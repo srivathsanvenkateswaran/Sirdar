@@ -6,6 +6,7 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -61,7 +62,8 @@ type fixtureServer struct {
 	batchIDs         [][]int
 	wiqlQuery        string
 	commentPages     int
-	attachmentStatus map[string]int // guid -> status override
+	attachmentStatus map[string]int      // guid -> status override
+	rewrite          func(string) string // rewrites the work item JSON before it is served
 }
 
 func newFixtureServer(t *testing.T) (*fixtureServer, *Client) {
@@ -89,8 +91,15 @@ func newFixtureServer(t *testing.T) (*fixtureServer, *Client) {
 		if got := r.URL.Query().Get("$expand"); got != "all" {
 			t.Errorf("$expand = %q, want all", got)
 		}
+		body := strings.ReplaceAll(string(workItemJSON), "{{BASE}}", fs.URL)
+		fs.mu.Lock()
+		rewrite := fs.rewrite
+		fs.mu.Unlock()
+		if rewrite != nil {
+			body = rewrite(body)
+		}
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(strings.ReplaceAll(string(workItemJSON), "{{BASE}}", fs.URL)))
+		w.Write([]byte(body))
 	})
 	mux.HandleFunc("/"+testProject+"/_apis/wit/workItems/4242/comments", func(w http.ResponseWriter, r *http.Request) {
 		checkAuth(t, r)
@@ -716,6 +725,126 @@ func TestHostMatches(t *testing.T) {
 	} {
 		if got := hostMatches(tc.host, tc.domain); got != tc.want {
 			t.Errorf("hostMatches(%q, %q) = %v, want %v", tc.host, tc.domain, got, tc.want)
+		}
+	}
+}
+
+// foreignServer stands in for a host an attacker put in a work item's
+// description or relations. Any request that reaches it means the PAT was
+// sent somewhere it should never go.
+func foreignServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth := r.Header.Get("Authorization")
+		t.Errorf("credentialed request reached a foreign host: %s %s (Authorization %q)", r.Method, r.URL.Path, auth)
+		w.Write([]byte("pwned"))
+	}))
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+func TestAttachmentsSkipsUntrustedRelationHost(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	foreign := foreignServer(t)
+
+	// Repoint only the AttachedFile relation at the foreign host; the
+	// inline image stays on the organisation's own host.
+	fs.mu.Lock()
+	fs.rewrite = func(body string) string {
+		return strings.Replace(body,
+			fs.URL+"/Fabrikam/_apis/wit/attachments/aaaaaaaa",
+			foreign.URL+"/Fabrikam/_apis/wit/attachments/aaaaaaaa", 1)
+	}
+	fs.mu.Unlock()
+
+	dir := filepath.Join(t.TempDir(), "attachments")
+	atts, err := c.Helpdesk().Attachments(context.Background(), "4242", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].Name != "screen shot.png" {
+		t.Fatalf("attachments = %+v, want only the inline image on the trusted host", atts)
+	}
+	w := c.WarningsFor("4242")
+	if len(w) != 1 || !strings.Contains(w[0], "attachment host not trusted") {
+		t.Fatalf("warnings = %v, want one about the untrusted host", w)
+	}
+	if strings.Contains(w[0], "aaaaaaaa") {
+		t.Errorf("warning quoted the URL, not just the host: %q", w[0])
+	}
+}
+
+func TestAttachmentsSkipsUntrustedInlineImageHost(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	foreign := foreignServer(t)
+
+	// Repoint only the inline <img src> — the attacker-editable one — at
+	// the foreign host.
+	fs.mu.Lock()
+	fs.rewrite = func(body string) string {
+		return strings.Replace(body,
+			fs.URL+"/Fabrikam/_apis/wit/attachments/bbbbbbbb",
+			foreign.URL+"/Fabrikam/_apis/wit/attachments/bbbbbbbb", 1)
+	}
+	fs.mu.Unlock()
+
+	dir := filepath.Join(t.TempDir(), "attachments")
+	atts, err := c.Helpdesk().Attachments(context.Background(), "4242", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].Name != "evil log.txt" {
+		t.Fatalf("attachments = %+v, want only the relation on the trusted host", atts)
+	}
+	w := c.WarningsFor("4242")
+	if len(w) != 1 || !strings.Contains(w[0], "attachment host not trusted") {
+		t.Fatalf("warnings = %v, want one about the untrusted host", w)
+	}
+}
+
+func TestDownloadRefusesUntrustedHostDirectly(t *testing.T) {
+	_, c := newFixtureServer(t)
+	foreign := foreignServer(t)
+
+	dest := filepath.Join(t.TempDir(), "out.bin")
+	if _, err := c.download(context.Background(), foreign.URL+"/x", dest); err == nil {
+		t.Fatal("download of an untrusted URL returned no error")
+	}
+	if _, err := os.Stat(dest); err == nil {
+		t.Error("download wrote a file for an untrusted URL")
+	}
+}
+
+func TestTrusted(t *testing.T) {
+	for _, tc := range []struct {
+		name, base, target string
+		want               bool
+	}{
+		{"services same host", "https://dev.azure.com/contoso", "https://dev.azure.com/contoso/Fabrikam/_apis/wit/attachments/g", true},
+		{"services legacy host for the same org", "https://dev.azure.com/contoso", "https://contoso.visualstudio.com/_apis/wit/attachments/g", true},
+		{"legacy base trusts dev.azure.com", "https://contoso.visualstudio.com", "https://dev.azure.com/contoso/_apis/wit/attachments/g", true},
+		{"another org's legacy host", "https://dev.azure.com/contoso", "https://fabrikam.visualstudio.com/_apis/wit/attachments/g", false},
+		{"foreign host", "https://dev.azure.com/contoso", "https://attacker.example/x", false},
+		{"lookalike host", "https://dev.azure.com/contoso", "https://dev.azure.com.attacker.example/x", false},
+		{"case and trailing dot", "https://dev.azure.com/contoso", "https://DEV.AZURE.COM./contoso/x", true},
+		{"non-http scheme", "https://dev.azure.com/contoso", "file:///etc/passwd", false},
+		{"server collection, same host", "https://tfs.corp:8080/DefaultCollection", "https://tfs.corp:8080/DefaultCollection/_apis/wit/attachments/g", true},
+		{"server collection, different port", "https://tfs.corp:8080/DefaultCollection", "https://tfs.corp:9999/x", false},
+		{"server collection does not trust dev.azure.com", "https://tfs.corp:8080/DefaultCollection", "https://dev.azure.com/contoso/x", false},
+		{"http allowed only on the base scheme", "http://tfs.corp/DefaultCollection", "http://tfs.corp/DefaultCollection/x", true},
+		{"http foreign host", "http://tfs.corp/DefaultCollection", "http://attacker.example/x", false},
+		{"https base rejects http", "https://dev.azure.com/contoso", "http://dev.azure.com/contoso/x", false},
+	} {
+		c, err := New(Config{OrgURL: tc.base, Project: testProject, PAT: testPAT}, nil)
+		if err != nil {
+			t.Fatalf("%s: New: %v", tc.name, err)
+		}
+		u, err := url.Parse(tc.target)
+		if err != nil {
+			t.Fatalf("%s: parse target: %v", tc.name, err)
+		}
+		if got := c.trusted(u); got != tc.want {
+			t.Errorf("%s: trusted(%q) with base %q = %v, want %v", tc.name, tc.target, tc.base, got, tc.want)
 		}
 	}
 }

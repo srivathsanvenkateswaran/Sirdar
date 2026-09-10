@@ -102,17 +102,112 @@ func attachmentID(rawURL string) string {
 	return path.Base(u.Path)
 }
 
+// trusted reports whether u may be fetched with the organisation's PAT.
+//
+// This gate exists because a work item's description, repro steps and
+// relations are attacker-editable: anyone who can edit a work item can put
+// <img src="https://attacker.example/x"> in its description, or point a
+// relation at their own host. Every attachment fetch carries the PAT in an
+// Authorization header, so following such a URL would hand the credential
+// to whoever wrote it. Only the organisation's own host — and, for Azure
+// DevOps Services, the well-known attachment hosts that serve the same
+// organisation — are fetched.
+//
+// The comparison keeps the port, so a URL on the same hostname but a
+// different port is not trusted; a default port for the scheme is
+// normalised away first.
+func (c *Client) trusted(u *url.URL) bool {
+	if u == nil || u.Host == "" {
+		return false
+	}
+	base, err := url.Parse(c.base)
+	if err != nil {
+		return false
+	}
+	// https always, plus the base's own scheme so a plain-HTTP Azure DevOps
+	// Server collection still works.
+	if !strings.EqualFold(u.Scheme, "https") && !strings.EqualFold(u.Scheme, base.Scheme) {
+		return false
+	}
+
+	target := normalizedHost(u)
+	if target == "" {
+		return false
+	}
+	if target == normalizedHost(base) {
+		return true
+	}
+	if org := orgName(base); org != "" {
+		return target == "dev.azure.com" || target == org+".visualstudio.com"
+	}
+	return false
+}
+
+// normalizedHost renders a URL's host for comparison: lower-cased, the root
+// label's trailing dot removed, and the port kept unless it is the default
+// for the scheme.
+func normalizedHost(u *url.URL) string {
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	if host == "" {
+		return ""
+	}
+	port := u.Port()
+	if port == "" ||
+		(port == "443" && strings.EqualFold(u.Scheme, "https")) ||
+		(port == "80" && strings.EqualFold(u.Scheme, "http")) {
+		return host
+	}
+	return host + ":" + port
+}
+
+// orgName reads the Azure DevOps Services organisation out of the base URL,
+// from the first path segment of https://dev.azure.com/{org} or from the
+// subdomain of the legacy {org}.visualstudio.com form. It returns "" for an
+// Azure DevOps Server collection URL, where the base host is the only host
+// that can serve attachments.
+func orgName(base *url.URL) string {
+	host := strings.ToLower(base.Hostname())
+	if host == "dev.azure.com" || strings.HasSuffix(host, ".dev.azure.com") {
+		if seg := strings.Split(strings.Trim(base.Path, "/"), "/"); len(seg) > 0 {
+			return seg[0]
+		}
+		return ""
+	}
+	if strings.HasSuffix(host, ".visualstudio.com") {
+		return strings.TrimSuffix(host, ".visualstudio.com")
+	}
+	return ""
+}
+
+// untrustedWarning describes a skipped URL without quoting the URL itself,
+// which may carry a token in its query.
+func untrustedWarning(rawURL string) string {
+	host := "(none)"
+	if u, err := url.Parse(rawURL); err == nil && u.Host != "" {
+		host = u.Host
+	}
+	return "azure devops: attachment host not trusted: " + host
+}
+
 // refs gathers a work item's downloadable files: every AttachedFile
 // relation first, then any image embedded in the description or repro steps
 // that is not already one of them. Inline images are how a screenshot pasted
 // into the description reaches the bundle, and they are served by the same
 // attachments route with the same auth.
-func (c *Client) refs(wi workItem) []attachmentRef {
-	var out []attachmentRef
+//
+// Both sources are attacker-editable, so both are filtered through trusted
+// before anything is fetched. A URL that does not pass is dropped and named
+// in the returned skips, which become warnings on the call.
+func (c *Client) refs(wi workItem) (out []attachmentRef, skipped []string) {
 	seen := map[string]bool{}
 
 	for _, rel := range wi.Relations {
 		if !strings.EqualFold(rel.Rel, "AttachedFile") || rel.URL == "" {
+			continue
+		}
+		u, err := url.Parse(rel.URL)
+		if err != nil || !c.trusted(u) {
+			skipped = append(skipped, untrustedWarning(rel.URL))
 			continue
 		}
 		id := attachmentID(rel.URL)
@@ -123,9 +218,7 @@ func (c *Client) refs(wi workItem) []attachmentRef {
 
 		name := rel.attributeString("name")
 		if name == "" {
-			if u, err := url.Parse(rel.URL); err == nil {
-				name = u.Query().Get("fileName")
-			}
+			name = u.Query().Get("fileName")
 		}
 		if name == "" {
 			name = id
@@ -136,7 +229,13 @@ func (c *Client) refs(wi workItem) []attachmentRef {
 	inline := 0
 	for _, field := range []string{fieldDescription, fieldReproSteps} {
 		for _, src := range htmltext.InlineImageSrcs(fieldString(wi.Fields, field)) {
-			if !strings.HasPrefix(src, "http://") && !strings.HasPrefix(src, "https://") {
+			u, err := url.Parse(src)
+			if err != nil || !c.trusted(u) {
+				// A relative or data: src is not a fetchable attachment and
+				// is not worth warning about; a foreign host is.
+				if err == nil && u.Host != "" {
+					skipped = append(skipped, untrustedWarning(src))
+				}
 				continue
 			}
 			id := attachmentID(src)
@@ -146,10 +245,7 @@ func (c *Client) refs(wi workItem) []attachmentRef {
 			seen[id] = true
 			inline++
 
-			name := ""
-			if u, err := url.Parse(src); err == nil {
-				name = u.Query().Get("fileName")
-			}
+			name := u.Query().Get("fileName")
 			if name == "" {
 				if strings.Contains(id, ".") {
 					name = id
@@ -160,7 +256,7 @@ func (c *Client) refs(wi workItem) []attachmentRef {
 			out = append(out, attachmentRef{ID: id, Name: name, URL: attachmentURL(src, "")})
 		}
 	}
-	return out
+	return out, skipped
 }
 
 // Attachments downloads every file attached to a work item into dir, named
@@ -185,8 +281,11 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	if err != nil {
 		return nil, err
 	}
-	refs := c.refs(wi)
+	refs, failures := c.refs(wi)
 	if len(refs) == 0 {
+		if len(failures) > 0 {
+			c.putWarnings(wid, failures)
+		}
 		return nil, nil
 	}
 
@@ -196,7 +295,6 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	base := filepath.Base(dir)
 
 	var out []ticket.Attachment
-	var failures []string
 	for i, r := range refs {
 		name := sanitizeName(r.Name)
 		filename := fmt.Sprintf("%d-%s", i+1, name)
@@ -225,6 +323,13 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 // download fetches rawURL with the client's auth and writes the body to
 // destPath, returning the response's Content-Type.
 func (c *Client) download(ctx context.Context, rawURL, destPath string) (string, error) {
+	// Belt and braces: refs already dropped every untrusted URL, and this
+	// makes it impossible for a future caller to reach one with the PAT
+	// attached.
+	u, perr := url.Parse(rawURL)
+	if perr != nil || !c.trusted(u) {
+		return "", fmt.Errorf("refusing to send credentials to an untrusted host")
+	}
 	req, err := c.newRequest(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
