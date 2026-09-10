@@ -1,0 +1,380 @@
+/*
+ * Shared styles for Register, Settings and QuotaMeter. Reads the shell's own
+ * tokens (--bg, --fg, --muted, --accent, --border, --mono) with fallbacks so
+ * these panels still render correctly if the shell hasn't defined one yet.
+ * Status colours (ok/warn/danger) are scoped locally since the shell doesn't
+ * carry them.
+ */
+
+.panel {
+  --panel-warn: #9a6b00;
+  --panel-danger: #b3392a;
+  --panel-ok: var(--accent, #2f6f4f);
+  padding: 16px;
+  color: var(--fg, #16181d);
+}
+
+@media (prefers-color-scheme: dark) {
+  .panel {
+    --panel-warn: #d9a441;
+    --panel-danger: #e0685a;
+  }
+}
+
+.panel-heading {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.panel section + section {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid var(--border, #e4e6eb);
+}
+
+.mono {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+}
+
+.empty-state,
+.loading-state {
+  color: var(--muted, #6b7280);
+  padding: 12px 0;
+}
+
+.form-error {
+  color: var(--panel-danger);
+  margin: 4px 0;
+}
+
+/* ---- Register ---- */
+
+.register-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.register-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+.register-filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--muted, #6b7280);
+}
+
+.register-filters select {
+  font: inherit;
+  padding: 3px 6px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 3px;
+  background: var(--bg, #fff);
+  color: var(--fg, #16181d);
+}
+
+.register-summary {
+  margin: 0 0 4px;
+  font-size: 13px;
+}
+
+.register-totals {
+  margin: 0 0 12px;
+  color: var(--muted, #6b7280);
+}
+
+.register-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.register-table th,
+.register-table td {
+  padding: 6px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+  vertical-align: middle;
+}
+
+.register-table th {
+  font-weight: 500;
+  color: var(--muted, #6b7280);
+  font-size: 11px;
+}
+
+.sort-btn {
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+  padding: 0;
+}
+
+.sort-btn:hover {
+  color: var(--fg, #16181d);
+}
+
+.badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 3px;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.badge--muted {
+  color: var(--muted, #6b7280);
+}
+
+.badge--confirmed {
+  color: var(--panel-ok);
+  border-color: var(--panel-ok);
+}
+
+.badge--partial {
+  color: var(--panel-warn);
+  border-color: var(--panel-warn);
+}
+
+.badge--wrong {
+  color: var(--panel-danger);
+  border-color: var(--panel-danger);
+}
+
+.note-dots {
+  display: inline-flex;
+  gap: 4px;
+}
+
+.note-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border, #e4e6eb);
+  display: inline-block;
+}
+
+.note-dot--on {
+  background: var(--accent, #2f6f4f);
+}
+
+/* ---- QuotaMeter ---- */
+
+.quota-meter {
+  --panel-warn: #9a6b00;
+  --panel-danger: #b3392a;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  font-size: 11px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .quota-meter {
+    --panel-warn: #d9a441;
+    --panel-danger: #e0685a;
+  }
+}
+
+.quota-meter__provider {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quota-meter__name {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  color: var(--muted, #6b7280);
+  text-transform: lowercase;
+}
+
+.quota-row {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.quota-row__label {
+  color: var(--muted, #6b7280);
+  min-width: 14px;
+}
+
+.quota-bar {
+  width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border, #e4e6eb);
+  overflow: hidden;
+}
+
+.quota-bar__fill {
+  height: 100%;
+  background: var(--accent, #2f6f4f);
+  border-radius: 2px;
+}
+
+.quota-bar__fill.quota-bar--warn {
+  background: var(--panel-warn);
+}
+
+.quota-bar__fill.quota-bar--danger {
+  background: var(--panel-danger);
+}
+
+.quota-row__pct {
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+}
+
+.quota-row__reset {
+  color: var(--muted, #6b7280);
+}
+
+/* ---- Settings ---- */
+
+.workspace-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.workspace-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+}
+
+.workspace-row__main {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: baseline;
+}
+
+.workspace-row__name {
+  font-weight: 600;
+}
+
+.workspace-row__root {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  color: var(--muted, #6b7280);
+}
+
+.workspace-row__meta {
+  color: var(--muted, #6b7280);
+}
+
+.workspace-row__actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.workspace-row__actions button {
+  font: inherit;
+  padding: 3px 8px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 3px;
+  background: var(--bg, #fff);
+  color: var(--fg, #16181d);
+  cursor: pointer;
+}
+
+.workspace-row__actions button:hover {
+  border-color: var(--accent, #2f6f4f);
+}
+
+.btn-danger {
+  color: var(--panel-danger);
+}
+
+.doctor-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+}
+
+.doctor-check {
+  display: flex;
+  gap: 8px;
+  padding: 2px 0;
+  align-items: baseline;
+}
+
+.doctor-check__mark {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  width: 20px;
+}
+
+.doctor-check--ok .doctor-check__mark {
+  color: var(--panel-ok);
+}
+
+.doctor-check--fail .doctor-check__mark {
+  color: var(--panel-danger);
+}
+
+.doctor-check__name {
+  min-width: 140px;
+}
+
+.doctor-check__detail {
+  color: var(--muted, #6b7280);
+}
+
+.add-workspace-form {
+  display: flex;
+  gap: 8px;
+}
+
+.add-workspace-form input {
+  flex: 1;
+  max-width: 420px;
+  font: inherit;
+  padding: 4px 8px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 3px;
+  background: var(--bg, #fff);
+  color: var(--fg, #16181d);
+}
+
+.add-workspace-form button {
+  font: inherit;
+  padding: 4px 10px;
+  border: 1px solid var(--border, #e4e6eb);
+  border-radius: 3px;
+  background: var(--bg, #fff);
+  color: var(--fg, #16181d);
+  cursor: pointer;
+}
+
+.add-workspace-form button:hover:not(:disabled) {
+  border-color: var(--accent, #2f6f4f);
+}
+
+.add-workspace-form button:disabled {
+  color: var(--muted, #6b7280);
+  cursor: default;
+}
+
+.about-version {
+  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-weight: 600;
+}
+
+.about-note {
+  color: var(--muted, #6b7280);
+  max-width: 60ch;
+}
