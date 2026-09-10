@@ -169,14 +169,19 @@ func (r *Runner) Triage(ctx context.Context, keys []string, o Options) ([]Outcom
 			defer wg.Done()
 			for i := range queue {
 				// An interrupt stops the queue: a key that never
-				// started is skipped, not failed.
+				// started is skipped, not failed. That includes a key
+				// still parked in a rate-limit pause when the
+				// interrupt lands.
 				select {
 				case <-ctx.Done():
 					outs[i] = skipped(keys[i])
 					continue
 				default:
 				}
-				p.waitUntilResumed(ctx)
+				if !p.waitUntilResumed(ctx) {
+					outs[i] = skipped(keys[i])
+					continue
+				}
 				outs[i], _ = r.runOne(ctx, keys[i], store.KindTriage, o, nil, p)
 			}
 		}()

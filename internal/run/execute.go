@@ -47,7 +47,10 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	}
 
 	// A rate limit reported by another run pauses this one until it lifts.
-	pl.waitUntilResumed(ctx)
+	// An interrupt during that wait means no session should start at all.
+	if !pl.waitUntilResumed(ctx) {
+		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
+	}
 
 	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
 	if err != nil {

@@ -37,26 +37,31 @@ func (p *pool) pause(until time.Time) {
 	}
 }
 
-// waitUntilResumed blocks while a rate-limit pause is in force, or until
-// the context is cancelled.
-func (p *pool) waitUntilResumed(ctx context.Context) {
+// waitUntilResumed blocks while a rate-limit pause is in force. It reports
+// whether the caller should go on: false means the context was cancelled
+// while waiting, so the work this run was about to do must not start.
+func (p *pool) waitUntilResumed(ctx context.Context) bool {
 	if p == nil {
-		return
+		return ctx.Err() == nil
 	}
 	for {
+		if ctx.Err() != nil {
+			return false
+		}
+
 		p.mu.Lock()
 		until := p.until
 		p.mu.Unlock()
 
 		wait := time.Until(until)
 		if wait <= 0 {
-			return
+			return true
 		}
 		timer := time.NewTimer(wait)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
-			return
+			return false
 		case <-timer.C:
 		}
 	}

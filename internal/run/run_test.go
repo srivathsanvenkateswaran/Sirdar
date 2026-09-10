@@ -886,6 +886,54 @@ func TestRetriageOverwritesTheKeysNote(t *testing.T) {
 	}
 }
 
+func TestInterruptDuringRateLimitPauseSkipsKey(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		s.emit(provider.Event{Kind: provider.EvRateLimited, Text: "slow down", ResetsAt: time.Now().Add(2 * time.Second)})
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	paused := make(chan struct{})
+	var once sync.Once
+	r.onPause = func(time.Time) { once.Do(func() { close(paused) }) }
+	go func() {
+		<-paused
+		time.Sleep(200 * time.Millisecond)
+		cancel()
+	}()
+
+	start := time.Now()
+	outs, err := r.Triage(ctx, []string{"OMNI-1", "OMNI-2"}, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("the interrupt did not cut the pause short: waited %v", elapsed)
+	}
+	if outs[0].State.Status != store.StatusBlocked || !strings.Contains(outs[0].State.Reason, "rate limited") {
+		t.Fatalf("first run: %+v", outs[0].State)
+	}
+	if outs[1].State.Status != store.StatusBlocked || !strings.Contains(outs[1].State.Reason, "skipped") {
+		t.Fatalf("second run: %+v", outs[1].State)
+	}
+	dirs, err := filepath.Glob(filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-2", "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) != 0 {
+		t.Fatalf("the skipped key got run directories: %v", dirs)
+	}
+	if p.startCount() != 1 {
+		t.Fatalf("sessions started: %d", p.startCount())
+	}
+	if ExitCode(outs) != 0 {
+		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
 func contains(list []string, want string) bool {
 	for _, s := range list {
 		if s == want {
