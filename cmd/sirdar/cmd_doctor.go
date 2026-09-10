@@ -64,13 +64,19 @@ func cmdDoctor(args []string, stdout, stderr io.Writer) int {
 }
 
 func providerChecks(ctx context.Context, cfg *config.Config) []provider.Check {
-	p, err := providerFor(cfg.Provider)
+	p, err := providerFor(cfg, config.Resolver{Keychain: keychainFor()})
 	if err != nil {
 		return []provider.Check{{Name: "provider", Detail: err.Error()}}
 	}
+	// provider: openai has no binary to find — the loop runs in this
+	// process — so its Doctor ignores the argument and probes the endpoint
+	// instead.
 	binary := cfg.Providers.Claude.Path
-	if cfg.Provider == "codex" {
+	switch cfg.Provider {
+	case "codex":
 		binary = cfg.Providers.Codex.Path
+	case "openai":
+		binary = ""
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)
@@ -145,8 +151,8 @@ func oauthCheck(ctx context.Context, rt *zohodesk.RefreshingToken) provider.Chec
 		return provider.Check{Name: "zoho oauth", Detail: err.Error()}
 	}
 	return provider.Check{
-		Name:   "zoho oauth",
-		OK:     true,
+		Name: "zoho oauth",
+		OK:   true,
 		// Rounded: the sub-second drift between minting the token and
 		// measuring it is not something to report to three decimals.
 		Detail: fmt.Sprintf("access token obtained, expires in %ds", int(ttl.Round(time.Second).Seconds())),

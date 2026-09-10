@@ -220,10 +220,15 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 }
 
 // binary is the configured path override for the provider in use, empty
-// when the provider should be looked up on PATH.
+// when the provider should be looked up on PATH — or, for the openai
+// provider, because there is no binary at all: that loop runs in this
+// process.
 func (r *Runner) binary() string {
-	path := r.Config.Providers.Claude.Path
-	if r.providerName() == "codex" {
+	var path string
+	switch r.providerName() {
+	case "claude":
+		path = r.Config.Providers.Claude.Path
+	case "codex":
 		path = r.Config.Providers.Codex.Path
 	}
 	if path == "" {

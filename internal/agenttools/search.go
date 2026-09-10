@@ -317,24 +317,40 @@ func splitPath(p string) []string {
 	return strings.Split(p, "/")
 }
 
+// matchSegments matches a split pattern against a split path, with "**"
+// spanning any number of segments.
+//
+// Every (pattern position, name position) pair is decided once and cached.
+// Without that, a pattern carrying several "**" segments re-explores the
+// same suffixes exponentially — and the model chooses these patterns, so
+// "**/**/**/*.go" against a deep tree must not be able to wedge a run.
 func matchSegments(pattern, name []string) bool {
-	if len(pattern) == 0 {
-		return len(name) == 0
-	}
-	if pattern[0] == "**" {
-		for i := 0; i <= len(name); i++ {
-			if matchSegments(pattern[1:], name[i:]) {
-				return true
+	memo := make(map[[2]int]bool)
+	var match func(pi, ni int) bool
+	match = func(pi, ni int) bool {
+		if pi == len(pattern) {
+			return ni == len(name)
+		}
+		key := [2]int{pi, ni}
+		if cached, ok := memo[key]; ok {
+			return cached
+		}
+		result := false
+		switch {
+		case pattern[pi] == "**":
+			for i := ni; i <= len(name); i++ {
+				if match(pi+1, i) {
+					result = true
+					break
+				}
+			}
+		case ni < len(name):
+			if ok, err := path.Match(pattern[pi], name[ni]); err == nil && ok {
+				result = match(pi+1, ni+1)
 			}
 		}
-		return false
+		memo[key] = result
+		return result
 	}
-	if len(name) == 0 {
-		return false
-	}
-	ok, err := path.Match(pattern[0], name[0])
-	if err != nil || !ok {
-		return false
-	}
-	return matchSegments(pattern[1:], name[1:])
+	return match(0, 0)
 }

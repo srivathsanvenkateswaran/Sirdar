@@ -8,10 +8,12 @@ import (
 	"html"
 	"io"
 	"mime"
+	"net"
 	"net/http"
 	"net/url"
 	"regexp"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -133,18 +135,85 @@ func allowedMediaType(mediaType string) bool {
 	}
 }
 
-// httpClient wraps the caller's transport in a client that refuses methods
-// and redirects the tool must not follow. The caller's client is never
+// allowPrivateAddrs disables the private-address guard. It exists for the
+// tests, which necessarily fetch from an httptest server on loopback; no
+// production path sets it.
+var allowPrivateAddrs bool
+
+// guardAddress is the dialer hook that refuses a connection to an address
+// the model must not reach through web_fetch: loopback, RFC1918, carrier
+// NAT, link-local — which is where cloud metadata services live, notably
+// 169.254.169.254 — unique-local IPv6, the unspecified address, and
+// multicast. It runs on the resolved IP, not the hostname, so a public DNS
+// name pointed at an internal address is refused too, and it sits on the
+// dialer rather than in the tool so a redirect chain is checked hop by hop.
+func guardAddress(_, address string, _ syscall.RawConn) error {
+	if allowPrivateAddrs {
+		return nil
+	}
+	host, _, err := net.SplitHostPort(address)
+	if err != nil {
+		host = address
+	}
+	ip := net.ParseIP(host)
+	if ip == nil {
+		return fmt.Errorf("refusing to connect to %s: unresolved address", address)
+	}
+	if blockedIP(ip) {
+		return fmt.Errorf("refusing to connect to %s: private, loopback and link-local addresses are not fetchable", ip)
+	}
+	return nil
+}
+
+// blockedIP reports whether an address falls in one of the ranges
+// web_fetch refuses. net.IP.IsPrivate covers both RFC1918 and IPv6
+// unique-local (fc00::/7).
+func blockedIP(ip net.IP) bool {
+	switch {
+	case ip.IsLoopback(), ip.IsUnspecified(), ip.IsPrivate():
+		return true
+	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast(), ip.IsMulticast():
+		return true
+	}
+	// 100.64.0.0/10, carrier-grade NAT: not routed on the public internet.
+	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
+		return true
+	}
+	return false
+}
+
+// httpClient builds the client web_fetch uses: a transport of its own,
+// whose dialer refuses private addresses, plus the redirect rule that keeps
+// a chain on the host the model asked for. A caller-supplied client
+// contributes its TLS configuration, cookie jar and timeout — an httptest
+// TLS server needs the first — but never its dialer, which is what keeps
+// the address guard in force on every path. The caller's client is never
 // mutated.
 func (o Options) httpClient() *http.Client {
 	client := &http.Client{Timeout: webTimeout}
+	transport := &http.Transport{
+		Proxy: http.ProxyFromEnvironment,
+		DialContext: (&net.Dialer{
+			Timeout:   10 * time.Second,
+			KeepAlive: 30 * time.Second,
+			Control:   guardAddress,
+		}).DialContext,
+		ForceAttemptHTTP2:     true,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       30 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ExpectContinueTimeout: time.Second,
+	}
 	if o.HTTP != nil {
-		client.Transport = o.HTTP.Transport
+		if t, ok := o.HTTP.Transport.(*http.Transport); ok && t != nil {
+			transport.TLSClientConfig = t.TLSClientConfig
+		}
 		client.Jar = o.HTTP.Jar
 		if o.HTTP.Timeout > 0 {
 			client.Timeout = o.HTTP.Timeout
 		}
 	}
+	client.Transport = transport
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= maxRedirects {
 			return fmt.Errorf("stopped after %d redirects", maxRedirects)

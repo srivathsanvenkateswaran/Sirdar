@@ -3,6 +3,7 @@ package agenttools
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -330,9 +331,90 @@ func TestBashEnvironmentIsMinimal(t *testing.T) {
 	}
 }
 
+// TestBashDeniesASecondCommandBehindAnOperator covers the allow-list hole
+// a trailing wildcard opens: "echo *" would otherwise match the whole of
+// "echo hi; rm -rf /", because the wildcard spans the semicolon.
+func TestBashDeniesASecondCommandBehindAnOperator(t *testing.T) {
+	root := t.TempDir()
+	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"echo *", "head*"}}), "bash")
+
+	for _, command := range []string{
+		"echo hi; rm -rf /",
+		"echo hi | rm -rf /",
+		"echo hi && rm -rf /",
+		"echo hi & rm -rf /",
+		"echo $(rm -rf /)",
+		"echo `rm -rf /`",
+	} {
+		out, err := call(t, bash, `{"command":`+quote(command)+`}`)
+		if err == nil || err.Error() != "denied: command not in the allow-list" {
+			t.Errorf("%q: out = %q, err = %v, want the denial text", command, out, err)
+		}
+	}
+
+	// A pipeline whose every segment is allow-listed still runs.
+	if got := mustCall(t, bash, `{"command":"echo hi | head -1"}`); got != "hi\n" {
+		t.Fatalf("allowed pipeline = %q", got)
+	}
+}
+
+func quote(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
 // --- web_fetch ----------------------------------------------------------
 
+// allowLoopback lifts the private-address guard for one test. Every
+// web_fetch test necessarily talks to an httptest server on 127.0.0.1,
+// which is exactly what the guard is there to refuse in production;
+// TestWebFetchRefusesPrivateAddresses covers the guard itself.
+func allowLoopback(t *testing.T) {
+	t.Helper()
+	previous := allowPrivateAddrs
+	allowPrivateAddrs = true
+	t.Cleanup(func() { allowPrivateAddrs = previous })
+}
+
+func TestWebFetchRefusesPrivateAddresses(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("secret"))
+	}))
+	defer srv.Close()
+
+	fetch := toolByName(t, ReadOnlySet(Options{Root: t.TempDir(), HTTP: srv.Client()}), "web_fetch")
+
+	out, err := call(t, fetch, `{"url":"`+srv.URL+`/"}`)
+	if err == nil || !strings.Contains(err.Error(), "loopback") {
+		t.Fatalf("loopback fetch: out = %q, err = %v", out, err)
+	}
+	if strings.Contains(out, "secret") {
+		t.Fatalf("a refused fetch must return nothing: %q", out)
+	}
+	// The cloud metadata address is the one that matters most: it is
+	// link-local, it needs no credentials, and it hands out the machine's.
+	if _, err := call(t, fetch, `{"url":"http://169.254.169.254/latest/meta-data/"}`); err == nil ||
+		!strings.Contains(err.Error(), "link-local") {
+		t.Fatalf("metadata fetch: err = %v", err)
+	}
+	for _, addr := range []string{"10.0.0.5", "192.168.1.1", "172.16.0.9", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1", "0.0.0.0"} {
+		if !blockedIP(net.ParseIP(addr)) {
+			t.Errorf("blockedIP(%s) = false, want true", addr)
+		}
+	}
+	for _, addr := range []string{"93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946", "8.8.8.8"} {
+		if blockedIP(net.ParseIP(addr)) {
+			t.Errorf("blockedIP(%s) = true, want false", addr)
+		}
+	}
+}
+
 func TestWebFetchAcceptsTextAndJSON(t *testing.T) {
+	allowLoopback(t)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/json":
@@ -381,6 +463,7 @@ func TestWebFetchAcceptsTextAndJSON(t *testing.T) {
 }
 
 func TestWebFetchCapsBodyAtOneMiB(t *testing.T) {
+	allowLoopback(t)
 	body := strings.Repeat("0123456789abcdef", (maxFetchBytes/16)+4096)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -404,6 +487,7 @@ func TestWebFetchCapsBodyAtOneMiB(t *testing.T) {
 }
 
 func TestWebFetchRefusesOffHostRedirect(t *testing.T) {
+	allowLoopback(t)
 	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
 		_, _ = w.Write([]byte("internal data"))

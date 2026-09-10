@@ -10,6 +10,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -74,7 +76,15 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
 	cmd.Dir = root
 	cmd.Env = execEnv()
-	var buf bytes.Buffer
+	// The command runs in a process group of its own so a timeout can kill
+	// everything it started: `sh -c "rg ... | head"` leaves children that
+	// keep the output pipe open, and killing only the shell would leave
+	// them running and Wait blocked on that pipe. WaitDelay is the backstop
+	// for a grandchild that survives the group kill.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.Cancel = func() error { return killGroup(cmd) }
+	cmd.WaitDelay = killGrace
+	var buf lockedBuffer
 	cmd.Stdout = &buf
 	cmd.Stderr = &buf
 	runErr := cmd.Run()
@@ -96,16 +106,51 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 	return out, nil
 }
 
-// allowed applies the workspace policy's Bash allow-list to the trimmed
-// command, using the same matcher the permission policy uses so the model
-// cannot reach anything the policy would refuse.
-func (o Options) allowed(command string) bool {
-	for _, pattern := range o.BashAllow {
-		if provider.MatchGlob(pattern, command) {
-			return true
+// killGrace is how long a timed-out command's process group has to die
+// before exec gives up waiting on the pipes it holds.
+const killGrace = 2 * time.Second
+
+// killGroup SIGKILLs the whole process group the command was started in,
+// falling back to the immediate child when the group is already gone.
+func killGroup(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	if pid := cmd.Process.Pid; pid > 0 {
+		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
+			return nil
 		}
 	}
-	return false
+	return cmd.Process.Kill()
+}
+
+// lockedBuffer collects a command's combined output. A command killed at
+// the timeout can leave a child writing into it after Wait has returned, so
+// every access is guarded.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// allowed applies the workspace policy's Bash allow-list to the trimmed
+// command, using the same matcher the permission policy uses so the model
+// cannot reach anything the policy would refuse — including a command that
+// hides a second one behind a pipe or a semicolon.
+func (o Options) allowed(command string) bool {
+	ok, _ := provider.MatchCommand(o.BashAllow, command)
+	return ok
 }
 
 // execEnv is the minimal environment child processes get: enough to find

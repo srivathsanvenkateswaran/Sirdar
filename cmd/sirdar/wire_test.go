@@ -212,3 +212,89 @@ func TestDoctorReportsARejectedGrant(t *testing.T) {
 		}
 	}
 }
+
+// --- provider: openai ----------------------------------------------------
+
+func openAIConfig(baseURL string) *config.Config {
+	cfg := &config.Config{Provider: "openai", Model: ""}
+	cfg.OpenAI = &config.OpenAIConfig{
+		BaseURL:          baseURL,
+		APIKey:           "env:OPENROUTER_API_KEY",
+		Model:            "qwen/qwen3-coder",
+		MaxContextTokens: 64000,
+		Price:            &config.PriceConfig{InputPerMTok: 0.2, OutputPerMTok: 0.8},
+	}
+	return cfg
+}
+
+// TestOpenAIProviderResolvesTheKeyAndNeverPrintsIt covers the wiring for
+// `provider: openai`: the credential reference is resolved here, the
+// resolved key authenticates the endpoint, and nothing doctor prints
+// carries it.
+func TestOpenAIProviderResolvesTheKeyAndNeverPrintsIt(t *testing.T) {
+	const secret = "sk-or-v1-not-a-real-key"
+	var seen string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen = r.Header.Get("Authorization")
+		if r.URL.Path != "/models" {
+			http.NotFound(w, r)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"qwen/qwen3-coder"}]}`)
+	}))
+	defer srv.Close()
+
+	cfg := openAIConfig(srv.URL)
+	p, err := providerFor(cfg, envResolver(map[string]string{"OPENROUTER_API_KEY": secret}))
+	if err != nil {
+		t.Fatalf("providerFor: %v", err)
+	}
+	if p.Name() != "openai" {
+		t.Fatalf("Name() = %q", p.Name())
+	}
+
+	checks := p.Doctor(context.Background(), "/no/such/binary")
+	if len(checks) != 2 || !checks[0].OK || !checks[1].OK {
+		t.Fatalf("doctor checks = %+v", checks)
+	}
+	if seen != "Bearer "+secret {
+		t.Errorf("Authorization = %q, want the resolved key", seen)
+	}
+	for _, c := range checks {
+		if strings.Contains(c.Detail, secret) {
+			t.Fatalf("doctor printed the api key: %q", c.Detail)
+		}
+	}
+}
+
+// TestOpenAIProviderMissingKeyNamesTheReference covers the error an
+// operator sees when the variable is not set: the reference, never a
+// guess at the value.
+func TestOpenAIProviderMissingKeyNamesTheReference(t *testing.T) {
+	_, err := providerFor(openAIConfig("https://api.example/v1"), envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error for an unresolvable api key")
+	}
+	if !strings.Contains(err.Error(), "openai.apiKey") || !strings.Contains(err.Error(), "OPENROUTER_API_KEY") {
+		t.Fatalf("error does not name the reference: %v", err)
+	}
+}
+
+// TestOpenAIProviderNeedsItsBlock covers a workspace that selects the
+// provider and configures nothing.
+func TestOpenAIProviderNeedsItsBlock(t *testing.T) {
+	_, err := providerFor(&config.Config{Provider: "openai"}, envResolver(nil))
+	if err == nil || !strings.Contains(err.Error(), "openai block") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestProviderForRejectsAnUnknownName keeps the message listing every
+// provider a workspace may name.
+func TestProviderForRejectsAnUnknownName(t *testing.T) {
+	_, err := providerFor(&config.Config{Provider: "gemini"}, envResolver(nil))
+	if err == nil || !strings.Contains(err.Error(), "claude, codex or openai") {
+		t.Fatalf("err = %v", err)
+	}
+}

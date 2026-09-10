@@ -137,7 +137,8 @@ func (d Deps) childEnv() []string {
 }
 
 // credentialEnvNames collects the variable names behind every "env:"
-// credential reference in the workspace configuration. An OAuth grant's
+// credential reference in the workspace configuration — the sources' and
+// the model endpoint's alike. An OAuth grant's
 // client secret and refresh token are longer-lived than the access token a
 // static token: ref holds, so they matter here more, not less: a refresh
 // token read out of the agent's environment mints access tokens until
@@ -147,18 +148,26 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 	if cfg == nil {
 		return names
 	}
+	refs := []string{}
 	for _, s := range []*config.SourceConfig{cfg.Sources.Tracker, cfg.Sources.Helpdesk} {
 		if s == nil {
 			continue
 		}
-		refs := []string{s.Token}
+		refs = append(refs, s.Token)
 		if s.Auth != nil {
 			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
 		}
-		for _, ref := range refs {
-			if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
-				names[name] = true
-			}
+	}
+	// The model's own API key belongs to Sirdar, not to the session: the
+	// loop authenticates the chat calls itself, and a key left in the
+	// environment would be readable by every allow-listed shell command
+	// and every MCP server the run starts.
+	if cfg.OpenAI != nil {
+		refs = append(refs, cfg.OpenAI.APIKey)
+	}
+	for _, ref := range refs {
+		if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
+			names[name] = true
 		}
 	}
 	return names

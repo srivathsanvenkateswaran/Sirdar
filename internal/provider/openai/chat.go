@@ -212,7 +212,7 @@ func (c *Client) Ping(ctx context.Context) error {
 		return err
 	}
 	if status < 200 || status >= 300 {
-		return statusError(http.MethodGet, "/models", status, body)
+		return c.statusError(http.MethodGet, "/models", status, body)
 	}
 	return nil
 }
@@ -238,14 +238,22 @@ func (c *Client) newRequest(ctx context.Context, method, path string, body []byt
 	if err != nil {
 		return nil, err
 	}
+	// ExtraHeaders go on first, so the two headers the client owns cannot
+	// be overwritten from config: an "Authorization" entry there would
+	// otherwise silently replace the configured key, and a "Content-Type"
+	// one would make the request unparseable to the server.
+	for k, v := range c.cfg.ExtraHeaders {
+		switch http.CanonicalHeaderKey(k) {
+		case "Authorization", "Content-Type":
+			continue
+		}
+		req.Header.Set(k, v)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
 	if c.cfg.APIKey != "" {
 		req.Header.Set("Authorization", "Bearer "+c.cfg.APIKey)
-	}
-	for k, v := range c.cfg.ExtraHeaders {
-		req.Header.Set(k, v)
 	}
 	return req, nil
 }
@@ -282,7 +290,7 @@ func (c *Client) doWithRetry(ctx context.Context, method, path string, body []by
 		return respBody, nil
 	}
 	if status != http.StatusTooManyRequests && status < 500 {
-		return nil, statusError(method, path, status, respBody)
+		return nil, c.statusError(method, path, status, respBody)
 	}
 
 	delay := retryDelay(header.Get("Retry-After"))
@@ -299,7 +307,7 @@ func (c *Client) doWithRetry(ctx context.Context, method, path string, body []by
 	if status >= 200 && status < 300 {
 		return respBody, nil
 	}
-	return nil, statusError(method, path, status, respBody)
+	return nil, c.statusError(method, path, status, respBody)
 }
 
 // retryDelay parses a Retry-After header value, which may be a number of
@@ -335,12 +343,22 @@ func retryDelay(v string) time.Duration {
 
 // statusError builds the standard "openai: METHOD PATH: STATUS: snippet"
 // error. The snippet is capped at 200 bytes and comes only from the
-// response body, never from request headers, so the API key can never
-// appear in it.
-func statusError(method, path string, status int, body []byte) error {
+// response body, never from request headers. Some gateways echo the
+// Authorization header they rejected back in the body, so the key is
+// scrubbed from the snippet as well: an error goes to the run log and to
+// the operator's terminal, and neither is a place for a credential.
+func (c *Client) statusError(method, path string, status int, body []byte) error {
 	snippet := body
 	if len(snippet) > 200 {
 		snippet = snippet[:200]
 	}
-	return fmt.Errorf("openai: %s %s: %d: %s", method, path, status, snippet)
+	return fmt.Errorf("openai: %s %s: %d: %s", method, path, status, c.scrub(string(snippet)))
+}
+
+// scrub replaces every occurrence of the configured API key with a marker.
+func (c *Client) scrub(s string) string {
+	if c.cfg.APIKey == "" {
+		return s
+	}
+	return strings.ReplaceAll(s, c.cfg.APIKey, "[redacted]")
 }

@@ -63,6 +63,39 @@ func AccountsURLFor(baseURL string) string {
 	return accountsURLs[strings.ToLower(u.Hostname())]
 }
 
+// OpenAIConfig configures `provider: openai`, where Sirdar runs the agent
+// loop itself against any OpenAI-compatible Chat Completions endpoint —
+// an aggregator, a vendor, or a server on the operator's own machine.
+// BaseURL and Model are required; everything else has a default or is
+// optional.
+//
+// APIKey is a credential reference ("env:NAME" or "keychain:SERVICE"),
+// never the key itself, and it is optional: a local llama.cpp or Ollama
+// server needs none.
+type OpenAIConfig struct {
+	BaseURL          string            `yaml:"baseUrl"`
+	APIKey           string            `yaml:"apiKey,omitempty"`
+	Model            string            `yaml:"model"`
+	MaxContextTokens int               `yaml:"maxContextTokens,omitempty"`
+	Price            *PriceConfig      `yaml:"price,omitempty"`
+	Temperature      *float64          `yaml:"temperature,omitempty"`
+	ExtraHeaders     map[string]string `yaml:"extraHeaders,omitempty"`
+}
+
+// PriceConfig is what a million tokens cost at the configured endpoint. It
+// is what turns the response's token counts into the cost the USD budget
+// is enforced against; with no price block the cost of a run is reported
+// as 0 and only the turn and wall-clock budgets bite.
+type PriceConfig struct {
+	InputPerMTok  float64 `yaml:"inputPerMTok"`
+	OutputPerMTok float64 `yaml:"outputPerMTok"`
+}
+
+// DefaultMaxContextTokens is the context window assumed for an
+// openai-compatible endpoint that does not name one. The loop starts
+// dropping old tool results as the prompt approaches it.
+const DefaultMaxContextTokens = 128000
+
 // Config is a fully loaded, defaulted, and validated workspace configuration.
 type Config struct {
 	Workspace string   `yaml:"workspace"`
@@ -100,6 +133,7 @@ type Config struct {
 			Path string `yaml:"path"`
 		} `yaml:"codex"`
 	} `yaml:"providers"`
+	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 }
@@ -162,6 +196,9 @@ func applyDefaults(c *Config) {
 	if c.Playbooks == "" {
 		c.Playbooks = ".sirdar/playbooks"
 	}
+	if c.OpenAI != nil && c.OpenAI.MaxContextTokens == 0 {
+		c.OpenAI.MaxContextTokens = DefaultMaxContextTokens
+	}
 	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
 		if s != nil && s.Auth != nil && s.Auth.AccountsURL == "" {
 			s.Auth.AccountsURL = AccountsURLFor(s.BaseURL)
@@ -188,9 +225,12 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex":
+	case "claude", "codex", "openai":
 	default:
-		return fmt.Errorf("config: provider: must be claude or codex, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex or openai, got %q", c.Provider)
+	}
+	if err := validateOpenAI(c); err != nil {
+		return err
 	}
 	switch c.Billing {
 	case "subscription", "api":
@@ -214,6 +254,52 @@ func (c *Config) Validate() error {
 	}
 	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk); err != nil {
 		return err
+	}
+	return nil
+}
+
+// validateOpenAI checks the openai block. baseUrl and model are required
+// only when the workspace actually selects the provider — an openai block
+// left in place while running on claude is not an error — but the fields
+// that are set are checked either way, so a bad value is caught at load
+// time rather than mid-run.
+func validateOpenAI(c *Config) error {
+	o := c.OpenAI
+	if c.Provider == "openai" && o == nil {
+		return fmt.Errorf("config: openai: is required when provider is openai")
+	}
+	if o == nil {
+		return nil
+	}
+	if c.Provider == "openai" {
+		if strings.TrimSpace(o.BaseURL) == "" {
+			return fmt.Errorf("config: openai.baseUrl: is required when provider is openai")
+		}
+		if strings.TrimSpace(o.Model) == "" {
+			return fmt.Errorf("config: openai.model: is required when provider is openai")
+		}
+	}
+	if o.BaseURL != "" {
+		u, err := url.Parse(o.BaseURL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf("config: openai.baseUrl: must be an absolute http or https URL, got %q", o.BaseURL)
+		}
+	}
+	if o.APIKey != "" {
+		if err := credentialRef("openai.apiKey", o.APIKey); err != nil {
+			return err
+		}
+	}
+	if o.MaxContextTokens < 0 {
+		return fmt.Errorf("config: openai.maxContextTokens: must be > 0, got %d", o.MaxContextTokens)
+	}
+	if o.Price != nil {
+		if o.Price.InputPerMTok < 0 {
+			return fmt.Errorf("config: openai.price.inputPerMTok: must be >= 0, got %v", o.Price.InputPerMTok)
+		}
+		if o.Price.OutputPerMTok < 0 {
+			return fmt.Errorf("config: openai.price.outputPerMTok: must be >= 0, got %v", o.Price.OutputPerMTok)
+		}
 	}
 	return nil
 }

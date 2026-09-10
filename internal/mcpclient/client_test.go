@@ -3,6 +3,7 @@ package mcpclient
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -157,5 +158,38 @@ func TestCloseKillsHungServer(t *testing.T) {
 func TestStartRejectsEmptyCommand(t *testing.T) {
 	if _, err := Start(t.Context(), ServerConfig{Name: "broken"}, nil); err == nil {
 		t.Fatal("want an error")
+	}
+}
+
+// TestStderrTailIsBounded covers the ring the session hands to Start: a
+// server that writes without end must cost a fixed amount of memory, and
+// the lines that survive must say which server wrote them.
+func TestStderrTailIsBounded(t *testing.T) {
+	tail := NewStderrTail(3)
+	w := tail.Writer("fake")
+	for i := 0; i < 100; i++ {
+		fmt.Fprintf(w, "line %d\n", i)
+	}
+	lines := tail.Lines()
+	if len(lines) != 3 {
+		t.Fatalf("Lines() kept %d lines, want 3", len(lines))
+	}
+	if lines[2] != "fake: line 99" {
+		t.Fatalf("last line = %q", lines[2])
+	}
+
+	// A line the server never terminated is still reported, and a line
+	// longer than the cap is cut rather than kept whole.
+	other := tail.Writer("second")
+	fmt.Fprint(other, "crashed mid-sentence")
+	lines = tail.Lines()
+	if lines[len(lines)-1] != "second: crashed mid-sentence" {
+		t.Fatalf("unterminated line = %q", lines[len(lines)-1])
+	}
+	fmt.Fprintln(w, strings.Repeat("x", maxStderrLineBytes*2))
+	for _, line := range tail.Lines() {
+		if len(line) > maxStderrLineBytes+len("fake: ")+len("…") {
+			t.Fatalf("a line escaped the cap: %d bytes", len(line))
+		}
 	}
 }

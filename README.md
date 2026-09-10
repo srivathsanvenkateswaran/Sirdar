@@ -1,8 +1,8 @@
 # Sirdar
 
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
-or tracker, a coding agent you already pay for (Claude Code, Codex) gathers evidence through your
-own read-only MCP servers, translates the conversation, and writes a root-cause note for you to
+or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
+model — gathers evidence through your own read-only MCP servers, translates the conversation, and writes a root-cause note for you to
 review. Once a human has made and merged the fix, Sirdar writes the RCA and Resolution notes that
 record it — it never opens a PR itself. Runs on your machine with your logins.
 
@@ -67,8 +67,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates; exits 1 if any check fails |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex`, `--model NAME`, `--concurrency N`, `--dry-run` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai`, `--model NAME`, `--concurrency N`, `--dry-run` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
 | `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, RCA date, verdict, severity, resolution, and which notes exist |
@@ -111,6 +111,17 @@ The agent session runs with permission to read the workspace and to run the `Bas
 listed under `permissions.bash` in config; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are
 always denied. Sirdar never writes to the tracker or helpdesk and never opens a PR itself: the
 RCA and Resolution notes record a fix a human already made.
+
+## Models
+
+Sirdar drives a run in one of two ways. `provider: claude` and `provider: codex` spawn the
+Claude Code or Codex CLI you already have installed and signed in, so the work counts against
+the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop
+itself against any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together,
+DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own
+read-only tool set and your workspace's MCP servers, and a per-million-token price you set in
+config for the USD budget. See `docs/config.md` for the `openai:` block, and
+`docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after it.
 
 ## Bring your own agent login
 

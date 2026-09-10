@@ -76,6 +76,9 @@ func LoadWorkspaceServers(root string) ([]ServerConfig, []string, error) {
 		e := f.MCPServers[name]
 		kind := strings.ToLower(strings.TrimSpace(e.Type))
 		switch {
+		case !validServerName(name):
+			warnings = append(warnings, fmt.Sprintf("mcp server %q: name must be letters, digits, - or _ (and no __), skipping", name))
+			continue
 		case kind != "" && kind != "stdio":
 			warnings = append(warnings, fmt.Sprintf("mcp server %q: transport %q is not supported (stdio only), skipping", name, kind))
 			continue
@@ -100,6 +103,27 @@ func LoadWorkspaceServers(root string) ([]ServerConfig, []string, error) {
 		servers = append(servers, cfg)
 	}
 	return servers, warnings, nil
+}
+
+// validServerName reports whether a name from .mcp.json is one Sirdar can
+// namespace safely. Tool names reach the model as mcp__<server>__<tool>
+// and are split back on the first "__" after the prefix, so a name
+// carrying "__" — or a space, a colon, anything else — would route a call
+// to the wrong server, or to none. Such an entry is skipped with a
+// warning rather than renamed: the workspace's permission rules are
+// written against the name as configured.
+func validServerName(name string) bool {
+	if name == "" || strings.Contains(name, nameSep) {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9', r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // expand substitutes ${VAR} and $VAR from the process environment.

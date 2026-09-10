@@ -410,3 +410,62 @@ func TestRetryDelay(t *testing.T) {
 		t.Errorf("retryDelay(HTTP-date +3s) = %v, want ~3s", d)
 	}
 }
+
+// TestExtraHeadersCannotOverrideAuthOrContentType covers a config that
+// names one of the two headers the client owns: an Authorization entry
+// would silently replace the configured key, and a Content-Type one would
+// make the body unreadable to the server.
+func TestExtraHeadersCannotOverrideAuthOrContentType(t *testing.T) {
+	var got http.Header
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		got = r.Header.Clone()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"choices":[{"message":{"role":"assistant","content":"ok"},"finish_reason":"stop"}]}`))
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, Config{
+		APIKey: "sk-real",
+		Model:  "m",
+		ExtraHeaders: map[string]string{
+			"Authorization": "Bearer sk-from-headers",
+			"content-type":  "text/plain",
+			"HTTP-Referer":  "https://example.com",
+		},
+	}, srv)
+	if _, err := c.Chat(context.Background(), Request{Messages: []Message{{Role: "user", Content: "hi"}}}); err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	if got.Get("Authorization") != "Bearer sk-real" {
+		t.Errorf("Authorization = %q, want the configured key", got.Get("Authorization"))
+	}
+	if got.Get("Content-Type") != "application/json" {
+		t.Errorf("Content-Type = %q", got.Get("Content-Type"))
+	}
+	if got.Get("HTTP-Referer") != "https://example.com" {
+		t.Errorf("HTTP-Referer = %q, want extra headers to still be applied", got.Get("HTTP-Referer"))
+	}
+}
+
+// TestErrorSnippetScrubsTheKey covers a gateway that echoes the
+// Authorization header it rejected: the error goes to the run log and the
+// operator's terminal, and neither is a place for a credential.
+func TestErrorSnippetScrubsTheKey(t *testing.T) {
+	const secret = "sk-live-abcdef"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, `{"error":"bad key: Bearer `+secret+`"}`, http.StatusUnauthorized)
+	}))
+	defer srv.Close()
+
+	c := newTestClient(t, Config{APIKey: secret, Model: "m"}, srv)
+	_, err := c.Chat(context.Background(), Request{Messages: []Message{{Role: "user", Content: "hi"}}})
+	if err == nil {
+		t.Fatal("want an error for a 401")
+	}
+	if strings.Contains(err.Error(), secret) {
+		t.Fatalf("the error carries the api key: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[redacted]") {
+		t.Errorf("error = %v, want the key replaced with a marker", err)
+	}
+}

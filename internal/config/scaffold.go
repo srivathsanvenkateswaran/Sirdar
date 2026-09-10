@@ -5,9 +5,24 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex
+provider: claude            # claude | codex | openai
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
+# provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
+# Chat Completions endpoint: an aggregator, a vendor, or a server on this
+# machine. Sirdar owns the read-only tools and connects the workspace's MCP
+# servers itself. Uncomment the block and set provider: openai to use it.
+# openai:
+#   baseUrl: https://openrouter.ai/api/v1     # or http://localhost:11434/v1
+#   apiKey: env:OPENROUTER_API_KEY            # omit for a local server that needs none
+#   model: qwen/qwen3-coder
+#   maxContextTokens: 128000                  # old tool results are trimmed as the prompt nears this
+#   price:                                    # optional; cost is reported as 0 without it
+#     inputPerMTok: 0.2
+#     outputPerMTok: 0.8
+#   temperature: 0
+#   extraHeaders:
+#     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
 sources:
   tracker:
     adapter: exec

@@ -100,3 +100,42 @@ func TestToolNameRoundTrip(t *testing.T) {
 		}
 	}
 }
+
+// TestLoadWorkspaceServersSkipsUnnamableServers covers a server whose name
+// cannot survive the mcp__<server>__<tool> round trip: a call would be
+// routed to the wrong server, or to none, and the workspace's mcp__
+// permission rules would not mean what they say.
+func TestLoadWorkspaceServersSkipsUnnamableServers(t *testing.T) {
+	root := t.TempDir()
+	body := `{"mcpServers":{
+		"good": {"command":"/bin/echo"},
+		"two__parts": {"command":"/bin/echo"},
+		"has space": {"command":"/bin/echo"},
+		"colon:name": {"command":"/bin/echo"}
+	}}`
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	servers, warnings, err := LoadWorkspaceServers(root)
+	if err != nil {
+		t.Fatalf("LoadWorkspaceServers: %v", err)
+	}
+	if len(servers) != 1 || servers[0].Name != "good" {
+		t.Fatalf("servers = %+v, want only good", servers)
+	}
+	if len(warnings) != 3 {
+		t.Fatalf("warnings = %q, want one per skipped name", warnings)
+	}
+	for _, name := range []string{"two__parts", "has space", "colon:name"} {
+		found := false
+		for _, w := range warnings {
+			if strings.Contains(w, name) && strings.Contains(w, "name must be") {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("no warning names %q: %q", name, warnings)
+		}
+	}
+}
