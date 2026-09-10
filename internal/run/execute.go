@@ -1,0 +1,757 @@
+package run
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync/atomic"
+	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
+)
+
+// maxMalformed is how many malformed provider lines in a row end the run.
+const maxMalformed = 10
+
+// execution is the state the event loop accumulates for one session.
+type execution struct {
+	final    []byte // the validated JSON note
+	rawFinal string // the last candidate, kept when validation failed
+
+	retried     bool
+	schemaError string
+	malformed   int
+
+	question    string
+	rateLimited bool
+	resetsAt    time.Time
+
+	overBudget  string
+	interrupted bool
+	failure     string
+}
+
+// execute starts one agent session for a prepared run, streams its events
+// to the log and to the operator, enforces the budgets, and turns whatever
+// the session ended with into a terminal state.
+func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *pool) Outcome {
+	if r.Provider == nil {
+		return r.finish(p, store.StatusFailed, "no provider configured", note.DigestRow{})
+	}
+
+	// A rate limit reported by another run pauses this one until it lifts.
+	pl.waitUntilResumed(ctx)
+
+	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
+	if err != nil {
+		return r.finish(p, store.StatusFailed, fmt.Sprintf("provider: %v", err), note.DigestRow{})
+	}
+
+	p.state.Status = store.StatusRunning
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+
+	log, err := p.run.OpenEventLog()
+	if err != nil {
+		sess.Cancel()
+		return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
+	}
+	defer log.Close()
+
+	var timedOut atomic.Bool
+	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
+		timer := time.AfterFunc(time.Duration(mins)*time.Minute, func() {
+			timedOut.Store(true)
+			sess.Cancel()
+		})
+		defer timer.Stop()
+	}
+
+	ex := &execution{}
+	r.consume(ctx, p, sess, log, pl, ex)
+
+	res, _ := sess.Wait()
+	if res.Handle != "" {
+		p.state.Handle = res.Handle
+	} else if h := sess.Handle(); h != "" {
+		p.state.Handle = h
+	}
+	if res.Usage.Turns > p.state.Usage.Turns {
+		p.state.Usage.Turns = res.Usage.Turns
+		p.state.Usage.InputTokens = res.Usage.InputTok
+		p.state.Usage.OutputTokens = res.Usage.OutputTok
+	}
+	if res.Usage.CostUSD > p.state.Usage.CostUSD {
+		p.state.Usage.CostUSD = res.Usage.CostUSD
+	}
+
+	if len(ex.final) == 0 && ex.rawFinal != "" {
+		if err := os.WriteFile(filepath.Join(p.run.Dir, "result.raw.txt"), []byte(ex.rawFinal), 0o644); err != nil {
+			fmt.Fprintf(r.stderr(), "[%s] write result.raw.txt: %v\n", p.state.Key, err)
+		}
+	}
+
+	switch {
+	case timedOut.Load():
+		return r.finish(p, store.StatusOverBudget,
+			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
+	case ex.overBudget != "":
+		return r.finish(p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
+	case ex.interrupted:
+		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
+	case ex.failure != "":
+		return r.finish(p, store.StatusFailed, ex.failure, note.DigestRow{})
+	case len(ex.final) > 0:
+		// A note that validated is worth keeping even if the process
+		// then exited badly; the exit is recorded as a warning.
+		if res.ExitErr != nil {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
+		}
+		row, err := r.complete(p, ex.final)
+		if err != nil {
+			return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
+		}
+		return r.finish(p, store.StatusCompleted, "", row)
+	case ex.question != "":
+		return r.finish(p, store.StatusBlocked, "agent asked: "+ex.question, note.DigestRow{})
+	case ex.rateLimited:
+		reason := "rate limited"
+		if !ex.resetsAt.IsZero() {
+			reason += ", resets at " + ex.resetsAt.Format(time.RFC3339)
+		}
+		return r.finish(p, store.StatusBlocked, reason, note.DigestRow{})
+	default:
+		reason := "the session ended without a JSON note"
+		if res.ExitErr != nil {
+			reason = fmt.Sprintf("provider exited: %v", res.ExitErr)
+		}
+		return r.finish(p, store.StatusFailed, reason, note.DigestRow{})
+	}
+}
+
+// sessionSpec turns the workspace configuration and the prepared run into
+// the session the provider should start.
+func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
+	cfg := r.Config
+	spec := provider.SessionSpec{
+		Cwd:          cfg.Root,
+		Prompt:       p.promptText,
+		Model:        p.state.Model,
+		OutputSchema: schemaFor(p.kind),
+		Policy:       &provider.PermissionPolicy{BashAllow: cfg.Permissions.Bash},
+		Budget: provider.Budget{
+			MaxTurns:   cfg.Budget.MaxTurns,
+			MaxMinutes: cfg.Budget.MaxMinutes,
+			MaxUSD:     cfg.Budget.MaxUSD,
+		},
+		Resume: resume,
+		Env:    r.childEnv(),
+		Binary: r.binary(),
+	}
+	// Claude Code reads image files from the bundle directory itself;
+	// Codex has to be handed them on the command line.
+	if r.providerName() == "codex" {
+		spec.Images = imageAttachments(p)
+	}
+	return spec
+}
+
+// binary is the configured path override for the provider in use, empty
+// when the provider should be looked up on PATH.
+func (r *Runner) binary() string {
+	path := r.Config.Providers.Claude.Path
+	if r.providerName() == "codex" {
+		path = r.Config.Providers.Codex.Path
+	}
+	if path == "" {
+		return ""
+	}
+	return r.Config.ExpandPath(path)
+}
+
+// imageAttachments returns the absolute path of every downloaded image in
+// the bundle.
+func imageAttachments(p *prepared) []string {
+	var out []string
+	for _, a := range p.bundle.Attachments {
+		if !strings.HasPrefix(a.MIME, "image/") || a.Path == "" {
+			continue
+		}
+		path := a.Path
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(p.run.BundleDir(), path)
+		}
+		out = append(out, path)
+	}
+	return out
+}
+
+func schemaFor(kind store.Kind) []byte {
+	if kind == store.KindRCA {
+		return prompt.RCASchema
+	}
+	return prompt.TriageSchema
+}
+
+func noteKind(kind store.Kind) note.Kind {
+	if kind == store.KindRCA {
+		return note.RCA
+	}
+	return note.Triage
+}
+
+// consume reads the session's events until it ends, handling an interrupt
+// by cancelling the session and letting the stream drain.
+func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
+	done := ctx.Done()
+	events := sess.Events()
+	for events != nil {
+		select {
+		case <-done:
+			done = nil // an interrupt is handled once; the stream still drains
+			ex.interrupted = true
+			sess.Cancel()
+		case ev, ok := <-events:
+			if !ok {
+				events = nil
+				continue
+			}
+			r.record(p, log, ev)
+			r.progress(p, ev)
+			r.handleEvent(ctx, p, sess, pl, ex, ev)
+		}
+	}
+}
+
+// eventPayload is the shape of one events.jsonl payload: enough of the
+// event to reconstruct what happened, plus the provider's original line.
+type eventPayload struct {
+	Tool     string          `json:"tool,omitempty"`
+	Decision string          `json:"decision,omitempty"`
+	Text     string          `json:"text,omitempty"`
+	Turns    int             `json:"turns,omitempty"`
+	CostUSD  float64         `json:"costUsd,omitempty"`
+	Raw      json.RawMessage `json:"raw,omitempty"`
+}
+
+func (r *Runner) record(p *prepared, log *store.EventLog, ev provider.Event) {
+	payload := eventPayload{
+		Tool:     ev.Tool,
+		Decision: ev.Decision,
+		Text:     ev.Text,
+		Turns:    ev.Turns,
+		CostUSD:  ev.CostUSD,
+	}
+	if ev.Raw != nil {
+		payload.Raw = ev.Raw
+	}
+	if err := log.Append(string(ev.Kind), payload); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
+	}
+}
+
+// progress prints the one-line-per-event view: what the agent is doing,
+// what it was refused, and how it ended. Informational and assistant-text
+// events are left out; they would drown the rest.
+func (r *Runner) progress(p *prepared, ev provider.Event) {
+	w := r.stderr()
+	key := p.state.Key
+	switch ev.Kind {
+	case provider.EvToolStarted:
+		fmt.Fprintf(w, "[%s] tool %s%s\n", key, ev.Tool, toolDetail(ev.Input))
+	case provider.EvPermission:
+		verb := "allow"
+		if ev.Decision == "deny" {
+			verb = "deny"
+		}
+		fmt.Fprintf(w, "[%s] %s %s\n", key, verb, ev.Tool)
+	case provider.EvFinal:
+		fmt.Fprintf(w, "[%s] final\n", key)
+	case provider.EvError:
+		fmt.Fprintf(w, "[%s] error %s\n", key, firstLine(ev.Text))
+	case provider.EvQuestion:
+		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
+	case provider.EvRateLimited:
+		fmt.Fprintf(w, "[%s] blocked rate limited\n", key)
+	}
+}
+
+const toolDetailMax = 60
+
+// toolDetail renders a tool's input as a short one-line tail for the
+// progress view.
+func toolDetail(input json.RawMessage) string {
+	if len(input) == 0 {
+		return ""
+	}
+	var compact bytes.Buffer
+	if err := json.Compact(&compact, input); err != nil {
+		return ""
+	}
+	s := strings.TrimSpace(compact.String())
+	if s == "" || s == "{}" {
+		return ""
+	}
+	if len(s) > toolDetailMax {
+		s = s[:toolDetailMax] + "…"
+	}
+	return " " + s
+}
+
+func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Session, pl *pool, ex *execution, ev provider.Event) {
+	if ev.Kind != provider.EvError {
+		ex.malformed = 0
+	}
+
+	switch ev.Kind {
+	case provider.EvUsage:
+		p.state.Usage = store.Usage{
+			Turns:        ev.Turns,
+			InputTokens:  ev.InputTok,
+			OutputTokens: ev.OutputTok,
+			CostUSD:      ev.CostUSD,
+		}
+		p.state.UpdatedAt = r.now()
+		if err := p.run.WriteState(p.state); err != nil {
+			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+		}
+		b := r.Config.Budget
+		switch {
+		case b.MaxUSD > 0 && ev.CostUSD > b.MaxUSD:
+			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", ev.CostUSD, b.MaxUSD)
+			sess.Cancel()
+		case b.MaxTurns > 0 && ev.Turns > b.MaxTurns:
+			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", ev.Turns, b.MaxTurns)
+			sess.Cancel()
+		}
+
+	case provider.EvRateLimited:
+		ex.rateLimited = true
+		ex.resetsAt = ev.ResetsAt
+		pl.pause(ev.ResetsAt)
+
+	case provider.EvQuestion:
+		ex.question = ev.Text
+
+	case provider.EvError:
+		ex.malformed++
+		if ex.malformed >= maxMalformed {
+			ex.failure = fmt.Sprintf("%d malformed provider lines in a row: %s", ex.malformed, firstLine(ev.Text))
+			sess.Cancel()
+		}
+
+	case provider.EvFinal:
+		r.handleFinal(ctx, p, sess, ex, ev)
+	}
+}
+
+// handleFinal validates the session's JSON output. The first failure buys
+// one retry turn quoting the validation errors; the second ends the run.
+func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
+	doc := []byte(ev.Final)
+	if len(doc) == 0 {
+		doc = []byte(strings.TrimSpace(ev.Text))
+	}
+
+	err := note.Validate(noteKind(p.kind), doc)
+	if err == nil {
+		ex.final = append([]byte(nil), doc...)
+		ex.rawFinal = ""
+		return
+	}
+
+	ex.rawFinal = string(doc)
+	if ex.retried {
+		ex.failure = "schema validation failed twice: " + ex.schemaError
+		sess.Cancel()
+		return
+	}
+
+	ex.retried = true
+	ex.schemaError = firstProblem(err)
+	msg := "Your previous answer did not match the schema: " +
+		strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", "; ") +
+		". Reply again with the corrected JSON object only."
+	if sendErr := sess.Send(ctx, msg); sendErr != nil {
+		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v", sendErr)
+		sess.Cancel()
+	}
+}
+
+// firstProblem summarises a validation error in one line: its header plus
+// the first violation under it.
+func firstProblem(err error) string {
+	lines := strings.Split(strings.TrimSpace(err.Error()), "\n")
+	head := strings.TrimSpace(lines[0])
+	if len(lines) > 1 && strings.HasSuffix(head, ":") {
+		return head + " " + strings.TrimSpace(lines[1])
+	}
+	return head
+}
+
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
+}
+
+// --- completion -------------------------------------------------------
+
+// triageFields are the parts of a validated triage document the run itself
+// reads: the rest is the template's business.
+type triageFields struct {
+	Title          string `json:"title"`
+	Complaint      string `json:"complaint"`
+	Classification string `json:"classification"`
+	Ticket         struct {
+		Service string `json:"service"`
+	} `json:"ticket"`
+	RootCause struct {
+		Confidence string `json:"confidence"`
+	} `json:"rootCause"`
+}
+
+// rcaFields are the parts of a validated rca document the run itself reads.
+type rcaFields struct {
+	RCA struct {
+		Title          string `json:"title"`
+		Summary        string `json:"summary"`
+		Classification string `json:"classification"`
+		Severity       string `json:"severity"`
+		Confidence     string `json:"confidence"`
+		TriageReview   struct {
+			Verdict string `json:"verdict"`
+		} `json:"triageReview"`
+		PlaybookSuggestions []struct {
+			Playbook string `json:"playbook"`
+			Addition string `json:"addition"`
+			Reason   string `json:"reason"`
+		} `json:"playbookSuggestions"`
+	} `json:"rca"`
+	Resolution struct {
+		Title          string `json:"title"`
+		ResolutionType string `json:"resolutionType"`
+	} `json:"resolution"`
+}
+
+// complete writes the validated document and the notes it renders into.
+func (r *Runner) complete(p *prepared, doc []byte) (note.DigestRow, error) {
+	if err := os.WriteFile(filepath.Join(p.run.Dir, "result.json"), doc, 0o644); err != nil {
+		return note.DigestRow{}, fmt.Errorf("run: write result.json: %w", err)
+	}
+	if p.kind == store.KindRCA {
+		return r.completeRCA(p, doc)
+	}
+	return r.completeTriage(p, doc)
+}
+
+func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error) {
+	cfg := r.Config
+	var f triageFields
+	if err := json.Unmarshal(doc, &f); err != nil {
+		return note.DigestRow{}, fmt.Errorf("run: parse triage note: %w", err)
+	}
+
+	key := p.state.Key
+	slug := note.Slug(f.Title)
+	filename := note.Filename(cfg.Notes.Filenames.Triage, key, slug)
+
+	meta := r.meta(p, f.Ticket.Service)
+	meta.Links.Triage = stem(filename)
+	meta.Links.RCA = stem(note.Filename(cfg.Notes.Filenames.RCA, key, slug))
+	meta.Links.Resolution = stem(note.Filename(cfg.Notes.Filenames.Resolution, key, slug))
+
+	body, err := r.renderer().Render(note.Triage, doc, meta)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+	notePath, err := r.writeNote(p, note.Triage, filename, body)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+
+	r.appendRegister(p, store.RegisterRow{
+		Kind:           string(note.Triage),
+		Date:           meta.Date,
+		Service:        f.Ticket.Service,
+		Classification: f.Classification,
+		Confidence:     f.RootCause.Confidence,
+		NotePath:       notePath,
+	})
+
+	return note.DigestRow{
+		Issue:          firstSentence(f.Complaint),
+		Confidence:     f.RootCause.Confidence,
+		Classification: f.Classification,
+	}, nil
+}
+
+func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
+	cfg := r.Config
+	var f rcaFields
+	if err := json.Unmarshal(doc, &f); err != nil {
+		return note.DigestRow{}, fmt.Errorf("run: parse rca note: %w", err)
+	}
+
+	key := p.state.Key
+	rcaName := note.Filename(cfg.Notes.Filenames.RCA, key, note.Slug(f.RCA.Title))
+	resName := note.Filename(cfg.Notes.Filenames.Resolution, key, note.Slug(f.Resolution.Title))
+
+	// The rca document carries no ticket block, so the service comes from
+	// the triage note this run reviews.
+	meta := r.meta(p, r.triageService(p))
+	meta.Links.RCA = stem(rcaName)
+	meta.Links.Resolution = stem(resName)
+	meta.Links.Triage = p.triageLink
+	if meta.Links.Triage == "" {
+		meta.Links.Triage = stem(note.Filename(cfg.Notes.Filenames.Triage, key, note.Slug(f.RCA.Title)))
+	}
+
+	rend := r.renderer()
+	rcaBody, err := rend.Render(note.RCA, doc, meta)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+	resBody, err := rend.Render(note.Resolution, doc, meta)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+
+	rcaPath, err := r.writeNote(p, note.RCA, rcaName, rcaBody)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+	resPath, err := r.writeNote(p, note.Resolution, resName, resBody)
+	if err != nil {
+		return note.DigestRow{}, err
+	}
+
+	if err := r.writePlaybookSuggestions(p, f); err != nil {
+		return note.DigestRow{}, err
+	}
+
+	// The triage note is now resolved and links to both new notes.
+	links := map[string]string{
+		"rca":        wikiLink(meta.Links.RCA),
+		"resolution": wikiLink(meta.Links.Resolution),
+	}
+	for _, path := range []string{p.triageNotePath, p.triageNoteCopy} {
+		if path == "" {
+			continue
+		}
+		if err := note.UpdateTriageStatus(path, "resolved", links); err != nil {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("triage note %s was not updated: %v", path, err))
+		}
+	}
+
+	r.appendRegister(p, store.RegisterRow{
+		Kind:           string(note.RCA),
+		Date:           meta.Date,
+		Service:        meta.Service,
+		Classification: f.RCA.Classification,
+		Confidence:     f.RCA.Confidence,
+		Severity:       f.RCA.Severity,
+		TriageVerdict:  f.RCA.TriageReview.Verdict,
+		NotePath:       rcaPath,
+	})
+	r.appendRegister(p, store.RegisterRow{
+		Kind:           string(note.Resolution),
+		Date:           meta.Date,
+		Service:        meta.Service,
+		Classification: f.Resolution.ResolutionType,
+		NotePath:       resPath,
+	})
+
+	return note.DigestRow{
+		Issue:          firstSentence(f.RCA.Summary),
+		Confidence:     f.RCA.Confidence,
+		Classification: f.RCA.Classification,
+	}, nil
+}
+
+// writeNote writes the rendered note into the run directory and, unless the
+// notes directory refuses it, files a copy there. It returns the path a
+// human should open.
+func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (string, error) {
+	name := "note.md"
+	if kind == note.Resolution {
+		name = "note-resolution.md"
+	}
+	runPath := filepath.Join(p.run.Dir, name)
+	if err := os.WriteFile(runPath, []byte(body), 0o644); err != nil {
+		return "", fmt.Errorf("run: write %s: %w", name, err)
+	}
+	p.state.Notes = append(p.state.Notes, runPath)
+
+	filed := r.fileNote(p, kind, filename, body)
+	if filed == "" {
+		return runPath, nil
+	}
+	p.state.Notes = append(p.state.Notes, filed)
+	return filed, nil
+}
+
+// fileNote copies a note into the workspace's notes directory. A triage
+// note is only overwritten while the existing one is still untouched
+// ("status: triaged"); anything else a human has moved on from is left
+// alone, with a warning on the run.
+func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) string {
+	dir := r.Config.ExpandPath(r.Config.Notes.Dir)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("notes directory %s: %v", dir, err))
+		return ""
+	}
+	path := filepath.Join(dir, filename)
+
+	if kind == note.Triage {
+		if existing, err := os.ReadFile(path); err == nil {
+			if status := frontmatterValue(string(existing), "status"); status != "triaged" {
+				p.state.Warnings = append(p.state.Warnings,
+					fmt.Sprintf("%s has status %q and was left unchanged", path, status))
+				return ""
+			}
+		}
+	}
+
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("write %s: %v", path, err))
+		return ""
+	}
+	return path
+}
+
+// writePlaybookSuggestions leaves the agent's playbook additions in the run
+// directory as a ready-to-paste block. Sirdar never edits a playbook.
+func (r *Runner) writePlaybookSuggestions(p *prepared, f rcaFields) error {
+	var b strings.Builder
+	b.WriteString("# Playbook suggestions\n")
+	if len(f.RCA.PlaybookSuggestions) == 0 {
+		b.WriteString("\n(none)\n")
+	}
+	for _, s := range f.RCA.PlaybookSuggestions {
+		b.WriteString("\n## " + s.Playbook + "\n\n" + strings.TrimRight(s.Addition, "\n") + "\n")
+		if s.Reason != "" {
+			b.WriteString("\nWhy: " + s.Reason + "\n")
+		}
+	}
+	path := filepath.Join(p.run.Dir, "playbook-suggestions.md")
+	if err := os.WriteFile(path, []byte(b.String()), 0o644); err != nil {
+		return fmt.Errorf("run: write playbook suggestions: %w", err)
+	}
+	return nil
+}
+
+// appendRegister fills in the fields every register row shares and appends
+// it. A register that cannot be written is a warning, not a failed run:
+// the notes are already on disk.
+func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
+	row.Key = p.state.Key
+	row.RunID = p.state.RunID
+	row.Provider = p.state.Provider
+	row.Model = p.state.Model
+	row.Turns = p.state.Usage.Turns
+	row.CostUSD = p.state.Usage.CostUSD
+	if err := store.AppendRegister(r.Config.Root, row); err != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("register: %v", err))
+	}
+}
+
+// meta carries the identifiers, dates and run details a note's frontmatter
+// needs but the validated document does not hold.
+func (r *Runner) meta(p *prepared, service string) note.Meta {
+	b := p.bundle
+	m := note.Meta{
+		Key:          p.state.Key,
+		Date:         r.now().Format(dateLayout),
+		DateReported: bundleDateReported(b),
+		Priority:     bundlePriority(b),
+		Service:      service,
+		RunID:        p.state.RunID,
+		Provider:     p.state.Provider,
+	}
+	if b.Tracker != nil {
+		m.TrackerURL = b.Tracker.URL
+	}
+	if b.Helpdesk != nil {
+		m.HelpdeskID = b.Helpdesk.ID
+		m.HelpdeskURL = b.Helpdesk.URL
+		m.Customer = b.Helpdesk.Customer
+		m.CustomerID = b.Helpdesk.CustomerID
+	}
+	return m
+}
+
+func (r *Runner) renderer() note.Renderer {
+	dir := ""
+	if r.Config.Notes.Templates != "" {
+		dir = r.Config.ExpandPath(r.Config.Notes.Templates)
+	}
+	return note.Renderer{TemplatesDir: dir}
+}
+
+// triageService reads the service out of the triage note this rca run
+// reviews, so both notes file under the same service.
+func (r *Runner) triageService(p *prepared) string {
+	if p.triageNotePath == "" {
+		return ""
+	}
+	data, err := os.ReadFile(p.triageNotePath)
+	if err != nil {
+		return ""
+	}
+	return frontmatterValue(string(data), "service")
+}
+
+// frontmatterValue returns the value of key in the note's leading YAML
+// frontmatter block, or "" when there is no such block or key.
+func frontmatterValue(text, key string) string {
+	lines := strings.Split(text, "\n")
+	if len(lines) == 0 || strings.TrimSpace(lines[0]) != "---" {
+		return ""
+	}
+	prefix := key + ":"
+	for _, line := range lines[1:] {
+		if strings.TrimSpace(line) == "---" {
+			return ""
+		}
+		if strings.HasPrefix(line, prefix) {
+			return strings.Trim(strings.TrimSpace(strings.TrimPrefix(line, prefix)), `"'`)
+		}
+	}
+	return ""
+}
+
+func stem(filename string) string { return strings.TrimSuffix(filename, ".md") }
+
+func wikiLink(stem string) string {
+	if stem == "" {
+		return ""
+	}
+	return `"[[` + stem + `]]"`
+}
+
+const issueMaxLen = 120
+
+// firstSentence is the digest's one-line summary of a complaint: up to the
+// first full stop, or the first 120 characters.
+func firstSentence(s string) string {
+	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
+	if i := strings.IndexByte(s, '.'); i >= 0 && i < issueMaxLen {
+		return strings.TrimSpace(s[:i+1])
+	}
+	if len(s) > issueMaxLen {
+		return strings.TrimSpace(s[:issueMaxLen])
+	}
+	return s
+}
