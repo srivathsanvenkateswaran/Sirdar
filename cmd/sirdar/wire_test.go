@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
@@ -210,5 +211,165 @@ func TestDoctorReportsARejectedGrant(t *testing.T) {
 				t.Fatalf("doctor printed a secret: %q", c.Detail)
 			}
 		}
+	}
+}
+
+// --- built-in tracker adapters ---
+
+// builtinTrackerSources are one valid configuration per built-in tracker,
+// each naming its credentials as env: refs.
+func builtinTrackerSources() map[string]*config.SourceConfig {
+	return map[string]*config.SourceConfig{
+		"jira": {
+			Adapter:  "jira",
+			BaseURL:  "https://acme.atlassian.net",
+			Email:    "you@acme.com",
+			APIToken: "env:JIRA_TOKEN",
+		},
+		"linear": {
+			Adapter: "linear",
+			APIKey:  "env:LINEAR_KEY",
+			TeamKey: "ENG",
+		},
+		"azdo": {
+			Adapter: "azdo",
+			OrgURL:  "https://dev.azure.com/acme",
+			Project: "Payments",
+			PAT:     "env:AZDO_PAT",
+		},
+		"rally": {
+			Adapter:   "rally",
+			BaseURL:   config.RallyDefaultBaseURL,
+			APIKey:    "env:RALLY_KEY",
+			Workspace: "12345",
+		},
+	}
+}
+
+var builtinCreds = map[string]string{
+	"JIRA_TOKEN": "jira-secret",
+	"LINEAR_KEY": "lin_api_secret",
+	"AZDO_PAT":   "azdo-secret",
+	"RALLY_KEY":  "rally-secret",
+}
+
+// TestNewBuiltinTracker covers what the wiring owes each adapter: a client
+// built from the config, and the conversation view where the adapter has
+// one.
+func TestNewBuiltinTracker(t *testing.T) {
+	for name, sc := range builtinTrackerSources() {
+		t.Run(name, func(t *testing.T) {
+			tracker, helpdesk, err := newBuiltinTracker(sc, envResolver(builtinCreds))
+			if err != nil {
+				t.Fatalf("newBuiltinTracker: %v", err)
+			}
+			if tracker == nil {
+				t.Fatal("tracker is nil")
+			}
+			if helpdesk == nil {
+				t.Fatal("adapter exposes Helpdesk(), so the wiring must carry it")
+			}
+			if _, ok := tracker.(pinger); !ok {
+				t.Fatalf("%T does not implement Ping, so doctor has no probe", tracker)
+			}
+		})
+	}
+}
+
+// TestNewBuiltinTrackerResolvesTheSecret proves the ref was resolved rather
+// than passed through: Linear is the one adapter that keeps its key on an
+// exported field, so it is the one that can be checked without a round trip.
+func TestNewBuiltinTrackerResolvesTheSecret(t *testing.T) {
+	sc := builtinTrackerSources()["linear"]
+	tracker, _, err := newBuiltinTracker(sc, envResolver(builtinCreds))
+	if err != nil {
+		t.Fatalf("newBuiltinTracker: %v", err)
+	}
+	c, ok := tracker.(*linear.Client)
+	if !ok {
+		t.Fatalf("tracker is %T, want *linear.Client", tracker)
+	}
+	if c.APIKey != "lin_api_secret" {
+		t.Errorf("APIKey = %q, want the resolved secret", c.APIKey)
+	}
+	if c.TeamKey != "ENG" {
+		t.Errorf("TeamKey = %q, want ENG", c.TeamKey)
+	}
+}
+
+// TestNewBuiltinTrackerMissingCredentialNamesTheKey covers the error an
+// operator sees when the variable or Keychain entry is not there.
+func TestNewBuiltinTrackerMissingCredentialNamesTheKey(t *testing.T) {
+	sc := builtinTrackerSources()["jira"]
+	_, _, err := newBuiltinTracker(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiToken") || !strings.Contains(err.Error(), "env:JIRA_TOKEN") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+func TestBuiltinEndpoint(t *testing.T) {
+	srcs := builtinTrackerSources()
+	for adapter, want := range map[string]string{
+		"jira":   "https://acme.atlassian.net",
+		"linear": linear.DefaultEndpoint,
+		"azdo":   "https://dev.azure.com/acme/Payments",
+		"rally":  config.RallyDefaultBaseURL,
+	} {
+		if got := builtinEndpoint(srcs[adapter]); got != want {
+			t.Errorf("builtinEndpoint(%s) = %q, want %q", adapter, got, want)
+		}
+	}
+}
+
+// TestBuildDepsBuiltinTrackerServesHelpdesk: a tracker that carries the
+// conversation on the issue itself fills the helpdesk role when nothing
+// else claims it.
+func TestBuildDepsBuiltinTrackerServesHelpdesk(t *testing.T) {
+	for name, value := range builtinCreds {
+		t.Setenv(name, value)
+	}
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Tracker = builtinTrackerSources()["jira"]
+
+	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("buildDeps: %v", err)
+	}
+	if deps.Tracker == nil {
+		t.Fatal("tracker was not wired")
+	}
+	if deps.Helpdesk == nil {
+		t.Fatal("the jira adapter's helpdesk view was not used for the helpdesk role")
+	}
+}
+
+// TestBuildDepsConfiguredHelpdeskWins: an operator who named a separate
+// helpdesk meant the thread to come from there, so the tracker's own view
+// must not displace it.
+func TestBuildDepsConfiguredHelpdeskWins(t *testing.T) {
+	for name, value := range builtinCreds {
+		t.Setenv(name, value)
+	}
+	t.Setenv("ZOHO_TOKEN", "access-1")
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Tracker = builtinTrackerSources()["jira"]
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "zohodesk",
+		OrgID:   "1",
+		BaseURL: "https://desk.zoho.in",
+		Token:   "env:ZOHO_TOKEN",
+	}
+
+	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("buildDeps: %v", err)
+	}
+	if _, ok := deps.Helpdesk.(*zohodesk.Client); !ok {
+		t.Fatalf("helpdesk is %T, want the configured Zoho Desk client", deps.Helpdesk)
 	}
 }

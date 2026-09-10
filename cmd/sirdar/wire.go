@@ -4,11 +4,13 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -16,7 +18,11 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/jira"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/rally"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
@@ -100,7 +106,7 @@ func buildDeps(cfg *config.Config, providerName, model string, _, stderr io.Writ
 	}
 
 	if sc := cfg.Sources.Tracker; sc != nil {
-		tracker, err := adapters.tracker(cfg, sc)
+		tracker, err := adapters.tracker(cfg, sc, creds)
 		if err != nil {
 			return runner.Deps{}, cleanup, fmt.Errorf("sources.tracker: %w", err)
 		}
@@ -112,6 +118,13 @@ func buildDeps(cfg *config.Config, providerName, model string, _, stderr io.Writ
 			return runner.Deps{}, cleanup, fmt.Errorf("sources.helpdesk: %w", err)
 		}
 		deps.Helpdesk = helpdesk
+	} else if adapters.trackerHelpdesk != nil {
+		// Trackers like Jira Service Management and Linear carry the
+		// customer conversation on the issue itself, so one adapter can
+		// serve both roles. A configured sources.helpdesk always wins:
+		// an operator who named a separate helpdesk meant the thread to
+		// come from there.
+		deps.Helpdesk = adapters.trackerHelpdesk
 	}
 	return deps, cleanup, nil
 }
@@ -133,6 +146,11 @@ func providerFor(name config.Provider) (provider.Provider, error) {
 type adapterSet struct {
 	stderr  io.Writer
 	clients map[string]*plugin.Client
+
+	// trackerHelpdesk is the conversation view of the built-in tracker
+	// that was built, when it has one. It is only used where no separate
+	// sources.helpdesk is configured.
+	trackerHelpdesk source.Helpdesk
 }
 
 func (a *adapterSet) client(command string) (*plugin.Client, error) {
@@ -157,12 +175,139 @@ func (a *adapterSet) close() {
 	a.clients = nil
 }
 
-func (a *adapterSet) tracker(cfg *config.Config, sc *config.SourceConfig) (source.Tracker, error) {
+func (a *adapterSet) tracker(cfg *config.Config, sc *config.SourceConfig, creds config.Resolver) (source.Tracker, error) {
 	switch sc.Adapter {
 	case "exec":
 		return a.client(expandCommand(cfg, sc.Command))
+	case "jira", "linear", "azdo", "rally":
+		tracker, helpdesk, err := newBuiltinTracker(sc, creds)
+		if err != nil {
+			return nil, err
+		}
+		a.trackerHelpdesk = helpdesk
+		return tracker, nil
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a tracker", sc.Adapter)
+	}
+}
+
+// builtinTimeout is the per-request timeout every built-in tracker adapter
+// gets. It is the adapters' own default, named here so the wiring hands
+// them a client it controls rather than one they construct.
+const builtinTimeout = 30 * time.Second
+
+// pinger is the reachability probe the built-in tracker adapters expose for
+// doctor: one authenticated round trip against the cheapest endpoint the
+// API has.
+type pinger interface {
+	Ping(ctx context.Context) error
+}
+
+// newBuiltinTracker builds one of the four built-in tracker adapters from
+// its configuration, resolving the credential refs on the way in. The
+// second return is the adapter's helpdesk view where it has one — the
+// conversation on the issue itself — and nil where it does not.
+//
+// Resolved secrets stay in the returned client: they are never written to a
+// run directory and never reach the agent's environment.
+func newBuiltinTracker(sc *config.SourceConfig, creds config.Resolver) (source.Tracker, source.Helpdesk, error) {
+	apiToken, err := resolveRef(creds, "apiToken", sc.APIToken)
+	if err != nil {
+		return nil, nil, err
+	}
+	pat, err := resolveRef(creds, "pat", sc.PAT)
+	if err != nil {
+		return nil, nil, err
+	}
+	apiKey, err := resolveRef(creds, "apiKey", sc.APIKey)
+	if err != nil {
+		return nil, nil, err
+	}
+	hc := &http.Client{Timeout: builtinTimeout}
+
+	switch sc.Adapter {
+	case "jira":
+		c, err := jira.New(jira.Config{
+			BaseURL:       sc.BaseURL,
+			Deployment:    sc.Deployment,
+			Email:         sc.Email,
+			APIToken:      apiToken,
+			PAT:           pat,
+			ProjectKey:    sc.ProjectKey,
+			EpicLinkField: sc.EpicLinkField,
+		}, hc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, c.Helpdesk(), nil
+
+	case "linear":
+		c, err := linear.New(linear.Config{APIKey: apiKey, TeamKey: sc.TeamKey}, hc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, c.Helpdesk(), nil
+
+	case "azdo":
+		c, err := azdo.New(azdo.Config{
+			OrgURL:             sc.OrgURL,
+			Project:            sc.Project,
+			PAT:                pat,
+			HelpdeskLinkDomain: sc.HelpdeskLinkDomain,
+			HelpdeskField:      sc.HelpdeskField,
+		}, hc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, c.Helpdesk(), nil
+
+	case "rally":
+		c, err := rally.New(rally.Config{
+			BaseURL:       sc.BaseURL,
+			APIKey:        apiKey,
+			Workspace:     sc.Workspace,
+			Project:       sc.Project,
+			Types:         sc.Types,
+			HelpdeskField: sc.HelpdeskField,
+		}, hc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c, c.Helpdesk(), nil
+	}
+	return nil, nil, fmt.Errorf("adapter %q cannot serve a tracker", sc.Adapter)
+}
+
+// resolveRef resolves one credential reference, naming the key and the ref
+// in the error so an operator knows which entry is missing. An empty ref
+// resolves to an empty string: whether that is allowed is the config
+// validator's business, not this function's.
+func resolveRef(creds config.Resolver, key, ref string) (string, error) {
+	if ref == "" {
+		return "", nil
+	}
+	v, err := creds.Resolve(ref)
+	if err != nil {
+		return "", fmt.Errorf("%s %s: %w", key, ref, err)
+	}
+	return v, nil
+}
+
+// builtinEndpoint is what a built-in tracker talks to, for the doctor row.
+// It never carries a credential.
+func builtinEndpoint(sc *config.SourceConfig) string {
+	switch sc.Adapter {
+	case "azdo":
+		return sc.OrgURL + "/" + sc.Project
+	case "linear":
+		return linear.DefaultEndpoint
+	case "rally":
+		if sc.BaseURL == "" {
+			return config.RallyDefaultBaseURL
+		}
+		return sc.BaseURL
+	default:
+		return sc.BaseURL
 	}
 }
 

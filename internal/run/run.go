@@ -141,7 +141,9 @@ func (d Deps) childEnv() []string {
 // client secret and refresh token are longer-lived than the access token a
 // static token: ref holds, so they matter here more, not less: a refresh
 // token read out of the agent's environment mints access tokens until
-// somebody revokes it at the Zoho console.
+// somebody revokes it at the Zoho console. A built-in tracker's apiToken,
+// pat or apiKey is stripped for the same reason: the agent reads the
+// tickets Sirdar hands it, never the tracker.
 func credentialEnvNames(cfg *config.Config) map[string]bool {
 	names := make(map[string]bool)
 	if cfg == nil {
@@ -151,7 +153,7 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 		if s == nil {
 			continue
 		}
-		refs := []string{s.Token}
+		refs := []string{s.Token, s.APIToken, s.PAT, s.APIKey}
 		if s.Auth != nil {
 			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
 		}

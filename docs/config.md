@@ -27,7 +27,7 @@ rather than being silently ignored.
 | `sources.*.auth.accountsUrl` | string | derived from `baseUrl` | Zoho accounts server that issues access tokens |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
-| `sources.tracker.email` | string | none (required for `jira` Cloud) | Credential reference to the Jira Cloud account email used with `apiToken` |
+| `sources.tracker.email` | string | none (required for `jira` Cloud) | The Jira Cloud account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
 | `sources.tracker.apiToken` | string | none (required for `jira` Cloud) | Credential reference to a Jira Cloud API token |
 | `sources.tracker.pat` | string | none (required for `jira` Data Center or `azdo`) | Credential reference to a Jira Data Center PAT or an Azure DevOps PAT |
 | `sources.tracker.projectKey` | string | unset | `jira` only: scopes `List` to one project |
@@ -40,8 +40,9 @@ rather than being silently ignored.
 | `sources.tracker.helpdeskField` | string | unset | `azdo`/`rally` only: custom field name/id carrying the helpdesk ticket reference |
 | `sources.tracker.workspace` | string | none (required for `rally`) | Rally workspace `_ref` or ObjectID, scopes all queries |
 | `sources.tracker.types` | list of string | `[Defect, HierarchicalRequirement]` | `rally` only: artifact types `Get` falls back through and `List` sweeps |
-| `sources.tracker.helpdeskRef.pattern` | string | unset | Planned: regex matched against the ticket description to find a helpdesk link/id when the adapter itself reports none |
-| `sources.tracker.helpdeskRef.idPattern` | string | unset | Planned: regex applied to the `pattern` match to extract the helpdesk ticket id |
+| `sources.tracker.helpdeskRef` | object, optional | unset | Description-regex fallback for the helpdesk reference; tracker only, see helpdeskRef fallback below |
+| `sources.tracker.helpdeskRef.pattern` | string | none (required with `helpdeskRef`) | Go regex matched against the ticket description, with exactly one capture group holding the helpdesk link or id |
+| `sources.tracker.helpdeskRef.idPattern` | string | unset | Go regex applied to `pattern`'s capture, with exactly one capture group holding the helpdesk ticket id |
 | `notes.dir` | string | `.sirdar/notes` | Where rendered notes are copied; expands `~` and relative paths against the workspace root |
 | `notes.templates` | string | `""` (embedded defaults) | Directory holding `triage.md.tmpl`, `rca.md.tmpl`, `resolution.md.tmpl` overrides |
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
@@ -71,6 +72,62 @@ naming the offending key. Budget values must all be greater than zero. A configu
 adapter-specific fields are required only for that adapter; `sources.tracker` and
 `sources.helpdesk` are each optional, but a source config with no `adapter` set is an error.
 
+## Built-in trackers
+
+`jira`, `linear`, `azdo` and `rally` are compiled into Sirdar, so they need no adapter process.
+They are tracker adapters: naming one under `sources.helpdesk` fails config load and points you
+at `sources.tracker`. Config load checks what each one cannot work without:
+
+| Adapter | Required | Notes |
+|---|---|---|
+| `jira` | `baseUrl`, and either `email` + `apiToken` (Cloud) or `pat` (Data Center) | `deployment` must be `cloud`, `datacenter` or `auto` |
+| `linear` | `apiKey` | The endpoint is fixed at `https://api.linear.app/graphql` |
+| `azdo` | `orgUrl`, `project`, `pat` | The PAT needs the `vso.work` scope |
+| `rally` | `apiKey`, `workspace` | `baseUrl` defaults to `https://rally1.rallydev.com` |
+
+Each of these trackers also carries the conversation on the issue itself, so it can fill the
+helpdesk role as well: when `sources.helpdesk` is unset, Sirdar reads the thread and the
+attachments from the same adapter. A configured `sources.helpdesk` always wins.
+
+`sirdar doctor` prints one row per built-in tracker, from a single authenticated call against
+the cheapest endpoint the API has — Jira's `serverInfo`, Linear's `viewer`, the Azure DevOps
+project, Rally's current user:
+
+```
+[OK] sources.tracker (jira) — reachable (https://acme.atlassian.net)
+```
+
+### helpdeskRef fallback
+
+A tracker that has no native link to the helpdesk — no Jira Service Management request, no
+Linear customer-request attachment, no Azure DevOps hyperlink or custom field — often still
+names the support ticket in its description, as a URL somebody pasted. `helpdeskRef` turns that
+into a rule the workspace owns:
+
+```yaml
+sources:
+  tracker:
+    helpdeskRef:
+      pattern: 'Zoho Ticket URL:\s*(\S+)'
+      idPattern: '(\d+)$'
+```
+
+`pattern` is matched against the ticket description and its one capture group is the reference;
+`idPattern`, when set, is applied to that capture and its one capture group is the id Sirdar
+passes to the helpdesk. Both are Go regular expressions, both are compiled at config load, and
+both must have exactly one capture group — a pattern with none or with several fails the load
+rather than a run. The fallback only fills in what the adapter left empty, so a tracker with
+native linkage is never overridden. A description that does not match leaves the reference
+empty and Sirdar reads the helpdesk by the ticket key instead; a `pattern` that matched while
+`idPattern` did not is recorded as a run warning, because that is a rule to fix rather than a
+ticket without a link.
+
+### List limits
+
+`ListFilter.Limit` is capped by the adapters, not by the caller: `0` means 100 results and the
+maximum is 200. An adapter paginates its API as far as it has to in order to fill the limit, and
+never returns more than it was asked for.
+
 ## Credential references
 
 `sources.*.token` (and any credential in config) is never a literal secret: config load
@@ -82,9 +139,11 @@ rejects a value that doesn't start with `env:` or `keychain:`. Two forms:
   `keychain:` ref fails to resolve.
 
 Resolved values are held in memory only: never written to a run directory, and never placed in
-the agent's environment. Every `env:` variable named anywhere in `sources.*` — the access token
-and all three parts of an `auth` grant — is stripped from the environment the agent process
-inherits, so a session that can run shell commands cannot read them back out.
+the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
+built-in trackers' `apiToken`, `pat` and `apiKey`, and all three parts of an `auth` grant — is
+stripped from the environment the agent process inherits, so a session that can run shell
+commands cannot read them back out. `email` is the one adapter credential field that is not a
+reference: it is an account name, not a secret, and it is left in place.
 
 ## Zoho Desk OAuth
 

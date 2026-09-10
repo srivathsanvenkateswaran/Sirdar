@@ -132,9 +132,32 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
+	case "jira", "linear", "azdo", "rally":
+		return []provider.Check{builtinProbe(ctx, name, sc)}
+
 	default:
 		return []provider.Check{{Name: name, Detail: fmt.Sprintf("unknown adapter %q", sc.Adapter)}}
 	}
+}
+
+// builtinProbe builds a built-in tracker adapter with the credentials the
+// config names and makes it call Ping: one authenticated round trip against
+// the cheapest endpoint the API has, which is what proves the base URL, the
+// credential and the network all work before a run spends an agent session
+// finding out otherwise.
+func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) provider.Check {
+	tracker, _, err := newBuiltinTracker(sc, config.Resolver{Keychain: keychainFor()})
+	if err != nil {
+		return provider.Check{Name: name, Detail: err.Error()}
+	}
+	p, ok := tracker.(pinger)
+	if !ok {
+		return provider.Check{Name: name, OK: true, Detail: "configured (" + builtinEndpoint(sc) + ")"}
+	}
+	if err := p.Ping(ctx); err != nil {
+		return provider.Check{Name: name, Detail: err.Error()}
+	}
+	return provider.Check{Name: name, OK: true, Detail: "reachable (" + builtinEndpoint(sc) + ")"}
 }
 
 // oauthCheck performs one refresh and reports the access token it got and
@@ -145,8 +168,8 @@ func oauthCheck(ctx context.Context, rt *zohodesk.RefreshingToken) provider.Chec
 		return provider.Check{Name: "zoho oauth", Detail: err.Error()}
 	}
 	return provider.Check{
-		Name:   "zoho oauth",
-		OK:     true,
+		Name: "zoho oauth",
+		OK:   true,
 		// Rounded: the sub-second drift between minting the token and
 		// measuring it is not something to report to three decimals.
 		Detail: fmt.Sprintf("access token obtained, expires in %ds", int(ttl.Round(time.Second).Seconds())),

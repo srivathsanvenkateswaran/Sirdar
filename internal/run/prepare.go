@@ -164,6 +164,9 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 			return b, fmt.Errorf("tracker %s: %w", key, err)
 		}
 		b.Tracker = &tt
+		if b.Tracker.HelpdeskRef == "" {
+			r.applyHelpdeskRefFallback(p, &b, b.Tracker)
+		}
 	}
 
 	helpdeskID := key
@@ -205,6 +208,52 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 		return b, fmt.Errorf("no ticket source configured; set sources.tracker or sources.helpdesk")
 	}
 	return b, nil
+}
+
+// applyHelpdeskRefFallback fills in a tracker ticket's HelpdeskRef from its
+// description, using the regex rule the workspace configured under
+// sources.tracker.helpdeskRef. It is only reached when the adapter reported
+// no reference of its own, so a tracker with native linkage — a Jira
+// Service Management request, a Linear customer request, an Azure DevOps
+// hyperlink — is never overridden by a guess made from prose.
+//
+// Both patterns were compiled once at config load, so a compile failure
+// here cannot happen for a config that loaded; it is treated as no match
+// rather than as a run failure. A pattern that matched while idPattern did
+// not is worth a warning: the description does name a helpdesk ticket and
+// the rule could not turn it into an id, which is a rule to fix rather than
+// a ticket without a link.
+func (r *Runner) applyHelpdeskRefFallback(p *prepared, b *ticket.Bundle, tt *ticket.TrackerTicket) {
+	if r.Config == nil || r.Config.Sources.Tracker == nil {
+		return
+	}
+	h := r.Config.Sources.Tracker.HelpdeskRef
+	if h == nil || h.Pattern == "" {
+		return
+	}
+	re, err := regexp.Compile(h.Pattern)
+	if err != nil {
+		return
+	}
+	m := re.FindStringSubmatch(tt.Description)
+	if len(m) < 2 || m[1] == "" {
+		return
+	}
+	ref := m[1]
+
+	if h.IDPattern != "" {
+		idRe, err := regexp.Compile(h.IDPattern)
+		if err != nil {
+			return
+		}
+		im := idRe.FindStringSubmatch(ref)
+		if len(im) < 2 || im[1] == "" {
+			p.warn(b, fmt.Sprintf("helpdeskRef.pattern matched %q in the description but idPattern did not; no helpdesk ticket was read", ref))
+			return
+		}
+		ref = im[1]
+	}
+	tt.HelpdeskRef = ref
 }
 
 // warn records a warning in both places it has to appear: the prompt the

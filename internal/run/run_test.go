@@ -1360,3 +1360,169 @@ func contains(list []string, want string) bool {
 	}
 	return false
 }
+
+// --- helpdeskRef fallback ---------------------------------------------
+
+// zohoURLRule is the rule that used to be hardcoded: it finds the Zoho Desk
+// ticket URL a triager pasted into the tracker description, then narrows it
+// to the ticket number the Desk API answers to.
+func zohoURLRule() *config.SourceConfig {
+	return &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+}
+
+func TestHelpdeskRefFallback(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		want        string
+		wantWarning bool
+	}{
+		{
+			name:        "the agent-console URL shape",
+			description: "Customer cannot export.\n\nZoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789\n",
+			want:        "1234567890123456789",
+		},
+		{
+			name:        "the ShowHomePage URL shape",
+			description: "Zoho Ticket URL: https://desk.zoho.com/support/acme/ShowHomePage.do#Cases/dv/987654321\nfiled by L1.",
+			want:        "987654321",
+		},
+		{
+			name:        "a description with no Zoho URL at all",
+			description: "Customer cannot export. Reported over the phone.",
+			want:        "",
+		},
+		{
+			name:        "a match the idPattern cannot narrow",
+			description: "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/none",
+			want:        "",
+			wantWarning: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg}}
+
+			tt := ticket.TrackerTicket{Key: "OMNI-1", Description: tc.description}
+			p := &prepared{}
+			var b ticket.Bundle
+			r.applyHelpdeskRefFallback(p, &b, &tt)
+
+			if tt.HelpdeskRef != tc.want {
+				t.Errorf("HelpdeskRef = %q, want %q", tt.HelpdeskRef, tc.want)
+			}
+			if got := len(b.Warnings) > 0; got != tc.wantWarning {
+				t.Errorf("warnings = %v, want a warning: %v", b.Warnings, tc.wantWarning)
+			}
+			if len(b.Warnings) != len(p.state.Warnings) {
+				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
+			}
+		})
+	}
+}
+
+// TestHelpdeskRefFallbackWithoutARule leaves the reference alone when the
+// workspace configured no rule at all.
+func TestHelpdeskRefFallbackWithoutARule(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear", APIKey: "env:LINEAR_KEY"}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	tt := ticket.TrackerTicket{Description: "Zoho Ticket URL: https://desk.zoho.com/agent/a/support/tickets/details/42"}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	if tt.HelpdeskRef != "" {
+		t.Fatalf("HelpdeskRef = %q, want it left empty", tt.HelpdeskRef)
+	}
+}
+
+// descTracker is a tracker whose issue carries a helpdesk URL in its
+// description and a native HelpdeskRef only when one is set.
+type descTracker struct {
+	description string
+	helpdeskRef string
+}
+
+func (d descTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
+	return ticket.TrackerTicket{Key: key, Title: "Export fails", Description: d.description, HelpdeskRef: d.helpdeskRef}, nil
+}
+
+func (d descTracker) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
+	return nil, nil
+}
+
+// TestFetchBundleAppliesAndDefersToTheAdapter: the fallback fills in a
+// missing reference and never overrides one the adapter found itself.
+func TestFetchBundleAppliesAndDefersToTheAdapter(t *testing.T) {
+	const desc = "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789"
+
+	for _, tc := range []struct {
+		name   string
+		native string
+		want   string
+	}{
+		{name: "the adapter found nothing", native: "", want: "1234567890123456789"},
+		{name: "the adapter found its own reference", native: "555", want: "555"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}}
+
+			b, err := r.fetchBundle(context.Background(), "OMNI-1", &prepared{})
+			if err != nil {
+				t.Fatalf("fetchBundle: %v", err)
+			}
+			if b.Tracker.HelpdeskRef != tc.want {
+				t.Fatalf("HelpdeskRef = %q, want %q", b.Tracker.HelpdeskRef, tc.want)
+			}
+		})
+	}
+}
+
+// TestCredentialEnvNamesCoversBuiltinTrackers: every env: ref a built-in
+// tracker names is stripped from the agent's environment, for the same
+// reason the Zoho token is — an agent that runs shell commands must not be
+// able to read the tracker's credentials back out.
+func TestCredentialEnvNamesCoversBuiltinTrackers(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter:  "jira",
+		BaseURL:  "https://acme.atlassian.net",
+		Email:    "you@acme.com",
+		APIToken: "env:JIRA_TOKEN",
+		PAT:      "env:JIRA_PAT",
+		APIKey:   "env:LINEAR_KEY",
+	}
+	cfg.Sources.Helpdesk = &config.SourceConfig{Adapter: "zohodesk", Token: "env:ZOHO_TOKEN"}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"JIRA_TOKEN", "JIRA_PAT", "LINEAR_KEY", "ZOHO_TOKEN"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "JIRA_TOKEN=x", "JIRA_PAT=y", "LINEAR_KEY=z", "ZOHO_TOKEN=w", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"JIRA_TOKEN=", "JIRA_PAT=", "LINEAR_KEY=", "ZOHO_TOKEN="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+}

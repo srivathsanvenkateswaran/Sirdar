@@ -223,27 +223,29 @@ collection, following each entry's `Content` reference to an
 
 ## helpdeskRef fallback
 
-**Planned; lands with the wiring change.** None of the four adapters above
-guess a helpdesk reference from free text — each only reports `HelpdeskRef`
-when the tracker's own data model gives an unambiguous answer (Jira JSM,
-Linear's Customer Request attachments, an Azure DevOps Hyperlink/custom
-field, a Rally custom field). For a workspace where the link only exists as
-a pasted URL or ticket number in the description, a generic regex fallback
-is planned at the wiring layer, configured per workspace:
+None of the four adapters above guess a helpdesk reference from free text —
+each only reports `HelpdeskRef` when the tracker's own data model gives an
+unambiguous answer (Jira JSM, Linear's Customer Request attachments, an
+Azure DevOps Hyperlink/custom field, a Rally custom field). For a workspace
+where the link only exists as a pasted URL or ticket number in the
+description, the wiring layer applies a generic regex fallback, configured
+per workspace:
 
 ```yaml
 sources:
   tracker:
     helpdeskRef:
-      pattern: 'https://acme\.zohodesk\.com/agent/.../(\d+)'
-      idPattern: '\d+'
+      pattern: 'Zoho Ticket URL:\s*(\S+)'
+      idPattern: '(\d+)$'
 ```
 
-`pattern` matches against the ticket description; `idPattern`, applied to
-the match, extracts the id passed to `helpdesk.get`/`helpdesk.threads`. This
-runs after an adapter's own native `HelpdeskRef`, only filling in when the
-adapter left it empty — it replaces what used to be a hardcoded Zoho-URL
-rule with something any workspace can point at its own helpdesk.
+`pattern` matches against the ticket description and its one capture group
+is the reference; `idPattern`, applied to that capture, extracts the id
+passed to `helpdesk.get`/`helpdesk.threads`. Both compile at config load and
+both take exactly one capture group. This runs after an adapter's own native
+`HelpdeskRef`, only filling in when the adapter left it empty — it replaces
+what used to be a hardcoded Zoho-URL rule with something any workspace can
+point at its own helpdesk. See `docs/config.md` for the full rules.
 
 ## External adapter protocol
 
