@@ -35,7 +35,15 @@ rather than being silently ignored.
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
-title. `provider`, `billing`, and `concurrency` are validated at load time: an unrecognised
+title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
+that a vault already expects, e.g. `notes.filenames.triage: "Triage/{key} {slug}.md"` files
+triage notes under `Triage/`, and `RCA/{key} RCA {slug}.md` / `Resolutions/{key} RES {slug}.md`
+do the same for RCA and resolution notes. Sirdar creates any missing subdirectory when it writes
+the note. A segment that is empty (including the one a leading `/` produces) or exactly `..` is
+dropped rather than followed, so a pattern can't write outside `notes.dir`; re-triage still finds
+and overwrites a triage note filed this way, searching `notes.dir` recursively (skipping
+dot-directories such as `.obsidian`) for a match by key and frontmatter tag rather than by exact
+path. `provider`, `billing`, and `concurrency` are validated at load time: an unrecognised
 `provider` or `billing` value, or a `concurrency` below 1, fails config load with a message
 naming the offending key. Budget values must all be greater than zero. A configured source's
 adapter-specific fields are required only for that adapter; `sources.tracker` and
