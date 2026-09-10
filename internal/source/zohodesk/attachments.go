@@ -201,7 +201,6 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 func (c *Client) putWarnings(id string, warnings []string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.lastID = id
 	if len(warnings) == 0 {
 		delete(c.warnings, id)
 		return
@@ -229,24 +228,12 @@ var (
 	_ source.Warner   = (*Client)(nil)
 )
 
-// Warnings implements source.Warner: it returns the per-attachment
-// failures the most recent Attachments call recorded, so the caller can put
-// them in the prompt and the run state instead of silently serving a short
-// list of attachments. Reading them consumes them.
-//
-// One Client serves every run in a batch, so "the most recent call" is only
-// unambiguous while one ticket is in flight. A caller that knows which
-// ticket it is asking about should use WarningsFor instead.
-func (c *Client) Warnings() []string {
-	c.mu.Lock()
-	id := c.lastID
-	c.mu.Unlock()
-	return c.takeWarnings(id)
-}
-
-// WarningsFor returns and consumes the failures recorded by the Attachments
-// call for ticket id, which is what a caller running several tickets at
-// once needs: it cannot be handed another ticket's missing evidence.
+// WarningsFor implements source.Warner: it returns and consumes the
+// per-attachment failures the Attachments call for ticket id recorded, so
+// the caller can put them in the prompt and the run state instead of
+// silently serving a short list of attachments. It is keyed by id, which is
+// what a caller running several tickets at once needs: it cannot be handed
+// another ticket's missing evidence.
 func (c *Client) WarningsFor(id string) []string {
 	return c.takeWarnings(id)
 }

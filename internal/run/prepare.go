@@ -195,7 +195,7 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 		// has to know an attachment is missing before it reasons from
 		// the ones that arrived.
 		if w, ok := r.Helpdesk.(source.Warner); ok {
-			for _, msg := range w.Warnings() {
+			for _, msg := range w.WarningsFor(helpdeskID) {
 				p.warn(&b, msg)
 			}
 		}

@@ -298,8 +298,8 @@ func TestAttachments_DownloadsThreeInOrder(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len(Attachments) = %d, want 3: %+v", len(got), got)
 	}
-	if w := c.Warnings(); len(w) != 0 {
-		t.Errorf("Warnings() = %v, want none", w)
+	if w := c.WarningsFor("555"); len(w) != 0 {
+		t.Errorf("WarningsFor(555) = %v, want none", w)
 	}
 
 	wantPrefixes := []string{"1-", "2-", "3-"}
@@ -389,7 +389,7 @@ func TestAttachments_PartialFailureRecordsWarning(t *testing.T) {
 	if _, err := c.Attachments(context.Background(), "555", t.TempDir()); err != nil {
 		t.Fatalf("second Attachments call: %v", err)
 	}
-	if w := c.Warnings(); len(w) != 1 {
+	if w := c.WarningsFor("555"); len(w) != 1 {
 		t.Fatalf("warnings not reset between calls: %v", w)
 	}
 }
@@ -710,7 +710,7 @@ func TestAttachments_ClearsWarningsOnAnEarlyReturn(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("second call returned %d attachments, want 0", len(got))
 	}
-	if w := c.Warnings(); len(w) != 0 {
+	if w := c.WarningsFor("555"); len(w) != 0 {
 		t.Fatalf("a ticket with no attachments inherited warnings: %v", w)
 	}
 }
@@ -745,7 +745,7 @@ func TestAttachments_AllFailDoesNotAlsoWarn(t *testing.T) {
 	if !strings.Contains(err.Error(), "gone") {
 		t.Errorf("error does not name the failure: %v", err)
 	}
-	if w := c.Warnings(); len(w) != 0 {
+	if w := c.WarningsFor("555"); len(w) != 0 {
 		t.Fatalf("failures were reported twice, as an error and as warnings: %v", w)
 	}
 }

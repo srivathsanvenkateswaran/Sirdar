@@ -63,8 +63,12 @@ type Closer interface{ Close() error }
 // rest of them did. The caller reads the warnings after the call it made
 // and puts them in front of the agent and the operator, because a partial
 // result that looks complete is how evidence goes missing unnoticed.
+//
+// It is keyed by ticket id, not the most recent call, because one source
+// can serve several tickets finishing at the same time: an argument-less
+// Warnings() would let two tickets in flight swap each other's warnings.
 type Warner interface {
-	// Warnings returns the problems recorded by the most recent call, or
-	// nothing when there were none.
-	Warnings() []string
+	// WarningsFor returns the problems recorded by the call made for
+	// ticket id, or nothing when there were none.
+	WarningsFor(id string) []string
 }
