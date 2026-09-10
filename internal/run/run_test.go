@@ -191,10 +191,18 @@ type stubHelpdesk struct {
 	attachErr error
 	// warnings is what the stub reports through source.Warner, standing in
 	// for a helpdesk that downloaded some attachments and skipped others.
-	warnings []string
+	// warningsFor, when set, overrides warnings with a per-ticket-id
+	// mapping, for tests that need two tickets to see different warnings.
+	warnings    []string
+	warningsFor map[string][]string
 }
 
-func (s stubHelpdesk) Warnings() []string { return s.warnings }
+func (s stubHelpdesk) WarningsFor(id string) []string {
+	if s.warningsFor != nil {
+		return s.warningsFor[id]
+	}
+	return s.warnings
+}
 
 func (s stubHelpdesk) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, error) {
 	if s.getErr != nil {
@@ -810,6 +818,48 @@ func TestHelpdeskWarningsReachThePrompt(t *testing.T) {
 	}
 	if !found {
 		t.Fatalf("run state warnings: %v", out.State.Warnings)
+	}
+}
+
+// TestHelpdeskWarningsStayWithTheirTicket covers a helpdesk that answers
+// two tickets with different per-id warnings: prepare must call
+// WarningsFor(helpdeskID) rather than an argument-less Warnings(), or one
+// ticket's prompt.md ends up carrying the other's missing-attachment
+// warning.
+func TestHelpdeskWarningsStayWithTheirTicket(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	hd := stubHelpdesk{warningsFor: map[string][]string{
+		"OMNI-1": {"zoho desk: download attachment a1: status 404"},
+		"OMNI-2": {"zoho desk: download attachment b2: status 500"},
+	}}
+	// No tracker: the helpdesk id is the ticket key itself, so the two
+	// tickets go to the helpdesk stub as distinct ids.
+	r := newRunner(cfg, p, nil, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1", "OMNI-2"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 2 {
+		t.Fatalf("outs = %d, want 2", len(outs))
+	}
+
+	for _, out := range outs {
+		if out.State.Status != store.StatusCompleted {
+			t.Fatalf("%s status %q reason %q", out.State.Key, out.State.Status, out.State.Reason)
+		}
+		promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+		own, other := "attachment a1", "attachment b2"
+		if out.State.Key == "OMNI-2" {
+			own, other = "attachment b2", "attachment a1"
+		}
+		if !strings.Contains(promptText, own) {
+			t.Fatalf("%s prompt is missing its own warning:\n%s", out.State.Key, promptText)
+		}
+		if strings.Contains(promptText, other) {
+			t.Fatalf("%s prompt carries the other ticket's warning:\n%s", out.State.Key, promptText)
+		}
 	}
 }
 

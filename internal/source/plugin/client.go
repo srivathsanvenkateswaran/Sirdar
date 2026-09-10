@@ -305,13 +305,13 @@ func (h helpdeskView) Get(ctx context.Context, id string) (ticket.HelpdeskTicket
 	return h.Client.getHelpdesk(ctx, id)
 }
 
-// Warnings implements source.Warner. The adapter protocol has no channel
+// WarningsFor implements source.Warner. The adapter protocol has no channel
 // for per-item warnings today — an adapter reports partial failures on its
 // own stderr, which Sirdar copies through — so there is never anything to
-// return. The method exists so every source Sirdar ships answers the same
-// interface, and so adding a warnings field to the protocol later is a
-// change to this one method.
-func (c *Client) Warnings() []string { return nil }
+// return for any ticket id. The method exists so every source Sirdar ships
+// answers the same interface, and so adding a warnings field to the
+// protocol later is a change to this one method.
+func (c *Client) WarningsFor(id string) []string { return nil }
 
 var (
 	_ source.Tracker  = (*Client)(nil)

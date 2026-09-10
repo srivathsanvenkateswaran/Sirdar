@@ -37,9 +37,6 @@ type Client struct {
 	// cannot be reported against another's. An entry is written when the
 	// call ends and removed when it is read.
 	warnings map[string][]string
-	// lastID is the ticket whose Attachments call finished most recently,
-	// which is what the argument-less source.Warner interface can offer.
-	lastID string
 }
 
 // New returns a Client configured to talk to baseURL as organization orgID,
