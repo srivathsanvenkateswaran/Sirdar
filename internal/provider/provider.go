@@ -1,0 +1,117 @@
+// Package provider defines the contract between Sirdar's triage loop and a
+// coding-agent CLI (Claude Code, Codex, etc.), plus the permission policy
+// that decides which tools an agent session may use.
+package provider
+
+import (
+	"context"
+	"encoding/json"
+	"time"
+)
+
+// Budget caps a session's turns, wall-clock time, and spend. A provider
+// enforces these locally where it can and reports usage via Event/Result
+// so the caller can stop a session that runs over.
+type Budget struct {
+	MaxTurns   int
+	MaxMinutes int
+	MaxUSD     float64
+}
+
+// SessionSpec configures a single agent session.
+type SessionSpec struct {
+	Cwd          string
+	Prompt       string
+	Model        string
+	OutputSchema []byte
+	Policy       *PermissionPolicy
+	Budget       Budget
+	Resume       string
+	Images       []string
+	Env          []string // full child env; provider may strip keys
+	Binary       string   // path override; "" = look up on PATH
+}
+
+// EventKind identifies the kind of a Session event.
+type EventKind string
+
+const (
+	EvAssistantText EventKind = "assistant_text"
+	EvToolStarted   EventKind = "tool_started"
+	EvToolFinished  EventKind = "tool_finished"
+	EvPermission    EventKind = "permission"
+	EvUsage         EventKind = "usage"
+	EvRateLimited   EventKind = "rate_limited"
+	EvQuestion      EventKind = "question"
+	EvFinal         EventKind = "final"
+	EvSystem        EventKind = "system" // init, status, anything informational
+	EvError         EventKind = "error"
+)
+
+// Event is one line of a Session's activity stream.
+type Event struct {
+	Kind     EventKind
+	At       time.Time
+	Text     string          // assistant text / question / error message
+	Tool     string          // tool name for tool_* and permission
+	Input    json.RawMessage // tool input
+	Decision string          // "allow" | "deny" for permission
+
+	Turns               int
+	InputTok, OutputTok int64
+	CostUSD             float64
+
+	ResetsAt time.Time // rate limit
+
+	Final json.RawMessage // structured output, nil if absent
+	Raw   json.RawMessage // original provider line, always set
+}
+
+// Result is a session's terminal outcome, available after Wait returns.
+type Result struct {
+	Final json.RawMessage
+	Text  string // final text when no structured output
+	Usage struct {
+		Turns               int
+		InputTok, OutputTok int64
+		CostUSD             float64
+	}
+	Handle  string
+	ExitErr error // non-nil if the process failed
+}
+
+// Session represents one running (or completed) agent process.
+type Session interface {
+	// Events returns the channel of activity events. It closes when the
+	// session ends, whether that is success, failure, or cancellation.
+	Events() <-chan Event
+
+	// Send delivers a follow-up user message to a running session. It is
+	// used for the schema-retry turn, when the agent's structured output
+	// failed validation and needs another attempt.
+	Send(ctx context.Context, userText string) error
+
+	// Wait blocks until the underlying process exits and returns its
+	// final Result.
+	Wait() (Result, error)
+
+	// Handle returns the provider's resume token for this session, so a
+	// later SessionSpec.Resume can continue it.
+	Handle() string
+
+	Cancel()
+}
+
+// Check is one Doctor diagnostic result.
+type Check struct {
+	Name   string
+	OK     bool
+	Detail string
+}
+
+// Provider adapts a specific agent CLI to the Session contract.
+type Provider interface {
+	Name() string
+	Start(ctx context.Context, spec SessionSpec) (Session, error)
+	Doctor(ctx context.Context, binary string) []Check
+}
