@@ -1,0 +1,6 @@
+{
+  "baseUrl": "https://jira.example.com",
+  "version": "1001.0.0-SNAPSHOT",
+  "deploymentType": "Cloud",
+  "serverTitle": "Jira"
+}

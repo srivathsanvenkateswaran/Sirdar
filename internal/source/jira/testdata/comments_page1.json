@@ -1,0 +1,21 @@
+{
+  "startAt": 0,
+  "maxResults": 2,
+  "total": 3,
+  "comments": [
+    {
+      "id": "8001",
+      "author": { "displayName": "Dana Okoro", "accountId": "acc-dana", "accountType": "customer" },
+      "body": "Any update?",
+      "created": "2026-09-02T09:00:00.000+0000",
+      "jsdPublic": true
+    },
+    {
+      "id": "8002",
+      "author": { "displayName": "Priya Raman", "accountId": "acc-priya", "accountType": "atlassian" },
+      "body": "Chasing the payout provider now.",
+      "created": "2026-09-03T09:00:00.000+0000",
+      "jsdPublic": true
+    }
+  ]
+}

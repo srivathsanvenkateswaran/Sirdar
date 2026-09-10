@@ -1,0 +1,6 @@
+[
+  { "id": "summary", "name": "Summary", "custom": false },
+  { "id": "customfield_10005", "name": "Story Points", "custom": true },
+  { "id": "customfield_10101", "name": "Epic Link", "custom": true },
+  { "id": "customfield_10102", "name": "Epic Name", "custom": true }
+]

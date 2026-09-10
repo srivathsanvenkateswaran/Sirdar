@@ -1,0 +1,6 @@
+{
+  "baseUrl": "https://jira.example.com",
+  "version": "9.12.4",
+  "deploymentType": "Server",
+  "serverTitle": "Corp Jira"
+}

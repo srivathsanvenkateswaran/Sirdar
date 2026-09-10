@@ -1,0 +1,64 @@
+{
+  "id": "20017",
+  "key": "ENG-17",
+  "self": "https://jira.example.com/rest/api/2/issue/20017",
+  "fields": {
+    "summary": "Nightly reconciliation job exits non-zero",
+    "description": "The 02:00 reconciliation run exits 1 without writing a report.\n\n!stacktrace.png!",
+    "priority": { "name": "Medium" },
+    "status": {
+      "name": "Open",
+      "statusCategory": { "key": "new", "name": "To Do" }
+    },
+    "assignee": {
+      "displayName": "Sam Iyer",
+      "name": "siyer",
+      "emailAddress": "sam.iyer@corp.example"
+    },
+    "reporter": {
+      "displayName": "Lena Fischer",
+      "name": "lfischer",
+      "emailAddress": "lena.fischer@corp.example"
+    },
+    "resolution": { "name": "Unresolved" },
+    "issuetype": { "name": "Bug" },
+    "project": {
+      "key": "ENG",
+      "name": "Engineering",
+      "projectTypeKey": "software"
+    },
+    "labels": ["batch", "reconciliation"],
+    "parent": null,
+    "customfield_10101": "ENG-1",
+    "created": "2026-08-28T02:41:09.000+0530",
+    "updated": "2026-09-09T10:05:00.000+0530",
+    "attachment": [
+      {
+        "id": "7001",
+        "filename": "stacktrace.png",
+        "mimeType": "image/png",
+        "content": "https://jira.example.com/secure/attachment/7001/stacktrace.png",
+        "created": "2026-08-28T02:42:00.000+0530",
+        "size": 900
+      }
+    ],
+    "comment": {
+      "startAt": 0,
+      "maxResults": 1,
+      "total": 1,
+      "comments": [
+        {
+          "id": "6001",
+          "author": {
+            "displayName": "Sam Iyer",
+            "name": "siyer",
+            "emailAddress": "sam.iyer@corp.example"
+          },
+          "body": "Reproduced on staging. The exit code comes from the ledger diff step.",
+          "created": "2026-08-29T09:12:00.000+0530",
+          "updated": "2026-08-29T09:12:00.000+0530"
+        }
+      ]
+    }
+  }
+}
