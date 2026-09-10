@@ -1,21 +1,22 @@
 # Adapters
 
 Sirdar reads tickets from a tracker (e.g. Jira) and a helpdesk (e.g. Zoho
-Desk) through *adapters*. Four trackers ship built into the Sirdar binary —
-Jira, Linear, Azure DevOps, and Rally — configured directly in
+Desk) through *adapters*. Four trackers and three helpdesks ship built into
+the Sirdar binary — Jira, Linear, Azure DevOps, and Rally for trackers; Zoho
+Desk, Zendesk, and Freshdesk for helpdesks — configured directly in
 `.sirdar/config.yaml`, no separate process required. Anything else talks to
 Sirdar through the external adapter protocol described below: a small
 line-delimited JSON protocol over stdin/stdout, which also stays available
-for the four built-in trackers if you'd rather run your own integration
-against them.
+for the built-in adapters if you'd rather run your own integration against
+them.
 
 ## Built-in tracker adapters
 
 Each built-in adapter implements the `tracker` role; some also implement
 `helpdesk` where the tracker itself carries (or can be made to carry) the
 customer conversation. Credentials are never literal values in config: use
-`env:NAME` or `keychain:SERVICE` references, same as `sources.helpdesk`'s
-`zohodesk` adapter. See `docs/config.md` for the full key reference.
+`env:NAME` or `keychain:SERVICE` references, same as the built-in helpdesk
+adapters below. See `docs/config.md` for the full key reference.
 
 ### Jira
 
@@ -220,6 +221,159 @@ collection, following each entry's `Content` reference to an
   responses rather than returning a clean error, so a large `List` sweep
   across several `types` can feel slow under load rather than failing
   outright.
+
+## Built-in helpdesk adapters
+
+Zoho Desk, Zendesk and Freshdesk implement the `helpdesk` role only —
+`Get`, `Threads`, `Attachments`, no `List` — and are compiled into Sirdar
+the same way the four trackers above are, no separate process required.
+Credentials are `env:NAME` or `keychain:SERVICE` references, same as
+everywhere else in Sirdar; see `docs/config.md` for the full key reference.
+
+### Zoho Desk
+
+```yaml
+sources:
+  helpdesk:
+    adapter: zohodesk
+    orgId: "60044805777"
+    baseUrl: https://desk.zoho.com
+    auth:
+      clientId: keychain:zoho-desk-client-id
+      clientSecret: keychain:zoho-desk-client-secret
+      refreshToken: keychain:zoho-desk-refresh-token
+```
+
+See `docs/config.md`'s "Zoho Desk OAuth" section for the refresh-token
+grant, the `token:` alternative for a run you're watching rather than
+scheduling unattended, and the per-data-centre `baseUrl`/`accountsUrl`
+table.
+
+**Getting credentials.** Register a Self Client at Zoho's [API
+console](https://api-console.zoho.com/) (or the regional equivalent for
+`.in`/`.eu`/`.com.au`), grant it read scopes covering tickets, conversations
+and attachments, and exchange the resulting grant token once for the
+refresh token `auth:` uses — Sirdar mints its own access tokens from there,
+retrying once with a freshly minted one whenever Desk answers 401.
+
+**Get.** Fetches `/api/v1/tickets/{id}`; `Fields` carries `departmentId`,
+`ticketNumber`, `email` and `phone` when Desk returns them.
+
+**Threads and attachments.** `Threads` pages `/api/v1/tickets/{id}/conversations`
+and resolves each `thread`-type entry's detail (`plainText`, falling back to
+`summary` then `content`), while `comment`-type entries map directly; role
+comes from the entry's `direction` (thread: `in` is customer) or
+`commenterType` (comment: `CONTACT`/`END_USER` is customer), and a private
+comment's author gets the same ` (internal)` suffix the other adapters use.
+`Attachments` downloads both listed attachments and inline `<img>`
+references matched out of the HTML content.
+
+**Known limitations.**
+- Attachment `href`/`src` values are resolved against `baseUrl` when
+  relative, but an absolute `http(s)://` one is downloaded as-is with no
+  host check — unlike Zendesk and Freshdesk below, this adapter trusts
+  whatever host a Desk API response names.
+- `doctor`'s probe looks up ticket id `0`, which cannot exist: the 404 Desk
+  returns is treated as proof the token and the transport both work, since
+  there's no cheaper authenticated endpoint to call.
+
+### Zendesk
+
+```yaml
+sources:
+  helpdesk:
+    adapter: zendesk
+    subdomain: acme                        # acme.zendesk.com
+    email: env:ZENDESK_EMAIL
+    apiToken: env:ZENDESK_API_TOKEN
+```
+
+An OAuth bearer token works instead of basic auth — set `oauthToken` and
+drop `email`/`apiToken`, never both:
+
+```yaml
+sources:
+  helpdesk:
+    adapter: zendesk
+    subdomain: acme
+    oauthToken: env:ZENDESK_OAUTH_TOKEN
+```
+
+**Getting credentials.** Basic auth: enable token access under Admin
+Center → Apps and integrations → APIs → Zendesk API, then generate an API
+token from an agent or admin account; it's sent as `{email}/token` with the
+token as the password, never the account's own login password. OAuth:
+register an app under the same API settings and mint a bearer token through
+its own flow; either way the token carries whatever the issuing account can
+already see, so use one scoped to what the adapter should read.
+
+**Get.** Fetches `/api/v2/tickets/{id}.json` with `users` and
+`organizations` side-loaded; `URL` is built from the configured subdomain,
+not from anything the API returns.
+
+**Threads and attachments.** `Threads` fetches the ticket's `requester_id`
+then pages `/api/v2/tickets/{id}/comments.json`; role is customer when a
+comment's author is the requester or the side-loaded author's Zendesk role
+is `end-user`, else agent, and a non-public comment's author gets an
+` (internal)` suffix. Text prefers `plain_body`, falling back to converting
+`html_body` to Markdown. `Attachments` downloads both `attachments[]`
+entries and inline `<img>` references out of `html_body`; a host outside
+the configured Zendesk instance, `*.zendesk.com`, or `*.zdusercontent.com`
+(Zendesk's attachment CDN) is refused, and the client's Authorization
+header is only ever sent to the configured instance itself — the CDN hosts
+serve pre-signed URLs that need no credential and shouldn't get one.
+
+**Known limitations.**
+- `Threads` makes two calls per ticket (the ticket itself, for
+  `requester_id`, then the comments page) rather than one — Zendesk's API
+  doesn't side-load the requester onto the comments endpoint.
+- A 429 is retried once after honouring `Retry-After` up to 30 seconds;
+  longer or missing values are reported as rate-limited rather than waited
+  out, so a very throttled account does not hang a run.
+
+### Freshdesk
+
+```yaml
+sources:
+  helpdesk:
+    adapter: freshdesk
+    domain: acme.freshdesk.com
+    apiKey: env:FRESHDESK_API_KEY
+```
+
+**Getting credentials.** Copy the account API key from the agent's Profile
+Settings page in the Freshdesk UI. It's sent as HTTP Basic auth — the key
+as the username, the literal string `X` as the password — Freshdesk's only
+documented auth mode; there's no separate OAuth path and no scope picker,
+so the key carries whatever the owning agent account can already see.
+
+**Get.** Fetches `/api/v2/tickets/{id}` with `requester`, `company` and
+`stats` side-loaded; numeric `status`/`priority`/`source` fields are mapped
+to names, with an undocumented value falling back to `status-<n>` /
+`priority-<n>` / `source-<n>` rather than going blank.
+
+**Threads and attachments.** Freshdesk has no separate "first message"
+endpoint, so `Threads` synthesises one from the ticket's own `description`
+(role: customer) and appends the ticket's `conversations` (paginated,
+`incoming` marks customer vs. agent, `private` marks an internal note with
+an ` (internal)` author suffix); an agent id on a message is resolved to a
+display name through a per-client cache, since the same agent typically
+appears on several messages. `Attachments` downloads both the ticket-level
+and per-conversation `attachments[]` entries; the API key is sent only to
+the configured account domain, with Freshdesk's other first-party hosts
+(its attachment CDN) trusted to download from but never given the key,
+since those URLs are pre-signed.
+
+**Known limitations.**
+- `Threads`' pagination is capped at 100 pages of conversations; a ticket
+  past that (a genuinely pathological thread) is truncated with a run
+  warning rather than swept indefinitely.
+- Freshdesk's numeric `source` (channel) enum is only reliably documented
+  for a handful of values (email, portal, phone, chat, feedback widget,
+  outbound email); anything else maps to `source-<n>` instead of a guessed
+  name, same treatment as an undocumented `status`.
+- Attachment MIME comes from the API's declared `content_type`; downloads
+  don't sniff the response's own `Content-Type`.
 
 ## helpdeskRef fallback
 

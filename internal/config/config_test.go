@@ -352,6 +352,129 @@ func TestBuiltinTrackerUnderHelpdeskIsRejected(t *testing.T) {
 	}
 }
 
+// --- built-in helpdesk adapters (zendesk, freshdesk) ---
+
+// helpdeskCfg builds a workspace whose only source is the helpdesk block
+// given, so a validation error can only have come from that block.
+func helpdeskCfg(block string) string {
+	return "workspace: demo\nsources:\n  helpdesk:\n" + block
+}
+
+func TestValidateZendesk(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // substring of the expected error; "" means it must load
+	}{
+		{
+			name:  "basic auth",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: env:ZENDESK_TOKEN\n",
+		},
+		{
+			name:  "oauth",
+			block: "    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n",
+		},
+		{
+			name:  "an optional baseUrl override",
+			block: "    adapter: zendesk\n    subdomain: acme\n    baseUrl: https://support.acme.com\n    oauthToken: env:ZENDESK_OAUTH\n",
+		},
+		{
+			name:  "missing subdomain",
+			block: "    adapter: zendesk\n    oauthToken: env:ZENDESK_OAUTH\n",
+			want:  "sources.helpdesk.subdomain",
+		},
+		{
+			name:  "no credentials at all",
+			block: "    adapter: zendesk\n    subdomain: acme\n",
+			want:  "one of email + apiToken or oauthToken",
+		},
+		{
+			name:  "both auth forms at once",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: env:ZENDESK_TOKEN\n    oauthToken: env:ZENDESK_OAUTH\n",
+			want:  "not both",
+		},
+		{
+			name:  "email without apiToken",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n",
+			want:  "both email and apiToken",
+		},
+		{
+			name:  "apiToken without email",
+			block: "    adapter: zendesk\n    subdomain: acme\n    apiToken: env:ZENDESK_TOKEN\n",
+			want:  "both email and apiToken",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateZendeskCredentialRefsAreNotLiterals(t *testing.T) {
+	for key, block := range map[string]string{
+		"apiToken":   "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: shhh\n",
+		"oauthToken": "    adapter: zendesk\n    subdomain: acme\n    oauthToken: shhh\n",
+	} {
+		_, err := Load(writeCfg(t, helpdeskCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk."+key) {
+			t.Errorf("%s: want an error naming the key, got %v", key, err)
+		}
+	}
+}
+
+func TestValidateFreshdesk(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "valid",
+			block: "    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n",
+		},
+		{
+			name:  "missing domain",
+			block: "    adapter: freshdesk\n    apiKey: env:FRESHDESK_KEY\n",
+			want:  "sources.helpdesk.domain",
+		},
+		{
+			name:  "missing apiKey",
+			block: "    adapter: freshdesk\n    domain: acme.freshdesk.com\n",
+			want:  "sources.helpdesk.apiKey",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateFreshdeskCredentialRefIsNotALiteral(t *testing.T) {
+	block := "    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: shhh\n"
+	_, err := Load(writeCfg(t, helpdeskCfg(block)))
+	if err == nil || !strings.Contains(err.Error(), "sources.helpdesk.apiKey") {
+		t.Fatalf("want an error naming the key, got %v", err)
+	}
+}
+
 // --- helpdeskRef fallback ---
 
 func TestValidateHelpdeskRef(t *testing.T) {
@@ -419,6 +542,7 @@ func TestDefaultConfigYAMLLoads(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
+		"# adapter: zendesk", "# adapter: freshdesk",
 		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
 	} {
 		if !strings.Contains(DefaultConfigYAML, want) {

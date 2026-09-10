@@ -1526,3 +1526,47 @@ func TestCredentialEnvNamesCoversBuiltinTrackers(t *testing.T) {
 		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
 	}
 }
+
+// TestCredentialEnvNamesCoversZendeskAndFreshdesk: a helpdesk configured as
+// zendesk or freshdesk strips its apiToken/oauthToken/apiKey refs from the
+// agent's environment the same way every other built-in source does.
+func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:    "zendesk",
+		Subdomain:  "acme",
+		Email:      "agent@acme.com",
+		APIToken:   "env:ZENDESK_TOKEN",
+		OAuthToken: "env:ZENDESK_OAUTH",
+	}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"ZENDESK_TOKEN", "ZENDESK_OAUTH"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "ZENDESK_TOKEN=x", "ZENDESK_OAUTH=y", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"ZENDESK_TOKEN=", "ZENDESK_OAUTH="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+
+	cfg2 := &config.Config{Billing: "subscription"}
+	cfg2.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  "acme.freshdesk.com",
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
+		t.Error("FRESHDESK_KEY is not treated as a credential")
+	}
+}

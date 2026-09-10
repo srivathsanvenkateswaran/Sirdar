@@ -127,7 +127,7 @@ Sirdar talks to trackers and helpdesks through adapters. Several ship built into
 | Kind | Supported |
 |---|---|
 | Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally |
-| Helpdesks | Zoho Desk (more planned, see `docs/research/adapters/helpdesks.md`) |
+| Helpdesks | Zoho Desk, Zendesk, Freshdesk (more planned, see `docs/research/adapters/helpdesks.md`) |
 
 Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
 executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so

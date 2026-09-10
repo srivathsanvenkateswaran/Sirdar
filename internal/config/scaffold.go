@@ -68,6 +68,21 @@ sources:
     # working an hour after it was issued, so it suits a run you are
     # watching, not a scheduled one.
     # token: keychain:<service>
+    #
+    # Built-in helpdesks, as alternatives to zohodesk. Pick one and delete
+    # the rest; apiToken, oauthToken and apiKey are credential refs, never
+    # literal secrets.
+    #
+    # adapter: zendesk
+    # subdomain: acme                         # acme.zendesk.com
+    # baseUrl: ""                             # optional override, e.g. a proxy
+    # email: you@acme.com                     # basic auth, sent with apiToken
+    # apiToken: keychain:zendesk-api-token    # basic auth, instead of oauthToken
+    # oauthToken: keychain:zendesk-oauth-token  # instead of email + apiToken
+    #
+    # adapter: freshdesk
+    # domain: acme.freshdesk.com
+    # apiKey: keychain:freshdesk-api-key
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

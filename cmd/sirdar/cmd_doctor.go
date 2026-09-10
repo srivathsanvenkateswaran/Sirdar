@@ -132,6 +132,9 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
+	case "zendesk", "freshdesk":
+		return []provider.Check{builtinHelpdeskProbe(ctx, name, sc)}
+
 	case "jira", "linear", "azdo", "rally":
 		return []provider.Check{builtinProbe(ctx, name, sc)}
 
@@ -158,6 +161,43 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) pro
 		return provider.Check{Name: name, Detail: err.Error()}
 	}
 	return provider.Check{Name: name, OK: true, Detail: "reachable (" + builtinEndpoint(sc) + ")"}
+}
+
+// builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
+// freshdesk) with the credentials the config names and calls its Ping: one
+// authenticated round trip proving the base URL/domain, the credential and
+// the network all work. The detail names who the connection authenticates
+// as — an email for Zendesk basic auth, "oauth" for a bearer token, the
+// account domain for Freshdesk — never the secret itself.
+func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) provider.Check {
+	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: keychainFor()})
+	if err != nil {
+		return provider.Check{Name: name, Detail: err.Error()}
+	}
+	p, ok := hd.(pinger)
+	if !ok {
+		return provider.Check{Name: name, OK: true, Detail: "configured"}
+	}
+	if err := p.Ping(ctx); err != nil {
+		return provider.Check{Name: name, Detail: err.Error()}
+	}
+	return provider.Check{Name: name, OK: true, Detail: "reachable as " + helpdeskAuthWho(sc)}
+}
+
+// helpdeskAuthWho names who a built-in helpdesk connection authenticates
+// as, for the doctor report. It never returns any part of the credential.
+func helpdeskAuthWho(sc *config.SourceConfig) string {
+	switch sc.Adapter {
+	case "zendesk":
+		if sc.Email != "" {
+			return sc.Email
+		}
+		return "oauth"
+	case "freshdesk":
+		return sc.Domain
+	default:
+		return "configured"
+	}
 }
 
 // oauthCheck performs one refresh and reports the access token it got and

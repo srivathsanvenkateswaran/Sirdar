@@ -20,22 +20,22 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
 	Token   string       `yaml:"token,omitempty"` // credential ref
 	Auth    *OAuthConfig `yaml:"auth,omitempty"`
 
-	// Jira.
+	// Jira (Email and APIToken are also Zendesk's basic-auth credentials).
 	Deployment    string `yaml:"deployment,omitempty"` // cloud | datacenter | auto
-	Email         string `yaml:"email,omitempty"`      // Cloud account email, sent with apiToken
-	APIToken      string `yaml:"apiToken,omitempty"`   // credential ref (Jira Cloud)
+	Email         string `yaml:"email,omitempty"`      // Cloud/Zendesk account email, sent with apiToken
+	APIToken      string `yaml:"apiToken,omitempty"`   // credential ref (Jira Cloud, Zendesk basic auth)
 	PAT           string `yaml:"pat,omitempty"`        // credential ref (Jira Data Center, Azure DevOps)
 	ProjectKey    string `yaml:"projectKey,omitempty"`
 	EpicLinkField string `yaml:"epicLinkField,omitempty"`
 
-	// Linear (APIKey is also Rally's credential).
+	// Linear (APIKey is also Rally's and Freshdesk's credential).
 	APIKey  string `yaml:"apiKey,omitempty"` // credential ref
 	TeamKey string `yaml:"teamKey,omitempty"`
 
@@ -48,6 +48,13 @@ type SourceConfig struct {
 	// Rally.
 	Workspace string   `yaml:"workspace,omitempty"`
 	Types     []string `yaml:"types,omitempty"`
+
+	// Zendesk.
+	Subdomain  string `yaml:"subdomain,omitempty"`  // account identifier, e.g. "acme" for acme.zendesk.com
+	OAuthToken string `yaml:"oauthToken,omitempty"` // credential ref; alternative to email + apiToken
+
+	// Freshdesk.
+	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
 
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
@@ -313,6 +320,27 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		if err := validateOAuth(prefix+".auth", s.Auth); err != nil {
 			return err
 		}
+	case "zendesk":
+		if s.Subdomain == "" {
+			return fmt.Errorf("config: %s.subdomain: is required for adapter zendesk", prefix)
+		}
+		basic := s.Email != "" || s.APIToken != ""
+		bearer := s.OAuthToken != ""
+		switch {
+		case basic && bearer:
+			return fmt.Errorf("config: %s: set email and apiToken, or oauthToken, not both", prefix)
+		case basic && (s.Email == "" || s.APIToken == ""):
+			return fmt.Errorf("config: %s: both email and apiToken are required for basic auth", prefix)
+		case !basic && !bearer:
+			return fmt.Errorf("config: %s: one of email + apiToken or oauthToken is required for adapter zendesk", prefix)
+		}
+	case "freshdesk":
+		if s.Domain == "" {
+			return fmt.Errorf("config: %s.domain: is required for adapter freshdesk", prefix)
+		}
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter freshdesk", prefix)
+		}
 	case "jira":
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
@@ -357,6 +385,7 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		{"apiToken", s.APIToken},
 		{"pat", s.PAT},
 		{"apiKey", s.APIKey},
+		{"oauthToken", s.OAuthToken},
 	} {
 		if f.ref == "" {
 			continue

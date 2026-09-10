@@ -19,10 +19,12 @@ import (
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/jira"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/rally"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zendesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
@@ -325,9 +327,59 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
+	case "zendesk", "freshdesk":
+		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
 	}
+}
+
+// newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
+// a plain credential ref — zendesk and freshdesk — resolving it on the way
+// in. zohodesk is built separately (zohoTokenSource) because of its
+// refresh-token grant option.
+//
+// Resolved secrets stay in the returned client: they are never written to a
+// run directory and never reach the agent's environment.
+func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.Helpdesk, error) {
+	hc := &http.Client{Timeout: builtinTimeout}
+	switch sc.Adapter {
+	case "zendesk":
+		apiToken, err := resolveRef(creds, "apiToken", sc.APIToken)
+		if err != nil {
+			return nil, err
+		}
+		oauthToken, err := resolveRef(creds, "oauthToken", sc.OAuthToken)
+		if err != nil {
+			return nil, err
+		}
+		c, err := zendesk.New(zendesk.Config{
+			Subdomain:  sc.Subdomain,
+			BaseURL:    sc.BaseURL,
+			Email:      sc.Email,
+			APIToken:   apiToken,
+			OAuthToken: oauthToken,
+		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "freshdesk":
+		apiKey, err := resolveRef(creds, "apiKey", sc.APIKey)
+		if err != nil {
+			return nil, err
+		}
+		c, err := freshdesk.New(freshdesk.Config{
+			Domain: sc.Domain,
+			APIKey: apiKey,
+		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+	}
+	return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
 }
 
 // zohoTokenSource builds what a Zoho Desk client authenticates with: either

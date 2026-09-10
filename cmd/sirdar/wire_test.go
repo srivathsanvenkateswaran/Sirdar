@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,7 +11,9 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zendesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
@@ -371,5 +374,250 @@ func TestBuildDepsConfiguredHelpdeskWins(t *testing.T) {
 	}
 	if _, ok := deps.Helpdesk.(*zohodesk.Client); !ok {
 		t.Fatalf("helpdesk is %T, want the configured Zoho Desk client", deps.Helpdesk)
+	}
+}
+
+// --- built-in helpdesk adapters (zendesk, freshdesk) ---
+
+// TestNewBuiltinHelpdeskZendeskBasicAuth proves the resolved apiToken, not
+// the env: ref, is what reaches the wire: the request the client actually
+// sends carries the secret the resolver handed back.
+func TestNewBuiltinHelpdeskZendeskBasicAuth(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	sc := &config.SourceConfig{
+		Adapter:   "zendesk",
+		Subdomain: "acme",
+		BaseURL:   srv.URL,
+		Email:     "agent@acme.com",
+		APIToken:  "env:ZENDESK_TOKEN",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"ZENDESK_TOKEN": "tok-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*zendesk.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *zendesk.Client", hd)
+	}
+	p, ok := hd.(pinger)
+	if !ok {
+		t.Fatal("zendesk.Client does not implement Ping, so doctor has no probe")
+	}
+	if err := p.Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("agent@acme.com/token:tok-1"))
+	if gotAuth != want {
+		t.Fatalf("Authorization = %q, want %q", gotAuth, want)
+	}
+}
+
+// TestNewBuiltinHelpdeskZendeskOAuth covers the alternative auth form: an
+// oauthToken ref resolved and sent as a Bearer token.
+func TestNewBuiltinHelpdeskZendeskOAuth(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	sc := &config.SourceConfig{
+		Adapter:    "zendesk",
+		Subdomain:  "acme",
+		BaseURL:    srv.URL,
+		OAuthToken: "env:ZENDESK_OAUTH",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"ZENDESK_OAUTH": "oauth-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	if gotAuth != "Bearer oauth-1" {
+		t.Fatalf("Authorization = %q, want Bearer oauth-1", gotAuth)
+	}
+}
+
+// TestNewBuiltinHelpdeskZendeskMissingCredentialNamesTheKey covers the
+// error an operator sees when the apiToken variable is not there.
+func TestNewBuiltinHelpdeskZendeskMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter:   "zendesk",
+		Subdomain: "acme",
+		Email:     "agent@acme.com",
+		APIToken:  "env:ZENDESK_TOKEN",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiToken") || !strings.Contains(err.Error(), "env:ZENDESK_TOKEN") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// withDefaultTransport points http.DefaultTransport at rt for the duration
+// of the test, restoring the original after. newBuiltinHelpdesk builds its
+// own *http.Client with no Transport set, so this is the only way to steer
+// its requests at a local test server: freshdesk.Config carries only a
+// Domain, with no baseUrl override field, and always talks https.
+func withDefaultTransport(t *testing.T, rt http.RoundTripper) {
+	t.Helper()
+	orig := http.DefaultTransport
+	http.DefaultTransport = rt
+	t.Cleanup(func() { http.DefaultTransport = orig })
+}
+
+// TestNewBuiltinHelpdeskFreshdesk proves the resolved apiKey reaches the
+// wire as Basic auth username, with the literal "X" password Freshdesk's
+// API expects.
+func TestNewBuiltinHelpdeskFreshdesk(t *testing.T) {
+	var gotAuth string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+
+	sc := &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  srv.Listener.Addr().String(),
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"FRESHDESK_KEY": "key-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*freshdesk.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *freshdesk.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("key-1:X"))
+	if gotAuth != want {
+		t.Fatalf("Authorization = %q, want %q", gotAuth, want)
+	}
+}
+
+// TestNewBuiltinHelpdeskFreshdeskMissingCredentialNamesTheKey covers the
+// error an operator sees when the apiKey variable is not there.
+func TestNewBuiltinHelpdeskFreshdeskMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  "acme.freshdesk.com",
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:FRESHDESK_KEY") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestBuildDepsZendeskHelpdesk covers sources.helpdesk wiring end to end
+// through buildDeps, the same path a real command takes.
+func TestBuildDepsZendeskHelpdesk(t *testing.T) {
+	t.Setenv("ZENDESK_TOKEN", "tok-1")
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:   "zendesk",
+		Subdomain: "acme",
+		Email:     "agent@acme.com",
+		APIToken:  "env:ZENDESK_TOKEN",
+	}
+
+	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("buildDeps: %v", err)
+	}
+	if _, ok := deps.Helpdesk.(*zendesk.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *zendesk.Client", deps.Helpdesk)
+	}
+}
+
+// TestBuiltinHelpdeskProbeZendesk covers the doctor row: it names who the
+// connection authenticates as and never the token.
+func TestBuiltinHelpdeskProbeZendesk(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("ZENDESK_TOKEN", "tok-1")
+
+	sc := &config.SourceConfig{
+		Adapter:   "zendesk",
+		Subdomain: "acme",
+		BaseURL:   srv.URL,
+		Email:     "agent@acme.com",
+		APIToken:  "env:ZENDESK_TOKEN",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (zendesk)", sc)
+	if !check.OK {
+		t.Fatalf("check: %+v", check)
+	}
+	if check.Detail != "reachable as agent@acme.com" {
+		t.Fatalf("detail = %q, want it to name the email", check.Detail)
+	}
+	if strings.Contains(check.Detail, "tok-1") {
+		t.Fatalf("doctor printed the secret: %q", check.Detail)
+	}
+}
+
+// TestBuiltinHelpdeskProbeZendeskOAuth covers the oauth-form doctor row:
+// "oauth" stands in for an email that does not exist for that auth form.
+func TestBuiltinHelpdeskProbeZendeskOAuth(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	t.Setenv("ZENDESK_OAUTH", "oauth-1")
+
+	sc := &config.SourceConfig{
+		Adapter:    "zendesk",
+		Subdomain:  "acme",
+		BaseURL:    srv.URL,
+		OAuthToken: "env:ZENDESK_OAUTH",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (zendesk)", sc)
+	if !check.OK || check.Detail != "reachable as oauth" {
+		t.Fatalf("check: %+v", check)
+	}
+}
+
+// TestBuiltinHelpdeskProbeFreshdesk covers the Freshdesk doctor row.
+func TestBuiltinHelpdeskProbeFreshdesk(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+	t.Setenv("FRESHDESK_KEY", "key-1")
+
+	sc := &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  srv.Listener.Addr().String(),
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (freshdesk)", sc)
+	if !check.OK {
+		t.Fatalf("check: %+v", check)
+	}
+	if check.Detail != "reachable as "+sc.Domain {
+		t.Fatalf("detail = %q, want it to name the domain", check.Detail)
+	}
+	if strings.Contains(check.Detail, "key-1") {
+		t.Fatalf("doctor printed the secret: %q", check.Detail)
 	}
 }
