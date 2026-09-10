@@ -79,3 +79,59 @@ func TestClientShutdownTimeout(t *testing.T) {
 		t.Fatal("Close did not return")
 	}
 }
+
+// stuckAdapter builds a script that answers exactly one request (describe,
+// always sent first and so always id 1) and then hangs: it never reads or
+// answers anything after that, simulating an adapter wedged mid-request.
+func stuckAdapter(t *testing.T) string {
+	t.Helper()
+	path := filepath.Join(t.TempDir(), "stuck.sh")
+	script := "#!/bin/sh\n" +
+		"read line\n" +
+		`echo '{"id":1,"result":{"name":"stuck","roles":["tracker"],"version":"1"}}'` + "\n" +
+		"sleep 60\n"
+	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func TestClientCloseUnblocksHangingCall(t *testing.T) {
+	// Reproduces the deadlock this test guards against: call() must not
+	// hold c.mu for the duration of a blocking wait, or Close can never
+	// acquire it to send shutdown and start its kill timer.
+	bin := stuckAdapter(t)
+	c, err := Start(context.Background(), bin, &bytes.Buffer{})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := c.Describe(context.Background()); err != nil {
+		t.Fatalf("describe: %v", err)
+	}
+
+	getErr := make(chan error, 1)
+	go func() {
+		_, err := c.Get(context.Background(), "OMNI-1")
+		getErr <- err
+	}()
+	time.Sleep(100 * time.Millisecond) // let Get actually block in call()
+
+	closeDone := make(chan struct{})
+	go func() { c.Close(); close(closeDone) }()
+
+	select {
+	case <-closeDone:
+	case <-time.After(7 * time.Second):
+		t.Fatal("Close did not return")
+	}
+
+	select {
+	case err := <-getErr:
+		if err == nil {
+			t.Fatal("want error from Get once the adapter is closed")
+		}
+	case <-time.After(1 * time.Second):
+		t.Fatal("Get did not return after Close")
+	}
+}

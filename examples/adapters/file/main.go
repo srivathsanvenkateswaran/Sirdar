@@ -197,7 +197,11 @@ func dispatch(fx fixture, req plugin.Request) plugin.Response {
 // writeAttachments decodes each fixture attachment and writes it into dir
 // as "<1-based index>-<name>", creating dir if needed. The returned
 // Attachment.Path is relative to the bundle directory (dir's parent):
-// "<base of dir>/<index>-<name>".
+// "<base of dir>/<index>-<name>". An attachment that fails to decode or
+// write is skipped, logged to stderr, and does not stop the rest from
+// being returned — matching the partial-failure behaviour docs/adapters.md
+// asks adapters to provide, since Sirdar treats Attachments errors as
+// fatal but a short result as merely a warning.
 func writeAttachments(fixtures []attachmentFixture, dir string) ([]ticket.Attachment, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, err
@@ -208,11 +212,13 @@ func writeAttachments(fixtures []attachmentFixture, dir string) ([]ticket.Attach
 	for i, af := range fixtures {
 		data, err := base64.StdEncoding.DecodeString(af.ContentBase64)
 		if err != nil {
-			return nil, fmt.Errorf("decode attachment %s: %w", af.ID, err)
+			fmt.Fprintf(os.Stderr, "file-adapter: skipping attachment %s: decode: %v\n", af.ID, err)
+			continue
 		}
 		name := fmt.Sprintf("%d-%s", i+1, af.Name)
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
-			return nil, err
+			fmt.Fprintf(os.Stderr, "file-adapter: skipping attachment %s: write: %v\n", af.ID, err)
+			continue
 		}
 		atts = append(atts, ticket.Attachment{
 			ID:   af.ID,
