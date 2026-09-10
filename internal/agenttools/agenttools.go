@@ -6,6 +6,22 @@
 // the loop: file paths are confined to the workspace root through the real
 // (symlink-resolved) path, shell commands must match the workspace policy's
 // allow-list, and every tool's output is capped.
+//
+// The two confinements are not equally strong, and the difference matters.
+// read_file, list_dir, grep and glob resolve a path and check where it
+// really lands, so a symlink out of the workspace is refused. The bash tool
+// cannot do that: it hands a string to a shell, and all the policy can do
+// is read that string. So provider.MatchCommand refuses the operators it
+// cannot judge — command and process substitution, redirection — and the
+// arguments that look like paths outside the root. That is a heuristic and
+// not a sandbox: it does not follow symlinks, does not know which of a
+// program's arguments are paths, and cannot see a path a program derives at
+// run time. An allow-list naming a program that reads a config file, spawns
+// a shell of its own, or resolves its own paths gives that program the
+// reach of the machine. A run that has to be confined for real needs a
+// container around the process; this package narrows what an ordinary
+// mistake or an ordinary prompt injection reaches, not what a determined
+// one does.
 package agenttools
 
 import (
@@ -38,9 +54,11 @@ type Tool interface {
 
 // Options configures the tool set.
 //
-// Root is the workspace directory every path argument is confined to.
+// Root is the workspace directory every path argument is confined to, and
+// the directory bash commands run in and are expected to stay inside.
 // BashAllow holds the glob patterns from the workspace policy; a bash
-// command runs only when provider.MatchGlob matches one of them. HTTP is
+// command runs only when provider.MatchCommand approves it against them
+// and against Root. HTTP is
 // the client web_fetch borrows its transport from (nil means a default
 // client). MaxOutputBytes caps every tool's output; 0 means
 // DefaultMaxOutputBytes.

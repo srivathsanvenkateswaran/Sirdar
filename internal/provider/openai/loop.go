@@ -410,7 +410,17 @@ func (s *session) discoverTools() bool {
 func (s *session) turnLoop() {
 	for {
 		if max := s.spec.Budget.MaxTurns; max > 0 && s.turns >= max {
-			s.fail(fmt.Sprintf("stopped after %d turns: the turn budget is spent and no note was submitted", s.turns))
+			// The runner reads "over budget" off a usage event whose
+			// turn count is past the budget, and it never sees one from
+			// here: the loop stops on the turn that reaches the limit,
+			// so the last usage it emitted said exactly max. Emitting
+			// the turn that would have run says the same thing in the
+			// vocabulary the runner has, which is the difference
+			// between the run being recorded as over_budget and being
+			// recorded as a plain failure.
+			s.turns = max + 1
+			s.emitUsage()
+			s.fail(fmt.Sprintf("stopped after %d turns: the turn budget is spent and no note was submitted", max))
 			return
 		}
 
@@ -422,6 +432,15 @@ func (s *session) turnLoop() {
 		if err != nil {
 			if s.ctx.Err() != nil {
 				return // cancelled: the caller already knows why
+			}
+			var limited *RateLimitError
+			if errors.As(err, &limited) {
+				// The endpoint is rate limiting us and the one retry did
+				// not clear it. That is a blocked run, not a failed one:
+				// the runner pauses its queue until ResetsAt and the
+				// ticket can be picked up again afterwards.
+				s.rateLimited(limited)
+				return
 			}
 			s.fail(err.Error())
 			return
@@ -504,7 +523,7 @@ func (s *session) handleProse(content string) bool {
 // runToolCalls executes one assistant message's tool calls in order,
 // stopping at submit_note. It reports whether the loop should continue.
 func (s *session) runToolCalls(calls []ToolCall) bool {
-	for _, call := range calls {
+	for i, call := range calls {
 		name := call.Function.Name
 		args := json.RawMessage(strings.TrimSpace(call.Function.Arguments))
 		if len(args) == 0 {
@@ -513,6 +532,15 @@ func (s *session) runToolCalls(calls []ToolCall) bool {
 
 		if t := s.byName[name]; t != nil && t.submit {
 			s.answerTool(call.ID, name, "note received")
+			// A model that puts submit_note in the middle of a batch
+			// leaves the calls after it unanswered, and an unanswered
+			// tool_call_id is a 400 from most endpoints on the next
+			// request. The schema retry is exactly that request, so the
+			// remaining calls are closed out here rather than leaving
+			// the retry to fail on a transcript this loop wrote.
+			for _, rest := range calls[i+1:] {
+				s.answerTool(rest.ID, rest.Function.Name, "skipped: the note was already submitted")
+			}
 			s.finalFromArgs(args)
 			return false
 		}
@@ -649,6 +677,22 @@ func (s *session) fail(text string) {
 		Kind: provider.EvError,
 		Text: text,
 		Raw:  rawOf(map[string]string{"error": text}),
+	})
+}
+
+// rateLimited ends the session on a 429 the chat client's retry could not
+// get past. The event carries the reset time so the runner can hold the
+// whole queue until the window reopens, rather than spending the rest of
+// it on tickets that will be refused the same way.
+func (s *session) rateLimited(err *RateLimitError) {
+	s.mu.Lock()
+	s.result.ExitErr = err
+	s.mu.Unlock()
+	s.emit(provider.Event{
+		Kind:     provider.EvRateLimited,
+		Text:     err.Error(),
+		ResetsAt: err.ResetsAt,
+		Raw:      rawOf(map[string]any{"rateLimited": true, "resetsAt": err.ResetsAt}),
 	})
 }
 

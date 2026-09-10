@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -71,10 +72,12 @@ var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 // PermissionPolicy decides whether a provider may run a given tool call.
 // BashAllow is a list of glob patterns (see MatchGlob) matched against each
 // segment of the Bash command, as MatchCommand defines it; MCPAllow is a
-// list of glob patterns matched against an MCP tool's full name.
+// list of glob patterns matched against an MCP tool's full name; Root is
+// the workspace directory a shell command is expected to stay inside.
 type PermissionPolicy struct {
 	BashAllow []string
 	MCPAllow  []string
+	Root      string
 }
 
 // Decide applies the policy rules to one tool call.
@@ -104,7 +107,7 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 // decideBash allows a command only when MatchCommand does, and reports
 // MatchCommand's reason when it does not.
 func (p *PermissionPolicy) decideBash(command string) Decision {
-	if ok, reason := MatchCommand(p.BashAllow, command); !ok {
+	if ok, reason := MatchCommand(p.Root, p.BashAllow, command); !ok {
 		return Decision{Allow: false, Message: "Sirdar policy: " + reason}
 	}
 	return Decision{Allow: true}
@@ -122,8 +125,19 @@ func (p *PermissionPolicy) decideBash(command string) Decision {
 // meant to permit cat. Every segment between the operators therefore has
 // to match a pattern of its own, and a command that can produce more text
 // at runtime — $(...) or a backquote — is refused outright, because what
-// such a command runs cannot be read off the string the policy sees.
-func MatchCommand(allow []string, command string) (bool, string) {
+// such a command runs cannot be read off the string the policy sees. So is
+// a redirection, which would let an allow-listed command read or write a
+// file no pattern named.
+//
+// root is the workspace directory the command will run in, and each
+// argument that looks like a path is checked against it, so `cat go.mod`
+// goes through and `cat ../../../etc/passwd` does not. That check reads
+// the command as text: it is a heuristic that catches the obvious ways out
+// of the workspace, not a sandbox. It does not follow symlinks, does not
+// know which arguments a given program treats as paths, and cannot see a
+// path a program derives at runtime. Anything that has to be confined for
+// real needs a container, not an allow-list.
+func MatchCommand(root string, allow []string, command string) (bool, string) {
 	command = strings.TrimSpace(command)
 	if command == "" {
 		return false, "empty command"
@@ -148,8 +162,89 @@ func MatchCommand(allow []string, command string) (bool, string) {
 				strings.Join(allow, ", ") +
 				"); every segment of a pipeline or compound command has to match"
 		}
+		if escape := escapesRoot(root, segment); escape != "" {
+			return false, escape
+		}
 	}
 	return true, ""
+}
+
+// escapesRoot reports the first argument of a segment that names a path
+// outside root, as the reason to show the operator, or "" when none does.
+// See MatchCommand on how far this reaches: it reads the command as text.
+func escapesRoot(root, segment string) string {
+	for _, arg := range argTokens(segment) {
+		if arg == "" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(arg, "~"):
+			// The shell would expand this to a home directory the
+			// workspace is not inside; the policy only ever sees the "~".
+			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
+		case filepath.IsAbs(arg):
+			if root != "" && !withinRoot(root, arg) {
+				return "the path " + quote(arg) + " is outside the workspace root " + quote(root)
+			}
+		default:
+			if clean := filepath.Clean(arg); clean == ".." || strings.HasPrefix(clean, "../") {
+				return "the path " + quote(arg) + " climbs out of the workspace root, which is as far as a shell command reaches"
+			}
+		}
+	}
+	return ""
+}
+
+// withinRoot reports whether an absolute path is root or sits under it.
+// Both are cleaned first; neither is resolved through symlinks.
+func withinRoot(root, path string) bool {
+	root, path = filepath.Clean(root), filepath.Clean(path)
+	return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
+}
+
+// argTokens splits a command segment into whitespace-separated arguments
+// with their quotes removed, which is as much of the shell's own word
+// splitting as a policy needs to see the paths in a command.
+func argTokens(segment string) []string {
+	var (
+		out   []string
+		cur   strings.Builder
+		quote = byte(0)
+		open  bool
+	)
+	flush := func() {
+		if open {
+			out = append(out, cur.String())
+		}
+		cur.Reset()
+		open = false
+	}
+	for i := 0; i < len(segment); i++ {
+		ch := segment[i]
+		switch {
+		case quote != 0:
+			if ch == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(ch)
+			open = true
+		case ch == '\'' || ch == '"':
+			quote = ch
+			open = true
+		case ch == '\\' && i+1 < len(segment):
+			i++
+			cur.WriteByte(segment[i])
+			open = true
+		case ch == ' ' || ch == '\t':
+			flush()
+		default:
+			cur.WriteByte(ch)
+			open = true
+		}
+	}
+	flush()
+	return out
 }
 
 // decideMCP applies permissions.mcp when the workspace configured it, and
@@ -256,21 +351,77 @@ func scanCommand(command string) (segments []string, unsafe string) {
 		case ch == '$' && i+1 < len(command) && command[i+1] == '(':
 			refuse("command substitution ($() is not allowed: what it would run cannot be read off the command")
 			cur.WriteByte(ch)
+		case ch == '<' && i+1 < len(command) && command[i+1] == '(':
+			refuse("process substitution (<() is not allowed: what it would run cannot be read off the command")
+			cur.WriteByte(ch)
+		case ch == '<' || ch == '>':
+			refuse("redirection (" + redirectionAt(command, i) + ") is not allowed: an allow-listed command must not read from or write to a file the pattern never named")
+			cur.WriteByte(ch)
 		case ch == ';' || ch == '\n':
 			flush()
-		case ch == '|' || ch == '&':
-			// "|", "||" and "&&" all separate; a lone "&" backgrounds
-			// the segment before it and separates just the same.
-			if i+1 < len(command) && command[i+1] == ch {
+		case ch == '|':
+			if i+1 < len(command) && command[i+1] == '|' {
 				i++
 			}
 			flush()
+		case ch == '&':
+			// "&&" always separates, and so does a lone "&", which
+			// backgrounds the segment before it. What is not a separator
+			// is the "&" of a file-descriptor redirection: "2>&1" and
+			// "cmd &> log" have to stay in one piece for the redirection
+			// check above to see them whole.
+			switch {
+			case i+1 < len(command) && command[i+1] == '&':
+				i++
+				flush()
+			case separatesCommands(command, i):
+				flush()
+			default:
+				cur.WriteByte(ch)
+			}
 		default:
 			cur.WriteByte(ch)
 		}
 	}
 	flush()
 	return segments, unsafe
+}
+
+// redirectionAt names the redirection operator whose "<" or ">" sits at
+// index i. The operator is read with its file-descriptor prefix so the
+// refusal says "2>" or "&>" rather than the bare ">" nobody typed.
+func redirectionAt(command string, i int) string {
+	start := i
+	if i > 0 {
+		if p := command[i-1]; p == '&' || (p >= '0' && p <= '9') {
+			start = i - 1
+		}
+	}
+	end := i + 1
+	if end < len(command) && command[end] == command[i] {
+		end++ // ">>" or "<<"
+	}
+	return command[start:end]
+}
+
+// separatesCommands reports whether the lone "&" at index i ends a command
+// rather than belonging to a redirection. It does not when the character
+// before it is a ">" ("2>&1") or the character after it is a ">" or a file
+// descriptor ("&>log"): those have to reach the redirection check whole.
+func separatesCommands(command string, i int) bool {
+	j := i - 1
+	for j >= 0 && (command[j] == ' ' || command[j] == '\t') {
+		j--
+	}
+	if j >= 0 && command[j] == '>' {
+		return false
+	}
+	if i+1 < len(command) {
+		if n := command[i+1]; n == '>' || (n >= '0' && n <= '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func quote(s string) string { return `"` + s + `"` }

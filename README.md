@@ -110,8 +110,11 @@ when `--pr` is given and `gh` is available, the PR's title, body, and diff.
 
 The agent session runs with permission to read the workspace and to run the `Bash` commands
 listed under `permissions.bash` in config; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are
-always denied. Sirdar never writes to the tracker or helpdesk and never opens a PR itself: the
-RCA and Resolution notes record a fix a human already made.
+always denied. Every segment of a compound command has to match a pattern, command substitution
+and redirection are refused outright, and so is an argument that points outside the workspace
+root — a guard rail rather than a sandbox, described in `docs/config.md`. Sirdar never writes to
+the tracker or helpdesk and never opens a PR itself: the RCA and Resolution notes record a fix a
+human already made.
 
 ## Models
 

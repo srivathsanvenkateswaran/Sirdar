@@ -520,6 +520,9 @@ func TestTriageHappyPath(t *testing.T) {
 	if spec.Cwd != cfg.Root {
 		t.Fatalf("cwd %q want %q", spec.Cwd, cfg.Root)
 	}
+	if spec.Policy.Root != cfg.Root {
+		t.Fatalf("policy root %q want %q; without it a shell command is not held to the workspace", spec.Policy.Root, cfg.Root)
+	}
 	if len(spec.Images) != 0 {
 		t.Fatalf("claude sessions take no images: %v", spec.Images)
 	}

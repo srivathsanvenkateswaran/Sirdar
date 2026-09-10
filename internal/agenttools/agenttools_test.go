@@ -358,6 +358,66 @@ func TestBashDeniesASecondCommandBehindAnOperator(t *testing.T) {
 	}
 }
 
+// TestBashStaysInTheWorkspace is the confinement the other tools get from
+// resolving a path and the bash tool has to get from reading one: `cat *`
+// approves cat, not every file on the machine. It is a heuristic and the
+// package doc says so; these are the cases it is meant to catch.
+func TestBashStaysInTheWorkspace(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module demo\n")
+	writeFile(t, filepath.Join(root, "sub", "inner.txt"), "inner\n")
+	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"cat *"}}), "bash")
+
+	if got := mustCall(t, bash, `{"command":"cat go.mod"}`); got != "module demo\n" {
+		t.Fatalf("cat go.mod = %q", got)
+	}
+	if got := mustCall(t, bash, `{"command":"cat sub/inner.txt"}`); got != "inner\n" {
+		t.Fatalf("cat sub/inner.txt = %q", got)
+	}
+	if got := mustCall(t, bash, `{"command":"cat `+filepath.Join(root, "go.mod")+`"}`); got != "module demo\n" {
+		t.Fatalf("an absolute path inside the root = %q", got)
+	}
+
+	for _, command := range []string{
+		"cat ../../../etc/passwd",
+		"cat /etc/passwd",
+		"cat ~/.ssh/id_rsa",
+		`cat "../../../etc/passwd"`,
+	} {
+		out, err := call(t, bash, `{"command":`+quote(command)+`}`)
+		if err == nil || err.Error() != "denied: command not in the allow-list" {
+			t.Errorf("%q: out = %q, err = %v, want the denial text", command, out, err)
+		}
+	}
+}
+
+// TestBashDeniesRedirection covers the other half of what an allow-list
+// cannot see: `cat *` says nothing about the file a redirection would
+// write, and `cat x > ~/.zshrc` is not the command the pattern approved.
+func TestBashDeniesRedirection(t *testing.T) {
+	root := t.TempDir()
+	writeFile(t, filepath.Join(root, "go.mod"), "module demo\n")
+	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"cat *", "git log*", "rg *"}}), "bash")
+
+	for _, command := range []string{
+		"git log > /tmp/x",
+		"cat go.mod >> ~/.zshrc",
+		"rg foo 2>/dev/null",
+		"cat < go.mod",
+		"rg foo <(git log)",
+	} {
+		out, err := call(t, bash, `{"command":`+quote(command)+`}`)
+		if err == nil || err.Error() != "denied: command not in the allow-list" {
+			t.Errorf("%q: out = %q, err = %v, want the denial text", command, out, err)
+		}
+	}
+
+	// Quoted, the same character is a search pattern.
+	if _, err := call(t, bash, `{"command":"rg \"a>b\" go.mod"}`); err != nil {
+		t.Errorf("a quoted > was treated as a redirection: %v", err)
+	}
+}
+
 func quote(s string) string {
 	b, err := json.Marshal(s)
 	if err != nil {
@@ -375,7 +435,7 @@ func quote(s string) string {
 func allowLoopback(t *testing.T) {
 	t.Helper()
 	previous := allowPrivateAddrs
-	allowPrivateAddrs = true
+	allowPrivateAddrs = func() bool { return true }
 	t.Cleanup(func() { allowPrivateAddrs = previous })
 }
 

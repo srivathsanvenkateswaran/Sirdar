@@ -135,10 +135,16 @@ func allowedMediaType(mediaType string) bool {
 	}
 }
 
-// allowPrivateAddrs disables the private-address guard. It exists for the
-// tests, which necessarily fetch from an httptest server on loopback; no
-// production path sets it.
-var allowPrivateAddrs bool
+// allowPrivateAddrs reports whether the private-address guard should stand
+// aside. It answers false. The only thing that ever replaces it is a test
+// in this package: an httptest server necessarily listens on loopback,
+// which is the first address the guard refuses.
+//
+// It is a func rather than a bool so the escape hatch cannot be opened by
+// assigning a value read from configuration, a flag or the environment.
+// Reaching it takes code in this package, which is where the reasoning
+// about what web_fetch may connect to belongs.
+var allowPrivateAddrs = func() bool { return false }
 
 // guardAddress is the dialer hook that refuses a connection to an address
 // the model must not reach through web_fetch: loopback, RFC1918, carrier
@@ -148,7 +154,7 @@ var allowPrivateAddrs bool
 // name pointed at an internal address is refused too, and it sits on the
 // dialer rather than in the tool so a redirect chain is checked hop by hop.
 func guardAddress(_, address string, _ syscall.RawConn) error {
-	if allowPrivateAddrs {
+	if allowPrivateAddrs() {
 		return nil
 	}
 	host, _, err := net.SplitHostPort(address)
@@ -192,7 +198,17 @@ func blockedIP(ip net.IP) bool {
 func (o Options) httpClient() *http.Client {
 	client := &http.Client{Timeout: webTimeout}
 	transport := &http.Transport{
-		Proxy: http.ProxyFromEnvironment,
+		// No proxy, deliberately. The address guard runs on the dialer,
+		// so it sees whatever the transport connects to — and through a
+		// proxy that is the proxy, every time, whatever the model asked
+		// for. HTTP_PROXY in the environment would therefore turn the
+		// guard off without anyone deciding to, and 169.254.169.254
+		// would be one fetch away again. Connecting directly keeps the
+		// address the guard checks and the address the fetch reaches the
+		// same one; a workspace that can only reach the internet through
+		// a proxy loses web_fetch, and gets a connection error rather
+		// than a silently unguarded fetch.
+		Proxy: nil,
 		DialContext: (&net.Dialer{
 			Timeout:   10 * time.Second,
 			KeepAlive: 30 * time.Second,

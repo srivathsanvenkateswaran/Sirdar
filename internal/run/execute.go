@@ -225,6 +225,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Policy: &provider.PermissionPolicy{
 			BashAllow: cfg.Permissions.Bash,
 			MCPAllow:  cfg.Permissions.MCP,
+			Root:      cfg.Root,
 		},
 		MCPConfig: cfg.MCPConfigPath(),
 		Budget: provider.Budget{
@@ -236,9 +237,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Env:    r.childEnv(),
 		Binary: r.binary(),
 	}
-	// Claude Code reads image files from the bundle directory itself;
-	// Codex has to be handed them on the command line.
-	if r.providerName() == "codex" {
+	// Claude Code reads image files from the bundle directory itself.
+	// Codex has to be handed them on the command line, and the openai
+	// loop names them in its first user message, so both need the list.
+	switch r.providerName() {
+	case "codex", "openai":
 		spec.Images = imageAttachments(p)
 	}
 	return spec

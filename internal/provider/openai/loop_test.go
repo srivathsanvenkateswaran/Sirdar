@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"net/http"
@@ -563,6 +564,157 @@ func TestLoopStopsAtTheTurnBudget(t *testing.T) {
 	}
 	if got := len(cs.captured()); got != 2 {
 		t.Errorf("the loop took %d turns, want the 2 it was given", got)
+	}
+
+	// The runner decides "over budget" from a usage event whose turn
+	// count is past the budget, so the loop has to emit one before it
+	// stops. Without it the run is filed as a plain failure, and the
+	// operator cannot tell a spent budget from a broken endpoint.
+	over := events[len(events)-3]
+	if over.Kind != provider.EvUsage || over.Turns <= 2 {
+		t.Fatalf("the event before the error = %+v, want a usage event past the 2-turn budget", over)
+	}
+}
+
+// TestLoopBlocksOnARateLimit covers a 429 the chat client's one retry did
+// not clear. That is a blocked run, not a failed one: the runner reads the
+// reset time off the event and holds its queue until then.
+func TestLoopBlocksOnARateLimit(t *testing.T) {
+	var mu sync.Mutex
+	hits := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		hits++
+		n := hits
+		mu.Unlock()
+		// The first Retry-After is how long the client's own retry
+		// waits, so the test asks it to wait for nothing; the second is
+		// the one that becomes ResetsAt.
+		if n == 1 {
+			w.Header().Set("Retry-After", "0")
+		} else {
+			w.Header().Set("Retry-After", "90")
+		}
+		w.WriteHeader(http.StatusTooManyRequests)
+		_, _ = w.Write([]byte(`{"error":{"message":"rate limit exceeded"}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	sess, err := NewProvider(LoopConfig{Chat: Config{BaseURL: srv.URL, Model: "test-model"}}).
+		Start(t.Context(), provider.SessionSpec{
+			Cwd:          t.TempDir(),
+			Prompt:       "Triage OMNI-1.",
+			OutputSchema: []byte(noteSchema),
+			Policy:       &provider.PermissionPolicy{},
+		})
+	if err != nil {
+		t.Fatalf("Start: %v", err)
+	}
+	t.Cleanup(sess.Cancel)
+
+	before := time.Now()
+	events := drain(t, sess)
+
+	mu.Lock()
+	got := hits
+	mu.Unlock()
+	if got != 2 {
+		t.Errorf("the endpoint was called %d times, want the request plus its one retry", got)
+	}
+
+	var limited *provider.Event
+	for i := range events {
+		if events[i].Kind == provider.EvRateLimited {
+			limited = &events[i]
+		}
+		if events[i].Kind == provider.EvError {
+			t.Errorf("a rate limit was also reported as an error: %q", events[i].Text)
+		}
+	}
+	if limited == nil {
+		t.Fatalf("no rate-limited event in %v", summary(events))
+	}
+	if !strings.Contains(limited.Text, "429") {
+		t.Errorf("event text = %q, want the status in it", limited.Text)
+	}
+	// Retry-After: 90 is a relative number of seconds, so the window
+	// reopens about a minute and a half after the call was refused.
+	if delta := limited.ResetsAt.Sub(before); delta < 80*time.Second || delta > 100*time.Second {
+		t.Errorf("ResetsAt is %s away, want about 90s", delta)
+	}
+
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	var rl *RateLimitError
+	if !errors.As(res.ExitErr, &rl) {
+		t.Errorf("Result.ExitErr = %v, want a *RateLimitError", res.ExitErr)
+	}
+}
+
+// TestLoopAnswersEveryCallWhenSubmitNoteIsNotLast covers a model that
+// batches submit_note with other calls. Every id in the batch has to come
+// back answered: the schema retry sends the transcript on again, and most
+// endpoints reject one carrying a tool_call_id nothing replied to.
+func TestLoopAnswersEveryCallWhenSubmitNoteIsNotLast(t *testing.T) {
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	batch := reply(map[string]any{
+		"role": "assistant",
+		"tool_calls": []map[string]any{
+			{"id": "c1", "type": "function", "function": map[string]string{"name": submitNoteTool, "arguments": noteJSON}},
+			{"id": "c2", "type": "function", "function": map[string]string{"name": "read_file", "arguments": `{"path":"a.txt"}`}},
+			{"id": "c3", "type": "function", "function": map[string]string{"name": "list_dir", "arguments": `{"path":"."}`}},
+		},
+	}, "tool_calls", 100, 10)
+
+	cs := newChatServer(t, scripted(batch, toolCallReply("c4", submitNoteTool, noteJSON, 100, 10)))
+	sess := newSession(t, cs, LoopConfig{}, provider.SessionSpec{
+		Cwd:    root,
+		Budget: provider.Budget{MaxTurns: 5},
+	})
+
+	finals := 0
+	for ev := range sess.Events() {
+		if ev.Kind == provider.EvFinal {
+			finals++
+			if finals == 1 {
+				// The runner's schema retry lands here, mid-drain.
+				if err := sess.Send(t.Context(), "that note failed validation, try again"); err != nil {
+					t.Fatalf("Send: %v", err)
+				}
+			}
+		}
+	}
+	if finals == 0 {
+		t.Fatal("no final event")
+	}
+
+	requests := cs.captured()
+	if len(requests) < 2 {
+		t.Fatalf("the retry turn was never sent (%d requests)", len(requests))
+	}
+	retry := requests[len(requests)-1]
+	answered := map[string]string{}
+	for _, m := range retry.Messages {
+		if m.Role == "tool" {
+			answered[m.ToolCallID] = m.Content
+		}
+	}
+	for _, id := range []string{"c1", "c2", "c3"} {
+		if _, ok := answered[id]; !ok {
+			t.Errorf("tool_call_id %q went unanswered in the retry transcript", id)
+		}
+	}
+	// The calls after submit_note are answered, not run: the note is in,
+	// and spending more of the budget gathering evidence for it is not
+	// worth the turn.
+	if !strings.Contains(answered["c2"], "skipped") {
+		t.Errorf("the call after submit_note answered %q, want it marked skipped", answered["c2"])
 	}
 }
 

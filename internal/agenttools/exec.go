@@ -147,9 +147,10 @@ func (b *lockedBuffer) String() string {
 // allowed applies the workspace policy's Bash allow-list to the trimmed
 // command, using the same matcher the permission policy uses so the model
 // cannot reach anything the policy would refuse — including a command that
-// hides a second one behind a pipe or a semicolon.
+// hides a second one behind a pipe or a semicolon, and one whose arguments
+// point outside the workspace root the command runs in.
 func (o Options) allowed(command string) bool {
-	ok, _ := provider.MatchCommand(o.BashAllow, command)
+	ok, _ := provider.MatchCommand(o.Root, o.BashAllow, command)
 	return ok
 }
 

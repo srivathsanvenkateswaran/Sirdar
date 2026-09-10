@@ -133,9 +133,14 @@ func providerFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 // openaiProvider builds the provider that runs Sirdar's own loop against
 // an OpenAI-compatible endpoint. The API key is resolved here, held in
 // memory, and passed only to the HTTP client that authenticates the chat
-// calls: it is never written to a run directory, never printed by doctor,
-// and (see run.credentialEnvNames) stripped from the environment the
-// session's shell commands and MCP servers inherit.
+// calls: it is never written to a run directory and never printed by
+// doctor. The session's own child processes never see Sirdar's environment
+// at all — an allow-listed shell command gets PATH, HOME and LANG
+// (agenttools.execEnv) and an MCP server gets those plus its own env block
+// (mcpclient.childEnv) — so the key is absent by construction rather than
+// by being stripped. The exception is a .mcp.json that names the key's
+// variable in that env block: ${VAR} there expands from Sirdar's process
+// environment, and the server is handed it.
 //
 // SIRDAR_BILLING says nothing here. It exists to tell the Claude adapter
 // whether to leave ANTHROPIC_API_KEY in place for a subscription login;
