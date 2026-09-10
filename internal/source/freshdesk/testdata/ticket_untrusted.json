@@ -1,0 +1,36 @@
+{
+  "id": 123,
+  "subject": "Attachment on an untrusted host",
+  "status": 2,
+  "priority": 2,
+  "source": 1,
+  "requester_id": 9001,
+  "company_id": null,
+  "created_at": "2026-09-01T08:30:00Z",
+  "updated_at": "2026-09-01T08:30:00Z",
+  "description": "<p>See attached.</p>",
+  "description_text": "See attached.",
+  "tags": [],
+  "type": "",
+  "group_id": null,
+  "responder_id": null,
+  "requester": {
+    "name": "Priya Shah",
+    "email": "priya@example.com"
+  },
+  "company": null,
+  "attachments": [
+    {
+      "id": 900001,
+      "name": "order-1234.pdf",
+      "content_type": "application/pdf",
+      "attachment_url": "https://acme.freshdesk.com/api/v2/attachments/900001/order-1234.pdf"
+    },
+    {
+      "id": 900099,
+      "name": "secret.exe",
+      "content_type": "application/octet-stream",
+      "attachment_url": "https://evil.example.com/secret.exe"
+    }
+  ]
+}

@@ -121,8 +121,71 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
+	case "zendesk", "freshdesk":
+		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
+
+	case "jira", "linear", "azdo", "rally":
+		return []Check{builtinProbe(ctx, name, sc)}
+
 	default:
 		return []Check{{Name: name, Detail: fmt.Sprintf("unknown adapter %q", sc.Adapter)}}
+	}
+}
+
+// builtinProbe builds a built-in tracker adapter with the credentials the
+// config names and makes it call Ping: one authenticated round trip against
+// the cheapest endpoint the API has, which is what proves the base URL, the
+// credential and the network all work before a run spends an agent session
+// finding out otherwise.
+func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
+	tracker, _, err := newBuiltinTracker(sc, config.Resolver{Keychain: KeychainFor()})
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	p, ok := tracker.(pinger)
+	if !ok {
+		return Check{Name: name, OK: true, Detail: "configured (" + builtinEndpoint(sc) + ")"}
+	}
+	if err := p.Ping(ctx); err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	return Check{Name: name, OK: true, Detail: "reachable (" + builtinEndpoint(sc) + ")"}
+}
+
+// builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
+// freshdesk) with the credentials the config names and calls its Ping: one
+// authenticated round trip proving the base URL/domain, the credential and
+// the network all work. The detail names who the connection authenticates
+// as — an email for Zendesk basic auth, "oauth" for a bearer token, the
+// account domain for Freshdesk — never the secret itself.
+func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
+	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
+	if err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	p, ok := hd.(pinger)
+	if !ok {
+		return Check{Name: name, OK: true, Detail: "configured"}
+	}
+	if err := p.Ping(ctx); err != nil {
+		return Check{Name: name, Detail: err.Error()}
+	}
+	return Check{Name: name, OK: true, Detail: "reachable as " + helpdeskAuthWho(sc)}
+}
+
+// helpdeskAuthWho names who a built-in helpdesk connection authenticates
+// as, for the doctor report. It never returns any part of the credential.
+func helpdeskAuthWho(sc *config.SourceConfig) string {
+	switch sc.Adapter {
+	case "zendesk":
+		if sc.Email != "" {
+			return sc.Email
+		}
+		return "oauth"
+	case "freshdesk":
+		return sc.Domain
+	default:
+		return "configured"
 	}
 }
 

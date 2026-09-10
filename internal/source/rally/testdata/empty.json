@@ -1,0 +1,11 @@
+{
+  "QueryResult": {
+    "_rallyAPIMajor": "2",
+    "Errors": [],
+    "Warnings": [],
+    "TotalResultCount": 0,
+    "StartIndex": 1,
+    "PageSize": 1,
+    "Results": []
+  }
+}

@@ -224,6 +224,376 @@ func TestDefaultConfigYAMLShowsTheAuthBlock(t *testing.T) {
 	}
 }
 
+// --- built-in tracker adapters ---
+
+// trackerCfg builds a workspace whose only source is the tracker block
+// given, so a validation error can only have come from that block.
+func trackerCfg(block string) string {
+	return "workspace: demo\nsources:\n  tracker:\n" + block
+}
+
+func TestValidateBuiltinTrackers(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // substring of the expected error; "" means it must load
+	}{
+		{
+			name:  "jira cloud",
+			block: "    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    email: you@acme.com\n    apiToken: env:JIRA_TOKEN\n",
+		},
+		{
+			name:  "jira data center pat",
+			block: "    adapter: jira\n    baseUrl: https://jira.acme.internal\n    deployment: datacenter\n    pat: env:JIRA_PAT\n",
+		},
+		{
+			name:  "jira without baseUrl",
+			block: "    adapter: jira\n    pat: env:JIRA_PAT\n",
+			want:  "sources.tracker.baseUrl",
+		},
+		{
+			name:  "jira with an email but no apiToken",
+			block: "    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    email: you@acme.com\n",
+			want:  "email and apiToken",
+		},
+		{
+			name:  "jira with an unknown deployment",
+			block: "    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    pat: env:JIRA_PAT\n    deployment: onprem\n",
+			want:  "sources.tracker.deployment",
+		},
+		{
+			name:  "linear",
+			block: "    adapter: linear\n    apiKey: env:LINEAR_KEY\n    teamKey: ENG\n",
+		},
+		{
+			name:  "linear without an apiKey",
+			block: "    adapter: linear\n    teamKey: ENG\n",
+			want:  "sources.tracker.apiKey",
+		},
+		{
+			name:  "azdo",
+			block: "    adapter: azdo\n    orgUrl: https://dev.azure.com/acme\n    project: Payments\n    pat: env:AZDO_PAT\n",
+		},
+		{
+			name:  "azdo without a project",
+			block: "    adapter: azdo\n    orgUrl: https://dev.azure.com/acme\n    pat: env:AZDO_PAT\n",
+			want:  "sources.tracker.project",
+		},
+		{
+			name:  "azdo without a pat",
+			block: "    adapter: azdo\n    orgUrl: https://dev.azure.com/acme\n    project: Payments\n",
+			want:  "sources.tracker.pat",
+		},
+		{
+			name:  "rally",
+			block: "    adapter: rally\n    apiKey: env:RALLY_KEY\n    workspace: \"12345\"\n    types: [Defect]\n",
+		},
+		{
+			name:  "rally without a workspace",
+			block: "    adapter: rally\n    apiKey: env:RALLY_KEY\n",
+			want:  "sources.tracker.workspace",
+		},
+		{
+			name:  "an unknown adapter is still an error",
+			block: "    adapter: shortcut\n",
+			want:  `unknown adapter "shortcut"`,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, trackerCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestValidateBuiltinCredentialRefs covers the rule that matters most: a
+// tracker credential names a secret, it never carries one.
+func TestValidateBuiltinCredentialRefs(t *testing.T) {
+	for key, block := range map[string]string{
+		"apiToken": "    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    email: you@acme.com\n    apiToken: shhh\n",
+		"pat":      "    adapter: azdo\n    orgUrl: https://dev.azure.com/acme\n    project: Payments\n    pat: shhh\n",
+		"apiKey":   "    adapter: linear\n    apiKey: lin_api_shhh\n",
+	} {
+		_, err := Load(writeCfg(t, trackerCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.tracker."+key) {
+			t.Errorf("%s: want an error naming the key, got %v", key, err)
+		}
+	}
+}
+
+// TestRallyBaseURLDefault: a rally source that names no host gets Rally's
+// production one, so the wiring and doctor both report the same endpoint.
+func TestRallyBaseURLDefault(t *testing.T) {
+	c, err := Load(writeCfg(t, trackerCfg("    adapter: rally\n    apiKey: env:RALLY_KEY\n    workspace: \"12345\"\n")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.Sources.Tracker.BaseURL; got != RallyDefaultBaseURL {
+		t.Fatalf("baseUrl = %q, want %q", got, RallyDefaultBaseURL)
+	}
+}
+
+// TestBuiltinTrackerUnderHelpdeskIsRejected: the four built-in adapters read
+// issues. Their conversation view is picked up automatically by the wiring,
+// so naming one under sources.helpdesk is a mistake, not a second source.
+func TestBuiltinTrackerUnderHelpdeskIsRejected(t *testing.T) {
+	body := "workspace: demo\nsources:\n  helpdesk:\n    adapter: linear\n    apiKey: env:LINEAR_KEY\n"
+	_, err := Load(writeCfg(t, body))
+	if err == nil || !strings.Contains(err.Error(), "sources.tracker") {
+		t.Fatalf("want an error pointing at sources.tracker, got %v", err)
+	}
+}
+
+// TestBuiltinHelpdeskUnderTrackerIsRejected: the helpdesk adapters read
+// support conversations and have no issue list to sweep, so naming one under
+// sources.tracker leaves a workspace that loads and then fails on its first
+// run.
+func TestBuiltinHelpdeskUnderTrackerIsRejected(t *testing.T) {
+	for _, block := range []string{
+		"    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n",
+		"    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n",
+		"    adapter: zohodesk\n    orgId: \"1\"\n    baseUrl: https://desk.zoho.com\n    token: env:ZOHO\n",
+	} {
+		_, err := Load(writeCfg(t, trackerCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk") {
+			t.Errorf("%s: want an error pointing at sources.helpdesk, got %v", strings.TrimSpace(block), err)
+		}
+	}
+}
+
+// TestAuthIsRejectedOnNonZohoAdapters: `auth:` is the Zoho OAuth refresh
+// grant and nothing else understands it. An adapter that quietly ignored the
+// block would read as "my OAuth config is live" right up until the first run
+// failed for want of a credential.
+func TestAuthIsRejectedOnNonZohoAdapters(t *testing.T) {
+	const auth = "    auth:\n      clientId: env:ID\n      clientSecret: env:SECRET\n      refreshToken: env:REFRESH\n"
+	for name, body := range map[string]string{
+		"jira":      trackerCfg("    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    pat: env:JIRA_PAT\n" + auth),
+		"linear":    trackerCfg("    adapter: linear\n    apiKey: env:LINEAR_KEY\n" + auth),
+		"zendesk":   helpdeskCfg("    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n" + auth),
+		"freshdesk": helpdeskCfg("    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n" + auth),
+		"exec":      helpdeskCfg("    adapter: exec\n    command: ./tickets.sh\n" + auth),
+	} {
+		_, err := Load(writeCfg(t, body))
+		if err == nil || !strings.Contains(err.Error(), ".auth: is only supported for adapter zohodesk") {
+			t.Errorf("%s: want the auth block refused, got %v", name, err)
+		}
+	}
+
+	// zohodesk itself still accepts it.
+	ok := helpdeskCfg("    adapter: zohodesk\n    orgId: \"1\"\n    baseUrl: https://desk.zoho.com\n" + auth)
+	if _, err := Load(writeCfg(t, ok)); err != nil {
+		t.Errorf("zohodesk with an auth block: %v", err)
+	}
+}
+
+// --- built-in helpdesk adapters (zendesk, freshdesk) ---
+
+// helpdeskCfg builds a workspace whose only source is the helpdesk block
+// given, so a validation error can only have come from that block.
+func helpdeskCfg(block string) string {
+	return "workspace: demo\nsources:\n  helpdesk:\n" + block
+}
+
+func TestValidateZendesk(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string // substring of the expected error; "" means it must load
+	}{
+		{
+			name:  "basic auth",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: env:ZENDESK_TOKEN\n",
+		},
+		{
+			name:  "oauth",
+			block: "    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n",
+		},
+		{
+			name:  "an optional baseUrl override",
+			block: "    adapter: zendesk\n    subdomain: acme\n    baseUrl: https://support.acme.com\n    oauthToken: env:ZENDESK_OAUTH\n",
+		},
+		{
+			name:  "missing subdomain",
+			block: "    adapter: zendesk\n    oauthToken: env:ZENDESK_OAUTH\n",
+			want:  "sources.helpdesk.subdomain",
+		},
+		{
+			name:  "no credentials at all",
+			block: "    adapter: zendesk\n    subdomain: acme\n",
+			want:  "one of email + apiToken or oauthToken",
+		},
+		{
+			name:  "both auth forms at once",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: env:ZENDESK_TOKEN\n    oauthToken: env:ZENDESK_OAUTH\n",
+			want:  "not both",
+		},
+		{
+			name:  "email without apiToken",
+			block: "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n",
+			want:  "both email and apiToken",
+		},
+		{
+			name:  "apiToken without email",
+			block: "    adapter: zendesk\n    subdomain: acme\n    apiToken: env:ZENDESK_TOKEN\n",
+			want:  "both email and apiToken",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateZendeskCredentialRefsAreNotLiterals(t *testing.T) {
+	for key, block := range map[string]string{
+		"apiToken":   "    adapter: zendesk\n    subdomain: acme\n    email: you@acme.com\n    apiToken: shhh\n",
+		"oauthToken": "    adapter: zendesk\n    subdomain: acme\n    oauthToken: shhh\n",
+	} {
+		_, err := Load(writeCfg(t, helpdeskCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk."+key) {
+			t.Errorf("%s: want an error naming the key, got %v", key, err)
+		}
+	}
+}
+
+func TestValidateFreshdesk(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "valid",
+			block: "    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n",
+		},
+		{
+			name:  "missing domain",
+			block: "    adapter: freshdesk\n    apiKey: env:FRESHDESK_KEY\n",
+			want:  "sources.helpdesk.domain",
+		},
+		{
+			name:  "missing apiKey",
+			block: "    adapter: freshdesk\n    domain: acme.freshdesk.com\n",
+			want:  "sources.helpdesk.apiKey",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateFreshdeskCredentialRefIsNotALiteral(t *testing.T) {
+	block := "    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: shhh\n"
+	_, err := Load(writeCfg(t, helpdeskCfg(block)))
+	if err == nil || !strings.Contains(err.Error(), "sources.helpdesk.apiKey") {
+		t.Fatalf("want an error naming the key, got %v", err)
+	}
+}
+
+// --- helpdeskRef fallback ---
+
+func TestValidateHelpdeskRef(t *testing.T) {
+	base := "    adapter: linear\n    apiKey: env:LINEAR_KEY\n    helpdeskRef:\n"
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "the Zoho URL rule",
+			block: "      pattern: 'Zoho Ticket URL:\\s*(\\S+)'\n      idPattern: '(\\d+)$'\n",
+		},
+		{
+			name:  "idPattern is optional",
+			block: "      pattern: 'ticket #(\\d+)'\n",
+		},
+		{
+			name:  "a pattern that does not compile",
+			block: "      pattern: '([0-9'\n",
+			want:  "helpdeskRef.pattern",
+		},
+		{
+			name:  "a pattern with no capture group",
+			block: "      pattern: 'ticket #\\d+'\n",
+			want:  "exactly one capture group",
+		},
+		{
+			name:  "a pattern with two capture groups",
+			block: "      pattern: '(ticket) #(\\d+)'\n",
+			want:  "exactly one capture group",
+		},
+		{
+			name:  "an idPattern with no capture group",
+			block: "      pattern: 'ticket #(\\d+)'\n      idPattern: '\\d+'\n",
+			want:  "helpdeskRef.idPattern",
+		},
+		{
+			name:  "helpdeskRef without a pattern",
+			block: "      idPattern: '(\\d+)'\n",
+			want:  "helpdeskRef.pattern",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, trackerCfg(base+tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// TestDefaultConfigYAMLLoads: every commented example in the scaffold is
+// still YAML, and the file `sirdar init` writes loads as it stands.
+func TestDefaultConfigYAMLLoads(t *testing.T) {
+	body := strings.Replace(DefaultConfigYAML, "<name>", "demo", 1)
+	if _, err := Load(writeCfg(t, body)); err != nil {
+		t.Fatalf("the scaffold does not load: %v", err)
+	}
+	for _, want := range []string{
+		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
+		"# adapter: zendesk", "# adapter: freshdesk",
+		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
+	} {
+		if !strings.Contains(DefaultConfigYAML, want) {
+			t.Errorf("DefaultConfigYAML is missing %q", want)
+		}
+	}
+}
+
 // TestMCPAndAttachmentDefaults pins the two settings D2 and D7 added: MCP
 // servers are restricted to the workspace unless the operator says
 // otherwise, and an attachment cap exists even in a config that predates

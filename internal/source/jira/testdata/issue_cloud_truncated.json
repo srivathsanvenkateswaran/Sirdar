@@ -1,0 +1,30 @@
+{
+  "id": "10045",
+  "key": "SUP-45",
+  "fields": {
+    "summary": "Long-running chat thread about a stuck payout",
+    "description": "Payout PAY-8891 has been pending for six days.",
+    "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate", "name": "In Progress" } },
+    "priority": { "name": "High" },
+    "reporter": { "displayName": "Dana Okoro", "accountId": "acc-dana", "accountType": "customer" },
+    "issuetype": { "name": "Support" },
+    "project": { "key": "SUP", "name": "Customer Support", "projectTypeKey": "service_desk" },
+    "created": "2026-09-01T09:00:00.000+0000",
+    "updated": "2026-09-09T09:00:00.000+0000",
+    "attachment": [],
+    "comment": {
+      "startAt": 0,
+      "maxResults": 1,
+      "total": 3,
+      "comments": [
+        {
+          "id": "8001",
+          "author": { "displayName": "Dana Okoro", "accountId": "acc-dana", "accountType": "customer" },
+          "body": "Any update?",
+          "created": "2026-09-02T09:00:00.000+0000",
+          "jsdPublic": true
+        }
+      ]
+    }
+  }
+}

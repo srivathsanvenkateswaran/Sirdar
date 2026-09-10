@@ -168,6 +168,16 @@ func newWorkspaceWith(t *testing.T, body string) *config.Config {
 type stubTracker struct {
 	gate func(key string)
 	err  error
+	// warningsFor stands in for a tracker that degraded without failing —
+	// a comment page it could not read, an attachment it skipped — keyed
+	// by the ticket key the warning belongs to.
+	warningsFor map[string][]string
+}
+
+// WarningsFor implements source.Warner. The tracker side of a bundle
+// degrades exactly as the helpdesk side does, so prepare has to drain both.
+func (s stubTracker) WarningsFor(key string) []string {
+	return s.warningsFor[key]
 }
 
 func (s stubTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
@@ -926,6 +936,46 @@ func TestHelpdeskWarningsReachThePrompt(t *testing.T) {
 	}
 }
 
+// TestTrackerWarningsReachThePrompt covers a tracker that answered with an
+// issue and, separately, reported what it could not read. Nothing failed,
+// so the warning is the only thing telling the agent the record in front of
+// it is incomplete — and it is keyed by the tracker key, not the helpdesk
+// id.
+func TestTrackerWarningsReachThePrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	tr := stubTracker{warningsFor: map[string][]string{
+		"OMNI-1": {"jira: comment pagination stopped after 100 pages"},
+		"OMNI-9": {"jira: a warning for another ticket entirely"},
+	}}
+	r := newRunner(cfg, p, tr, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(promptText, "stopped after 100 pages") {
+		t.Fatalf("prompt is missing the tracker warning:\n%s", promptText)
+	}
+	if strings.Contains(promptText, "another ticket entirely") {
+		t.Fatalf("prompt carries another ticket's tracker warning:\n%s", promptText)
+	}
+	found := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "stopped after 100 pages") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("run state warnings: %v", out.State.Warnings)
+	}
+}
+
 // TestHelpdeskWarningsStayWithTheirTicket covers a helpdesk that answers
 // two tickets with different per-id warnings: prepare must call
 // WarningsFor(helpdeskID) rather than an argument-less Warnings(), or one
@@ -1464,6 +1514,252 @@ func contains(list []string, want string) bool {
 		}
 	}
 	return false
+}
+
+// --- helpdeskRef fallback ---------------------------------------------
+
+// zohoURLRule is the rule that used to be hardcoded: it finds the Zoho Desk
+// ticket URL a triager pasted into the tracker description, then narrows it
+// to the ticket number the Desk API answers to.
+func zohoURLRule() *config.SourceConfig {
+	return &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+}
+
+func TestHelpdeskRefFallback(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		want        string
+		wantWarning bool
+	}{
+		{
+			name:        "the agent-console URL shape",
+			description: "Customer cannot export.\n\nZoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789\n",
+			want:        "1234567890123456789",
+		},
+		{
+			name:        "the ShowHomePage URL shape",
+			description: "Zoho Ticket URL: https://desk.zoho.com/support/acme/ShowHomePage.do#Cases/dv/987654321\nfiled by L1.",
+			want:        "987654321",
+		},
+		{
+			name:        "a description with no Zoho URL at all",
+			description: "Customer cannot export. Reported over the phone.",
+			want:        "",
+		},
+		{
+			name:        "a match the idPattern cannot narrow",
+			description: "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/none",
+			want:        "",
+			wantWarning: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg}}
+
+			tt := ticket.TrackerTicket{Key: "OMNI-1", Description: tc.description}
+			p := &prepared{}
+			var b ticket.Bundle
+			r.applyHelpdeskRefFallback(p, &b, &tt)
+
+			if tt.HelpdeskRef != tc.want {
+				t.Errorf("HelpdeskRef = %q, want %q", tt.HelpdeskRef, tc.want)
+			}
+			if got := len(b.Warnings) > 0; got != tc.wantWarning {
+				t.Errorf("warnings = %v, want a warning: %v", b.Warnings, tc.wantWarning)
+			}
+			if len(b.Warnings) != len(p.state.Warnings) {
+				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
+			}
+		})
+	}
+}
+
+// The value quoted in the idPattern warning comes out of a ticket
+// description, so its length is whoever wrote that description's choice. A
+// warning line goes into prompt.md and the run state, and neither wants a
+// paragraph of prose.
+func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	long := strings.Repeat("x", 500)
+	tt := ticket.TrackerTicket{Key: "OMNI-1", Description: "Zoho Ticket URL: " + long}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+
+	if len(b.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", b.Warnings)
+	}
+	if n := len(b.Warnings[0]); n > 250 {
+		t.Errorf("warning is %d bytes long; the captured value was not truncated: %q", n, b.Warnings[0])
+	}
+	if !strings.Contains(b.Warnings[0], "…") {
+		t.Errorf("warning does not mark the value as truncated: %q", b.Warnings[0])
+	}
+	if strings.Contains(b.Warnings[0], long) {
+		t.Errorf("warning still carries the whole captured value: %q", b.Warnings[0])
+	}
+}
+
+// TestHelpdeskRefFallbackWithoutARule leaves the reference alone when the
+// workspace configured no rule at all.
+func TestHelpdeskRefFallbackWithoutARule(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear", APIKey: "env:LINEAR_KEY"}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	tt := ticket.TrackerTicket{Description: "Zoho Ticket URL: https://desk.zoho.com/agent/a/support/tickets/details/42"}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	if tt.HelpdeskRef != "" {
+		t.Fatalf("HelpdeskRef = %q, want it left empty", tt.HelpdeskRef)
+	}
+}
+
+// descTracker is a tracker whose issue carries a helpdesk URL in its
+// description and a native HelpdeskRef only when one is set.
+type descTracker struct {
+	description string
+	helpdeskRef string
+}
+
+func (d descTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
+	return ticket.TrackerTicket{Key: key, Title: "Export fails", Description: d.description, HelpdeskRef: d.helpdeskRef}, nil
+}
+
+func (d descTracker) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
+	return nil, nil
+}
+
+// TestFetchBundleAppliesAndDefersToTheAdapter: the fallback fills in a
+// missing reference and never overrides one the adapter found itself.
+func TestFetchBundleAppliesAndDefersToTheAdapter(t *testing.T) {
+	const desc = "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789"
+
+	for _, tc := range []struct {
+		name   string
+		native string
+		want   string
+	}{
+		{name: "the adapter found nothing", native: "", want: "1234567890123456789"},
+		{name: "the adapter found its own reference", native: "555", want: "555"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}}
+
+			b, err := r.fetchBundle(context.Background(), "OMNI-1", &prepared{})
+			if err != nil {
+				t.Fatalf("fetchBundle: %v", err)
+			}
+			if b.Tracker.HelpdeskRef != tc.want {
+				t.Fatalf("HelpdeskRef = %q, want %q", b.Tracker.HelpdeskRef, tc.want)
+			}
+		})
+	}
+}
+
+// TestCredentialEnvNamesCoversBuiltinTrackers: every env: ref a built-in
+// tracker names is stripped from the agent's environment, for the same
+// reason the Zoho token is — an agent that runs shell commands must not be
+// able to read the tracker's credentials back out.
+func TestCredentialEnvNamesCoversBuiltinTrackers(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter:  "jira",
+		BaseURL:  "https://acme.atlassian.net",
+		Email:    "you@acme.com",
+		APIToken: "env:JIRA_TOKEN",
+		PAT:      "env:JIRA_PAT",
+		APIKey:   "env:LINEAR_KEY",
+	}
+	cfg.Sources.Helpdesk = &config.SourceConfig{Adapter: "zohodesk", Token: "env:ZOHO_TOKEN"}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"JIRA_TOKEN", "JIRA_PAT", "LINEAR_KEY", "ZOHO_TOKEN"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "JIRA_TOKEN=x", "JIRA_PAT=y", "LINEAR_KEY=z", "ZOHO_TOKEN=w", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"JIRA_TOKEN=", "JIRA_PAT=", "LINEAR_KEY=", "ZOHO_TOKEN="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+}
+
+// TestCredentialEnvNamesCoversZendeskAndFreshdesk: a helpdesk configured as
+// zendesk or freshdesk strips its apiToken/oauthToken/apiKey refs from the
+// agent's environment the same way every other built-in source does.
+func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:    "zendesk",
+		Subdomain:  "acme",
+		Email:      "agent@acme.com",
+		APIToken:   "env:ZENDESK_TOKEN",
+		OAuthToken: "env:ZENDESK_OAUTH",
+	}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"ZENDESK_TOKEN", "ZENDESK_OAUTH"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "ZENDESK_TOKEN=x", "ZENDESK_OAUTH=y", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"ZENDESK_TOKEN=", "ZENDESK_OAUTH="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+
+	cfg2 := &config.Config{Billing: "subscription"}
+	cfg2.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  "acme.freshdesk.com",
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
+		t.Error("FRESHDESK_KEY is not treated as a credential")
+	}
 }
 
 // TestFinalEndsTheSessionDeterministically is the D1 regression: the first

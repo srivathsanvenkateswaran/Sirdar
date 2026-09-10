@@ -1,0 +1,63 @@
+{
+  "QueryResult": {
+    "_rallyAPIMajor": "2",
+    "Errors": [],
+    "Warnings": [],
+    "TotalResultCount": 1,
+    "StartIndex": 1,
+    "PageSize": 1,
+    "Results": [
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/defect/12345",
+        "_type": "Defect",
+        "ObjectID": 12345,
+        "FormattedID": "DE1234",
+        "Name": "Payment webhook retries stall after the third attempt",
+        "Description": "<p>Webhook delivery <strong>stops</strong> after the third retry.</p><p>Reported by the merchant on 2026-09-01.</p>",
+        "Notes": "<p>Customer confirmed the stall reproduces on staging.</p>",
+        "Priority": "High Attention",
+        "Severity": "Major Problem",
+        "State": "Submitted",
+        "Owner": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9001",
+          "_refObjectName": "Ann Agent",
+          "_type": "User",
+          "UserName": "ann@example.com"
+        },
+        "Project": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/project/301",
+          "_refObjectName": "Payments",
+          "_type": "Project"
+        },
+        "Iteration": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/iteration/55",
+          "_refObjectName": "Sprint 42",
+          "_type": "Iteration"
+        },
+        "Release": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/release/7",
+          "_refObjectName": "2026.09",
+          "_type": "Release"
+        },
+        "Tags": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/defect/12345/Tags",
+          "Count": 2,
+          "_tagsNameArray": [
+            { "_ref": "https://rally.example.com/slm/webservice/v2.0/tag/1", "Name": "regression" },
+            { "_ref": "https://rally.example.com/slm/webservice/v2.0/tag/2", "Name": "payments" }
+          ]
+        },
+        "Parent": null,
+        "Feature": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/portfolioitem/feature/900",
+          "_refObjectName": "Webhook reliability",
+          "_type": "PortfolioItem",
+          "FormattedID": "F42"
+        },
+        "CreationDate": "2026-09-01T09:15:00.000Z",
+        "LastUpdateDate": "2026-09-09T16:40:00.000Z",
+        "c_ZendeskTicketID": "8891"
+      }
+    ]
+  }
+}

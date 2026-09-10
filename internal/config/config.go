@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"gopkg.in/yaml.v3"
@@ -19,12 +20,62 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
 	Token   string       `yaml:"token,omitempty"` // credential ref
 	Auth    *OAuthConfig `yaml:"auth,omitempty"`
+
+	// Jira (Email and APIToken are also Zendesk's basic-auth credentials).
+	Deployment    string `yaml:"deployment,omitempty"` // cloud | datacenter | auto
+	Email         string `yaml:"email,omitempty"`      // Cloud/Zendesk account email, sent with apiToken
+	APIToken      string `yaml:"apiToken,omitempty"`   // credential ref (Jira Cloud, Zendesk basic auth)
+	PAT           string `yaml:"pat,omitempty"`        // credential ref (Jira Data Center, Azure DevOps)
+	ProjectKey    string `yaml:"projectKey,omitempty"`
+	EpicLinkField string `yaml:"epicLinkField,omitempty"`
+
+	// Linear (APIKey is also Rally's and Freshdesk's credential).
+	APIKey  string `yaml:"apiKey,omitempty"` // credential ref
+	TeamKey string `yaml:"teamKey,omitempty"`
+
+	// Azure DevOps (HelpdeskField is also Rally's).
+	OrgURL             string `yaml:"orgUrl,omitempty"`
+	Project            string `yaml:"project,omitempty"`
+	HelpdeskLinkDomain string `yaml:"helpdeskLinkDomain,omitempty"`
+	HelpdeskField      string `yaml:"helpdeskField,omitempty"`
+
+	// Rally.
+	Workspace string   `yaml:"workspace,omitempty"`
+	Types     []string `yaml:"types,omitempty"`
+
+	// Zendesk.
+	Subdomain  string `yaml:"subdomain,omitempty"`  // account identifier, e.g. "acme" for acme.zendesk.com
+	OAuthToken string `yaml:"oauthToken,omitempty"` // credential ref; alternative to email + apiToken
+
+	// Freshdesk.
+	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
+
+	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
+	// reference out of the ticket description when the tracker's own data
+	// model carries none.
+	HelpdeskRef *HelpdeskRefConfig `yaml:"helpdeskRef,omitempty"`
+}
+
+// HelpdeskRefConfig configures the description-regex fallback for a
+// tracker ticket that carries its helpdesk link only as pasted text. The
+// wiring layer applies it after the adapter has had its say, so a tracker
+// with native linkage (Jira Service Management, a Linear customer request,
+// an Azure DevOps hyperlink) is never overridden.
+//
+// Pattern is matched against the description and must have exactly one
+// capture group: the group, not the whole match, is what gets used, so a
+// rule can anchor on surrounding text it does not want to keep. IDPattern
+// is optional and narrows that capture further — a URL down to the ticket
+// number the helpdesk API expects.
+type HelpdeskRefConfig struct {
+	Pattern   string `yaml:"pattern"`
+	IDPattern string `yaml:"idPattern,omitempty"`
 }
 
 // OAuthConfig configures an OAuth refresh-token grant, so the source mints
@@ -62,6 +113,10 @@ func AccountsURLFor(baseURL string) string {
 	}
 	return accountsURLs[strings.ToLower(u.Hostname())]
 }
+
+// RallyDefaultBaseURL is the subscription host a rally source falls back to
+// when it names none: Rally's North American production instance.
+const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 
 // DefaultAttachmentMaxBytes is the size above which a downloaded
 // attachment is dropped from the bundle. A 17 MB screen recording is 99%
@@ -198,8 +253,14 @@ func applyDefaults(c *Config) {
 		c.Attachments.MaxBytes = DefaultAttachmentMaxBytes
 	}
 	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
-		if s != nil && s.Auth != nil && s.Auth.AccountsURL == "" {
+		if s == nil {
+			continue
+		}
+		if s.Auth != nil && s.Auth.AccountsURL == "" {
 			s.Auth.AccountsURL = AccountsURLFor(s.BaseURL)
+		}
+		if s.Adapter == "rally" && s.BaseURL == "" {
+			s.BaseURL = RallyDefaultBaseURL
 		}
 	}
 }
@@ -247,26 +308,52 @@ func (c *Config) Validate() error {
 	if c.Attachments.MaxBytes < 0 {
 		return fmt.Errorf("config: attachments.maxBytes: must be >= 0, got %d", c.Attachments.MaxBytes)
 	}
-	if err := validateSource("sources.tracker", c.Sources.Tracker); err != nil {
+	if err := validateSource("sources.tracker", c.Sources.Tracker, true); err != nil {
 		return err
 	}
-	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk); err != nil {
+	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk, false); err != nil {
 		return err
 	}
 	return nil
 }
 
-func validateSource(prefix string, s *SourceConfig) error {
+// trackerOnlyAdapters are the built-in trackers. They read issues, not
+// support conversations, so naming one under sources.helpdesk is a mistake
+// worth catching at load time — each of them does serve the conversation on
+// its own issues, but the wiring layer picks that view up automatically and
+// there is nothing for an operator to configure separately.
+var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": true, "rally": true}
+
+// helpdeskOnlyAdapters are the built-in helpdesks. They read support
+// conversations and have no issue list to sweep, so naming one under
+// sources.tracker leaves a workspace that loads and then fails on its first
+// run — worth catching at load time instead.
+var helpdeskOnlyAdapters = map[string]bool{"zendesk": true, "freshdesk": true, "zohodesk": true}
+
+func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	if s == nil {
 		return nil
+	}
+	if trackerOnlyAdapters[s.Adapter] && !isTracker {
+		return fmt.Errorf("config: %s.adapter: %q is a tracker adapter; configure it under sources.tracker", prefix, s.Adapter)
+	}
+	if helpdeskOnlyAdapters[s.Adapter] && isTracker {
+		return fmt.Errorf("config: %s.adapter: %q is a helpdesk adapter; configure it under sources.helpdesk", prefix, s.Adapter)
+	}
+	if s.HelpdeskRef != nil && !isTracker {
+		return fmt.Errorf("config: %s.helpdeskRef: is only supported for sources.tracker", prefix)
+	}
+	// Hoisted out of the exec case so it covers every adapter: an `auth:`
+	// block on a jira or zendesk source used to be read, ignored, and never
+	// mentioned, which reads as "my OAuth config is live" right up until
+	// the first run fails on a missing token.
+	if s.Auth != nil && s.Adapter != "zohodesk" {
+		return fmt.Errorf("config: %s.auth: is only supported for adapter zohodesk", prefix)
 	}
 	switch s.Adapter {
 	case "exec":
 		if s.Command == "" {
 			return fmt.Errorf("config: %s.command: is required for adapter exec", prefix)
-		}
-		if s.Auth != nil {
-			return fmt.Errorf("config: %s.auth: is only supported for adapter zohodesk", prefix)
 		}
 	case "zohodesk":
 		if s.OrgID == "" {
@@ -284,13 +371,108 @@ func validateSource(prefix string, s *SourceConfig) error {
 		if err := validateOAuth(prefix+".auth", s.Auth); err != nil {
 			return err
 		}
+	case "zendesk":
+		if s.Subdomain == "" {
+			return fmt.Errorf("config: %s.subdomain: is required for adapter zendesk", prefix)
+		}
+		basic := s.Email != "" || s.APIToken != ""
+		bearer := s.OAuthToken != ""
+		switch {
+		case basic && bearer:
+			return fmt.Errorf("config: %s: set email and apiToken, or oauthToken, not both", prefix)
+		case basic && (s.Email == "" || s.APIToken == ""):
+			return fmt.Errorf("config: %s: both email and apiToken are required for basic auth", prefix)
+		case !basic && !bearer:
+			return fmt.Errorf("config: %s: one of email + apiToken or oauthToken is required for adapter zendesk", prefix)
+		}
+	case "freshdesk":
+		if s.Domain == "" {
+			return fmt.Errorf("config: %s.domain: is required for adapter freshdesk", prefix)
+		}
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter freshdesk", prefix)
+		}
+	case "jira":
+		if s.BaseURL == "" {
+			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
+		}
+		switch s.Deployment {
+		case "", "auto", "cloud", "datacenter":
+		default:
+			return fmt.Errorf("config: %s.deployment: must be cloud, datacenter or auto, got %q", prefix, s.Deployment)
+		}
+		hasCloud := s.Email != "" && s.APIToken != ""
+		if !hasCloud && s.PAT == "" {
+			return fmt.Errorf("config: %s: adapter jira needs email and apiToken (Cloud) or pat (Data Center)", prefix)
+		}
+	case "linear":
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter linear", prefix)
+		}
+	case "azdo":
+		if s.OrgURL == "" {
+			return fmt.Errorf("config: %s.orgUrl: is required for adapter azdo", prefix)
+		}
+		if s.Project == "" {
+			return fmt.Errorf("config: %s.project: is required for adapter azdo", prefix)
+		}
+		if s.PAT == "" {
+			return fmt.Errorf("config: %s.pat: is required for adapter azdo", prefix)
+		}
+	case "rally":
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter rally", prefix)
+		}
+		if s.Workspace == "" {
+			return fmt.Errorf("config: %s.workspace: is required for adapter rally", prefix)
+		}
 	case "":
 		return fmt.Errorf("config: %s.adapter: is required", prefix)
 	default:
 		return fmt.Errorf("config: %s.adapter: unknown adapter %q", prefix, s.Adapter)
 	}
-	if s.Token != "" {
-		return credentialRef(prefix+".token", s.Token)
+	for _, f := range []struct{ key, ref string }{
+		{"token", s.Token},
+		{"apiToken", s.APIToken},
+		{"pat", s.PAT},
+		{"apiKey", s.APIKey},
+		{"oauthToken", s.OAuthToken},
+	} {
+		if f.ref == "" {
+			continue
+		}
+		if err := credentialRef(prefix+"."+f.key, f.ref); err != nil {
+			return err
+		}
+	}
+	return validateHelpdeskRef(prefix+".helpdeskRef", s.HelpdeskRef)
+}
+
+// validateHelpdeskRef compiles the fallback's patterns and insists each has
+// exactly one capture group. A pattern with none, or with several, has no
+// single answer to "which part is the reference", and finding that out at
+// load time beats finding it out halfway through a batch.
+func validateHelpdeskRef(prefix string, h *HelpdeskRefConfig) error {
+	if h == nil {
+		return nil
+	}
+	if h.Pattern == "" {
+		return fmt.Errorf("config: %s.pattern: is required", prefix)
+	}
+	for _, f := range []struct{ key, expr string }{
+		{"pattern", h.Pattern},
+		{"idPattern", h.IDPattern},
+	} {
+		if f.expr == "" {
+			continue
+		}
+		re, err := regexp.Compile(f.expr)
+		if err != nil {
+			return fmt.Errorf("config: %s.%s: %w", prefix, f.key, err)
+		}
+		if n := re.NumSubexp(); n != 1 {
+			return fmt.Errorf("config: %s.%s: must have exactly one capture group, got %d", prefix, f.key, n)
+		}
 	}
 	return nil
 }

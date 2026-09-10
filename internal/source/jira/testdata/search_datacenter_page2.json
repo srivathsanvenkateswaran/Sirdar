@@ -1,0 +1,22 @@
+{
+  "startAt": 2,
+  "maxResults": 1,
+  "total": 3,
+  "issues": [
+    {
+      "id": "20019",
+      "key": "ENG-19",
+      "fields": {
+        "summary": "Reconciliation report is not uploaded on partial success",
+        "status": { "name": "Open", "statusCategory": { "key": "new", "name": "To Do" } },
+        "priority": { "name": "Low" },
+        "assignee": { "displayName": "Sam Iyer", "name": "siyer" },
+        "issuetype": { "name": "Task" },
+        "project": { "key": "ENG", "name": "Engineering", "projectTypeKey": "software" },
+        "labels": ["batch"],
+        "created": "2026-09-02T08:00:00.000+0530",
+        "updated": "2026-09-04T17:30:00.000+0530"
+      }
+    }
+  ]
+}

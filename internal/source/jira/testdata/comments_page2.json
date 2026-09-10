@@ -1,0 +1,14 @@
+{
+  "startAt": 2,
+  "maxResults": 2,
+  "total": 3,
+  "comments": [
+    {
+      "id": "8003",
+      "author": { "displayName": "Priya Raman", "accountId": "acc-priya", "accountType": "atlassian" },
+      "body": "Provider confirmed a bank-side hold; not our retry logic.",
+      "created": "2026-09-04T09:00:00.000+0000",
+      "jsdPublic": false
+    }
+  ]
+}

@@ -1,0 +1,32 @@
+{
+  "id": 123,
+  "subject": "Checkout fails on payment step",
+  "status": 3,
+  "priority": 4,
+  "source": 1,
+  "requester_id": 9001,
+  "company_id": 501,
+  "created_at": "2026-09-01T08:30:00Z",
+  "updated_at": "2026-09-05T12:00:00Z",
+  "description": "<p>It just spins forever. See <img src=\"https://cdn.freshdesk.com/data/helpdesk/attachments/production/700001/original/spinner.png\"> for a screenshot.</p>",
+  "description_text": "It just spins forever. See for a screenshot.",
+  "tags": ["billing", "urgent"],
+  "type": "Problem",
+  "group_id": 42,
+  "responder_id": 501,
+  "requester": {
+    "name": "Priya Shah",
+    "email": "priya@example.com"
+  },
+  "company": {
+    "name": "Acme Corp"
+  },
+  "attachments": [
+    {
+      "id": 900001,
+      "name": "order-1234.pdf",
+      "content_type": "application/pdf",
+      "attachment_url": "https://acme.freshdesk.com/api/v2/attachments/900001/order-1234.pdf"
+    }
+  ]
+}
