@@ -6,6 +6,8 @@ import type {
   Transport,
   Workspace,
 } from '../api/types'
+import { parseTime } from '../lib/format'
+import { clearJob, setRunJob } from '../lib/jobs'
 
 /** Which screen the window is showing. Run detail carries the run it opened. */
 export type Screen =
@@ -41,6 +43,35 @@ export interface TriageOptions {
   dryRun?: boolean
 }
 
+export interface RCAOptions {
+  prUrl?: string
+  resolution?: string
+}
+
+/**
+ * A job this window started, held until its runs are known.
+ *
+ * `startTriage` and `startRCA` answer with a job id straight away; the runs
+ * that job produces only exist once the runner has written their state, and
+ * arrive as `run.updated`. Pairing the two is what makes Cancel usable, so the
+ * store keeps the keys it asked for and claims the first run reported for each.
+ */
+interface PendingJob {
+  jobId: string
+  workspaceId: string
+  /** The keys still waiting for a run of their own. */
+  keys: Set<string>
+  /** When the job was asked for, so an older run for the same key is ignored. */
+  startedAt: number
+}
+
+/**
+ * How far before the request a run may claim to have started and still be
+ * taken for this job's. The service writes the timestamp after answering, so
+ * the allowance is only there to absorb a clock that ticks the other way.
+ */
+const CLOCK_GRACE_MS = 2000
+
 export interface AppStore {
   subscribe(listener: () => void): () => void
   getState(): AppState
@@ -48,6 +79,7 @@ export interface AppStore {
   setWorkspace(id: string): void
   navigate(screen: Screen): void
   startTriage(keys: string[], opts?: TriageOptions): Promise<void>
+  startRCA(key: string, opts?: RCAOptions): Promise<void>
   refresh(): Promise<void>
   toast(text: string, tone?: Toast['tone']): void
   dismissToast(id: number): void
@@ -123,6 +155,7 @@ export function createAppStore(transport: Transport): AppStore {
   }
 
   const listeners = new Set<() => void>()
+  const pending: PendingJob[] = []
   let unsubscribe: (() => void) | null = null
   let toastSeq = 0
   let disposed = false
@@ -193,10 +226,40 @@ export function createAppStore(transport: Transport): AppStore {
     await Promise.all([loadRuns(workspaceId), loadQueue(workspaceId)])
   }
 
+  /** Remembers a job until every key it was given has a run. */
+  function track(jobId: string, workspaceId: string, keys: string[], startedAt: number): void {
+    if (!jobId) return
+    pending.push({ jobId, workspaceId, keys: new Set(keys), startedAt })
+  }
+
+  /**
+   * Pairs a newly reported run with the job that asked for it: the oldest
+   * pending job for this workspace that is still waiting on the run's key.
+   */
+  function claim(workspaceId: string, run: RunSummary): void {
+    const startedAt = parseTime(run.startedAt)
+    for (const job of pending) {
+      if (job.workspaceId !== workspaceId) continue
+      if (!job.keys.has(run.key)) continue
+      if (!Number.isNaN(startedAt) && startedAt < job.startedAt - CLOCK_GRACE_MS) continue
+      job.keys.delete(run.key)
+      setRunJob(run.runId, job.jobId)
+      return
+    }
+  }
+
+  /** Forgets a finished job: its id is no longer one the service will cancel. */
+  function release(jobId: string): void {
+    const at = pending.findIndex((job) => job.jobId === jobId)
+    if (at >= 0) pending.splice(at, 1)
+    clearJob(jobId)
+  }
+
   function apply(event: AppEvent): void {
     if (disposed) return
     switch (event.kind) {
       case 'run.updated': {
+        claim(event.workspaceId, event.run)
         const existing = state.runsByWorkspace[event.workspaceId] ?? []
         set({
           runsByWorkspace: {
@@ -211,6 +274,7 @@ export function createAppStore(transport: Transport): AppStore {
         return
       }
       case 'job.finished': {
+        release(event.jobId)
         const done = event.outcomes ?? []
         const failed = done.filter(
           (o) => o.status === 'failed' || o.status === 'over_budget',
@@ -290,13 +354,37 @@ export function createAppStore(transport: Transport): AppStore {
         toast('Enter at least one ticket key.', 'error')
         return
       }
+      const askedAt = Date.now()
       try {
-        await transport.startTriage(workspaceId, keys, opts)
+        const started = await transport.startTriage(workspaceId, keys, opts)
         if (disposed) return
+        track(started?.jobId ?? '', workspaceId, keys, askedAt)
         toast(`Triage started for ${keys.length === 1 ? keys[0] : `${keys.length} keys`}.`)
         void loadRuns(workspaceId)
       } catch (err) {
         if (!disposed) toast(`Triage did not start. ${errorText(err)}`, 'error')
+      }
+    },
+
+    async startRCA(key, opts) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return
+      }
+      if (!key) {
+        toast('Enter a ticket key.', 'error')
+        return
+      }
+      const askedAt = Date.now()
+      try {
+        const started = await transport.startRCA(workspaceId, key, opts)
+        if (disposed) return
+        track(started?.jobId ?? '', workspaceId, [key], askedAt)
+        toast(`Root cause analysis started for ${key}.`)
+        void loadRuns(workspaceId)
+      } catch (err) {
+        if (!disposed) toast(`Root cause analysis did not start. ${errorText(err)}`, 'error')
       }
     },
 
@@ -309,6 +397,7 @@ export function createAppStore(transport: Transport): AppStore {
 
     dispose() {
       disposed = true
+      pending.length = 0
       unsubscribe?.()
       unsubscribe = null
       listeners.clear()

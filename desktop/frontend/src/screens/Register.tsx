@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { RegisterRow, Transport } from '../api/types'
 import ConfidenceBadge from '../components/register/ConfidenceBadge'
 import NoteDots from '../components/register/NoteDots'
@@ -21,7 +21,12 @@ interface Filters {
 }
 
 const EMPTY_FILTERS: Filters = { service: '', confidence: '', verdict: '' }
+
+/** How long the copy button reports what happened before it says its name. */
+const COPY_LABEL_MS = 1500
 const VERDICT_OPTIONS = ['confirmed', 'partial', 'wrong']
+
+const COPY_LABEL = 'Copy as Markdown table'
 
 function uniqueSorted(values: (string | undefined)[]): string[] {
   return [...new Set(values.filter((v): v is string => Boolean(v)))].sort()
@@ -33,7 +38,18 @@ export default function Register(props: { transport: Transport; workspaceId: str
   const [error, setError] = useState<string | null>(null)
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS)
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc')
-  const [copyLabel, setCopyLabel] = useState('Copy as Markdown table')
+  const [copyLabel, setCopyLabel] = useState(COPY_LABEL)
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // The copy button restores its label on a timer; a screen that closes first
+  // must not leave that timer behind to fire into an unmounted component.
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = null
+    },
+    [],
+  )
 
   useEffect(() => {
     let cancelled = false
@@ -95,7 +111,8 @@ export default function Register(props: { transport: Transport; workspaceId: str
     } catch {
       setCopyLabel('Copy failed')
     }
-    setTimeout(() => setCopyLabel('Copy as Markdown table'), 1500)
+    if (copyTimer.current) clearTimeout(copyTimer.current)
+    copyTimer.current = setTimeout(() => setCopyLabel(COPY_LABEL), COPY_LABEL_MS)
   }
 
   return (

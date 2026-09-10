@@ -11,3 +11,22 @@ jobs:
       # three platforms, so keep this job to the pure-Go packages.
       - run: go vet $(go list ./... | grep -v '/desktop$')
       - run: go test $(go list ./... | grep -v '/desktop$')
+
+  # The shared frontend is the same bundle both shells load, and neither Go
+  # job compiles a line of it, so it is checked on its own.
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: desktop/frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx vitest run
+      - run: npm run build

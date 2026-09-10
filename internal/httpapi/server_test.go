@@ -74,7 +74,7 @@ func TestListWorkspaces(t *testing.T) {
 		t.Fatalf("got %d workspaces", len(got))
 	}
 	// The frontend reads camelCase; a Go-cased key here would break it.
-	for _, k := range []string{"id", "name", "root", "provider", "model", "notesDir"} {
+	for _, k := range []string{"id", "name", "root", "provider", "model", "notesDir", "billing"} {
 		if _, ok := got[0][k]; !ok {
 			t.Errorf("workspace has no %q: %v", k, got[0])
 		}

@@ -1,11 +1,14 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Check, Transport, Workspace } from '../api/types'
-import Settings from './Settings'
+import Settings, { CONFIG_DOCS_URL } from './Settings'
 
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  vi.useRealTimers()
+})
 
 function fakeTransport(overrides: Partial<Transport> = {}): Transport {
   const notImplemented = () => Promise.reject(new Error('not used by Settings'))
@@ -38,6 +41,7 @@ const workspace: Workspace = {
   provider: 'claude',
   model: 'sonnet',
   notesDir: '.sirdar/notes',
+  billing: 'subscription',
 }
 
 describe('Settings', () => {
@@ -85,5 +89,67 @@ describe('Settings', () => {
     expect(screen.getByText('!!')).toBeInTheDocument()
     expect(screen.getByText('not a repo')).toBeInTheDocument()
     expect(doctor).toHaveBeenCalledWith('ws1')
+  })
+
+  // A relative docs path resolves against the asset server, which answers
+  // with the app's own index.html, so the link has to be the absolute one.
+  it('links the configuration reference at GitHub and shows the billing mode', () => {
+    render(<Settings transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+
+    const link = screen.getByRole('link', { name: 'docs/config.md' })
+    expect(link).toHaveAttribute('href', CONFIG_DOCS_URL)
+    expect(screen.getByText('billing: subscription')).toBeInTheDocument()
+  })
+
+  // window.confirm blocks the whole webview, run stream included, so the
+  // button arms itself instead.
+  it('removes a workspace only on the second press', async () => {
+    const removeWorkspace = vi.fn().mockResolvedValue(undefined)
+    const onWorkspacesChanged = vi.fn()
+    const transport = fakeTransport({ removeWorkspace })
+
+    render(
+      <Settings
+        transport={transport}
+        workspaces={[workspace]}
+        onWorkspacesChanged={onWorkspacesChanged}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(removeWorkspace).not.toHaveBeenCalled()
+
+    const armed = await screen.findByRole('button', { name: 'Confirm remove' })
+    fireEvent.click(armed)
+    await waitFor(() => expect(removeWorkspace).toHaveBeenCalledWith('ws1'))
+    await waitFor(() => expect(onWorkspacesChanged).toHaveBeenCalled())
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument()
+  })
+
+  it('disarms the remove button after five seconds', async () => {
+    const removeWorkspace = vi.fn().mockResolvedValue(undefined)
+    const { unmount } = render(
+      <Settings
+        transport={fakeTransport({ removeWorkspace })}
+        workspaces={[workspace]}
+        onWorkspacesChanged={vi.fn()}
+      />,
+    )
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    await vi.waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Confirm remove' })).toBeInTheDocument(),
+    )
+
+    act(() => vi.advanceTimersByTime(5000))
+    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument()
+    expect(removeWorkspace).not.toHaveBeenCalled()
+
+    // And the timer does not outlive the screen.
+    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

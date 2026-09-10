@@ -137,3 +137,80 @@ func TestWatcherPicksUpAWorkspaceAddedLater(t *testing.T) {
 		t.Fatalf("run %+v", e.Run)
 	}
 }
+
+// TestWatcherTailsARunFirstSeenAfterTheSweep covers the run that never has
+// an active-to-inactive transition the watcher can see: one written whole
+// between two polls, or found after it had already finished. Its events
+// still have to reach the UI.
+func TestWatcherTailsARunFirstSeenAfterTheSweep(t *testing.T) {
+	root := newWorkspace(t)
+	reg := newRegistry(t, root)
+
+	events := make(chan Event, 64)
+	w := NewWatcher(reg, 20*time.Millisecond, func(e Event) { events <- e })
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	w.Start(ctx)
+	defer w.Stop()
+
+	const key, runID = "OMNI-4", "20260910T091500Z-dddd"
+	writeState(t, root, key, runID, store.StatusCompleted)
+	for _, kind := range []string{"system", "usage", "final"} {
+		appendEvent(t, root, key, runID, kind, "")
+	}
+
+	for i, want := range []string{"system", "usage", "final"} {
+		e := waitFor(t, events, "event "+want, func(e Event) bool { return e.Kind == KindRunEvent })
+		if e.Index != i+1 || e.Event.Kind != want {
+			t.Fatalf("event %d: index %d kind %q, want %d %q", i, e.Index, e.Event.Kind, i+1, want)
+		}
+		if e.RunID != runID {
+			t.Fatalf("runId %q", e.RunID)
+		}
+	}
+}
+
+// TestWatcherAdoptsRunsPresentBeforeStart is the other half: a log that was
+// already on disk is not replayed — the UI backfills it from Service.Events
+// — but the index carries on from its end, so a line written afterwards
+// arrives with the number that line actually has in the file.
+func TestWatcherAdoptsRunsPresentBeforeStart(t *testing.T) {
+	root := newWorkspace(t)
+	reg := newRegistry(t, root)
+
+	const key, runID = "OMNI-5", "20260910T092000Z-eeee"
+	writeState(t, root, key, runID, store.StatusRunning)
+	for _, kind := range []string{"system", "tool_started", "tool_finished"} {
+		appendEvent(t, root, key, runID, kind, "Bash")
+	}
+
+	events := make(chan Event, 64)
+	w := NewWatcher(reg, 20*time.Millisecond, func(e Event) { events <- e })
+	w.Start(context.Background())
+	defer w.Stop()
+
+	waitFor(t, events, "run.updated for the adopted run", func(e Event) bool {
+		return e.Kind == KindRunUpdated && e.Run != nil && e.Run.RunID == runID
+	})
+
+	// Nothing already in the file is republished.
+	deadline := time.After(200 * time.Millisecond)
+	for replayed := true; replayed; {
+		select {
+		case e := <-events:
+			if e.Kind == KindRunEvent {
+				t.Fatalf("replayed a pre-existing event: %+v", e.Event)
+			}
+		case <-deadline:
+			replayed = false
+		}
+	}
+
+	appendEvent(t, root, key, runID, "final", "")
+	e := waitFor(t, events, "the event written after Start", func(e Event) bool {
+		return e.Kind == KindRunEvent
+	})
+	if e.Index != 4 || e.Event.Kind != "final" {
+		t.Fatalf("event %+v index %d, want index 4 and kind final", e.Event, e.Index)
+	}
+}

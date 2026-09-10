@@ -1,6 +1,6 @@
 export type RunState = 'preparing'|'running'|'completed'|'failed'|'blocked'|'over_budget';
 export type NoteKind = 'triage'|'rca'|'resolution';
-export interface Workspace { id: string; name: string; root: string; provider: 'claude'|'codex'; model: string; notesDir: string }
+export interface Workspace { id: string; name: string; root: string; provider: 'claude'|'codex'; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
 export interface RunSummary { runId: string; key: string; kind: 'triage'|'rca'; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number } }

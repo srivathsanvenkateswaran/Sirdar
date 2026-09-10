@@ -40,6 +40,11 @@ func TestRegistryRoundTrip(t *testing.T) {
 	if ws.NotesDir != filepath.Join(root, "notes") {
 		t.Fatalf("notesDir %q", ws.NotesDir)
 	}
+	// Settings shows the billing mode read-only, so it has to come back
+	// from the workspace's own config rather than being left blank.
+	if ws.Billing != "subscription" {
+		t.Fatalf("billing %q", ws.Billing)
+	}
 
 	// The file holds roots and nothing else, so a workspace's provider is
 	// always whatever its own config currently says.

@@ -1,7 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail as RunDetailData, RunEvent, Transport } from '../api/types'
-import RunDetail, { clearRunJob, setRunJob } from './RunDetail'
+import { resetRunJobs, setRunJob } from '../lib/jobs'
+import RunDetail from './RunDetail'
 
 const RUN: RunDetailData = {
   runId: '20260910-1000-omni-2510',
@@ -98,7 +99,8 @@ function renderRun(fake: Fake, onBack = vi.fn(), onStartRCA = vi.fn()) {
 describe('RunDetail', () => {
   // The run-to-job pairing is module state the shell fills in; reset it so one
   // test's resume does not enable another's Cancel button.
-  beforeEach(() => clearRunJob(RUN.runId))
+  beforeEach(() => resetRunJobs())
+  afterEach(() => vi.useRealTimers())
 
   it('backfills the event log and shows the run header', async () => {
     const fake = fakeTransport({
@@ -121,7 +123,7 @@ describe('RunDetail', () => {
       kind: 'run.event',
       workspaceId: 'ws1',
       runId: RUN.runId,
-      index: 0,
+      index: 1,
       event: toolEvent('rg -n "nil pointer"'),
     })
 
@@ -137,7 +139,7 @@ describe('RunDetail', () => {
       kind: 'run.event',
       workspaceId: 'ws1',
       runId: 'some-other-run',
-      index: 0,
+      index: 1,
       event: toolEvent('rm -rf /'),
     })
 
@@ -145,23 +147,41 @@ describe('RunDetail', () => {
     expect(screen.queryByText('rm -rf /')).toBeNull()
   })
 
+  // The watcher and Service.Events both number events from 1. Backfilling
+  // from 0 left the last line of the page indexed one below the live event
+  // that repeats it, so the stream showed it twice.
   it('does not re-append an event already backfilled', async () => {
     const fake = fakeTransport({
-      events: vi.fn(async () => ({ events: [toolEvent('ls -la')], next: 1 })),
+      events: vi.fn(async () => ({
+        events: [toolEvent('ls -la'), toolEvent('git status')],
+        next: 2,
+      })),
     } as Partial<Transport>)
     renderRun(fake)
-    await screen.findByText('ls -la')
+    await screen.findByText('git status')
 
+    // The live stream delivers the last backfilled line again, under the
+    // index the file actually gives it.
     fake.emit({
       kind: 'run.event',
       workspaceId: 'ws1',
       runId: RUN.runId,
-      index: 0,
-      event: toolEvent('ls -la'),
+      index: 2,
+      event: toolEvent('git status'),
     })
 
-    await waitFor(() => expect(screen.getByText('1 event')).toBeInTheDocument())
-    expect(screen.getAllByText('ls -la')).toHaveLength(1)
+    await waitFor(() => expect(screen.getByText('2 events')).toBeInTheDocument())
+    expect(screen.getAllByText('git status')).toHaveLength(1)
+
+    // The line after the page is new, and is appended.
+    fake.emit({
+      kind: 'run.event',
+      workspaceId: 'ws1',
+      runId: RUN.runId,
+      index: 3,
+      event: toolEvent('go test ./...'),
+    })
+    expect(await screen.findByText('go test ./...')).toBeInTheDocument()
   })
 
   it('applies run.updated to the header', async () => {
@@ -248,7 +268,10 @@ describe('RunDetail', () => {
     expect(onBack).toHaveBeenCalled()
   })
 
-  it('starts an RCA from a completed triage', async () => {
+  // The shell starts the RCA, so its job id is recorded where Cancel can
+  // find it. This screen hands over the key and the form's two inputs and
+  // starts nothing itself: doing both would run the same ticket twice.
+  it('hands an RCA to the shell rather than starting it twice', async () => {
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     const { onStartRCA } = renderRun(fake)
     await screen.findByText('completed')
@@ -261,11 +284,32 @@ describe('RunDetail', () => {
     fireEvent.click(within(form).getByRole('button', { name: 'Start RCA' }))
 
     await waitFor(() =>
-      expect(fake.transport.startRCA).toHaveBeenCalledWith('ws1', 'OMNI-2510', {
+      expect(onStartRCA).toHaveBeenCalledWith('OMNI-2510', {
         prUrl: 'https://github.com/acme/api/pull/12',
         resolution: undefined,
       }),
     )
-    await waitFor(() => expect(onStartRCA).toHaveBeenCalledWith('OMNI-2510'))
+    expect(fake.transport.startRCA).not.toHaveBeenCalled()
+  })
+
+  // A screen that closes while "Copied" is still showing must not leave the
+  // timer that resets the label running behind it.
+  it('clears the copy timeout when it unmounts', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    })
+    const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
+    const { unmount } = renderRun(fake)
+    await screen.findByText('completed')
+
+    vi.useFakeTimers()
+    fireEvent.click(screen.getByRole('button', { name: 'Copy note path' }))
+    await vi.waitFor(() => expect(writeText).toHaveBeenCalledWith(RUN.notes[0]))
+    expect(vi.getTimerCount()).toBeGreaterThan(0)
+
+    unmount()
+    expect(vi.getTimerCount()).toBe(0)
   })
 })

@@ -25,6 +25,9 @@ type Workspace struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	NotesDir string `json:"notesDir"`
+	// Billing is "subscription" or "api": whether the agent runs on the
+	// operator's CLI login or bills a key. Settings shows it read-only.
+	Billing string `json:"billing"`
 }
 
 // Registry is the list of workspace roots at Path, by default
@@ -128,6 +131,7 @@ func describe(root string) Workspace {
 	ws.Provider = string(cfg.Provider)
 	ws.Model = cfg.Model
 	ws.NotesDir = cfg.ExpandPath(cfg.Notes.Dir)
+	ws.Billing = cfg.Billing
 	return ws
 }
 

@@ -102,7 +102,8 @@ func TestWireFieldNames(t *testing.T) {
 	wantKeys(t, "job outcome", JobOutcome{}, "key", "status", "runId")
 	wantKeys(t, "log", Event{Kind: KindLog, Text: "x"}, "kind", "text")
 
-	wantKeys(t, "Workspace", Workspace{}, "id", "name", "root", "provider", "model", "notesDir")
+	wantKeys(t, "Workspace", Workspace{},
+		"id", "name", "root", "provider", "model", "notesDir", "billing")
 }
 
 func TestConversionsCarryTheState(t *testing.T) {

@@ -65,19 +65,11 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openTriage, state.screen.name, triageOpen])
 
+  // Both starts go through the store, which keeps the job id the run detail
+  // screen's Cancel button needs.
   const startRCA = useCallback(
-    (key: string) => {
-      state.transport
-        .startRCA(workspaceId, key)
-        .then(() => store.toast(`Root cause analysis started for ${key}.`))
-        .catch((err: unknown) =>
-          store.toast(
-            `Root cause analysis did not start. ${err instanceof Error ? err.message : String(err)}`,
-            'error',
-          ),
-        )
-    },
-    [state.transport, store, workspaceId],
+    (key: string, opts?: { prUrl?: string; resolution?: string }) => store.startRCA(key, opts),
+    [store],
   )
 
   let screen

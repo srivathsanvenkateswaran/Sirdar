@@ -40,6 +40,7 @@ export function workspace(over: Partial<Workspace> = {}): Workspace {
     provider: 'claude',
     model: 'sonnet',
     notesDir: 'notes',
+    billing: 'subscription',
     ...over,
   }
 }

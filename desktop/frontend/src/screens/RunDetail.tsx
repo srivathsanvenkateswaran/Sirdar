@@ -9,6 +9,7 @@ import {
 } from 'react'
 import type { NoteKind, RunDetail as RunDetailData, Transport } from '../api/types'
 import { askedQuestion, elapsed, formatCost, type IndexedEvent } from '../lib/events'
+import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
 import PromptView from '../components/run/PromptView'
@@ -19,37 +20,14 @@ import RCAForm from '../components/run/RCAForm'
 import '../components/run/run.css'
 
 /**
- * Cancel only works for jobs this process started, and only the shell knows
- * which run a `startTriage` turned into. It records the pairing here as the
- * `job.finished` outcomes arrive; until it does, the Cancel button says why it
- * cannot act rather than failing when pressed.
+ * Cancel only works for a job this window started. `lib/jobs` holds the run →
+ * job pairing the store fills in as the runs appear; until it has one, the
+ * Cancel button says why it cannot act rather than failing when pressed.
  */
-const jobs = new Map<string, string>()
-const jobWatchers = new Set<() => void>()
-
-export function setRunJob(runId: string, jobId: string): void {
-  jobs.set(runId, jobId)
-  for (const notify of jobWatchers) notify()
-}
-
-export function clearRunJob(runId: string): void {
-  if (!jobs.delete(runId)) return
-  for (const notify of jobWatchers) notify()
-}
-
-export function getRunJob(runId: string): string | undefined {
-  return jobs.get(runId)
-}
-
 function useRunJob(runId: string): string | undefined {
   return useSyncExternalStore(
-    (notify) => {
-      jobWatchers.add(notify)
-      return () => {
-        jobWatchers.delete(notify)
-      }
-    },
-    () => jobs.get(runId),
+    subscribeRunJobs,
+    () => getRunJob(runId),
     () => undefined,
   )
 }
@@ -65,12 +43,15 @@ type Tab = (typeof TABS)[number]['id']
 
 const LIVE = new Set(['preparing', 'running'])
 
+/** How long the copy button stays on "Copied" before it says its name again. */
+const COPIED_MS = 1500
+
 export default function RunDetail(props: {
   transport: Transport
   workspaceId: string
   runId: string
   onBack: () => void
-  onStartRCA: (key: string) => void
+  onStartRCA: (key: string, opts?: { prUrl?: string; resolution?: string }) => Promise<void> | void
 }): JSX.Element {
   const { transport, workspaceId, runId, onBack, onStartRCA } = props
   const [detail, setDetail] = useState<RunDetailData | null>(null)
@@ -83,6 +64,7 @@ export default function RunDetail(props: {
   const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const seen = useRef<Set<number>>(new Set())
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const jobId = useRunJob(runId)
 
   const live = LIVE.has(detail?.status ?? '')
@@ -128,9 +110,14 @@ export default function RunDetail(props: {
 
     transport
       .events(workspaceId, runId, 0)
-      .then(({ events: backfill }) => {
+      .then(({ events: backfill, next }) => {
         if (cancelled) return
-        backfill.forEach((event, i) => append(i, event))
+        // The watcher and Service.Events both number events from 1, and
+        // `next` is the index of the last line in this page. Numbering the
+        // backfill from zero would leave the last line sharing no index with
+        // the live event that repeats it, and the stream would show it twice.
+        const first = Math.max(1, next - backfill.length + 1)
+        backfill.forEach((event, i) => append(first + i, event))
       })
       .catch(() => {
         // The detail request already reports an unreadable run; an empty event
@@ -148,6 +135,16 @@ export default function RunDetail(props: {
     const id = setInterval(() => setNow(Date.now()), 1000)
     return () => clearInterval(id)
   }, [live])
+
+  // The "Copied" label resets itself on a timer; a screen that closes first
+  // must not leave that timer behind to fire into an unmounted component.
+  useEffect(
+    () => () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = null
+    },
+    [],
+  )
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -191,19 +188,21 @@ export default function RunDetail(props: {
       setPending('rca')
       setActionError('')
       try {
-        await transport.startRCA(workspaceId, detail.key, {
+        // The shell starts the run, so the job id it comes back with is
+        // recorded where Cancel can find it. Starting it here as well would
+        // triage the same ticket twice.
+        await onStartRCA(detail.key, {
           prUrl: o.prUrl || undefined,
           resolution: o.resolution || undefined,
         })
         setRcaOpen(false)
-        onStartRCA(detail.key)
       } catch (err: unknown) {
         setActionError(err instanceof Error ? err.message : String(err))
       } finally {
         setPending('')
       }
     },
-    [detail, transport, workspaceId, onStartRCA],
+    [detail, onStartRCA],
   )
 
   const cancel = useCallback(async () => {
@@ -225,7 +224,8 @@ export default function RunDetail(props: {
     try {
       await navigator.clipboard?.writeText(notePath)
       setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopied(false), COPIED_MS)
     } catch {
       setActionError('Could not reach the clipboard. The path is under State.')
     }

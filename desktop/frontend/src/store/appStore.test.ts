@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { getRunJob, resetRunJobs } from '../lib/jobs'
 import { createAppStore, isQueueUnsupported, type AppStore } from './appStore'
 import { createFakeTransport, run, ticket, workspace } from './fakeTransport'
 
@@ -7,6 +8,7 @@ let store: AppStore | null = null
 afterEach(() => {
   store?.dispose()
   store = null
+  resetRunJobs()
   try {
     localStorage.clear()
   } catch {
@@ -16,6 +18,9 @@ afterEach(() => {
 
 /** Lets the promises `init()` fans out settle before asserting. */
 const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+
+/** A run started now, as the service would stamp it. */
+const nowISO = () => new Date().toISOString()
 
 describe('createAppStore', () => {
   it('loads workspaces, runs and tickets, then applies run.updated', async () => {
@@ -141,6 +146,110 @@ describe('createAppStore', () => {
     const toast = store.getState().toasts[0]
     expect(toast?.tone).toBe('error')
     expect(toast?.text).toContain('provider not configured')
+  })
+
+  // Cancel only works for a job this window started, and the job id comes
+  // back before the run it produces exists. The store holds it until a
+  // run.updated for one of the job's keys says which run to pair it with.
+  it('pairs a started job with the run that comes back for its key', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startTriage(['OMNI-1', 'OMNI-2'])
+    expect(getRunJob('r-omni-1')).toBeUndefined()
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-omni-1', key: 'OMNI-1', status: 'running', startedAt: nowISO() }),
+    })
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-omni-2', key: 'OMNI-2', status: 'running', startedAt: nowISO() }),
+    })
+
+    expect(getRunJob('r-omni-1')).toBe('job-1')
+    expect(getRunJob('r-omni-2')).toBe('job-1')
+
+    // A second report for the same run does not re-pair it, and a key the
+    // job never asked for is not this job's.
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-omni-9', key: 'OMNI-9', status: 'running', startedAt: nowISO() }),
+    })
+    expect(getRunJob('r-omni-9')).toBeUndefined()
+
+    transport.emit({
+      kind: 'job.finished',
+      jobId: 'job-1',
+      workspaceId: 'ws1',
+      outcomes: [{ key: 'OMNI-1', status: 'completed', runId: 'r-omni-1' }],
+    })
+    await settle()
+
+    // A finished job is no longer one the service will cancel.
+    expect(getRunJob('r-omni-1')).toBeUndefined()
+    expect(getRunJob('r-omni-2')).toBeUndefined()
+  })
+
+  it('does not pair a job with an older run for the same key', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startTriage(['OMNI-1'])
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-last-week', key: 'OMNI-1', startedAt: '2026-09-03T09:00:00Z' }),
+    })
+    expect(getRunJob('r-last-week')).toBeUndefined()
+
+    // The run this job actually started still claims it.
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-now', key: 'OMNI-1', status: 'running', startedAt: nowISO() }),
+    })
+    expect(getRunJob('r-now')).toBe('job-1')
+  })
+
+  it('startRCA forwards the key and pairs its job with the run', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startRCA('OMNI-1', { prUrl: 'https://github.com/acme/api/pull/12' })
+    expect(transport.calls.startRCA).toEqual([{ ws: 'ws1', key: 'OMNI-1' }])
+    expect(store.getState().toasts[0]?.text).toBe('Root cause analysis started for OMNI-1.')
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-rca', key: 'OMNI-1', kind: 'rca', startedAt: nowISO() }),
+    })
+    expect(getRunJob('r-rca')).toBe('job-rca')
+  })
+
+  it('toasts when an RCA cannot start', async () => {
+    const transport = createFakeTransport()
+    transport.startRCA = async () => {
+      throw new Error('no rca playbook')
+    }
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startRCA('OMNI-1')
+    const toast = store.getState().toasts[0]
+    expect(toast?.tone).toBe('error')
+    expect(toast?.text).toContain('no rca playbook')
   })
 
   it('navigate replaces the screen', async () => {

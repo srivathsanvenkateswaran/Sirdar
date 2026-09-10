@@ -35,6 +35,10 @@ type Watcher struct {
 	// runs is touched only by the polling goroutine.
 	runs map[string]*watchedRun
 
+	// swept is set once the initial sweep has finished, so a run found
+	// after it can be told from one that was already on disk.
+	swept bool
+
 	mu      sync.Mutex
 	started bool
 	stop    chan struct{}
@@ -79,6 +83,12 @@ func (w *Watcher) Start(ctx context.Context) {
 	stop, done := w.stop, w.done
 	w.mu.Unlock()
 
+	// The initial sweep runs before Start returns. What it finds was
+	// written before this process existed, so its event logs are adopted
+	// silently: the UI backfills that history from Service.Events, and
+	// replaying it here would only duplicate it. A run that appears after
+	// this point is new, and is tailed from the top.
+	w.tick()
 	go w.loop(ctx, stop, done)
 }
 
@@ -103,7 +113,6 @@ func (w *Watcher) loop(ctx context.Context, stop, done chan struct{}) {
 	ticker := time.NewTicker(w.interval)
 	defer ticker.Stop()
 
-	w.tick()
 	for {
 		select {
 		case <-ctx.Done():
@@ -144,6 +153,16 @@ func (w *Watcher) tick() {
 			if r == nil {
 				r = &watchedRun{dir: dir, wsID: ws.ID, runID: filepath.Base(dir)}
 				w.runs[id] = r
+				if w.swept {
+					// A run first seen now may already be finished —
+					// it can start and end inside one interval — so
+					// it is tailed for the grace period whatever its
+					// status says, rather than only from an
+					// active-to-inactive transition it never makes.
+					r.flushUntil = now.Add(flushGrace)
+				} else {
+					w.adopt(r)
+				}
 			}
 			w.check(r, path, now)
 			if active(r.status) || now.Before(r.flushUntil) {
@@ -151,6 +170,8 @@ func (w *Watcher) tick() {
 			}
 		}
 	}
+
+	w.swept = true
 
 	// A workspace that was removed, or a run directory that was deleted,
 	// stops being tracked so the map does not grow without bound.
@@ -192,9 +213,18 @@ func (w *Watcher) check(r *watchedRun, path string, now time.Time) {
 	w.sink(Event{Kind: KindRunUpdated, WorkspaceID: r.wsID, Run: &summary})
 }
 
+// adopt reads a run's existing events.jsonl without publishing any of it,
+// so the watcher's index carries on from the end of the file rather than
+// restarting at 1 and colliding with the history the UI already has.
+func (w *Watcher) adopt(r *watchedRun) { w.read(r, false) }
+
 // tail emits every complete line appended to the run's events.jsonl since
 // the last tick. A trailing partial line is left for the next one.
-func (w *Watcher) tail(r *watchedRun) {
+func (w *Watcher) tail(r *watchedRun) { w.read(r, true) }
+
+// read advances the run's offset and index over every complete line it has
+// not consumed yet, publishing each one when emit is set.
+func (w *Watcher) read(r *watchedRun, emit bool) {
 	f, err := os.Open(filepath.Join(r.dir, "events.jsonl"))
 	if err != nil {
 		return
@@ -236,6 +266,9 @@ func (w *Watcher) tail(r *watchedRun) {
 			continue
 		}
 		r.index++
+		if !emit {
+			continue
+		}
 		event := ev
 		w.sink(Event{
 			Kind:        KindRunEvent,

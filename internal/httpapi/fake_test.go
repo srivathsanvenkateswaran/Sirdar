@@ -61,7 +61,7 @@ func newFake() *fake {
 	return &fake{
 		workspaces: []Workspace{{
 			ID: knownWS, Name: "oxo-apis", Root: "/repos/oxo-apis",
-			Provider: "claude", Model: "sonnet", NotesDir: "/notes",
+			Provider: "claude", Model: "sonnet", NotesDir: "/notes", Billing: "subscription",
 		}},
 		tickets: []Ticket{{
 			Key: "OMNI-2510", Title: "Payment stuck", Priority: "P1", Status: "Open",
@@ -132,7 +132,7 @@ func (f *fake) AddWorkspace(root string) (Workspace, error) {
 	if f.addErr != nil {
 		return Workspace{}, f.addErr
 	}
-	return Workspace{ID: "ws2", Name: "new", Root: root, Provider: "claude", Model: "sonnet", NotesDir: "/notes"}, nil
+	return Workspace{ID: "ws2", Name: "new", Root: root, Provider: "claude", Model: "sonnet", NotesDir: "/notes", Billing: "subscription"}, nil
 }
 
 func (f *fake) RemoveWorkspace(id string) error {
