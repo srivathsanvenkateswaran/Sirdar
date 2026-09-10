@@ -1,32 +1,32 @@
 {{- $cc := .doc.resolution.codeChange -}}
 {{- $dc := .doc.resolution.dataChange -}}
 ---
-tags: [support-duty, resolution]
-tracker_key: {{.meta.Key}}
-tracker_url: {{.meta.TrackerURL}}
-helpdesk_id: {{.meta.HelpdeskID}}
-helpdesk_url: {{.meta.HelpdeskURL}}
-customer: {{.meta.Customer}}
-customer_id: {{.meta.CustomerID}}
-service: {{.meta.Service}}
-resolution_type: {{.doc.resolution.resolutionType}}
-status: proposed
-pr: {{if $cc}}{{fill "pr" $cc.pr}}{{else}}{{fill "pr" ""}}{{end}}
-pr_status: {{if $cc}}{{fill "pr_status" $cc.prStatus}}{{else}}{{fill "pr_status" ""}}{{end}}
-approved_by: {{fill "approved_by" ""}}
-applied_by: {{fill "applied_by" ""}}
-applied_at: {{fill "applied_at" ""}}
-verified_at: {{fill "verified_at" ""}}
+tags: [{{yq "support-duty"}}, {{yq "resolution"}}]
+tracker_key: {{yq .meta.Key}}
+tracker_url: {{yq .meta.TrackerURL}}
+helpdesk_id: {{yq .meta.HelpdeskID}}
+helpdesk_url: {{yq .meta.HelpdeskURL}}
+customer: {{yq .meta.Customer}}
+customer_id: {{yq .meta.CustomerID}}
+service: {{yq .meta.Service}}
+resolution_type: {{yq .doc.resolution.resolutionType}}
+status: {{yq "proposed"}}
+pr: {{if $cc}}{{fill "pr" $cc.pr | yq}}{{else}}{{fill "pr" "" | yq}}{{end}}
+pr_status: {{if $cc}}{{fill "pr_status" $cc.prStatus | yq}}{{else}}{{fill "pr_status" "" | yq}}{{end}}
+approved_by: {{fill "approved_by" "" | yq}}
+applied_by: {{fill "applied_by" "" | yq}}
+applied_at: {{fill "applied_at" "" | yq}}
+verified_at: {{fill "verified_at" "" | yq}}
 {{- if or .meta.Links.Triage .meta.Links.RCA}}
 related:
 {{- if .meta.Links.Triage}}
-  - "[[{{.meta.Links.Triage}}]]"
+  - {{yq (printf "[[%s]]" .meta.Links.Triage)}}
 {{- end}}
 {{- if .meta.Links.RCA}}
-  - "[[{{.meta.Links.RCA}}]]"
+  - {{yq (printf "[[%s]]" .meta.Links.RCA)}}
 {{- end}}
 {{- end}}
-run: {{.meta.RunID}}
+run: {{yq .meta.RunID}}
 ---
 
 # {{.doc.resolution.title}}

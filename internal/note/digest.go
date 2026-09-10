@@ -51,8 +51,9 @@ func Digest(rows []DigestRow) string {
 }
 
 func truncateIssue(s string) string {
-	if len(s) <= issueMaxLen {
+	r := []rune(s)
+	if len(r) <= issueMaxLen {
 		return s
 	}
-	return s[:issueMaxLen]
+	return string(r[:issueMaxLen])
 }

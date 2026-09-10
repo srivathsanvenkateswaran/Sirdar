@@ -1,24 +1,24 @@
 ---
-tags: [support-duty, resolution]
-tracker_key: OMNI-1
-tracker_url: https://tracker.example/OMNI-1
-helpdesk_id: 12345
-helpdesk_url: https://helpdesk.example/12345
-customer: Example Corp
-customer_id: cust-1
-service: omni
-resolution_type: data-fix
-status: proposed
-pr: <fill: pr>
-pr_status: <fill: pr_status>
-approved_by: <fill: approved_by>
-applied_by: <fill: applied_by>
-applied_at: <fill: applied_at>
-verified_at: <fill: verified_at>
+tags: ["support-duty", "resolution"]
+tracker_key: "OMNI-1"
+tracker_url: "https://tracker.example/OMNI-1"
+helpdesk_id: "12345"
+helpdesk_url: "https://helpdesk.example/12345"
+customer: "Example Corp"
+customer_id: "cust-1"
+service: "omni"
+resolution_type: "data-fix"
+status: "proposed"
+pr: "<fill: pr>"
+pr_status: "<fill: pr_status>"
+approved_by: "<fill: approved_by>"
+applied_by: "<fill: applied_by>"
+applied_at: "<fill: applied_at>"
+verified_at: "<fill: verified_at>"
 related:
   - "[[OMNI-1 export-fails]]"
   - "[[OMNI-1 export-fails-rca]]"
-run: run-1
+run: "run-1"
 ---
 
 # Backfill the missing export flag for large orders

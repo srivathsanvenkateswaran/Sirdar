@@ -10,6 +10,8 @@ import (
 	"regexp"
 	"strings"
 	"text/template"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Meta carries the values a note's frontmatter and header need that are not
@@ -43,6 +45,7 @@ var templateFuncs = template.FuncMap{
 	"fill":    fillFunc,
 	"date":    dateFunc,
 	"default": defaultFunc,
+	"yq":      yqFunc,
 }
 
 func templateFilename(kind Kind) string {
@@ -105,19 +108,47 @@ func (r Renderer) loadTemplate(kind Kind) (*template.Template, error) {
 
 // Check parses and renders every kind's active template (a custom override
 // when configured, else the embedded default) against a built-in sample
-// document, to catch a broken template before it is used on a real run.
-// Used by doctor and init.
+// document, to catch a broken template before it is used on a real run. It
+// also parses the rendered frontmatter block with a YAML parser, so a
+// custom template that produces invalid YAML (an unescaped value, say) is
+// rejected here rather than surfacing as a broken note later. Used by
+// doctor and init.
 func (r Renderer) Check() error {
 	for _, kind := range []Kind{Triage, RCA, Resolution} {
 		doc, meta, err := sampleFor(kind)
 		if err != nil {
 			return err
 		}
-		if _, err := r.Render(kind, doc, meta); err != nil {
+		rendered, err := r.Render(kind, doc, meta)
+		if err != nil {
 			return fmt.Errorf("note: check %s template: %w", kind, err)
+		}
+		fm, err := extractFrontmatter(rendered)
+		if err != nil {
+			return fmt.Errorf("note: check %s template: %w", kind, err)
+		}
+		var parsed map[string]any
+		if err := yaml.Unmarshal([]byte(fm), &parsed); err != nil {
+			return fmt.Errorf("note: check %s template: rendered frontmatter is not valid YAML: %w", kind, err)
 		}
 	}
 	return nil
+}
+
+// extractFrontmatter returns the YAML content between the leading and
+// closing "---" lines of rendered, the way UpdateTriageStatus locates the
+// same block: line by line, looking for an exact "---" line.
+func extractFrontmatter(rendered string) (string, error) {
+	lines := strings.Split(rendered, "\n")
+	if len(lines) == 0 || strings.TrimRight(lines[0], "\r") != "---" {
+		return "", fmt.Errorf("note: rendered output has no frontmatter")
+	}
+	for i := 1; i < len(lines); i++ {
+		if strings.TrimRight(lines[i], "\r") == "---" {
+			return strings.Join(lines[1:i], "\n"), nil
+		}
+	}
+	return "", fmt.Errorf("note: frontmatter is not closed")
 }
 
 // sampleFor returns the embedded sample document and a matching Meta for
@@ -235,6 +266,54 @@ func defaultFunc(fallback string, v any) string {
 		if strings.TrimSpace(t) == "" {
 			return fallback
 		}
+		return t
+	default:
+		return fmt.Sprint(v)
+	}
+}
+
+// yqFunc renders v as a YAML double-quoted scalar: backslash, double quote,
+// and control characters are escaped (newline as \n, tab as \t, carriage
+// return as \r, anything else below 0x20 or 0x7f as \xHH), so the result is
+// always a valid frontmatter value regardless of what the underlying string
+// contains — a colon, a leading "#", embedded quotes, non-Latin text. Used
+// on every scalar frontmatter value in the note templates, including
+// "<fill: NAME>" markers, which contain ": " and would otherwise produce
+// invalid YAML as a plain (unquoted) scalar.
+func yqFunc(v any) string {
+	s := toYQString(v)
+	var b strings.Builder
+	b.Grow(len(s) + 2)
+	b.WriteByte('"')
+	for _, r := range s {
+		switch r {
+		case '\\':
+			b.WriteString(`\\`)
+		case '"':
+			b.WriteString(`\"`)
+		case '\n':
+			b.WriteString(`\n`)
+		case '\t':
+			b.WriteString(`\t`)
+		case '\r':
+			b.WriteString(`\r`)
+		default:
+			if r < 0x20 || r == 0x7f {
+				fmt.Fprintf(&b, `\x%02x`, r)
+			} else {
+				b.WriteRune(r)
+			}
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
+}
+
+func toYQString(v any) string {
+	switch t := v.(type) {
+	case nil:
+		return ""
+	case string:
 		return t
 	default:
 		return fmt.Sprint(v)

@@ -1,17 +1,17 @@
 ---
-tags: [support-duty, triage]
-tracker_key: {{.meta.Key}}
-tracker_url: {{.meta.TrackerURL}}
-helpdesk_id: {{.meta.HelpdeskID}}
-helpdesk_url: {{.meta.HelpdeskURL}}
-customer: {{.meta.Customer}}
-customer_id: {{.meta.CustomerID}}
-date: {{.meta.Date}}
-priority: {{.meta.Priority}}
-service: {{.meta.Service}}
-status: triaged
-run: {{.meta.RunID}}
-provider: {{.meta.Provider}}
+tags: [{{yq "support-duty"}}, {{yq "triage"}}]
+tracker_key: {{yq .meta.Key}}
+tracker_url: {{yq .meta.TrackerURL}}
+helpdesk_id: {{yq .meta.HelpdeskID}}
+helpdesk_url: {{yq .meta.HelpdeskURL}}
+customer: {{yq .meta.Customer}}
+customer_id: {{yq .meta.CustomerID}}
+date: {{yq .meta.Date}}
+priority: {{yq .meta.Priority}}
+service: {{yq .meta.Service}}
+status: {{yq "triaged"}}
+run: {{yq .meta.RunID}}
+provider: {{yq .meta.Provider}}
 ---
 
 # {{.doc.title}}

@@ -1,24 +1,24 @@
 ---
-tags: [support-duty, rca]
-tracker_key: OMNI-1
-tracker_url: https://tracker.example/OMNI-1
-helpdesk_id: 12345
-helpdesk_url: https://helpdesk.example/12345
-customer: Example Corp
-customer_id: cust-1
-date_reported: 2026-09-01
-date_rca: 2026-09-10
-service: omni
-classification: code
-severity: medium
-confidence: high
-origin: omni
-triage_verdict: confirmed
+tags: ["support-duty", "rca"]
+tracker_key: "OMNI-1"
+tracker_url: "https://tracker.example/OMNI-1"
+helpdesk_id: "12345"
+helpdesk_url: "https://helpdesk.example/12345"
+customer: "Example Corp"
+customer_id: "cust-1"
+date_reported: "2026-09-01"
+date_rca: "2026-09-10"
+service: "omni"
+classification: "code"
+severity: "medium"
+confidence: "high"
+origin: "omni"
+triage_verdict: "confirmed"
 related:
   - "[[OMNI-1 export-fails]]"
   - "[[OMNI-1 export-fails-resolution]]"
-run: run-1
-provider: claude-code
+run: "run-1"
+provider: "claude-code"
 ---
 
 # Export job times out on large orders

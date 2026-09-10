@@ -1,10 +1,13 @@
 package note
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"gopkg.in/yaml.v3"
 )
 
 func readTestdata(t *testing.T, name string) []byte {
@@ -14,6 +17,27 @@ func readTestdata(t *testing.T, name string) []byte {
 		t.Fatalf("read testdata/%s: %v", name, err)
 	}
 	return data
+}
+
+// assertGolden compares got against testdata/name. Set UPDATE_GOLDEN=1 to
+// overwrite the golden file with got instead of failing, then re-review the
+// diff by eye before committing it.
+func assertGolden(t *testing.T, name, got string) {
+	t.Helper()
+	path := filepath.Join("testdata", name)
+	if os.Getenv("UPDATE_GOLDEN") == "1" {
+		if err := os.WriteFile(path, []byte(got), 0o644); err != nil {
+			t.Fatalf("write golden testdata/%s: %v", name, err)
+		}
+		return
+	}
+	want, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read testdata/%s: %v", name, err)
+	}
+	if got != string(want) {
+		t.Fatalf("testdata/%s mismatch:\n--- got ---\n%s\n--- want ---\n%s", name, got, want)
+	}
 }
 
 // --- Validate ---
@@ -85,10 +109,7 @@ func TestRenderTriageMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render(Triage): %v", err)
 	}
-	want := readTestdata(t, "triage.golden.md")
-	if got != string(want) {
-		t.Fatalf("Render(Triage) mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	assertGolden(t, "triage.golden.md", got)
 }
 
 func TestRenderRCAMatchesGolden(t *testing.T) {
@@ -100,10 +121,7 @@ func TestRenderRCAMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render(RCA): %v", err)
 	}
-	want := readTestdata(t, "rca.golden.md")
-	if got != string(want) {
-		t.Fatalf("Render(RCA) mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	assertGolden(t, "rca.golden.md", got)
 }
 
 func TestRenderResolutionMatchesGolden(t *testing.T) {
@@ -115,10 +133,7 @@ func TestRenderResolutionMatchesGolden(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Render(Resolution): %v", err)
 	}
-	want := readTestdata(t, "resolution.golden.md")
-	if got != string(want) {
-		t.Fatalf("Render(Resolution) mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	assertGolden(t, "resolution.golden.md", got)
 }
 
 // --- Render (custom template override) ---
@@ -164,6 +179,101 @@ func TestRenderFallsBackToEmbeddedForOtherKindsWhenOverridingOne(t *testing.T) {
 	}
 }
 
+// --- Frontmatter YAML safety ---
+//
+// Frontmatter scalars go through the "yq" template func, which renders them
+// as YAML double-quoted scalars, so values containing ": ", "#", quotes, or
+// non-Latin text can't corrupt the frontmatter block. These tests render
+// with such a value and confirm the result parses as YAML and round-trips.
+
+const specialCustomer = `شركة: "كود" #1`
+
+// withTitle returns a copy of doc (decoded from JSON) with title (a
+// top-level field for Triage, or nested under key for the combined RCA
+// document) replaced by a value containing "a: b", to also exercise a body
+// heading with a colon in it alongside the frontmatter customer field.
+func withTitle(t *testing.T, doc []byte, key string) []byte {
+	t.Helper()
+	var decoded map[string]any
+	if err := json.Unmarshal(doc, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	const title = "Export fails: a: b"
+	if key == "" {
+		decoded["title"] = title
+	} else {
+		obj, ok := decoded[key].(map[string]any)
+		if !ok {
+			t.Fatalf("decoded[%q] is not an object", key)
+		}
+		obj["title"] = title
+	}
+	out, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	return out
+}
+
+// assertFrontmatterRoundTrips extracts rendered's frontmatter block, parses
+// it as YAML, and asserts it parses cleanly and that "customer" comes back
+// exactly as wantCustomer.
+func assertFrontmatterRoundTrips(t *testing.T, rendered, wantCustomer string) {
+	t.Helper()
+	fm, err := extractFrontmatter(rendered)
+	if err != nil {
+		t.Fatalf("extractFrontmatter: %v\n%s", err, rendered)
+	}
+	var parsed map[string]any
+	if err := yaml.Unmarshal([]byte(fm), &parsed); err != nil {
+		t.Fatalf("frontmatter is not valid YAML: %v\n--- frontmatter ---\n%s", err, fm)
+	}
+	got, _ := parsed["customer"].(string)
+	if got != wantCustomer {
+		t.Fatalf("customer round-tripped as %q, want %q\n--- frontmatter ---\n%s", got, wantCustomer, fm)
+	}
+}
+
+func TestRenderTriageFrontmatterRoundTripsSpecialCharacters(t *testing.T) {
+	doc := withTitle(t, readTestdata(t, "triage.json"), "")
+	m := triageMeta()
+	m.Customer = specialCustomer
+
+	got, err := (Renderer{}).Render(Triage, doc, m)
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	assertFrontmatterRoundTrips(t, got, specialCustomer)
+}
+
+func TestRenderRCAFrontmatterRoundTripsSpecialCharacters(t *testing.T) {
+	doc := withTitle(t, readTestdata(t, "rca.json"), "rca")
+	m := triageMeta()
+	m.Customer = specialCustomer
+	m.Links.Triage = "OMNI-1 export-fails"
+	m.Links.Resolution = "OMNI-1 export-fails-resolution"
+
+	got, err := (Renderer{}).Render(RCA, doc, m)
+	if err != nil {
+		t.Fatalf("Render(RCA): %v", err)
+	}
+	assertFrontmatterRoundTrips(t, got, specialCustomer)
+}
+
+func TestRenderResolutionFrontmatterRoundTripsSpecialCharacters(t *testing.T) {
+	doc := withTitle(t, readTestdata(t, "rca.json"), "resolution")
+	m := triageMeta()
+	m.Customer = specialCustomer
+	m.Links.Triage = "OMNI-1 export-fails"
+	m.Links.RCA = "OMNI-1 export-fails-rca"
+
+	got, err := (Renderer{}).Render(Resolution, doc, m)
+	if err != nil {
+		t.Fatalf("Render(Resolution): %v", err)
+	}
+	assertFrontmatterRoundTrips(t, got, specialCustomer)
+}
+
 // --- Check ---
 
 func TestCheckPassesForEmbeddedTemplates(t *testing.T) {
@@ -182,6 +292,21 @@ func TestCheckFailsOnTemplateSyntaxError(t *testing.T) {
 	r := Renderer{TemplatesDir: dir}
 	if err := r.Check(); err == nil {
 		t.Fatal("Check: got nil error, want a template parse failure")
+	}
+}
+
+func TestCheckFailsOnInvalidFrontmatterYAML(t *testing.T) {
+	dir := t.TempDir()
+	// Parses and renders fine as a template, but the frontmatter it
+	// produces is not valid YAML: an unterminated double-quoted scalar.
+	broken := "---\nfoo: \"unterminated\n---\n\nbody\n"
+	if err := os.WriteFile(filepath.Join(dir, "triage.md.tmpl"), []byte(broken), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := Renderer{TemplatesDir: dir}
+	if err := r.Check(); err == nil {
+		t.Fatal("Check: got nil error, want the invalid frontmatter YAML rejected")
 	}
 }
 
@@ -305,6 +430,31 @@ func TestUpdateTriageStatusReplacesExistingLinks(t *testing.T) {
 	}
 }
 
+func TestUpdateTriageStatusErrorsOnMissingFrontmatter(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "no-frontmatter.md")
+	original := "# Just a note\n\nNo frontmatter here.\n"
+	if err := os.WriteFile(path, []byte(original), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := UpdateTriageStatus(path, "resolved", nil)
+	if err == nil {
+		t.Fatal("UpdateTriageStatus: got nil error, want one for a file with no frontmatter")
+	}
+	if !strings.Contains(err.Error(), "has no frontmatter") {
+		t.Fatalf("error = %v, want it to name the missing-frontmatter condition", err)
+	}
+
+	got, readErr := os.ReadFile(path)
+	if readErr != nil {
+		t.Fatal(readErr)
+	}
+	if string(got) != original {
+		t.Fatalf("file was modified despite the error:\n%s", got)
+	}
+}
+
 // --- Digest ---
 
 func TestDigestMatchesGolden(t *testing.T) {
@@ -315,10 +465,7 @@ func TestDigestMatchesGolden(t *testing.T) {
 		{Key: "OMNI-4", Priority: "medium", Issue: "Budget exceeded case", Confidence: "high", Classification: "config", State: "over_budget", RunID: "run-4", Reason: "exceeded $5 run budget"},
 	}
 	got := Digest(rows)
-	want := readTestdata(t, "digest.golden.txt")
-	if got != string(want) {
-		t.Fatalf("Digest mismatch:\n--- got ---\n%s\n--- want ---\n%s", got, want)
-	}
+	assertGolden(t, "digest.golden.txt", got)
 }
 
 func TestDigestNoReasonBlockWhenNothingBlocked(t *testing.T) {
@@ -328,5 +475,27 @@ func TestDigestNoReasonBlockWhenNothingBlocked(t *testing.T) {
 	got := Digest(rows)
 	if strings.Contains(got, "—") {
 		t.Fatalf("Digest included a reason line with nothing blocked/failed/over_budget:\n%s", got)
+	}
+}
+
+func TestDigestTruncatesIssueByRuneNotByte(t *testing.T) {
+	// Each "ع" is two bytes in UTF-8; a byte-based truncation at 60 bytes
+	// would split the 30th rune in half and leave a broken multi-byte
+	// sequence (or a replacement character) in the output.
+	issue := strings.Repeat("ع", 70)
+	rows := []DigestRow{
+		{Key: "OMNI-9", Priority: "low", Issue: issue, Confidence: "low", Classification: "data", State: "done", RunID: "run-9"},
+	}
+	got := Digest(rows)
+
+	if strings.ContainsRune(got, '�') {
+		t.Fatalf("Digest output contains a UTF-8 replacement character (a rune was split):\n%s", got)
+	}
+	want := strings.Repeat("ع", 60)
+	if !strings.Contains(got, want) {
+		t.Fatalf("Digest did not contain the 60-rune truncated issue:\n%s", got)
+	}
+	if strings.Contains(got, want+"ع") {
+		t.Fatalf("Digest issue was not truncated to 60 runes:\n%s", got)
 	}
 }

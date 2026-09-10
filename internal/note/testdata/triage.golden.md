@@ -1,17 +1,17 @@
 ---
-tags: [support-duty, triage]
-tracker_key: OMNI-1
-tracker_url: https://tracker.example/OMNI-1
-helpdesk_id: 12345
-helpdesk_url: https://helpdesk.example/12345
-customer: Example Corp
-customer_id: cust-1
-date: 2026-09-10
-priority: high
-service: omni
-status: triaged
-run: run-1
-provider: claude-code
+tags: ["support-duty", "triage"]
+tracker_key: "OMNI-1"
+tracker_url: "https://tracker.example/OMNI-1"
+helpdesk_id: "12345"
+helpdesk_url: "https://helpdesk.example/12345"
+customer: "Example Corp"
+customer_id: "cust-1"
+date: "2026-09-10"
+priority: "high"
+service: "omni"
+status: "triaged"
+run: "run-1"
+provider: "claude-code"
 ---
 
 # Sample issue for template checks

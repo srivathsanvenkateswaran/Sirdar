@@ -1,30 +1,30 @@
 ---
-tags: [support-duty, rca]
-tracker_key: {{.meta.Key}}
-tracker_url: {{.meta.TrackerURL}}
-helpdesk_id: {{.meta.HelpdeskID}}
-helpdesk_url: {{.meta.HelpdeskURL}}
-customer: {{.meta.Customer}}
-customer_id: {{.meta.CustomerID}}
-date_reported: {{.meta.DateReported}}
-date_rca: {{.meta.Date}}
-service: {{.meta.Service}}
-classification: {{.doc.rca.classification}}
-severity: {{.doc.rca.severity}}
-confidence: {{.doc.rca.confidence}}
-origin: {{.doc.rca.origin}}
-triage_verdict: {{.doc.rca.triageReview.verdict}}
+tags: [{{yq "support-duty"}}, {{yq "rca"}}]
+tracker_key: {{yq .meta.Key}}
+tracker_url: {{yq .meta.TrackerURL}}
+helpdesk_id: {{yq .meta.HelpdeskID}}
+helpdesk_url: {{yq .meta.HelpdeskURL}}
+customer: {{yq .meta.Customer}}
+customer_id: {{yq .meta.CustomerID}}
+date_reported: {{yq .meta.DateReported}}
+date_rca: {{yq .meta.Date}}
+service: {{yq .meta.Service}}
+classification: {{yq .doc.rca.classification}}
+severity: {{yq .doc.rca.severity}}
+confidence: {{yq .doc.rca.confidence}}
+origin: {{yq .doc.rca.origin}}
+triage_verdict: {{yq .doc.rca.triageReview.verdict}}
 {{- if or .meta.Links.Triage .meta.Links.Resolution}}
 related:
 {{- if .meta.Links.Triage}}
-  - "[[{{.meta.Links.Triage}}]]"
+  - {{yq (printf "[[%s]]" .meta.Links.Triage)}}
 {{- end}}
 {{- if .meta.Links.Resolution}}
-  - "[[{{.meta.Links.Resolution}}]]"
+  - {{yq (printf "[[%s]]" .meta.Links.Resolution)}}
 {{- end}}
 {{- end}}
-run: {{.meta.RunID}}
-provider: {{.meta.Provider}}
+run: {{yq .meta.RunID}}
+provider: {{yq .meta.Provider}}
 ---
 
 # {{.doc.rca.title}}
