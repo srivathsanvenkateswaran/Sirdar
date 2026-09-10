@@ -1,0 +1,9 @@
+KEY     PRIO      ISSUE                                                         CONF     CLASS    STATE        RUN
+OMNI-1  high      Export fails for large orders                                 medium   code     done         run-1
+OMNI-2  low       This export job keeps failing whenever an order has more tha  low      data     blocked      run-2
+OMNI-3  critical  Short one                                                     unknown  unknown  failed       run-3
+OMNI-4  medium    Budget exceeded case                                          high     config   over_budget  run-4
+
+OMNI-2: blocked — waiting on a data steward to confirm the migration is reversible
+OMNI-3: failed — provider session errored twice
+OMNI-4: over_budget — exceeded $5 run budget

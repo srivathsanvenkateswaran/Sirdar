@@ -1,0 +1,109 @@
+{{- $cc := .doc.resolution.codeChange -}}
+{{- $dc := .doc.resolution.dataChange -}}
+---
+tags: [support-duty, resolution]
+tracker_key: {{.meta.Key}}
+tracker_url: {{.meta.TrackerURL}}
+helpdesk_id: {{.meta.HelpdeskID}}
+helpdesk_url: {{.meta.HelpdeskURL}}
+customer: {{.meta.Customer}}
+customer_id: {{.meta.CustomerID}}
+service: {{.meta.Service}}
+resolution_type: {{.doc.resolution.resolutionType}}
+status: proposed
+pr: {{if $cc}}{{fill "pr" $cc.pr}}{{else}}{{fill "pr" ""}}{{end}}
+pr_status: {{if $cc}}{{fill "pr_status" $cc.prStatus}}{{else}}{{fill "pr_status" ""}}{{end}}
+approved_by: {{fill "approved_by" ""}}
+applied_by: {{fill "applied_by" ""}}
+applied_at: {{fill "applied_at" ""}}
+verified_at: {{fill "verified_at" ""}}
+{{- if or .meta.Links.Triage .meta.Links.RCA}}
+related:
+{{- if .meta.Links.Triage}}
+  - "[[{{.meta.Links.Triage}}]]"
+{{- end}}
+{{- if .meta.Links.RCA}}
+  - "[[{{.meta.Links.RCA}}]]"
+{{- end}}
+{{- end}}
+run: {{.meta.RunID}}
+---
+
+# {{.doc.resolution.title}}
+
+## What Was Wrong
+
+{{.doc.resolution.whatWasWrong}}
+
+## What We Changed
+
+{{.doc.resolution.whatWeChanged}}
+{{if $cc}}
+### Code change
+
+PR: {{fill "pr" $cc.pr}}
+PR status: {{fill "pr status" $cc.prStatus}}
+Merged at: {{fill "merged at" $cc.mergedAt}}
+Reviewer: {{fill "reviewer" $cc.reviewer}}
+Deployed: {{fill "deployed" $cc.deployed}}
+
+Files:
+{{range $cc.files}}
+- {{fill "path" .path}}: {{fill "what" .what}}
+{{- end}}
+{{end}}
+{{- if $dc}}
+### Data change
+
+Authorised by: {{fill "authorised by" $dc.authorisedBy}} at {{fill "authorised at" $dc.authorisedAt}}
+Executed by: {{fill "executed by" $dc.executedBy}} at {{fill "executed at" $dc.executedAt}}
+
+Pre-verification:
+
+```sql
+{{fill "pre verification sql" $dc.preVerificationSql}}
+```
+
+Pre output: {{fill "pre output" $dc.preOutput}}
+
+Change:
+
+```sql
+{{fill "change sql" $dc.changeSql}}
+```
+
+Rows affected: {{fill "rows affected" $dc.rowsAffected}}
+
+Post-verification:
+
+```sql
+{{fill "post verification sql" $dc.postVerificationSql}}
+```
+
+Post output: {{fill "post output" $dc.postOutput}}
+
+Rollback plan: {{fill "rollback plan" $dc.rollbackPlan}}
+Side effects: {{fill "side effects" $dc.sideEffects}}
+{{end}}
+
+## Verification
+
+| Check | Environment | Result | Date | By |
+| --- | --- | --- | --- | --- |
+{{range .doc.resolution.verification}}| {{.check}} | {{.environment}} | {{.result}} | {{.date}} | {{.by}} |
+{{end}}
+## Customer Outcome
+
+- Told: {{.doc.resolution.customerOutcome.told}}
+- Confirmed fixed: {{.doc.resolution.customerOutcome.confirmedFixed}}
+- Helpdesk closed: {{.doc.resolution.customerOutcome.helpdeskClosed}}
+- Tracker status: {{.doc.resolution.customerOutcome.trackerStatus}}
+
+## Residual Risk / Follow-ups
+{{range .doc.resolution.residualRisk}}
+- {{.}}
+{{- end}}
+
+## Lessons
+
+{{.doc.resolution.lessons}}

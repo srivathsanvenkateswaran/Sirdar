@@ -1,0 +1,128 @@
+---
+tags: [support-duty, rca]
+tracker_key: {{.meta.Key}}
+tracker_url: {{.meta.TrackerURL}}
+helpdesk_id: {{.meta.HelpdeskID}}
+helpdesk_url: {{.meta.HelpdeskURL}}
+customer: {{.meta.Customer}}
+customer_id: {{.meta.CustomerID}}
+date_reported: {{.meta.DateReported}}
+date_rca: {{.meta.Date}}
+service: {{.meta.Service}}
+classification: {{.doc.rca.classification}}
+severity: {{.doc.rca.severity}}
+confidence: {{.doc.rca.confidence}}
+origin: {{.doc.rca.origin}}
+triage_verdict: {{.doc.rca.triageReview.verdict}}
+{{- if or .meta.Links.Triage .meta.Links.Resolution}}
+related:
+{{- if .meta.Links.Triage}}
+  - "[[{{.meta.Links.Triage}}]]"
+{{- end}}
+{{- if .meta.Links.Resolution}}
+  - "[[{{.meta.Links.Resolution}}]]"
+{{- end}}
+{{- end}}
+run: {{.meta.RunID}}
+provider: {{.meta.Provider}}
+---
+
+# {{.doc.rca.title}}
+
+## Summary
+
+{{.doc.rca.summary}}
+
+## Impact
+
+- Customers affected: {{.doc.rca.impact.customersAffected}}
+- Records affected: {{.doc.rca.impact.recordsAffected}}
+- Financial impact: {{.doc.rca.impact.financialImpact}}
+- First occurrence: {{.doc.rca.impact.firstOccurrence}}
+- Detection: {{.doc.rca.impact.detection}}
+- Time to detect: {{.doc.rca.impact.timeToDetect}}
+
+## Timeline
+{{range .doc.rca.timeline}}
+- **{{.at}}** {{.event}} ({{.evidence}})
+{{- end}}
+
+## Root Cause
+
+{{.doc.rca.rootCause.description}}
+
+Mechanism: {{.doc.rca.rootCause.mechanism}}
+
+Offending code:
+
+```
+{{.doc.rca.rootCause.offendingCode}}
+```
+
+Code references: {{join ", " .doc.rca.rootCause.codeRefs}}
+
+## Contributing Factors
+{{range .doc.rca.contributingFactors}}
+- {{.}}
+{{- end}}
+
+## Evidence
+
+Database:
+{{range .doc.rca.evidence.database}}
+- {{if .query}}`{{.query}}` → {{.result}}{{else}}{{.ref}}: {{.note}}{{end}}
+{{- end}}
+
+Logs:
+{{range .doc.rca.evidence.logs}}
+- {{if .query}}`{{.query}}` → {{.result}}{{else}}{{.ref}}: {{.note}}{{end}}
+{{- end}}
+
+APM:
+{{range .doc.rca.evidence.apm}}
+- {{if .query}}`{{.query}}` → {{.result}}{{else}}{{.ref}}: {{.note}}{{end}}
+{{- end}}
+
+Code:
+{{range .doc.rca.evidence.code}}
+- {{if .query}}`{{.query}}` → {{.result}}{{else}}{{.ref}}: {{.note}}{{end}}
+{{- end}}
+
+Attachments:
+{{range .doc.rca.evidence.attachments}}
+- {{if .query}}`{{.query}}` → {{.result}}{{else}}{{.ref}}: {{.note}}{{end}}
+{{- end}}
+
+## Blast Radius
+
+Query: `{{.doc.rca.blastRadius.query}}`
+Count: {{.doc.rca.blastRadius.count}}
+Scope: {{.doc.rca.blastRadius.scope}}
+Reasoning: {{.doc.rca.blastRadius.reasoning}}
+
+## Why Not Caught Earlier
+
+{{.doc.rca.whyNotCaughtEarlier}}
+
+## Prevention
+{{range .doc.rca.prevention}}
+- [{{.type}}] {{.action}} (owner: {{.owner}}, ticket: {{.ticket}})
+{{- end}}
+
+## Open Questions
+{{range .doc.rca.openQuestions}}
+- {{.}}
+{{- end}}
+
+## Triage Review
+
+Verdict: {{.doc.rca.triageReview.verdict}}
+
+Got right: {{.doc.rca.triageReview.gotRight}}
+Missed: {{.doc.rca.triageReview.missed}}
+Why missed: {{.doc.rca.triageReview.whyMissed}}
+
+## Lessons
+{{range .doc.rca.lessons}}
+- {{.}}
+{{- end}}

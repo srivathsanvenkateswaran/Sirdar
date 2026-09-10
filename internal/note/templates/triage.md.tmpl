@@ -1,0 +1,68 @@
+---
+tags: [support-duty, triage]
+tracker_key: {{.meta.Key}}
+tracker_url: {{.meta.TrackerURL}}
+helpdesk_id: {{.meta.HelpdeskID}}
+helpdesk_url: {{.meta.HelpdeskURL}}
+customer: {{.meta.Customer}}
+customer_id: {{.meta.CustomerID}}
+date: {{.meta.Date}}
+priority: {{.meta.Priority}}
+service: {{.meta.Service}}
+status: triaged
+run: {{.meta.RunID}}
+provider: {{.meta.Provider}}
+---
+
+# {{.doc.title}}
+
+Register: [[_Issue Register]] · RCA: {{fill "RCA" .meta.Links.RCA}} · Resolution: {{fill "Resolution" .meta.Links.Resolution}}
+
+## Customer Complaint (translated)
+
+{{.doc.complaint}}
+
+## Conversation Summary
+{{range .doc.timeline}}
+- **{{.at}}** ({{.role}}): {{.summary}}
+{{- end}}
+
+## Repro Steps
+{{range .doc.reproSteps}}
+1. {{.}}
+{{- end}}
+
+## Root Cause Hypothesis
+
+**Classification:** {{.doc.classification}}
+**Confidence:** {{.doc.rootCause.confidence}}
+
+{{.doc.rootCause.hypothesis}}
+
+Evidence:
+{{range .doc.rootCause.evidence}}
+- {{.source}} (`{{.query}}`): {{.finding}}
+{{- end}}
+
+Code references: {{join ", " .doc.rootCause.codeRefs}}
+
+Blast radius: {{.doc.blastRadius}}
+
+## Proposed Fix
+
+{{.doc.proposedFix.description}}
+
+Files: {{join ", " .doc.proposedFix.files}}
+
+Remediation SQL:
+
+```sql
+{{.doc.proposedFix.remediationSql}}
+```
+
+Risks: {{.doc.proposedFix.risks}}
+
+## Open Questions
+{{range .doc.openQuestions}}
+- {{.}}
+{{- end}}

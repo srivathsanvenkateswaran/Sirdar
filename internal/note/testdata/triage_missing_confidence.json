@@ -1,0 +1,58 @@
+{
+  "ticket": {
+    "key": "OMNI-1",
+    "title": "Export fails for large orders",
+    "trackerUrl": "https://tracker.example/OMNI-1",
+    "helpdeskId": "12345",
+    "helpdeskUrl": "https://helpdesk.example/12345",
+    "priority": "high",
+    "service": "omni",
+    "customer": "Example Corp",
+    "customerId": "cust-1"
+  },
+  "title": "Sample issue for template checks",
+  "complaint": "Customer reports the export fails for orders over 500 lines.",
+  "timeline": [
+    {
+      "at": "2026-09-01T10:00:00Z",
+      "role": "customer",
+      "summary": "Reported the export failing."
+    },
+    {
+      "at": "2026-09-01T10:15:00Z",
+      "role": "L1",
+      "summary": "Confirmed the failure and escalated."
+    }
+  ],
+  "reproSteps": [
+    "Create an order with 500+ line items.",
+    "Request a CSV export.",
+    "Observe the export job fail."
+  ],
+  "rootCause": {
+    "hypothesis": "The export job times out serializing more than 500 rows.",
+    "evidence": [
+      {
+        "source": "logs",
+        "query": "service:export level:error",
+        "finding": "Timeout after 30s on large exports."
+      }
+    ],
+    "codeRefs": [
+      "internal/export/csv.go:42"
+    ]
+  },
+  "blastRadius": "Any customer exporting an order with more than 500 line items.",
+  "classification": "code",
+  "proposedFix": {
+    "description": "Stream the export instead of buffering it in memory.",
+    "files": [
+      "internal/export/csv.go"
+    ],
+    "remediationSql": "",
+    "risks": "Streaming changes the export's error-handling path."
+  },
+  "openQuestions": [
+    "Is 500 lines the exact threshold, or does it vary by column count?"
+  ]
+}

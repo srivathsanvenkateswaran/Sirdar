@@ -1,0 +1,135 @@
+{
+  "rca": {
+    "title": "Export job times out on large orders",
+    "summary": "The CSV export buffered the entire result set in memory before writing it, so orders over 500 line items exceeded the request timeout. This has been happening since the export feature shipped, but only became visible once customers started placing bulk orders. The fix streams rows to the response instead of buffering them.",
+    "impact": {
+      "customersAffected": "1 confirmed, likely more with large orders",
+      "recordsAffected": "n/a",
+      "financialImpact": "none reported",
+      "firstOccurrence": "2026-06-01",
+      "detection": "customer report",
+      "timeToDetect": "unknown, likely months"
+    },
+    "timeline": [
+      {
+        "at": "2026-09-01T10:00:00Z",
+        "event": "Customer reported export failing.",
+        "evidence": "Zoho ticket #12345"
+      },
+      {
+        "at": "2026-09-02T09:00:00Z",
+        "event": "Reproduced locally with a 600-line order.",
+        "evidence": "local repro log"
+      }
+    ],
+    "rootCause": {
+      "description": "The export handler buffers every row into a slice before encoding it as CSV, so large orders exceed the request timeout while still building the slice.",
+      "codeRefs": [
+        "internal/export/csv.go:42"
+      ],
+      "offendingCode": "rows := make([][]string, 0)\nfor _, item := range order.Items { rows = append(rows, itemRow(item)) }\nwriteCSV(w, rows)",
+      "mechanism": "Building the full slice before writing means nothing is flushed to the client until encoding finishes, so the request timeout fires first on large orders."
+    },
+    "contributingFactors": [
+      "No test exercised an order above 100 line items."
+    ],
+    "evidence": {
+      "database": [
+        {
+          "query": "select count(*) from order_items where order_id = 4821",
+          "result": "612 rows"
+        }
+      ],
+      "logs": [
+        {
+          "query": "service:export level:error",
+          "result": "12 timeouts in the last 30 days"
+        }
+      ],
+      "apm": [],
+      "code": [
+        {
+          "ref": "internal/export/csv.go:42",
+          "note": "Buffers all rows before writing."
+        }
+      ],
+      "attachments": []
+    },
+    "blastRadius": {
+      "query": "select count(distinct order_id) from order_items group by order_id having count(*) > 500",
+      "count": "37 orders in the last 90 days",
+      "scope": "systemic",
+      "reasoning": "Any order above the row threshold hits the same code path."
+    },
+    "whyNotCaughtEarlier": "Load testing used small fixture orders, so the buffering cost never showed up.",
+    "prevention": [
+      {
+        "action": "Add a load test with a 1000-line order.",
+        "type": "test",
+        "owner": "platform",
+        "ticket": "OMNI-2"
+      }
+    ],
+    "openQuestions": [],
+    "classification": "code",
+    "severity": "medium",
+    "confidence": "high",
+    "origin": "omni",
+    "triageReview": {
+      "verdict": "confirmed",
+      "gotRight": "Identified the timeout and the affected file.",
+      "missed": "Did not identify the exact buffering mechanism.",
+      "whyMissed": "Triage did not have profiling data available."
+    },
+    "lessons": [
+      "Load test with realistic data sizes, not fixtures."
+    ],
+    "playbookSuggestions": [
+      {
+        "playbook": "export-issues",
+        "addition": "Check for buffering before assuming a timeout config issue.",
+        "reason": "This is the second export timeout traced to buffering."
+      }
+    ]
+  },
+  "resolution": {
+    "title": "Backfill the missing export flag for large orders",
+    "resolutionType": "data-fix",
+    "whatWasWrong": "612 orders had export_enabled left false by a bad migration.",
+    "whatWeChanged": "Ran a one-off update to set export_enabled=true for the affected orders.",
+    "codeChange": null,
+    "dataChange": {
+      "authorisedBy": "j.manager",
+      "authorisedAt": "2026-09-08T12:00:00Z",
+      "executedBy": "j.engineer",
+      "executedAt": "2026-09-08T13:00:00Z",
+      "preVerificationSql": "select count(*) from orders where export_enabled = false and line_items > 500;",
+      "preOutput": "612",
+      "changeSql": "update orders set export_enabled = true where export_enabled = false and line_items > 500;",
+      "rowsAffected": "612",
+      "postVerificationSql": "select count(*) from orders where export_enabled = false and line_items > 500;",
+      "postOutput": "0",
+      "rollbackPlan": "update orders set export_enabled = false where id in (<snapshot ids>);",
+      "sideEffects": "None observed."
+    },
+    "verification": [
+      {
+        "check": "Export a 600-line order",
+        "environment": "staging",
+        "result": "completes in 4s",
+        "date": "2026-09-08",
+        "by": "j.reviewer"
+      }
+    ],
+    "customerOutcome": {
+      "told": "Explained the fix and asked them to retry.",
+      "confirmedFixed": "yes",
+      "helpdeskClosed": "yes",
+      "trackerStatus": "done"
+    },
+    "residualRisk": [
+      "Very large orders (10k+ lines) are untested."
+    ],
+    "lessons": "Add a load test for large orders as a matter of course for export features."
+  }
+}
