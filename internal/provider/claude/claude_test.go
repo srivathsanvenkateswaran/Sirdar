@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -29,6 +30,15 @@ func TestMain(m *testing.M) {
 // {"$stderr":"boom"} writes to stderr. Every stdin line is echoed to stderr
 // prefixed "STDIN:" so tests can inspect what Sirdar wrote.
 func fakeCLI(script string) int {
+	// Report a clean interrupt so a test can tell SIGINT from SIGKILL.
+	interrupted := make(chan os.Signal, 1)
+	signal.Notify(interrupted, os.Interrupt)
+	go func() {
+		<-interrupted
+		fmt.Fprintln(os.Stderr, "SIGINT")
+		os.Exit(0)
+	}()
+
 	f, err := os.Open(script)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake claude:", err)
@@ -405,6 +415,136 @@ func TestDoctor(t *testing.T) {
 	checks = New().Doctor(context.Background(), filepath.Join(dir, "missing"))
 	if checks[0].OK {
 		t.Fatalf("missing binary must fail the version check: %+v", checks[0])
+	}
+}
+
+func TestCancelSendsInterrupt(t *testing.T) {
+	// The script stops at a control_response that never arrives, so the fake
+	// is alive and blocked when Cancel lands.
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s5"}`,
+		`{"$wait":"control_response"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s5","result":"never reached","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range s.Events() {
+		}
+	}()
+
+	deadline := time.Now().Add(2 * time.Second)
+	for s.Handle() == "" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if s.Handle() != "s5" {
+		t.Fatalf("session did not start, handle %q", s.Handle())
+	}
+
+	s.Cancel()
+
+	type outcome struct {
+		res provider.Result
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		res, err := s.Wait()
+		done <- outcome{res, err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("Wait after Cancel: %v", got.err)
+		}
+		if got.res.ExitErr == nil {
+			t.Fatal("a cancelled session must report ExitErr")
+		}
+		if got.res.Handle != "s5" {
+			t.Fatalf("handle %q", got.res.Handle)
+		}
+	case <-time.After(3 * time.Second):
+		t.Fatal("Wait did not return within 3s of Cancel")
+	}
+	<-drained
+
+	if !containsPrefix(lastStderrTail, "SIGINT") {
+		t.Fatalf("fake was not interrupted (SIGKILL?), stderr tail: %v", lastStderrTail)
+	}
+}
+
+func TestUnparseableControlRequestIsAnswered(t *testing.T) {
+	// tool_name has the wrong type, so the strict decode fails; the CLI is
+	// still blocked and must get a reply.
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"s6"}`,
+		`{"type":"control_request","request_id":"r9","request":{"subtype":"can_use_tool","tool_name":123}}`,
+		`{"$wait":"control_response"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s6","result":"done","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var noted bool
+	var final bool
+	for ev := range s.Events() {
+		if ev.Text == "unparseable control request" {
+			noted = true
+		}
+		if ev.Kind == provider.EvFinal {
+			final = true
+		}
+	}
+	res, err := s.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !final {
+		t.Fatal("session did not reach its result line")
+	}
+	if res.ExitErr != nil {
+		t.Fatalf("exit err %v", res.ExitErr)
+	}
+	if !noted {
+		t.Fatal("unparseable control request was not surfaced")
+	}
+	var denied bool
+	for _, line := range lastStderrTail {
+		if strings.Contains(line, `"request_id":"r9"`) && strings.Contains(line, `"behavior":"deny"`) &&
+			strings.Contains(line, "unsupported control request") {
+			denied = true
+		}
+	}
+	if !denied {
+		t.Fatalf("no deny written for the unparseable request: %v", lastStderrTail)
+	}
+}
+
+func TestUnparseableControlRequestWithoutID(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"control_request","request":{"subtype":"can_use_tool","tool_name":123}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"s7","result":"done","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var errors int
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvError && ev.Text == "unparseable control request" {
+			errors++
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if errors != 1 {
+		t.Fatalf("expected one error event for an unanswerable control request, got %d", errors)
 	}
 }
 

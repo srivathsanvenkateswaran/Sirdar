@@ -59,9 +59,9 @@ func args(spec provider.SessionSpec) []string {
 		"--permission-prompt-tool", "stdio",
 		"--permission-mode", "default",
 	}
-	if len(spec.OutputSchema) > 0 {
-		out = append(out, "--json-schema", compactJSON(spec.OutputSchema))
-	}
+	// The runner always supplies a schema; an empty one is a caller bug, so
+	// it is passed through rather than silently dropped.
+	out = append(out, "--json-schema", compactJSON(spec.OutputSchema))
 	if spec.Model != "" {
 		out = append(out, "--model", spec.Model)
 	}
@@ -113,16 +113,24 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if binary == "" {
 		binary = defaultBinary
 	}
-	cmd := exec.CommandContext(ctx, binary, args(spec)...)
+	// runCtx is the one cancellation path: Cancel() cancels it, and so does
+	// the caller's ctx. cmd.Cancel turns either into SIGINT, and WaitDelay
+	// escalates to SIGKILL if the process has not exited by then.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	cmd := exec.CommandContext(runCtx, binary, args(spec)...)
+	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
 	cmd.Env = childEnv(spec)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
+		cancelRun()
 		return nil, fmt.Errorf("claude stdin: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		cancelRun()
 		return nil, fmt.Errorf("claude stdout: %w", err)
 	}
 	tail := &tailWriter{max: stderrTailLines}
@@ -133,23 +141,25 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		policy = &provider.PermissionPolicy{}
 	}
 	s := &session{
-		binary:   binary,
-		cmd:      cmd,
-		stdin:    stdin,
-		stderr:   tail,
-		policy:   policy,
-		events:   make(chan provider.Event, eventBuffer),
-		readDone: make(chan struct{}),
-		done:     make(chan struct{}),
+		binary:    binary,
+		cmd:       cmd,
+		cancelRun: cancelRun,
+		stdin:     stdin,
+		stderr:    tail,
+		policy:    policy,
+		events:    make(chan provider.Event, eventBuffer),
+		readDone:  make(chan struct{}),
+		done:      make(chan struct{}),
 	}
 	if err := cmd.Start(); err != nil {
+		cancelRun()
 		return nil, fmt.Errorf("start %s: %w", binary, err)
 	}
 	go s.read(stdout)
 	if err := s.writeUser(spec.Prompt); err != nil {
 		// The session is never handed to the caller, so reap it here
 		// rather than through Cancel/Wait.
-		_ = cmd.Process.Kill()
+		cancelRun()
 		go func() {
 			<-s.readDone
 			_ = cmd.Wait()
@@ -213,11 +223,12 @@ func startsWithDigit(s string) bool {
 
 // session is one running claude process.
 type session struct {
-	binary string
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stderr *tailWriter
-	policy *provider.PermissionPolicy
+	binary    string
+	cmd       *exec.Cmd
+	cancelRun context.CancelFunc
+	stdin     io.WriteCloser
+	stderr    *tailWriter
+	policy    *provider.PermissionPolicy
 
 	events   chan provider.Event
 	readDone chan struct{} // closed when stdout hits EOF
@@ -272,14 +283,20 @@ func (s *session) Wait() (provider.Result, error) {
 		s.res.Handle = s.handle
 		if err != nil {
 			var exitErr *exec.ExitError
-			if errors.As(err, &exitErr) {
+			switch {
+			case errors.As(err, &exitErr):
 				s.res.ExitErr = fmt.Errorf("%s exited with code %d%s", s.binary, exitErr.ExitCode(), formatTail(tail))
-			} else {
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				// Cancel() or the caller's context stopped the session; that
+				// is a reported outcome, not a Wait failure.
+				s.res.ExitErr = fmt.Errorf("%s cancelled: %w%s", s.binary, err, formatTail(tail))
+			default:
 				s.res.ExitErr = err
 				s.waitErr = err
 			}
 		}
 		s.mu.Unlock()
+		s.cancelRun()
 		close(s.done)
 	})
 	<-s.done
@@ -289,18 +306,11 @@ func (s *session) Wait() (provider.Result, error) {
 	return s.res, s.waitErr
 }
 
-// Cancel interrupts the process, then kills it if it has not exited.
-func (s *session) Cancel() {
-	if s.cmd.Process == nil {
-		return
-	}
-	_ = s.cmd.Process.Signal(os.Interrupt)
-	select {
-	case <-s.done:
-	case <-time.After(interruptGrace):
-		_ = s.cmd.Process.Kill()
-	}
-}
+// Cancel stops the session through the same path as a cancelled context:
+// cmd.Cancel delivers SIGINT and cmd.WaitDelay escalates to SIGKILL if the
+// process is still alive after interruptGrace. It does not block; the outcome
+// shows up in Wait's Result.
+func (s *session) Cancel() { s.cancelRun() }
 
 // read consumes stdout until EOF, answering control requests inline and
 // emitting one or more events per line.
@@ -342,7 +352,10 @@ func (s *session) answerControl(raw []byte) bool {
 	}
 	var req controlRequest
 	if err := json.Unmarshal(raw, &req); err != nil {
-		return false
+		// The CLI is blocked waiting for a reply, so a request we cannot read
+		// still has to be answered.
+		s.denyUnparseable(raw)
+		return true
 	}
 
 	if req.Request.Subtype != "can_use_tool" {
@@ -377,6 +390,36 @@ func (s *session) answerControl(raw []byte) bool {
 	ev.Text = decision.Message
 	s.events <- ev
 	return true
+}
+
+// denyUnparseable answers a control_request whose body did not parse. The
+// request id is recovered leniently so the CLI is unblocked; when even that
+// fails the line is reported as an error for the runner to count.
+func (s *session) denyUnparseable(raw []byte) {
+	requestID := recoverRequestID(raw)
+	if requestID == "" {
+		ev := newEvent(provider.EvError, raw)
+		ev.Text = "unparseable control request"
+		s.events <- ev
+		return
+	}
+	s.writeControlResponse(requestID, map[string]any{
+		"behavior": "deny",
+		"message":  "unsupported control request",
+	})
+	ev := newEvent(provider.EvSystem, raw)
+	ev.Text = "unparseable control request"
+	s.events <- ev
+}
+
+// recoverRequestID pulls request_id out of a line that failed strict decoding.
+func recoverRequestID(raw []byte) string {
+	var loose map[string]any
+	if err := json.Unmarshal(raw, &loose); err != nil {
+		return ""
+	}
+	id, _ := loose["request_id"].(string)
+	return id
 }
 
 func (s *session) writeControlResponse(requestID string, response map[string]any) {
