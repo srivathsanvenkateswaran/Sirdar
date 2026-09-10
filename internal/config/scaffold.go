@@ -16,7 +16,18 @@ sources:
     adapter: zohodesk
     orgId: "<org-id>"
     baseUrl: https://desk.zoho.com
-    token: keychain:<service>
+    # Refresh-token grant from a Zoho Self Client. Sirdar mints its own
+    # access tokens, so an unattended run keeps working past the hour one
+    # of them lives. All three are credential refs, never literal secrets.
+    auth:
+      clientId: keychain:zoho-desk-client-id
+      clientSecret: keychain:zoho-desk-client-secret
+      refreshToken: keychain:zoho-desk-refresh-token
+      # accountsUrl: https://accounts.zoho.com   # only when baseUrl is not a desk.zoho.{in,com,eu,com.au} host
+    # Alternative to auth: one access token you paste in yourself. It stops
+    # working an hour after it was issued, so it suits a run you are
+    # watching, not a scheduled one.
+    # token: keychain:<service>
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

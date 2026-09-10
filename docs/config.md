@@ -19,7 +19,12 @@ rather than being silently ignored.
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`) | Zoho Desk API base URL |
-| `sources.*.token` | string | none (required for `zohodesk`) | Credential reference (`env:NAME` or `keychain:SERVICE`) |
+| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME` or `keychain:SERVICE`) |
+| `sources.*.auth` | object | none (one of `token`/`auth` required for `zohodesk`) | OAuth refresh-token grant; see Zoho Desk OAuth below |
+| `sources.*.auth.clientId` | string | none (required with `auth`) | Credential reference to the Self Client's client id |
+| `sources.*.auth.clientSecret` | string | none (required with `auth`) | Credential reference to the Self Client's client secret |
+| `sources.*.auth.refreshToken` | string | none (required with `auth`) | Credential reference to the Self Client's refresh token |
+| `sources.*.auth.accountsUrl` | string | derived from `baseUrl` | Zoho accounts server that issues access tokens |
 | `notes.dir` | string | `.sirdar/notes` | Where rendered notes are copied; expands `~` and relative paths against the workspace root |
 | `notes.templates` | string | `""` (embedded defaults) | Directory holding `triage.md.tmpl`, `rca.md.tmpl`, `resolution.md.tmpl` overrides |
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
@@ -60,7 +65,52 @@ rejects a value that doesn't start with `env:` or `keychain:`. Two forms:
   `keychain:` ref fails to resolve.
 
 Resolved values are held in memory only: never written to a run directory, and never placed in
-the agent's environment.
+the agent's environment. Every `env:` variable named anywhere in `sources.*` — the access token
+and all three parts of an `auth` grant — is stripped from the environment the agent process
+inherits, so a session that can run shell commands cannot read them back out.
+
+## Zoho Desk OAuth
+
+A Zoho Desk access token expires an hour after it is issued, so `token:` cannot carry a run
+nobody is watching. `auth:` names a [Zoho Self
+Client](https://www.zoho.com/accounts/protocol/oauth/self-client/overview.html) instead, and
+Sirdar exchanges its refresh token for a fresh access token whenever the one it holds is within
+a minute of expiry, or when Desk rejects it (one retry per request, then the failure stands).
+Set `token` or `auth`, not both.
+
+```yaml
+sources:
+  helpdesk:
+    adapter: zohodesk
+    orgId: "60044805777"
+    baseUrl: https://desk.zoho.in
+    auth:
+      clientId: keychain:zoho-desk-client-id
+      clientSecret: keychain:zoho-desk-client-secret
+      refreshToken: keychain:zoho-desk-refresh-token
+```
+
+`accountsUrl` is the accounts server for the data centre the desk lives in, and is normally left
+out: it is derived from `baseUrl` for the four Zoho hosts below. A `baseUrl` outside that list
+has to name it, since sending the grant to the wrong data centre's accounts server only fails.
+
+| `baseUrl` host | derived `accountsUrl` |
+|---|---|
+| `desk.zoho.in` | `https://accounts.zoho.in` |
+| `desk.zoho.com` | `https://accounts.zoho.com` |
+| `desk.zoho.eu` | `https://accounts.zoho.eu` |
+| `desk.zoho.com.au` | `https://accounts.zoho.com.au` |
+
+`sirdar doctor` performs one refresh and reports it, so a revoked grant is caught before a run
+spends an agent session on it:
+
+```
+[OK] zoho oauth — access token obtained, expires in 3600s
+[OK] sources.helpdesk (zohodesk) — https://desk.zoho.in
+```
+
+A refused grant reports the reason the accounts server gave — `invalid_client`, `invalid_code`
+— and never any part of the credentials.
 
 ## `permissions.bash` glob semantics
 

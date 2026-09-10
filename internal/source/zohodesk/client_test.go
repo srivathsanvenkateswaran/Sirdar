@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -105,16 +106,20 @@ func newFixtureServer(t *testing.T, opts serverOpts) (*httptest.Server, *Client)
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
 
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 	return srv, c
 }
 
-func TestNew(t *testing.T) {
-	c := New("https://example.zohodesk.com", "org1", "tok")
-	if c.BaseURL != "https://example.zohodesk.com" || c.OrgID != "org1" || c.Token != "tok" {
+func TestNewWithToken(t *testing.T) {
+	c := NewWithToken("https://example.zohodesk.com", "org1", "tok")
+	if c.BaseURL != "https://example.zohodesk.com" || c.OrgID != "org1" {
 		t.Fatalf("unexpected client: %+v", c)
+	}
+	got, err := c.Tokens.Token(context.Background())
+	if err != nil || got != "tok" {
+		t.Fatalf("Tokens.Token() = %q, %v; want %q", got, err, "tok")
 	}
 	if c.HTTP == nil || c.HTTP.Timeout != 30*time.Second {
 		t.Fatalf("expected default 30s HTTP client, got %+v", c.HTTP)
@@ -260,7 +265,7 @@ func TestThreads_CommentRoleMapping(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 
@@ -293,8 +298,8 @@ func TestAttachments_DownloadsThreeInOrder(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len(Attachments) = %d, want 3: %+v", len(got), got)
 	}
-	if len(c.LastWarnings) != 0 {
-		t.Errorf("LastWarnings = %v, want none", c.LastWarnings)
+	if w := c.Warnings(); len(w) != 0 {
+		t.Errorf("Warnings() = %v, want none", w)
 	}
 
 	wantPrefixes := []string{"1-", "2-", "3-"}
@@ -358,7 +363,7 @@ func TestAttachments_PartialFailureRecordsWarning(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 
@@ -370,18 +375,22 @@ func TestAttachments_PartialFailureRecordsWarning(t *testing.T) {
 	if len(got) != 2 {
 		t.Fatalf("len(Attachments) = %d, want 2: %+v", len(got), got)
 	}
-	if len(c.LastWarnings) != 1 {
-		t.Fatalf("LastWarnings = %v, want 1 entry", c.LastWarnings)
+	if w := c.WarningsFor("555"); len(w) != 1 {
+		t.Fatalf("WarningsFor(555) = %v, want 1 entry", w)
+	}
+	// Reading them consumes them: a second read must not report the same
+	// missing attachment against whatever runs next.
+	if w := c.WarningsFor("555"); len(w) != 0 {
+		t.Fatalf("WarningsFor(555) after reading = %v, want none", w)
 	}
 
-	// LastWarnings must be cleared at the start of each call.
-	got2, err := c.Attachments(context.Background(), "555", t.TempDir())
-	_ = got2
-	if err != nil {
+	// A second call records its own warnings rather than adding to the
+	// first call's.
+	if _, err := c.Attachments(context.Background(), "555", t.TempDir()); err != nil {
 		t.Fatalf("second Attachments call: %v", err)
 	}
-	if len(c.LastWarnings) != 1 {
-		t.Fatalf("LastWarnings not reset between calls: %v", c.LastWarnings)
+	if w := c.Warnings(); len(w) != 1 {
+		t.Fatalf("warnings not reset between calls: %v", w)
 	}
 }
 
@@ -400,7 +409,7 @@ func TestAttachments_AllFail(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 
@@ -480,7 +489,7 @@ func TestConversations_Pagination(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 
@@ -503,7 +512,7 @@ func TestConversations_Pagination(t *testing.T) {
 }
 
 func TestResolveURL_RelativePath(t *testing.T) {
-	c := New("https://desk.example.com", testOrgID, testToken)
+	c := NewWithToken("https://desk.example.com", testOrgID, testToken)
 
 	got := c.resolveURL("api/v1/tickets/555/attachments/a7/content")
 	want := "https://desk.example.com/api/v1/tickets/555/attachments/a7/content"
@@ -541,7 +550,7 @@ func TestAttachments_SanitizesPathTraversalName(t *testing.T) {
 	})
 	srv := httptest.NewServer(mux)
 	t.Cleanup(srv.Close)
-	c := New(srv.URL, testOrgID, testToken)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
 	c.HTTP = srv.Client()
 	c.BaseURL = srv.URL
 
@@ -578,5 +587,165 @@ func TestAttachments_SanitizesPathTraversalName(t *testing.T) {
 	}
 	if len(entries) != 1 || entries[0].Name() != "1-evil.txt" {
 		t.Errorf("dir contents = %v, want exactly [1-evil.txt]", entries)
+	}
+}
+
+// warningsServer serves two tickets, each with one attachment that fails to
+// download, so a concurrent Attachments call for each has something to
+// record. Ticket ids are "a" and "b"; the failing attachment's id names the
+// ticket, which is how a leak between them shows up.
+func newWarningsServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	for _, id := range []string{"a", "b"} {
+		id := id
+		mux.HandleFunc("/api/v1/tickets/"+id+"/conversations", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprint(w, `{"data":[{"id":"t1","type":"thread","direction":"in","author":{"name":"Alice"},"createdTime":"2026-09-10T08:00:00.000Z"}]}`)
+		})
+		mux.HandleFunc("/api/v1/tickets/"+id+"/threads/t1", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json")
+			fmt.Fprintf(w, `{"plainText":"hi","content":"<p>x</p>","attachments":[`+
+				`{"id":"ok-%s","name":"ok-%s.txt","href":"/api/v1/tickets/%s/attachments/ok/content"},`+
+				`{"id":"gone-%s","name":"gone-%s.txt","href":"/api/v1/tickets/%s/attachments/gone/content"}]}`,
+				id, id, id, id, id, id)
+		})
+		mux.HandleFunc("/api/v1/tickets/"+id+"/attachments/ok/content", func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/plain")
+			w.Write([]byte("fine"))
+		})
+		mux.HandleFunc("/api/v1/tickets/"+id+"/attachments/gone/content", func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "gone", http.StatusNotFound)
+		})
+	}
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// TestAttachments_ConcurrentCallsKeepWarningsApart covers the shape a batch
+// run has: one Client, several tickets in flight. Under -race this also
+// catches the unsynchronised write the warnings used to be. A ticket must
+// never be told an attachment is missing when the missing one belongs to
+// another ticket.
+func TestAttachments_ConcurrentCallsKeepWarningsApart(t *testing.T) {
+	srv := newWarningsServer(t)
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	var wg sync.WaitGroup
+	warnings := map[string][]string{}
+	var mu sync.Mutex
+	for _, id := range []string{"a", "b"} {
+		id := id
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := c.Attachments(context.Background(), id, t.TempDir()); err != nil {
+				t.Errorf("Attachments(%s): %v", id, err)
+				return
+			}
+			w := c.WarningsFor(id)
+			mu.Lock()
+			warnings[id] = w
+			mu.Unlock()
+		}()
+	}
+	wg.Wait()
+
+	for _, id := range []string{"a", "b"} {
+		got := warnings[id]
+		if len(got) != 1 {
+			t.Fatalf("ticket %s warnings = %v, want exactly 1", id, got)
+		}
+		if !strings.Contains(got[0], "gone-"+id) {
+			t.Errorf("ticket %s got another ticket's warning: %q", id, got[0])
+		}
+	}
+}
+
+// TestAttachments_ClearsWarningsOnAnEarlyReturn covers a ticket with no
+// attachments at all following one that had a failure: the earlier call's
+// warning must not be served against it.
+func TestAttachments_ClearsWarningsOnAnEarlyReturn(t *testing.T) {
+	mux := http.NewServeMux()
+	calls := 0
+	mux.HandleFunc("/api/v1/tickets/555/conversations", func(w http.ResponseWriter, r *http.Request) {
+		calls++
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"t1","type":"thread","direction":"in","author":{"name":"Alice"},"createdTime":"2026-09-10T08:00:00.000Z"}]}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/threads/t1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		if calls == 1 {
+			fmt.Fprint(w, `{"plainText":"hi","content":"<p>x</p>","attachments":[`+
+				`{"id":"ok","name":"ok.txt","href":"/api/v1/tickets/555/attachments/ok/content"},`+
+				`{"id":"gone","name":"gone.txt","href":"/api/v1/tickets/555/attachments/gone/content"}]}`)
+			return
+		}
+		// The second time round the ticket has no attachments at all.
+		fmt.Fprint(w, `{"plainText":"hi","content":"<p>x</p>"}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/attachments/ok/content", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("fine"))
+	})
+	mux.HandleFunc("/api/v1/tickets/555/attachments/gone/content", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "gone", http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	if _, err := c.Attachments(context.Background(), "555", t.TempDir()); err != nil {
+		t.Fatalf("first Attachments: %v", err)
+	}
+	// Deliberately not read: the point is that the next call discards it.
+	got, err := c.Attachments(context.Background(), "555", t.TempDir())
+	if err != nil {
+		t.Fatalf("second Attachments: %v", err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("second call returned %d attachments, want 0", len(got))
+	}
+	if w := c.Warnings(); len(w) != 0 {
+		t.Fatalf("a ticket with no attachments inherited warnings: %v", w)
+	}
+}
+
+// TestAttachments_AllFailDoesNotAlsoWarn covers the duplicate report: when
+// every attachment fails, the caller already has each failure in the error,
+// and repeating them as warnings put the same line in the prompt twice.
+func TestAttachments_AllFailDoesNotAlsoWarn(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/tickets/555/conversations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"t1","type":"thread","direction":"in","author":{"name":"Alice"},"createdTime":"2026-09-10T08:00:00.000Z"}]}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/threads/t1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"plainText":"hi","content":"<p>x</p>","attachments":[`+
+			`{"id":"gone","name":"gone.txt","href":"/api/v1/tickets/555/attachments/gone/content"}]}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/attachments/gone/content", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "gone", http.StatusNotFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	_, err := c.Attachments(context.Background(), "555", t.TempDir())
+	if err == nil {
+		t.Fatal("want an error when every attachment fails")
+	}
+	if !strings.Contains(err.Error(), "gone") {
+		t.Errorf("error does not name the failure: %v", err)
+	}
+	if w := c.Warnings(); len(w) != 0 {
+		t.Fatalf("failures were reported twice, as an error and as warnings: %v", w)
 	}
 }
