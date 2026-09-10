@@ -1,0 +1,8 @@
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-9","sessionId":"th-9","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"never"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-9","items":[],"status":"inProgress"}}}
+{"jsonrpc":"2.0","method":"turn/started","params":{"threadId":"th-9","turn":{"id":"tn-9","status":"inProgress","startedAt":1789039385}}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-9","turn":{"id":"tn-9","status":"failed","error":{"message":"model stream disconnected"},"items":[],"completedAt":1789039390,"durationMs":5000}}}
