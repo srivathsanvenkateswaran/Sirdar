@@ -589,8 +589,10 @@ func TestListResolvesMe(t *testing.T) {
 	if len(sq) == 0 {
 		t.Fatal("hierarchicalrequirement was never queried")
 	}
-	if q := sq[0].Get("query"); !strings.Contains(q, `(ScheduleState != "Closed")`) {
-		t.Errorf("story query %q did not use ScheduleState", q)
+	// Stock Rally has no Closed ScheduleState; a story finishes at
+	// Accepted, so that is what the open-ish default excludes.
+	if q := sq[0].Get("query"); !strings.Contains(q, `(ScheduleState != "Accepted")`) {
+		t.Errorf("story query %q did not exclude the story terminal state", q)
 	}
 }
 
@@ -631,6 +633,12 @@ func TestListFilters(t *testing.T) {
 			typ:    artifactType{"Defect", "defect"},
 			want:   []string{`(Parent.FormattedID = "F42")`},
 		},
+		{
+			name:   "story open-ish default excludes Accepted",
+			filter: source.ListFilter{},
+			typ:    artifactType{"HierarchicalRequirement", "hierarchicalrequirement"},
+			want:   []string{`(ScheduleState != "Accepted")`},
+		},
 	}
 	c, err := New(Config{APIKey: "k"}, nil)
 	if err != nil {
@@ -638,7 +646,10 @@ func TestListFilters(t *testing.T) {
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			q := c.listQuery(tc.typ, tc.filter, "")
+			q, err := c.listQuery(tc.typ, tc.filter, "")
+			if err != nil {
+				t.Fatalf("listQuery: %v", err)
+			}
 			for _, want := range tc.want {
 				if !strings.Contains(q, want) {
 					t.Errorf("listQuery = %q, want it to contain %q", q, want)
@@ -944,15 +955,19 @@ func TestSanitizeName(t *testing.T) {
 }
 
 func TestDecodeBase64(t *testing.T) {
-	b, err := decodeBase64("aGVsbG8g\ncmFsbHk=")
+	b, err := decodeBase64("aGVsbG8g\ncmFsbHk=", maxAttachmentBytes)
 	if err != nil {
 		t.Fatalf("decodeBase64: %v", err)
 	}
 	if string(b) != "hello rally" {
 		t.Errorf("decodeBase64 = %q", b)
 	}
-	if _, err := decodeBase64("!!!not base64!!!"); err == nil {
+	if _, err := decodeBase64("!!!not base64!!!", maxAttachmentBytes); err == nil {
 		t.Error("decodeBase64 accepted a non-base64 payload")
+	}
+	// The size check happens on the encoded length, before decoding.
+	if _, err := decodeBase64("aGVsbG8gcmFsbHk=", 4); err == nil {
+		t.Error("decodeBase64 accepted a payload past its limit")
 	}
 }
 
@@ -1003,34 +1018,44 @@ func TestInterfaces(t *testing.T) {
 	}
 }
 
-func TestListPagesBeyondTheFirstPage(t *testing.T) {
-	const total = 250
-	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
-		if collection(r) != "defect" {
-			serveFixture(t, w, base, "empty.json")
-			return
-		}
-		writeGeneratedDefects(t, w, r, total)
-	})
-	c := newClient(t, fs, Config{Types: []string{"Defect"}})
+// An unbounded List is not on offer: no Limit means defaultListLimit, and
+// an outsized Limit is cut to maxListLimit.
+func TestListLimitBounds(t *testing.T) {
+	tests := []struct {
+		name         string
+		limit        int
+		wantResults  int
+		wantPageSize string
+	}{
+		{"zero means the default", 0, defaultListLimit, strconv.Itoa(defaultListLimit)},
+		{"oversized is capped", 5000, maxListLimit, strconv.Itoa(maxListLimit)},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+				if collection(r) != "defect" {
+					serveFixture(t, w, base, "empty.json")
+					return
+				}
+				writeGeneratedDefects(t, w, r, 1000)
+			})
+			c := newClient(t, fs, Config{Types: []string{"Defect"}})
 
-	got, err := c.List(context.Background(), source.ListFilter{})
-	if err != nil {
-		t.Fatalf("List: %v", err)
-	}
-	if len(got) != total {
-		t.Fatalf("List returned %d tickets, want %d", len(got), total)
-	}
-	var starts, sizes []string
-	for _, q := range fs.queriesFor("defect") {
-		starts = append(starts, q.Get("start"))
-		sizes = append(sizes, q.Get("pagesize"))
-	}
-	if want := "1,201"; strings.Join(starts, ",") != want {
-		t.Errorf("start values = %v, want %s (1-based, advanced by the rows returned)", starts, want)
-	}
-	if want := "200,200"; strings.Join(sizes, ",") != want {
-		t.Errorf("pagesize values = %v, want %s (the WSAPI ceiling)", sizes, want)
+			got, err := c.List(context.Background(), source.ListFilter{Limit: tc.limit})
+			if err != nil {
+				t.Fatalf("List: %v", err)
+			}
+			if len(got) != tc.wantResults {
+				t.Errorf("List returned %d tickets, want %d", len(got), tc.wantResults)
+			}
+			qs := fs.queriesFor("defect")
+			if got := qs[0].Get("pagesize"); got != tc.wantPageSize {
+				t.Errorf("pagesize = %q, want %q", got, tc.wantPageSize)
+			}
+			if got := qs[0].Get("start"); got != "1" {
+				t.Errorf("start = %q, want 1 (WSAPI start is 1-based)", got)
+			}
+		})
 	}
 }
 
@@ -1066,5 +1091,179 @@ func TestWarningsAreKeyedPerTicketUnderConcurrency(t *testing.T) {
 		if got := warnings[id]; len(got) != 1 {
 			t.Errorf("ticket %s warnings = %v, want exactly 1", id, got)
 		}
+	}
+}
+
+// --- query-value validation ---
+
+// A value interpolated into query=(...) that carries a parenthesis, a
+// quote, a backslash or a control character cannot be made safe — WSAPI
+// documents no escape sequence inside a quoted literal — so it is refused
+// rather than silently rewritten.
+func TestQueryValuesAreRejectedNotStripped(t *testing.T) {
+	rejected := map[string]string{
+		"open paren":       `DE1234") OR (1 = 1`,
+		"close paren":      `ann)`,
+		"double quote":     `ann" OR "x`,
+		"backslash":        `ann\x`,
+		"newline":          "ann\nx",
+		"carriage return":  "ann\rx",
+		"null":             "ann\x00x",
+		"delete character": "ann\x7fx",
+	}
+	for name, value := range rejected {
+		t.Run(name, func(t *testing.T) {
+			if err := checkQueryValue("assignee", value); err == nil {
+				t.Fatalf("checkQueryValue(%q) accepted it, want a rejection", value)
+			} else if code := sourceCode(t, err); code != source.Internal {
+				t.Errorf("code = %q, want %q", code, source.Internal)
+			}
+		})
+	}
+	for _, ok := range []string{"ann@example.com", "Ann Agent", "https://rally.example.com/slm/webservice/v2.0/defect/1", "In-Progress"} {
+		if err := checkQueryValue("value", ok); err != nil {
+			t.Errorf("checkQueryValue(%q) = %v, want it accepted", ok, err)
+		}
+	}
+}
+
+func TestFormattedIDsAreValidated(t *testing.T) {
+	for _, ok := range []string{"DE1234", "US777", "F42", "de1234", "TC9", "ABCD123456789"} {
+		if err := checkFormattedID("ticket key", ok); err != nil {
+			t.Errorf("checkFormattedID(%q) = %v, want it accepted", ok, err)
+		}
+	}
+	for _, bad := range []string{"", "DE", "1234", `DE1234") OR (1 = 1`, "DE 1234", "TOOLONG1", "DE1234567890", "DE-12"} {
+		if err := checkFormattedID("ticket key", bad); err == nil {
+			t.Errorf("checkFormattedID(%q) accepted it, want a rejection", bad)
+		}
+	}
+}
+
+// A rejected value must never reach the wire.
+func TestGetRejectsAMalformedKeyBeforeCallingOut(t *testing.T) {
+	fs := newServer(t, artifactHandler)
+	c := newClient(t, fs, Config{})
+
+	_, err := c.Get(context.Background(), `DE1234") OR (FormattedID != "`)
+	if err == nil {
+		t.Fatal("Get accepted an injected key, want a rejection")
+	}
+	if code := sourceCode(t, err); code != source.Internal {
+		t.Errorf("code = %q, want %q", code, source.Internal)
+	}
+	if !strings.Contains(err.Error(), "invalid query value") {
+		t.Errorf("error = %v, want it to name the invalid value", err)
+	}
+	if n := len(fs.requests()); n != 0 {
+		t.Errorf("%d requests were made, want none", n)
+	}
+}
+
+func TestListRejectsMalformedFilters(t *testing.T) {
+	tests := map[string]source.ListFilter{
+		"assignee": {Assignee: `ann") OR (1 = 1`},
+		"status":   {Status: `Open") OR (1 = 1`},
+		"parent":   {Parent: `US1") OR (1 = 1`},
+	}
+	for name, filter := range tests {
+		t.Run(name, func(t *testing.T) {
+			fs := newServer(t, artifactHandler)
+			c := newClient(t, fs, Config{})
+
+			if _, err := c.List(context.Background(), filter); err == nil {
+				t.Fatal("List accepted an injected filter, want a rejection")
+			} else if code := sourceCode(t, err); code != source.Internal {
+				t.Errorf("code = %q, want %q", code, source.Internal)
+			}
+			for _, u := range fs.requests() {
+				if q := u.Query().Get("query"); strings.Contains(q, "1 = 1") {
+					t.Errorf("an injected clause reached the wire: %q", q)
+				}
+			}
+		})
+	}
+}
+
+// --- body ceilings ---
+
+func TestReadLimitedFailsClosed(t *testing.T) {
+	got, err := readLimited(strings.NewReader("hello"), 16)
+	if err != nil {
+		t.Fatalf("readLimited: %v", err)
+	}
+	if string(got) != "hello" {
+		t.Errorf("readLimited = %q, want the whole body", got)
+	}
+	if _, err := readLimited(strings.NewReader("hello"), 4); err == nil {
+		t.Error("readLimited accepted a body past its limit, want an error")
+	}
+	// A body exactly at the limit is not over it.
+	if _, err := readLimited(strings.NewReader("hello"), 5); err != nil {
+		t.Errorf("readLimited at exactly the limit = %v, want no error", err)
+	}
+}
+
+func TestOversizedJSONResponseIsRefused(t *testing.T) {
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		// A well-formed envelope whose padding pushes it past the
+		// JSON ceiling: it must not be decoded as a short result.
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"QueryResult":{"Errors":[],"Warnings":[],"TotalResultCount":1,"Results":[{"FormattedID":"DE1234","Name":"%s"}]}}`,
+			strings.Repeat("x", maxJSONBody+1024))
+	})
+	c := newClient(t, fs, Config{})
+
+	_, err := c.Get(context.Background(), "DE1234")
+	if err == nil {
+		t.Fatal("Get accepted an oversized body, want an error")
+	}
+	if code := sourceCode(t, err); code != source.Internal {
+		t.Errorf("code = %q, want %q", code, source.Internal)
+	}
+	if !strings.Contains(err.Error(), "limit") {
+		t.Errorf("error = %v, want it to name the limit", err)
+	}
+}
+
+func TestOversizedAttachmentContentIsRefused(t *testing.T) {
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		coll := collection(r)
+		switch {
+		case coll == "attachment":
+			serveFixture(t, w, base, "attachments.json")
+		case strings.HasPrefix(coll, "attachmentcontent/"):
+			// Base64 well past what a 50 MB attachment can encode
+			// to would exceed the decoded ceiling; the encoded
+			// length is what gets checked, before any allocation.
+			fmt.Fprintf(w, `{"AttachmentContent":{"Content":"%s"}}`, strings.Repeat("QQ==", 1))
+		default:
+			artifactHandler(t, w, r, base)
+		}
+	})
+	c := newClient(t, fs, Config{})
+
+	// Sanity: the small payload still works, so the ceiling below is the
+	// only thing the oversized case trips.
+	if _, err := c.Helpdesk().Attachments(context.Background(), "DE1234", filepath.Join(t.TempDir(), "a")); err != nil {
+		t.Fatalf("Attachments with a small payload: %v", err)
+	}
+
+	// The AttachmentContent request reads under its own, larger ceiling,
+	// and that read fails closed the same way — exercised here with a
+	// small limit rather than a 64 MiB fixture.
+	var out attachmentContentResult
+	err := c.getLimited(context.Background(), fs.URL+wsPrefix+"attachmentcontent/55501", 8, &out)
+	if err == nil {
+		t.Fatal("getLimited accepted a body past its limit, want an error")
+	}
+	if code := sourceCode(t, err); code != source.Internal {
+		t.Errorf("code = %q, want %q", code, source.Internal)
+	}
+	if !strings.Contains(err.Error(), "limit") {
+		t.Errorf("error = %v, want it to name the limit", err)
+	}
+	if maxAttachmentBody <= maxAttachmentBytes {
+		t.Errorf("maxAttachmentBody (%d) must exceed the decoded ceiling (%d) to allow for base64 inflation", maxAttachmentBody, maxAttachmentBytes)
 	}
 }

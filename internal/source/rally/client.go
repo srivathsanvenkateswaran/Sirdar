@@ -38,6 +38,29 @@ const maxPageSize = 200
 // call gives up and reports source.RateLimited to the caller.
 const maxRetryAfter = 30 * time.Second
 
+// List bounds. A caller that asks for no limit gets defaultListLimit, and
+// nobody gets more than maxListLimit: an unbounded sweep of a Rally
+// subscription is a way to hang a triage run, not a useful default.
+const (
+	defaultListLimit = 100
+	maxListLimit     = 200
+)
+
+// Response body ceilings. Both are enforced with io.LimitReader and fail
+// closed, so a truncated body is never decoded as if it were complete.
+const (
+	// maxJSONBody bounds an ordinary WSAPI JSON response. Rally caps
+	// Description and Notes at 32KB and a page at 200 rows, so 8 MiB is
+	// far above anything legitimate.
+	maxJSONBody = 8 << 20
+	// maxAttachmentBody bounds an AttachmentContent response, which
+	// carries the file base64-encoded: Rally's ~50 MB attachment
+	// ceiling plus base64's ~33% inflation fits inside 64 MiB.
+	maxAttachmentBody = 64 << 20
+	// maxAttachmentBytes bounds the decoded file.
+	maxAttachmentBytes = 50 << 20
+)
+
 // defaultTypes are the artifact types Get and List sweep when Config.Types
 // is empty: the two that carry the work Sirdar triages.
 var defaultTypes = []string{"Defect", "HierarchicalRequirement"}
@@ -200,7 +223,13 @@ func (c *Client) refURL(ref string) (string, error) {
 // JSON body into out. Non-2xx responses map to a *source.Error; a 429 is
 // retried once after honouring a Retry-After of at most maxRetryAfter.
 func (c *Client) get(ctx context.Context, rawURL string, out any) error {
-	body, err := c.getRaw(ctx, rawURL)
+	return c.getLimited(ctx, rawURL, maxJSONBody, out)
+}
+
+// getLimited is get with an explicit body ceiling, for the one response
+// (AttachmentContent) that is legitimately larger than a JSON record.
+func (c *Client) getLimited(ctx context.Context, rawURL string, limit int64, out any) error {
+	body, err := c.getRaw(ctx, rawURL, limit)
 	if err != nil {
 		return err
 	}
@@ -213,8 +242,8 @@ func (c *Client) get(ctx context.Context, rawURL string, out any) error {
 	return nil
 }
 
-func (c *Client) getRaw(ctx context.Context, rawURL string) ([]byte, error) {
-	body, status, retryAfter, err := c.do(ctx, rawURL)
+func (c *Client) getRaw(ctx context.Context, rawURL string, limit int64) ([]byte, error) {
+	body, status, retryAfter, err := c.do(ctx, rawURL, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -229,7 +258,7 @@ func (c *Client) getRaw(ctx context.Context, rawURL string) ([]byte, error) {
 		if err := sleepCtx(ctx, wait); err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: %v", logPath(rawURL), err)}
 		}
-		body, status, _, err = c.do(ctx, rawURL)
+		body, status, _, err = c.do(ctx, rawURL, limit)
 		if err != nil {
 			return nil, err
 		}
@@ -242,7 +271,7 @@ func (c *Client) getRaw(ctx context.Context, rawURL string) ([]byte, error) {
 
 // do performs one request, returning the body, status and parsed
 // Retry-After. Transport-level failures come back as a *source.Error.
-func (c *Client) do(ctx context.Context, rawURL string) ([]byte, int, time.Duration, error) {
+func (c *Client) do(ctx context.Context, rawURL string, limit int64) ([]byte, int, time.Duration, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: %v", logPath(rawURL), err)}
@@ -255,11 +284,25 @@ func (c *Client) do(ctx context.Context, rawURL string) ([]byte, int, time.Durat
 	}
 	defer resp.Body.Close()
 
-	body, readErr := io.ReadAll(resp.Body)
+	body, readErr := readLimited(resp.Body, limit)
 	if readErr != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: read body: %v", logPath(rawURL), readErr)}
 	}
 	return body, resp.StatusCode, parseRetryAfter(resp.Header.Get("Retry-After")), nil
+}
+
+// readLimited reads at most limit bytes and fails when the reader had more
+// to give, rather than returning a body that would decode as a short but
+// well-formed result.
+func readLimited(r io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return body, err
+	}
+	if int64(len(body)) > limit {
+		return body[:limit], fmt.Errorf("response exceeds the %d byte limit", limit)
+	}
+	return body, nil
 }
 
 // setHeaders applies the API key. Rally authenticates WSAPI requests with

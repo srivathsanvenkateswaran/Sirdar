@@ -80,9 +80,14 @@ func (c *Client) collect(ctx context.Context, path, query, fetch, order string, 
 	return all, nil
 }
 
-// artifactClause filters a collection by its owning artifact's _ref.
-func artifactClause(ref string) string {
-	return `(Artifact = "` + escapeQueryValue(ref) + `")`
+// artifactClause filters a collection by its owning artifact's _ref. The
+// ref comes back from WSAPI rather than from a caller, but it is checked
+// on the same terms as any other interpolated value.
+func artifactClause(ref string) (string, error) {
+	if err := checkQueryValue("artifact ref", ref); err != nil {
+		return "", err
+	}
+	return `(Artifact = "` + ref + `")`, nil
 }
 
 // --- Discussion ---
@@ -109,7 +114,11 @@ func (h helpdeskView) Threads(ctx context.Context, id string) (ticket.Thread, er
 	if err != nil {
 		return nil, err
 	}
-	raws, err := c.collect(ctx, "conversationpost", artifactClause(art.a.Ref), "Text,User,CreationDate", "CreationDate ASC", &w)
+	clause, err := artifactClause(art.a.Ref)
+	if err != nil {
+		return nil, err
+	}
+	raws, err := c.collect(ctx, "conversationpost", clause, "Text,User,CreationDate", "CreationDate ASC", &w)
 	if err != nil {
 		return nil, err
 	}
@@ -181,7 +190,11 @@ func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket
 	if err != nil {
 		return nil, err
 	}
-	raws, err := c.collect(ctx, "attachment", artifactClause(art.a.Ref), "Name,ContentType,Size,Content", "", &w)
+	clause, err := artifactClause(art.a.Ref)
+	if err != nil {
+		return nil, err
+	}
+	raws, err := c.collect(ctx, "attachment", clause, "Name,ContentType,Size,Content", "", &w)
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +276,7 @@ func (c *Client) attachmentContent(ctx context.Context, a rallyAttachment) ([]by
 	u.RawQuery = q.Encode()
 
 	var res attachmentContentResult
-	if err := c.get(ctx, u.String(), &res); err != nil {
+	if err := c.getLimited(ctx, u.String(), maxAttachmentBody, &res); err != nil {
 		return nil, err
 	}
 	content := ""
@@ -281,18 +294,24 @@ func (c *Client) attachmentContent(ctx context.Context, a rallyAttachment) ([]by
 	if content == "" {
 		return nil, errors.New("AttachmentContent carried no Content")
 	}
-	return decodeBase64(content)
+	return decodeBase64(content, maxAttachmentBytes)
 }
 
 // decodeBase64 decodes a WSAPI Content field, tolerating the line breaks
-// and padding-free variants seen in the wild.
-func decodeBase64(s string) ([]byte, error) {
+// and padding-free variants seen in the wild. It refuses a payload whose
+// decoded size would exceed max, so a hostile or corrupt Content field
+// cannot turn one attachment into an out-of-memory failure — the check is
+// on the encoded length, before any allocation.
+func decodeBase64(s string, max int64) ([]byte, error) {
 	clean := strings.Map(func(r rune) rune {
 		if unicode.IsSpace(r) {
 			return -1
 		}
 		return r
 	}, s)
+	if int64(base64.StdEncoding.DecodedLen(len(clean))) > max {
+		return nil, fmt.Errorf("content decodes to more than the %d byte limit", max)
+	}
 	if b, err := base64.StdEncoding.DecodeString(clean); err == nil {
 		return b, nil
 	}

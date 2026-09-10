@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -214,16 +215,46 @@ func decodeArtifact(raw json.RawMessage, t artifactType) (found, error) {
 	return f, nil
 }
 
-// formattedIDQuery builds the equality filter for a human key.
-func formattedIDQuery(key string) string {
-	return `(FormattedID = "` + escapeQueryValue(key) + `")`
+// formattedIDRe is the shape of a Rally FormattedID: a short type prefix
+// followed by digits, e.g. DE1234, US777, F42. Anything else is not a key
+// this adapter will put in a query.
+var formattedIDRe = regexp.MustCompile(`^[A-Za-z]{1,4}[0-9]{1,9}$`)
+
+// checkFormattedID rejects a key that is not shaped like a FormattedID,
+// which is both a typo guard and the tightest possible bound on what can
+// reach a query expression.
+func checkFormattedID(what, key string) error {
+	if !formattedIDRe.MatchString(strings.TrimSpace(key)) {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: invalid query value: %s is not a FormattedID", what)}
+	}
+	return nil
 }
 
-// escapeQueryValue strips the characters that would break out of a quoted
-// WSAPI query literal. Rally documents no escape sequence for a double
-// quote inside a quoted value, so they are removed rather than encoded.
-func escapeQueryValue(v string) string {
-	return strings.NewReplacer(`"`, "", `\`, "", "\n", " ", "\r", " ").Replace(v)
+// checkQueryValue rejects any value that could break out of the quoted
+// literal it is interpolated into. WSAPI documents no escape sequence
+// inside a quoted value and its query grammar is parenthesised, so a value
+// carrying a parenthesis, a quote, a backslash or a control character
+// cannot be made safe — it is refused rather than silently rewritten into
+// something the operator did not ask for.
+func checkQueryValue(what, v string) error {
+	for _, r := range v {
+		switch {
+		case r == '(' || r == ')' || r == '"' || r == '\\':
+			return &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: invalid query value: %s contains %q", what, r)}
+		case r < 0x20 || r == 0x7f:
+			return &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: invalid query value: %s contains a control character", what)}
+		}
+	}
+	return nil
+}
+
+// formattedIDQuery builds the equality filter for a human key.
+func formattedIDQuery(key string) (string, error) {
+	key = strings.TrimSpace(key)
+	if err := checkFormattedID("ticket key", key); err != nil {
+		return "", err
+	}
+	return `(FormattedID = "` + key + `")`, nil
 }
 
 // find locates one artifact by FormattedID, trying the prefix-suggested
@@ -234,11 +265,14 @@ func (c *Client) find(ctx context.Context, key string, w *warnBuf) (found, error
 	if key == "" {
 		return found{}, &source.Error{Code: source.NotFound, Message: "rally: empty ticket key"}
 	}
-	q := formattedIDQuery(key)
+	q, err := formattedIDQuery(key)
+	if err != nil {
+		return found{}, err
+	}
 	for _, t := range c.candidateTypes(key) {
-		res, err := c.runQuery(ctx, t, queryOpts{Query: q, PageSize: 1}, w)
-		if err != nil {
-			return found{}, err
+		res, qerr := c.runQuery(ctx, t, queryOpts{Query: q, PageSize: 1}, w)
+		if qerr != nil {
+			return found{}, qerr
 		}
 		if len(res.Results) == 0 {
 			continue
@@ -292,7 +326,7 @@ func parentField(t artifactType, parentKey string) string {
 
 // listQuery composes the filter clauses for one type, ANDed together.
 // An empty Status means "open-ish": everything not Closed.
-func (c *Client) listQuery(t artifactType, f source.ListFilter, userName string) string {
+func (c *Client) listQuery(t artifactType, f source.ListFilter, userName string) (string, error) {
 	var clauses []string
 	if a := strings.TrimSpace(f.Assignee); a != "" {
 		name := a
@@ -300,23 +334,40 @@ func (c *Client) listQuery(t artifactType, f source.ListFilter, userName string)
 			name = userName
 		}
 		if name != "" {
-			clauses = append(clauses, `(Owner.UserName = "`+escapeQueryValue(name)+`")`)
+			if err := checkQueryValue("assignee", name); err != nil {
+				return "", err
+			}
+			clauses = append(clauses, `(Owner.UserName = "`+name+`")`)
 		}
 	}
 	field := statusField(t)
 	if s := strings.TrimSpace(f.Status); s != "" {
-		clauses = append(clauses, `(`+field+` = "`+escapeQueryValue(s)+`")`)
+		if err := checkQueryValue("status", s); err != nil {
+			return "", err
+		}
+		clauses = append(clauses, `(`+field+` = "`+s+`")`)
 	} else {
-		// Open-ish default. Note that stock ScheduleState has no
-		// "Closed" value, so for story-shaped types this excludes
-		// nothing unless the subscription defines one; a caller that
-		// needs a narrower default sets Status explicitly.
-		clauses = append(clauses, `(`+field+` != "Closed")`)
+		clauses = append(clauses, `(`+field+` != "`+openishExclusion(field)+`")`)
 	}
 	if p := strings.TrimSpace(f.Parent); p != "" {
-		clauses = append(clauses, `(`+parentField(t, p)+`.FormattedID = "`+escapeQueryValue(p)+`")`)
+		if err := checkFormattedID("parent", p); err != nil {
+			return "", err
+		}
+		clauses = append(clauses, `(`+parentField(t, p)+`.FormattedID = "`+p+`")`)
 	}
-	return andClauses(clauses)
+	return andClauses(clauses), nil
+}
+
+// openishExclusion is the state an unfiltered List excludes. Defect-shaped
+// types close out through State = "Closed"; story-shaped types have no
+// Closed value in stock Rally and finish at ScheduleState = "Accepted", so
+// the default has to name a different terminal state per field to mean the
+// same thing.
+func openishExclusion(field string) string {
+	if field == "State" {
+		return "Closed"
+	}
+	return "Accepted"
 }
 
 // andClauses joins WSAPI clauses with AND. Rally's parser is strictly
@@ -337,7 +388,14 @@ func andClauses(clauses []string) string {
 
 // List returns artifacts matching f across every configured type, newest
 // updated first. Results from each type are merged and re-sorted, then
-// truncated to Limit.
+// truncated to the effective limit: f.Limit, or defaultListLimit when it is
+// zero, capped at maxListLimit either way.
+//
+// Warnings from a List are call-scoped, not per-ticket: the problems it can
+// record (a WSAPI warning attached to the query, a row that would not
+// decode) qualify every ticket the call returned, so the same set is filed
+// under every returned key and each is consumed independently by
+// WarningsFor.
 func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
 	userName := ""
 	if strings.EqualFold(strings.TrimSpace(f.Assignee), "me") {
@@ -348,10 +406,18 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		userName = u.UserName
 	}
 
+	limit := f.Limit
+	if limit <= 0 {
+		limit = defaultListLimit
+	}
+	if limit > maxListLimit {
+		limit = maxListLimit
+	}
+
 	var w warnBuf
 	var out []ticket.TrackerTicket
 	for _, t := range c.configuredTypes() {
-		items, err := c.listType(ctx, t, f, userName, &w)
+		items, err := c.listType(ctx, t, f, userName, limit, &w)
 		if err != nil {
 			return nil, err
 		}
@@ -359,13 +425,11 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	}
 
 	sort.SliceStable(out, func(i, j int) bool { return out[i].UpdatedAt.After(out[j].UpdatedAt) })
-	if f.Limit > 0 && len(out) > f.Limit {
-		out = out[:f.Limit]
+	if len(out) > limit {
+		out = out[:limit]
 	}
-	// A List call has no single ticket to key its warnings by, and the
-	// problems it does record (a WSAPI warning on the query, a row that
-	// would not decode) qualify every ticket the call returned — so each
-	// returned key carries them.
+	// A List call has no single ticket to key its warnings by, so each
+	// returned key carries the call's warnings; see the doc comment.
 	for _, item := range out {
 		c.putWarnings(item.Key, w.msgs)
 	}
@@ -374,11 +438,14 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 
 // listType pages one collection until Limit is reached or the collection is
 // exhausted.
-func (c *Client) listType(ctx context.Context, t artifactType, f source.ListFilter, userName string, w *warnBuf) ([]ticket.TrackerTicket, error) {
-	q := c.listQuery(t, f, userName)
+func (c *Client) listType(ctx context.Context, t artifactType, f source.ListFilter, userName string, limit int, w *warnBuf) ([]ticket.TrackerTicket, error) {
+	q, err := c.listQuery(t, f, userName)
+	if err != nil {
+		return nil, err
+	}
 	pageSize := maxPageSize
-	if f.Limit > 0 && f.Limit < pageSize {
-		pageSize = f.Limit
+	if limit > 0 && limit < pageSize {
+		pageSize = limit
 	}
 
 	var out []ticket.TrackerTicket
@@ -404,7 +471,7 @@ func (c *Client) listType(ctx context.Context, t artifactType, f source.ListFilt
 				continue
 			}
 			out = append(out, c.toTracker(item))
-			if f.Limit > 0 && len(out) >= f.Limit {
+			if len(out) >= limit {
 				return out, nil
 			}
 		}
