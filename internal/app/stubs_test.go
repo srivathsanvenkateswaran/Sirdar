@@ -166,6 +166,20 @@ func (s *stubSession) finish() { s.finishOnce.Do(func() { close(s.events) }) }
 
 type stubProvider struct {
 	script func(spec provider.SessionSpec, s *stubSession)
+
+	mu       sync.Mutex
+	sessions []*stubSession
+}
+
+// session returns the i-th session this provider started.
+func (p *stubProvider) session(t *testing.T, i int) *stubSession {
+	t.Helper()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if i >= len(p.sessions) {
+		t.Fatalf("session %d of %d was never started", i, len(p.sessions))
+	}
+	return p.sessions[i]
 }
 
 func (p *stubProvider) Name() string { return "claude" }
@@ -179,6 +193,10 @@ func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (pr
 		handle:    "handle-abc",
 	}
 	s.result.Handle = s.handle
+	p.mu.Lock()
+	p.sessions = append(p.sessions, s)
+	p.mu.Unlock()
+
 	go p.script(spec, s)
 	return s, nil
 }
@@ -210,4 +228,14 @@ func block(started chan struct{}) func(provider.SessionSpec, *stubSession) {
 
 func finalEvent(doc string) provider.Event {
 	return provider.Event{Kind: provider.EvFinal, Final: json.RawMessage(doc), Raw: json.RawMessage(`{"type":"result"}`)}
+}
+
+// cancelled reports whether the runner has cancelled this session.
+func (s *stubSession) wasCancelled() bool {
+	select {
+	case <-s.cancelled:
+		return true
+	default:
+		return false
+	}
 }

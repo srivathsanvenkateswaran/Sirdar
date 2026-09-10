@@ -9,7 +9,10 @@ package app
 
 import (
 	"encoding/json"
+	"errors"
+	"fmt"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -264,4 +267,51 @@ func RegisterRowOf(r store.RegisterRow) RegisterRow {
 		TriageVerdict:  r.TriageVerdict,
 		NotePath:       r.NotePath,
 	}
+}
+
+// --- identifiers ------------------------------------------------------
+
+// ErrInvalidArgument marks an identifier this package refuses to look up.
+// Ids reach the service straight from an HTTP route or query string, where
+// ServeMux has already unescaped each segment: `..%2F..` arrives as `../..`
+// and `%2A` as `*`. Both would otherwise reach filepath.Join and
+// filepath.Glob inside internal/store, so they are rejected here rather
+// than sanitised deeper down.
+//
+// Every invalid id is also reported as the matching "no such thing"
+// sentinel, so the HTTP layer answers 404 — an id that cannot name
+// anything names nothing — without needing to know about this error.
+var ErrInvalidArgument = errors.New("app: invalid identifier")
+
+// idRejects are the characters that make an id something other than one
+// plain path element: separators, and the glob metacharacters
+// filepath.Glob would act on.
+const idRejects = `/\*?[`
+
+// validateID rejects an identifier that could escape the run tree or turn
+// a lookup into a pattern match.
+func validateID(s string) error {
+	switch {
+	case s == "":
+		return fmt.Errorf("%w: empty", ErrInvalidArgument)
+	case s == "." || s == "..":
+		return fmt.Errorf("%w: %q is a directory reference", ErrInvalidArgument, s)
+	case strings.ContainsAny(s, idRejects):
+		return fmt.Errorf("%w: %q contains a path separator or a glob character", ErrInvalidArgument, s)
+	}
+	for _, r := range s {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("%w: %q contains a control character", ErrInvalidArgument, s)
+		}
+	}
+	return nil
+}
+
+// checkID validates one identifier and, when it fails, reports it as both
+// invalid and unknown to whichever sentinel names that kind of id.
+func checkID(unknown error, what, value string) error {
+	if err := validateID(value); err != nil {
+		return fmt.Errorf("%w: %s %q: %w", unknown, what, value, ErrInvalidArgument)
+	}
+	return nil
 }

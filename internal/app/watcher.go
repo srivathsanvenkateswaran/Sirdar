@@ -205,8 +205,12 @@ func (w *Watcher) tail(r *watchedRun) {
 	if err != nil {
 		return
 	}
-	if fi.Size() < r.offset { // the log was replaced; start over
-		r.offset, r.index = 0, 0
+	if fi.Size() < r.offset {
+		// The log was truncated or replaced, so read it from the top
+		// again. The index keeps counting: it is the sequence number of
+		// the events this subscriber has been sent, and rewinding it
+		// would make the UI treat new events as ones it already has.
+		r.offset = 0
 	}
 	if fi.Size() == r.offset {
 		return

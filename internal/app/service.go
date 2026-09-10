@@ -66,7 +66,14 @@ type Service struct {
 	nextSub int
 	jobs    map[JobID]context.CancelFunc
 	nextJob int
+
+	// running counts the job goroutines Stop waits for.
+	running sync.WaitGroup
 }
+
+// stopTimeout is how long Stop waits for the jobs it cancelled to end
+// before giving up on them and shutting the watcher down anyway.
+const stopTimeout = 10 * time.Second
 
 // New returns a Service over reg. Nothing is watched until Start is called.
 func New(reg *Registry, build DepsBuilder, opts Options) *Service {
@@ -93,8 +100,34 @@ func (s *Service) Start(ctx context.Context) {
 	s.watcher.Start(ctx)
 }
 
-// Stop halts the watcher and waits for it to finish.
-func (s *Service) Stop() { s.watcher.Stop() }
+// Stop cancels every job this process started, waits for their agent
+// sessions to end, and then halts the watcher. A shell that exits without
+// calling it leaves the provider subprocesses behind.
+func (s *Service) Stop() {
+	s.mu.Lock()
+	cancels := make([]context.CancelFunc, 0, len(s.jobs))
+	for _, cancel := range s.jobs {
+		cancels = append(cancels, cancel)
+	}
+	s.mu.Unlock()
+	for _, cancel := range cancels {
+		cancel()
+	}
+
+	finished := make(chan struct{})
+	go func() {
+		s.running.Wait()
+		close(finished)
+	}()
+	select {
+	case <-finished:
+	case <-time.After(stopTimeout):
+		// A run that will not end in ten seconds is not worth holding
+		// the shutdown for; its state.json already says it was blocked.
+	}
+
+	s.watcher.Stop()
+}
 
 func (s *Service) now() time.Time {
 	if s.opts.Now != nil {
@@ -196,10 +229,18 @@ func (s *Service) AddWorkspace(root string) (Workspace, error) { return s.reg.Ad
 
 // RemoveWorkspace drops a workspace from the registry. Nothing on disk is
 // touched.
-func (s *Service) RemoveWorkspace(id string) error { return s.reg.Remove(id) }
+func (s *Service) RemoveWorkspace(id string) error {
+	if err := checkID(ErrNoSuchWorkspace, "workspace", id); err != nil {
+		return err
+	}
+	return s.reg.Remove(id)
+}
 
 // load resolves a workspace id to its registration and its configuration.
 func (s *Service) load(wsID string) (Workspace, *config.Config, error) {
+	if err := checkID(ErrNoSuchWorkspace, "workspace", wsID); err != nil {
+		return Workspace{}, nil, err
+	}
 	ws, err := s.reg.Find(wsID)
 	if err != nil {
 		return Workspace{}, nil, err
@@ -213,6 +254,9 @@ func (s *Service) load(wsID string) (Workspace, *config.Config, error) {
 
 // root resolves a workspace id to its root directory.
 func (s *Service) root(wsID string) (string, error) {
+	if err := checkID(ErrNoSuchWorkspace, "workspace", wsID); err != nil {
+		return "", err
+	}
 	ws, err := s.reg.Find(wsID)
 	if err != nil {
 		return "", err
@@ -227,6 +271,12 @@ func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
 	root, err := s.root(wsID)
 	if err != nil {
 		return nil, err
+	}
+	// An empty key means every key, which is not a lookup and not a path.
+	if key != "" {
+		if err := checkID(ErrNoSuchRun, "key", key); err != nil {
+			return nil, err
+		}
 	}
 	states, err := store.List(root, key)
 	if err != nil {
@@ -245,6 +295,9 @@ func (s *Service) Run(wsID, runID string) (RunDetail, error) {
 	if err != nil {
 		return RunDetail{}, err
 	}
+	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
+		return RunDetail{}, err
+	}
 	_, state, err := store.Open(root, runID)
 	if err != nil {
 		return RunDetail{}, fmt.Errorf("%w: %s", ErrNoSuchRun, runID)
@@ -258,6 +311,9 @@ func (s *Service) Run(wsID, runID string) (RunDetail, error) {
 func (s *Service) Events(wsID, runID string, after int) ([]RunEvent, int, error) {
 	root, err := s.root(wsID)
 	if err != nil {
+		return nil, after, err
+	}
+	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return nil, after, err
 	}
 	rn, _, err := store.Open(root, runID)
@@ -295,42 +351,78 @@ func (s *Service) Events(wsID, runID string, after int) ([]RunEvent, int, error)
 	return out, index, nil
 }
 
-// noteFile maps a note kind to the file the run wrote it to.
-func noteFile(kind string) (string, error) {
+// noteFile maps a note kind to the file the run wrote it to. A triage run
+// holds only a triage note and an rca run only the rca pair, so asking a
+// run for a note it never wrote is an error rather than the other note:
+// note.md means something different in each.
+func noteFile(kind string, runKind store.Kind) (string, error) {
 	switch kind {
-	case "triage", "rca", "":
+	case "": // whichever primary note this run's own kind produced
+		return "note.md", nil
+	case "triage":
+		if runKind != store.KindTriage {
+			return "", noteKindMismatch(kind, runKind)
+		}
+		return "note.md", nil
+	case "rca":
+		if runKind != store.KindRCA {
+			return "", noteKindMismatch(kind, runKind)
+		}
 		return "note.md", nil
 	case "resolution":
+		if runKind != store.KindRCA {
+			return "", noteKindMismatch(kind, runKind)
+		}
 		return "note-resolution.md", nil
 	default:
-		return "", fmt.Errorf("app: unknown note kind %q", kind)
+		return "", fmt.Errorf("%w: note kind %q: %w", ErrNoSuchRun, kind, ErrInvalidArgument)
 	}
+}
+
+func noteKindMismatch(kind string, runKind store.Kind) error {
+	return fmt.Errorf("%w: a %s run has no %s note", ErrNoSuchRun, runKind, kind)
 }
 
 // Note returns the markdown of one of a run's notes.
 func (s *Service) Note(wsID, runID, kind string) (string, error) {
-	name, err := noteFile(kind)
+	rn, state, err := s.openRun(wsID, runID)
 	if err != nil {
 		return "", err
 	}
-	return s.runFile(wsID, runID, name)
+	name, err := noteFile(kind, state.Kind)
+	if err != nil {
+		return "", err
+	}
+	return readRunFile(rn.Dir, name)
 }
 
 // Prompt returns the prompt the run sent the agent.
 func (s *Service) Prompt(wsID, runID string) (string, error) {
-	return s.runFile(wsID, runID, "prompt.md")
-}
-
-func (s *Service) runFile(wsID, runID, name string) (string, error) {
-	root, err := s.root(wsID)
+	rn, _, err := s.openRun(wsID, runID)
 	if err != nil {
 		return "", err
 	}
-	rn, _, err := store.Open(root, runID)
+	return readRunFile(rn.Dir, "prompt.md")
+}
+
+// openRun resolves a workspace and run id to the run on disk.
+func (s *Service) openRun(wsID, runID string) (store.Run, store.State, error) {
+	root, err := s.root(wsID)
 	if err != nil {
-		return "", fmt.Errorf("%w: %s", ErrNoSuchRun, runID)
+		return store.Run{}, store.State{}, err
 	}
-	data, err := os.ReadFile(filepath.Join(rn.Dir, name))
+	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
+		return store.Run{}, store.State{}, err
+	}
+	rn, state, err := store.Open(root, runID)
+	if err != nil {
+		return store.Run{}, store.State{}, fmt.Errorf("%w: %s", ErrNoSuchRun, runID)
+	}
+	return rn, state, nil
+}
+
+func readRunFile(dir, name string) (string, error) {
+	data, err := os.ReadFile(filepath.Join(dir, name))
 	if err != nil {
 		return "", fmt.Errorf("app: read %s: %w", name, err)
 	}
@@ -427,7 +519,12 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 // that can cancel it. The runs themselves surface through the watcher.
 func (s *Service) StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error) {
 	if len(keys) == 0 {
-		return "", fmt.Errorf("app: no keys to triage")
+		return "", fmt.Errorf("%w: no keys to triage", ErrInvalidArgument)
+	}
+	for _, key := range keys {
+		if err := checkID(ErrNoSuchRun, "key", key); err != nil {
+			return "", err
+		}
 	}
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		r := &runner.Runner{Deps: deps}
@@ -445,8 +542,8 @@ func (s *Service) StartTriage(ctx context.Context, wsID string, keys []string, o
 
 // StartRCA produces the RCA note and resolution draft for one key.
 func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) (JobID, error) {
-	if key == "" {
-		return "", fmt.Errorf("app: no key to review")
+	if err := checkID(ErrNoSuchRun, "key", key); err != nil {
+		return "", err
 	}
 	return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		r := &runner.Runner{Deps: deps}
@@ -454,8 +551,11 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 			PRURL:      o.PRURL,
 			Resolution: o.Resolution,
 		})
-		if err != nil && out.State.RunID == "" {
-			return s.failed([]string{key}, err)
+		if err != nil {
+			s.log(err)
+			if out.State.RunID == "" {
+				return s.failed([]string{key}, nil)
+			}
 		}
 		return outcomesOf([]runner.Outcome{out})
 	}, func(err error) []JobOutcome { return s.failed([]string{key}, err) })
@@ -464,8 +564,8 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 // Resume continues a blocked run, answering the agent's question with
 // answer when it asked one.
 func (s *Service) Resume(ctx context.Context, wsID, runID, answer string) (JobID, error) {
-	if runID == "" {
-		return "", fmt.Errorf("app: no run to resume")
+	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
+		return "", err
 	}
 	return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		// The runner reads the operator's answer from Stdin; a desktop
@@ -473,8 +573,11 @@ func (s *Service) Resume(ctx context.Context, wsID, runID, answer string) (JobID
 		deps.Stdin = strings.NewReader(answer + "\n")
 		r := &runner.Runner{Deps: deps}
 		out, err := r.Resume(jctx, runID)
-		if err != nil && out.State.RunID == "" {
-			return s.failed([]string{out.Key}, err)
+		if err != nil {
+			s.log(err)
+			if out.State.RunID == "" {
+				return []JobOutcome{{Key: out.Key, Status: string(store.StatusFailed), RunID: runID}}
+			}
 		}
 		return outcomesOf([]runner.Outcome{out})
 	}, func(err error) []JobOutcome {
@@ -501,9 +604,10 @@ func (s *Service) start(
 	jctx, cancel := context.WithCancel(context.WithoutCancel(ctx))
 	id := s.addJob(cancel)
 
+	s.running.Add(1)
 	go func() {
+		defer s.running.Done()
 		defer cancel()
-		defer s.dropJob(id)
 
 		var outcomes []JobOutcome
 		deps, cleanup, err := s.build(cfg, providerName, model, Synced(s.stderr()))
@@ -513,6 +617,11 @@ func (s *Service) start(
 		if err != nil {
 			outcomes = onBuildError(err)
 		} else {
+			// A job started from a UI has no terminal behind it, so it
+			// must never inherit the process's stdin: a runner that
+			// asked for an answer would hang on it. Resume, the one
+			// flow with an answer, supplies its own reader.
+			deps.Stdin = strings.NewReader("")
 			outcomes = work(jctx, deps)
 		}
 
