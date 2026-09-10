@@ -1417,6 +1417,7 @@ func TestFinalEndsTheSessionDeterministically(t *testing.T) {
 		<-s.cancelled // the CLI stays alive after its result line
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
 
 	start := time.Now()
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -1429,8 +1430,8 @@ func TestFinalEndsTheSessionDeterministically(t *testing.T) {
 	if out.State.Status != store.StatusCompleted {
 		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
 	}
-	if elapsed > closeGrace+10*time.Second {
-		t.Fatalf("the run took %s; a session that will not exit must be cancelled %s after the note", elapsed, closeGrace)
+	if elapsed > 2*time.Second {
+		t.Fatalf("the run took %s; a session that will not exit must be cancelled %s after the note", elapsed, r.CloseGrace)
 	}
 	if got := p.session(0).inputCloseCount(); got == 0 {
 		t.Fatal("the session's input was never closed")
@@ -1607,5 +1608,83 @@ func TestSessionSpecCarriesMCPPolicy(t *testing.T) {
 	}
 	if d := spec.Policy.Decide("mcp__grafana__create_incident", nil); d.Allow {
 		t.Error("a write-shaped MCP tool reached the session as allowed")
+	}
+}
+
+// TestASecondFinalIsIgnored is R5: a provider that repeats its result line
+// — a resumed session replaying it, a CLI that says goodbye twice — filed
+// the note a second time and left the register with a duplicate row.
+func TestASecondFinalIsIgnored(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		finalEvent(triageDoc),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("register rows: %d, want the note filed once", len(rows))
+	}
+}
+
+// TestUsageKeepsTheHighestReport is R6: usage was assigned from whichever
+// event arrived last, so a schema retry in a fresh session — whose turn
+// and cost counters start again at zero — handed the run back a budget it
+// had already spent.
+func TestUsageKeepsTheHighestReport(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		provider.Event{Kind: provider.EvUsage, Turns: 5, InputTok: 900, OutputTok: 300, CostUSD: 0.4},
+		provider.Event{Kind: provider.EvUsage, Turns: 1, InputTok: 20, OutputTok: 5, CostUSD: 0.05},
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := outs[0].State.Usage
+	if u.Turns != 5 || u.InputTokens != 900 || u.OutputTokens != 300 || u.CostUSD != 0.4 {
+		t.Fatalf("usage %+v, want the highest figure each counter reached", u)
+	}
+}
+
+// TestFailureAfterTheNoteIsAWarning is R7: a provider that fell apart once
+// the note was on disk left nothing in the run's state to say so, because
+// the completed branch read only completeErr.
+func TestFailureAfterTheNoteIsAWarning(t *testing.T) {
+	cfg := newWorkspace(t)
+	events := []provider.Event{finalEvent(triageDoc)}
+	for i := 0; i < 10; i++ {
+		events = append(events, provider.Event{Kind: provider.EvError, Text: "not json"})
+	}
+	p := &stubProvider{script: replay(events...)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !hasWarningContaining(out.State.Warnings, "malformed provider lines") {
+		t.Fatalf("warnings %v, want the provider failure reported as one", out.State.Warnings)
 	}
 }

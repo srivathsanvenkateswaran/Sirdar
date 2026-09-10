@@ -286,11 +286,10 @@ type session struct {
 // the result line, so a run can show turns and tokens as they happen
 // rather than only once it is over.
 type usageMeter struct {
-	turns    int
-	inTok    int64
-	outTok   int64
-	costUSD  float64
-	reported bool // a result line has given authoritative totals
+	turns   int
+	inTok   int64
+	outTok  int64
+	costUSD float64
 }
 
 // Events returns the activity stream. The channel is buffered; the caller
@@ -529,18 +528,22 @@ func (s *session) writeControlResponse(requestID string, response map[string]any
 // and no turn number; the result line carries the session's own totals and
 // replaces the running count, since it is the figure the operator is
 // billed against.
+//
+// Which of the two it is comes from the line's own type, not from the
+// numbers on it: a result line reporting a free, zero-turn session was
+// read as a per-turn event and had its totals added to the running count
+// instead of replacing them.
 func (s *session) measure(ev *provider.Event) {
 	if ev.Kind != provider.EvUsage {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if ev.Turns > 0 || ev.CostUSD > 0 {
+	if isResultLine(ev.Raw) {
 		s.meter.turns = ev.Turns
 		s.meter.inTok = ev.InputTok
 		s.meter.outTok = ev.OutputTok
 		s.meter.costUSD = ev.CostUSD
-		s.meter.reported = true
 		return
 	}
 	s.meter.turns++
@@ -550,6 +553,15 @@ func (s *session) measure(ev *provider.Event) {
 	ev.InputTok = s.meter.inTok
 	ev.OutputTok = s.meter.outTok
 	ev.CostUSD = s.meter.costUSD
+}
+
+// isResultLine reports whether raw is the CLI's terminal "result" line,
+// the one that carries the session's own totals.
+func isResultLine(raw []byte) bool {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(raw, &probe) == nil && probe.Type == "result"
 }
 
 // absorb records the parts of an event that belong to the terminal Result.

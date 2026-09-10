@@ -24,7 +24,9 @@ const maxMalformed = 10
 
 // closeGrace is how long a session gets to end on its own after its input
 // has been closed, before it is cancelled outright. The note is already on
-// disk by then; this only decides how the process is reaped.
+// disk by then; this only decides how the process is reaped. Runner.CloseGrace
+// overrides it, which is how a test asserts the reaping without waiting
+// ten seconds for it.
 const closeGrace = 10 * time.Second
 
 // execution is the state the event loop accumulates for one session.
@@ -178,6 +180,12 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		}
 		if ex.interrupted {
 			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
+		}
+		if ex.failure != "" {
+			// Whatever went wrong after the note landed is still worth
+			// reading — it is the only account of a provider that died
+			// mid-sentence — but it does not make the run a failure.
+			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the note was written")
 		}
 		if timedOut.Load() {
 			p.state.Warnings = append(p.state.Warnings,
@@ -417,23 +425,26 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 
 	switch ev.Kind {
 	case provider.EvUsage:
-		p.state.Usage = store.Usage{
-			Turns:        ev.Turns,
-			InputTokens:  ev.InputTok,
-			OutputTokens: ev.OutputTok,
-			CostUSD:      ev.CostUSD,
-		}
+		// The highest figure each session reported, not the last one:
+		// a schema retry runs in a fresh session whose counters start at
+		// zero, and assigning those would hand the run back a turn and
+		// cost budget it has already spent.
+		u := &p.state.Usage
+		u.Turns = max(u.Turns, ev.Turns)
+		u.InputTokens = max(u.InputTokens, ev.InputTok)
+		u.OutputTokens = max(u.OutputTokens, ev.OutputTok)
+		u.CostUSD = max(u.CostUSD, ev.CostUSD)
 		p.state.UpdatedAt = r.now()
 		if err := p.run.WriteState(p.state); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 		}
 		b := r.Config.Budget
 		switch {
-		case b.MaxUSD > 0 && ev.CostUSD > b.MaxUSD:
-			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", ev.CostUSD, b.MaxUSD)
+		case b.MaxUSD > 0 && u.CostUSD > b.MaxUSD:
+			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", u.CostUSD, b.MaxUSD)
 			sess.Cancel()
-		case b.MaxTurns > 0 && ev.Turns > b.MaxTurns:
-			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", ev.Turns, b.MaxTurns)
+		case b.MaxTurns > 0 && u.Turns > b.MaxTurns:
+			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
 			sess.Cancel()
 		}
 
@@ -460,6 +471,14 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 // handleFinal validates the session's JSON output. The first failure buys
 // one retry turn quoting the validation errors; the second ends the run.
 func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
+	// A session that has already produced a valid note is done. A provider
+	// that emits a second final line — a resumed session replaying its
+	// result, a CLI that repeats itself on the way out — must not file the
+	// note twice and hand the register a duplicate row.
+	if len(ex.final) > 0 {
+		return
+	}
+
 	doc := []byte(ev.Final)
 	if len(doc) == 0 {
 		doc = []byte(strings.TrimSpace(ev.Text))
@@ -525,7 +544,7 @@ func (r *Runner) endSession(p *prepared, sess provider.Session) {
 	if err := sess.CloseInput(); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] close session input: %v\n", p.state.Key, err)
 	}
-	time.AfterFunc(closeGrace, sess.Cancel)
+	time.AfterFunc(r.grace(), sess.Cancel)
 }
 
 // resumeForRetry starts a new session that continues the finished one,
@@ -980,4 +999,13 @@ func firstSentence(s string) string {
 		return strings.TrimSpace(s[:i+1])
 	}
 	return s
+}
+
+// grace is how long endSession waits before cancelling, taking the
+// Runner's override when it has one.
+func (r *Runner) grace() time.Duration {
+	if r.CloseGrace > 0 {
+		return r.CloseGrace
+	}
+	return closeGrace
 }

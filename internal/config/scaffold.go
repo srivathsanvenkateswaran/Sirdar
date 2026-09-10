@@ -46,7 +46,9 @@ attachments:
                            # bundle and named in a warning instead.
 permissions:
   # Every segment of a pipeline or compound command has to match a pattern:
-  # "rg foo | head -50" needs both "rg *" and "head *".
+  # "rg foo | head -50" needs both "rg *" and "head *". A segment that
+  # redirects or substitutes ($(…), backticks, >, >>, <, &>) is refused
+  # whatever the patterns say; 2>&1 and 2>/dev/null are the exceptions.
   bash:
     - "git log*"
     - "git show*"
@@ -60,9 +62,12 @@ permissions:
     - "file *"
     - "which *"
   # Globs matched against an MCP tool's full name. While this list is empty,
-  # read-shaped MCP tools are allowed and write-shaped ones (create_*,
-  # deploy_*, send_*, buy_*, …) are denied by name. Naming patterns here
-  # replaces that heuristic outright: anything unlisted is then denied.
+  # a tool is allowed unless a word of its name is a write verb (create,
+  # update, delete, send, deploy, buy, save, log, …). A name that also
+  # carries a read word (query, select, read, search, list, get, find,
+  # describe, show) is a read whatever else it says, so run_query and
+  # run_select go through. Naming patterns here replaces that heuristic
+  # outright: anything unlisted is then denied.
   mcp: []
     # - "mcp__grafana__query_*"
     # - "mcp__grafana__list_*"
