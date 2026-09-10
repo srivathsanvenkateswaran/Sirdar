@@ -200,13 +200,28 @@ func sampleFor(kind Kind) ([]byte, Meta, error) {
 	return doc, m, nil
 }
 
-// Filename fills pattern's "{key}" and "{slug}" placeholders, e.g.
-// Filename("{key} {slug}.md", "OMNI-1", "export-fails") ->
-// "OMNI-1 export-fails.md".
+// Filename fills pattern's "{key}" and "{slug}" placeholders and returns a
+// path relative to notes.dir, e.g. Filename("{key} {slug}.md", "OMNI-1",
+// "export-fails") -> "OMNI-1 export-fails.md". A pattern may contain "/"
+// segments so a workspace can file notes into a subdirectory it already
+// uses, e.g. Filename("Triage/{key} {slug}.md", "OMNI-1", "export-fails")
+// -> "Triage/OMNI-1 export-fails.md". Each "/"-separated segment of pattern
+// is filled independently; a segment that is empty (including the one a
+// leading "/" produces) or exactly ".." is dropped rather than passed
+// through, so a pattern can't escape notes.dir or leave an empty path
+// component.
 func Filename(pattern, key, slug string) string {
-	f := strings.ReplaceAll(pattern, "{key}", key)
-	f = strings.ReplaceAll(f, "{slug}", slug)
-	return f
+	segments := strings.Split(pattern, "/")
+	kept := make([]string, 0, len(segments))
+	for _, seg := range segments {
+		f := strings.ReplaceAll(seg, "{key}", key)
+		f = strings.ReplaceAll(f, "{slug}", slug)
+		if f == "" || f == ".." {
+			continue
+		}
+		kept = append(kept, f)
+	}
+	return filepath.Join(kept...)
 }
 
 var (

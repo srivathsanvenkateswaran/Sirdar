@@ -121,6 +121,20 @@ const configWithCredential = configYAML + `sources:
     token: env:ZOHO_TOKEN
 `
 
+// configWithOAuth is the same workspace with a helpdesk whose credentials
+// are an OAuth grant rather than one access token, so the run has three
+// env: references to keep away from the agent instead of one.
+const configWithOAuth = configYAML + `sources:
+  helpdesk:
+    adapter: zohodesk
+    orgId: "1"
+    baseUrl: https://desk.zoho.in
+    auth:
+      clientId: env:ZOHO_CLIENT_ID
+      clientSecret: env:ZOHO_CLIENT_SECRET
+      refreshToken: env:ZOHO_REFRESH_TOKEN
+`
+
 // newWorkspace writes a real .sirdar workspace into a temp dir and loads
 // it through config.Load, so Config.Root and every default is set the way
 // a real run sees them.
@@ -592,6 +606,42 @@ func TestCredentialEnvIsStrippedFromTheAgent(t *testing.T) {
 	}
 }
 
+// TestOAuthCredentialsAreStrippedFromTheAgent covers the refresh grant
+// reaching the agent's environment. It matters more than the access token
+// did: an access token expires in an hour, while a refresh token keeps
+// minting them until somebody revokes it at the Zoho console.
+func TestOAuthCredentialsAreStrippedFromTheAgent(t *testing.T) {
+	cfg := newWorkspaceWith(t, configWithOAuth)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.Env = []string{
+		"PATH=/usr/bin",
+		"ZOHO_CLIENT_ID=1000.clientid",
+		"ZOHO_CLIENT_SECRET=shhh",
+		"ZOHO_REFRESH_TOKEN=1000.refresh",
+		"HOME=/home/tester",
+	}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	env := p.spec(0).Env
+	for _, entry := range env {
+		for _, name := range []string{"ZOHO_CLIENT_ID=", "ZOHO_CLIENT_SECRET=", "ZOHO_REFRESH_TOKEN="} {
+			if strings.HasPrefix(entry, name) {
+				t.Fatalf("an OAuth credential reached the agent: %s", name)
+			}
+		}
+	}
+	if !contains(env, "PATH=/usr/bin") || !contains(env, "HOME=/home/tester") {
+		t.Fatalf("child env dropped entries that are not credentials: %v", env)
+	}
+}
+
 func TestOverBudgetUSD(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replay(
@@ -1058,6 +1108,149 @@ func TestRetriageOverwritesTheKeysNote(t *testing.T) {
 	// With nothing filed, the run keeps its own copy of the note.
 	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// subdirConfigYAML files notes the way an Obsidian vault with per-kind
+// folders expects: a triage note under Triage/, an RCA note under RCA/, and
+// a resolution note under Resolutions/.
+const subdirConfigYAML = `workspace: test
+provider: claude
+billing: subscription
+notes:
+  dir: notes
+  filenames:
+    triage: "Triage/{key} {slug}.md"
+    rca: "RCA/{key} RCA {slug}.md"
+    resolution: "Resolutions/{key} RES {slug}.md"
+budget:
+  maxTurns: 60
+  maxMinutes: 25
+  maxUsd: 5
+concurrency: 1
+permissions:
+  bash:
+    - "git log*"
+    - "rg *"
+playbooks: .sirdar/playbooks
+`
+
+func TestTriageFilesNoteUnderPatternSubdirectory(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	notePath := filepath.Join(cfg.Root, "notes", "Triage", "OMNI-1 export-fails-for-large-orders.md")
+	if _, err := os.Stat(notePath); err != nil {
+		t.Fatalf("note was not filed under Triage/: %v", err)
+	}
+
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].NotePath != notePath {
+		t.Fatalf("register row NotePath = %q, want %q", rows[0].NotePath, notePath)
+	}
+}
+
+func TestRetriageWithSubdirectoryPatternOverwritesInPlace(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	notesDir := filepath.Join(cfg.Root, "notes")
+	notePath := filepath.Join(notesDir, "Triage", "OMNI-1 export-fails-for-large-orders.md")
+
+	if outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	} else if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("first triage: %+v", outs[0].State)
+	}
+
+	retitled := strings.Replace(triageDoc, `"title": "Export fails for large orders"`, `"title": "Export still fails"`, 1)
+	p.script = replay(finalEvent(retitled))
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("second triage: %+v", outs[0].State)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(notesDir, "Triage"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(notePath) {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Fatalf("Triage/ holds %v", names)
+	}
+	if body := readFile(t, notePath); !strings.Contains(body, "# Export still fails") {
+		t.Fatalf("the note inside Triage/ was not rewritten:\n%s", body)
+	}
+}
+
+func TestRCAWithSubdirectoryPatternsFilesBothNotesAndUpdatesTriage(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	triageOuts, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if triageOuts[0].State.Status != store.StatusCompleted {
+		t.Fatalf("triage status %q", triageOuts[0].State.Status)
+	}
+
+	p.script = replay(finalEvent(rcaDoc))
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("rca status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	rcaPath := filepath.Join(cfg.Root, "notes", "RCA", "OMNI-1 RCA export-times-out-on-large-orders.md")
+	resPath := filepath.Join(cfg.Root, "notes", "Resolutions", "OMNI-1 RES stream-the-csv-export.md")
+	if _, err := os.Stat(rcaPath); err != nil {
+		t.Fatalf("rca note was not filed under RCA/: %v", err)
+	}
+	if _, err := os.Stat(resPath); err != nil {
+		t.Fatalf("resolution note was not filed under Resolutions/: %v", err)
+	}
+
+	triagePath := filepath.Join(cfg.Root, "notes", "Triage", "OMNI-1 export-fails-for-large-orders.md")
+	triageNote := readFile(t, triagePath)
+	if !strings.Contains(triageNote, "status: resolved") {
+		t.Fatalf("triage note inside Triage/ was not updated:\n%s", triageNote)
+	}
+
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("register rows: %d", len(rows))
+	}
+	if rows[1].NotePath != rcaPath {
+		t.Fatalf("rca register NotePath = %q, want %q", rows[1].NotePath, rcaPath)
+	}
+	if rows[2].NotePath != resPath {
+		t.Fatalf("resolution register NotePath = %q, want %q", rows[2].NotePath, resPath)
 	}
 }
 

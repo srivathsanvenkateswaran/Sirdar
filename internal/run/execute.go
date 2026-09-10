@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -702,11 +703,13 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	return filed, nil
 }
 
-// fileNote copies a note into the workspace's notes directory. A key's
-// triage note is looked up by key rather than by filename, because a
-// re-triage often retitles the issue: the existing note is overwritten in
-// place while its status is still "triaged", and left alone with a warning
-// once a human has moved it on.
+// fileNote copies a note into the workspace's notes directory, creating
+// filename's parent directory when the configured pattern files it into a
+// subdirectory (e.g. "Triage/{key} {slug}.md"). A key's triage note is
+// looked up by key rather than by filename, because a re-triage often
+// retitles the issue: the existing note is overwritten in place while its
+// status is still "triaged", and left alone with a warning once a human has
+// moved it on.
 func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) string {
 	dir := r.Config.ExpandPath(r.Config.Notes.Dir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -731,6 +734,10 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 		}
 	}
 
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("notes directory %s: %v", filepath.Dir(path), err))
+		return ""
+	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("write %s: %v", path, err))
 		return ""
@@ -739,10 +746,12 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 }
 
 // existingTriageNote finds this key's triage note in the notes directory,
-// whatever it is called. It prefers the path the last completed triage run
-// recorded, and falls back to scanning the directory for a note filed under
-// the key whose frontmatter tags it as triage — which is how a note written
-// by hand, or before the run state existed, is still found.
+// whatever it is called or however deep the configured filename pattern
+// files it. It prefers the path the last completed triage run recorded, and
+// falls back to walking dir recursively — skipping dot-directories such as
+// .obsidian — for a "<key> *.md" file whose frontmatter tags it as triage,
+// which is how a note written by hand, filed before the run state existed,
+// or filed into a pattern subdirectory such as Triage/ is still found.
 func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
@@ -751,7 +760,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 				continue
 			}
 			for _, path := range s.Notes {
-				if filepath.Dir(path) != dir {
+				if !underDir(path, dir) {
 					continue
 				}
 				if _, err := os.Stat(path); err == nil {
@@ -761,25 +770,41 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 		}
 	}
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
 	prefix := p.state.Key + " "
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	var found string
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // an unreadable entry just isn't a candidate
 		}
-		path := filepath.Join(dir, e.Name())
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasPrefix(d.Name(), prefix) || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil
 		}
 		if strings.Contains(frontmatterValue(string(data), "tags"), string(note.Triage)) {
-			return path
+			found = path
+			return filepath.SkipAll
 		}
+		return nil
+	})
+	return found
+}
+
+// underDir reports whether path is dir itself or lies somewhere beneath it.
+func underDir(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
 	}
-	return ""
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // writePlaybookSuggestions leaves the agent's playbook additions in the run
