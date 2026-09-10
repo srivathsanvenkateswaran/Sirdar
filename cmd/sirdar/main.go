@@ -43,5 +43,6 @@ commands:
   resume      continue a blocked or interrupted run
   runs        list runs and states
   register    print the register
+  serve       serve the web UI and API on loopback
   version     print version`)
 }
