@@ -2,14 +2,17 @@ package claude
 
 import (
 	"encoding/json"
+	"fmt"
 	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
-// statusAllowed is the rate_limit_info.status the CLI reports while the
-// window still has room; every other status refuses work.
+// statusAllowed is the prefix of every rate_limit_info.status the CLI
+// reports while the window still has room: "allowed" outright, and
+// "allowed_warning" once utilization is high enough to mention. Neither
+// refuses work, so neither is a rate limit.
 const statusAllowed = "allowed"
 
 // streamLine is the union of every stdout line shape Claude Code emits in
@@ -22,12 +25,15 @@ type streamLine struct {
 	Message struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
+		Usage   *tokenUsage     `json:"usage"`
 	} `json:"message"`
 
 	RateLimitInfo struct {
-		Status        string `json:"status"`
-		ResetsAt      int64  `json:"resetsAt"`
-		RateLimitType string `json:"rateLimitType"`
+		Status         string  `json:"status"`
+		ResetsAt       int64   `json:"resetsAt"`
+		RateLimitType  string  `json:"rateLimitType"`
+		Utilization    float64 `json:"utilization"`
+		IsUsingOverage bool    `json:"isUsingOverage"`
 	} `json:"rate_limit_info"`
 
 	// result line
@@ -35,10 +41,23 @@ type streamLine struct {
 	StructuredOutput json.RawMessage `json:"structured_output"`
 	NumTurns         int             `json:"num_turns"`
 	TotalCostUSD     float64         `json:"total_cost_usd"`
-	Usage            struct {
-		InputTokens  int64 `json:"input_tokens"`
-		OutputTokens int64 `json:"output_tokens"`
-	} `json:"usage"`
+	Usage            tokenUsage      `json:"usage"`
+}
+
+// tokenUsage is the CLI's usage object. Input tokens arrive in three
+// separate counters and reporting only the uncached one understates a
+// cached session by three orders of magnitude, so Input adds them up.
+type tokenUsage struct {
+	InputTokens              int64 `json:"input_tokens"`
+	CacheCreationInputTokens int64 `json:"cache_creation_input_tokens"`
+	CacheReadInputTokens     int64 `json:"cache_read_input_tokens"`
+	OutputTokens             int64 `json:"output_tokens"`
+}
+
+// Input is every token the request was billed for on the way in, cached or
+// not.
+func (u tokenUsage) Input() int64 {
+	return u.InputTokens + u.CacheCreationInputTokens + u.CacheReadInputTokens
 }
 
 // contentBlock is one entry of an assistant or user message's content array.
@@ -87,9 +106,9 @@ func decode(raw []byte) []provider.Event {
 		// refuses work is a rate limit; treating the routine line as one
 		// parks the whole pool until resetsAt, hours away.
 		info := l.RateLimitInfo
-		if info.Status == statusAllowed {
+		if strings.HasPrefix(info.Status, statusAllowed) {
 			ev := newEvent(provider.EvSystem, raw)
-			ev.Text = strings.TrimSpace("rate limit " + info.Status + " " + info.RateLimitType)
+			ev.Text = rateLimitNote(info.RateLimitType, info.Utilization, info.IsUsingOverage)
 			return []provider.Event{ev}
 		}
 		ev := newEvent(provider.EvRateLimited, raw)
@@ -101,13 +120,13 @@ func decode(raw []byte) []provider.Event {
 	case "result":
 		usage := newEvent(provider.EvUsage, raw)
 		usage.Turns = l.NumTurns
-		usage.InputTok = l.Usage.InputTokens
+		usage.InputTok = l.Usage.Input()
 		usage.OutputTok = l.Usage.OutputTokens
 		usage.CostUSD = l.TotalCostUSD
 
 		final := newEvent(provider.EvFinal, raw)
 		final.Turns = l.NumTurns
-		final.InputTok = l.Usage.InputTokens
+		final.InputTok = l.Usage.Input()
 		final.OutputTok = l.Usage.OutputTokens
 		final.CostUSD = l.TotalCostUSD
 		final.Text = l.Result
@@ -126,8 +145,34 @@ func decode(raw []byte) []provider.Event {
 	}
 }
 
+// rateLimitNote renders an informational rate_limit_event as the operator
+// would want to read it on a run that costs real money: which window, and
+// how much of it is gone. It never says "blocked", because nothing was.
+func rateLimitNote(window string, utilization float64, overage bool) string {
+	note := "rate limit"
+	if window != "" {
+		note += " " + window
+	}
+	if utilization > 0 {
+		note += fmt.Sprintf(" at %.0f%% of the window", utilization*100)
+	}
+	if overage {
+		note += ", using overage"
+	}
+	return note
+}
+
 func assistantEvents(l streamLine, raw []byte) []provider.Event {
 	var events []provider.Event
+	if u := l.Message.Usage; u != nil && (u.Input() > 0 || u.OutputTokens > 0) {
+		// One turn's tokens. The session accumulates these into running
+		// totals, so state.json shows spend as it happens rather than
+		// zeros until the result line lands.
+		ev := newEvent(provider.EvUsage, raw)
+		ev.InputTok = u.Input()
+		ev.OutputTok = u.OutputTokens
+		events = append(events, ev)
+	}
 	for _, b := range blocksOf(l.Message.Content) {
 		switch b.Type {
 		case "tool_use":

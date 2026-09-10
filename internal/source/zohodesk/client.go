@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -95,15 +96,23 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 	}
 	defer resp.Body.Close()
 
-	body, readErr := io.ReadAll(resp.Body)
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, maxJSONBytes+1))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, statusError(http.MethodGet, path, resp.StatusCode, body)
 	}
 	if readErr != nil {
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zoho desk: GET %s: read body: %v", path, readErr)}
 	}
+	if len(body) > maxJSONBytes {
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zoho desk: GET %s: response is over the %d byte limit", path, int64(maxJSONBytes))}
+	}
 	return body, nil
 }
+
+// maxJSONBytes caps a JSON response. A conversation page is measured in
+// kilobytes; anything at this size is a fault or a hostile response, and
+// either way it should not be read into memory whole.
+const maxJSONBytes = 8 << 20
 
 func (c *Client) http() *http.Client {
 	if c.HTTP != nil {
@@ -137,31 +146,108 @@ func (c *Client) setHeaders(ctx context.Context, req *http.Request) (string, err
 // Every request this client makes is a bodyless GET, so replaying one is
 // free of the usual re-send problem.
 func (c *Client) send(ctx context.Context, req *http.Request) (*http.Response, error) {
+	return c.sendWith(ctx, req, c.http())
+}
+
+// maxRetryAfter is the longest 429 wait this client will sit out inline. A
+// longer one is reported to the caller, which knows about the run's budget
+// and this does not.
+const maxRetryAfter = 30 * time.Second
+
+// sendWith is send against a particular HTTP client, so an attachment
+// download can use one with a redirect policy of its own.
+//
+// The credential is only ever handed to a host trustedURL vouches for, and
+// only a 401 from the configured Desk endpoint buys a token refresh: a 401
+// from any other host — a CDN, or a redirect target — is not evidence that
+// this token has expired, and answering it with a fresh one would be
+// handing that host a live credential on request.
+func (c *Client) sendWith(ctx context.Context, req *http.Request, client *http.Client) (*http.Response, error) {
+	if !c.trustedURL(req.URL.String()) {
+		return nil, &source.Error{Code: source.Internal, Message: "zoho desk: refusing a credentialed request to an untrusted host: " + req.URL.Host}
+	}
 	token, err := c.setHeaders(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-	resp, err := c.http().Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
+
+	if resp.StatusCode == http.StatusTooManyRequests {
+		if wait, ok := retryAfter(resp); ok {
+			drain(resp)
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(wait):
+			}
+			retry := req.Clone(ctx)
+			if _, err := c.setHeaders(ctx, retry); err != nil {
+				return nil, err
+			}
+			return client.Do(retry)
+		}
+		return resp, nil
+	}
+
 	if resp.StatusCode != http.StatusUnauthorized {
 		return resp, nil
 	}
 	refresher, ok := c.Tokens.(Refresher)
-	if !ok {
+	if !ok || !c.isConfiguredEndpoint(req.URL) {
 		return resp, nil
 	}
 
-	_, _ = io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	drain(resp)
 	refresher.Invalidate(token)
 
 	retry := req.Clone(ctx)
 	if _, err := c.setHeaders(ctx, retry); err != nil {
 		return nil, err
 	}
-	return c.http().Do(retry)
+	return client.Do(retry)
+}
+
+// isConfiguredEndpoint reports whether u is the Desk endpoint this client
+// was configured with, as opposed to a merely trusted sibling host.
+func (c *Client) isConfiguredEndpoint(u *url.URL) bool {
+	base, err := url.Parse(strings.TrimSuffix(c.BaseURL, "/"))
+	if err != nil {
+		return false
+	}
+	return sameEndpoint(u, base)
+}
+
+// retryAfter reads a 429's Retry-After header, honouring it only when it
+// is a delay this client is willing to sit out.
+func retryAfter(resp *http.Response) (time.Duration, bool) {
+	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
+	if raw == "" {
+		return 0, false
+	}
+	if secs, err := strconv.Atoi(raw); err == nil {
+		if secs < 0 {
+			return 0, false
+		}
+		d := time.Duration(secs) * time.Second
+		return d, d <= maxRetryAfter
+	}
+	at, err := http.ParseTime(raw)
+	if err != nil {
+		return 0, false
+	}
+	d := time.Until(at)
+	if d < 0 {
+		d = 0
+	}
+	return d, d <= maxRetryAfter
+}
+
+func drain(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
 }
 
 // statusError maps a non-2xx HTTP response to a *source.Error.
@@ -185,8 +271,24 @@ func statusError(method, path string, status int, body []byte) *source.Error {
 // --- Ticket ---
 
 type zohoContact struct {
-	FirstName string `json:"firstName"`
-	LastName  string `json:"lastName"`
+	FirstName string       `json:"firstName"`
+	LastName  string       `json:"lastName"`
+	Email     string       `json:"email"`
+	Account   *zohoAccount `json:"account"`
+}
+
+// zohoAccount is the customer company, embedded in the contact object the
+// contacts include returns.
+type zohoAccount struct {
+	ID          string           `json:"id"`
+	AccountName string           `json:"accountName"`
+	CF          zohoCustomFields `json:"cf"`
+}
+
+// zohoDepartment is the queue the ticket sits in, embedded by the
+// departments include.
+type zohoDepartment struct {
+	Name string `json:"name"`
 }
 
 type zohoCustomFields struct {
@@ -200,6 +302,8 @@ type zohoTicket struct {
 	Priority     string           `json:"priority"`
 	Channel      string           `json:"channel"`
 	Contact      zohoContact      `json:"contact"`
+	Account      *zohoAccount     `json:"account"`
+	Department   *zohoDepartment  `json:"department"`
 	AccountName  string           `json:"accountName"`
 	CF           zohoCustomFields `json:"cf"`
 	WebURL       string           `json:"webUrl"`
@@ -211,10 +315,25 @@ type zohoTicket struct {
 	Phone        string           `json:"phone"`
 }
 
+// ticketInclude names the related objects Desk embeds in a ticket only
+// when they are asked for. Without it the response carries an accountId
+// and a contactId and nothing else, so Customer, CustomerID and Contact
+// come back empty — while the note template and the output schema both
+// require them.
+//
+// These three are the v1 spelling Desk accepts: "accounts" is not an
+// allowed value and any request carrying it is refused whole, with
+// 422 UNPROCESSABLE_ENTITY, so the account has to be read off the contact
+// the contacts include embeds.
+const ticketInclude = "contacts,assignee,departments"
+
 // Get fetches a ticket and maps it to ticket.HelpdeskTicket.
 func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, error) {
+	q := url.Values{}
+	q.Set("include", ticketInclude)
+
 	var zt zohoTicket
-	if err := c.get(ctx, "/api/v1/tickets/"+id, nil, &zt); err != nil {
+	if err := c.get(ctx, "/api/v1/tickets/"+id, q, &zt); err != nil {
 		return ticket.HelpdeskTicket{}, err
 	}
 
@@ -231,6 +350,12 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 	if zt.Phone != "" {
 		fields["phone"] = zt.Phone
 	}
+	if zt.Department != nil && zt.Department.Name != "" {
+		fields["department"] = zt.Department.Name
+	}
+	if zt.Contact.Email != "" {
+		fields["contactEmail"] = zt.Contact.Email
+	}
 
 	return ticket.HelpdeskTicket{
 		ID:         zt.ID,
@@ -239,13 +364,47 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 		Priority:   zt.Priority,
 		Channel:    zt.Channel,
 		Contact:    strings.TrimSpace(zt.Contact.FirstName + " " + zt.Contact.LastName),
-		Customer:   zt.AccountName,
-		CustomerID: zt.CF.CompanyID,
+		Customer:   customerName(zt),
+		CustomerID: customerID(zt),
 		URL:        zt.WebURL,
 		CreatedAt:  parseZohoTime(zt.CreatedTime),
 		UpdatedAt:  parseZohoTime(zt.ModifiedTime),
 		Fields:     fields,
 	}, nil
+}
+
+// customerName is the customer company, from wherever Desk put it: the
+// flat accountName field, the account object the accounts include
+// embeds, or the account hanging off the contact.
+func customerName(zt zohoTicket) string {
+	if zt.AccountName != "" {
+		return zt.AccountName
+	}
+	if zt.Account != nil && zt.Account.AccountName != "" {
+		return zt.Account.AccountName
+	}
+	if zt.Contact.Account != nil {
+		return zt.Contact.Account.AccountName
+	}
+	return ""
+}
+
+// customerID is the workspace's own company id, which lives in a custom
+// field on the ticket or on the account behind it.
+func customerID(zt zohoTicket) string {
+	if zt.CF.CompanyID != "" {
+		return zt.CF.CompanyID
+	}
+	if zt.Account != nil && zt.Account.CF.CompanyID != "" {
+		return zt.Account.CF.CompanyID
+	}
+	if zt.Contact.Account != nil && zt.Contact.Account.CF.CompanyID != "" {
+		return zt.Contact.Account.CF.CompanyID
+	}
+	if zt.Account != nil {
+		return zt.Account.ID
+	}
+	return ""
 }
 
 // parseZohoTime parses a Zoho Desk timestamp, which is RFC3339 with
@@ -262,6 +421,23 @@ func parseZohoTime(s string) time.Time {
 		return t
 	}
 	return time.Time{}
+}
+
+// asText converts a Desk HTML fragment into readable Markdown-flavoured
+// text. Desk returns rich HTML for comments and for a thread with no
+// plainText: styled <div> wrappers, inline CSS, mention anchors and
+// &quot; entities, all of which cost tokens and none of which is
+// evidence. A fragment with no markup, or one that converts to nothing,
+// is passed through untouched rather than lost.
+func asText(h string) string {
+	if !strings.Contains(h, "<") {
+		return h
+	}
+	text, _ := htmltext.ToMarkdown(h)
+	if strings.TrimSpace(text) == "" {
+		return h
+	}
+	return text
 }
 
 // --- Conversations / threads ---
@@ -363,7 +539,7 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 				text = td.Summary
 			}
 			if text == "" {
-				text = td.Content
+				text = asText(td.Content)
 			}
 			role := ticket.RoleAgent
 			if e.Direction == "in" {
@@ -390,10 +566,15 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 			}
 			refs := c.collectEntryAttachments(e.Attachments, e.Content, &inlineCounter)
 			msgs = append(msgs, ticket.Message{
-				At:            parseZohoTime(e.CommentedTime),
-				Author:        author,
-				Role:          role,
-				Text:          e.Content,
+				At:     parseZohoTime(e.CommentedTime),
+				Author: author,
+				Role:   role,
+				// A Desk comment is rich HTML: an agent's internal note
+				// arrives wrapped in a styled <div> with inline CSS and
+				// entity-escaped quotes. None of that is evidence, and
+				// all of it is paid for twice — once in thread.md and
+				// again in the prompt.
+				Text:          asText(e.Content),
 				AttachmentIDs: attachmentIDs(refs),
 			})
 		}

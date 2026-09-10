@@ -66,6 +66,12 @@ func args(spec provider.SessionSpec) []string {
 	if spec.Resume != "" {
 		out = append(out, "--resume", spec.Resume)
 	}
+	// With a config named, the session loads those MCP servers and only
+	// those: --strict-mcp-config is what keeps the operator's own global
+	// connectors — deploy, buy, send — out of a read-only triage run.
+	if spec.MCPConfig != "" {
+		out = append(out, "--strict-mcp-config", "--mcp-config", spec.MCPConfig)
+	}
 	return append(out, "--disallowedTools", disallowedTools)
 }
 
@@ -187,7 +193,7 @@ func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
 	switch {
 	case err == nil:
 		auth.OK = true
-		auth.Detail = firstLine(out)
+		auth.Detail = authDetail(out)
 	case strings.Contains(strings.ToLower(string(out)), "unknown command"):
 		auth.OK = true
 		auth.Detail = "auth status not supported by this version"
@@ -196,6 +202,40 @@ func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
 	}
 
 	return []provider.Check{version, auth}
+}
+
+// authDetail summarises `claude auth status`. Claude Code 2.1 answers with
+// a JSON object, whose first line is "{" and tells the operator nothing;
+// older builds answer with a sentence, which is passed through as it is.
+// The account's email address, org id and org name are deliberately not
+// reported: doctor's output gets pasted into tickets, and a personal
+// account's orgName is that account's email with a suffix on it.
+func authDetail(out []byte) string {
+	var status struct {
+		LoggedIn         *bool  `json:"loggedIn"`
+		AuthMethod       string `json:"authMethod"`
+		SubscriptionType string `json:"subscriptionType"`
+	}
+	if err := json.Unmarshal(bytes.TrimSpace(out), &status); err != nil {
+		return firstLine(out)
+	}
+	var parts []string
+	switch {
+	case status.LoggedIn == nil:
+	case *status.LoggedIn:
+		parts = append(parts, "logged in")
+	default:
+		parts = append(parts, "not logged in")
+	}
+	for _, s := range []string{status.AuthMethod, status.SubscriptionType} {
+		if s != "" {
+			parts = append(parts, s)
+		}
+	}
+	if len(parts) == 0 {
+		return firstLine(out)
+	}
+	return strings.Join(parts, ", ")
 }
 
 func runWithTimeout(ctx context.Context, name string, arg ...string) ([]byte, error) {
@@ -229,14 +269,27 @@ type session struct {
 	readDone chan struct{} // closed when stdout hits EOF
 	done     chan struct{} // closed when the process has been reaped
 
-	writeMu sync.Mutex // serialises stdin writes
+	writeMu   sync.Mutex // serialises stdin writes
+	stdinShut bool       // set once stdin has been closed
 
 	mu      sync.Mutex
 	handle  string
 	res     provider.Result
 	waitErr error
+	meter   usageMeter
 
 	waitOnce sync.Once
+}
+
+// usageMeter accumulates what the session has spent so far. The CLI
+// reports a turn's usage on each assistant line and the session total on
+// the result line, so a run can show turns and tokens as they happen
+// rather than only once it is over.
+type usageMeter struct {
+	turns   int
+	inTok   int64
+	outTok  int64
+	costUSD float64
 }
 
 // Events returns the activity stream. The channel is buffered; the caller
@@ -263,12 +316,34 @@ func (s *session) Send(ctx context.Context, userText string) error {
 	return s.writeUser(userText)
 }
 
+// CloseInput closes the CLI's stdin. Started with --input-format
+// stream-json, `claude -p` does not exit after its result line: it waits
+// for the next user message, holding stdout open, and a run that has its
+// answer would otherwise sit there until a budget killed it. Closing stdin
+// is the EOF that lets the CLI finish. Calling it more than once, or after
+// the process has gone, is not an error.
+func (s *session) CloseInput() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.stdinShut {
+		return nil
+	}
+	s.stdinShut = true
+	if err := s.stdin.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		return err
+	}
+	return nil
+}
+
 // Wait reaps the process and returns the session's Result. It must be called
 // after Events has been drained. A non-zero exit is reported in Result.ExitErr
 // rather than as an error, so the caller can still read the handle and
 // whatever the session produced.
 func (s *session) Wait() (provider.Result, error) {
 	s.waitOnce.Do(func() {
+		// Nothing more will be sent, and the CLI will not close stdout
+		// until it knows that.
+		_ = s.CloseInput()
 		<-s.readDone
 		err := s.cmd.Wait()
 		tail := s.stderr.snapshot()
@@ -305,7 +380,17 @@ func (s *session) Wait() (provider.Result, error) {
 // cmd.Cancel delivers SIGINT and cmd.WaitDelay escalates to SIGKILL if the
 // process is still alive after interruptGrace. It does not block; the outcome
 // shows up in Wait's Result.
-func (s *session) Cancel() { s.cancelRun() }
+//
+// It marks stdin as shut without closing it, so the Wait that follows does
+// not close the pipe out from under a process that is being interrupted:
+// a CLI blocked on a read would then exit on EOF and never report the
+// signal it was sent.
+func (s *session) Cancel() {
+	s.writeMu.Lock()
+	s.stdinShut = true
+	s.writeMu.Unlock()
+	s.cancelRun()
+}
 
 // read consumes stdout until EOF, answering control requests inline and
 // emitting one or more events per line.
@@ -325,6 +410,7 @@ func (s *session) read(stdout io.Reader) {
 			continue
 		}
 		for _, ev := range decode(line) {
+			s.measure(&ev)
 			s.absorb(ev)
 			s.events <- ev
 		}
@@ -435,6 +521,47 @@ func (s *session) writeControlResponse(requestID string, response map[string]any
 		ev.Text = "write control response: " + err.Error()
 		s.events <- ev
 	}
+}
+
+// measure turns a usage event into running session totals. A per-turn
+// usage event (from an assistant line) carries that turn's tokens alone
+// and no turn number; the result line carries the session's own totals and
+// replaces the running count, since it is the figure the operator is
+// billed against.
+//
+// Which of the two it is comes from the line's own type, not from the
+// numbers on it: a result line reporting a free, zero-turn session was
+// read as a per-turn event and had its totals added to the running count
+// instead of replacing them.
+func (s *session) measure(ev *provider.Event) {
+	if ev.Kind != provider.EvUsage {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if isResultLine(ev.Raw) {
+		s.meter.turns = ev.Turns
+		s.meter.inTok = ev.InputTok
+		s.meter.outTok = ev.OutputTok
+		s.meter.costUSD = ev.CostUSD
+		return
+	}
+	s.meter.turns++
+	s.meter.inTok += ev.InputTok
+	s.meter.outTok += ev.OutputTok
+	ev.Turns = s.meter.turns
+	ev.InputTok = s.meter.inTok
+	ev.OutputTok = s.meter.outTok
+	ev.CostUSD = s.meter.costUSD
+}
+
+// isResultLine reports whether raw is the CLI's terminal "result" line,
+// the one that carries the session's own totals.
+func isResultLine(raw []byte) bool {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(raw, &probe) == nil && probe.Type == "result"
 }
 
 // absorb records the parts of an event that belong to the terminal Result.

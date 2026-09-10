@@ -33,7 +33,10 @@ type TriageInput struct {
 	Bundle     ticket.Bundle
 	BundleDir  string // absolute
 	Playbooks  []Playbook
-	ThreadHead string // first 40 lines of thread.md
+	ThreadHead string // thread.md, or its first 40 lines
+	// ThreadHeadTruncated says whether ThreadHead is only the head of a
+	// longer conversation, so the prompt's heading can say which it is.
+	ThreadHeadTruncated bool
 }
 
 // RCAInput is everything RCA needs to assemble an rca prompt: the same
@@ -106,7 +109,7 @@ func Triage(in TriageInput) string {
 		strings.TrimRight(preambleMD, "\n"),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
-		conversationSection(in.ThreadHead),
+		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
@@ -122,7 +125,7 @@ func RCA(in RCAInput) string {
 		strings.TrimRight(preambleMD, "\n"),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
-		conversationSection(in.ThreadHead),
+		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
 	}
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
@@ -215,8 +218,12 @@ func customerLine(bundle ticket.Bundle) string {
 	return bundle.Helpdesk.Customer + " (" + bundle.Helpdesk.CustomerID + ")"
 }
 
-func conversationSection(threadHead string) string {
-	return "## Conversation (first lines)\n\n" + fenceBlock("", threadHead)
+func conversationSection(threadHead string, truncated bool) string {
+	heading := "## Conversation"
+	if truncated {
+		heading += " (first lines; the rest is in thread.md)"
+	}
+	return heading + "\n\n" + fenceBlock("", threadHead)
 }
 
 func warningsSection(warnings []string) string {

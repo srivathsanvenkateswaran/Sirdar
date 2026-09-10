@@ -147,6 +147,12 @@ func (s *stubSession) Send(ctx context.Context, userText string) error { return 
 func (s *stubSession) Wait() (provider.Result, error)                  { return s.result, nil }
 func (s *stubSession) Handle() string                                  { return s.handle }
 
+// CloseInput takes the runner's "no further message is coming" and does
+// nothing with it: the stub's stream ends when its script ends, which is
+// the case the runner has to survive — a provider process that stays
+// alive after its answer.
+func (s *stubSession) CloseInput() error { return nil }
+
 func (s *stubSession) Cancel() {
 	s.cancelOnce.Do(func() { close(s.cancelled) })
 }

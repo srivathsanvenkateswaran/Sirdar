@@ -67,6 +67,11 @@ type Outcome struct {
 type Runner struct {
 	Deps
 
+	// CloseGrace overrides how long a session that has produced its note
+	// is given to exit on its own before it is cancelled. Zero means the
+	// closeGrace default.
+	CloseGrace time.Duration
+
 	// onPause, when set, is called every time a rate-limit pause is
 	// recorded, so a test can synchronise on it. Production leaves it nil.
 	onPause func(time.Time)

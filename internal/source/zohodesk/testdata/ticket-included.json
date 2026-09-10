@@ -1,0 +1,20 @@
+{
+  "id": "900",
+  "subject": "#28053 سلام عليكم",
+  "status": "Open",
+  "priority": "Medium",
+  "channel": "EMAIL",
+  "contact": {
+    "id": "c-1",
+    "firstName": "Sana",
+    "lastName": "Alharbi",
+    "email": "sana@example.com",
+    "account": { "id": "acc-1", "accountName": "neqsa18", "cf": { "cf_company_id": "6751" } }
+  },
+  "department": { "id": "d1", "name": "Support" },
+  "webUrl": "https://desk.zoho.in/support/900",
+  "createdTime": "2026-09-09T20:53:08.000Z",
+  "modifiedTime": "2026-09-10T08:51:21.000Z",
+  "departmentId": "d1",
+  "ticketNumber": "28053"
+}
