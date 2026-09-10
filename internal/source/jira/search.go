@@ -14,9 +14,11 @@ import (
 const (
 	// maxPageSize is the largest page either search endpoint is asked for.
 	maxPageSize = 100
+	// defaultListResults is what List returns when the caller asked for no
+	// limit at all: a triage run reads a working set, not a backlog export.
+	defaultListResults = 100
 	// maxListResults caps how many issues one List returns, including when
-	// the caller asked for no limit at all: a triage run reads a working set,
-	// not a backlog export.
+	// an explicit limit asked for more.
 	maxListResults = 200
 	// maxSearchPages stops Cloud's cursor pagination from running forever.
 	// The nextPageToken cursor has a documented failure mode where a token
@@ -24,6 +26,19 @@ const (
 	// are both treated as the end of the results.
 	maxSearchPages = 20
 )
+
+// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
+// zero or negative takes defaultListResults, and nothing above
+// maxListResults is honored.
+func effectiveLimit(n int) int {
+	if n <= 0 {
+		return defaultListResults
+	}
+	if n > maxListResults {
+		return maxListResults
+	}
+	return n
+}
 
 // List implements source.Tracker, translating the filter into JQL and
 // paginating whichever search endpoint this deployment serves.
@@ -33,14 +48,10 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	ctx, col := withCollector(ctx)
 	defer c.publish("", col)
 
-	limit := f.Limit
-	if limit > maxListResults {
-		warnCtx(ctx, "jira: list limit %d capped at %d", limit, maxListResults)
-		limit = maxListResults
+	if f.Limit > maxListResults {
+		warnCtx(ctx, "jira: list limit %d capped at %d", f.Limit, maxListResults)
 	}
-	if limit <= 0 {
-		limit = maxListResults
-	}
+	limit := effectiveLimit(f.Limit)
 
 	jql := c.buildJQL(f)
 	fields := c.issueFieldList(ctx)

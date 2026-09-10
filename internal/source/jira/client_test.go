@@ -689,6 +689,24 @@ func TestListStopsOnRepeatedCursorAndCapsLimit(t *testing.T) {
 	}
 }
 
+func TestEffectiveLimit(t *testing.T) {
+	cases := []struct{ in, want int }{
+		{0, defaultListResults},
+		{-1, defaultListResults},
+		{50, 50},
+		{200, maxListResults},
+		{500, maxListResults},
+	}
+	for _, tc := range cases {
+		if got := effectiveLimit(tc.in); got != tc.want {
+			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+	if defaultListResults != 100 || maxListResults != 200 {
+		t.Errorf("limits = %d/%d, want the contract's 100 default and 200 cap", defaultListResults, maxListResults)
+	}
+}
+
 // --- Ping and deployment detection ---
 
 func TestPingDetectsDeployment(t *testing.T) {

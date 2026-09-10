@@ -451,6 +451,24 @@ func TestListLimitTruncates(t *testing.T) {
 	}
 }
 
+func TestEffectiveLimit(t *testing.T) {
+	cases := []struct{ in, want int }{
+		{0, defaultListLimit},
+		{-1, defaultListLimit},
+		{50, 50},
+		{200, maxListLimit},
+		{500, maxListLimit},
+	}
+	for _, tc := range cases {
+		if got := effectiveLimit(tc.in); got != tc.want {
+			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+	if defaultListLimit != 100 || maxListLimit != 200 {
+		t.Errorf("limits = %d/%d, want the contract's 100 default and 200 cap", defaultListLimit, maxListLimit)
+	}
+}
+
 func TestPing(t *testing.T) {
 	_, c := newFixtureServer(t)
 	if err := c.Ping(context.Background()); err != nil {

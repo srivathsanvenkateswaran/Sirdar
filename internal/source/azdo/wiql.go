@@ -18,6 +18,29 @@ import (
 // ones.
 var closedStates = []string{"Closed", "Done", "Removed", "Resolved"}
 
+// List bounds. A caller that asks for no limit gets defaultListLimit, and
+// nobody gets more than maxListLimit: an unbounded WIQL query would size
+// $top, and the merged work item list, off whatever a broad filter happens
+// to match.
+const (
+	defaultListLimit = 100
+	maxListLimit     = 200
+)
+
+// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
+// zero or negative takes defaultListLimit, and nothing above maxListLimit is
+// honored. Both bounds sit well under WIQL's own $top ceiling, so no further
+// capping against the API is needed here.
+func effectiveLimit(n int) int {
+	if n <= 0 {
+		return defaultListLimit
+	}
+	if n > maxListLimit {
+		return maxListLimit
+	}
+	return n
+}
+
 // batchFields is the fixed field list requested from workitemsbatch. The
 // batch endpoint returns fields only — no relations, no _links — so it asks
 // for exactly what mapTracker reads.
@@ -118,7 +141,9 @@ func buildWIQL(f source.ListFilter, project string) (string, error) {
 
 // List runs a WIQL query for the filter and hydrates the ids it returns.
 // WIQL never returns field values, so this is always two steps: the query,
-// then workitemsbatch in chunks of at most 200 ids.
+// then workitemsbatch in chunks of at most 200 ids. Limit is bounded by
+// effectiveLimit: 0 (unset) means defaultListLimit, and anything above
+// maxListLimit is capped there.
 func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
 	query, err := buildWIQL(f, c.cfg.Project)
 	if err != nil {
@@ -129,10 +154,9 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("azure devops: encode wiql: %v", err)}
 	}
 
+	limit := effectiveLimit(f.Limit)
 	u := c.projectURL("/_apis/wit/wiql?api-version=" + apiVersion)
-	if f.Limit > 0 {
-		u += "&$top=" + strconv.Itoa(f.Limit)
-	}
+	u += "&$top=" + strconv.Itoa(limit)
 	var wr wiqlResponse
 	if err := c.doJSON(ctx, http.MethodPost, u, body, &wr); err != nil {
 		return nil, err
@@ -155,8 +179,8 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 			add(r.Target.ID)
 		}
 	}
-	if f.Limit > 0 && len(ids) > f.Limit {
-		ids = ids[:f.Limit]
+	if len(ids) > limit {
+		ids = ids[:limit]
 	}
 	if len(ids) == 0 {
 		return nil, nil
