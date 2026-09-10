@@ -1,0 +1,15 @@
+{
+  "totalCount": 3,
+  "count": 1,
+  "comments": [
+    {
+      "id": 3,
+      "workItemId": 4242,
+      "version": 1,
+      "text": "Linked pull request 512.",
+      "format": "markdown",
+      "createdBy": { "displayName": "", "uniqueName": "" },
+      "createdDate": "2026-09-04T08:15:00Z"
+    }
+  ]
+}
