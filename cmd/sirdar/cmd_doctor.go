@@ -41,6 +41,7 @@ func cmdDoctor(args []string, stdout, stderr io.Writer) int {
 	checks := []provider.Check{{Name: "config", OK: true, Detail: filepath.Join(cfg.Root, ".sirdar", "config.yaml")}}
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg, stderr)...)
+	checks = append(checks, mcpCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 
 	failed := 0
@@ -114,7 +115,11 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		if err != nil {
 			return []provider.Check{{Name: name, Detail: err.Error()}}
 		}
-		return []provider.Check{{Name: name, OK: true, Detail: fmt.Sprintf("%s v%s roles=%v", d.Name, d.Version, d.Roles)}}
+		detail := fmt.Sprintf("%s v%s roles=%v", d.Name, d.Version, d.Roles)
+		if probeErr := trackerProbe(ctx, client, d); probeErr != "" {
+			return []provider.Check{{Name: name, Detail: detail + " — " + probeErr}}
+		}
+		return []provider.Check{{Name: name, OK: true, Detail: detail}}
 
 	case "zohodesk":
 		ts, err := zohoTokenSource(sc, config.Resolver{Keychain: keychainFor()})
@@ -137,6 +142,51 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 	}
 }
 
+// probeKey is a tracker key no tracker has. Looking it up is the cheapest
+// call that needs a credential, which is the point: describe does not, so
+// an adapter whose token command is broken answers describe perfectly
+// while being unable to list a single ticket.
+const probeKey = "SIRDAR-DOCTOR-PROBE-0"
+
+// probeTimeout caps the probe on its own, inside the check's budget, so a
+// slow tracker is reported as slow rather than as the whole check running
+// out of time.
+const probeTimeout = 20 * time.Second
+
+// trackerProbe fetches a key that cannot exist and reports the problem
+// when the adapter answers with anything other than "not found" — an auth
+// error means the credential is wrong, and an internal error means the
+// token command failed. It returns "" when the adapter is healthy, and
+// says nothing about an adapter that serves no tracker role.
+func trackerProbe(ctx context.Context, client *plugin.Client, d plugin.Describe) string {
+	tracker := false
+	for _, role := range d.Roles {
+		if role == "tracker" {
+			tracker = true
+		}
+	}
+	if !tracker {
+		return ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, probeTimeout)
+	defer cancel()
+
+	_, err := client.Get(ctx, probeKey)
+	var serr *source.Error
+	if !errors.As(err, &serr) {
+		return ""
+	}
+	if ctx.Err() != nil {
+		return fmt.Sprintf("a tracker.get probe did not answer within %s, so a run's first fetch may not either", probeTimeout)
+	}
+	switch serr.Code {
+	case source.Auth, source.Internal:
+		return "a tracker.get probe failed with " + string(serr.Code) + ": " + serr.Message
+	default:
+		return ""
+	}
+}
+
 // oauthCheck performs one refresh and reports the access token it got and
 // how long that token is good for. The token itself is never printed.
 func oauthCheck(ctx context.Context, rt *zohodesk.RefreshingToken) provider.Check {
@@ -145,8 +195,8 @@ func oauthCheck(ctx context.Context, rt *zohodesk.RefreshingToken) provider.Chec
 		return provider.Check{Name: "zoho oauth", Detail: err.Error()}
 	}
 	return provider.Check{
-		Name:   "zoho oauth",
-		OK:     true,
+		Name: "zoho oauth",
+		OK:   true,
 		// Rounded: the sub-second drift between minting the token and
 		// measuring it is not something to report to three decimals.
 		Detail: fmt.Sprintf("access token obtained, expires in %ds", int(ttl.Round(time.Second).Seconds())),
@@ -167,6 +217,31 @@ func deskProbe(ctx context.Context, name string, sc *config.SourceConfig, ts zoh
 	default:
 		return provider.Check{Name: name, Detail: err.Error()}
 	}
+}
+
+// mcpCheck reports which MCP servers a session will be able to reach. A
+// workspace .mcp.json is the good case: the run sees those servers and no
+// others. Without one there is nothing to restrict the session to, so it
+// inherits every server the operator has configured for themselves —
+// including whatever write tools those carry — and that is worth saying
+// out loud rather than discovering in an events log.
+func mcpCheck(cfg *config.Config) provider.Check {
+	check := provider.Check{Name: "mcp", OK: true}
+	path := filepath.Join(cfg.Root, ".mcp.json")
+	switch {
+	case !cfg.WorkspaceOnlyMCP():
+		check.Detail = "mcp.workspaceOnly is off: every user-level MCP server is visible to the agent"
+	case cfg.MCPConfigPath() != "":
+		check.Detail = path + " — the session sees these servers only"
+	default:
+		check.Detail = "warning: no " + path + ", so every user-level MCP server is visible to the agent"
+	}
+	if len(cfg.Permissions.MCP) > 0 {
+		check.Detail += fmt.Sprintf("; permissions.mcp allows %d pattern(s)", len(cfg.Permissions.MCP))
+	} else {
+		check.Detail += "; permissions.mcp is empty, so write-shaped MCP tools are denied by name"
+	}
+	return check
 }
 
 // notesCheck proves the notes directory exists and takes writes, since a

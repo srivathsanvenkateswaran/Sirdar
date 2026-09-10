@@ -40,11 +40,36 @@ budget:
   maxMinutes: 25
   maxUsd: 5
 concurrency: 1
+attachments:
+  maxBytes: 10485760       # 10 MiB. Anything larger, and anything the session
+                           # cannot open (audio, video), is dropped from the
+                           # bundle and named in a warning instead.
 permissions:
+  # Every segment of a pipeline or compound command has to match a pattern:
+  # "rg foo | head -50" needs both "rg *" and "head *".
   bash:
     - "git log*"
     - "git show*"
     - "git grep*"
     - "rg *"
+    - "ls *"
+    - "cat *"
+    - "head *"
+    - "tail *"
+    - "wc *"
+    - "file *"
+    - "which *"
+  # Globs matched against an MCP tool's full name. While this list is empty,
+  # read-shaped MCP tools are allowed and write-shaped ones (create_*,
+  # deploy_*, send_*, buy_*, …) are denied by name. Naming patterns here
+  # replaces that heuristic outright: anything unlisted is then denied.
+  mcp: []
+    # - "mcp__grafana__query_*"
+    # - "mcp__grafana__list_*"
+mcp:
+  # Start the session against <workspace>/.mcp.json and nothing else, so the
+  # operator's own global connectors are not loaded into a triage run. With
+  # no such file the session sees every user-level server; doctor says so.
+  workspaceOnly: true
 playbooks: .sirdar/playbooks
 `

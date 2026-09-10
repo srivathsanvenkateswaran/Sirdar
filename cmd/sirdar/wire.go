@@ -230,9 +230,12 @@ func zohoTokenSource(sc *config.SourceConfig, creds config.Resolver) (zohodesk.T
 	}, nil
 }
 
-// expandCommand expands a leading "~/" or "./" in an adapter command line.
-// Only the program is a path; everything after the first space is the
-// adapter's own arguments and is left alone.
+// expandCommand expands a leading "~/", "./" or "../" in an adapter
+// command's program, which is the part that is resolved against the
+// workspace root. A "~/" inside the adapter's own arguments is expanded
+// too, but against the home directory and by plugin.Start, which is the
+// last place that can do it before the argv reaches a process with no
+// shell in front of it.
 func expandCommand(cfg *config.Config, command string) string {
 	program, args, _ := strings.Cut(command, " ")
 	switch {

@@ -66,6 +66,14 @@ out-of-order responses.
 | `helpdesk.attachments`    | `{"id","dir"}`                     | `[]ticket.Attachment`                  |
 | `shutdown`                | none                              | `null`                               |
 
+`tracker.list`'s `assignee` is matched against the same form the adapter puts in each
+returned ticket's `Assignee` field. If that field carries display names, an email address
+matches nothing — and an adapter that answers such a filter with an empty list is
+indistinguishable, to the operator, from having no open tickets. An adapter should either
+resolve the value it was given to the form it stores, or reject an `assignee` it cannot
+resolve with an `invalid_request` error. Returning `[]` for an unresolvable filter is the one
+answer it must not give.
+
 Ticket types are defined in `internal/ticket`; their JSON field names are
 the Go field names verbatim (`Key`, `Title`, `HelpdeskRef`, and so on —
 capitalized, no renaming). An adapter that fulfils only one role need not

@@ -150,9 +150,15 @@ func splitCommand(command string) []string {
 		argv = append(argv, cur.String())
 	}
 
-	if len(argv) > 0 && strings.HasPrefix(argv[0], "~/") {
-		if home, err := os.UserHomeDir(); err == nil {
-			argv[0] = filepath.Join(home, argv[0][2:])
+	// There is no shell between here and the adapter, so nothing else
+	// will expand a "~/" — not in argv[0], and not in an argument such as
+	// "--token-cmd-file ~/.sirdar/janus-token.sh", which the adapter
+	// would otherwise be handed as a literal path that cannot exist.
+	if home, err := os.UserHomeDir(); err == nil {
+		for i, a := range argv {
+			if strings.HasPrefix(a, "~/") {
+				argv[i] = filepath.Join(home, a[2:])
+			}
 		}
 	}
 

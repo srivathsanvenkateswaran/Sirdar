@@ -185,7 +185,7 @@ func TestBasicSession(t *testing.T) {
 	if rl != 1 {
 		t.Fatalf("rate limited events %d, want only the rejected one", rl)
 	}
-	if !contains(systems, "rate limit allowed five_hour") {
+	if !contains(systems, "rate limit five_hour") {
 		t.Fatalf("the allowed rate-limit line was not reported as informational: %v", systems)
 	}
 	if usage == nil || usage.InputTok != 18 || usage.OutputTok != 516 {
@@ -574,4 +574,119 @@ func containsPrefix(list []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+// TestMCPArgs is D2's other half: with a workspace MCP config named, the
+// session is started against that file and nothing else, so the operator's
+// own global connectors — deploy, buy, send — are never loaded.
+func TestMCPArgs(t *testing.T) {
+	spec := provider.SessionSpec{OutputSchema: []byte(`{}`)}
+	if got := args(spec); contains(got, "--mcp-config") || contains(got, "--strict-mcp-config") {
+		t.Fatalf("no config was named, so neither flag belongs on the command line: %v", got)
+	}
+
+	spec.MCPConfig = "/w/.mcp.json"
+	got := args(spec)
+	if !contains(got, "--strict-mcp-config") {
+		t.Fatalf("missing --strict-mcp-config: %v", got)
+	}
+	for i, a := range got {
+		if a == "--mcp-config" {
+			if i+1 >= len(got) || got[i+1] != "/w/.mcp.json" {
+				t.Fatalf("--mcp-config does not name the file: %v", got)
+			}
+			return
+		}
+	}
+	t.Fatalf("missing --mcp-config: %v", got)
+}
+
+// TestAuthDetail is D9: `claude auth status` answers with JSON in 2.1, and
+// doctor was printing its first line, which is "{". The account's email
+// and org id are never reported.
+func TestAuthDetail(t *testing.T) {
+	out := []byte(`{"loggedIn":true,"authMethod":"claude.ai","subscriptionType":"max","orgName":"Acme","email":"a@b.c","orgId":"o-1"}`)
+	got := authDetail(out)
+	for _, want := range []string{"logged in", "claude.ai", "max"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("detail %q is missing %q", got, want)
+		}
+	}
+	// orgName is left out too: on a personal account it is the login
+	// email with "'s Organization" on the end.
+	for _, secret := range []string{"a@b.c", "o-1", "Acme"} {
+		if strings.Contains(got, secret) {
+			t.Fatalf("detail %q leaks %q", got, secret)
+		}
+	}
+	if got := authDetail([]byte("Logged in as someone\nmore")); got != "Logged in as someone" {
+		t.Fatalf("a non-JSON status should pass through its first line, got %q", got)
+	}
+}
+
+// TestUsageAccumulatesAndCountsCachedTokens is D10 and D12: usage was
+// zero for a whole 25-minute run and the final input token count was 54
+// against a 31 KB prompt, because only the uncached input counter was
+// read.
+func TestUsageAccumulatesAndCountsCachedTokens(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"u1"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"one"}],"usage":{"input_tokens":10,"cache_creation_input_tokens":8000,"cache_read_input_tokens":0,"output_tokens":40}}}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"two"}],"usage":{"input_tokens":12,"cache_creation_input_tokens":0,"cache_read_input_tokens":8000,"output_tokens":60}}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":2,"session_id":"u1","result":"done","total_cost_usd":0.5,"usage":{"input_tokens":54,"cache_creation_input_tokens":8000,"cache_read_input_tokens":8000,"output_tokens":100}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var usage []provider.Event
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvUsage {
+			usage = append(usage, ev)
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(usage) != 3 {
+		t.Fatalf("want a usage event per assistant turn plus the result, got %d", len(usage))
+	}
+	if usage[0].Turns != 1 || usage[0].InputTok != 8010 || usage[0].OutputTok != 40 {
+		t.Fatalf("first turn %+v", usage[0])
+	}
+	if usage[1].Turns != 2 || usage[1].InputTok != 16022 || usage[1].OutputTok != 100 {
+		t.Fatalf("running total after two turns %+v", usage[1])
+	}
+	if usage[2].InputTok != 16054 || usage[2].CostUSD != 0.5 {
+		t.Fatalf("the result line's totals must count cached input: %+v", usage[2])
+	}
+}
+
+// TestAllowedWarningIsNotARateLimit is D11: nine informational
+// rate_limit_events were rendered as "blocked rate limited" on a run
+// where nothing was ever throttled.
+func TestAllowedWarningIsNotARateLimit(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"rate_limit_event","rate_limit_info":{"status":"allowed_warning","rateLimitType":"seven_day","utilization":0.56,"isUsingOverage":false}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"r1","result":"done","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var systems []string
+	for ev := range s.Events() {
+		switch ev.Kind {
+		case provider.EvRateLimited:
+			t.Errorf("allowed_warning must not be a rate limit: %+v", ev)
+		case provider.EvSystem:
+			systems = append(systems, ev.Text)
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if !contains(systems, "rate limit seven_day at 56% of the window") {
+		t.Fatalf("utilization was not reported: %v", systems)
+	}
 }
