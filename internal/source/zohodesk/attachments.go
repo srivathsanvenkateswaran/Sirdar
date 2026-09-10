@@ -127,12 +127,17 @@ func (c *Client) collectEntryAttachments(direct []zohoAttachmentRef, htmlContent
 // "<1-based index>-<name>" in collection order.
 //
 // A download failure for one attachment does not fail the call: it is
-// skipped, recorded in LastWarnings, and the remaining attachments are
+// skipped, reported through Warnings, and the remaining attachments are
 // still returned. Only when every attachment fails to download does
 // Attachments return a non-nil error (via errors.Join of the individual
-// failures).
+// failures) — and in that case the failures are not also recorded as
+// warnings, since the caller already has every one of them in the error.
 func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
-	c.LastWarnings = nil
+	// Discard anything an earlier call for this ticket left behind before
+	// doing anything else: every path out of here from this point on,
+	// including the ones that return early, must leave no stale warning
+	// for the next caller to pick up as its own.
+	c.takeWarnings(id)
 
 	entries, err := c.listConversations(ctx, id)
 	if err != nil {
@@ -180,7 +185,6 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		}
 		out = append(out, ticket.Attachment{ID: r.ID, Name: name, MIME: mime, Path: base + "/" + filename})
 	}
-	c.LastWarnings = warnings
 
 	if len(out) == 0 {
 		errs := make([]error, len(warnings))
@@ -189,7 +193,35 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		}
 		return out, errors.Join(errs...)
 	}
+	c.putWarnings(id, warnings)
 	return out, nil
+}
+
+// putWarnings records the failures one Attachments call skipped over.
+func (c *Client) putWarnings(id string, warnings []string) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.lastID = id
+	if len(warnings) == 0 {
+		delete(c.warnings, id)
+		return
+	}
+	if c.warnings == nil {
+		c.warnings = map[string][]string{}
+	}
+	c.warnings[id] = warnings
+}
+
+// takeWarnings returns and removes the warnings recorded for ticket id.
+func (c *Client) takeWarnings(id string) []string {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	w := c.warnings[id]
+	delete(c.warnings, id)
+	if len(w) == 0 {
+		return nil
+	}
+	return append([]string(nil), w...)
 }
 
 var (
@@ -200,12 +232,23 @@ var (
 // Warnings implements source.Warner: it returns the per-attachment
 // failures the most recent Attachments call recorded, so the caller can put
 // them in the prompt and the run state instead of silently serving a short
-// list of attachments.
+// list of attachments. Reading them consumes them.
+//
+// One Client serves every run in a batch, so "the most recent call" is only
+// unambiguous while one ticket is in flight. A caller that knows which
+// ticket it is asking about should use WarningsFor instead.
 func (c *Client) Warnings() []string {
-	if len(c.LastWarnings) == 0 {
-		return nil
-	}
-	return append([]string(nil), c.LastWarnings...)
+	c.mu.Lock()
+	id := c.lastID
+	c.mu.Unlock()
+	return c.takeWarnings(id)
+}
+
+// WarningsFor returns and consumes the failures recorded by the Attachments
+// call for ticket id, which is what a caller running several tickets at
+// once needs: it cannot be handed another ticket's missing evidence.
+func (c *Client) WarningsFor(id string) []string {
+	return c.takeWarnings(id)
 }
 
 // downloadAttachment fetches url with the client's auth headers and writes
@@ -215,9 +258,8 @@ func (c *Client) downloadAttachment(ctx context.Context, url, destPath string) (
 	if err != nil {
 		return "", err
 	}
-	c.setHeaders(req)
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.send(ctx, req)
 	if err != nil {
 		return "", err
 	}

@@ -175,14 +175,59 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 		}
 		return c.Helpdesk(), nil
 	case "zohodesk":
+		ts, err := zohoTokenSource(sc, creds)
+		if err != nil {
+			return nil, err
+		}
+		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
+	default:
+		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
+	}
+}
+
+// zohoTokenSource builds what a Zoho Desk client authenticates with: either
+// the one static access token the config names, or a refreshing source that
+// mints access tokens from a Self Client's refresh token. Either way the
+// secrets are resolved here and held in memory only — they are never
+// written to a run directory and never reach the agent's environment.
+func zohoTokenSource(sc *config.SourceConfig, creds config.Resolver) (zohodesk.TokenSource, error) {
+	if sc.Auth == nil {
 		token, err := creds.Resolve(sc.Token)
 		if err != nil {
 			return nil, fmt.Errorf("token %s: %w", sc.Token, err)
 		}
-		return zohodesk.New(sc.BaseURL, sc.OrgID, token), nil
-	default:
-		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
+		return zohodesk.StaticToken(token), nil
 	}
+
+	resolved := make([]string, 0, 3)
+	for _, ref := range []struct{ key, value string }{
+		{"auth.clientId", sc.Auth.ClientID},
+		{"auth.clientSecret", sc.Auth.ClientSecret},
+		{"auth.refreshToken", sc.Auth.RefreshToken},
+	} {
+		v, err := creds.Resolve(ref.value)
+		if err != nil {
+			return nil, fmt.Errorf("%s %s: %w", ref.key, ref.value, err)
+		}
+		resolved = append(resolved, v)
+	}
+
+	// accountsUrl is normally filled in from baseUrl when the config
+	// loads; deriving it again covers a Config built by hand.
+	accounts := sc.Auth.AccountsURL
+	if accounts == "" {
+		accounts = config.AccountsURLFor(sc.BaseURL)
+	}
+	if accounts == "" {
+		return nil, fmt.Errorf("auth.accountsUrl: cannot be derived from baseUrl %q; set it explicitly", sc.BaseURL)
+	}
+
+	return &zohodesk.RefreshingToken{
+		AccountsURL:  accounts,
+		ClientID:     resolved[0],
+		ClientSecret: resolved[1],
+		RefreshToken: resolved[2],
+	}, nil
 }
 
 // expandCommand expands a leading "~/" or "./" in an adapter command line.

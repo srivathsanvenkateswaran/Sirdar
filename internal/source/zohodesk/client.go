@@ -6,6 +6,7 @@ package zohodesk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -23,24 +25,38 @@ import (
 type Client struct {
 	BaseURL string
 	OrgID   string
-	Token   string
+	Tokens  TokenSource
 	HTTP    *http.Client
 
-	// LastWarnings holds non-fatal problems (e.g. individual attachment
-	// download failures) recorded by the most recent Attachments call. It is
-	// cleared at the start of every Attachments call.
-	LastWarnings []string
+	// mu guards warnings and lastID. One Client serves every run in a
+	// batch, so two tickets can be inside Attachments at the same time.
+	mu sync.Mutex
+	// warnings holds the non-fatal problems (individual attachment
+	// download failures) each Attachments call recorded, keyed by the
+	// ticket id it was called with, so one ticket's skipped attachment
+	// cannot be reported against another's. An entry is written when the
+	// call ends and removed when it is read.
+	warnings map[string][]string
+	// lastID is the ticket whose Attachments call finished most recently,
+	// which is what the argument-less source.Warner interface can offer.
+	lastID string
 }
 
 // New returns a Client configured to talk to baseURL as organization orgID,
-// authenticating with token.
-func New(baseURL, orgID, token string) *Client {
+// taking each request's access token from ts.
+func New(baseURL, orgID string, ts TokenSource) *Client {
 	return &Client{
 		BaseURL: baseURL,
 		OrgID:   orgID,
-		Token:   token,
+		Tokens:  ts,
 		HTTP:    &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// NewWithToken returns a Client that authenticates with one fixed access
+// token, which Zoho Desk stops honouring an hour after it was issued.
+func NewWithToken(baseURL, orgID, token string) *Client {
+	return New(baseURL, orgID, StaticToken(token))
 }
 
 // get issues an authenticated GET against path (relative to BaseURL) with
@@ -71,10 +87,13 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 	if err != nil {
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zoho desk: GET %s: %v", path, err)}
 	}
-	c.setHeaders(req)
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.send(ctx, req)
 	if err != nil {
+		var serr *source.Error
+		if errors.As(err, &serr) {
+			return nil, serr
+		}
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zoho desk: GET %s: %v", path, err)}
 	}
 	defer resp.Body.Close()
@@ -89,9 +108,63 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 	return body, nil
 }
 
-func (c *Client) setHeaders(req *http.Request) {
+func (c *Client) http() *http.Client {
+	if c.HTTP != nil {
+		return c.HTTP
+	}
+	return &http.Client{Timeout: 30 * time.Second}
+}
+
+// setHeaders puts the org id and a current access token on req, returning
+// the token it used so a rejection can name it.
+func (c *Client) setHeaders(ctx context.Context, req *http.Request) (string, error) {
+	if c.Tokens == nil {
+		return "", &source.Error{Code: source.Auth, Message: "zoho desk: no token source configured"}
+	}
+	token, err := c.Tokens.Token(ctx)
+	if err != nil {
+		return "", err
+	}
 	req.Header.Set("orgId", c.OrgID)
-	req.Header.Set("Authorization", "Zoho-oauthtoken "+c.Token)
+	req.Header.Set("Authorization", "Zoho-oauthtoken "+token)
+	return token, nil
+}
+
+// send issues an authenticated request, retrying it once with a freshly
+// minted access token when Desk answers 401. An access token can stop
+// working before the expiry it was issued with — revoked, or invalidated by
+// another client refreshing the same grant — and a whole triage run should
+// not fail for the second it takes to mint another. Only one retry: a 401
+// that survives a new token is a real authentication failure.
+//
+// Every request this client makes is a bodyless GET, so replaying one is
+// free of the usual re-send problem.
+func (c *Client) send(ctx context.Context, req *http.Request) (*http.Response, error) {
+	token, err := c.setHeaders(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	resp, err := c.http().Do(req)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusUnauthorized {
+		return resp, nil
+	}
+	refresher, ok := c.Tokens.(Refresher)
+	if !ok {
+		return resp, nil
+	}
+
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+	refresher.Invalidate(token)
+
+	retry := req.Clone(ctx)
+	if _, err := c.setHeaders(ctx, retry); err != nil {
+		return nil, err
+	}
+	return c.http().Do(retry)
 }
 
 // statusError maps a non-2xx HTTP response to a *source.Error.

@@ -137,7 +137,11 @@ func (d Deps) childEnv() []string {
 }
 
 // credentialEnvNames collects the variable names behind every "env:"
-// credential reference in the workspace configuration.
+// credential reference in the workspace configuration. An OAuth grant's
+// client secret and refresh token are longer-lived than the access token a
+// static token: ref holds, so they matter here more, not less: a refresh
+// token read out of the agent's environment mints access tokens until
+// somebody revokes it at the Zoho console.
 func credentialEnvNames(cfg *config.Config) map[string]bool {
 	names := make(map[string]bool)
 	if cfg == nil {
@@ -147,7 +151,11 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 		if s == nil {
 			continue
 		}
-		for _, ref := range []string{s.Token} {
+		refs := []string{s.Token}
+		if s.Auth != nil {
+			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
+		}
+		for _, ref := range refs {
 			if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
 				names[name] = true
 			}
