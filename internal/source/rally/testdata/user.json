@@ -1,0 +1,17 @@
+{
+  "OperationResult": {
+    "_rallyAPIMajor": "2",
+    "_rallyAPIMinor": "0",
+    "Errors": [],
+    "Warnings": [],
+    "User": {
+      "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9001",
+      "_refObjectName": "Ann Agent",
+      "_type": "User",
+      "ObjectID": 9001,
+      "UserName": "ann@example.com",
+      "DisplayName": "Ann Agent",
+      "EmailAddress": "ann@example.com"
+    }
+  }
+}

@@ -1,0 +1,4 @@
+{
+  "55501": { "AttachmentContent": { "_ref": "https://rally.example.com/slm/webservice/v2.0/attachmentcontent/55501", "ObjectID": 55501, "Content": "aGVsbG8gcmFsbHk=" } },
+  "55502": { "AttachmentContent": { "_ref": "https://rally.example.com/slm/webservice/v2.0/attachmentcontent/55502", "ObjectID": 55502, "Content": "c2VjcmV0" } }
+}
