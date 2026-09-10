@@ -3,6 +3,7 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -109,20 +110,50 @@ permissions:
 playbooks: .sirdar/playbooks
 `
 
+// configWithCredential is the same workspace with a helpdesk source whose
+// token is an env: reference, so the run has a credential to keep away from
+// the agent.
+const configWithCredential = configYAML + `sources:
+  helpdesk:
+    adapter: zohodesk
+    orgId: "1"
+    baseUrl: https://desk.example
+    token: env:ZOHO_TOKEN
+`
+
+// configWithOAuth is the same workspace with a helpdesk whose credentials
+// are an OAuth grant rather than one access token, so the run has three
+// env: references to keep away from the agent instead of one.
+const configWithOAuth = configYAML + `sources:
+  helpdesk:
+    adapter: zohodesk
+    orgId: "1"
+    baseUrl: https://desk.zoho.in
+    auth:
+      clientId: env:ZOHO_CLIENT_ID
+      clientSecret: env:ZOHO_CLIENT_SECRET
+      refreshToken: env:ZOHO_REFRESH_TOKEN
+`
+
 // newWorkspace writes a real .sirdar workspace into a temp dir and loads
 // it through config.Load, so Config.Root and every default is set the way
 // a real run sees them.
 func newWorkspace(t *testing.T) *config.Config {
 	t.Helper()
+	return newWorkspaceWith(t, configYAML)
+}
+
+func newWorkspaceWith(t *testing.T, body string) *config.Config {
+	t.Helper()
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".sirdar", "playbooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(root, ".sirdar", "config.yaml"), []byte(configYAML), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".sirdar", "config.yaml"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	body := "# Exports\n\n" + playbookMarker + "\n"
-	if err := os.WriteFile(filepath.Join(root, ".sirdar", "playbooks", "00-test.md"), []byte(body), 0o644); err != nil {
+	playbook := "# Exports\n\n" + playbookMarker + "\n"
+	if err := os.WriteFile(filepath.Join(root, ".sirdar", "playbooks", "00-test.md"), []byte(playbook), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	cfg, err := config.Load(root)
@@ -158,6 +189,19 @@ func (s stubTracker) List(ctx context.Context, f source.ListFilter) ([]ticket.Tr
 type stubHelpdesk struct {
 	getErr    error
 	attachErr error
+	// warnings is what the stub reports through source.Warner, standing in
+	// for a helpdesk that downloaded some attachments and skipped others.
+	// warningsFor, when set, overrides warnings with a per-ticket-id
+	// mapping, for tests that need two tickets to see different warnings.
+	warnings    []string
+	warningsFor map[string][]string
+}
+
+func (s stubHelpdesk) WarningsFor(id string) []string {
+	if s.warningsFor != nil {
+		return s.warningsFor[id]
+	}
+	return s.warnings
 }
 
 func (s stubHelpdesk) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, error) {
@@ -189,6 +233,7 @@ type stubSession struct {
 	sendCh    chan string
 	handle    string
 	result    provider.Result
+	sendErr   error // when set, Send fails the way a finished CLI does
 
 	mu         sync.Mutex
 	sends      []string
@@ -202,7 +247,11 @@ func (s *stubSession) Events() <-chan provider.Event { return s.events }
 func (s *stubSession) Send(ctx context.Context, userText string) error {
 	s.mu.Lock()
 	s.sends = append(s.sends, userText)
+	err := s.sendErr
 	s.mu.Unlock()
+	if err != nil {
+		return err
+	}
 	s.sendCh <- userText
 	return nil
 }
@@ -243,8 +292,10 @@ func (s *stubSession) cancelCount() int {
 }
 
 type stubProvider struct {
-	name   string
-	script func(spec provider.SessionSpec, s *stubSession)
+	name       string
+	sendErr    error    // handed to every session this provider starts
+	stderrTail []string // reported in every session's Result
+	script     func(spec provider.SessionSpec, s *stubSession)
 
 	mu       sync.Mutex
 	specs    []provider.SessionSpec
@@ -267,8 +318,10 @@ func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (pr
 		cancelled: make(chan struct{}),
 		sendCh:    make(chan string, 4),
 		handle:    "handle-abc",
+		sendErr:   p.sendErr,
 	}
 	s.result.Handle = s.handle
+	s.result.StderrTail = p.stderrTail
 	p.mu.Lock()
 	p.specs = append(p.specs, spec)
 	p.starts = append(p.starts, time.Now())
@@ -364,7 +417,7 @@ func TestTriageHappyPath(t *testing.T) {
 		{Kind: provider.EvUsage, Turns: 3, InputTok: 100, OutputTok: 20, CostUSD: 0.42},
 		finalEvent(triageDoc),
 	}
-	p := &stubProvider{script: replay(events...)}
+	p := &stubProvider{script: replay(events...), stderrTail: []string{"warning: mcp server slow", "done"}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -434,6 +487,16 @@ func TestTriageHappyPath(t *testing.T) {
 	if out.Digest.Confidence != "medium" || out.Digest.Classification != "code" || out.Digest.Issue == "" {
 		t.Fatalf("digest: %+v", out.Digest)
 	}
+	if strings.Join(out.State.StderrTail, "|") != "warning: mcp server slow|done" {
+		t.Fatalf("state stderr tail: %v", out.State.StderrTail)
+	}
+	var persisted store.State
+	if err := json.Unmarshal([]byte(readFile(t, filepath.Join(dir, "state.json"))), &persisted); err != nil {
+		t.Fatal(err)
+	}
+	if len(persisted.StderrTail) != 2 {
+		t.Fatalf("state.json stderr tail: %v", persisted.StderrTail)
+	}
 }
 
 func TestSchemaRetryThenFail(t *testing.T) {
@@ -476,6 +539,114 @@ func TestSchemaRetryThenFail(t *testing.T) {
 	}
 	if ExitCode(outs) != 1 {
 		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
+// TestSchemaRetryResumesAfterSendFails covers the retry turn arriving when
+// the agent process has already exited: Send fails, and the run continues in
+// a fresh session resumed from the same handle rather than failing outright.
+func TestSchemaRetryResumesAfterSendFails(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{sendErr: errors.New("claude session has exited")}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if spec.Resume == "" {
+			s.emit(provider.Event{Kind: provider.EvFinal, Text: `{"title":"nope"}`})
+			return
+		}
+		s.emit(finalEvent(triageDoc))
+	}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if p.startCount() != 2 {
+		t.Fatalf("sessions started: %d, want the original plus the resumed retry", p.startCount())
+	}
+	retry := p.spec(1)
+	if retry.Resume != "handle-abc" {
+		t.Fatalf("retry session resume %q, want the first session's handle", retry.Resume)
+	}
+	if !strings.Contains(retry.Prompt, "did not match the schema") {
+		t.Fatalf("retry session prompt %q", retry.Prompt)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Fatal(err)
+	}
+	if ExitCode(outs) != 0 {
+		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
+// TestCredentialEnvIsStrippedFromTheAgent covers a token the workspace
+// resolves for itself ending up in the agent's environment, where a session
+// that can run shell commands could read it straight out.
+func TestCredentialEnvIsStrippedFromTheAgent(t *testing.T) {
+	cfg := newWorkspaceWith(t, configWithCredential)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.Env = []string{"PATH=/usr/bin", "ZOHO_TOKEN=secret", "HOME=/home/tester"}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	env := p.spec(0).Env
+	for _, entry := range env {
+		if strings.HasPrefix(entry, "ZOHO_TOKEN=") {
+			t.Fatalf("the helpdesk credential reached the agent: %v", env)
+		}
+	}
+	if !contains(env, "PATH=/usr/bin") || !contains(env, "HOME=/home/tester") {
+		t.Fatalf("child env dropped entries that are not credentials: %v", env)
+	}
+	if !contains(env, "SIRDAR_BILLING=subscription") {
+		t.Fatalf("child env is missing the billing mode: %v", env)
+	}
+}
+
+// TestOAuthCredentialsAreStrippedFromTheAgent covers the refresh grant
+// reaching the agent's environment. It matters more than the access token
+// did: an access token expires in an hour, while a refresh token keeps
+// minting them until somebody revokes it at the Zoho console.
+func TestOAuthCredentialsAreStrippedFromTheAgent(t *testing.T) {
+	cfg := newWorkspaceWith(t, configWithOAuth)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.Env = []string{
+		"PATH=/usr/bin",
+		"ZOHO_CLIENT_ID=1000.clientid",
+		"ZOHO_CLIENT_SECRET=shhh",
+		"ZOHO_REFRESH_TOKEN=1000.refresh",
+		"HOME=/home/tester",
+	}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	env := p.spec(0).Env
+	for _, entry := range env {
+		for _, name := range []string{"ZOHO_CLIENT_ID=", "ZOHO_CLIENT_SECRET=", "ZOHO_REFRESH_TOKEN="} {
+			if strings.HasPrefix(entry, name) {
+				t.Fatalf("an OAuth credential reached the agent: %s", name)
+			}
+		}
+	}
+	if !contains(env, "PATH=/usr/bin") || !contains(env, "HOME=/home/tester") {
+		t.Fatalf("child env dropped entries that are not credentials: %v", env)
 	}
 }
 
@@ -543,6 +714,36 @@ func TestBlockedOnQuestion(t *testing.T) {
 	}
 }
 
+// TestInvalidKeyFailsBeforeAnyWrite covers `sirdar triage ../x`: the key is
+// joined into the runs directory and the note filename, so it is refused
+// before a directory exists.
+func TestInvalidKeyFailsBeforeAnyWrite(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"../escape"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q", out.State.Status)
+	}
+	if !strings.Contains(out.State.Reason, "not a usable ticket key") {
+		t.Fatalf("reason %q", out.State.Reason)
+	}
+	if p.startCount() != 0 {
+		t.Fatal("the provider was started for an unusable key")
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".sirdar", "runs")); !os.IsNotExist(err) {
+		t.Fatalf("an unusable key created run directories: %v", err)
+	}
+	if ExitCode(outs) != 1 {
+		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
 func TestPrepareFailsFast(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replay(finalEvent(triageDoc))}
@@ -585,6 +786,80 @@ func TestAttachmentWarning(t *testing.T) {
 	promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
 	if !strings.Contains(promptText, "download failed") {
 		t.Fatalf("prompt is missing the warning:\n%s", promptText)
+	}
+}
+
+// TestHelpdeskWarningsReachThePrompt covers a helpdesk that returns
+// attachments and, separately, reports that it skipped some. Nothing fails,
+// so the only way the agent learns an attachment is missing is the warning.
+func TestHelpdeskWarningsReachThePrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	hd := stubHelpdesk{warnings: []string{"zoho desk: download attachment a2: status 404"}}
+	r := newRunner(cfg, p, stubTracker{}, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(promptText, "download attachment a2") {
+		t.Fatalf("prompt is missing the helpdesk warning:\n%s", promptText)
+	}
+	found := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "download attachment a2") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("run state warnings: %v", out.State.Warnings)
+	}
+}
+
+// TestHelpdeskWarningsStayWithTheirTicket covers a helpdesk that answers
+// two tickets with different per-id warnings: prepare must call
+// WarningsFor(helpdeskID) rather than an argument-less Warnings(), or one
+// ticket's prompt.md ends up carrying the other's missing-attachment
+// warning.
+func TestHelpdeskWarningsStayWithTheirTicket(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	hd := stubHelpdesk{warningsFor: map[string][]string{
+		"OMNI-1": {"zoho desk: download attachment a1: status 404"},
+		"OMNI-2": {"zoho desk: download attachment b2: status 500"},
+	}}
+	// No tracker: the helpdesk id is the ticket key itself, so the two
+	// tickets go to the helpdesk stub as distinct ids.
+	r := newRunner(cfg, p, nil, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1", "OMNI-2"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(outs) != 2 {
+		t.Fatalf("outs = %d, want 2", len(outs))
+	}
+
+	for _, out := range outs {
+		if out.State.Status != store.StatusCompleted {
+			t.Fatalf("%s status %q reason %q", out.State.Key, out.State.Status, out.State.Reason)
+		}
+		promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+		own, other := "attachment a1", "attachment b2"
+		if out.State.Key == "OMNI-2" {
+			own, other = "attachment b2", "attachment a1"
+		}
+		if !strings.Contains(promptText, own) {
+			t.Fatalf("%s prompt is missing its own warning:\n%s", out.State.Key, promptText)
+		}
+		if strings.Contains(promptText, other) {
+			t.Fatalf("%s prompt carries the other ticket's warning:\n%s", out.State.Key, promptText)
+		}
 	}
 }
 
@@ -883,6 +1158,149 @@ func TestRetriageOverwritesTheKeysNote(t *testing.T) {
 	// With nothing filed, the run keeps its own copy of the note.
 	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// subdirConfigYAML files notes the way an Obsidian vault with per-kind
+// folders expects: a triage note under Triage/, an RCA note under RCA/, and
+// a resolution note under Resolutions/.
+const subdirConfigYAML = `workspace: test
+provider: claude
+billing: subscription
+notes:
+  dir: notes
+  filenames:
+    triage: "Triage/{key} {slug}.md"
+    rca: "RCA/{key} RCA {slug}.md"
+    resolution: "Resolutions/{key} RES {slug}.md"
+budget:
+  maxTurns: 60
+  maxMinutes: 25
+  maxUsd: 5
+concurrency: 1
+permissions:
+  bash:
+    - "git log*"
+    - "rg *"
+playbooks: .sirdar/playbooks
+`
+
+func TestTriageFilesNoteUnderPatternSubdirectory(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	notePath := filepath.Join(cfg.Root, "notes", "Triage", "OMNI-1 export-fails-for-large-orders.md")
+	if _, err := os.Stat(notePath); err != nil {
+		t.Fatalf("note was not filed under Triage/: %v", err)
+	}
+
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 || rows[0].NotePath != notePath {
+		t.Fatalf("register row NotePath = %q, want %q", rows[0].NotePath, notePath)
+	}
+}
+
+func TestRetriageWithSubdirectoryPatternOverwritesInPlace(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	notesDir := filepath.Join(cfg.Root, "notes")
+	notePath := filepath.Join(notesDir, "Triage", "OMNI-1 export-fails-for-large-orders.md")
+
+	if outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	} else if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("first triage: %+v", outs[0].State)
+	}
+
+	retitled := strings.Replace(triageDoc, `"title": "Export fails for large orders"`, `"title": "Export still fails"`, 1)
+	p.script = replay(finalEvent(retitled))
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("second triage: %+v", outs[0].State)
+	}
+
+	entries, err := os.ReadDir(filepath.Join(notesDir, "Triage"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(notePath) {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Fatalf("Triage/ holds %v", names)
+	}
+	if body := readFile(t, notePath); !strings.Contains(body, "# Export still fails") {
+		t.Fatalf("the note inside Triage/ was not rewritten:\n%s", body)
+	}
+}
+
+func TestRCAWithSubdirectoryPatternsFilesBothNotesAndUpdatesTriage(t *testing.T) {
+	cfg := newWorkspaceWith(t, subdirConfigYAML)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	triageOuts, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if triageOuts[0].State.Status != store.StatusCompleted {
+		t.Fatalf("triage status %q", triageOuts[0].State.Status)
+	}
+
+	p.script = replay(finalEvent(rcaDoc))
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("rca status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	rcaPath := filepath.Join(cfg.Root, "notes", "RCA", "OMNI-1 RCA export-times-out-on-large-orders.md")
+	resPath := filepath.Join(cfg.Root, "notes", "Resolutions", "OMNI-1 RES stream-the-csv-export.md")
+	if _, err := os.Stat(rcaPath); err != nil {
+		t.Fatalf("rca note was not filed under RCA/: %v", err)
+	}
+	if _, err := os.Stat(resPath); err != nil {
+		t.Fatalf("resolution note was not filed under Resolutions/: %v", err)
+	}
+
+	triagePath := filepath.Join(cfg.Root, "notes", "Triage", "OMNI-1 export-fails-for-large-orders.md")
+	triageNote := readFile(t, triagePath)
+	if !strings.Contains(triageNote, "status: resolved") {
+		t.Fatalf("triage note inside Triage/ was not updated:\n%s", triageNote)
+	}
+
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("register rows: %d", len(rows))
+	}
+	if rows[1].NotePath != rcaPath {
+		t.Fatalf("rca register NotePath = %q, want %q", rows[1].NotePath, rcaPath)
+	}
+	if rows[2].NotePath != resPath {
+		t.Fatalf("resolution register NotePath = %q, want %q", rows[2].NotePath, resPath)
 	}
 }
 

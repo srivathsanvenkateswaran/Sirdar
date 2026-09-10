@@ -5,9 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +31,13 @@ type execution struct {
 	schemaError string
 	malformed   int
 
+	// retrySession is set when the schema retry could not be sent on the
+	// running session and a fresh one was started to carry it; consume
+	// switches to it and keeps going. live is the session being read from
+	// right now, which the wall-clock timer cancels from its own goroutine.
+	retrySession provider.Session
+	live         liveSession
+
 	question    string
 	rateLimited bool
 	resetsAt    time.Time
@@ -36,6 +45,30 @@ type execution struct {
 	overBudget  string
 	interrupted bool
 	failure     string
+}
+
+// liveSession holds the session the run is currently reading from. The
+// wall-clock timer fires on its own goroutine and has to stop whichever
+// session is live, which is not necessarily the one the run started with:
+// a schema retry can replace it partway through.
+type liveSession struct {
+	mu   sync.Mutex
+	sess provider.Session
+}
+
+func (l *liveSession) set(s provider.Session) {
+	l.mu.Lock()
+	l.sess = s
+	l.mu.Unlock()
+}
+
+func (l *liveSession) cancel() {
+	l.mu.Lock()
+	s := l.sess
+	l.mu.Unlock()
+	if s != nil {
+		s.Cancel()
+	}
 }
 
 // execute starts one agent session for a prepared run, streams its events
@@ -66,36 +99,49 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	log, err := p.run.OpenEventLog()
 	if err != nil {
 		sess.Cancel()
-		_, _ = sess.Wait() // reap the child before giving up on the run
+		res, _ := sess.Wait() // reap the child before giving up on the run
+		p.state.StderrTail = res.StderrTail
 		return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
 	}
 	defer log.Close()
+
+	ex := &execution{}
+	ex.live.set(sess)
 
 	var timedOut atomic.Bool
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
 		timer := time.AfterFunc(time.Duration(mins)*time.Minute, func() {
 			timedOut.Store(true)
-			sess.Cancel()
+			ex.live.cancel()
 		})
 		defer timer.Stop()
 	}
 
-	ex := &execution{}
-	r.consume(ctx, p, sess, log, pl, ex)
+	sessions := r.consume(ctx, p, sess, log, pl, ex)
 
-	res, _ := sess.Wait()
-	if res.Handle != "" {
-		p.state.Handle = res.Handle
-	} else if h := sess.Handle(); h != "" {
-		p.state.Handle = h
-	}
-	if res.Usage.Turns > p.state.Usage.Turns {
-		p.state.Usage.Turns = res.Usage.Turns
-		p.state.Usage.InputTokens = res.Usage.InputTok
-		p.state.Usage.OutputTokens = res.Usage.OutputTok
-	}
-	if res.Usage.CostUSD > p.state.Usage.CostUSD {
-		p.state.Usage.CostUSD = res.Usage.CostUSD
+	// Every session started for this run is reaped, and the last one's
+	// result is the run's: a schema retry that had to open a fresh session
+	// carries the answer.
+	var res provider.Result
+	for _, s := range sessions {
+		got, _ := s.Wait()
+		res = got
+		if got.Handle != "" {
+			p.state.Handle = got.Handle
+		} else if h := s.Handle(); h != "" {
+			p.state.Handle = h
+		}
+		if got.Usage.Turns > p.state.Usage.Turns {
+			p.state.Usage.Turns = got.Usage.Turns
+			p.state.Usage.InputTokens = got.Usage.InputTok
+			p.state.Usage.OutputTokens = got.Usage.OutputTok
+		}
+		if got.Usage.CostUSD > p.state.Usage.CostUSD {
+			p.state.Usage.CostUSD = got.Usage.CostUSD
+		}
+		if len(got.StderrTail) > 0 {
+			p.state.StderrTail = got.StderrTail
+		}
 	}
 
 	if len(ex.final) == 0 && ex.rawFinal != "" {
@@ -217,9 +263,27 @@ func noteKind(kind store.Kind) note.Kind {
 	return note.Triage
 }
 
-// consume reads the session's events until it ends, handling an interrupt
-// by cancelling the session and letting the stream drain.
-func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
+// consume reads the run's events until they end, and returns every session
+// it read from, in the order they were started. There is normally one; a
+// schema retry the running session could not take adds the fresh session
+// that carried it, whose events are consumed the same way and into the same
+// execution state.
+func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) []provider.Session {
+	sessions := []provider.Session{sess}
+	for {
+		r.consumeSession(ctx, p, sess, log, pl, ex)
+		if ex.retrySession == nil {
+			return sessions
+		}
+		sess, ex.retrySession = ex.retrySession, nil
+		ex.live.set(sess)
+		sessions = append(sessions, sess)
+	}
+}
+
+// consumeSession reads one session's events until it ends, handling an
+// interrupt by cancelling the session and letting the stream drain.
+func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
 	done := ctx.Done()
 	events := sess.Events()
 	for events != nil {
@@ -390,10 +454,38 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	msg := "Your previous answer did not match the schema: " +
 		strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", "; ") +
 		". Reply again with the corrected JSON object only."
-	if sendErr := sess.Send(ctx, msg); sendErr != nil {
-		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v", sendErr)
-		sess.Cancel()
+	sendErr := sess.Send(ctx, msg)
+	if sendErr == nil {
+		return
 	}
+
+	// `claude -p` exits after its result line, and a Codex session ends its
+	// event stream on the completed turn, so by the time the note fails
+	// validation there is often no session left to answer on. Carry the
+	// retry into a fresh session against the same provider handle instead
+	// of throwing the run away over it.
+	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
+	if startErr != nil {
+		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
+		sess.Cancel()
+		return
+	}
+	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
+	ex.retrySession = next
+}
+
+// resumeForRetry starts a new session that continues the finished one,
+// opening with the retry message. It reports an error when the provider has
+// no handle to resume from, because a fresh session without one would start
+// the whole triage again on a budget meant for a single answer.
+func (r *Runner) resumeForRetry(ctx context.Context, p *prepared, sess provider.Session, msg string) (provider.Session, error) {
+	handle := sess.Handle()
+	if handle == "" {
+		return nil, fmt.Errorf("the session reported no handle to resume")
+	}
+	spec := r.sessionSpec(p, handle)
+	spec.Prompt = msg
+	return r.Provider.Start(ctx, spec)
 }
 
 // firstProblem summarises a validation error in one line: its header plus
@@ -611,11 +703,13 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	return filed, nil
 }
 
-// fileNote copies a note into the workspace's notes directory. A key's
-// triage note is looked up by key rather than by filename, because a
-// re-triage often retitles the issue: the existing note is overwritten in
-// place while its status is still "triaged", and left alone with a warning
-// once a human has moved it on.
+// fileNote copies a note into the workspace's notes directory, creating
+// filename's parent directory when the configured pattern files it into a
+// subdirectory (e.g. "Triage/{key} {slug}.md"). A key's triage note is
+// looked up by key rather than by filename, because a re-triage often
+// retitles the issue: the existing note is overwritten in place while its
+// status is still "triaged", and left alone with a warning once a human has
+// moved it on.
 func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) string {
 	dir := r.Config.ExpandPath(r.Config.Notes.Dir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -640,6 +734,10 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 		}
 	}
 
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("notes directory %s: %v", filepath.Dir(path), err))
+		return ""
+	}
 	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
 		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("write %s: %v", path, err))
 		return ""
@@ -648,10 +746,12 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 }
 
 // existingTriageNote finds this key's triage note in the notes directory,
-// whatever it is called. It prefers the path the last completed triage run
-// recorded, and falls back to scanning the directory for a note filed under
-// the key whose frontmatter tags it as triage — which is how a note written
-// by hand, or before the run state existed, is still found.
+// whatever it is called or however deep the configured filename pattern
+// files it. It prefers the path the last completed triage run recorded, and
+// falls back to walking dir recursively — skipping dot-directories such as
+// .obsidian — for a "<key> *.md" file whose frontmatter tags it as triage,
+// which is how a note written by hand, filed before the run state existed,
+// or filed into a pattern subdirectory such as Triage/ is still found.
 func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
@@ -660,7 +760,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 				continue
 			}
 			for _, path := range s.Notes {
-				if filepath.Dir(path) != dir {
+				if !underDir(path, dir) {
 					continue
 				}
 				if _, err := os.Stat(path); err == nil {
@@ -670,25 +770,41 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 		}
 	}
 
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return ""
-	}
 	prefix := p.state.Key + " "
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".md") {
-			continue
+	var found string
+	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return nil // an unreadable entry just isn't a candidate
 		}
-		path := filepath.Join(dir, e.Name())
+		if d.IsDir() {
+			if path != dir && strings.HasPrefix(d.Name(), ".") {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if !strings.HasPrefix(d.Name(), prefix) || !strings.HasSuffix(d.Name(), ".md") {
+			return nil
+		}
 		data, err := os.ReadFile(path)
 		if err != nil {
-			continue
+			return nil
 		}
 		if strings.Contains(frontmatterValue(string(data), "tags"), string(note.Triage)) {
-			return path
+			found = path
+			return filepath.SkipAll
 		}
+		return nil
+	})
+	return found
+}
+
+// underDir reports whether path is dir itself or lies somewhere beneath it.
+func underDir(path, dir string) bool {
+	rel, err := filepath.Rel(dir, path)
+	if err != nil {
+		return false
 	}
-	return ""
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
 }
 
 // writePlaybookSuggestions leaves the agent's playbook additions in the run

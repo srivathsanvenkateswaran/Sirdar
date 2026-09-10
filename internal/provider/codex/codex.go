@@ -36,10 +36,6 @@ const (
 	stderrTailLines = 50
 )
 
-// lastStderrTail exposes the most recent session's stderr tail to tests. It is
-// set by Wait once the child has exited; production code should not read it.
-var lastStderrTail []string
-
 // lastPumpDone exposes the most recent session's pump-exit signal to tests, so
 // a failed Start can be checked for a leaked goroutine. Tests in this package
 // therefore must not run in parallel.
@@ -106,6 +102,9 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 	go func() {
 		defer close(s.stdoutDone)
 		s.conn.run()
+		// stdout is at EOF, so the child can send nothing more: end the
+		// event stream here whatever state the turn was left in.
+		s.closeStream()
 	}()
 	go func() {
 		defer close(s.stderrDone)
@@ -246,6 +245,14 @@ type session struct {
 	turnClosed bool
 	turnErr    error
 
+	// streamClosed records that the event queue has been closed, so
+	// Events() has ended and no further turn can be started on this
+	// session. sendPending is set for the window in which Send is starting
+	// a follow-up turn, which keeps the turn that just completed from
+	// ending the stream underneath it.
+	streamClosed bool
+	sendPending  bool
+
 	exitErr error
 
 	exited     chan struct{}
@@ -272,18 +279,38 @@ func (s *session) Handle() string {
 }
 
 // Send starts a follow-up turn on the same thread, reusing the output schema.
+// It fails once the event stream has ended, because a turn whose events
+// nobody can observe is worse than no turn at all: the caller is expected to
+// resume the thread in a fresh session instead.
 func (s *session) Send(ctx context.Context, userText string) error {
 	if err := ctx.Err(); err != nil {
 		return err
 	}
 	s.mu.Lock()
+	if s.streamClosed {
+		s.mu.Unlock()
+		return errors.New("codex: the session's event stream has ended")
+	}
+	s.sendPending = true
 	if s.turnClosed {
 		s.turnDone = make(chan struct{})
 		s.turnClosed = false
 		s.turnErr = nil
 	}
 	s.mu.Unlock()
-	return s.startTurn(userText, nil)
+
+	err := s.startTurn(userText, nil)
+
+	s.mu.Lock()
+	s.sendPending = false
+	s.mu.Unlock()
+	if err != nil {
+		// No follow-up turn is coming after all, so the stream the
+		// completed turn held open has to end here rather than leave the
+		// caller ranging over Events() forever.
+		s.closeStream()
+	}
+	return err
 }
 
 // Cancel interrupts the running turn and closes stdin.
@@ -329,7 +356,7 @@ func (s *session) wait() (provider.Result, error) {
 	s.shutdown()
 
 	s.mu.Lock()
-	res := provider.Result{Handle: s.threadID, ExitErr: s.exitErr}
+	res := provider.Result{Handle: s.threadID, ExitErr: s.exitErr, StderrTail: s.tail.lines()}
 	if s.finalText != "" && json.Valid([]byte(s.finalText)) {
 		res.Final = json.RawMessage(s.finalText)
 	} else {
@@ -365,8 +392,32 @@ func (s *session) shutdown() {
 		}
 	}
 
-	lastStderrTail = s.tail.lines()
+	s.closeStream()
+}
+
+// closeStream ends Events() for good: the queue is closed (pop drains what
+// is already buffered before reporting the end) and no further turn may be
+// started. It is safe to call more than once.
+func (s *session) closeStream() {
+	s.mu.Lock()
+	s.streamClosed = true
+	s.mu.Unlock()
 	s.queue.close()
+}
+
+// endStream closes the event stream after a turn has completed, unless a
+// follow-up turn is being started, in which case the stream stays open for
+// it. The provider contract says Events() closes when the session ends, and
+// a caller that drains Events() before calling Wait — which is what the
+// runner does — would otherwise block forever on a channel nothing closes.
+func (s *session) endStream() {
+	s.mu.Lock()
+	pending := s.sendPending
+	s.mu.Unlock()
+	if pending {
+		return
+	}
+	s.closeStream()
 }
 
 // abort tears down a session whose handshake failed. Start returns an error in
@@ -646,6 +697,7 @@ func (s *session) onTurnCompleted(params, raw json.RawMessage) {
 		}
 		s.emit(provider.Event{Kind: provider.EvError, Text: msg, Raw: raw})
 		s.endTurn(errors.New(msg))
+		s.endStream()
 		return
 	}
 
@@ -657,6 +709,7 @@ func (s *session) onTurnCompleted(params, raw json.RawMessage) {
 	}
 	s.emit(ev)
 	s.endTurn(nil)
+	s.endStream()
 }
 
 // onRequest answers the server-to-client requests Codex can raise. Triage

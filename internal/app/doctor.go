@@ -73,12 +73,15 @@ func sourceChecks(ctx context.Context, cfg *config.Config) []Check {
 			continue
 		}
 		name := fmt.Sprintf("sources.%s (%s)", s.role, s.sc.Adapter)
-		checks = append(checks, checkSource(ctx, cfg, name, s.sc))
+		checks = append(checks, checkSource(ctx, cfg, name, s.sc)...)
 	}
 	return checks
 }
 
-func checkSource(ctx context.Context, cfg *config.Config, name string, sc *config.SourceConfig) Check {
+// checkSource returns every check one configured source is worth. Most
+// sources are one line; an OAuth-authenticated Zoho Desk is two, because
+// the grant it refreshes with is worth reporting on its own.
+func checkSource(ctx context.Context, cfg *config.Config, name string, sc *config.SourceConfig) []Check {
 	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
 	defer cancel()
 
@@ -87,34 +90,65 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		command := ExpandCommand(cfg, sc.Command)
 		client, err := plugin.Start(ctx, command, io.Discard)
 		if err != nil {
-			return Check{Name: name, Detail: err.Error()}
+			return []Check{{Name: name, Detail: err.Error()}}
 		}
 		defer client.Close()
 		d, err := client.Describe(ctx)
 		if err != nil {
-			return Check{Name: name, Detail: err.Error()}
+			return []Check{{Name: name, Detail: err.Error()}}
 		}
-		return Check{Name: name, OK: true, Detail: fmt.Sprintf("%s v%s roles=%v", d.Name, d.Version, d.Roles)}
+		return []Check{{Name: name, OK: true, Detail: fmt.Sprintf("%s v%s roles=%v", d.Name, d.Version, d.Roles)}}
 
 	case "zohodesk":
-		token, err := (config.Resolver{Keychain: KeychainFor()}).Resolve(sc.Token)
+		ts, err := ZohoTokenSource(sc, config.Resolver{Keychain: KeychainFor()})
 		if err != nil {
-			return Check{Name: name, Detail: fmt.Sprintf("token %s: %v", sc.Token, err)}
-		}
-		_, err = zohodesk.New(sc.BaseURL, sc.OrgID, token).Get(ctx, "0")
-		var serr *source.Error
-		switch {
-		case err == nil:
-			return Check{Name: name, OK: true, Detail: sc.BaseURL}
-		case errors.As(err, &serr) && serr.Code == source.NotFound:
-			// The API answered and rejected the id, not the token.
-			return Check{Name: name, OK: true, Detail: sc.BaseURL}
-		default:
-			return Check{Name: name, Detail: err.Error()}
+			return []Check{{Name: name, Detail: err.Error()}}
 		}
 
+		var checks []Check
+		if rt, ok := ts.(*zohodesk.RefreshingToken); ok {
+			// The refresh grant gets its own line: it is the part an
+			// unattended run depends on, and a Desk call that happens to
+			// succeed does not tell the operator the grant is still good
+			// for the next one.
+			checks = append(checks, oauthCheck(ctx, rt))
+		}
+		return append(checks, deskProbe(ctx, name, sc, ts))
+
 	default:
-		return Check{Name: name, Detail: fmt.Sprintf("unknown adapter %q", sc.Adapter)}
+		return []Check{{Name: name, Detail: fmt.Sprintf("unknown adapter %q", sc.Adapter)}}
+	}
+}
+
+// oauthCheck performs one refresh and reports the access token it got and
+// how long that token is good for. The token itself is never printed.
+func oauthCheck(ctx context.Context, rt *zohodesk.RefreshingToken) Check {
+	_, ttl, err := rt.TokenWithExpiry(ctx)
+	if err != nil {
+		return Check{Name: "zoho oauth", Detail: err.Error()}
+	}
+	return Check{
+		Name: "zoho oauth",
+		OK:   true,
+		// Rounded: the sub-second drift between minting the token and
+		// measuring it is not something to report to three decimals.
+		Detail: fmt.Sprintf("access token obtained, expires in %ds", int(ttl.Round(time.Second).Seconds())),
+	}
+}
+
+// deskProbe looks up a ticket id that cannot exist. "Not found" is the
+// answer that proves the transport and the credentials work, since the API
+// had to authenticate the request before it could reject the id.
+func deskProbe(ctx context.Context, name string, sc *config.SourceConfig, ts zohodesk.TokenSource) Check {
+	_, err := zohodesk.New(sc.BaseURL, sc.OrgID, ts).Get(ctx, "0")
+	var serr *source.Error
+	switch {
+	case err == nil:
+		return Check{Name: name, OK: true, Detail: sc.BaseURL}
+	case errors.As(err, &serr) && serr.Code == source.NotFound:
+		return Check{Name: name, OK: true, Detail: sc.BaseURL}
+	default:
+		return Check{Name: name, Detail: err.Error()}
 	}
 }
 

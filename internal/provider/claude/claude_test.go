@@ -139,7 +139,8 @@ func TestBasicSession(t *testing.T) {
 	var perms []provider.Event
 	var final *provider.Event
 	var tools []string
-	var rl bool
+	var systems []string
+	var rl int
 	var usage *provider.Event
 	for ev := range s.Events() {
 		switch ev.Kind {
@@ -147,8 +148,10 @@ func TestBasicSession(t *testing.T) {
 			perms = append(perms, ev)
 		case provider.EvToolStarted:
 			tools = append(tools, ev.Tool)
+		case provider.EvSystem:
+			systems = append(systems, ev.Text)
 		case provider.EvRateLimited:
-			rl = true
+			rl++
 			if ev.Text != "five_hour" || !ev.ResetsAt.Equal(time.Unix(1789049400, 0)) {
 				t.Errorf("rate limit event %+v", ev)
 			}
@@ -176,8 +179,14 @@ func TestBasicSession(t *testing.T) {
 	if len(tools) != 2 || tools[0] != "Write" || tools[1] != "Bash" {
 		t.Fatalf("tool started %v", tools)
 	}
-	if !rl {
-		t.Fatal("rate limit event not surfaced")
+	// The fixture carries two rate_limit_event lines: the routine
+	// "allowed" one that must not park the pool, and a "rejected" one that
+	// must.
+	if rl != 1 {
+		t.Fatalf("rate limited events %d, want only the rejected one", rl)
+	}
+	if !contains(systems, "rate limit allowed five_hour") {
+		t.Fatalf("the allowed rate-limit line was not reported as informational: %v", systems)
 	}
 	if usage == nil || usage.InputTok != 18 || usage.OutputTok != 516 {
 		t.Fatalf("usage %+v", usage)
@@ -237,11 +246,12 @@ func TestFakeBinaryStdinDenyText(t *testing.T) {
 	}
 	for range s.Events() {
 	}
-	if _, err := s.Wait(); err != nil {
+	res, err := s.Wait()
+	if err != nil {
 		t.Fatal(err)
 	}
 	var denyLine, allowLine, promptLine string
-	for _, line := range lastStderrTail {
+	for _, line := range res.StderrTail {
 		if !strings.HasPrefix(line, "STDIN:") {
 			continue
 		}
@@ -255,7 +265,7 @@ func TestFakeBinaryStdinDenyText(t *testing.T) {
 		}
 	}
 	if denyLine == "" {
-		t.Fatalf("no deny control_response on stdin, tail: %v", lastStderrTail)
+		t.Fatalf("no deny control_response on stdin, tail: %v", res.StderrTail)
 	}
 	if !strings.Contains(denyLine, "Sirdar policy: triage runs are read-only") {
 		t.Fatalf("deny response missing policy message: %s", denyLine)
@@ -342,13 +352,13 @@ func TestSendFollowUpTurn(t *testing.T) {
 		t.Fatal("Send after exit must fail")
 	}
 	var sent int
-	for _, line := range lastStderrTail {
+	for _, line := range res.StderrTail {
 		if strings.HasPrefix(line, "STDIN:") && strings.Contains(line, `"type":"user"`) {
 			sent++
 		}
 	}
 	if sent != 2 {
-		t.Fatalf("expected prompt + follow-up on stdin, got %d: %v", sent, lastStderrTail)
+		t.Fatalf("expected prompt + follow-up on stdin, got %d: %v", sent, res.StderrTail)
 	}
 }
 
@@ -369,20 +379,21 @@ func TestUnsupportedControlRequestDenied(t *testing.T) {
 			systems = append(systems, ev.Text)
 		}
 	}
-	if _, err := s.Wait(); err != nil {
+	res, err := s.Wait()
+	if err != nil {
 		t.Fatal(err)
 	}
 	if !contains(systems, "unsupported control request") {
 		t.Fatalf("system events %v", systems)
 	}
 	var denied bool
-	for _, line := range lastStderrTail {
+	for _, line := range res.StderrTail {
 		if strings.Contains(line, `"request_id":"r9"`) && strings.Contains(line, `"unsupported control request"`) {
 			denied = true
 		}
 	}
 	if !denied {
-		t.Fatalf("unsupported control request not denied: %v", lastStderrTail)
+		t.Fatalf("unsupported control request not denied: %v", res.StderrTail)
 	}
 }
 
@@ -467,14 +478,13 @@ func TestCancelSendsInterrupt(t *testing.T) {
 		if got.res.Handle != "s5" {
 			t.Fatalf("handle %q", got.res.Handle)
 		}
+		if !containsPrefix(got.res.StderrTail, "SIGINT") {
+			t.Fatalf("fake was not interrupted (SIGKILL?), stderr tail: %v", got.res.StderrTail)
+		}
 	case <-time.After(3 * time.Second):
 		t.Fatal("Wait did not return within 3s of Cancel")
 	}
 	<-drained
-
-	if !containsPrefix(lastStderrTail, "SIGINT") {
-		t.Fatalf("fake was not interrupted (SIGKILL?), stderr tail: %v", lastStderrTail)
-	}
 }
 
 func TestUnparseableControlRequestIsAnswered(t *testing.T) {
@@ -514,14 +524,14 @@ func TestUnparseableControlRequestIsAnswered(t *testing.T) {
 		t.Fatal("unparseable control request was not surfaced")
 	}
 	var denied bool
-	for _, line := range lastStderrTail {
+	for _, line := range res.StderrTail {
 		if strings.Contains(line, `"request_id":"r9"`) && strings.Contains(line, `"behavior":"deny"`) &&
 			strings.Contains(line, "unsupported control request") {
 			denied = true
 		}
 	}
 	if !denied {
-		t.Fatalf("no deny written for the unparseable request: %v", lastStderrTail)
+		t.Fatalf("no deny written for the unparseable request: %v", res.StderrTail)
 	}
 }
 

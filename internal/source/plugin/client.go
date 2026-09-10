@@ -305,10 +305,20 @@ func (h helpdeskView) Get(ctx context.Context, id string) (ticket.HelpdeskTicket
 	return h.Client.getHelpdesk(ctx, id)
 }
 
+// WarningsFor implements source.Warner. The adapter protocol has no channel
+// for per-item warnings today — an adapter reports partial failures on its
+// own stderr, which Sirdar copies through — so there is never anything to
+// return for any ticket id. The method exists so every source Sirdar ships
+// answers the same interface, and so adding a warnings field to the
+// protocol later is a change to this one method.
+func (c *Client) WarningsFor(id string) []string { return nil }
+
 var (
 	_ source.Tracker  = (*Client)(nil)
 	_ source.Helpdesk = helpdeskView{}
 	_ source.Closer   = (*Client)(nil)
+	_ source.Warner   = (*Client)(nil)
+	_ source.Warner   = helpdeskView{}
 )
 
 // Close sends a shutdown request, then waits up to 5s for the adapter to

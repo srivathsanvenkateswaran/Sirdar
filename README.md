@@ -2,8 +2,9 @@
 
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
 or tracker, a coding agent you already pay for (Claude Code, Codex) gathers evidence through your
-own read-only MCP servers, translates the conversation, writes a root-cause note, and, once you
-approve the note, opens the fix PR. Runs on your machine with your logins.
+own read-only MCP servers, translates the conversation, and writes a root-cause note for you to
+review. Once a human has made and merged the fix, Sirdar writes the RCA and Resolution notes that
+record it — it never opens a PR itself. Runs on your machine with your logins.
 
 On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work,
 decides who goes up and when, and answers to the client for the outcome. The name is a tribute
@@ -140,12 +141,12 @@ make test    # go test ./...
 make vet     # go vet ./...
 ```
 
-Provider tests run against a fake `claude`/`codex` binary on `PATH` (a small script that emits
-canned stream-json events) rather than the real CLI, so they run offline and deterministically.
+Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
+is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
+override is available to you in config as `providers.claude.path` and `providers.codex.path`.
+The tests therefore run offline and deterministically.
 
-Release builds via `.goreleaser.yaml` inject the version with `-X main.version=...`, which
-requires `version` in `cmd/sirdar/main.go` to be a `var`, not the `const` it is today; that
-change is still needed before cutting a tagged release.
+Release builds via `.goreleaser.yaml` stamp the version with `-X main.version=...`.
 
 ## License
 

@@ -7,9 +7,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
@@ -34,12 +36,36 @@ type prepared struct {
 // the agent reads the rest from the bundle directory.
 const threadHeadLines = 40
 
+// keyPattern is what a ticket key may contain. The key comes off the command
+// line and goes straight into the run directory path and the note filename,
+// so `sirdar triage ../../etc` has to be refused before anything is created
+// rather than quietly writing outside the workspace.
+var keyPattern = regexp.MustCompile(`^[A-Za-z0-9._-]+$`)
+
+// validateKey rejects a ticket key that cannot safely become a path segment.
+func validateKey(key string) error {
+	if key == "" {
+		return fmt.Errorf("run: the ticket key is empty")
+	}
+	if !keyPattern.MatchString(key) {
+		return fmt.Errorf("run: %q is not a usable ticket key: only letters, digits, '.', '_' and '-' are allowed", key)
+	}
+	if strings.Contains(key, "..") {
+		return fmt.Errorf("run: %q is not a usable ticket key: it must not contain \"..\"", key)
+	}
+	return nil
+}
+
 // prepare creates the run directory, fetches the ticket, writes the bundle
 // and assembles the prompt. Every error it returns happens before an agent
 // process exists, so the caller fails the run in "preparing".
 func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Options, rca *RCAOptions) (*prepared, error) {
 	cfg := r.Config
 	now := r.now()
+
+	if err := validateKey(key); err != nil {
+		return nil, err
+	}
 
 	rn, err := store.Create(cfg.Root, key, now)
 	if err != nil {
@@ -163,6 +189,15 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 			p.warn(&b, fmt.Sprintf("attachments for helpdesk ticket %s could not be downloaded: %v", helpdeskID, err))
 		} else {
 			b.Attachments = atts
+		}
+		// A helpdesk that downloaded some attachments and not others
+		// returns no error at all, so ask it what it skipped: the agent
+		// has to know an attachment is missing before it reasons from
+		// the ones that arrived.
+		if w, ok := r.Helpdesk.(source.Warner); ok {
+			for _, msg := range w.WarningsFor(helpdeskID) {
+				p.warn(&b, msg)
+			}
 		}
 	}
 

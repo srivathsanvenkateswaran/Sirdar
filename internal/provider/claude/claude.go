@@ -34,11 +34,6 @@ const (
 	disallowedTools = "Write,Edit,MultiEdit,NotebookEdit"
 )
 
-// lastStderrTail exposes the most recent session's stderr tail to tests in
-// this package. provider.Result has no field for it, and Sirdar's runner only
-// needs the tail through Result.ExitErr.
-var lastStderrTail []string
-
 // Provider starts Claude Code sessions.
 type Provider struct{}
 
@@ -277,10 +272,10 @@ func (s *session) Wait() (provider.Result, error) {
 		<-s.readDone
 		err := s.cmd.Wait()
 		tail := s.stderr.snapshot()
-		lastStderrTail = tail
 
 		s.mu.Lock()
 		s.res.Handle = s.handle
+		s.res.StderrTail = tail
 		if err != nil {
 			var exitErr *exec.ExitError
 			switch {

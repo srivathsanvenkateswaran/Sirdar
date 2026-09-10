@@ -1,59 +1,60 @@
-# Handoff (2026-09-10)
+# Handoff (updated 2026-09-10, 19:10 IST)
 
-Read this first when opening a new thread in this project.
+Read this first when opening a new session in this project.
 
-## Where this came from
+## Where things are
 
-The research was done in a T3 Code thread started under the OXO.APIs work project, while the
-project was still called Sherpa. T3 Code has no thread-move command and its importer binds a
-transcript to a project by the working directory recorded inside it, so a copy of that
-transcript was re-homed to this directory's Claude Code project folder with the recorded working
-directory rewritten. If T3 Code lists an imported thread titled "Research AI Support Harnesses"
-under this project, that is it. If not, everything the thread produced is in `docs/research/`.
+Three worktrees, one repo (`git@github.com:srivathsanvenkateswaran/Sirdar.git`, personal identity
+via the includeIf rule; never set `user.email` by hand):
 
-## State
+| Worktree | Branch | State |
+|---|---|---|
+| `~/Documents/Personal/Sirdar` | `main` | v0 CLI complete and reviewed: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`. Zoho Desk (OAuth refresh) + external stdio adapters. Notes may file into subfolders. Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar-desktop` | `desktop` | Wails v2 app + `sirdar serve` (HTTP/SSE) + React UI (Board, Run detail, Register, Settings, quota). Whole-branch review was in progress at handoff; see its ledger. Not merged. |
+| `~/Documents/Personal/Sirdar-adapters` | `adapters` | Built-in trackers: Jira, Linear, Azure DevOps, Rally (each task-reviewed; host-trust fixes applied). Wiring task (config, wire.go, doctor, generic `helpdeskRef` regex) was in progress. Not merged. |
 
-- Repo initialised on `main`; personal git identity resolves through the `includeIf` rule in
-  `~/.gitconfig`. Do not set `user.email` by hand.
-- Nothing committed yet.
-- Name decided: Sirdar (was Sherpa during research; the research docs keep "Sherpa" where they
-  discuss the name or the people).
-- Research complete:
-  - `docs/research/00-context.md`: the problem, the current workflow, the evidence sources.
-  - `docs/research/01-name-collisions.md`: why plain "Sherpa" was rejected; decision recorded.
-  - `docs/research/02-landscape.md`: nothing does the full loop; nearest are Devin Auto-Triage
-    and Linear Agent (SaaS, vendor-billed).
-  - `docs/research/03-licensing-byo-subscription.md`: spawning the unmodified official CLI
-    with the user's own login is permitted; touching the OAuth token is not; SDK is grey.
-  - `docs/research/04-harness-internals.md`: how T3 Code, Vibe Kanban, Symphony, Paperclip
-    are built, and which pieces to copy.
-  - `docs/research/05-verdict-and-proposal.md`: build it; proposed architecture and phasing.
+Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
+each worktree. Reports per task sit beside them.
 
-## Decisions taken
+Private, outside the repo: the Janus tracker adapter at `~/Documents/Work/Coding/sirdar-janus`
+(work identity, no remote; binary `~/bin/sirdar-janus`; verified against the live API). The
+dogfood workspace is `OXO.APIs/.sirdar/` (git-excluded) with playbooks encoding the support
+gotchas and templates matching the Obsidian vault; notes go to `Support Duty/Sirdar/` so no
+human-written note is touched. First real run: see
+`.superpowers/sdd/2026-09-10-sirdar-v0-triage-core/dogfood-report.md` when present.
 
-- Build, don't adopt.
-- Name: Sirdar.
-- Local-first, open source, bring-your-own agent login.
-- Provider layer spawns the user's installed CLI; API-key fallback is mandatory.
-- Root-cause note first, PR second, human gate between them and before any write.
+## Decisions taken today
 
-## Decisions pending (owner: Srivathsan)
+- Build, don't adopt (nothing exists for helpdesk → coding agent → RCA note; see `docs/research/02`).
+- Name Sirdar; Apache-2.0.
+- Providers spawn the user's own installed CLI (Claude Code stream-json, Codex app-server); API-key
+  billing is a config switch. `docs/research/03` has the licensing detail.
+- Desktop: Wails v2 (system webview), one React frontend for both the app and `sirdar serve`;
+  the app observes run directories instead of hooking the runner.
+- Adapters: stdlib HTTP, read-only, per-ticket warnings, credentialed downloads only to the
+  configured host; `ListFilter.Limit` 0 means 100, cap 200.
+- Models beyond Claude/Codex: plan only (`docs/superpowers/plans/2026-09-10-provider-roadmap.md`):
+  spikes first, then a Sirdar-owned OpenAI-compatible loop, then an ACP client, then Qwen Code.
+  Codex custom providers are a dead end (Responses API only).
 
-- Runtime choices (Node/Bun, Effect or plain TS).
-- System of record for ticket status (tracker vs helpdesk).
-- GitHub handle to publish under (`sirdar` is taken by an inactive user).
-- What "G1 workflow" means. The research found no such feature in T3 Code.
+## Next steps, in order
 
-## Next step
+1. Read the desktop final-review result (ledger) and apply its fix wave; merge `main` into
+   `desktop` (expect `go.mod` conflicts: take `go 1.26`, union of requires) and re-run
+   `make ui && go test ./... && cd desktop && wails build`.
+2. Finish A5 wiring on `adapters`, run a final review of that branch, merge `main` in, then
+   open PRs `desktop` → `main` and `adapters` → `main` (or merge directly; single maintainer).
+3. Dogfood: run `sirdar triage` on two or three real tickets with the OXO workspace and compare
+   against the hand-written notes; fold gotchas into `.sirdar/playbooks/`.
+4. Provider roadmap Phase 0 spikes (Ollama/llama.cpp behind `ANTHROPIC_BASE_URL`; Anthropic
+   terms text; Qwen Code wire capture).
+5. Helpdesk adapters after Zoho: Zendesk, Freshdesk, Help Scout (`docs/research/adapters/helpdesks.md`).
+6. Release: goreleaser config exists; `version` is a var; CI on Go 1.26; desktop CI matrix in
+   `.github/workflows/desktop.yml` (unsigned artifacts).
 
-Run a design session (brainstorming skill) against `05-verdict-and-proposal.md`, produce a spec,
-then a plan for v0 (`sirdar triage <key>` on the command line, validated against the seven
-tickets closed on 2026-09-10).
+## Known gaps (deliberate)
 
-## Work-project material Sirdar generalises (not copied here)
-
-- `~/.claude/skills/support-triage/SKILL.md` and `support-fix/SKILL.md`
-- `~/Documents/Work/MCPs/` (oxo-mysql, metabase, newrelic, grafana) and its README
-- `~/.claude/scripts/zoho-fetch-attachment.sh`
-
-These contain employer-specific identifiers. Generalise the patterns; do not copy the files.
+No fix flow (the tool records a human's fix, it never makes one). No writes to any helpdesk or
+tracker. No auth on `sirdar serve` (loopback only unless `--allow-remote`). Frontend `Cancel`
+needs the store to register job ids (`setRunJob`). Register markdown export lacks
+title/company columns (`RegisterRow` has none).

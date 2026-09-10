@@ -238,24 +238,25 @@ func only(t *testing.T, evs []provider.Event, kind provider.EventKind) []provide
 	return out
 }
 
-// sent returns the client-to-server lines the fake echoed to stderr.
-func sent(t *testing.T) []string {
+// sent returns the client-to-server lines the fake echoed to stderr, taken
+// from the session's result.
+func sent(t *testing.T, res provider.Result) []string {
 	t.Helper()
 	var out []string
-	for _, line := range lastStderrTail {
+	for _, line := range res.StderrTail {
 		if rest, ok := strings.CutPrefix(line, "STDIN: "); ok {
 			out = append(out, rest)
 		}
 	}
 	if len(out) == 0 {
-		t.Fatalf("no STDIN lines captured from the fake server; tail=%v", lastStderrTail)
+		t.Fatalf("no STDIN lines captured from the fake server; tail=%v", res.StderrTail)
 	}
 	return out
 }
 
-func findSent(t *testing.T, method string) string {
+func findSent(t *testing.T, res provider.Result, method string) string {
 	t.Helper()
-	for _, line := range sent(t) {
+	for _, line := range sent(t, res) {
 		var msg inbound
 		if err := json.Unmarshal([]byte(line), &msg); err != nil {
 			continue
@@ -264,7 +265,7 @@ func findSent(t *testing.T, method string) string {
 			return line
 		}
 	}
-	t.Fatalf("no %s line was sent; sent=%v", method, sent(t))
+	t.Fatalf("no %s line was sent; sent=%v", method, sent(t, res))
 	return ""
 }
 
@@ -273,11 +274,13 @@ func findSent(t *testing.T, method string) string {
 func TestBasicSession(t *testing.T) {
 	sess := startSession(t, "script-basic.jsonl", nil)
 
+	// Drain first and wait afterwards, the way the runner does: Events()
+	// must close on its own once the turn has completed.
+	evs := drain(sess)
 	res, err := sess.Wait()
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	evs := drain(sess)
 
 	if res.Handle != "th-1" {
 		t.Errorf("Handle = %q, want th-1", res.Handle)
@@ -349,13 +352,13 @@ func TestBasicSession(t *testing.T) {
 
 	// The approval request must have been declined.
 	var declined bool
-	for _, line := range sent(t) {
+	for _, line := range sent(t, res) {
 		if strings.Contains(line, `"decision":"decline"`) {
 			declined = true
 		}
 	}
 	if !declined {
-		t.Errorf("no decline reply was sent; sent=%v", sent(t))
+		t.Errorf("no decline reply was sent; sent=%v", sent(t, res))
 	}
 }
 
@@ -366,26 +369,27 @@ func TestThreadStartParams(t *testing.T) {
 		spec.Images = []string{"/work/bundle/attachments/1-shot.png"}
 		spec.Model = "gpt-5-codex"
 	})
-	if _, err := sess.Wait(); err != nil {
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	drain(sess)
 
-	initLine := findSent(t, "initialize")
+	initLine := findSent(t, res, "initialize")
 	for _, want := range []string{`"name":"sirdar"`, `"title":"Sirdar"`, `"version":"` + clientVersion + `"`} {
 		if !strings.Contains(initLine, want) {
 			t.Errorf("initialize params missing %s: %s", want, initLine)
 		}
 	}
 
-	startLine := findSent(t, "thread/start")
+	startLine := findSent(t, res, "thread/start")
 	for _, want := range []string{`"sandbox":"read-only"`, `"approvalPolicy":"never"`, `"model":"gpt-5-codex"`} {
 		if !strings.Contains(startLine, want) {
 			t.Errorf("thread/start params missing %s: %s", want, startLine)
 		}
 	}
 
-	turnLine := findSent(t, "turn/start")
+	turnLine := findSent(t, res, "turn/start")
 	var turn struct {
 		Params struct {
 			ThreadID     string          `json:"threadId"`
@@ -420,6 +424,7 @@ func TestThreadStartParams(t *testing.T) {
 func TestTurnFailed(t *testing.T) {
 	sess := startSession(t, "script-failed.jsonl", nil)
 
+	evs := drain(sess)
 	res, err := sess.Wait()
 	if err == nil {
 		t.Fatalf("Wait returned no error for a failed turn (result %+v)", res)
@@ -427,7 +432,6 @@ func TestTurnFailed(t *testing.T) {
 	if !strings.Contains(err.Error(), "model stream disconnected") {
 		t.Errorf("Wait error = %v, want it to mention the turn error", err)
 	}
-	evs := drain(sess)
 
 	errs := only(t, evs, provider.EvError)
 	if len(errs) != 1 {
@@ -473,11 +477,11 @@ func TestResumeThread(t *testing.T) {
 	sess := startSession(t, "script-resume.jsonl", func(spec *provider.SessionSpec) {
 		spec.Resume = "th-77"
 	})
+	drain(sess)
 	res, err := sess.Wait()
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	drain(sess)
 
 	if res.Handle != "th-77" {
 		t.Errorf("Handle = %q, want th-77", res.Handle)
@@ -487,13 +491,13 @@ func TestResumeThread(t *testing.T) {
 		t.Errorf("Result.Final = %q, want the item from turn/completed", got)
 	}
 
-	for _, line := range sent(t) {
+	for _, line := range sent(t, res) {
 		var msg inbound
 		if json.Unmarshal([]byte(line), &msg) == nil && msg.Method == "thread/start" {
 			t.Errorf("thread/start was sent for a resumed session: %s", line)
 		}
 	}
-	resumeLine := findSent(t, "thread/resume")
+	resumeLine := findSent(t, res, "thread/resume")
 	for _, want := range []string{`"threadId":"th-77"`, `"sandbox":"read-only"`, `"approvalPolicy":"never"`} {
 		if !strings.Contains(resumeLine, want) {
 			t.Errorf("thread/resume params missing %s: %s", want, resumeLine)
@@ -506,11 +510,11 @@ func TestResumeThread(t *testing.T) {
 
 func TestMCPToolCallAndUserInput(t *testing.T) {
 	sess := startSession(t, "script-tools.jsonl", nil)
+	evs := drain(sess)
 	res, err := sess.Wait()
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	evs := drain(sess)
 
 	started := only(t, evs, provider.EvToolStarted)
 	if len(started) != 1 || started[0].Tool != "oxo-mysql/query" {
@@ -533,13 +537,13 @@ func TestMCPToolCallAndUserInput(t *testing.T) {
 	}
 
 	var answered bool
-	for _, line := range sent(t) {
+	for _, line := range sent(t, res) {
 		if strings.Contains(line, `"id":88`) && strings.Contains(line, `"answers":{}`) {
 			answered = true
 		}
 	}
 	if !answered {
-		t.Errorf("requestUserInput was not answered with empty answers; sent=%v", sent(t))
+		t.Errorf("requestUserInput was not answered with empty answers; sent=%v", sent(t, res))
 	}
 
 	// Text that is not JSON lands in Text, not Final.
@@ -548,6 +552,54 @@ func TestMCPToolCallAndUserInput(t *testing.T) {
 	}
 	if res.Text != "No structured output this time." {
 		t.Errorf("Result.Text = %q", res.Text)
+	}
+}
+
+// TestEventsCloseWithoutWait covers the hang the runner used to walk into:
+// it drains Events() to completion and only then calls Wait, so Events()
+// has to close on its own once the final turn has completed.
+func TestEventsCloseWithoutWait(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", nil)
+
+	drained := make(chan []provider.Event, 1)
+	go func() { drained <- drain(sess) }()
+
+	var evs []provider.Event
+	select {
+	case evs = <-drained:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Events() did not close within 5s of turn/completed")
+	}
+	if n := len(only(t, evs, provider.EvFinal)); n != 1 {
+		t.Fatalf("got %d final events, want 1", n)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		if _, err := sess.Wait(); err != nil {
+			t.Errorf("Wait: %v", err)
+		}
+	}()
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Wait did not return within 5s of a drained event stream")
+	}
+}
+
+// TestSendAfterStreamEnds pins the other half of that contract: once the
+// stream has ended, a follow-up turn nobody could observe is refused, so the
+// runner falls back to resuming the thread in a fresh session.
+func TestSendAfterStreamEnds(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", nil)
+	drain(sess)
+
+	if err := sess.Send(context.Background(), "try again"); err == nil {
+		t.Fatal("Send after the event stream ended must return an error")
+	}
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
 	}
 }
 

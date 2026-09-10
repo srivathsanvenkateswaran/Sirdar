@@ -320,6 +320,35 @@ func TestFilename(t *testing.T) {
 	}
 }
 
+func TestFilenameSubdirectoryPattern(t *testing.T) {
+	cases := []struct{ pattern, want string }{
+		{"Triage/{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+		{"RCA/{key} RCA {slug}.md", filepath.Join("RCA", "OMNI-1 RCA export-fails.md")},
+		{"Resolutions/{key} RES {slug}.md", filepath.Join("Resolutions", "OMNI-1 RES export-fails.md")},
+	}
+	for _, c := range cases {
+		got := Filename(c.pattern, "OMNI-1", "export-fails")
+		if got != c.want {
+			t.Errorf("Filename(%q) = %q, want %q", c.pattern, got, c.want)
+		}
+	}
+}
+
+func TestFilenameDropsDotDotAndLeadingSlash(t *testing.T) {
+	cases := []struct{ pattern, want string }{
+		{"/Triage/{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+		{"../{key} {slug}.md", "OMNI-1 export-fails.md"},
+		{"Triage/../../{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+		{"Triage//{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+	}
+	for _, c := range cases {
+		got := Filename(c.pattern, "OMNI-1", "export-fails")
+		if got != c.want {
+			t.Errorf("Filename(%q) = %q, want %q", c.pattern, got, c.want)
+		}
+	}
+}
+
 func TestSlug(t *testing.T) {
 	cases := []struct{ title, want string }{
 		{"Export Fails!! For Large Orders", "export-fails-for-large-orders"},

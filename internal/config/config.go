@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,13 +15,52 @@ import (
 type Provider string
 
 // SourceConfig configures one ticket data source (tracker or helpdesk).
+// It takes no inline catch-all map: one would swallow every unknown key
+// under sources.*, which is exactly what KnownFields(true) is there to
+// catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string            `yaml:"adapter"` // "exec" | "zohodesk"
-	Command string            `yaml:"command,omitempty"`
-	OrgID   string            `yaml:"orgId,omitempty"`
-	BaseURL string            `yaml:"baseUrl,omitempty"`
-	Token   string            `yaml:"token,omitempty"` // credential ref
-	Extra   map[string]string `yaml:",inline"`
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk"
+	Command string       `yaml:"command,omitempty"`
+	OrgID   string       `yaml:"orgId,omitempty"`
+	BaseURL string       `yaml:"baseUrl,omitempty"`
+	Token   string       `yaml:"token,omitempty"` // credential ref
+	Auth    *OAuthConfig `yaml:"auth,omitempty"`
+}
+
+// OAuthConfig configures an OAuth refresh-token grant, so the source mints
+// its own short-lived access tokens instead of being handed one. A Zoho
+// Desk access token lives an hour; a static token: ref therefore cannot
+// carry an unattended run, and auth: is the shape that can.
+//
+// ClientID, ClientSecret and RefreshToken are credential references
+// ("env:NAME" or "keychain:SERVICE"), never literal secrets.
+type OAuthConfig struct {
+	ClientID     string `yaml:"clientId"`
+	ClientSecret string `yaml:"clientSecret"`
+	RefreshToken string `yaml:"refreshToken"`
+	AccountsURL  string `yaml:"accountsUrl,omitempty"`
+}
+
+// accountsURLs maps a Zoho Desk API host to the accounts server that issues
+// its tokens. Zoho runs one accounts server per data centre, and the
+// mapping is not a substring rewrite: desk.zoho.com.au is its own host, not
+// desk.zoho.com with a suffix.
+var accountsURLs = map[string]string{
+	"desk.zoho.in":     "https://accounts.zoho.in",
+	"desk.zoho.com":    "https://accounts.zoho.com",
+	"desk.zoho.eu":     "https://accounts.zoho.eu",
+	"desk.zoho.com.au": "https://accounts.zoho.com.au",
+}
+
+// AccountsURLFor returns the Zoho accounts server matching a Desk API base
+// URL, or "" when the host is not one of the data centres above — in which
+// case the operator has to name sources.*.auth.accountsUrl themselves.
+func AccountsURLFor(baseURL string) string {
+	u, err := url.Parse(strings.TrimSuffix(baseURL, "/"))
+	if err != nil {
+		return ""
+	}
+	return accountsURLs[strings.ToLower(u.Hostname())]
 }
 
 // Config is a fully loaded, defaulted, and validated workspace configuration.
@@ -122,6 +162,11 @@ func applyDefaults(c *Config) {
 	if c.Playbooks == "" {
 		c.Playbooks = ".sirdar/playbooks"
 	}
+	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
+		if s != nil && s.Auth != nil && s.Auth.AccountsURL == "" {
+			s.Auth.AccountsURL = AccountsURLFor(s.BaseURL)
+		}
+	}
 }
 
 // FindRoot walks up from dir to the first directory containing .sirdar/config.yaml.
@@ -182,6 +227,9 @@ func validateSource(prefix string, s *SourceConfig) error {
 		if s.Command == "" {
 			return fmt.Errorf("config: %s.command: is required for adapter exec", prefix)
 		}
+		if s.Auth != nil {
+			return fmt.Errorf("config: %s.auth: is only supported for adapter zohodesk", prefix)
+		}
 	case "zohodesk":
 		if s.OrgID == "" {
 			return fmt.Errorf("config: %s.orgId: is required for adapter zohodesk", prefix)
@@ -189,18 +237,58 @@ func validateSource(prefix string, s *SourceConfig) error {
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter zohodesk", prefix)
 		}
-		if s.Token == "" {
-			return fmt.Errorf("config: %s.token: is required for adapter zohodesk", prefix)
+		switch {
+		case s.Token == "" && s.Auth == nil:
+			return fmt.Errorf("config: %s: one of token or auth is required for adapter zohodesk", prefix)
+		case s.Token != "" && s.Auth != nil:
+			return fmt.Errorf("config: %s: set token or auth, not both", prefix)
+		}
+		if err := validateOAuth(prefix+".auth", s.Auth); err != nil {
+			return err
 		}
 	case "":
 		return fmt.Errorf("config: %s.adapter: is required", prefix)
 	default:
 		return fmt.Errorf("config: %s.adapter: unknown adapter %q", prefix, s.Adapter)
 	}
-	if s.Token != "" && !strings.HasPrefix(s.Token, "env:") && !strings.HasPrefix(s.Token, "keychain:") {
-		return fmt.Errorf("config: %s.token: must start with env: or keychain:, got %q", prefix, s.Token)
+	if s.Token != "" {
+		return credentialRef(prefix+".token", s.Token)
 	}
 	return nil
+}
+
+// validateOAuth checks an auth block: all three credential references are
+// required and each must name a credential rather than carry one, and the
+// accounts server must be known, either derived from baseUrl by
+// applyDefaults or named outright.
+func validateOAuth(prefix string, a *OAuthConfig) error {
+	if a == nil {
+		return nil
+	}
+	for _, f := range []struct{ key, ref string }{
+		{"clientId", a.ClientID},
+		{"clientSecret", a.ClientSecret},
+		{"refreshToken", a.RefreshToken},
+	} {
+		if f.ref == "" {
+			return fmt.Errorf("config: %s.%s: is required", prefix, f.key)
+		}
+		if err := credentialRef(prefix+"."+f.key, f.ref); err != nil {
+			return err
+		}
+	}
+	if a.AccountsURL == "" {
+		return fmt.Errorf("config: %s.accountsUrl: is required when baseUrl is not a known Zoho data centre", prefix)
+	}
+	return nil
+}
+
+// credentialRef rejects a value that carries a secret instead of naming one.
+func credentialRef(key, ref string) error {
+	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
+		return nil
+	}
+	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
 }
 
 // ExpandPath expands a leading ~ and makes relative paths relative to c.Root.
