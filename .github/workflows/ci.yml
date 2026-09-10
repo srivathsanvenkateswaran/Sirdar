@@ -6,6 +6,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
-        with: { go-version: '1.24' }
-      - run: go vet ./...
-      - run: go test ./...
+        with: { go-version: '1.25' }
+      # `desktop` needs cgo + WebKitGTK; the desktop workflow builds it on all
+      # three platforms, so keep this job to the pure-Go packages.
+      - run: go vet $(go list ./... | grep -v '/desktop$')
+      - run: go test $(go list ./... | grep -v '/desktop$')

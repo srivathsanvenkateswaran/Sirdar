@@ -1,0 +1,20 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Sirdar",
+  "outputfilename": "Sirdar",
+  "frontend:dir": "frontend",
+  "frontend:install": "npm install",
+  "frontend:dev": "npm run dev",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "wailsjsdir": "./frontend",
+  "author": {
+    "name": "Srivathsan Venkateswaran"
+  },
+  "info": {
+    "productName": "Sirdar",
+    "productVersion": "0.1.0",
+    "comments": "Agentic L2 triage for OSS maintainers"
+  }
+}
