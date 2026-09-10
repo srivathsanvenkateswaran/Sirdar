@@ -308,6 +308,8 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 				AttachmentIDs: attachmentIDs(refs),
 			})
 		case "comment":
+			// Both CONTACT and END_USER commenter types identify the customer
+			// side of the conversation; everything else defaults to agent.
 			role := ticket.RoleAgent
 			if e.CommenterType == "CONTACT" || e.CommenterType == "END_USER" {
 				role = ticket.RoleCustomer

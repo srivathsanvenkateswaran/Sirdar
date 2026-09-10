@@ -501,3 +501,82 @@ func TestConversations_Pagination(t *testing.T) {
 		t.Errorf("second request from = %q, want 100", gotFrom[1])
 	}
 }
+
+func TestResolveURL_RelativePath(t *testing.T) {
+	c := New("https://desk.example.com", testOrgID, testToken)
+
+	got := c.resolveURL("api/v1/tickets/555/attachments/a7/content")
+	want := "https://desk.example.com/api/v1/tickets/555/attachments/a7/content"
+	if got != want {
+		t.Errorf("resolveURL(no leading slash) = %q, want %q", got, want)
+	}
+
+	got = c.resolveURL("/api/v1/tickets/555/attachments/a7/content")
+	if got != want {
+		t.Errorf("resolveURL(leading slash) = %q, want %q", got, want)
+	}
+
+	abs := "https://other.example.com/x"
+	if got := c.resolveURL(abs); got != abs {
+		t.Errorf("resolveURL(absolute) = %q, want unchanged %q", got, abs)
+	}
+}
+
+// TestAttachments_SanitizesPathTraversalName covers a thread attachment whose
+// API-supplied name is a path-traversal payload: the file must land inside
+// dir (as "<index>-evil.txt"), and nothing must be written outside dir.
+func TestAttachments_SanitizesPathTraversalName(t *testing.T) {
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/tickets/555/conversations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"data":[{"id":"t1","type":"thread","direction":"in","author":{"name":"Alice"},"createdTime":"2026-09-10T08:00:00.000Z"}]}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/threads/t1", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"plainText":"hi","content":"<p>no images</p>","attachments":[{"id":"a1","name":"../../evil.txt","href":"/api/v1/tickets/555/attachments/a1/content"}]}`)
+	})
+	mux.HandleFunc("/api/v1/tickets/555/attachments/a1/content", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("evil payload"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	c := New(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+	c.BaseURL = srv.URL
+
+	base := t.TempDir()
+	dir := filepath.Join(base, "out")
+
+	got, err := c.Attachments(context.Background(), "555", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("len(Attachments) = %d, want 1: %+v", len(got), got)
+	}
+
+	wantPath := filepath.Base(dir) + "/1-evil.txt"
+	if got[0].Path != wantPath {
+		t.Errorf("Path = %q, want %q", got[0].Path, wantPath)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "1-evil.txt")); err != nil {
+		t.Errorf("expected file at %s: %v", filepath.Join(dir, "1-evil.txt"), err)
+	}
+
+	// Nothing must have escaped dir: no "evil.txt" anywhere in base other
+	// than inside dir, and no writes above base either.
+	if _, err := os.Stat(filepath.Join(base, "evil.txt")); !os.IsNotExist(err) {
+		t.Errorf("file escaped into %s: %v", base, err)
+	}
+	if _, err := os.Stat(filepath.Join(filepath.Dir(base), "evil.txt")); !os.IsNotExist(err) {
+		t.Errorf("file escaped above %s: %v", base, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("ReadDir(dir): %v", err)
+	}
+	if len(entries) != 1 || entries[0].Name() != "1-evil.txt" {
+		t.Errorf("dir contents = %v, want exactly [1-evil.txt]", entries)
+	}
+}

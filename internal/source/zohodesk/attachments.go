@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
@@ -28,6 +29,54 @@ type attachmentRef struct {
 // inlineImgRe matches an <img> src attribute pointing at an inline
 // attachment, e.g. src="/supportapi/x/inlineattachments/i9".
 var inlineImgRe = regexp.MustCompile(`src="([^"]*inlineattachments[^"]*)"`)
+
+// sanitizeName turns an attachment name (or ID) taken from the API response
+// into a safe filename component: it strips any directory portion (so a
+// name like "../../evil.txt" cannot write outside the destination dir),
+// drops path separators and control characters, falls back to "attachment"
+// for an empty/"."/".." result, and caps the result at 120 bytes while
+// preserving the extension.
+func sanitizeName(name string) string {
+	base := filepath.Base(name)
+
+	var b strings.Builder
+	for _, r := range base {
+		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	clean := b.String()
+	if clean == "" || clean == "." || clean == ".." {
+		clean = "attachment"
+	}
+	return capBytes(clean, 120)
+}
+
+// capBytes truncates name to at most max bytes, preserving its extension
+// where possible and never splitting a multi-byte UTF-8 rune.
+func capBytes(name string, max int) string {
+	if len(name) <= max {
+		return name
+	}
+	ext := filepath.Ext(name)
+	if len(ext) >= max {
+		return truncateValidUTF8(name, max)
+	}
+	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
+	return stem + ext
+}
+
+func truncateValidUTF8(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	s = s[:max]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s
+}
 
 // resolveURL turns a possibly-relative href/src from a Zoho Desk payload
 // into an absolute URL against BaseURL.
@@ -121,6 +170,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		if name == "" {
 			name = r.ID
 		}
+		name = sanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
 		mime, derr := c.downloadAttachment(ctx, r.URL, filepath.Join(dir, filename))
