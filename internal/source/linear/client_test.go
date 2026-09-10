@@ -539,8 +539,10 @@ func TestThreadsOrdersAndFlattensReplies(t *testing.T) {
 	// The fixture lists the comments out of order and puts the reply in the
 	// middle: c0 (bot, 08:55) is last in the payload, and c2 is a reply to
 	// c1 that must land directly after it.
+	// Linear draws no customer/agent line on a comment, so the guest author
+	// stays an agent; only the bot is anything else.
 	wantAuthors := []string{"Sentry", "Dana Okoro", "Kai Mensah", "Priya Raman"}
-	wantRoles := []ticket.Role{ticket.RoleSystem, ticket.RoleAgent, ticket.RoleAgent, ticket.RoleCustomer}
+	wantRoles := []ticket.Role{ticket.RoleSystem, ticket.RoleAgent, ticket.RoleAgent, ticket.RoleAgent}
 	wantAt := []time.Time{
 		time.Date(2026, 9, 2, 8, 55, 0, 0, time.UTC),
 		time.Date(2026, 9, 2, 9, 0, 0, 0, time.UTC),
@@ -565,7 +567,85 @@ func TestThreadsOrdersAndFlattensReplies(t *testing.T) {
 		t.Errorf("top-level comment text = %q, want it unprefixed: %q", th[1].Text, want)
 	}
 	if ids := th[3].AttachmentIDs; len(ids) != 1 || ids[0] != "4444dddd-0000-4000-8000-000000000004" {
-		t.Errorf("customer message AttachmentIDs = %v, want the inline upload id", ids)
+		t.Errorf("guest message AttachmentIDs = %v, want the inline upload id", ids)
+	}
+	for i, m := range th {
+		if m.Role == ticket.RoleCustomer {
+			t.Errorf("message %d role = customer; Linear comments are workspace discussion, "+
+				"the customer voice arrives through the helpdesk adapter", i)
+		}
+	}
+	if w := c.WarningsFor("ENG-123"); len(w) != 0 {
+		t.Errorf("WarningsFor(ENG-123) = %v, want none", w)
+	}
+}
+
+func TestThreadsRetriesWithoutCommentActors(t *testing.T) {
+	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
+		if req.Op != "IssueConversation" {
+			return false
+		}
+		if strings.Contains(req.Query, "externalUser") {
+			w.Write([]byte(`{"errors":[{"message":"Cannot query field \"externalUser\" on type \"Comment\".",` +
+				`"extensions":{"type":"GRAPHQL_VALIDATION_FAILED"}}]}`))
+			return true
+		}
+		if strings.Contains(req.Query, "botActor") {
+			t.Error("the retry still asked for botActor")
+		}
+		w.Write(fixture(t, "conversation_no_actors.json"))
+		return true
+	})
+	c := newTestClient(t, f, "")
+
+	th, err := c.Helpdesk().Threads(context.Background(), "ENG-123")
+	if err != nil {
+		t.Fatalf("Threads: a workspace without externalUser must still yield a thread: %v", err)
+	}
+	if ops := f.ops(); len(ops) != 2 {
+		t.Fatalf("operations = %v, want the query retried once without the actor fields", ops)
+	}
+	if len(th) != 4 {
+		t.Fatalf("got %d messages, want all 4 from the reduced query", len(th))
+	}
+	for i, m := range th {
+		if m.Role != ticket.RoleAgent {
+			t.Errorf("message %d role = %q, want agent when the actor fields are unavailable", i, m.Role)
+		}
+	}
+	if th[1].Author != "Dana Okoro" {
+		t.Errorf("message 1 author = %q, want the user author still mapped", th[1].Author)
+	}
+	if th[0].Author != "" {
+		t.Errorf("message 0 author = %q, want it empty: the bot author was not returned", th[0].Author)
+	}
+	if want := "\u21b3 Only on the second retry, not the first."; th[2].Text != want {
+		t.Errorf("reply text = %q, want the flattening still applied: %q", th[2].Text, want)
+	}
+
+	warns := c.WarningsFor("ENG-123")
+	if len(warns) != 1 || !strings.Contains(warns[0], "externalUser") {
+		t.Errorf("WarningsFor(ENG-123) = %v, want one naming the unavailable fields", warns)
+	}
+}
+
+func TestEffectiveLimit(t *testing.T) {
+	cases := []struct{ in, want int }{
+		{0, defaultLimit},
+		{-5, defaultLimit},
+		{1, 1},
+		{99, 99},
+		{maxLimit, maxLimit},
+		{maxLimit + 1, maxLimit},
+		{100000, maxLimit},
+	}
+	for _, tc := range cases {
+		if got := effectiveLimit(tc.in); got != tc.want {
+			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		}
+	}
+	if defaultLimit != 100 || maxLimit != 200 {
+		t.Errorf("limits = %d/%d, want the contract's 100 default and 200 cap", defaultLimit, maxLimit)
 	}
 }
 

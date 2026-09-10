@@ -29,8 +29,14 @@ const DefaultEndpoint = "https://api.linear.app/graphql"
 // economy, so a caller asking for more gets more pages, not a bigger one.
 const (
 	defaultPageSize  = 50
-	maxPageSize      = 200
 	commentsPageSize = 100
+)
+
+// Bounds on List's result count: a caller that names no limit gets
+// defaultLimit issues, and no caller gets more than maxLimit.
+const (
+	defaultLimit = 100
+	maxLimit     = 200
 )
 
 // Config is the adapter's configuration. Secrets arrive already resolved by
@@ -191,21 +197,23 @@ func (c *Client) fetchIssue(ctx context.Context, key string) (*linearIssue, erro
 }
 
 // List returns the issues matching f, paging through Linear's cursor
-// connection until Limit is reached or the results run out. With no Status
-// filter it excludes completed and cancelled work, which is the open-ish
-// default the adapter contract asks for.
+// connection until the limit is reached or the results run out. With no
+// Status filter it excludes completed and cancelled work, which is the
+// open-ish default the adapter contract asks for.
+//
+// Limit is bounded: 0 (unset) means defaultLimit, and anything above
+// maxLimit is capped there. An unbounded walk of a broad filter would spend
+// a caller's hourly request budget on results nobody asked to read.
 func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
 	filter, err := c.buildFilter(ctx, f)
 	if err != nil {
 		return nil, err
 	}
 
+	limit := effectiveLimit(f.Limit)
 	pageSize := defaultPageSize
-	if f.Limit > 0 && f.Limit < pageSize {
-		pageSize = f.Limit
-	}
-	if pageSize > maxPageSize {
-		pageSize = maxPageSize
+	if limit < pageSize {
+		pageSize = limit
 	}
 
 	var out []ticket.TrackerTicket
@@ -249,7 +257,7 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 				c.addWarnings(t.Key, noCustomerNeedsWarning)
 			}
 			out = append(out, t)
-			if f.Limit > 0 && len(out) >= f.Limit {
+			if len(out) >= limit {
 				return out, nil
 			}
 		}
@@ -260,10 +268,27 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	}
 }
 
+// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
+// an unset limit takes defaultLimit, and no limit exceeds maxLimit.
+func effectiveLimit(n int) int {
+	if n <= 0 {
+		return defaultLimit
+	}
+	if n > maxLimit {
+		return maxLimit
+	}
+	return n
+}
+
 // noCustomerNeedsWarning is recorded when a workspace does not expose the
 // Customers feature's fields, so a reader of the ticket knows the customer
 // request count is missing rather than zero.
 const noCustomerNeedsWarning = "linear: customerNeeds is not available on this workspace; customer request counts are missing"
+
+// noCommentActorsWarning is recorded when a workspace does not expose a
+// comment's non-user authors, so a reader knows an unattributed comment is a
+// gap in the data rather than an anonymous one.
+const noCommentActorsWarning = "linear: comment externalUser/botActor are not available on this workspace; some comment authors and the system role are missing"
 
 // buildFilter turns Sirdar's ListFilter into Linear's IssueFilter input.
 func (c *Client) buildFilter(ctx context.Context, f source.ListFilter) (map[string]any, error) {
@@ -358,6 +383,7 @@ type conversation struct {
 // connection is exhausted.
 func (c *Client) fetchConversation(ctx context.Context, id string) (*conversation, error) {
 	conv := &conversation{}
+	withActors := true
 	after := ""
 	for {
 		vars := map[string]any{"id": id, "first": commentsPageSize}
@@ -379,7 +405,16 @@ func (c *Client) fetchConversation(ctx context.Context, id string) (*conversatio
 				} `json:"comments"`
 			} `json:"issue"`
 		}
-		if err := c.query(ctx, conversationQuery, vars, &resp); err != nil {
+		err := c.query(ctx, conversationQuery(withActors), vars, &resp)
+		if withActors && fieldValidationError(err) {
+			// This workspace does not expose the non-user comment authors.
+			// Ask again without them: a thread with plainer authorship is
+			// worth far more to the caller than no thread at all.
+			withActors = false
+			c.addWarnings(id, noCommentActorsWarning)
+			continue
+		}
+		if err != nil {
 			return nil, err
 		}
 		if resp.Issue == nil {

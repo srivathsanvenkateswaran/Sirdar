@@ -73,10 +73,24 @@ const issueIDQuery = `query IssueID($id: String!) {
   issue(id: $id) { id identifier }
 }`
 
+// commentActorFields name the comment authors that are not workspace users.
+// Like customerNeedsField they are requested optionally: neither is confirmed
+// against Linear's live schema, and a workspace that does not have them would
+// otherwise fail every conversation fetch outright rather than returning a
+// thread with plainer authorship (see fieldValidationError).
+const commentActorFields = `
+        externalUser { name email }
+        botActor { name }`
+
 // conversationQuery fetches one page of an issue's comments together with the
 // description and attachment list, which the thread and attachment mapping
 // both need.
-const conversationQuery = `query IssueConversation($id: String!, $first: Int!, $after: String) {
+func conversationQuery(withActors bool) string {
+	actors := ""
+	if withActors {
+		actors = commentActorFields
+	}
+	return `query IssueConversation($id: String!, $first: Int!, $after: String) {
   issue(id: $id) {
     id
     identifier
@@ -88,15 +102,14 @@ const conversationQuery = `query IssueConversation($id: String!, $first: Int!, $
         body
         createdAt
         url
-        user { name email }
-        externalUser { name email }
-        botActor { name }
+        user { name email }` + actors + `
         parent { id }
       }
       pageInfo { hasNextPage endCursor }
     }
   }
 }`
+}
 
 const pingQuery = `query Ping {
   viewer { id name }

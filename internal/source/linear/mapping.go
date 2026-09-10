@@ -301,10 +301,11 @@ func buildThread(cs []linearComment) ticket.Thread {
 	return out
 }
 
-// mapComment turns one comment into a thread message. Linear comments are
-// written by workspace members, so the default role is agent; a comment with
-// no user but an externalUser is a customer's words relayed in from a linked
-// support conversation, and a bot-authored one is automation.
+// mapComment turns one comment into a thread message. Linear carries no
+// customer/agent distinction on a comment — the thread is the workspace's own
+// discussion, and a customer's own words reach Sirdar through the helpdesk
+// adapter, not through here — so the role is agent unless the comment was
+// written by a bot, which is automation.
 func mapComment(c linearComment, reply bool) ticket.Message {
 	m := ticket.Message{
 		At:   parseTime(c.CreatedAt),
@@ -314,15 +315,16 @@ func mapComment(c linearComment, reply bool) ticket.Message {
 	switch {
 	case c.User != nil && c.User.Name != "":
 		m.Author = c.User.Name
+	case c.User == nil && c.BotActor != nil:
+		m.Role = ticket.RoleSystem
+		m.Author = c.BotActor.Name
 	case c.User == nil && c.ExternalUser != nil:
-		m.Role = ticket.RoleCustomer
+		// An external user is a guest commenting in Linear, not the
+		// customer voice: take the name, leave the role alone.
 		m.Author = c.ExternalUser.Name
 		if m.Author == "" {
 			m.Author = c.ExternalUser.Email
 		}
-	case c.User == nil && c.BotActor != nil:
-		m.Role = ticket.RoleSystem
-		m.Author = c.BotActor.Name
 	}
 	if reply {
 		m.Text = replyPrefix + m.Text
