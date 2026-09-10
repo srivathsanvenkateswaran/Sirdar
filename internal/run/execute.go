@@ -22,10 +22,25 @@ import (
 // maxMalformed is how many malformed provider lines in a row end the run.
 const maxMalformed = 10
 
+// closeGrace is how long a session gets to end on its own after its input
+// has been closed, before it is cancelled outright. The note is already on
+// disk by then; this only decides how the process is reaped. Runner.CloseGrace
+// overrides it, which is how a test asserts the reaping without waiting
+// ten seconds for it.
+const closeGrace = 10 * time.Second
+
 // execution is the state the event loop accumulates for one session.
 type execution struct {
 	final    []byte // the validated JSON note
 	rawFinal string // the last candidate, kept when validation failed
+
+	// row and completeErr are the outcome of filing the note, which
+	// happens the moment the note validates rather than after the
+	// session has ended: a run that has produced its answer must not be
+	// able to lose it to a timeout, an interrupt, or a provider that
+	// will not exit.
+	row         note.DigestRow
+	completeErr error
 
 	retried     bool
 	schemaError string
@@ -151,26 +166,40 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	}
 
 	switch {
-	case timedOut.Load():
-		return r.finish(p, store.StatusOverBudget,
-			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
-	case ex.overBudget != "":
-		return r.finish(p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
 	case len(ex.final) > 0:
-		// A note that validated is worth keeping, whether the process
-		// then exited badly or the operator interrupted the run before
-		// the stream closed. Either is recorded as a warning.
+		// The note validated and was filed the moment it arrived. What
+		// happened to the session afterwards — a bad exit, an interrupt,
+		// a budget that expired while the process was being reaped — is
+		// a warning on a completed run, not a verdict that throws the
+		// answer away.
+		if ex.completeErr != nil {
+			return r.finish(p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
+		}
 		if res.ExitErr != nil {
 			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
 		}
 		if ex.interrupted {
 			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
 		}
-		row, err := r.complete(p, ex.final)
-		if err != nil {
-			return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
+		if ex.failure != "" {
+			// Whatever went wrong after the note landed is still worth
+			// reading — it is the only account of a provider that died
+			// mid-sentence — but it does not make the run a failure.
+			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the note was written")
 		}
-		return r.finish(p, store.StatusCompleted, "", row)
+		if timedOut.Load() {
+			p.state.Warnings = append(p.state.Warnings,
+				fmt.Sprintf("the session was still running when the %d minute budget expired, after the note was written", r.Config.Budget.MaxMinutes))
+		}
+		if ex.overBudget != "" {
+			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the note was written")
+		}
+		return r.finish(p, store.StatusCompleted, "", ex.row)
+	case timedOut.Load():
+		return r.finish(p, store.StatusOverBudget,
+			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
+	case ex.overBudget != "":
+		return r.finish(p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
 	case ex.interrupted:
 		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
 	case ex.failure != "":
@@ -201,7 +230,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Prompt:       p.promptText,
 		Model:        p.state.Model,
 		OutputSchema: schemaFor(p.kind),
-		Policy:       &provider.PermissionPolicy{BashAllow: cfg.Permissions.Bash},
+		Policy: &provider.PermissionPolicy{
+			BashAllow: cfg.Permissions.Bash,
+			MCPAllow:  cfg.Permissions.MCP,
+		},
+		MCPConfig: cfg.MCPConfigPath(),
 		Budget: provider.Budget{
 			MaxTurns:   cfg.Budget.MaxTurns,
 			MaxMinutes: cfg.Budget.MaxMinutes,
@@ -354,6 +387,12 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
 	case provider.EvRateLimited:
 		fmt.Fprintf(w, "[%s] blocked rate limited\n", key)
+	case provider.EvSystem:
+		// A window's utilization is worth a line on a run that costs
+		// real money. It is not a block, and must not read like one.
+		if strings.HasPrefix(ev.Text, "rate limit") {
+			fmt.Fprintf(w, "[%s] %s\n", key, ev.Text)
+		}
 	}
 }
 
@@ -386,23 +425,26 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 
 	switch ev.Kind {
 	case provider.EvUsage:
-		p.state.Usage = store.Usage{
-			Turns:        ev.Turns,
-			InputTokens:  ev.InputTok,
-			OutputTokens: ev.OutputTok,
-			CostUSD:      ev.CostUSD,
-		}
+		// The highest figure each session reported, not the last one:
+		// a schema retry runs in a fresh session whose counters start at
+		// zero, and assigning those would hand the run back a turn and
+		// cost budget it has already spent.
+		u := &p.state.Usage
+		u.Turns = max(u.Turns, ev.Turns)
+		u.InputTokens = max(u.InputTokens, ev.InputTok)
+		u.OutputTokens = max(u.OutputTokens, ev.OutputTok)
+		u.CostUSD = max(u.CostUSD, ev.CostUSD)
 		p.state.UpdatedAt = r.now()
 		if err := p.run.WriteState(p.state); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 		}
 		b := r.Config.Budget
 		switch {
-		case b.MaxUSD > 0 && ev.CostUSD > b.MaxUSD:
-			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", ev.CostUSD, b.MaxUSD)
+		case b.MaxUSD > 0 && u.CostUSD > b.MaxUSD:
+			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", u.CostUSD, b.MaxUSD)
 			sess.Cancel()
-		case b.MaxTurns > 0 && ev.Turns > b.MaxTurns:
-			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", ev.Turns, b.MaxTurns)
+		case b.MaxTurns > 0 && u.Turns > b.MaxTurns:
+			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
 			sess.Cancel()
 		}
 
@@ -429,6 +471,14 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 // handleFinal validates the session's JSON output. The first failure buys
 // one retry turn quoting the validation errors; the second ends the run.
 func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
+	// A session that has already produced a valid note is done. A provider
+	// that emits a second final line — a resumed session replaying its
+	// result, a CLI that repeats itself on the way out — must not file the
+	// note twice and hand the register a duplicate row.
+	if len(ex.final) > 0 {
+		return
+	}
+
 	doc := []byte(ev.Final)
 	if len(doc) == 0 {
 		doc = []byte(strings.TrimSpace(ev.Text))
@@ -438,6 +488,15 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	if err == nil {
 		ex.final = append([]byte(nil), doc...)
 		ex.rawFinal = ""
+		// Write everything the run exists to produce before waiting on
+		// anything else, then end the session on purpose instead of
+		// hoping it ends by itself.
+		ex.row, ex.completeErr = r.complete(p, ex.final)
+		p.state.UpdatedAt = r.now()
+		if werr := p.run.WriteState(p.state); werr != nil {
+			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, werr)
+		}
+		r.endSession(p, sess)
 		return
 	}
 
@@ -459,11 +518,12 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
-	// `claude -p` exits after its result line, and a Codex session ends its
-	// event stream on the completed turn, so by the time the note fails
-	// validation there is often no session left to answer on. Carry the
-	// retry into a fresh session against the same provider handle instead
-	// of throwing the run away over it.
+	// A Codex session ends its event stream on the completed turn, and a
+	// `claude -p` session that has been cancelled or has already closed
+	// its input is equally past taking another message, so by the time a
+	// note fails validation there is often no session left to answer on.
+	// Carry the retry into a fresh session against the same provider
+	// handle instead of throwing the run away over it.
 	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
 	if startErr != nil {
 		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
@@ -472,6 +532,19 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
 	ex.retrySession = next
+}
+
+// endSession brings a session that has given its answer to a close. It
+// tells the provider no further message is coming — a CLI reading
+// stream-json on stdin holds its stdout open until it knows that — and
+// cancels the process outright if it is still running closeGrace later.
+// The timer is left to fire on its own goroutine: Cancel on an exited
+// session is harmless, and the run must not sit here waiting for it.
+func (r *Runner) endSession(p *prepared, sess provider.Session) {
+	if err := sess.CloseInput(); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] close session input: %v\n", p.state.Key, err)
+	}
+	time.AfterFunc(r.grace(), sess.Cancel)
 }
 
 // resumeForRetry starts a new session that continues the finished one,
@@ -926,4 +999,13 @@ func firstSentence(s string) string {
 		return strings.TrimSpace(s[:i+1])
 	}
 	return s
+}
+
+// grace is how long endSession waits before cancelling, taking the
+// Runner's override when it has one.
+func (r *Runner) grace() time.Duration {
+	if r.CloseGrace > 0 {
+		return r.CloseGrace
+	}
+	return closeGrace
 }

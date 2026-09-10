@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"mime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -119,16 +120,17 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	if err != nil {
 		return p, err
 	}
-	threadHead, err := readThreadHead(rn.BundleDir())
+	threadHead, truncated, err := readThreadHead(rn.BundleDir())
 	if err != nil {
 		return p, err
 	}
 
 	in := prompt.TriageInput{
-		Bundle:     bundle,
-		BundleDir:  rn.BundleDir(),
-		Playbooks:  playbooks,
-		ThreadHead: threadHead,
+		Bundle:              bundle,
+		BundleDir:           rn.BundleDir(),
+		Playbooks:           playbooks,
+		ThreadHead:          threadHead,
+		ThreadHeadTruncated: truncated,
 	}
 
 	switch kind {
@@ -202,7 +204,7 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 		if err != nil {
 			p.warn(&b, fmt.Sprintf("attachments for helpdesk ticket %s could not be downloaded: %v", helpdeskID, err))
 		} else {
-			b.Attachments = atts
+			b.Attachments = r.keepReadableAttachments(p, &b, atts)
 		}
 		// A helpdesk that downloaded some attachments and not others
 		// returns no error at all, so ask it what it skipped: the agent
@@ -283,6 +285,103 @@ func truncate(s string, max int) string {
 		s = s[:len(s)-1]
 	}
 	return s + "…"
+}
+
+// readableMIME reports whether an agent session can actually open a file
+// of this type. Everything else — audio, video, and anything the helpdesk
+// labelled with a type nobody can read — is evidence the session cannot
+// reach, and is better named in a warning than left in the bundle for it
+// to hunt for a transcoder over.
+func readableMIME(mime string) bool {
+	switch {
+	case mime == "":
+		return false
+	case strings.HasPrefix(mime, "image/"), strings.HasPrefix(mime, "text/"):
+		return true
+	}
+	switch mime {
+	case "application/pdf", "application/json", "application/csv", "application/xml",
+		"application/zip", "application/x-zip-compressed":
+		return true
+	}
+	return false
+}
+
+// attachmentMIME is the type an attachment should be judged by: what its
+// filename extension says, falling back to what the helpdesk's download
+// response claimed. The extension leads because the claim is unreliable —
+// Zoho served this workspace's 16 MB .mp4 as text/html — and because a
+// wrong claim in that direction is the one that matters: it would put a
+// file the session cannot open back into the bundle.
+func attachmentMIME(a ticket.Attachment) string {
+	if byExt := baseMIME(mime.TypeByExtension(strings.ToLower(filepath.Ext(a.Name)))); byExt != "" {
+		return byExt
+	}
+	return baseMIME(a.MIME)
+}
+
+// baseMIME strips any ";charset=..." parameters from a media type.
+func baseMIME(t string) string {
+	if i := strings.IndexByte(t, ';'); i >= 0 {
+		t = t[:i]
+	}
+	return strings.TrimSpace(t)
+}
+
+// keepReadableAttachments enforces the size cap and the type allow-list on
+// what the helpdesk downloaded. A file that fails either is deleted from
+// the bundle — leaving it there means the session can still read 17 MB of
+// mp4 into its context — and named, with its size, in a warning the prompt
+// and the run state both carry.
+func (r *Runner) keepReadableAttachments(p *prepared, b *ticket.Bundle, atts []ticket.Attachment) []ticket.Attachment {
+	max := r.Config.AttachmentMaxBytes()
+	kept := make([]ticket.Attachment, 0, len(atts))
+	for _, a := range atts {
+		path := a.Path
+		if path != "" && !filepath.IsAbs(path) {
+			path = filepath.Join(p.run.BundleDir(), path)
+		}
+		size := int64(-1)
+		if info, err := os.Stat(path); err == nil {
+			size = info.Size()
+		}
+
+		mimeType := attachmentMIME(a)
+		switch {
+		case size > max:
+			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) is over the %s limit and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), humanBytes(max)))
+		case !readableMIME(mimeType):
+			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) cannot be opened in this session and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size)))
+		default:
+			kept = append(kept, a)
+			continue
+		}
+		if path != "" {
+			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+				fmt.Fprintf(r.stderr(), "[%s] remove attachment %s: %v\n", p.state.Key, path, err)
+			}
+		}
+	}
+	if len(kept) == 0 {
+		return nil
+	}
+	return kept
+}
+
+// humanBytes renders a byte count the way a warning should read.
+func humanBytes(n int64) string {
+	switch {
+	case n < 0:
+		return "size unknown"
+	case n < 1024:
+		return fmt.Sprintf("%d B", n)
+	case n < 1<<20:
+		return fmt.Sprintf("%.1f KiB", float64(n)/1024)
+	default:
+		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
+	}
 }
 
 // warn records a warning in both places it has to appear: the prompt the
@@ -377,18 +476,20 @@ func (r *Runner) pullRequest(ctx context.Context, p *prepared, url string) prMat
 	return pr
 }
 
-// readThreadHead returns the first lines of the rendered thread, which the
-// prompt quotes inline.
-func readThreadHead(bundleDir string) (string, error) {
+// readThreadHead returns the lines of the rendered thread the prompt
+// quotes inline, and whether that is only the head of a longer thread —
+// which is what decides whether the prompt's heading can honestly say the
+// conversation is all there.
+func readThreadHead(bundleDir string) (string, bool, error) {
 	data, err := os.ReadFile(filepath.Join(bundleDir, "thread.md"))
 	if err != nil {
-		return "", fmt.Errorf("run: read thread: %w", err)
+		return "", false, fmt.Errorf("run: read thread: %w", err)
 	}
 	lines := strings.Split(string(data), "\n")
 	if len(lines) > threadHeadLines {
-		lines = lines[:threadHeadLines]
+		return strings.Join(lines[:threadHeadLines], "\n"), true, nil
 	}
-	return strings.Join(lines, "\n"), nil
+	return strings.Join(lines, "\n"), false, nil
 }
 
 // triageNoteCopy locates the notes-directory copy of a triage note from the

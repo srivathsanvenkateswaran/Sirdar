@@ -205,6 +205,17 @@ type stubHelpdesk struct {
 	// mapping, for tests that need two tickets to see different warnings.
 	warnings    []string
 	warningsFor map[string][]string
+	// files, when set, replaces the single sample attachment: each entry
+	// is written to the bundle at the given size, which is what the
+	// runner's size cap and MIME allow-list are applied to.
+	files []stubAttachment
+}
+
+// stubAttachment is one downloaded attachment and the number of bytes it
+// arrived with.
+type stubAttachment struct {
+	ticket.Attachment
+	bytes int
 }
 
 func (s stubHelpdesk) WarningsFor(id string) []string {
@@ -229,6 +240,17 @@ func (s stubHelpdesk) Attachments(ctx context.Context, id, dir string) ([]ticket
 	if s.attachErr != nil {
 		return nil, s.attachErr
 	}
+	if len(s.files) > 0 {
+		var out []ticket.Attachment
+		for _, f := range s.files {
+			path := filepath.Join(dir, filepath.Base(f.Path))
+			if err := os.WriteFile(path, make([]byte, f.bytes), 0o644); err != nil {
+				return nil, err
+			}
+			out = append(out, f.Attachment)
+		}
+		return out, nil
+	}
 	if err := os.WriteFile(filepath.Join(dir, "1-shot.png"), []byte("png"), 0o644); err != nil {
 		return nil, err
 	}
@@ -248,8 +270,25 @@ type stubSession struct {
 	mu         sync.Mutex
 	sends      []string
 	cancels    int
+	inputClose int
 	cancelOnce sync.Once
 	finishOnce sync.Once
+}
+
+// CloseInput records that the runner said no further message is coming.
+// The stub does not end its stream on it: a provider whose process stays
+// alive after its answer is exactly the case the runner has to survive.
+func (s *stubSession) CloseInput() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.inputClose++
+	return nil
+}
+
+func (s *stubSession) inputCloseCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.inputClose
 }
 
 func (s *stubSession) Events() <-chan provider.Event { return s.events }
@@ -1654,5 +1693,294 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 	}
 	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
 		t.Error("FRESHDESK_KEY is not treated as a credential")
+	}
+}
+
+// TestFinalEndsTheSessionDeterministically is the D1 regression: the first
+// real run produced a schema-valid note at 9 minutes and then sat for
+// another 15 until the wall-clock budget killed it, because nothing closed
+// the CLI's stdin and the CLI does not exit while it might still be sent
+// another message. The stub reproduces that provider exactly — it holds
+// its event stream open until it is cancelled — so the run can only finish
+// if the runner ends the session itself.
+func TestFinalEndsTheSessionDeterministically(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(triageDoc)) {
+			return
+		}
+		<-s.cancelled // the CLI stays alive after its result line
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	start := time.Now()
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(start)
+
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if elapsed > 2*time.Second {
+		t.Fatalf("the run took %s; a session that will not exit must be cancelled %s after the note", elapsed, r.CloseGrace)
+	}
+	if got := p.session(0).inputCloseCount(); got == 0 {
+		t.Fatal("the session's input was never closed")
+	}
+	if got := p.session(0).cancelCount(); got == 0 {
+		t.Fatal("the session was never cancelled after the grace period")
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "result.json")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestNoteIsWrittenBeforeTheSessionEnds pins the ordering D1 turned on: the
+// note, the register row and the state are on disk while the session is
+// still running, not after it has been reaped.
+func TestNoteIsWrittenBeforeTheSessionEnds(t *testing.T) {
+	cfg := newWorkspace(t)
+	seen := make(chan []string, 1)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(triageDoc)) {
+			return
+		}
+		// The runner is past handleFinal by the time CloseInput lands.
+		for s.inputCloseCount() == 0 {
+			time.Sleep(time.Millisecond)
+		}
+		var found []string
+		for _, name := range []string{"result.json", "note.md"} {
+			if _, err := os.Stat(filepath.Join(runDirFor(cfg, "OMNI-1"), name)); err == nil {
+				found = append(found, name)
+			}
+		}
+		seen <- found
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	got := <-seen
+	if len(got) != 2 {
+		t.Fatalf("while the session was still running, only %v were on disk", got)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".sirdar", "register.jsonl")); err != nil {
+		t.Fatalf("register row: %v", err)
+	}
+}
+
+// runDirFor finds the one run directory for a key, for a test that has to
+// look at the run's files while the run is still going.
+func runDirFor(cfg *config.Config, key string) string {
+	entries, err := os.ReadDir(filepath.Join(cfg.Root, ".sirdar", "runs", key))
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+	return filepath.Join(cfg.Root, ".sirdar", "runs", key, entries[len(entries)-1].Name())
+}
+
+// TestBudgetAfterTheNoteDoesNotLoseIt is the other half of D1: a run that
+// blew its budget while the session was being reaped has still produced a
+// note, and reporting it as over_budget sends the operator to their budget
+// settings instead of to the note that is sitting on disk.
+func TestBudgetAfterTheNoteDoesNotLoseIt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		finalEvent(triageDoc),
+		provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 6},
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !hasWarningContaining(out.State.Warnings, "after the note was written") {
+		t.Fatalf("warnings %v", out.State.Warnings)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func hasWarningContaining(warnings []string, want string) bool {
+	for _, w := range warnings {
+		if strings.Contains(w, want) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestOversizeAndUnreadableAttachmentsAreDropped is D7: the first real run
+// put a 17 MB mp4 and two voice notes in the bundle, 99% of it by bytes,
+// none of it openable by the session, which then spent a denied turn
+// looking for a transcoder.
+func TestOversizeAndUnreadableAttachmentsAreDropped(t *testing.T) {
+	cfg := newWorkspace(t)
+	cfg.Attachments.MaxBytes = 1024
+	hd := stubHelpdesk{files: []stubAttachment{
+		{ticket.Attachment{ID: "a1", Name: "shot.png", MIME: "image/png", Path: "attachments/1-shot.png"}, 10},
+		{ticket.Attachment{ID: "a2", Name: "screen.mp4", MIME: "video/mp4", Path: "attachments/2-screen.mp4"}, 20},
+		{ticket.Attachment{ID: "a3", Name: "voice.ogg", MIME: "audio/ogg", Path: "attachments/3-voice.ogg"}, 30},
+		{ticket.Attachment{ID: "a4", Name: "dump.txt", MIME: "text/plain", Path: "attachments/4-dump.txt"}, 4096},
+	}}
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+
+	dir := filepath.Join(runDir(t, cfg, out), "bundle", "attachments")
+	for name, wantKept := range map[string]bool{
+		"1-shot.png": true, "2-screen.mp4": false, "3-voice.ogg": false, "4-dump.txt": false,
+	} {
+		_, err := os.Stat(filepath.Join(dir, name))
+		if wantKept && err != nil {
+			t.Errorf("%s should have been kept: %v", name, err)
+		}
+		if !wantKept && err == nil {
+			t.Errorf("%s should have been deleted from the bundle", name)
+		}
+	}
+	for _, want := range []string{"screen.mp4", "voice.ogg", "dump.txt"} {
+		if !hasWarningContaining(out.State.Warnings, want) {
+			t.Errorf("no warning names %s: %v", want, out.State.Warnings)
+		}
+	}
+	if !hasWarningContaining(out.State.Warnings, "4.0 KiB") {
+		t.Errorf("the oversize warning does not give the size: %v", out.State.Warnings)
+	}
+	prompt := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(prompt, "screen.mp4") {
+		t.Error("the prompt does not tell the agent the video was not kept")
+	}
+	if strings.Contains(prompt, "attachments/2-screen.mp4") {
+		t.Error("the prompt still lists the dropped video as a file to read")
+	}
+}
+
+// TestSessionSpecCarriesMCPPolicy checks the wiring D2 needs at the run
+// level: the workspace's MCP allow-list reaches the policy, and a
+// workspace .mcp.json reaches the provider as the only server file the
+// session may load.
+func TestSessionSpecCarriesMCPPolicy(t *testing.T) {
+	cfg := newWorkspaceWith(t, strings.Replace(configYAML,
+		"    - \"rg *\"\n",
+		"    - \"rg *\"\n  mcp:\n    - \"mcp__grafana__query_*\"\n", 1))
+	if err := os.WriteFile(filepath.Join(cfg.Root, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	spec := p.spec(0)
+	if spec.MCPConfig != filepath.Join(cfg.Root, ".mcp.json") {
+		t.Errorf("MCPConfig %q", spec.MCPConfig)
+	}
+	if len(spec.Policy.MCPAllow) != 1 || spec.Policy.MCPAllow[0] != "mcp__grafana__query_*" {
+		t.Errorf("MCPAllow %v", spec.Policy.MCPAllow)
+	}
+	if d := spec.Policy.Decide("mcp__grafana__create_incident", nil); d.Allow {
+		t.Error("a write-shaped MCP tool reached the session as allowed")
+	}
+}
+
+// TestASecondFinalIsIgnored is R5: a provider that repeats its result line
+// — a resumed session replaying it, a CLI that says goodbye twice — filed
+// the note a second time and left the register with a duplicate row.
+func TestASecondFinalIsIgnored(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		finalEvent(triageDoc),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("register rows: %d, want the note filed once", len(rows))
+	}
+}
+
+// TestUsageKeepsTheHighestReport is R6: usage was assigned from whichever
+// event arrived last, so a schema retry in a fresh session — whose turn
+// and cost counters start again at zero — handed the run back a budget it
+// had already spent.
+func TestUsageKeepsTheHighestReport(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		provider.Event{Kind: provider.EvUsage, Turns: 5, InputTok: 900, OutputTok: 300, CostUSD: 0.4},
+		provider.Event{Kind: provider.EvUsage, Turns: 1, InputTok: 20, OutputTok: 5, CostUSD: 0.05},
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := outs[0].State.Usage
+	if u.Turns != 5 || u.InputTokens != 900 || u.OutputTokens != 300 || u.CostUSD != 0.4 {
+		t.Fatalf("usage %+v, want the highest figure each counter reached", u)
+	}
+}
+
+// TestFailureAfterTheNoteIsAWarning is R7: a provider that fell apart once
+// the note was on disk left nothing in the run's state to say so, because
+// the completed branch read only completeErr.
+func TestFailureAfterTheNoteIsAWarning(t *testing.T) {
+	cfg := newWorkspace(t)
+	events := []provider.Event{finalEvent(triageDoc)}
+	for i := 0; i < 10; i++ {
+		events = append(events, provider.Event{Kind: provider.EvError, Text: "not json"})
+	}
+	p := &stubProvider{script: replay(events...)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !hasWarningContaining(out.State.Warnings, "malformed provider lines") {
+		t.Fatalf("warnings %v, want the provider failure reported as one", out.State.Warnings)
 	}
 }

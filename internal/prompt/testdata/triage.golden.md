@@ -16,7 +16,14 @@ Rules:
 6. When information is missing, stop and report it under open questions rather than inventing.
 7. Translate faithfully. Preserve tone and urgency; quote the original wording where the exact
    phrase matters.
-8. Answer only with the JSON object the schema describes. No prose before or after it.
+8. Every segment of a Bash command is checked against the allow-list separately, so a
+   pipeline or a compound command is allowed only if `rg foo`, `head -50` and everything
+   else between `|`, `&&` and `;` are each allowed on their own.
+9. Attachments listed under Files are the ones you can open; read images with Read. Anything
+   the Warnings section says was not kept — audio, video, an oversize file — cannot be
+   transcoded or recovered here. Report it under open questions, and say plainly that its
+   contents are unread rather than reasoning as though you had seen it.
+10. Answer only with the JSON object the schema describes. No prose before or after it.
 
 # Playbooks
 
@@ -42,7 +49,7 @@ Bundle directory: /bundles/OMNI-2510
 Files:
 - attachments/att-1-screenshot.png
 
-## Conversation (first lines)
+## Conversation
 
 ```
 [2026-09-01T09:00:00Z] Jane (customer): My refund has not arrived.

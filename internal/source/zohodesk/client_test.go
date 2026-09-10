@@ -3,6 +3,7 @@ package zohodesk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -747,5 +749,277 @@ func TestAttachments_AllFailDoesNotAlsoWarn(t *testing.T) {
 	}
 	if w := c.WarningsFor("555"); len(w) != 0 {
 		t.Fatalf("failures were reported twice, as an error and as warnings: %v", w)
+	}
+}
+
+// TestGet_RequestsTheIncludeAndMapsTheCustomer is D6: the first real run
+// produced a note with an empty Customer, CustomerID and Contact, because
+// Desk embeds the contact and the account only when the request asks for
+// them, and the field mapping had nothing to map.
+func TestGet_RequestsTheIncludeAndMapsTheCustomer(t *testing.T) {
+	var gotInclude string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/tickets/900", func(w http.ResponseWriter, r *http.Request) {
+		gotInclude = r.URL.Query().Get("include")
+		w.Header().Set("Content-Type", "application/json")
+		w.Write(mustReadFile(t, "testdata/ticket-included.json"))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	got, err := c.Get(context.Background(), "900")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if gotInclude != ticketInclude {
+		t.Fatalf("include %q, want %q", gotInclude, ticketInclude)
+	}
+	if got.Contact != "Sana Alharbi" {
+		t.Errorf("contact %q", got.Contact)
+	}
+	if got.Customer != "neqsa18" {
+		t.Errorf("customer %q", got.Customer)
+	}
+	if got.CustomerID != "6751" {
+		t.Errorf("customerId %q", got.CustomerID)
+	}
+	if got.Fields["department"] != "Support" {
+		t.Errorf("department %q", got.Fields["department"])
+	}
+}
+
+// TestThreads_HTMLBecomesText is D5: an internal Desk comment arrives as a
+// styled <div> with inline CSS, a mention anchor and &quot; entities, all
+// of which reached thread.md and the prompt verbatim.
+func TestThreads_HTMLBecomesText(t *testing.T) {
+	html := `<div style="direction: rtl; font-size: 13px; font-family: Arial, sans-serif;">` +
+		`<span class="x_147788365highlight">the account is &quot;neqsa18&quot;</span>` +
+		`<a class="zd_v2-commentcontent-mention" href="/agent/x">@Ali</a></div>`
+	conversations := `{"data":[{"id":"c1","type":"comment","commenter":{"name":"L1"},"commenterType":"AGENT",` +
+		`"isPublic":false,"commentedTime":"2026-09-10T07:00:00.000Z","content":` + quoteJSONString(t, html) + `}]}`
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/tickets/901/conversations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(conversations))
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	th, err := c.Threads(context.Background(), "901")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(th) != 1 {
+		t.Fatalf("messages %d", len(th))
+	}
+	text := th[0].Text
+	for _, unwanted := range []string{"<div", "style=", "&quot;", "zd_v2-commentcontent-mention"} {
+		if strings.Contains(text, unwanted) {
+			t.Errorf("markup survived into the thread: %q in %q", unwanted, text)
+		}
+	}
+	if !strings.Contains(text, `the account is "neqsa18"`) {
+		t.Errorf("the text itself was lost: %q", text)
+	}
+	if !strings.Contains(text, "@Ali") {
+		t.Errorf("the mention text was lost: %q", text)
+	}
+}
+
+func quoteJSONString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
+
+// TestTrustedURL is the gate itself: every request this client makes
+// carries a live Desk access token, and attachment hrefs come out of
+// customer-authored HTML.
+func TestTrustedURL(t *testing.T) {
+	c := NewWithToken("https://desk.zoho.in", testOrgID, testToken)
+	trusted := []string{
+		"https://desk.zoho.in/api/v1/tickets/1/attachments/a/content",
+		"https://DESK.Zoho.IN.:443/api/v1/tickets/1",
+		"https://downloads.zoho.in/x",
+		"https://cdn.zohostatic.in/x",
+		"https://files.zohopublic.in/x",
+	}
+	untrusted := []string{
+		"https://attacker.example/x",
+		"http://desk.zoho.in.attacker.example/x",
+		"https://desk.zoho.in.attacker.example/x",
+		"https://desk.zoho.com/x", // another data centre is not this workspace's
+		"http://desk.zoho.in/x",   // the configured endpoint is https
+		"https://169.254.169.254/latest/meta-data/",
+		"file:///etc/passwd",
+		"",
+	}
+	for _, raw := range trusted {
+		if !c.trustedURL(raw) {
+			t.Errorf("%q should be trusted", raw)
+		}
+	}
+	for _, raw := range untrusted {
+		if c.trustedURL(raw) {
+			t.Errorf("%q must not be trusted", raw)
+		}
+	}
+}
+
+// TestAttachments_ForeignHostIsNeverContacted: an attachment href pointing
+// somewhere else is skipped without a single request, so the token is
+// never offered to it, and the skip is reported as a warning naming the
+// host alone.
+func TestAttachments_ForeignHostIsNeverContacted(t *testing.T) {
+	var foreignHits int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&foreignHits, 1)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(foreign.Close)
+
+	mux := http.NewServeMux()
+	var desk *httptest.Server
+	mux.HandleFunc("/api/v1/tickets/910/conversations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":[{"id":"c1","type":"comment","commenter":{"name":"L1"},"commentedTime":"2026-09-10T07:00:00.000Z","content":"hi","attachments":[
+			{"id":"good","name":"shot.png","href":"%s/api/v1/tickets/910/attachments/good/content"},
+			{"id":"evil","name":"evil.png","href":"%s/steal"}]}]}`, desk.URL, foreign.URL)
+	})
+	mux.HandleFunc("/api/v1/tickets/910/attachments/good/content", func(w http.ResponseWriter, r *http.Request) {
+		checkHeaders(t, r)
+		w.Header().Set("Content-Type", "image/png")
+		w.Write([]byte("PNG"))
+	})
+	desk = httptest.NewServer(mux)
+	t.Cleanup(desk.Close)
+
+	c := NewWithToken(desk.URL, testOrgID, testToken)
+	c.HTTP = desk.Client()
+
+	dir := t.TempDir()
+	atts, err := c.Attachments(context.Background(), "910", dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(atts) != 1 || atts[0].ID != "good" {
+		t.Fatalf("attachments %+v", atts)
+	}
+	if n := atomic.LoadInt32(&foreignHits); n != 0 {
+		t.Fatalf("the foreign host was contacted %d times", n)
+	}
+	warnings := c.WarningsFor("910")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "attachment host not trusted: ") {
+		t.Fatalf("warnings %v", warnings)
+	}
+	foreignHost := strings.TrimPrefix(foreign.URL, "http://")
+	if !strings.Contains(warnings[0], foreignHost) {
+		t.Fatalf("the warning does not name the host: %v", warnings)
+	}
+	if strings.Contains(warnings[0], "/steal") {
+		t.Fatalf("the warning repeats the attacker's path: %v", warnings)
+	}
+}
+
+// TestAttachments_RedirectToAForeignHostIsRefused: a trusted host must not
+// be able to bounce the credentialed request onto an untrusted one.
+func TestAttachments_RedirectToAForeignHostIsRefused(t *testing.T) {
+	var foreignHits int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&foreignHits, 1)
+		w.Write([]byte("stolen"))
+	}))
+	t.Cleanup(foreign.Close)
+
+	mux := http.NewServeMux()
+	var desk *httptest.Server
+	mux.HandleFunc("/api/v1/tickets/911/conversations", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprintf(w, `{"data":[{"id":"c1","type":"comment","commenter":{"name":"L1"},"commentedTime":"2026-09-10T07:00:00.000Z","content":"hi","attachments":[
+			{"id":"hop","name":"hop.png","href":"%s/api/v1/tickets/911/attachments/hop/content"}]}]}`, desk.URL)
+	})
+	mux.HandleFunc("/api/v1/tickets/911/attachments/hop/content", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, foreign.URL+"/steal", http.StatusFound)
+	})
+	desk = httptest.NewServer(mux)
+	t.Cleanup(desk.Close)
+
+	c := NewWithToken(desk.URL, testOrgID, testToken)
+	c.HTTP = desk.Client()
+
+	atts, err := c.Attachments(context.Background(), "911", t.TempDir())
+	if len(atts) != 0 {
+		t.Fatalf("a redirected download must not be kept: %+v", atts)
+	}
+	if err == nil {
+		t.Fatal("every attachment failed, so the call reports it")
+	}
+	if n := atomic.LoadInt32(&foreignHits); n != 0 {
+		t.Fatalf("the redirect target was contacted %d times", n)
+	}
+}
+
+// TestSend_RetryAfterIsHonouredOnce is the 429 path: a short Retry-After
+// is sat out and the request replayed, and only once.
+func TestSend_RetryAfterIsHonouredOnce(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if atomic.AddInt32(&calls, 1) == 1 {
+			w.Header().Set("Retry-After", "0")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"id":"912"}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	got, err := c.Get(context.Background(), "912")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ID != "912" {
+		t.Fatalf("ticket %+v", got)
+	}
+	if n := atomic.LoadInt32(&calls); n != 2 {
+		t.Fatalf("calls %d, want the original and one replay", n)
+	}
+}
+
+// TestSend_LongRetryAfterIsReportedNotSlept: a wait longer than the client
+// is willing to sit out is handed back to the caller, which knows about
+// the run's budget.
+func TestSend_LongRetryAfterIsReportedNotSlept(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&calls, 1)
+		w.Header().Set("Retry-After", "600")
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewWithToken(srv.URL, testOrgID, testToken)
+	c.HTTP = srv.Client()
+
+	_, err := c.Get(context.Background(), "913")
+	var serr *source.Error
+	if !errors.As(err, &serr) || serr.Code != source.RateLimited {
+		t.Fatalf("error %v", err)
+	}
+	if n := atomic.LoadInt32(&calls); n != 1 {
+		t.Fatalf("calls %d, want no replay", n)
 	}
 }
