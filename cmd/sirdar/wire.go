@@ -6,18 +6,10 @@ import (
 	"io"
 	"os"
 	"os/signal"
-	"runtime"
-	"strings"
-	"sync"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
 
 // exitUsage is the status for a command the operator invoked wrongly: bad
@@ -54,172 +46,10 @@ func interruptible() (context.Context, func()) {
 	return signal.NotifyContext(context.Background(), os.Interrupt)
 }
 
-// buildDeps assembles everything a Runner needs: the ticket sources named
-// in the configuration, the provider to drive, and the credential resolver
-// for this platform. A non-empty providerName or model overrides what the
-// configuration says. The returned func releases the adapter subprocesses
-// and must be called even when the error is nil.
-//
-// The stdout writer is accepted so every command wires the runner the same
-// way; nothing the runner produces goes there.
+// buildDeps assembles the runner's dependencies for this workspace. The
+// work lives in internal/app so the desktop shell wires a runner the same
+// way; the stdout writer is accepted so every command calls it identically,
+// though nothing the runner produces goes there.
 func buildDeps(cfg *config.Config, providerName, model string, _, stderr io.Writer) (runner.Deps, func(), error) {
-	stderr = synced(stderr)
-	creds := config.Resolver{Keychain: keychainFor()}
-	adapters := &adapterSet{stderr: stderr}
-	cleanup := adapters.close
-
-	if providerName != "" {
-		cfg.Provider = config.Provider(providerName)
-	}
-	if model != "" {
-		cfg.Model = model
-	}
-	p, err := providerFor(cfg.Provider)
-	if err != nil {
-		return runner.Deps{}, cleanup, err
-	}
-
-	deps := runner.Deps{
-		Config:   cfg,
-		Provider: p,
-		Creds:    creds,
-		Stderr:   stderr,
-		Stdin:    os.Stdin,
-		Env:      os.Environ(),
-	}
-
-	if sc := cfg.Sources.Tracker; sc != nil {
-		tracker, err := adapters.tracker(cfg, sc)
-		if err != nil {
-			return runner.Deps{}, cleanup, fmt.Errorf("sources.tracker: %w", err)
-		}
-		deps.Tracker = tracker
-	}
-	if sc := cfg.Sources.Helpdesk; sc != nil {
-		helpdesk, err := adapters.helpdesk(cfg, sc, creds)
-		if err != nil {
-			return runner.Deps{}, cleanup, fmt.Errorf("sources.helpdesk: %w", err)
-		}
-		deps.Helpdesk = helpdesk
-	}
-	return deps, cleanup, nil
-}
-
-func providerFor(name config.Provider) (provider.Provider, error) {
-	switch name {
-	case "claude":
-		return claude.New(), nil
-	case "codex":
-		return codex.New(), nil
-	default:
-		return nil, fmt.Errorf("unknown provider %q: use claude or codex", name)
-	}
-}
-
-// adapterSet owns the adapter subprocesses a command starts. One process
-// serves both roles when the tracker and the helpdesk name the same
-// command, which is the usual shape for a single-system adapter.
-type adapterSet struct {
-	stderr  io.Writer
-	clients map[string]*plugin.Client
-}
-
-func (a *adapterSet) client(command string) (*plugin.Client, error) {
-	if c, ok := a.clients[command]; ok {
-		return c, nil
-	}
-	c, err := plugin.Start(context.Background(), command, a.stderr)
-	if err != nil {
-		return nil, err
-	}
-	if a.clients == nil {
-		a.clients = map[string]*plugin.Client{}
-	}
-	a.clients[command] = c
-	return c, nil
-}
-
-func (a *adapterSet) close() {
-	for _, c := range a.clients {
-		_ = c.Close()
-	}
-	a.clients = nil
-}
-
-func (a *adapterSet) tracker(cfg *config.Config, sc *config.SourceConfig) (source.Tracker, error) {
-	switch sc.Adapter {
-	case "exec":
-		return a.client(expandCommand(cfg, sc.Command))
-	default:
-		return nil, fmt.Errorf("adapter %q cannot serve a tracker", sc.Adapter)
-	}
-}
-
-func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds config.Resolver) (source.Helpdesk, error) {
-	switch sc.Adapter {
-	case "exec":
-		c, err := a.client(expandCommand(cfg, sc.Command))
-		if err != nil {
-			return nil, err
-		}
-		return c.Helpdesk(), nil
-	case "zohodesk":
-		token, err := creds.Resolve(sc.Token)
-		if err != nil {
-			return nil, fmt.Errorf("token %s: %w", sc.Token, err)
-		}
-		return zohodesk.New(sc.BaseURL, sc.OrgID, token), nil
-	default:
-		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
-	}
-}
-
-// expandCommand expands a leading "~/" or "./" in an adapter command line.
-// Only the program is a path; everything after the first space is the
-// adapter's own arguments and is left alone.
-func expandCommand(cfg *config.Config, command string) string {
-	program, args, _ := strings.Cut(command, " ")
-	switch {
-	case strings.HasPrefix(program, "~/"), strings.HasPrefix(program, "./"), strings.HasPrefix(program, "../"):
-		program = cfg.ExpandPath(program)
-	default:
-		return command
-	}
-	if args == "" {
-		return program
-	}
-	return program + " " + args
-}
-
-// keychainFor returns the platform's keychain reader, or nil where there is
-// none: on those platforms a "keychain:" credential ref is an error and
-// only "env:" refs work, as the spec says.
-func keychainFor() config.KeychainReader {
-	if runtime.GOOS == "darwin" {
-		return config.MacKeychain{}
-	}
-	return nil
-}
-
-// syncWriter serialises writes to one writer.
-type syncWriter struct {
-	mu sync.Mutex
-	w  io.Writer
-}
-
-func (s *syncWriter) Write(p []byte) (int, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.w.Write(p)
-}
-
-// synced guards a writer that several goroutines share. The runner's
-// progress lines and every adapter subprocess's copied stderr all land on
-// the same writer at the same time: os.Stderr tolerates that, an in-memory
-// writer does not.
-func synced(w io.Writer) io.Writer {
-	if _, ok := w.(*syncWriter); ok {
-		return w
-	}
-	return &syncWriter{w: w}
+	return app.BuildDeps(cfg, providerName, model, stderr)
 }
