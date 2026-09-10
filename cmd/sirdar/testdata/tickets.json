@@ -1,0 +1,11 @@
+{
+  "tracker": {"OMNI-1": {"Key":"OMNI-1","Title":"Export fails","Description":"Zoho Ticket URL: https://desk.example/tickets/555","Priority":"high","Status":"open","URL":"https://t/OMNI-1","HelpdeskRef":"555"}},
+  "helpdesk": {"555": {
+    "ticket": {"ID":"555","Subject":"تصدير","Customer":"شركة","CustomerID":"4561","URL":"https://h/555"},
+    "thread": [
+      {"At":"2026-09-10T08:30:00+03:00","Author":"Customer","Role":"customer","Text":"لا يعمل التصدير","AttachmentIDs":["a1"]},
+      {"At":"2026-09-10T09:30:00+03:00","Author":"L1","Role":"agent","Text":"سنتحقق"}
+    ],
+    "attachments": [{"id":"a1","name":"shot.png","mime":"image/png","content_base64":"iVBORw0KGgo="}]
+  }}
+}

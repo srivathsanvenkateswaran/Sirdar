@@ -1,0 +1,43 @@
+{
+  "ticket": {
+    "key": "OMNI-1",
+    "title": "Export fails",
+    "trackerUrl": "https://t/OMNI-1",
+    "helpdeskId": "555",
+    "helpdeskUrl": "https://h/555",
+    "priority": "high",
+    "service": "omni",
+    "customer": "شركة",
+    "customerId": "4561"
+  },
+  "title": "Export fails for large orders",
+  "complaint": "The customer reports that exporting an order does nothing and no file arrives.",
+  "timeline": [
+    { "at": "2026-09-10T08:30:00+03:00", "role": "customer", "summary": "Reported that the export does not work." },
+    { "at": "2026-09-10T09:30:00+03:00", "role": "agent", "summary": "L1 told the customer they would check." }
+  ],
+  "reproSteps": [
+    "Open an order with more than 500 line items.",
+    "Request a CSV export.",
+    "Observe that no file is produced."
+  ],
+  "rootCause": {
+    "hypothesis": "The export handler buffers every row before writing, so large orders exceed the request timeout.",
+    "confidence": "medium",
+    "evidence": [
+      { "source": "logs", "query": "service:export level:error", "finding": "Timeouts after 30s on exports of large orders." }
+    ],
+    "codeRefs": ["internal/export/csv.go:42"]
+  },
+  "blastRadius": "Any customer exporting an order above the row threshold.",
+  "classification": "code",
+  "proposedFix": {
+    "description": "Stream the export to the response instead of buffering it in memory.",
+    "files": ["internal/export/csv.go"],
+    "remediationSql": "",
+    "risks": "Streaming changes the error-handling path of the export endpoint."
+  },
+  "openQuestions": [
+    "Is the threshold a row count or a total payload size?"
+  ]
+}

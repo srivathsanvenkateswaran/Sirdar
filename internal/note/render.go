@@ -106,6 +106,18 @@ func (r Renderer) loadTemplate(kind Kind) (*template.Template, error) {
 	return tmpl, nil
 }
 
+// DefaultTemplate returns the embedded default template for kind, which is
+// what `sirdar init --templates` writes into a workspace as the starting
+// point for a vault-specific override.
+func DefaultTemplate(kind Kind) ([]byte, error) {
+	name := templateFilename(kind)
+	raw, err := embeddedTemplates.ReadFile("templates/" + name)
+	if err != nil {
+		return nil, fmt.Errorf("note: read embedded template %s: %w", name, err)
+	}
+	return raw, nil
+}
+
 // Check parses and renders every kind's active template (a custom override
 // when configured, else the embedded default) against a built-in sample
 // document, to catch a broken template before it is used on a real run. It
