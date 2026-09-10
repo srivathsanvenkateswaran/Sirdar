@@ -144,11 +144,9 @@ func truncateValidUTF8(s string, max int) string {
 // failures), and in that case the failures are not also recorded as
 // warnings, since the caller already has every one of them in the error.
 func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
-	// Discard anything an earlier call for this ticket left behind before
-	// doing anything else: every path out of here, including the ones that
-	// return early, must leave no stale warning for the next caller.
-	c.takeWarnings(id)
-
+	// Whatever Get and Threads recorded for this ticket stays where it is:
+	// they are earlier calls in the same bundle, not stale state, and the
+	// caller reads WarningsFor once after all three.
 	ft, err := c.fetchTicket(ctx, id)
 	if err != nil {
 		return nil, err
@@ -164,7 +162,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		refs = append(refs, collectRefs(cv.Attachments, cv.Body, &inline)...)
 	}
 	if len(refs) == 0 {
-		c.putWarnings(id, pagingWarnings)
+		c.addWarnings(id, pagingWarnings)
 		return nil, nil
 	}
 
@@ -216,6 +214,6 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		}
 		return out, errors.Join(errs...)
 	}
-	c.putWarnings(id, warnings)
+	c.addWarnings(id, warnings)
 	return out, nil
 }

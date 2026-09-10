@@ -997,3 +997,60 @@ func TestThreads_ConversationPaginationCapped(t *testing.T) {
 		t.Errorf("warnings = %v, want one naming the page cap", warnings)
 	}
 }
+
+// TestWarningsSurviveTheWholeBundle runs the sequence internal/run's
+// fetchBundle runs — Get, Threads, Attachments, then one WarningsFor.
+//
+// Threads and Attachments both page the conversation feed, so both hit the
+// cap and record the same sentence. The reader has to end up with it still
+// there — not cleared by the call that followed — and with exactly one copy
+// of it.
+func TestWarningsSurviveTheWholeBundle(t *testing.T) {
+	origPer, origMax := conversationsPerPage, maxConversationPages
+	conversationsPerPage = 1
+	maxConversationPages = 3
+	t.Cleanup(func() { conversationsPerPage, maxConversationPages = origPer, origMax })
+
+	ts := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/tickets/123":
+			writeFixture(t, w, "ticket.json")
+		case "/api/v2/tickets/123/conversations":
+			body := fmt.Sprintf(`[{"id":%s,"body":"<p>x</p>","body_text":"x","incoming":true,"private":false,"from_email":"priya@example.com","created_at":"2026-09-01T09:00:00Z","attachments":[]}]`,
+				r.URL.Query().Get("page"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		case "/api/v2/attachments/900001/order-1234.pdf",
+			"/data/helpdesk/attachments/production/700001/original/spinner.png":
+			_, _ = w.Write([]byte("attachment bytes"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	// One listener plays both the account domain and the CDN the ticket's
+	// inline image sits on, so every attachment downloads cleanly and the
+	// only warning in play is the page cap.
+	c := newClient(t, map[string]string{
+		testDomain: addrOf(ts.Server),
+		testCDN:    addrOf(ts.Server),
+	}, testDomain)
+	ctx := context.Background()
+
+	if _, err := c.Get(ctx, "123"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Threads(ctx, "123"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if _, err := c.Attachments(ctx, "123", filepath.Join(t.TempDir(), "123")); err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+
+	warnings := c.WarningsFor("123")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "conversation pages capped at 3") {
+		t.Errorf("warnings = %v, want exactly one page-cap warning after Get/Threads/Attachments", warnings)
+	}
+	if again := c.WarningsFor("123"); len(again) != 0 {
+		t.Errorf("warnings survived being read: %v", again)
+	}
+}

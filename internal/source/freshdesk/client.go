@@ -438,20 +438,37 @@ func statusError(path string, status int, body []byte) *source.Error {
 
 // --- warnings ---
 
-// putWarnings files the problems one Attachments call skipped over under
-// its ticket, replacing anything an earlier call for the same ticket left
-// behind.
-func (c *Client) putWarnings(id string, warnings []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// addWarnings files the problems one call skipped over under its ticket,
+// alongside whatever an earlier call for the same ticket recorded.
+//
+// It appends rather than replaces because one ticket's bundle is assembled
+// from several calls — internal/run's fetchBundle runs Get, then Threads,
+// then Attachments, and reads WarningsFor once at the end. Reading is what
+// clears the entry.
+//
+// An identical line is dropped: Threads and Attachments both page the same
+// conversation feed, so a feed that stops at the page cap says so once
+// rather than twice.
+func (c *Client) addWarnings(id string, warnings []string) {
 	if len(warnings) == 0 {
-		delete(c.warnings, id)
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.warnings == nil {
 		c.warnings = map[string][]string{}
 	}
-	c.warnings[id] = append([]string(nil), warnings...)
+	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
+	for _, w := range c.warnings[id] {
+		seen[w] = true
+	}
+	for _, w := range warnings {
+		if seen[w] {
+			continue
+		}
+		seen[w] = true
+		c.warnings[id] = append(c.warnings[id], w)
+	}
 }
 
 // takeWarnings returns and removes the warnings recorded for ticket id.

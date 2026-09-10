@@ -91,9 +91,10 @@ func (c *Client) trustedRawURL(raw string) (string, bool) {
 func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
 	ctx, col := withCollector(ctx)
 	published := false
-	// Every path out of here must leave the right warnings behind for this
-	// ticket and no stale ones from an earlier call, including the paths
-	// that return early.
+	// Every path out of here has to file this call's warnings under the
+	// ticket, including the paths that return early. publish appends, so
+	// what an earlier call in the same bundle (Get, Threads) recorded stays
+	// where it is.
 	defer func() {
 		if !published {
 			c.publish(id, col)
@@ -154,12 +155,12 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	}
 
 	if len(out) == 0 {
-		// Every download failed, so the caller gets all of them in the error
-		// and needs no warning saying the same thing a second time. Filing
-		// nothing under id still clears whatever an earlier call left there.
+		// Every download failed, so the caller gets all of them in the
+		// error and needs no warning saying the same thing a second time.
+		// Dropping this call's messages leaves whatever Get and Threads
+		// recorded for the same ticket untouched.
 		published = true
 		col.take()
-		c.publish(id, col)
 		return nil, errors.Join(failures...)
 	}
 	return out, nil

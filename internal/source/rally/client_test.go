@@ -943,6 +943,62 @@ func TestAttachmentContentRefOnAForeignHostIsRefused(t *testing.T) {
 	}
 }
 
+// TestWarningsSurviveTheWholeBundle runs the sequence internal/run's
+// fetchBundle runs — Get, Threads, Attachments, then one WarningsFor — with
+// the discussion query carrying a WSAPI warning and the attachments
+// downloading cleanly.
+//
+// A warning on the conversationpost query belongs to Threads alone:
+// Attachments queries the attachment collection and never regenerates it.
+// While filing warnings replaced the ticket's entry instead of appending to
+// it, a clean Attachments erased it and the agent read a short discussion
+// with nothing saying so.
+func TestWarningsSurviveTheWholeBundle(t *testing.T) {
+	const wsapiWarning = "Attribute Text is restricted for this subscription"
+
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		if collection(r) == "conversationpost" {
+			body := strings.Replace(
+				strings.ReplaceAll(fixture(t, "conversationposts.json"), fixtureBase, base),
+				`"Warnings": []`, `"Warnings": ["`+wsapiWarning+`"]`, 1)
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+			return
+		}
+		attachmentHandler(t, w, r, base)
+	})
+	c := newClient(t, fs, Config{})
+	ctx := context.Background()
+
+	if _, err := c.Helpdesk().Get(ctx, "DE1234"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Helpdesk().Threads(ctx, "DE1234"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	atts, err := c.Helpdesk().Attachments(ctx, "DE1234", filepath.Join(t.TempDir(), "att"))
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) == 0 {
+		t.Fatal("Attachments returned nothing; this test needs the clean-download path")
+	}
+
+	warnings := c.WarningsFor("DE1234")
+	found := false
+	for _, msg := range warnings {
+		if strings.Contains(msg, wsapiWarning) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("WarningsFor(DE1234) = %v, want the Threads query warning to have survived Attachments", warnings)
+	}
+	if again := c.WarningsFor("DE1234"); len(again) != 0 {
+		t.Errorf("warnings survived being read: %v", again)
+	}
+}
+
 func TestAttachmentsAllFail(t *testing.T) {
 	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
 		coll := collection(r)

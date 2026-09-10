@@ -849,7 +849,11 @@ func TestAttachmentsAllFailuresBecomeAnError(t *testing.T) {
 	}
 }
 
-func TestAttachmentsClearsStaleWarnings(t *testing.T) {
+// Reading is what clears a ticket's warnings, not the next call: a bundle is
+// several calls and a single read, so a later clean call must not erase what
+// an earlier one recorded. Once WarningsFor has drained them, a clean call
+// puts nothing back.
+func TestWarningsAreClearedByReadingNotByTheNextCall(t *testing.T) {
 	fail := true
 	f := newFakeLinear(t, serveFixtures(t, map[string]string{"IssueConversation": "conversation.json"}))
 	f.download = func(w http.ResponseWriter, r *http.Request) {
@@ -865,12 +869,78 @@ func TestAttachmentsClearsStaleWarnings(t *testing.T) {
 	if _, err := c.Helpdesk().Attachments(context.Background(), "ENG-123", filepath.Join(t.TempDir(), "a")); err != nil {
 		t.Fatalf("Attachments: %v", err)
 	}
+	if w := c.WarningsFor("ENG-123"); len(w) != 1 {
+		t.Fatalf("WarningsFor = %v, want the one failed download", w)
+	}
+
 	fail = false
 	if _, err := c.Helpdesk().Attachments(context.Background(), "ENG-123", filepath.Join(t.TempDir(), "b")); err != nil {
 		t.Fatalf("Attachments: %v", err)
 	}
 	if w := c.WarningsFor("ENG-123"); len(w) != 0 {
-		t.Errorf("warnings not reset between calls: %v", w)
+		t.Errorf("a clean call after a drained read left warnings behind: %v", w)
+	}
+}
+
+// TestWarningsSurviveTheWholeBundle runs the sequence internal/run's
+// fetchBundle runs — Get, Threads, Attachments, then one WarningsFor — with
+// Get degrading (this workspace does not expose customerNeeds) and the two
+// later calls running clean.
+//
+// The Get degradation is the one that proves the point: Threads and
+// Attachments read the issue through a different query, so neither
+// regenerates it. While Attachments cleared the ticket's warnings on entry,
+// it reached nobody.
+func TestWarningsSurviveTheWholeBundle(t *testing.T) {
+	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
+		switch req.Op {
+		case "Issue":
+			if strings.Contains(req.Query, "customerNeeds") {
+				w.Write([]byte(`{"errors":[{"message":"Cannot query field \"customerNeeds\" on type \"Issue\".","extensions":{"type":"GRAPHQL_VALIDATION_FAILED"}}]}`))
+				return true
+			}
+			w.Write([]byte(strings.Replace(string(fixture(t, "issue.json")),
+				`"customerNeeds": { "nodes": [{ "id": "need-1" }, { "id": "need-2" }] }`, `"x": 1`, 1)))
+			return true
+		case "IssueConversation":
+			w.Write(fixture(t, "conversation.json"))
+			return true
+		}
+		return false
+	})
+	f.download = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		fmt.Fprint(w, "png")
+	}
+	c := newTestClient(t, f, "")
+	ctx := context.Background()
+
+	if _, err := c.Get(ctx, "ENG-123"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Helpdesk().Threads(ctx, "ENG-123"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	atts, err := c.Helpdesk().Attachments(ctx, "ENG-123", filepath.Join(t.TempDir(), "att"))
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) == 0 {
+		t.Fatal("Attachments returned nothing; the clean-download path is what this test needs")
+	}
+
+	w := c.WarningsFor("ENG-123")
+	found := false
+	for _, msg := range w {
+		if msg == noCustomerNeedsWarning {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("WarningsFor = %v, want the Get degradation to have survived Threads and Attachments", w)
+	}
+	if again := c.WarningsFor("ENG-123"); len(again) != 0 {
+		t.Errorf("warnings survived being read: %v", again)
 	}
 }
 

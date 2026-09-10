@@ -94,24 +94,14 @@ var (
 
 // --- Warnings ---
 
-// putWarnings records the problems one call for ticket id skipped over,
-// replacing anything an earlier call for that id left behind.
-func (c *Client) putWarnings(id string, warnings []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(warnings) == 0 {
-		delete(c.warnings, id)
-		return
-	}
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	c.warnings[id] = append([]string(nil), warnings...)
-}
-
 // addWarnings appends to ticket id's warnings without disturbing what is
 // already there, skipping a line that has already been recorded — a query
 // that degrades the same way on every page should say so once.
+//
+// Appending is what a bundle needs rather than a nicety: internal/run's
+// fetchBundle runs Get, then Threads, then Attachments, and reads
+// WarningsFor once at the end, so a warning one of those calls records has
+// to survive the next two.
 func (c *Client) addWarnings(id string, warnings ...string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -458,12 +448,11 @@ func (h helpdeskView) Threads(ctx context.Context, id string) (ticket.Thread, er
 // as warnings, since the caller already has every one of them in the error.
 func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
 	c := h.Client
-	// Discard anything an earlier call for this ticket left behind before
-	// doing anything else: every path out of here from this point on,
-	// including the ones that return early, must leave no stale warning for
-	// the next caller to pick up as its own.
-	c.takeWarnings(id)
-
+	// Whatever Get and Threads recorded for this ticket stays where it is:
+	// they are earlier calls in the same bundle, not stale state, and the
+	// caller reads WarningsFor once after all three. Clearing here used to
+	// mean a comment field Threads could not read went unreported whenever
+	// the attachments downloaded cleanly.
 	conv, err := c.fetchConversation(ctx, id)
 	if err != nil {
 		return nil, err
@@ -508,7 +497,7 @@ func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket
 		}
 		return out, errors.Join(errs...)
 	}
-	c.putWarnings(id, failures)
+	c.addWarnings(id, failures...)
 	return out, nil
 }
 

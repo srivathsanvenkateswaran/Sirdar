@@ -291,7 +291,7 @@ func (c *Client) find(ctx context.Context, key string, w *warnBuf) (found, error
 func (c *Client) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
 	var w warnBuf
 	f, err := c.find(ctx, key, &w)
-	c.putWarnings(key, w.msgs)
+	c.addWarnings(key, w.msgs)
 	if err != nil {
 		return ticket.TrackerTicket{}, err
 	}
@@ -431,7 +431,7 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	// A List call has no single ticket to key its warnings by, so each
 	// returned key carries the call's warnings; see the doc comment.
 	for _, item := range out {
-		c.putWarnings(item.Key, w.msgs)
+		c.addWarnings(item.Key, w.msgs)
 	}
 	return out, nil
 }

@@ -520,6 +520,62 @@ func TestThreadsCapsCommentPagination(t *testing.T) {
 	}
 }
 
+// TestWarningsSurviveTheWholeBundle runs the call sequence
+// internal/run/prepare.go's fetchBundle runs — Get, then Threads, then
+// Attachments, then one WarningsFor — with Threads hitting the comment page
+// cap and Attachments finding nothing to complain about.
+//
+// Each call files its warnings under the same ticket when it ends. While
+// publish replaced that entry instead of appending to it, the clean
+// Attachments wiped the pagination warning Threads had just recorded, and
+// the agent read a thread that stops at page 100 with nothing saying so.
+func TestWarningsSurviveTheWholeBundle(t *testing.T) {
+	t.Parallel()
+	ts, mux := startServer(t)
+	mux.HandleFunc("/rest/api/2/issue/SUP-45", func(w http.ResponseWriter, r *http.Request) {
+		ts.writeFixture(w, "issue_cloud_truncated.json")
+	})
+	mux.HandleFunc("/rest/api/2/issue/SUP-45/comment", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"startAt":0,"maxResults":1,"total":0,"comments":[
+			{"id":"9001","author":{"displayName":"Loop One","accountId":"acc-1"},"body":"again","created":"2026-09-02T09:00:00.000+0000"}
+		]}`))
+	})
+
+	c := newClient(t, ts, cloudConfig())
+	ctx := context.Background()
+
+	if _, err := c.Get(ctx, "SUP-45"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Threads(ctx, "SUP-45"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	// The fixture carries no attachments, so this call records nothing —
+	// the case that used to erase everything before it.
+	atts, err := c.Attachments(ctx, "SUP-45", filepath.Join(t.TempDir(), "att"))
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 0 {
+		t.Fatalf("attachments = %+v, want none", atts)
+	}
+
+	warnings := c.WarningsFor("SUP-45")
+	found := 0
+	for _, w := range warnings {
+		if strings.Contains(w, "stopped after") && strings.Contains(w, "pages") {
+			found++
+		}
+	}
+	if found != 1 {
+		t.Errorf("WarningsFor(SUP-45) = %v, want exactly one pagination warning after Get/Threads/Attachments", warnings)
+	}
+	if again := c.WarningsFor("SUP-45"); len(again) != 0 {
+		t.Errorf("warnings survived being read: %v", again)
+	}
+}
+
 // --- Search ---
 
 func TestBuildJQL(t *testing.T) {

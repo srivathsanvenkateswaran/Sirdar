@@ -108,7 +108,7 @@ type conversationPost struct {
 func (h helpdeskView) Threads(ctx context.Context, id string) (ticket.Thread, error) {
 	c := h.Client
 	var w warnBuf
-	defer func() { c.putWarnings(id, w.msgs) }()
+	defer func() { c.addWarnings(id, w.msgs) }()
 
 	art, err := c.find(ctx, id, &w)
 	if err != nil {
@@ -184,7 +184,7 @@ type attachmentContentResult struct {
 func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
 	c := h.Client
 	var w warnBuf
-	defer func() { c.putWarnings(id, w.msgs) }()
+	defer func() { c.addWarnings(id, w.msgs) }()
 
 	art, err := c.find(ctx, id, &w)
 	if err != nil {

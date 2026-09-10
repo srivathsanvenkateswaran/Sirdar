@@ -146,18 +146,35 @@ func (c *Client) WarningsFor(id string) []string {
 	return c.takeWarnings(key)
 }
 
-// putWarnings records the failures one Attachments call skipped over.
-func (c *Client) putWarnings(id string, warnings []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// addWarnings records the failures one call skipped over, alongside
+// whatever an earlier call for the same work item recorded.
+//
+// Attachments is the only caller today, but it appends rather than replaces
+// so that it stays that way by design and not by luck: one work item's
+// bundle is Get, then Threads, then Attachments, with a single WarningsFor
+// at the end, so the first call to warn about something must not have it
+// erased by the two that follow. Reading is what clears the entry. An
+// identical line is dropped rather than repeated.
+func (c *Client) addWarnings(id string, warnings []string) {
 	if len(warnings) == 0 {
-		delete(c.warnings, id)
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.warnings == nil {
 		c.warnings = map[string][]string{}
 	}
-	c.warnings[id] = warnings
+	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
+	for _, w := range c.warnings[id] {
+		seen[w] = true
+	}
+	for _, w := range warnings {
+		if seen[w] {
+			continue
+		}
+		seen[w] = true
+		c.warnings[id] = append(c.warnings[id], w)
+	}
 }
 
 // takeWarnings returns and removes the warnings recorded for work item id.

@@ -273,11 +273,8 @@ func (c *Client) resolveAuthor(ctx context.Context, cv fdConversation) string {
 // description as the first message (from the requester), followed by every
 // conversation entry, ordered by timestamp.
 func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) {
-	// Every path out of here replaces whatever an earlier call for this
-	// ticket (of any kind — Threads or Attachments) left in the warning
-	// slot, so a stale one is never handed to the next reader.
-	c.takeWarnings(id)
-
+	// What an earlier call in the same bundle recorded stays where it is:
+	// warnings accumulate under the ticket and the reader clears them.
 	ft, err := c.fetchTicket(ctx, id)
 	if err != nil {
 		return nil, err
@@ -332,6 +329,6 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	}
 
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].At.Before(msgs[j].At) })
-	c.putWarnings(id, warnings)
+	c.addWarnings(id, warnings)
 	return msgs, nil
 }

@@ -430,19 +430,39 @@ func (col *collector) take() []string {
 // publish files a finished call's warnings under the ticket it was about, so
 // a later WarningsFor(id) finds them. id is "" for List, which is not about
 // one ticket.
+//
+// It appends rather than replaces. One ticket's bundle is assembled from
+// several calls — internal/run/prepare.go runs Get, then Threads, then
+// Attachments, and reads WarningsFor once at the end — so a warning from an
+// earlier call has to survive a later one. Replacing meant a clean
+// Attachments erased the comment-pagination warning Threads had just
+// recorded, and the agent read a truncated thread with nothing saying so.
+//
+// An identical line is dropped: Threads and Attachments both walk the same
+// comment feed, so a feed that stops at the page cap says the same sentence
+// on each pass, and two copies in the prompt read as two problems.
 func (c *Client) publish(id string, col *collector) {
 	msgs := col.take()
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.lastID = id
 	if len(msgs) == 0 {
-		delete(c.warnings, id)
 		return
 	}
 	if c.warnings == nil {
 		c.warnings = map[string][]string{}
 	}
-	c.warnings[id] = msgs
+	seen := make(map[string]bool, len(c.warnings[id])+len(msgs))
+	for _, w := range c.warnings[id] {
+		seen[w] = true
+	}
+	for _, w := range msgs {
+		if seen[w] {
+			continue
+		}
+		seen[w] = true
+		c.warnings[id] = append(c.warnings[id], w)
+	}
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the

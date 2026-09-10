@@ -551,6 +551,50 @@ func TestAttachmentsPartialFailureWarns(t *testing.T) {
 	}
 }
 
+// A work item's bundle is Get, then Threads, then Attachments, with a single
+// WarningsFor at the end (internal/run's fetchBundle). Warnings accumulate
+// under the work item across those calls and are cleared by the read, not by
+// the next call — so a later clean call cannot erase what an earlier one
+// recorded, and a line already recorded is not repeated.
+func TestWarningsAccumulateAcrossTheBundleAndClearOnRead(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	fs.mu.Lock()
+	fs.attachmentStatus["bbbbbbbb-2222-3333-4444-555555555555"] = http.StatusInternalServerError
+	fs.mu.Unlock()
+
+	ctx := context.Background()
+	if _, err := c.Get(ctx, "4242"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Helpdesk().Threads(ctx, "4242"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if _, err := c.Helpdesk().Attachments(ctx, "4242", filepath.Join(t.TempDir(), "a")); err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+
+	// A second pass — a retry, say — that hits the same failure adds no
+	// second copy of the line, and a third that runs clean does not erase
+	// what the first recorded.
+	if _, err := c.Helpdesk().Attachments(ctx, "4242", filepath.Join(t.TempDir(), "b")); err != nil {
+		t.Fatalf("Attachments (retry): %v", err)
+	}
+	fs.mu.Lock()
+	delete(fs.attachmentStatus, "bbbbbbbb-2222-3333-4444-555555555555")
+	fs.mu.Unlock()
+	if _, err := c.Helpdesk().Attachments(ctx, "4242", filepath.Join(t.TempDir(), "c")); err != nil {
+		t.Fatalf("Attachments (clean): %v", err)
+	}
+
+	w := c.WarningsFor("4242")
+	if len(w) != 1 || !strings.Contains(w[0], "bbbbbbbb") {
+		t.Fatalf("WarningsFor(4242) = %v, want exactly one line naming the failed attachment", w)
+	}
+	if again := c.WarningsFor("4242"); len(again) != 0 {
+		t.Errorf("warnings survived being read: %v", again)
+	}
+}
+
 func TestAttachmentsAllFail(t *testing.T) {
 	fs, c := newFixtureServer(t)
 	fs.mu.Lock()

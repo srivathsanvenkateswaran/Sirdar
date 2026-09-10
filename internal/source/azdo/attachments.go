@@ -272,11 +272,9 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	if err != nil {
 		return nil, err
 	}
-	// Discard anything an earlier call for this work item left behind
-	// before doing anything else: every path out of here from this point
-	// on, including the ones that return early, must leave no stale
-	// warning for the next caller to pick up as its own.
-	c.takeWarnings(wid)
+	// Whatever an earlier call in the same bundle recorded for this work
+	// item stays where it is: warnings accumulate under the id, and reading
+	// them is what clears the entry.
 	wi, err := c.getWorkItem(ctx, wid)
 	if err != nil {
 		return nil, err
@@ -284,7 +282,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	refs, failures := c.refs(wi)
 	if len(refs) == 0 {
 		if len(failures) > 0 {
-			c.putWarnings(wid, failures)
+			c.addWarnings(wid, failures)
 		}
 		return nil, nil
 	}
@@ -316,7 +314,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		// already has every one of them in the error.
 		return out, errors.Join(errs...)
 	}
-	c.putWarnings(wid, failures)
+	c.addWarnings(wid, failures)
 	return out, nil
 }
 
