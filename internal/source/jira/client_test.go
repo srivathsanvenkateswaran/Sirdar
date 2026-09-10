@@ -27,6 +27,9 @@ const (
 	// URLs; it is rewritten to the test server's address as each fixture is
 	// served.
 	fixtureBase = "https://jira.example.com"
+	// fixtureForeign is the placeholder for a host that is not the configured
+	// Jira instance; a test that cares rewrites it to a second listener.
+	fixtureForeign = "https://attacker.example"
 )
 
 // --- test server ---
@@ -34,6 +37,10 @@ const (
 type testServer struct {
 	*httptest.Server
 	t *testing.T
+
+	// rewrites is applied to every fixture served, on top of the placeholder
+	// host rewrite, so a fixture can point at a second listener too.
+	rewrites map[string]string
 
 	mu     sync.Mutex
 	counts map[string]int
@@ -71,8 +78,12 @@ func (ts *testServer) writeFixture(w http.ResponseWriter, name string) {
 		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
+	body := strings.ReplaceAll(string(b), fixtureBase, ts.URL)
+	for from, to := range ts.rewrites {
+		body = strings.ReplaceAll(body, from, to)
+	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(strings.ReplaceAll(string(b), fixtureBase, ts.URL)))
+	_, _ = w.Write([]byte(body))
 }
 
 func wantBasicAuth(t *testing.T, r *http.Request) {
@@ -1050,6 +1061,114 @@ func TestAttachmentsWarnsOnLoginRedirectAndHTML(t *testing.T) {
 	}
 	if !strings.Contains(warnings[1], "text/html") {
 		t.Errorf("html warning = %q, want it to name the content type", warnings[1])
+	}
+}
+
+func TestAttachmentsRefusesAContentURLOnAnotherHost(t *testing.T) {
+	t.Parallel()
+
+	// A second listener standing in for wherever a hostile instance would
+	// like the credential sent. Any request at all is a failure.
+	var foreignHits int
+	var foreignMu sync.Mutex
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		foreignMu.Lock()
+		foreignHits++
+		foreignMu.Unlock()
+		t.Errorf("credentialed request reached a foreign host: %s %s (Authorization %q)",
+			r.Method, r.URL.Path, r.Header.Get("Authorization"))
+	}))
+	t.Cleanup(foreign.Close)
+
+	ts, mux := startServer(t)
+	ts.rewrites = map[string]string{fixtureForeign: foreign.URL}
+	mux.HandleFunc("/rest/api/2/issue/SUP-46", func(w http.ResponseWriter, r *http.Request) {
+		ts.writeFixture(w, "issue_foreign_attachment.json")
+	})
+	mux.HandleFunc("/rest/api/2/attachment/content/", func(w http.ResponseWriter, r *http.Request) {
+		wantBasicAuth(t, r)
+		w.Header().Set("Content-Type", "application/octet-stream")
+		_, _ = w.Write([]byte("real attachment bytes"))
+	})
+
+	c := newClient(t, ts, cloudConfig())
+	dir := filepath.Join(t.TempDir(), "attachments")
+	got, err := c.Attachments(context.Background(), "SUP-46", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+
+	foreignMu.Lock()
+	hits := foreignHits
+	foreignMu.Unlock()
+	if hits != 0 {
+		t.Errorf("foreign host received %d requests, want 0", hits)
+	}
+
+	// The sibling on the configured host is unaffected.
+	if len(got) != 1 || got[0].ID != "9101" {
+		t.Fatalf("got %v, want only the same-host attachment 9101", got)
+	}
+	if got[0].Path != "attachments/1-same-host.png" {
+		t.Errorf("Path = %q, want attachments/1-same-host.png", got[0].Path)
+	}
+
+	warnings := c.WarningsFor("SUP-46")
+	if len(warnings) != 1 {
+		t.Fatalf("warnings = %v, want one for the untrusted host", warnings)
+	}
+	foreignHost := strings.TrimPrefix(foreign.URL, "http://")
+	if want := "jira: attachment host not trusted: " + foreignHost; warnings[0] != want {
+		t.Errorf("warning = %q, want %q", warnings[0], want)
+	}
+	if strings.Contains(warnings[0], "/rest/api/2/attachment") {
+		t.Errorf("warning carries the URL, not just the host: %q", warnings[0])
+	}
+}
+
+func TestTrustedURL(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		name    string
+		baseURL string
+		raw     string
+		want    bool
+	}{
+		{"same host", "https://jira.example.com", "https://jira.example.com/rest/api/2/attachment/content/1", true},
+		{"host case is ignored", "https://jira.example.com", "https://JIRA.EXAMPLE.COM/x", true},
+		{"trailing dot is the same host", "https://jira.example.com", "https://jira.example.com./x", true},
+		{"explicit default port", "https://jira.example.com", "https://jira.example.com:443/x", true},
+
+		{"lookalike suffix", "https://jira.example.com", "https://jira.example.com.attacker.example/x", false},
+		{"lookalike prefix", "https://jira.example.com", "https://xjira.example.com/x", false},
+		{"unrelated host", "https://jira.example.com", "https://attacker.example/x", false},
+		// The real destination of this URL is attacker.example; the
+		// configured host is only the userinfo.
+		{"userinfo decoy", "https://jira.example.com", "https://jira.example.com@attacker.example/x", false},
+		{"userinfo on the right host", "https://jira.example.com", "https://someone@jira.example.com/x", false},
+		{"downgraded scheme", "https://jira.example.com", "http://jira.example.com/x", false},
+		{"other port", "https://jira.example.com", "https://jira.example.com:8443/x", false},
+		{"relative", "https://jira.example.com", "/rest/api/2/attachment/content/1", false},
+		{"empty", "https://jira.example.com", "", false},
+		{"not a url", "https://jira.example.com", "://nope", false},
+
+		// A plain-HTTP instance (a test server, an on-prem host behind a
+		// terminating proxy) trusts its own scheme and https to itself.
+		{"http base, same host and port", "http://127.0.0.1:8080", "http://127.0.0.1:8080/x", true},
+		{"http base upgraded", "http://127.0.0.1:8080", "https://127.0.0.1:8080/x", true},
+		{"http base, default port is a different host", "http://127.0.0.1:8080", "http://127.0.0.1/x", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+			c, err := New(Config{BaseURL: tt.baseURL, PAT: "p"}, nil)
+			if err != nil {
+				t.Fatalf("New: %v", err)
+			}
+			if _, got := c.trustedRawURL(tt.raw); got != tt.want {
+				t.Errorf("trustedRawURL(%q) with base %q = %v, want %v", tt.raw, tt.baseURL, got, tt.want)
+			}
+		})
 	}
 }
 

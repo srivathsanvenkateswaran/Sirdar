@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -69,9 +70,13 @@ type Config struct {
 // Client is a Jira REST client implementing source.Tracker. Call Helpdesk
 // for the source.Helpdesk view of the same issues.
 type Client struct {
-	cfg  Config
-	base string // BaseURL, trailing slash trimmed
-	host string // host[:port] of BaseURL, for redirect checks
+	cfg    Config
+	base   string // BaseURL, trailing slash trimmed
+	scheme string // scheme of BaseURL, lowercased
+	// host is the one host this client will ever send its credential to,
+	// normalised (lowercased, trailing dot and default port removed) so a
+	// URL taken out of an API response can be compared against it.
+	host string
 	hc   *http.Client
 
 	// mu guards the caches below and the warning map. One Client serves
@@ -118,7 +123,8 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	c := &Client{cfg: cfg, base: base, host: u.Host, hc: hc}
+	scheme := strings.ToLower(u.Scheme)
+	c := &Client{cfg: cfg, base: base, scheme: scheme, host: normalizeHost(scheme, u.Host), hc: hc}
 	if cfg.Deployment != DeploymentAuto {
 		c.deployment = cfg.Deployment
 	}
@@ -206,9 +212,9 @@ func (c *Client) deploymentFor(ctx context.Context) string {
 // the credentials, without a network call. It is the pre-detection default
 // used to pick an auth header for the very first request.
 func (c *Client) guessDeployment() string {
-	h := strings.ToLower(c.host)
-	if i := strings.IndexByte(h, ':'); i >= 0 {
-		h = h[:i]
+	h := c.host
+	if bare, _, err := net.SplitHostPort(h); err == nil {
+		h = bare
 	}
 	if strings.HasSuffix(h, ".atlassian.net") || strings.HasSuffix(h, ".jira.com") {
 		return DeploymentCloud

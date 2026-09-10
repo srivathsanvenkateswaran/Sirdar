@@ -6,7 +6,9 @@ import (
 	"fmt"
 	"io"
 	"mime"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,6 +21,65 @@ import (
 // maxRedirects bounds how far a same-host redirect chain is followed before
 // the download is abandoned.
 const maxRedirects = 5
+
+// normalizeHost renders a URL host comparable: lowercased, with the DNS root's
+// trailing dot removed and the scheme's default port dropped, so
+// "JIRA.Example.com.:443" and "jira.example.com" are recognised as one host.
+func normalizeHost(scheme, host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+
+	name, port, err := net.SplitHostPort(host)
+	if err != nil {
+		// No port at all, or a bare IPv6 literal.
+		return strings.TrimSuffix(host, ".")
+	}
+	name = strings.TrimSuffix(name, ".")
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		return name
+	}
+	return net.JoinHostPort(name, port)
+}
+
+// trustedURL reports whether u may be fetched with this client's credential,
+// and returns the host it named so a warning can say where the request would
+// have gone.
+//
+// An attachment's content URL arrives inside an API response body, which makes
+// it input rather than configuration: nothing in the protocol stops a hostile
+// or compromised instance from pointing one at a host it controls, and sending
+// the Authorization header there would hand over the API token or PAT in full.
+// So the credential only ever leaves for the host the operator configured, and
+// that is checked before the request is built — not only on the redirects that
+// follow it.
+func (c *Client) trustedURL(u *url.URL) (string, bool) {
+	if u == nil || u.Host == "" {
+		return "(no host)", false
+	}
+	// "https://jira.example.com@attacker.example/x" parses with the real
+	// destination in Host and the decoy in User. The host comparison below
+	// already catches that; userinfo has no business on an attachment URL
+	// either way.
+	if u.User != nil {
+		return u.Host, false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != c.scheme {
+		return u.Host, false
+	}
+	if normalizeHost(scheme, u.Host) != c.host {
+		return u.Host, false
+	}
+	return u.Host, true
+}
+
+// trustedRawURL is trustedURL for a URL still in string form.
+func (c *Client) trustedRawURL(raw string) (string, bool) {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil {
+		return "(unparseable)", false
+	}
+	return c.trustedURL(u)
+}
 
 // Attachments implements source.Helpdesk: it downloads every file attached to
 // the issue into dir, named "<1-based index>-<sanitised filename>".
@@ -61,6 +122,15 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		if a.Content == "" {
 			warnCtx(ctx, "jira: attachment %s (%s) has no content URL", a.ID, a.Filename)
 			failures = append(failures, fmt.Errorf("attachment %s: no content URL", a.ID))
+			continue
+		}
+		// Checked before the request is built, so an attachment pointed at
+		// somebody else's host costs no round trip and, more to the point,
+		// never sees the credential. The warning names the host and not the
+		// URL: the rest of it is attacker-chosen text headed for a log.
+		if host, ok := c.trustedRawURL(a.Content); !ok {
+			warnCtx(ctx, "jira: attachment host not trusted: %s", host)
+			failures = append(failures, fmt.Errorf("attachment %s: host not trusted: %s", a.ID, host))
 			continue
 		}
 		name := sanitizeName(a.Filename)
@@ -114,7 +184,11 @@ func pickMIME(declared, served string) string {
 func (c *Client) downloadClient() *http.Client {
 	dl := *c.hc
 	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if !strings.EqualFold(req.URL.Host, c.host) {
+		// Same trust rule as the initial request, so a redirect cannot walk
+		// the credential off the configured host either. Go re-sends the
+		// Authorization header only on a same-host hop, but the check does
+		// not rely on that.
+		if _, ok := c.trustedURL(req.URL); !ok {
 			return http.ErrUseLastResponse
 		}
 		if len(via) >= maxRedirects {
