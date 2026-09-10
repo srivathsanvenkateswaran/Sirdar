@@ -1,0 +1,70 @@
+{
+  "data": {
+    "issue": {
+      "id": "1a2b3c4d-0000-4000-8000-00000000abcd",
+      "identifier": "ENG-123",
+      "description": "Customer cannot complete checkout after a declined card.\n\n![screenshot](https://uploads.linear.app/1111aaaa-0000-4000-8000-000000000001/3333cccc-0000-4000-8000-000000000003/..%2F..%2Fevil.png)\n",
+      "attachments": {
+        "nodes": [
+          {
+            "url": "https://acme.zendesk.com/agent/tickets/4242",
+            "title": "Cannot pay with my card",
+            "subtitle": "Zendesk",
+            "sourceType": "zendesk"
+          },
+          {
+            "url": "https://uploads.linear.app/1111aaaa-0000-4000-8000-000000000001/2222bbbb-0000-4000-8000-000000000002/crash%20log.txt",
+            "title": "crash log.txt",
+            "subtitle": "",
+            "sourceType": "unknown"
+          }
+        ]
+      },
+      "comments": {
+        "nodes": [
+          {
+            "id": "c1",
+            "body": "Reproduced on staging with a declined Visa.",
+            "createdAt": "2026-09-02T09:00:00.000Z",
+            "url": "https://linear.app/acme/issue/ENG-123#comment-c1",
+            "user": { "name": "Dana Okoro", "email": "dana@example.com" },
+            "externalUser": null,
+            "botActor": null,
+            "parent": null
+          },
+          {
+            "id": "c2",
+            "body": "Only on the second retry, not the first.",
+            "createdAt": "2026-09-02T09:05:00.000Z",
+            "url": "https://linear.app/acme/issue/ENG-123#comment-c2",
+            "user": { "name": "Kai Mensah", "email": "kai@example.com" },
+            "externalUser": null,
+            "botActor": null,
+            "parent": { "id": "c1" }
+          },
+          {
+            "id": "c3",
+            "body": "It still fails for me this morning.\n\n![repro](https://uploads.linear.app/1111aaaa-0000-4000-8000-000000000001/4444dddd-0000-4000-8000-000000000004/repro.png)",
+            "createdAt": "2026-09-02T09:10:00.000Z",
+            "url": "https://linear.app/acme/issue/ENG-123#comment-c3",
+            "user": null,
+            "externalUser": { "name": "Priya Raman", "email": "priya@acme-customer.example" },
+            "botActor": null,
+            "parent": null
+          },
+          {
+            "id": "c0",
+            "body": "New Sentry issue linked: PAY-500.",
+            "createdAt": "2026-09-02T08:55:00.000Z",
+            "url": "https://linear.app/acme/issue/ENG-123#comment-c0",
+            "user": null,
+            "externalUser": null,
+            "botActor": { "name": "Sentry" },
+            "parent": null
+          }
+        ],
+        "pageInfo": { "hasNextPage": false, "endCursor": "" }
+      }
+    }
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "aaaa1111-0000-4000-8000-000000000013",
+          "identifier": "ENG-203",
+          "title": "Refund job retries forever",
+          "description": "",
+          "priority": 0,
+          "priorityLabel": "No priority",
+          "state": { "name": "Triage", "type": "triage" },
+          "assignee": { "name": "Dana Okoro", "email": "dana@example.com" },
+          "team": { "key": "ENG", "name": "Engineering" },
+          "project": null,
+          "parent": null,
+          "labels": { "nodes": [] },
+          "url": "https://linear.app/acme/issue/ENG-203",
+          "createdAt": "2026-09-05T10:00:00.000Z",
+          "updatedAt": "2026-09-08T12:00:00.000Z",
+          "attachments": { "nodes": [] },
+          "customerNeeds": { "nodes": [] }
+        }
+      ],
+      "pageInfo": { "hasNextPage": false, "endCursor": "cursor-page-2" }
+    }
+  }
+}

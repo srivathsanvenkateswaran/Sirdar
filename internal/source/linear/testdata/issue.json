@@ -1,0 +1,44 @@
+{
+  "data": {
+    "issue": {
+      "id": "1a2b3c4d-0000-4000-8000-00000000abcd",
+      "identifier": "ENG-123",
+      "title": "Checkout returns 500 on card retry",
+      "description": "Customer cannot complete checkout after a declined card.\n\n![screenshot](https://uploads.linear.app/1111aaaa-0000-4000-8000-000000000001/3333cccc-0000-4000-8000-000000000003/..%2F..%2Fevil.png)\n",
+      "priority": 2,
+      "priorityLabel": "High",
+      "state": { "name": "In Progress", "type": "started" },
+      "assignee": { "name": "Dana Okoro", "email": "dana@example.com" },
+      "team": { "key": "ENG", "name": "Engineering" },
+      "project": { "name": "Payments hardening" },
+      "parent": { "identifier": "ENG-100" },
+      "labels": { "nodes": [{ "name": "bug" }, { "name": "payments" }] },
+      "url": "https://linear.app/acme/issue/ENG-123/checkout-returns-500-on-card-retry",
+      "createdAt": "2026-09-01T08:30:00.000Z",
+      "updatedAt": "2026-09-09T17:05:12.000Z",
+      "attachments": {
+        "nodes": [
+          {
+            "url": "https://github.com/acme/api/pull/812",
+            "title": "Fix retry path",
+            "subtitle": "acme/api#812",
+            "sourceType": "github"
+          },
+          {
+            "url": "https://acme.zendesk.com/agent/tickets/4242",
+            "title": "Cannot pay with my card",
+            "subtitle": "Zendesk",
+            "sourceType": "zendesk"
+          },
+          {
+            "url": "https://uploads.linear.app/1111aaaa-0000-4000-8000-000000000001/2222bbbb-0000-4000-8000-000000000002/crash%20log.txt",
+            "title": "crash log.txt",
+            "subtitle": "",
+            "sourceType": "unknown"
+          }
+        ]
+      },
+      "customerNeeds": { "nodes": [{ "id": "need-1" }, { "id": "need-2" }] }
+    }
+  }
+}
