@@ -1,0 +1,42 @@
+[
+  {
+    "id": 800001,
+    "body": "<p>Still broken, tried on Chrome and Safari.</p>",
+    "body_text": "Still broken, tried on Chrome and Safari.",
+    "incoming": true,
+    "private": false,
+    "user_id": 9001,
+    "from_email": "priya@example.com",
+    "created_at": "2026-09-01T09:00:00Z",
+    "attachments": []
+  },
+  {
+    "id": 800002,
+    "body": "<p>Checking the payment provider logs now.</p>",
+    "body_text": "",
+    "incoming": false,
+    "private": true,
+    "user_id": 501,
+    "from_email": "",
+    "created_at": "2026-09-01T10:00:00Z",
+    "attachments": []
+  },
+  {
+    "id": 800003,
+    "body": "<p>Found it &mdash; a stale API key on our side. Fixed, please retry. <img src=\"https://cdn.freshdesk.com/data/helpdesk/attachments/production/700002/original/fix.png\"></p>",
+    "body_text": "",
+    "incoming": false,
+    "private": false,
+    "user_id": 501,
+    "from_email": "",
+    "created_at": "2026-09-01T11:00:00Z",
+    "attachments": [
+      {
+        "id": 900002,
+        "name": "changelog.txt",
+        "content_type": "text/plain",
+        "attachment_url": "https://acme.freshdesk.com/api/v2/attachments/900002/changelog.txt"
+      }
+    ]
+  }
+]
