@@ -57,6 +57,7 @@ type Config struct {
 type Client struct {
 	baseURL    string // request target, no trailing slash
 	host       string // lowercase hostname of baseURL; the "configured host" for attachment trust
+	scheme     string // lowercase scheme of baseURL; an http baseUrl is the only way a URL off https is trusted
 	subdomain  string
 	authHeader string
 	hc         *http.Client
@@ -109,6 +110,7 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	return &Client{
 		baseURL:    base,
 		host:       strings.ToLower(u.Hostname()),
+		scheme:     strings.ToLower(u.Scheme),
 		subdomain:  cfg.Subdomain,
 		authHeader: authHeader,
 		hc:         client,
@@ -122,14 +124,36 @@ func (c *Client) Ping(ctx context.Context) error {
 	return err
 }
 
-// hostTrust reports whether host is safe to download an attachment from at
-// all (trusted), and whether this client's Authorization header should be
-// sent to it (sendAuth). The configured host (the account's own Zendesk
+// hostTrust reports whether u is safe to download an attachment from at all
+// (trusted), and whether this client's Authorization header should be sent
+// to it (sendAuth). The configured host (the account's own Zendesk
 // instance) gets both; any other *.zendesk.com or *.zdusercontent.com host
 // is trusted to fetch from — Zendesk's own attachment CDN — but never gets
 // this client's credentials, since those URLs carry their own token.
-func (c *Client) hostTrust(host string) (trusted, sendAuth bool) {
-	h := strings.ToLower(host)
+//
+// The transport matters as much as the host. An attachment URL arrives
+// inside an API response body, so a hostile or compromised instance can put
+// "http://" in front of a perfectly legitimate host and watch the
+// credential — and the file — cross the network in the clear. https is
+// therefore required, with one exception: a workspace whose configured
+// baseUrl is itself http has already chosen plain HTTP.
+func (c *Client) hostTrust(u *url.URL) (trusted, sendAuth bool) {
+	if u == nil || u.Hostname() == "" {
+		return false, false
+	}
+	// "https://acme.zendesk.com@attacker.example/x" parses with the real
+	// destination in Host and the decoy in User. The host comparison below
+	// already catches that; userinfo has no business on an attachment URL
+	// either way.
+	if u.User != nil {
+		return false, false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != c.scheme {
+		return false, false
+	}
+
+	h := strings.ToLower(u.Hostname())
 	if h == c.host {
 		return true, true
 	}
@@ -168,14 +192,14 @@ func (c *Client) trustedNextPage(raw string) (urlStr, host string, trusted bool)
 func (c *Client) doOnce(ctx context.Context, urlStr string) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, urlStr, nil)
 	if err != nil {
-		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: %v", urlStr, err)}
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: %v", logPath(urlStr), err)}
 	}
 	req.Header.Set("Authorization", c.authHeader)
 	req.Header.Set("Accept", "application/json")
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
-		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: %v", urlStr, err)}
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: %v", logPath(urlStr), err)}
 	}
 	return resp, nil
 }
@@ -195,7 +219,7 @@ func (c *Client) do(ctx context.Context, urlStr string) (*http.Response, error) 
 	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
 	if !ok || wait > maxRetryAfter {
-		return nil, &source.Error{Code: source.RateLimited, Message: fmt.Sprintf("zendesk: GET %s: 429", urlStr)}
+		return nil, &source.Error{Code: source.RateLimited, Message: fmt.Sprintf("zendesk: GET %s: 429", logPath(urlStr))}
 	}
 
 	select {
@@ -242,10 +266,10 @@ func (c *Client) getRaw(ctx context.Context, urlStr string) ([]byte, error) {
 		return nil, statusError(http.MethodGet, urlStr, resp.StatusCode, body)
 	}
 	if readErr != nil {
-		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: read body: %v", urlStr, readErr)}
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: read body: %v", logPath(urlStr), readErr)}
 	}
 	if len(body) > maxBodyBytes {
-		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: response exceeds %d bytes", urlStr, maxBodyBytes)}
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: response exceeds %d bytes", logPath(urlStr), maxBodyBytes)}
 	}
 	return body, nil
 }
@@ -268,28 +292,46 @@ func (c *Client) getJSONAbsolute(ctx context.Context, urlStr string, out any) er
 		return err
 	}
 	if err := json.Unmarshal(body, out); err != nil {
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: decode: %v", urlStr, err)}
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: decode: %v", logPath(urlStr), err)}
 	}
 	return nil
 }
 
-// statusError maps a non-2xx HTTP response to a *source.Error. body is
-// truncated to at most 200 bytes and never contains the request's
-// Authorization header, so a mapped error can never repeat the credential.
+// logPath reduces a request URL to its path for an error message. The query
+// string goes: a paginated URL carries cursors, and an attachment URL its
+// pre-signed signature, neither of which belongs in a log line an operator
+// pastes into a ticket. The credential travels in a header and so is never
+// at risk here either way.
+func logPath(urlStr string) string {
+	u, err := url.Parse(urlStr)
+	if err != nil {
+		return "<url>"
+	}
+	if u.Path == "" {
+		return "/"
+	}
+	return u.Path
+}
+
+// statusError maps a non-2xx HTTP response to a *source.Error, naming the
+// request by method and path. body is truncated to at most 200 bytes and
+// never contains the request's Authorization header, so a mapped error can
+// never repeat the credential.
 func statusError(method, urlStr string, status int, body []byte) *source.Error {
+	path := logPath(urlStr)
 	switch status {
 	case http.StatusUnauthorized, http.StatusForbidden:
-		return &source.Error{Code: source.Auth, Message: fmt.Sprintf("zendesk: %s %s: %d", method, urlStr, status)}
+		return &source.Error{Code: source.Auth, Message: fmt.Sprintf("zendesk: %s %s: %d", method, path, status)}
 	case http.StatusNotFound:
-		return &source.Error{Code: source.NotFound, Message: fmt.Sprintf("zendesk: %s %s: %d", method, urlStr, status)}
+		return &source.Error{Code: source.NotFound, Message: fmt.Sprintf("zendesk: %s %s: %d", method, path, status)}
 	case http.StatusTooManyRequests:
-		return &source.Error{Code: source.RateLimited, Message: fmt.Sprintf("zendesk: %s %s: %d", method, urlStr, status)}
+		return &source.Error{Code: source.RateLimited, Message: fmt.Sprintf("zendesk: %s %s: %d", method, path, status)}
 	default:
 		snippet := body
 		if len(snippet) > 200 {
 			snippet = snippet[:200]
 		}
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: %s %s: %d: %s", method, urlStr, status, snippet)}
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: %s %s: %d: %s", method, path, status, snippet)}
 	}
 }
 
@@ -300,6 +342,11 @@ func statusError(method, urlStr string, status int, body []byte) *source.Error {
 // (internal/run/prepare.go) reads WarningsFor once at the end of all of
 // them, so a warning from one call must survive the next call rather than
 // being overwritten by it.
+// An identical line is dropped rather than appended twice: Get, Threads and
+// Attachments each walk the same comment feed, so a feed that stops early or
+// an attachment host that is not trusted produces the same sentence on every
+// pass, and three copies of one warning in the prompt read as three
+// problems.
 func (c *Client) addWarnings(id string, warnings []string) {
 	if len(warnings) == 0 {
 		return
@@ -309,7 +356,17 @@ func (c *Client) addWarnings(id string, warnings []string) {
 	if c.warnings == nil {
 		c.warnings = map[string][]string{}
 	}
-	c.warnings[id] = append(c.warnings[id], warnings...)
+	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
+	for _, w := range c.warnings[id] {
+		seen[w] = true
+	}
+	for _, w := range warnings {
+		if seen[w] {
+			continue
+		}
+		seen[w] = true
+		c.warnings[id] = append(c.warnings[id], w)
+	}
 }
 
 // takeWarnings returns and removes the warnings recorded for ticket id.

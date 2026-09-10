@@ -183,8 +183,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			warnings = append(warnings, fmt.Sprintf("freshdesk: attachment %s: invalid url", r.ID))
 			continue
 		}
-		host := hostKey(u.Scheme, u.Host)
-		trusted, sendAuth := c.attachmentTrust(host)
+		host, trusted, sendAuth := c.urlTrust(u)
 		if !trusted {
 			warnings = append(warnings, fmt.Sprintf("freshdesk: attachment host not trusted: %s", host))
 			continue
@@ -197,13 +196,8 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		name = sanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
-		body, derr := c.doRaw(ctx, r.URL, sendAuth, maxAttachmentBytes)
-		if derr != nil {
+		if derr := c.downloadTo(ctx, r.URL, sendAuth, filepath.Join(dir, filename)); derr != nil {
 			warnings = append(warnings, fmt.Sprintf("freshdesk: download attachment %s: %v", r.ID, derr))
-			continue
-		}
-		if werr := os.WriteFile(filepath.Join(dir, filename), body, 0o644); werr != nil {
-			warnings = append(warnings, fmt.Sprintf("freshdesk: write attachment %s: %v", r.ID, werr))
 			continue
 		}
 

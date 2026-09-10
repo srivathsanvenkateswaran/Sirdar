@@ -21,6 +21,8 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -40,8 +42,6 @@ const (
 	// maxJSONBody bounds an ordinary API JSON response (a ticket, a page of
 	// conversations, an agent record).
 	maxJSONBody = 8 << 20
-	// maxAttachmentBytes bounds a downloaded attachment's raw bytes.
-	maxAttachmentBytes = 64 << 20
 	// maxAgentCacheEntries bounds the agent name cache: past this many
 	// distinct agents seen by one Client, the cache is dropped and rebuilt
 	// rather than left to grow without limit.
@@ -52,6 +52,10 @@ const (
 // conversations. It is a var, not a const, so a test can shrink it to
 // exercise pagination without a 100-entry fixture.
 var conversationsPerPage = 100
+
+// maxAttachmentBytes bounds a downloaded attachment's raw bytes. It is a
+// var for the same reason: a test can shrink it rather than serve 64 MiB.
+var maxAttachmentBytes int64 = 64 << 20
 
 // trustedSuffixes are the first-party Freshworks hosts an attachment
 // download is allowed to reach even when they are not the configured
@@ -153,11 +157,40 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
 		return fmt.Errorf("freshdesk: stopped after %d redirects", maxRedirects)
 	}
-	host := hostKey(req.URL.Scheme, req.URL.Host)
-	if trusted, _ := c.attachmentTrust(host); !trusted {
+	host, trusted, _ := c.urlTrust(req.URL)
+	if !trusted {
 		return fmt.Errorf("freshdesk: redirect to untrusted host %s", host)
 	}
 	return nil
+}
+
+// urlTrust is attachmentTrust plus the two things a bare host comparison
+// cannot see.
+//
+// The transport: an attachment_url arrives inside an API response body, so
+// a hostile or compromised instance can put "http://" in front of a
+// perfectly legitimate Freshworks host and watch the file — and, on the
+// configured domain, the API key — cross the network in the clear. This
+// adapter's base URL is always https (Config.Domain is normalised into
+// one), so there is no plain-HTTP workspace to make an exception for.
+//
+// And the userinfo: "https://acme.freshdesk.com@attacker.example/x" parses
+// with the real destination in Host and the decoy in User. The host
+// comparison catches that on its own; userinfo has no business on one of
+// these URLs either way.
+func (c *Client) urlTrust(u *url.URL) (host string, trusted, sendAuth bool) {
+	if u == nil || u.Host == "" {
+		return "(no host)", false, false
+	}
+	host = hostKey(u.Scheme, u.Host)
+	if u.User != nil {
+		return host, false, false
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return host, false, false
+	}
+	trusted, sendAuth = c.attachmentTrust(host)
+	return host, trusted, sendAuth
 }
 
 // hostKey renders a scheme+host pair comparable: lowercased, with the DNS
@@ -263,6 +296,57 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 		}
 		return body, nil
 	}
+}
+
+// downloadTo fetches rawURL and streams the body straight to destPath,
+// stopping at maxAttachmentBytes. Attachments are the one response this
+// adapter never needs whole in memory, and a 64 MiB buffer per file — times
+// however many files a ticket carries, times the tickets a run has in
+// flight — is memory spent for nothing. A file that would exceed the limit
+// is a download failure and its partial output is removed, so a truncated
+// attachment is never left on disk looking complete.
+func (c *Client) downloadTo(ctx context.Context, rawURL string, withAuth bool, destPath string) error {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
+	}
+	if withAuth {
+		req.SetBasicAuth(c.cfg.APIKey, "X")
+	}
+	req.Header.Set("Accept", "*/*")
+
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxJSONBody))
+		resp.Body.Close()
+	}()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := readLimited(resp.Body, maxJSONBody)
+		return statusError(logPath(rawURL), resp.StatusCode, body)
+	}
+
+	f, err := os.Create(destPath)
+	if err != nil {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: create %s: %v", filepath.Base(destPath), err)}
+	}
+	n, copyErr := io.Copy(f, io.LimitReader(resp.Body, maxAttachmentBytes+1))
+	closeErr := f.Close()
+	switch {
+	case copyErr != nil:
+		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: read body: %v", logPath(rawURL), copyErr)}
+	case closeErr != nil:
+		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: write %s: %v", filepath.Base(destPath), closeErr)}
+	case n > maxAttachmentBytes:
+		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
+	default:
+		return nil
+	}
+	_ = os.Remove(destPath)
+	return err
 }
 
 // readLimited reads at most limit bytes and fails when the reader had more

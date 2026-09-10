@@ -13,6 +13,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -33,6 +34,10 @@ const defaultBaseURL = "https://rally1.rallydev.com"
 
 // maxPageSize is WSAPI's hard per-page ceiling; pagesize is clamped to it.
 const maxPageSize = 200
+
+// maxRedirects bounds how far a redirect chain that stays on the configured
+// host is followed before the request is abandoned.
+const maxRedirects = 3
 
 // maxRetryAfter caps how long a 429's Retry-After is honoured before the
 // call gives up and reports source.RateLimited to the caller.
@@ -94,6 +99,14 @@ type Client struct {
 	cfg  Config
 	http *http.Client
 
+	// host and scheme are BaseURL's, normalised, and are the only place
+	// this client's API key is ever sent. Rally authenticates with a
+	// custom ZSESSIONID header, which Go does not strip on a cross-host
+	// redirect the way it strips Authorization, so the trust check has to
+	// be this client's own.
+	host   string
+	scheme string
+
 	// mu guards the mutable per-client state below: the per-ticket
 	// warnings recorded by recent calls and the current user cached by
 	// Ping. One Client serves every ticket in a run, so the warnings are
@@ -135,8 +148,12 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		cfg.BaseURL = defaultBaseURL
 	}
 	cfg.BaseURL = strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/")
-	if _, err := url.Parse(cfg.BaseURL); err != nil {
+	base, err := url.Parse(cfg.BaseURL)
+	if err != nil {
 		return nil, fmt.Errorf("rally: invalid baseUrl %q: %w", cfg.BaseURL, err)
+	}
+	if base.Host == "" {
+		return nil, fmt.Errorf("rally: invalid baseUrl %q: no host", cfg.BaseURL)
 	}
 	if len(cfg.Types) == 0 {
 		cfg.Types = append([]string(nil), defaultTypes...)
@@ -155,7 +172,80 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Client{cfg: cfg, http: hc}, nil
+	c := &Client{
+		cfg:    cfg,
+		scheme: strings.ToLower(base.Scheme),
+	}
+	c.host = normalizeHost(c.scheme, base.Host)
+	// A shallow copy: the Transport (and its pooled connections) stays
+	// shared with the caller's client, only the redirect policy is ours.
+	// Every request this adapter makes carries the API key, so the policy
+	// goes on the client rather than on one download path.
+	rc := *hc
+	rc.CheckRedirect = c.checkRedirect
+	c.http = &rc
+	return c, nil
+}
+
+// normalizeHost renders a URL host comparable: lowercased, with the DNS
+// root's trailing dot removed and the scheme's default port dropped, so
+// "Rally1.RallyDev.com.:443" and "rally1.rallydev.com" are recognised as
+// one host.
+func normalizeHost(scheme, host string) string {
+	host = strings.ToLower(strings.TrimSpace(host))
+	name, port, err := net.SplitHostPort(host)
+	if err != nil {
+		// No port at all, or a bare IPv6 literal.
+		return strings.TrimSuffix(host, ".")
+	}
+	name = strings.TrimSuffix(name, ".")
+	scheme = strings.ToLower(scheme)
+	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
+		return name
+	}
+	return net.JoinHostPort(name, port)
+}
+
+// trustedURL reports whether u may be fetched with this client's API key,
+// returning the host it named so a warning can say where the request would
+// have gone.
+//
+// WSAPI answers with `_ref` URLs and, on a misconfigured or hostile
+// subscription, with redirects; both are response content rather than
+// configuration. Since the key travels in ZSESSIONID — a custom header Go
+// keeps on a cross-host redirect, unlike Authorization — nothing but this
+// check stops it walking off the configured host.
+func (c *Client) trustedURL(u *url.URL) (string, bool) {
+	if u == nil || u.Host == "" {
+		return "(no host)", false
+	}
+	// "https://rally1.rallydev.com@attacker.example/x" parses with the
+	// real destination in Host and the decoy in User. The host comparison
+	// below already catches it; userinfo has no business on a WSAPI URL
+	// either way.
+	if u.User != nil {
+		return u.Host, false
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "https" && scheme != c.scheme {
+		return u.Host, false
+	}
+	if normalizeHost(scheme, u.Host) != c.host {
+		return u.Host, false
+	}
+	return u.Host, true
+}
+
+// checkRedirect refuses any hop that leaves the configured host, and stops
+// a chain that keeps hopping after maxRedirects.
+func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("rally: stopped after %d redirects", maxRedirects)
+	}
+	if host, ok := c.trustedURL(req.URL); !ok {
+		return fmt.Errorf("rally: refusing to follow a redirect to %s", host)
+	}
+	return nil
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the
@@ -201,18 +291,33 @@ func (c *Client) endpoint(path string) string {
 }
 
 // refURL turns a _ref returned by the API into an absolute URL on the
-// configured base host. Only the ref's path and query are kept, so a
-// payload can never redirect a request (carrying the API key) at a host
-// the operator did not configure.
+// configured base host. A ref that names a host of its own has to name the
+// configured one: rewriting a foreign ref onto the base host would turn a
+// payload that points at attacker.example into a request the client makes
+// anyway, against a path the attacker chose. Only the path and query of an
+// accepted ref are kept, so the API key never leaves the configured host.
 func (c *Client) refURL(ref string) (string, error) {
-	u, err := url.Parse(ref)
+	u, err := url.Parse(strings.TrimSpace(ref))
 	if err != nil {
 		return "", fmt.Errorf("parse ref %q: %w", ref, err)
+	}
+	if u.Host != "" {
+		if host, ok := c.trustedURL(u); !ok {
+			return "", fmt.Errorf("ref host not trusted: %s", host)
+		}
+	} else if u.User != nil {
+		return "", fmt.Errorf("ref %q carries userinfo", ref)
 	}
 	if u.Path == "" {
 		return "", fmt.Errorf("ref %q has no path", ref)
 	}
-	out := c.cfg.BaseURL + u.Path
+	path := u.Path
+	if !strings.HasPrefix(path, "/") {
+		// A relative ref would otherwise be glued straight onto the host:
+		// "…rallydev.comattachmentcontent/1".
+		path = "/" + path
+	}
+	out := c.cfg.BaseURL + path
 	if u.RawQuery != "" {
 		out += "?" + u.RawQuery
 	}

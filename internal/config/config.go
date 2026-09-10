@@ -286,6 +286,12 @@ func (c *Config) Validate() error {
 // there is nothing for an operator to configure separately.
 var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": true, "rally": true}
 
+// helpdeskOnlyAdapters are the built-in helpdesks. They read support
+// conversations and have no issue list to sweep, so naming one under
+// sources.tracker leaves a workspace that loads and then fails on its first
+// run — worth catching at load time instead.
+var helpdeskOnlyAdapters = map[string]bool{"zendesk": true, "freshdesk": true, "zohodesk": true}
+
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	if s == nil {
 		return nil
@@ -293,16 +299,23 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	if trackerOnlyAdapters[s.Adapter] && !isTracker {
 		return fmt.Errorf("config: %s.adapter: %q is a tracker adapter; configure it under sources.tracker", prefix, s.Adapter)
 	}
+	if helpdeskOnlyAdapters[s.Adapter] && isTracker {
+		return fmt.Errorf("config: %s.adapter: %q is a helpdesk adapter; configure it under sources.helpdesk", prefix, s.Adapter)
+	}
 	if s.HelpdeskRef != nil && !isTracker {
 		return fmt.Errorf("config: %s.helpdeskRef: is only supported for sources.tracker", prefix)
+	}
+	// Hoisted out of the exec case so it covers every adapter: an `auth:`
+	// block on a jira or zendesk source used to be read, ignored, and never
+	// mentioned, which reads as "my OAuth config is live" right up until
+	// the first run fails on a missing token.
+	if s.Auth != nil && s.Adapter != "zohodesk" {
+		return fmt.Errorf("config: %s.auth: is only supported for adapter zohodesk", prefix)
 	}
 	switch s.Adapter {
 	case "exec":
 		if s.Command == "" {
 			return fmt.Errorf("config: %s.command: is required for adapter exec", prefix)
-		}
-		if s.Auth != nil {
-			return fmt.Errorf("config: %s.auth: is only supported for adapter zohodesk", prefix)
 		}
 	case "zohodesk":
 		if s.OrgID == "" {

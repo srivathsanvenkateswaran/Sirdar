@@ -474,6 +474,52 @@ func TestThreadsPagesTruncatedComments(t *testing.T) {
 	}
 }
 
+// TestThreadsCapsCommentPagination covers an instance that never stops
+// paginating: it answers every request with the same full page and a total
+// it does not honour. Both of the loop's own exits depend on the server
+// being truthful, so without a page cap this is an endless run of round
+// trips.
+func TestThreadsCapsCommentPagination(t *testing.T) {
+	t.Parallel()
+	ts, mux := startServer(t)
+	mux.HandleFunc("/rest/api/2/issue/SUP-45", func(w http.ResponseWriter, r *http.Request) {
+		ts.writeFixture(w, "issue_cloud_truncated.json")
+	})
+	mux.HandleFunc("/rest/api/2/issue/SUP-45/comment", func(w http.ResponseWriter, r *http.Request) {
+		// total 0 means "not reported", and startAt is ignored: the same
+		// two comments come back for ever.
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"startAt":0,"maxResults":2,"total":0,"comments":[
+			{"id":"9001","author":{"displayName":"Loop One","accountId":"acc-1"},"body":"again","created":"2026-09-02T09:00:00.000+0000"},
+			{"id":"9002","author":{"displayName":"Loop Two","accountId":"acc-2"},"body":"and again","created":"2026-09-02T09:01:00.000+0000"}
+		]}`))
+	})
+
+	c := newClient(t, ts, cloudConfig())
+	th, err := c.Threads(context.Background(), "SUP-45")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if n := ts.hits("/rest/api/2/issue/SUP-45/comment"); n != maxCommentPages {
+		t.Errorf("comment endpoint hit %d times, want the %d page cap", n, maxCommentPages)
+	}
+	// The description, plus two comments for every page fetched.
+	if want := 1 + 2*maxCommentPages; len(th) != want {
+		t.Errorf("got %d messages, want %d", len(th), want)
+	}
+
+	warnings := c.WarningsFor("SUP-45")
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "stopped after") && strings.Contains(w, "pages") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("WarningsFor(SUP-45) = %v, want one saying pagination stopped early", warnings)
+	}
+}
+
 // --- Search ---
 
 func TestBuildJQL(t *testing.T) {

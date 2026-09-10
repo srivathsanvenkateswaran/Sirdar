@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -167,6 +168,16 @@ func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (tick
 		if b.Tracker.HelpdeskRef == "" {
 			r.applyHelpdeskRefFallback(p, &b, b.Tracker)
 		}
+		// A tracker adapter degrades the same way a helpdesk one does — a
+		// comment page it could not read, a field this workspace does not
+		// expose, an attachment it skipped — and reports none of it in the
+		// error. Draining its warnings here is the only thing that puts
+		// them in front of the agent.
+		if w, ok := r.Tracker.(source.Warner); ok {
+			for _, msg := range w.WarningsFor(key) {
+				p.warn(&b, msg)
+			}
+		}
 	}
 
 	helpdeskID := key
@@ -248,12 +259,30 @@ func (r *Runner) applyHelpdeskRefFallback(p *prepared, b *ticket.Bundle, tt *tic
 		}
 		im := idRe.FindStringSubmatch(ref)
 		if len(im) < 2 || im[1] == "" {
-			p.warn(b, fmt.Sprintf("helpdeskRef.pattern matched %q in the description but idPattern did not; no helpdesk ticket was read", ref))
+			// The captured value came out of a ticket description, so its
+			// length is whoever wrote that description's choice, not a
+			// bounded field. A warning line goes into the prompt and the
+			// run state; a paragraph of prose does not belong in either.
+			p.warn(b, fmt.Sprintf("helpdeskRef.pattern matched %q in the description but idPattern did not; no helpdesk ticket was read", truncate(ref, 120)))
 			return
 		}
 		ref = im[1]
 	}
 	tt.HelpdeskRef = ref
+}
+
+// truncate caps s at max bytes without splitting a multi-byte rune,
+// marking a shortened value with an ellipsis so a reader can tell the
+// difference between a short value and a trimmed one.
+func truncate(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	s = s[:max]
+	for len(s) > 0 && !utf8.ValidString(s) {
+		s = s[:len(s)-1]
+	}
+	return s + "…"
 }
 
 // warn records a warning in both places it has to appear: the prompt the

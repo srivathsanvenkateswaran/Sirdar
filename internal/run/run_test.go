@@ -168,6 +168,16 @@ func newWorkspaceWith(t *testing.T, body string) *config.Config {
 type stubTracker struct {
 	gate func(key string)
 	err  error
+	// warningsFor stands in for a tracker that degraded without failing —
+	// a comment page it could not read, an attachment it skipped — keyed
+	// by the ticket key the warning belongs to.
+	warningsFor map[string][]string
+}
+
+// WarningsFor implements source.Warner. The tracker side of a bundle
+// degrades exactly as the helpdesk side does, so prepare has to drain both.
+func (s stubTracker) WarningsFor(key string) []string {
+	return s.warningsFor[key]
 }
 
 func (s stubTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
@@ -821,6 +831,46 @@ func TestHelpdeskWarningsReachThePrompt(t *testing.T) {
 	}
 }
 
+// TestTrackerWarningsReachThePrompt covers a tracker that answered with an
+// issue and, separately, reported what it could not read. Nothing failed,
+// so the warning is the only thing telling the agent the record in front of
+// it is incomplete — and it is keyed by the tracker key, not the helpdesk
+// id.
+func TestTrackerWarningsReachThePrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	tr := stubTracker{warningsFor: map[string][]string{
+		"OMNI-1": {"jira: comment pagination stopped after 100 pages"},
+		"OMNI-9": {"jira: a warning for another ticket entirely"},
+	}}
+	r := newRunner(cfg, p, tr, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(promptText, "stopped after 100 pages") {
+		t.Fatalf("prompt is missing the tracker warning:\n%s", promptText)
+	}
+	if strings.Contains(promptText, "another ticket entirely") {
+		t.Fatalf("prompt carries another ticket's tracker warning:\n%s", promptText)
+	}
+	found := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "stopped after 100 pages") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("run state warnings: %v", out.State.Warnings)
+	}
+}
+
 // TestHelpdeskWarningsStayWithTheirTicket covers a helpdesk that answers
 // two tickets with different per-id warnings: prepare must call
 // WarningsFor(helpdeskID) rather than an argument-less Warnings(), or one
@@ -1428,6 +1478,42 @@ func TestHelpdeskRefFallback(t *testing.T) {
 				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
 			}
 		})
+	}
+}
+
+// The value quoted in the idPattern warning comes out of a ticket
+// description, so its length is whoever wrote that description's choice. A
+// warning line goes into prompt.md and the run state, and neither wants a
+// paragraph of prose.
+func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	long := strings.Repeat("x", 500)
+	tt := ticket.TrackerTicket{Key: "OMNI-1", Description: "Zoho Ticket URL: " + long}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+
+	if len(b.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", b.Warnings)
+	}
+	if n := len(b.Warnings[0]); n > 250 {
+		t.Errorf("warning is %d bytes long; the captured value was not truncated: %q", n, b.Warnings[0])
+	}
+	if !strings.Contains(b.Warnings[0], "…") {
+		t.Errorf("warning does not mark the value as truncated: %q", b.Warnings[0])
+	}
+	if strings.Contains(b.Warnings[0], long) {
+		t.Errorf("warning still carries the whole captured value: %q", b.Warnings[0])
 	}
 }
 

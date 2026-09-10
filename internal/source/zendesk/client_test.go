@@ -8,9 +8,11 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -741,6 +743,116 @@ func TestAttachments_RedirectToUntrustedHostRefused(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "untrusted host") {
 		t.Errorf("error = %v, want it to say the redirect was refused for an untrusted host", err)
+	}
+}
+
+// TestHostTrust_RequiresHTTPSAndRejectsUserinfo: the host is only half the
+// question. A content_url arrives inside an API response body, so a hostile
+// instance can put "http://" in front of a legitimate Zendesk host and watch
+// the file cross the network in the clear, or hide the real destination
+// behind userinfo. Neither is trusted — unless the workspace's own baseUrl
+// is http, which is a choice it already made.
+func TestHostTrust_RequiresHTTPSAndRejectsUserinfo(t *testing.T) {
+	httpsClient, err := New(Config{Subdomain: "acme", OAuthToken: testOAuth}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	httpClient, err := New(Config{Subdomain: "acme", BaseURL: "http://acme.zendesk.com", OAuthToken: testOAuth}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	cases := []struct {
+		raw             string
+		trusted         bool
+		sendAuth        bool
+		httpBaseTrusted bool
+	}{
+		{raw: "https://acme.zendesk.com/x.png", trusted: true, sendAuth: true, httpBaseTrusted: true},
+		{raw: "https://cdn.zdusercontent.com/x.png", trusted: true, httpBaseTrusted: true},
+		// The right host over the wrong transport.
+		{raw: "http://acme.zendesk.com/x.png", httpBaseTrusted: true},
+		{raw: "http://cdn.zdusercontent.com/x.png", httpBaseTrusted: true},
+		// The real destination is attacker.example; acme.zendesk.com is
+		// only the userinfo.
+		{raw: "https://acme.zendesk.com@attacker.example/x.png"},
+		// Userinfo on an otherwise legitimate URL is still refused.
+		{raw: "https://user:pass@acme.zendesk.com/x.png"},
+		{raw: "https://evil.example.com/x.png"},
+		{raw: "ftp://acme.zendesk.com/x.png"},
+	}
+	for _, tc := range cases {
+		u, perr := url.Parse(tc.raw)
+		if perr != nil {
+			t.Fatalf("parse %q: %v", tc.raw, perr)
+		}
+		trusted, sendAuth := httpsClient.hostTrust(u)
+		if trusted != tc.trusted || sendAuth != tc.sendAuth {
+			t.Errorf("hostTrust(%q) = (%v, %v), want (%v, %v)", tc.raw, trusted, sendAuth, tc.trusted, tc.sendAuth)
+		}
+		if trusted, _ := httpClient.hostTrust(u); trusted != tc.httpBaseTrusted {
+			t.Errorf("hostTrust(%q) with an http baseUrl = %v, want %v", tc.raw, trusted, tc.httpBaseTrusted)
+		}
+	}
+}
+
+// TestAttachments_PlainHTTPUploadURLRefused is the same rule seen from the
+// outside: an https workspace never fetches an http attachment, and the
+// listener serving it is never called.
+func TestAttachments_PlainHTTPUploadURLRefused(t *testing.T) {
+	var cdnHits int32
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&cdnHits, 1)
+		w.Write([]byte("PNGDATA"))
+	}))
+	t.Cleanup(cdn.Close)
+
+	mainMux := http.NewServeMux()
+	mainMux.HandleFunc("/api/v2/tickets/555.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(mustReadFile(t, "testdata/ticket.json"))
+	})
+	mainMux.HandleFunc("/api/v2/tickets/555/comments.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{
+			"comments": [{
+				"id": 1, "author_id": 100, "public": true,
+				"plain_body": "hi", "created_at": "2026-09-10T07:00:00Z",
+				"attachments": [
+					{"id": 11, "file_name": "plain.png", "content_url": "http://cdn.zdusercontent.com/files/plain.png"},
+					{"id": 12, "file_name": "decoy.png", "content_url": "https://acme.zendesk.com@cdn.zdusercontent.com/files/decoy.png"}
+				]
+			}],
+			"users": [{"id": 100, "name": "John Doe", "role": "end-user"}],
+			"next_page": null
+		}`)
+	})
+	mainSrv := httptest.NewServer(mainMux)
+	t.Cleanup(mainSrv.Close)
+
+	hc := hostRemapClient(map[string]string{
+		"acme.zendesk.com":      strings.TrimPrefix(mainSrv.URL, "http://"),
+		"cdn.zdusercontent.com": strings.TrimPrefix(cdn.URL, "http://"),
+	})
+	// The workspace is configured over https, so http is not its choice.
+	c, err := New(Config{Subdomain: "acme", BaseURL: "https://acme.zendesk.com", Email: testEmail, APIToken: testAPIToken}, hc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	// The API calls themselves go over https to a host the remap dials
+	// locally; only the attachment URLs above are the point of the test.
+	c.baseURL = mainSrv.URL
+
+	got, err := c.Attachments(context.Background(), "555", t.TempDir())
+	if err == nil {
+		t.Fatal("Attachments succeeded with both URLs untrusted, want an error")
+	}
+	if len(got) != 0 {
+		t.Errorf("Attachments = %+v, want none", got)
+	}
+	if n := atomic.LoadInt32(&cdnHits); n != 0 {
+		t.Errorf("the attachment host was called %d times, want 0", n)
+	}
+	if !strings.Contains(err.Error(), "not trusted") {
+		t.Errorf("error = %v, want it to say the host was not trusted", err)
 	}
 }
 

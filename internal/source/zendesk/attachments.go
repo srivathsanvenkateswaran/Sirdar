@@ -23,6 +23,10 @@ import (
 // any other.
 const maxAttachmentBytes = 64 << 20 // 64 MiB
 
+// maxRedirects bounds how far a redirect chain that stays inside the trust
+// boundary is followed before the download is abandoned.
+const maxRedirects = 3
+
 // attachmentRef is a resolved reference to a downloadable attachment,
 // gathered from either a comment's attachments[] list or an inline <img>
 // src in its html_body.
@@ -112,9 +116,11 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			warnings = append(warnings, fmt.Sprintf("zendesk: attachment %s: invalid url", r.ID))
 			continue
 		}
-		trusted, sendAuth := c.hostTrust(u.Hostname())
+		trusted, sendAuth := c.hostTrust(u)
 		if !trusted {
-			warnings = append(warnings, fmt.Sprintf("zendesk: attachment host not trusted: %s", u.Hostname()))
+			// The warning names the scheme and host and nothing else: the
+			// rest of the URL is attacker-chosen text headed for a log.
+			warnings = append(warnings, fmt.Sprintf("zendesk: attachment host not trusted: %s (over %s)", u.Hostname(), u.Scheme))
 			continue
 		}
 
@@ -192,11 +198,11 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth
 func (c *Client) attachmentHTTPClient() *http.Client {
 	cl := *c.hc
 	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= 10 {
-			return errors.New("zendesk: stopped after 10 redirects")
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("zendesk: stopped after %d redirects", maxRedirects)
 		}
-		if trusted, _ := c.hostTrust(req.URL.Hostname()); !trusted {
-			return fmt.Errorf("zendesk: redirect to untrusted host: %s", req.URL.Hostname())
+		if trusted, _ := c.hostTrust(req.URL); !trusted {
+			return fmt.Errorf("zendesk: redirect to untrusted host: %s (over %s)", req.URL.Hostname(), req.URL.Scheme)
 		}
 		return nil
 	}

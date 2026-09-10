@@ -212,8 +212,13 @@ func (c *Client) helpdeskRef(wi workItem) string {
 // hostMatches reports whether host is domain or a subdomain of it. The dot
 // boundary is deliberate: a plain suffix test would treat
 // "nothelpdesk.example.com" as a match for "helpdesk.example.com".
+//
+// Both sides are lowercased. The configured domain is typed by hand into a
+// YAML file, so "Helpdesk.Example.com" there is an ordinary thing to write
+// and used to match nothing at all, silently.
 func hostMatches(host, domain string) bool {
 	host = strings.ToLower(strings.TrimSuffix(host, "."))
+	domain = strings.ToLower(strings.TrimSuffix(strings.TrimSpace(domain), "."))
 	return host == domain || strings.HasSuffix(host, "."+domain)
 }
 

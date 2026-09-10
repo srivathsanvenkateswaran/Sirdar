@@ -13,6 +13,7 @@ import (
 	"regexp"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -697,6 +698,105 @@ func TestAttachmentsDownloadsLinearUploads(t *testing.T) {
 	}
 	if w := c.WarningsFor("ENG-123"); len(w) != 0 {
 		t.Errorf("WarningsFor(ENG-123) = %v, want none", w)
+	}
+}
+
+// isUploadURL is what decides whether the API key goes out with a request,
+// so the host is only half of it: plain HTTP would put the key on the wire
+// in the clear, and userinfo hides the real destination behind a
+// legitimate-looking name.
+func TestIsUploadURLRequiresHTTPSAndRejectsUserinfo(t *testing.T) {
+	cases := map[string]bool{
+		"https://uploads.linear.app/a/b/shot.png":          true,
+		"https://UPLOADS.LINEAR.APP/a/b/shot.png":          true,
+		"http://uploads.linear.app/a/b/shot.png":           false,
+		"https://uploads.linear.app@attacker.example/x":    false,
+		"https://user:pass@uploads.linear.app/a/b/x.png":   false,
+		"https://attacker.example/a/b/shot.png":            false,
+		"https://uploads.linear.app.attacker.example/x":    false,
+		"ftp://uploads.linear.app/a/b/shot.png":            false,
+		"//uploads.linear.app/a/b/shot.png":                false,
+		"https://linear.app/acme/issue/ENG-123":            false,
+		"https://acme.zendesk.com/agent/tickets/4242":      false,
+		"https://uploads.linear.app:443/a/b/shot.png":      true,
+		"https://uploads.linear.app:8443/a/b/shot.png":     true,
+		"https://uploads.linear.appattacker.example/x.png": false,
+	}
+	for raw, want := range cases {
+		if got := isUploadURL(raw); got != want {
+			t.Errorf("isUploadURL(%q) = %v, want %v", raw, got, want)
+		}
+	}
+}
+
+// TestAttachmentsRefusesAnUntrustedUploadURL: an attachment URL arrives
+// inside a GraphQL response body, so an issue can name one over plain HTTP.
+// It is skipped, and no request is made for it.
+func TestAttachmentsRefusesAnUntrustedUploadURL(t *testing.T) {
+	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
+		if req.Op != "IssueConversation" {
+			return false
+		}
+		fmt.Fprint(w, `{"data":{"issue":{
+			"id":"i1","identifier":"ENG-124","description":"see attached",
+			"attachments":{"nodes":[
+				{"url":"http://uploads.linear.app/a/b/plain.png","title":"plain.png","sourceType":"unknown"},
+				{"url":"https://uploads.linear.app/a/b/fine.png","title":"fine.png","sourceType":"unknown"}
+			]},
+			"comments":{"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":""}}
+		}}}`)
+		return true
+	})
+	f.download = func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "image/png")
+		fmt.Fprint(w, "png")
+	}
+	c := newTestClient(t, f, "")
+
+	got, err := c.Helpdesk().Attachments(context.Background(), "ENG-124", filepath.Join(t.TempDir(), "att"))
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(got) != 1 || got[0].Name != "fine.png" {
+		t.Fatalf("got %+v, want only the https upload", got)
+	}
+	if n := f.downloadCount(); n != 1 {
+		t.Errorf("made %d downloads, want 1: the http URL must never be fetched", n)
+	}
+}
+
+// TestDownloadRefusesAnOffHostRedirect: a Location header comes back inside
+// a server response, so it is input too. A redirect off the upload host is
+// refused before the hop is made, and nothing is written to disk for it.
+func TestDownloadRefusesAnOffHostRedirect(t *testing.T) {
+	var attackerHits int32
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attackerHits, 1)
+		w.Header().Set("Content-Type", "image/png")
+		fmt.Fprint(w, "attacker bytes")
+	}))
+	t.Cleanup(attacker.Close)
+
+	f := newFakeLinear(t, serveFixtures(t, map[string]string{"IssueConversation": "conversation.json"}))
+	f.download = func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, attacker.URL+"/stolen.png", http.StatusFound)
+	}
+	c := newTestClient(t, f, "")
+	dir := filepath.Join(t.TempDir(), "att")
+
+	got, err := c.Helpdesk().Attachments(context.Background(), "ENG-123", dir)
+	if err == nil {
+		t.Fatal("Attachments succeeded with every download redirected off-host, want an error")
+	}
+	if len(got) != 0 {
+		t.Errorf("got %+v, want no attachments", got)
+	}
+	if n := atomic.LoadInt32(&attackerHits); n != 0 {
+		t.Errorf("the redirect target was called %d times, want 0", n)
+	}
+	entries, rerr := os.ReadDir(dir)
+	if rerr == nil && len(entries) != 0 {
+		t.Errorf("files were written for the refused downloads: %v", entries)
 	}
 }
 

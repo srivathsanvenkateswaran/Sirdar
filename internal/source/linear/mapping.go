@@ -379,9 +379,26 @@ func uploadAttachments(atts []linearAttachment) []uploadRef {
 	return refs
 }
 
+// isUploadURL reports whether raw may be fetched with this adapter's API
+// key: Linear's own upload host, reached over https, with no userinfo.
+//
+// An attachment URL arrives inside a GraphQL response body, which makes it
+// input rather than configuration. "http://uploads.linear.app/…" would send
+// the key over the wire in the clear, and
+// "https://uploads.linear.app@attacker.example/…" parses with the real
+// destination in Host and the decoy in User — the host comparison catches
+// the second on its own, but userinfo has no business on one of these URLs
+// either way. Linear is a hosted service on a fixed https host, so there is
+// no plain-HTTP workspace to make an exception for.
 func isUploadURL(raw string) bool {
-	u, err := url.Parse(raw)
+	u, err := url.Parse(strings.TrimSpace(raw))
 	if err != nil {
+		return false
+	}
+	if u.User != nil {
+		return false
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
 		return false
 	}
 	return strings.EqualFold(u.Hostname(), uploadHost)

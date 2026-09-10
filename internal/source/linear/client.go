@@ -512,17 +512,51 @@ func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket
 	return out, nil
 }
 
+// maxRedirects bounds how far a redirect chain that stays on the upload
+// host is followed before the download is abandoned.
+const maxRedirects = 3
+
+// downloadClient returns a copy of the HTTP client whose redirect policy
+// applies the same trust check the starting URL got. A Location header
+// arrives inside a server response, so it is input: a redirect off
+// uploads.linear.app would otherwise be followed and whatever the other
+// host served written to disk under the attachment's name. Go strips the
+// Authorization header on a cross-host hop, but stripping the credential is
+// not the same as refusing the request.
+//
+// A shallow copy is enough: the Transport is safe to share, and
+// CheckRedirect is being replaced outright.
+func (c *Client) downloadClient() *http.Client {
+	dl := *c.HTTP
+	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		if !isUploadURL(req.URL.String()) {
+			return fmt.Errorf("refusing to follow a redirect to %s", req.URL.Hostname())
+		}
+		return nil
+	}
+	return &dl
+}
+
 // download fetches a Linear upload with the same Authorization header the
 // GraphQL API uses — Linear's file storage is private and accepts the API key
 // directly — and writes it to destPath, returning the response Content-Type.
 func (c *Client) download(ctx context.Context, rawURL, destPath string) (string, error) {
+	// Belt and braces: every ref that reaches here was already filtered to
+	// the upload host, and this makes it impossible for a future caller to
+	// reach anywhere else with the API key attached.
+	if !isUploadURL(rawURL) {
+		return "", fmt.Errorf("refusing to send the API key to an untrusted URL")
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("Authorization", c.APIKey)
 
-	resp, err := c.HTTP.Do(req)
+	resp, err := c.downloadClient().Do(req)
 	if err != nil {
 		return "", err
 	}

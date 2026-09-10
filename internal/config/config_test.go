@@ -352,6 +352,49 @@ func TestBuiltinTrackerUnderHelpdeskIsRejected(t *testing.T) {
 	}
 }
 
+// TestBuiltinHelpdeskUnderTrackerIsRejected: the helpdesk adapters read
+// support conversations and have no issue list to sweep, so naming one under
+// sources.tracker leaves a workspace that loads and then fails on its first
+// run.
+func TestBuiltinHelpdeskUnderTrackerIsRejected(t *testing.T) {
+	for _, block := range []string{
+		"    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n",
+		"    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n",
+		"    adapter: zohodesk\n    orgId: \"1\"\n    baseUrl: https://desk.zoho.com\n    token: env:ZOHO\n",
+	} {
+		_, err := Load(writeCfg(t, trackerCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk") {
+			t.Errorf("%s: want an error pointing at sources.helpdesk, got %v", strings.TrimSpace(block), err)
+		}
+	}
+}
+
+// TestAuthIsRejectedOnNonZohoAdapters: `auth:` is the Zoho OAuth refresh
+// grant and nothing else understands it. An adapter that quietly ignored the
+// block would read as "my OAuth config is live" right up until the first run
+// failed for want of a credential.
+func TestAuthIsRejectedOnNonZohoAdapters(t *testing.T) {
+	const auth = "    auth:\n      clientId: env:ID\n      clientSecret: env:SECRET\n      refreshToken: env:REFRESH\n"
+	for name, body := range map[string]string{
+		"jira":      trackerCfg("    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    pat: env:JIRA_PAT\n" + auth),
+		"linear":    trackerCfg("    adapter: linear\n    apiKey: env:LINEAR_KEY\n" + auth),
+		"zendesk":   helpdeskCfg("    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n" + auth),
+		"freshdesk": helpdeskCfg("    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n" + auth),
+		"exec":      helpdeskCfg("    adapter: exec\n    command: ./tickets.sh\n" + auth),
+	} {
+		_, err := Load(writeCfg(t, body))
+		if err == nil || !strings.Contains(err.Error(), ".auth: is only supported for adapter zohodesk") {
+			t.Errorf("%s: want the auth block refused, got %v", name, err)
+		}
+	}
+
+	// zohodesk itself still accepts it.
+	ok := helpdeskCfg("    adapter: zohodesk\n    orgId: \"1\"\n    baseUrl: https://desk.zoho.com\n" + auth)
+	if _, err := Load(writeCfg(t, ok)); err != nil {
+		t.Errorf("zohodesk with an auth block: %v", err)
+	}
+}
+
 // --- built-in helpdesk adapters (zendesk, freshdesk) ---
 
 // helpdeskCfg builds a workspace whose only source is the helpdesk block

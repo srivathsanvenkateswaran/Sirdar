@@ -64,6 +64,10 @@ type fixtureServer struct {
 	commentPages     int
 	attachmentStatus map[string]int      // guid -> status override
 	rewrite          func(string) string // rewrites the work item JSON before it is served
+	// redirectAttachmentsTo, when set, answers every attachment request
+	// with a 302 to it, the way Azure DevOps answers with the sign-in page
+	// instead of a 401.
+	redirectAttachmentsTo string
 }
 
 func newFixtureServer(t *testing.T) (*fixtureServer, *Client) {
@@ -158,7 +162,12 @@ func newFixtureServer(t *testing.T) (*fixtureServer, *Client) {
 		guid := filepath.Base(r.URL.Path)
 		fs.mu.Lock()
 		status := fs.attachmentStatus[guid]
+		redirectTo := fs.redirectAttachmentsTo
 		fs.mu.Unlock()
+		if redirectTo != "" {
+			http.Redirect(w, r, redirectTo, http.StatusFound)
+			return
+		}
 		if status != 0 {
 			w.WriteHeader(status)
 			w.Write([]byte("nope"))
@@ -740,6 +749,11 @@ func TestHostMatches(t *testing.T) {
 		{"EU.Support.Contoso.com", "support.contoso.com", true},
 		{"mysupport.contoso.com", "support.contoso.com", false},
 		{"contoso.com", "support.contoso.com", false},
+		// The domain side is typed by hand into a YAML file, so it is
+		// lowercased too rather than silently matching nothing.
+		{"support.contoso.com", "Support.Contoso.com", true},
+		{"eu.support.contoso.com", "SUPPORT.CONTOSO.COM", true},
+		{"support.contoso.com", " support.contoso.com. ", true},
 	} {
 		if got := hostMatches(tc.host, tc.domain); got != tc.want {
 			t.Errorf("hostMatches(%q, %q) = %v, want %v", tc.host, tc.domain, got, tc.want)
@@ -817,6 +831,36 @@ func TestAttachmentsSkipsUntrustedInlineImageHost(t *testing.T) {
 	w := c.WarningsFor("4242")
 	if len(w) != 1 || !strings.Contains(w[0], "attachment host not trusted") {
 		t.Fatalf("warnings = %v, want one about the untrusted host", w)
+	}
+}
+
+// TestDownloadRefusesAnOffHostRedirect: Azure DevOps answers an
+// unauthenticated or expired attachment request with a redirect to the
+// sign-in page rather than a 401, and a Location header is server output
+// like any other. Following one off the org's hosts would put the request on
+// a host that was never trust-checked and write whatever came back to disk
+// under the attachment's name.
+func TestDownloadRefusesAnOffHostRedirect(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	foreign := foreignServer(t)
+
+	fs.mu.Lock()
+	fs.redirectAttachmentsTo = foreign.URL + "/signin"
+	fs.mu.Unlock()
+
+	dir := filepath.Join(t.TempDir(), "attachments")
+	atts, err := c.Helpdesk().Attachments(context.Background(), "4242", dir)
+	if err == nil {
+		t.Fatal("every download redirected off-host but Attachments returned no error")
+	}
+	if len(atts) != 0 {
+		t.Errorf("attachments = %+v, want none", atts)
+	}
+	// foreignServer fails the test itself if it is ever called, so the
+	// only thing left to check is that nothing was written.
+	entries, rerr := os.ReadDir(dir)
+	if rerr == nil && len(entries) != 0 {
+		t.Errorf("files were written for the refused downloads: %v", entries)
 	}
 }
 

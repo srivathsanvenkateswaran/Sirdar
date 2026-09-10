@@ -361,6 +361,13 @@ func (c *Client) mapHelpdesk(iss *jiraIssue) ticket.HelpdeskTicket {
 
 const commentPageSize = 100
 
+// maxCommentPages bounds the comment feed the same way maxSearchPages
+// bounds search. The loop's own exit conditions rely on the server
+// advancing startAt and reporting a truthful total; an instance that
+// answers every request with the same full page satisfies neither and
+// would otherwise page for ever, one round trip at a time.
+const maxCommentPages = 100
+
 // Threads implements source.Helpdesk: the issue description opens the
 // conversation and every comment follows, oldest first.
 func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) {
@@ -440,25 +447,31 @@ func (c *Client) allComments(ctx context.Context, iss *jiraIssue) ([]jiraComment
 
 	var all []jiraComment
 	startAt := 0
-	for {
+	page := 0
+	for ; page < maxCommentPages; page++ {
 		q := url.Values{}
 		q.Set("startAt", strconv.Itoa(startAt))
 		q.Set("maxResults", strconv.Itoa(commentPageSize))
 		q.Set("orderBy", "created")
 
-		var page jiraComments
+		var res jiraComments
 		path := "/rest/api/2/issue/" + url.PathEscape(iss.Key) + "/comment"
-		if err := c.doJSON(ctx, http.MethodGet, path, q, nil, &page); err != nil {
+		if err := c.doJSON(ctx, http.MethodGet, path, q, nil, &res); err != nil {
 			return nil, err
 		}
-		all = append(all, page.Comments...)
-		if len(page.Comments) == 0 {
+		all = append(all, res.Comments...)
+		if len(res.Comments) == 0 {
 			break
 		}
-		startAt += len(page.Comments)
-		if page.Total > 0 && startAt >= page.Total {
+		startAt += len(res.Comments)
+		if res.Total > 0 && startAt >= res.Total {
 			break
 		}
+	}
+	if page >= maxCommentPages {
+		// The thread the agent reads is now a prefix of the real one, and
+		// nothing else would say so.
+		warnCtx(ctx, "jira: comments for %s stopped after %d pages (%d comments); the thread may be incomplete", iss.Key, maxCommentPages, len(all))
 	}
 	return all, nil
 }

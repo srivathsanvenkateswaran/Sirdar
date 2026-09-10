@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -902,6 +903,46 @@ func TestAttachments(t *testing.T) {
 	}
 }
 
+// An Attachment whose Content._ref names a host the operator never
+// configured is skipped with a warning, and the foreign host is never
+// called: the _ref arrives inside a response body, so it is input.
+func TestAttachmentContentRefOnAForeignHostIsRefused(t *testing.T) {
+	var attackerHits int32
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attackerHits, 1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"AttachmentContent":{"Content":"aGVsbG8="}}`)
+	}))
+	t.Cleanup(attacker.Close)
+
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		if collection(r) == "attachment" {
+			// Point every Content._ref at the attacker instead of the
+			// subscription the operator configured.
+			w.Header().Set("Content-Type", "application/json")
+			body := strings.ReplaceAll(fixture(t, "attachments.json"), fixtureBase+"/slm/webservice/v2.0/attachmentcontent", attacker.URL+"/slm/webservice/v2.0/attachmentcontent")
+			_, _ = w.Write([]byte(strings.ReplaceAll(body, fixtureBase, base)))
+			return
+		}
+		attachmentHandler(t, w, r, base)
+	})
+	c := newClient(t, fs, Config{})
+
+	got, err := c.Helpdesk().Attachments(context.Background(), "DE1234", filepath.Join(t.TempDir(), "a"))
+	if err == nil {
+		t.Fatal("Attachments succeeded with every Content._ref off-host, want an error")
+	}
+	if len(got) != 0 {
+		t.Errorf("Attachments returned %d files, want none", len(got))
+	}
+	if n := atomic.LoadInt32(&attackerHits); n != 0 {
+		t.Errorf("the foreign host was called %d times, want 0", n)
+	}
+	if !strings.Contains(err.Error(), "not trusted") {
+		t.Errorf("error does not say the host was untrusted: %v", err)
+	}
+}
+
 func TestAttachmentsAllFail(t *testing.T) {
 	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
 		coll := collection(r)
@@ -989,19 +1030,92 @@ func TestHelpdeskGet(t *testing.T) {
 	}
 }
 
-// refURL keeps a payload from steering an authenticated request at another
-// host: only the path survives.
+// refURL keeps a payload from steering an authenticated request anywhere: a
+// ref on the configured host resolves, and one naming any other host is
+// refused rather than rewritten onto the configured host — rewriting still
+// makes the request, against a path the payload chose.
 func TestRefURLPinsTheConfiguredHost(t *testing.T) {
 	c, err := New(Config{APIKey: "k", BaseURL: "https://rally1.rallydev.com"}, nil)
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
-	got, err := c.refURL("https://evil.example.com/slm/webservice/v2.0/attachmentcontent/1")
+
+	got, err := c.refURL("https://rally1.rallydev.com/slm/webservice/v2.0/attachmentcontent/1")
+	if err != nil {
+		t.Fatalf("refURL on the configured host: %v", err)
+	}
+	if want := "https://rally1.rallydev.com/slm/webservice/v2.0/attachmentcontent/1"; got != want {
+		t.Errorf("refURL = %q, want %q", got, want)
+	}
+
+	for _, ref := range []string{
+		"https://evil.example.com/slm/webservice/v2.0/attachmentcontent/1",
+		"http://rally1.rallydev.com/slm/webservice/v2.0/attachmentcontent/1",
+		"https://rally1.rallydev.com@evil.example/slm/webservice/v2.0/attachmentcontent/1",
+	} {
+		if got, err := c.refURL(ref); err == nil {
+			t.Errorf("refURL(%q) = %q, want an error", ref, got)
+		}
+	}
+}
+
+// A relative _ref (no scheme, no host, no leading slash) still has to land
+// on the WSAPI path rather than being glued straight onto the host.
+func TestRefURLAddsTheMissingLeadingSlash(t *testing.T) {
+	c, err := New(Config{APIKey: "k", BaseURL: "https://rally1.rallydev.com"}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	got, err := c.refURL("slm/webservice/v2.0/attachmentcontent/1")
 	if err != nil {
 		t.Fatalf("refURL: %v", err)
 	}
 	if want := "https://rally1.rallydev.com/slm/webservice/v2.0/attachmentcontent/1"; got != want {
 		t.Errorf("refURL = %q, want %q", got, want)
+	}
+}
+
+// The API key travels in ZSESSIONID, a custom header Go keeps across a
+// cross-host redirect. A 302 off the configured host must therefore never be
+// followed: the second listener sees no request at all.
+func TestRedirectOffTheConfiguredHostIsRefused(t *testing.T) {
+	var attackerHits int32
+	attacker := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&attackerHits, 1)
+		w.Header().Set("Content-Type", "application/json")
+		fmt.Fprint(w, `{"QueryResult":{"Results":[],"TotalResultCount":0}}`)
+	}))
+	t.Cleanup(attacker.Close)
+
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		http.Redirect(w, r, attacker.URL+r.URL.Path, http.StatusFound)
+	})
+	c := newClient(t, fs, Config{})
+
+	if _, err := c.Get(context.Background(), "DE1234"); err == nil {
+		t.Fatal("Get through a cross-host redirect succeeded, want an error")
+	}
+	if n := atomic.LoadInt32(&attackerHits); n != 0 {
+		t.Errorf("the redirect target was called %d times, want 0", n)
+	}
+}
+
+// A redirect that stays on the configured host is ordinary and still
+// followed, so the policy above is not simply "never redirect".
+func TestRedirectOnTheConfiguredHostIsFollowed(t *testing.T) {
+	fs := newServer(t, func(t *testing.T, w http.ResponseWriter, r *http.Request, base string) {
+		if r.URL.Query().Get("moved") == "" {
+			q := r.URL.Query()
+			q.Set("moved", "1")
+			http.Redirect(w, r, base+r.URL.Path+"?"+q.Encode(), http.StatusFound)
+			return
+		}
+		artifactHandler(t, w, r, base)
+	})
+	c := newClient(t, fs, Config{})
+
+	if _, err := c.Get(context.Background(), "DE1234"); err != nil {
+		t.Fatalf("Get through a same-host redirect: %v", err)
 	}
 }
 

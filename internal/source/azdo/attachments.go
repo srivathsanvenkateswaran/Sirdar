@@ -320,6 +320,34 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	return out, nil
 }
 
+// maxRedirects bounds how far a redirect chain that stays on a trusted host
+// is followed before the download is abandoned.
+const maxRedirects = 3
+
+// downloadClient returns a copy of the HTTP client whose redirect policy
+// applies the same trust check the starting URL got. Azure DevOps answers
+// an unauthenticated (or expired) attachment request with a redirect to the
+// Entra sign-in page rather than a 401, and a Location header is a server
+// response like any other: following one off the org's hosts would write a
+// sign-in page to disk under the attachment's name, and put the request on
+// a host that was never checked.
+//
+// A shallow copy is enough: the Transport is safe to share, and
+// CheckRedirect is being replaced outright.
+func (c *Client) downloadClient() *http.Client {
+	dl := *c.hc
+	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= maxRedirects {
+			return fmt.Errorf("stopped after %d redirects", maxRedirects)
+		}
+		if !c.trusted(req.URL) {
+			return fmt.Errorf("refusing to follow a redirect to %s", req.URL.Hostname())
+		}
+		return nil
+	}
+	return &dl
+}
+
 // download fetches rawURL with the client's auth and writes the body to
 // destPath, returning the response's Content-Type.
 func (c *Client) download(ctx context.Context, rawURL, destPath string) (string, error) {
@@ -336,7 +364,7 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	}
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := c.hc.Do(req)
+	resp, err := c.downloadClient().Do(req)
 	if err != nil {
 		return "", err
 	}

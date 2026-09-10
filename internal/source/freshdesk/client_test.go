@@ -655,6 +655,111 @@ func TestAttachments_NoAttachments(t *testing.T) {
 	}
 }
 
+// TestAttachments_PlainHTTPAndUserinfoRefused: the host is only half the
+// question. An attachment_url arrives inside an API response body, so a
+// hostile instance can put "http://" in front of a real Freshworks host, or
+// hide the destination behind userinfo. Neither URL is fetched at all — the
+// listener behind both records zero hits.
+func TestAttachments_PlainHTTPAndUserinfoRefused(t *testing.T) {
+	cdn := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("cdn-bytes"))
+	})
+
+	ticket := `{"id":123,"subject":"x","status":2,"priority":1,"source":1,
+		"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z",
+		"attachments":[
+			{"id":1,"name":"plain.png","content_type":"image/png",
+			 "attachment_url":"http://cdn.freshdesk.com/plain.png"},
+			{"id":2,"name":"decoy.png","content_type":"image/png",
+			 "attachment_url":"https://acme.freshdesk.com@cdn.freshdesk.com/decoy.png"}
+		]}`
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/tickets/123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(ticket))
+		case "/api/v2/tickets/123/conversations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(primary.Close)
+
+	c := newClient(t, map[string]string{
+		testDomain: addrOf(primary),
+		testCDN:    addrOf(cdn.Server),
+	}, testDomain)
+
+	atts, err := c.Attachments(context.Background(), "123", filepath.Join(t.TempDir(), "123"))
+	if err == nil {
+		t.Fatal("Attachments: want an error, neither URL is trusted")
+	}
+	if len(atts) != 0 {
+		t.Errorf("atts = %+v, want none", atts)
+	}
+	if got := cdn.count("/plain.png") + cdn.count("/decoy.png"); got != 0 {
+		t.Errorf("attachment host hits = %d, want 0", got)
+	}
+	if !strings.Contains(err.Error(), "host not trusted") {
+		t.Errorf("error = %v, want it to say the host was not trusted", err)
+	}
+}
+
+// TestAttachments_OversizeFileIsRefusedAndNotLeftOnDisk covers the download
+// limit now that attachments stream to disk rather than through a buffer: a
+// file past the ceiling fails, and its partial output is removed instead of
+// being left there looking complete.
+func TestAttachments_OversizeFileIsRefusedAndNotLeftOnDisk(t *testing.T) {
+	orig := maxAttachmentBytes
+	maxAttachmentBytes = 16
+	t.Cleanup(func() { maxAttachmentBytes = orig })
+
+	ticket := `{"id":123,"subject":"x","status":2,"priority":1,"source":1,
+		"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z",
+		"attachments":[
+			{"id":1,"name":"big.bin","content_type":"application/octet-stream",
+			 "attachment_url":"https://acme.freshdesk.com/api/v2/attachments/1/big.bin"},
+			{"id":2,"name":"small.txt","content_type":"text/plain",
+			 "attachment_url":"https://acme.freshdesk.com/api/v2/attachments/2/small.txt"}
+		]}`
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/tickets/123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(ticket))
+		case "/api/v2/tickets/123/conversations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+		case "/api/v2/attachments/1/big.bin":
+			_, _ = w.Write([]byte(strings.Repeat("A", 1024)))
+		case "/api/v2/attachments/2/small.txt":
+			_, _ = w.Write([]byte("small"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(primary.Close)
+	c := newClient(t, map[string]string{testDomain: addrOf(primary)}, testDomain)
+
+	dir := filepath.Join(t.TempDir(), "123")
+	atts, err := c.Attachments(context.Background(), "123", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].ID != "2" {
+		t.Fatalf("atts = %+v, want only the small attachment", atts)
+	}
+	if _, statErr := os.Stat(filepath.Join(dir, "1-big.bin")); !os.IsNotExist(statErr) {
+		t.Errorf("the oversize attachment was left on disk (stat err = %v)", statErr)
+	}
+	warnings := c.WarningsFor("123")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "exceeds") {
+		t.Errorf("warnings = %v, want one saying the attachment exceeded the limit", warnings)
+	}
+}
+
 // --- pure-function coverage ---
 
 func TestSanitizeName(t *testing.T) {
