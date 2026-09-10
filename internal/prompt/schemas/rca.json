@@ -1,0 +1,348 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sirdar RCA and Resolution Note",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rca", "resolution"],
+  "definitions": {
+    "evidenceEntry": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["query", "result"],
+          "properties": {
+            "query": { "type": "string" },
+            "result": { "type": "string" }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ref", "note"],
+          "properties": {
+            "ref": { "type": "string" },
+            "note": { "type": "string" }
+          }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "rca": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "summary",
+        "impact",
+        "timeline",
+        "rootCause",
+        "contributingFactors",
+        "evidence",
+        "blastRadius",
+        "whyNotCaughtEarlier",
+        "prevention",
+        "openQuestions",
+        "classification",
+        "severity",
+        "confidence",
+        "origin",
+        "triageReview",
+        "lessons",
+        "playbookSuggestions"
+      ],
+      "properties": {
+        "title": { "type": "string" },
+        "summary": { "type": "string" },
+        "impact": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "customersAffected",
+            "recordsAffected",
+            "financialImpact",
+            "firstOccurrence",
+            "detection",
+            "timeToDetect"
+          ],
+          "properties": {
+            "customersAffected": { "type": "string" },
+            "recordsAffected": { "type": "string" },
+            "financialImpact": { "type": "string" },
+            "firstOccurrence": { "type": "string" },
+            "detection": { "type": "string" },
+            "timeToDetect": { "type": "string" }
+          }
+        },
+        "timeline": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["at", "event", "evidence"],
+            "properties": {
+              "at": { "type": "string" },
+              "event": { "type": "string" },
+              "evidence": { "type": "string" }
+            }
+          }
+        },
+        "rootCause": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["description", "codeRefs", "offendingCode", "mechanism"],
+          "properties": {
+            "description": { "type": "string" },
+            "codeRefs": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "offendingCode": { "type": "string" },
+            "mechanism": { "type": "string" }
+          }
+        },
+        "contributingFactors": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "evidence": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["database", "logs", "apm", "code", "attachments"],
+          "properties": {
+            "database": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidenceEntry" }
+            },
+            "logs": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidenceEntry" }
+            },
+            "apm": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidenceEntry" }
+            },
+            "code": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidenceEntry" }
+            },
+            "attachments": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/evidenceEntry" }
+            }
+          }
+        },
+        "blastRadius": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["query", "count", "scope", "reasoning"],
+          "properties": {
+            "query": { "type": "string" },
+            "count": { "type": "string" },
+            "scope": {
+              "type": "string",
+              "enum": ["one-off", "systemic"]
+            },
+            "reasoning": { "type": "string" }
+          }
+        },
+        "whyNotCaughtEarlier": { "type": "string" },
+        "prevention": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["action", "type", "owner", "ticket"],
+            "properties": {
+              "action": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["code", "test", "monitoring", "process"]
+              },
+              "owner": { "type": "string" },
+              "ticket": { "type": "string" }
+            }
+          }
+        },
+        "openQuestions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "classification": {
+          "type": "string",
+          "enum": ["code", "data", "config", "not-a-bug"]
+        },
+        "severity": {
+          "type": "string",
+          "enum": ["high", "medium", "low"]
+        },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        },
+        "origin": { "type": "string" },
+        "triageReview": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["verdict", "gotRight", "missed", "whyMissed"],
+          "properties": {
+            "verdict": {
+              "type": "string",
+              "enum": ["confirmed", "partial", "wrong"]
+            },
+            "gotRight": { "type": "string" },
+            "missed": { "type": "string" },
+            "whyMissed": { "type": "string" }
+          }
+        },
+        "lessons": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "playbookSuggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["playbook", "addition", "reason"],
+            "properties": {
+              "playbook": { "type": "string" },
+              "addition": { "type": "string" },
+              "reason": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "resolution": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "title",
+        "resolutionType",
+        "whatWasWrong",
+        "whatWeChanged",
+        "codeChange",
+        "dataChange",
+        "verification",
+        "customerOutcome",
+        "residualRisk",
+        "lessons"
+      ],
+      "properties": {
+        "title": { "type": "string" },
+        "resolutionType": {
+          "type": "string",
+          "enum": [
+            "code-fix",
+            "data-fix",
+            "config-change",
+            "guidance",
+            "wont-fix",
+            "duplicate"
+          ]
+        },
+        "whatWasWrong": { "type": "string" },
+        "whatWeChanged": { "type": "string" },
+        "codeChange": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["pr", "prStatus", "mergedAt", "files", "reviewer", "deployed"],
+              "properties": {
+                "pr": { "type": ["string", "null"] },
+                "prStatus": { "type": ["string", "null"] },
+                "mergedAt": { "type": ["string", "null"] },
+                "files": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["path", "what"],
+                    "properties": {
+                      "path": { "type": ["string", "null"] },
+                      "what": { "type": ["string", "null"] }
+                    }
+                  }
+                },
+                "reviewer": { "type": ["string", "null"] },
+                "deployed": { "type": ["string", "null"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "dataChange": {
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "authorisedBy",
+                "authorisedAt",
+                "executedBy",
+                "executedAt",
+                "preVerificationSql",
+                "preOutput",
+                "changeSql",
+                "rowsAffected",
+                "postVerificationSql",
+                "postOutput",
+                "rollbackPlan",
+                "sideEffects"
+              ],
+              "properties": {
+                "authorisedBy": { "type": ["string", "null"] },
+                "authorisedAt": { "type": ["string", "null"] },
+                "executedBy": { "type": ["string", "null"] },
+                "executedAt": { "type": ["string", "null"] },
+                "preVerificationSql": { "type": ["string", "null"] },
+                "preOutput": { "type": ["string", "null"] },
+                "changeSql": { "type": ["string", "null"] },
+                "rowsAffected": { "type": ["string", "null"] },
+                "postVerificationSql": { "type": ["string", "null"] },
+                "postOutput": { "type": ["string", "null"] },
+                "rollbackPlan": { "type": ["string", "null"] },
+                "sideEffects": { "type": ["string", "null"] }
+              }
+            },
+            { "type": "null" }
+          ]
+        },
+        "verification": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["check", "environment", "result", "date", "by"],
+            "properties": {
+              "check": { "type": "string" },
+              "environment": { "type": "string" },
+              "result": { "type": "string" },
+              "date": { "type": "string" },
+              "by": { "type": "string" }
+            }
+          }
+        },
+        "customerOutcome": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["told", "confirmedFixed", "helpdeskClosed", "trackerStatus"],
+          "properties": {
+            "told": { "type": "string" },
+            "confirmedFixed": { "type": "string" },
+            "helpdeskClosed": { "type": "string" },
+            "trackerStatus": { "type": "string" }
+          }
+        },
+        "residualRisk": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "lessons": { "type": "string" }
+      }
+    }
+  }
+}

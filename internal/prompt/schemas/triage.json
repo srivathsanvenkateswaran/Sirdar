@@ -1,0 +1,117 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sirdar Triage Note",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "ticket",
+    "title",
+    "complaint",
+    "timeline",
+    "reproSteps",
+    "rootCause",
+    "blastRadius",
+    "classification",
+    "proposedFix",
+    "openQuestions"
+  ],
+  "properties": {
+    "ticket": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "title",
+        "trackerUrl",
+        "helpdeskId",
+        "helpdeskUrl",
+        "priority",
+        "service",
+        "customer",
+        "customerId"
+      ],
+      "properties": {
+        "key": { "type": "string" },
+        "title": { "type": "string" },
+        "trackerUrl": { "type": "string" },
+        "helpdeskId": { "type": "string" },
+        "helpdeskUrl": { "type": "string" },
+        "priority": { "type": "string" },
+        "service": { "type": "string" },
+        "customer": { "type": "string" },
+        "customerId": { "type": "string" }
+      }
+    },
+    "title": { "type": "string" },
+    "complaint": { "type": "string" },
+    "timeline": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["at", "role", "summary"],
+        "properties": {
+          "at": { "type": "string" },
+          "role": { "type": "string" },
+          "summary": { "type": "string" }
+        }
+      }
+    },
+    "reproSteps": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rootCause": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["hypothesis", "confidence", "evidence", "codeRefs"],
+      "properties": {
+        "hypothesis": { "type": "string" },
+        "confidence": {
+          "type": "string",
+          "enum": ["high", "medium", "low", "unknown"]
+        },
+        "evidence": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["source", "query", "finding"],
+            "properties": {
+              "source": { "type": "string" },
+              "query": { "type": "string" },
+              "finding": { "type": "string" }
+            }
+          }
+        },
+        "codeRefs": {
+          "type": "array",
+          "items": { "type": "string" }
+        }
+      }
+    },
+    "blastRadius": { "type": "string" },
+    "classification": {
+      "type": "string",
+      "enum": ["code", "data", "config", "not-a-bug", "unknown"]
+    },
+    "proposedFix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["description", "files", "remediationSql", "risks"],
+      "properties": {
+        "description": { "type": "string" },
+        "files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "remediationSql": { "type": "string" },
+        "risks": { "type": "string" }
+      }
+    },
+    "openQuestions": {
+      "type": "array",
+      "items": { "type": "string" }
+    }
+  }
+}
