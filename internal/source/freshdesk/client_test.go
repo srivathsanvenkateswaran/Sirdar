@@ -699,3 +699,196 @@ func TestAttachmentTrust(t *testing.T) {
 		}
 	}
 }
+
+// --- redirects and pagination trust ---
+
+// TestCheckRedirect_RefusesOffDomainRedirect covers an API call (the ticket
+// GET, which every one of Get/Threads/Attachments starts with) answered
+// with a redirect to a host outside the configured domain and the trusted
+// Freshdesk suffixes. The credential must never reach that host, and — the
+// stronger property CheckRedirect exists for — the hop must never even be
+// taken: a foreign listener wired into the same hostRouter records zero
+// hits.
+func TestCheckRedirect_RefusesOffDomainRedirect(t *testing.T) {
+	foreign := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("stolen"))
+	})
+
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/api/v2/tickets/123" {
+			http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
+			return
+		}
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(primary.Close)
+
+	c := newClient(t, map[string]string{
+		testDomain:         addrOf(primary),
+		"evil.example.com": addrOf(foreign.Server),
+	}, testDomain)
+
+	if _, err := c.Get(context.Background(), "123"); err == nil {
+		t.Fatal("Get: want an error, the redirect target is off the trusted hosts")
+	}
+	if got := foreign.count("/steal"); got != 0 {
+		t.Errorf("foreign host hits = %d, want 0: an off-domain redirect must never be followed", got)
+	}
+}
+
+// TestAttachments_RedirectToForeignHostRefused covers the download path
+// specifically: an attachment URL on the configured domain that itself
+// redirects off it. The pre-signed-URL trust check only looks at the URL's
+// own host, so without CheckRedirect this would still leak the credential
+// (Go strips Authorization on a cross-host hop by default, but would still
+// follow the redirect and write whatever the foreign host served to disk
+// under the attachment's name) and reach a host never checked for trust.
+func TestAttachments_RedirectToForeignHostRefused(t *testing.T) {
+	foreign := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("stolen-bytes"))
+	})
+
+	ticketJSON := `{"id":123,"subject":"x","status":2,"priority":1,"source":1,
+		"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z",
+		"attachments":[{"id":1,"name":"a.txt","content_type":"text/plain",
+		"attachment_url":"https://acme.freshdesk.com/api/v2/attachments/1/a.txt"}]}`
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/tickets/123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(ticketJSON))
+		case "/api/v2/tickets/123/conversations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+		case "/api/v2/attachments/1/a.txt":
+			http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(primary.Close)
+
+	c := newClient(t, map[string]string{
+		testDomain:         addrOf(primary),
+		"evil.example.com": addrOf(foreign.Server),
+	}, testDomain)
+
+	dir := filepath.Join(t.TempDir(), "123")
+	atts, err := c.Attachments(context.Background(), "123", dir)
+	if err == nil {
+		t.Fatal("Attachments: want an error, the only attachment redirects off-domain")
+	}
+	if len(atts) != 0 {
+		t.Errorf("atts = %+v, want none", atts)
+	}
+	if got := foreign.count("/steal"); got != 0 {
+		t.Errorf("foreign host hits = %d, want 0: an off-domain redirect must never be followed", got)
+	}
+}
+
+// TestAttachments_TrustedHostRedirectSkippedOthersStillDownload covers the
+// case where a *trusted* attachment host (the CDN suffix, not the
+// configured domain itself) answers with a redirect off the trusted set —
+// an expired pre-signed link falling back to a generic host, say. That one
+// attachment must be skipped with a warning, not treated as fatal: a
+// ticket's other, unrelated attachments still come back.
+func TestAttachments_TrustedHostRedirectSkippedOthersStillDownload(t *testing.T) {
+	foreign := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("stolen-bytes"))
+	})
+	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
+	}))
+	t.Cleanup(cdn.Close)
+
+	ticketJSON := `{"id":123,"subject":"x","status":2,"priority":1,"source":1,
+		"created_at":"2026-09-01T00:00:00Z","updated_at":"2026-09-01T00:00:00Z",
+		"attachments":[
+			{"id":1,"name":"redirected.png","content_type":"image/png",
+			 "attachment_url":"https://cdn.freshdesk.com/redirected.png"},
+			{"id":2,"name":"fine.txt","content_type":"text/plain",
+			 "attachment_url":"https://acme.freshdesk.com/api/v2/attachments/2/fine.txt"}
+		]}`
+	primary := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/api/v2/tickets/123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(ticketJSON))
+		case "/api/v2/tickets/123/conversations":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte("[]"))
+		case "/api/v2/attachments/2/fine.txt":
+			_, _ = w.Write([]byte("still here"))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	t.Cleanup(primary.Close)
+
+	c := newClient(t, map[string]string{
+		testDomain:         addrOf(primary),
+		testCDN:            addrOf(cdn),
+		"evil.example.com": addrOf(foreign.Server),
+	}, testDomain)
+
+	dir := filepath.Join(t.TempDir(), "123")
+	atts, err := c.Attachments(context.Background(), "123", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].ID != "2" || atts[0].Name != "fine.txt" {
+		t.Fatalf("atts = %+v, want only the non-redirecting attachment", atts)
+	}
+	if got := foreign.count("/steal"); got != 0 {
+		t.Errorf("foreign host hits = %d, want 0: the redirect must never be followed", got)
+	}
+
+	warnings := c.WarningsFor("123")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "freshdesk: redirect to untrusted host evil.example.com") {
+		t.Errorf("warnings = %v, want one naming the untrusted redirect target", warnings)
+	}
+}
+
+// --- pagination cap ---
+
+func TestThreads_ConversationPaginationCapped(t *testing.T) {
+	origPer, origMax := conversationsPerPage, maxConversationPages
+	conversationsPerPage = 1
+	maxConversationPages = 3
+	t.Cleanup(func() { conversationsPerPage, maxConversationPages = origPer, origMax })
+
+	ts := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		wantBasicAuth(t, r)
+		switch {
+		case r.URL.Path == "/api/v2/tickets/123":
+			writeFixture(t, w, "ticket.json")
+		case r.URL.Path == "/api/v2/tickets/123/conversations":
+			// Every page is full (1 of 1), so pagination would run
+			// forever without the cap.
+			body := fmt.Sprintf(`[{"id":%s,"body":"<p>x</p>","body_text":"x","incoming":true,"private":false,"user_id":9001,"from_email":"priya@example.com","created_at":"2026-09-01T09:00:00Z","attachments":[]}]`,
+				r.URL.Query().Get("page"))
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(body))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	c := newClient(t, map[string]string{testDomain: addrOf(ts.Server)}, testDomain)
+
+	thread, err := c.Threads(context.Background(), "123")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	// description + 3 capped pages of 1 entry each.
+	if len(thread) != 4 {
+		t.Fatalf("len(thread) = %d, want 4 (stopped at the page cap)", len(thread))
+	}
+	if got := ts.count("/api/v2/tickets/123/conversations"); got != maxConversationPages {
+		t.Errorf("conversations requests = %d, want %d (the cap, not an unbounded sweep)", got, maxConversationPages)
+	}
+
+	warnings := c.WarningsFor("123")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "freshdesk: conversation pages capped at 3") {
+		t.Errorf("warnings = %v, want one naming the page cap", warnings)
+	}
+}

@@ -213,10 +213,23 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 	return mapTicket(c.cfg.Domain, ft), nil
 }
 
+// maxConversationPages bounds how many pages listConversations will fetch.
+// Every page URL is built by this client from the configured domain and a
+// page number it counts itself — never from a server-supplied "next" link
+// or Location header — so this cap exists only to stop an unbounded sweep
+// against a ticket with a pathological number of conversation entries from
+// hanging a triage run; a page count above it is warned about, not treated
+// as a fatal error. It is a var, not a const, so a test can shrink it
+// without needing a 100-page fixture.
+var maxConversationPages = 100
+
 // listConversations fetches every conversation entry for a ticket, paging
 // with page/per_page until a page returns fewer than conversationsPerPage
-// entries.
-func (c *Client) listConversations(ctx context.Context, id string) ([]fdConversation, error) {
+// entries or maxConversationPages is reached. In the latter case the
+// entries fetched so far are returned along with a warning: a ticket this
+// long is unusual enough that Sirdar would rather triage it with a
+// truncated thread and a visible note than fail outright.
+func (c *Client) listConversations(ctx context.Context, id string) ([]fdConversation, []string, error) {
 	var all []fdConversation
 	for page := 1; ; page++ {
 		q := url.Values{}
@@ -225,14 +238,17 @@ func (c *Client) listConversations(ctx context.Context, id string) ([]fdConversa
 
 		var batch []fdConversation
 		if err := c.apiGET(ctx, "/api/v2/tickets/"+id+"/conversations", q, &batch); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		all = append(all, batch...)
 		if len(batch) < conversationsPerPage {
-			break
+			return all, nil, nil
+		}
+		if page >= maxConversationPages {
+			warning := fmt.Sprintf("freshdesk: conversation pages capped at %d", maxConversationPages)
+			return all, []string{warning}, nil
 		}
 	}
-	return all, nil
 }
 
 // resolveAuthor names the sender of a conversation entry: the raw email
@@ -257,11 +273,16 @@ func (c *Client) resolveAuthor(ctx context.Context, cv fdConversation) string {
 // description as the first message (from the requester), followed by every
 // conversation entry, ordered by timestamp.
 func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) {
+	// Every path out of here replaces whatever an earlier call for this
+	// ticket (of any kind — Threads or Attachments) left in the warning
+	// slot, so a stale one is never handed to the next reader.
+	c.takeWarnings(id)
+
 	ft, err := c.fetchTicket(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	convs, err := c.listConversations(ctx, id)
+	convs, warnings, err := c.listConversations(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -311,5 +332,6 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	}
 
 	sort.SliceStable(msgs, func(i, j int) bool { return msgs[i].At.Before(msgs[j].At) })
+	c.putWarnings(id, warnings)
 	return msgs, nil
 }

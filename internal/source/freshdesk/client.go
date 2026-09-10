@@ -42,6 +42,10 @@ const (
 	maxJSONBody = 8 << 20
 	// maxAttachmentBytes bounds a downloaded attachment's raw bytes.
 	maxAttachmentBytes = 64 << 20
+	// maxAgentCacheEntries bounds the agent name cache: past this many
+	// distinct agents seen by one Client, the cache is dropped and rebuilt
+	// rather than left to grow without limit.
+	maxAgentCacheEntries = 1000
 )
 
 // conversationsPerPage is the page size used when listing a ticket's
@@ -113,12 +117,47 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &Client{
+	c := &Client{
 		cfg:     cfg,
 		baseURL: "https://" + domain,
 		host:    hostKey("https", domain),
-		hc:      hc,
-	}, nil
+	}
+	// A shallow copy: the Transport (and any pooled connections) is shared
+	// with the caller's client, only the redirect policy is ours. Every
+	// request this adapter makes — ticket/conversation/agent lookups as
+	// much as attachment downloads — goes through this same *http.Client,
+	// so a server response that tries to redirect any of them off the
+	// trusted hosts is refused uniformly, not just on the download path.
+	dl := *hc
+	dl.CheckRedirect = c.checkRedirect
+	c.hc = &dl
+	return c, nil
+}
+
+// maxRedirects bounds how far a same-trust-boundary redirect chain is
+// followed before the request is abandoned.
+const maxRedirects = 3
+
+// checkRedirect refuses to follow a redirect off the hosts this client
+// trusts with its credential or its downloads (see attachmentTrust): a
+// redirect Location comes back inside a server response, which makes it
+// input, not configuration, and nothing stops a hostile or compromised
+// endpoint — including a legitimately trusted one that has been
+// compromised, or a CDN host whose pre-signed link expired into a generic
+// error/login redirect — from pointing one at a host it controls. Go
+// already strips the Authorization header on a cross-host hop, but that
+// still lets the request happen and the response get written to disk as if
+// it were the real attachment; refusing the hop entirely, with an error
+// that names the offending host, is the actual fix.
+func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
+	if len(via) >= maxRedirects {
+		return fmt.Errorf("freshdesk: stopped after %d redirects", maxRedirects)
+	}
+	host := hostKey(req.URL.Scheme, req.URL.Host)
+	if trusted, _ := c.attachmentTrust(host); !trusted {
+		return fmt.Errorf("freshdesk: redirect to untrusted host %s", host)
+	}
+	return nil
 }
 
 // hostKey renders a scheme+host pair comparable: lowercased, with the DNS
@@ -378,7 +417,13 @@ func (c *Client) lookupAgent(ctx context.Context, id int64) (string, error) {
 	}
 
 	c.mu.Lock()
-	if c.agents == nil {
+	if c.agents == nil || len(c.agents) > maxAgentCacheEntries {
+		// A triage run's per-ticket agent set is small in practice; a cache
+		// that grew past this is more likely a pathological ticket (or a
+		// client reused across far more agents than one account plausibly
+		// has) than a workload worth holding onto indefinitely. Dropping it
+		// wholesale trades a few repeat lookups for a bounded footprint
+		// rather than attempting an LRU for what should be a rare case.
 		c.agents = map[int64]string{}
 	}
 	c.agents[id] = ag.Contact.Name

@@ -153,7 +153,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	if err != nil {
 		return nil, err
 	}
-	convs, err := c.listConversations(ctx, id)
+	convs, pagingWarnings, err := c.listConversations(ctx, id)
 	if err != nil {
 		return nil, err
 	}
@@ -164,6 +164,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		refs = append(refs, collectRefs(cv.Attachments, cv.Body, &inline)...)
 	}
 	if len(refs) == 0 {
+		c.putWarnings(id, pagingWarnings)
 		return nil, nil
 	}
 
@@ -173,7 +174,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	base := filepath.Base(dir)
 
 	var out []ticket.Attachment
-	var warnings []string
+	warnings := append([]string(nil), pagingWarnings...)
 	for i, r := range refs {
 		idx := i + 1
 
