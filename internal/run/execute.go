@@ -235,6 +235,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MCPAllow:  cfg.Permissions.MCP,
 		},
 		MCPConfig: cfg.MCPConfigPath(),
+		MCPStrict: cfg.WorkspaceOnlyMCP(),
 		Budget: provider.Budget{
 			MaxTurns:   cfg.Budget.MaxTurns,
 			MaxMinutes: cfg.Budget.MaxMinutes,
@@ -429,6 +430,11 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		// a schema retry runs in a fresh session whose counters start at
 		// zero, and assigning those would hand the run back a turn and
 		// cost budget it has already spent.
+		//
+		// The provider's running turn count is an estimate of the same
+		// unit the CLI reports and never runs ahead of it, and the
+		// provider reconciles its meter to the result line's num_turns,
+		// so taking the maximum lands on the provider's own total.
 		u := &p.state.Usage
 		u.Turns = max(u.Turns, ev.Turns)
 		u.InputTokens = max(u.InputTokens, ev.InputTok)
@@ -589,7 +595,9 @@ type triageFields struct {
 	Complaint      string `json:"complaint"`
 	Classification string `json:"classification"`
 	Ticket         struct {
-		Service string `json:"service"`
+		Service    string `json:"service"`
+		Customer   string `json:"customer"`
+		CustomerID string `json:"customerId"`
 	} `json:"ticket"`
 	RootCause struct {
 		Confidence string `json:"confidence"`
@@ -642,6 +650,7 @@ func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error)
 	filename := note.Filename(cfg.Notes.Filenames.Triage, key, slug)
 
 	meta := r.meta(p, f.Ticket.Service)
+	r.applyDocumentCustomer(p, &meta, f.Ticket.Customer, f.Ticket.CustomerID)
 	meta.Links.Triage = stem(filename)
 	meta.Links.RCA = stem(note.Filename(cfg.Notes.Filenames.RCA, key, slug))
 	meta.Links.Resolution = stem(note.Filename(cfg.Notes.Filenames.Resolution, key, slug))
@@ -939,6 +948,38 @@ func (r *Runner) meta(p *prepared, service string) note.Meta {
 		m.CustomerID = b.Helpdesk.CustomerID
 	}
 	return m
+}
+
+// applyDocumentCustomer lets the note say who the customer is. The
+// helpdesk's account fields are only where the ticket was filed: an
+// agent that has read the thread, the attachments and the logs routinely
+// resolves a different company, or the id the helpdesk never held, and the
+// frontmatter used to carry the bundle's answer regardless. The
+// document's value wins when it has one; the bundle's is the fallback.
+//
+// A disagreement is not silently resolved: the bundle's value goes into
+// the run's warnings, so state.json still says what the helpdesk claimed
+// and the two can be compared later.
+func (r *Runner) applyDocumentCustomer(p *prepared, m *note.Meta, customer, customerID string) {
+	for _, f := range []struct {
+		field   string
+		fromDoc string
+		into    *string // holds the bundle's value on the way in
+	}{
+		{"customer", strings.TrimSpace(customer), &m.Customer},
+		{"customer_id", strings.TrimSpace(customerID), &m.CustomerID},
+	} {
+		if f.fromDoc == "" {
+			continue
+		}
+		bundle := *f.into
+		if bundle != "" && bundle != f.fromDoc {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf(
+				"frontmatter %s: the note says %q, the helpdesk bundle says %q; the note's value was used",
+				f.field, f.fromDoc, bundle))
+		}
+		*f.into = f.fromDoc
+	}
 }
 
 func (r *Runner) renderer() note.Renderer {

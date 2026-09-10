@@ -33,7 +33,7 @@ export default function RunCard(props: {
       <span className="card-foot">
         <StatusBadge status={run.status} />
         <ElapsedTime startedAt={run.startedAt} updatedAt={run.updatedAt} live={live} />
-        <CostChip usage={run.usage} />
+        <CostChip usage={run.usage} live={live} />
       </span>
     </button>
   )

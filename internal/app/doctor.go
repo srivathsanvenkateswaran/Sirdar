@@ -173,10 +173,10 @@ func trackerProbe(ctx context.Context, client *plugin.Client, d plugin.Describe)
 
 // mcpCheck reports which MCP servers a session will be able to reach. A
 // workspace .mcp.json is the good case: the run sees those servers and no
-// others. Without one there is nothing to restrict the session to, so it
-// inherits every server the operator has configured for themselves —
-// including whatever write tools those carry — and that is worth saying
-// out loud rather than discovering in an events log.
+// others. With mcp.workspaceOnly set and no such file the session is
+// started against an empty config, so it has no MCP tools at all — safe,
+// but it silently costs the run every datasource the playbooks name, which
+// is worth saying here rather than leaving to an events log.
 func mcpCheck(cfg *config.Config) Check {
 	check := Check{Name: "mcp", OK: true}
 	path := filepath.Join(cfg.Root, ".mcp.json")
@@ -186,7 +186,7 @@ func mcpCheck(cfg *config.Config) Check {
 	case cfg.MCPConfigPath() != "":
 		check.Detail = path + " — the session sees these servers only"
 	default:
-		check.Detail = "warning: no " + path + ", so every user-level MCP server is visible to the agent"
+		check.Detail = "no workspace .mcp.json: the agent will have no MCP tools; add the servers the playbooks need to " + path
 	}
 	if len(cfg.Permissions.MCP) > 0 {
 		check.Detail += fmt.Sprintf("; permissions.mcp allows %d pattern(s)", len(cfg.Permissions.MCP))

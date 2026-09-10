@@ -33,7 +33,7 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if c.Provider != "claude" || c.Billing != "subscription" || c.Concurrency != 1 {
 		t.Fatalf("defaults not applied: %+v", c)
 	}
-	if c.Budget.MaxTurns != 60 || c.Budget.MaxMinutes != 25 || c.Budget.MaxUSD != 5 {
+	if c.Budget.MaxTurns != 120 || c.Budget.MaxMinutes != 25 || c.Budget.MaxUSD != 5 {
 		t.Fatalf("budget defaults: %+v", c.Budget)
 	}
 	if c.Notes.Filenames.RCA != "{key} RCA {slug}.md" {

@@ -30,13 +30,13 @@ rather than being silently ignored.
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
 | `notes.filenames.rca` | string | `"{key} RCA {slug}.md"` | Filename pattern for RCA notes |
 | `notes.filenames.resolution` | string | `"{key} RES {slug}.md"` | Filename pattern for resolution notes |
-| `budget.maxTurns` | int | `60` | Agent turns before a run is marked `over_budget` |
+| `budget.maxTurns` | int | `120` | Model round-trips before a run is marked `over_budget`; see Budgets below |
 | `budget.maxMinutes` | int | `25` | Wall-clock minutes before a run is cancelled and marked `over_budget` |
-| `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget` |
+| `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
-| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone, so the operator's global MCP servers are not loaded |
+| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
@@ -115,6 +115,35 @@ spends an agent session on it:
 A refused grant reports the reason the accounts server gave — `invalid_client`, `invalid_code`
 — and never any part of the credentials.
 
+## Budgets
+
+Three budgets end a run early, and they do not all see the same thing.
+
+**`budget.maxTurns` counts model round-trips.** One turn is one assistant message that calls a
+tool or gives the final answer — the same unit the Claude CLI reports as `num_turns` in its
+result line. Thinking blocks are part of the round-trip they precede, not turns of their own,
+and a response that calls three tools in parallel is three round-trips because the CLI counts
+it that way. Sirdar keeps a running count while the session streams and reconciles it to the
+CLI's `num_turns` when the result line arrives, so `state.json` ends the run holding the
+provider's own figure. A real triage of a busy ticket takes 40–60 turns; the default of 120
+leaves room for a hard one. (An earlier version counted every assistant *line*, which ran about
+1.5x ahead — 61 against the CLI's 41 — and cancelled a session mid-tool on a budget it had not
+spent.)
+
+**`budget.maxUsd` is an end-of-run check with Claude.** Claude Code reports cost only in its
+result line, so `state.json` shows `costUsd: 0` for the whole of a running session no matter
+how much it is spending, and progress views show `n/a` rather than a `$0.00` that would read
+like a free run. The cost budget therefore records an overspend after the fact; it cannot stop
+one in flight. `maxTurns` and `maxMinutes` are the budgets that bite while a run is going.
+Tokens are the exception: input and output counts do accumulate live, from each assistant
+message's usage, and the input count includes cache-creation and cache-read tokens.
+
+**`budget.maxMinutes` is wall-clock**, measured from the moment the session starts, and
+cancels the session when it expires.
+
+A budget that expires *after* the note has been written and filed does not throw the note away:
+the run completes and the overrun is recorded as a warning on it.
+
 ## `permissions.bash` glob semantics
 
 Each entry in `permissions.bash` is a glob pattern matched against one segment of the agent's
@@ -151,9 +180,20 @@ session can see at all; `permissions.mcp` decides which of their tools it may ca
 
 With `mcp.workspaceOnly: true` (the default) and a `.mcp.json` in the workspace root, Sirdar
 starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mcp.json`, so
-the session loads those servers and no others. With no such file it passes neither flag, the
-session inherits every MCP server the operator has configured for themselves, and
-`sirdar doctor` prints a warning saying so.
+the session loads those servers and no others.
+
+With `mcp.workspaceOnly: true` and no such file, Sirdar passes
+`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` — strict against an empty config — so
+the session has **no MCP tools at all**. That is the safe reading of the setting, and it is a
+change from earlier versions, which passed neither flag and let the session inherit every
+user-level server the operator had (one dogfood run saw 102 tools from six of them, including
+`deploy_to_vercel` and `buy_domain`, while `workspaceOnly` was true). A playbook that tells the
+agent to query Grafana or a database will now get nothing back until those servers are written
+into `<workspace>/.mcp.json`; `sirdar doctor`'s `mcp` row says which of the three states the
+workspace is in.
+
+With `mcp.workspaceOnly: false`, neither flag is passed and the session inherits the
+operator's own MCP servers. `permissions.mcp` still decides which of their tools it may call.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
 `mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless a word

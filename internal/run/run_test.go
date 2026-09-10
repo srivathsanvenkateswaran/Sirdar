@@ -446,6 +446,72 @@ func runDir(t *testing.T, cfg *config.Config, out Outcome) string {
 
 // --- tests ------------------------------------------------------------
 
+// TestFrontmatterPrefersTheDocumentsCustomer is N2 of the second dogfood:
+// the frontmatter took customer and customer_id from the helpdesk bundle
+// alone, so a run whose agent resolved the real company from logs filed
+// the note under the wrong one with an empty id. The document's values
+// win; the bundle's disagreement is kept in the run's warnings.
+func TestFrontmatterPrefersTheDocumentsCustomer(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"مؤسسة شيك الراقي","customerId":"5598"`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's customer fields did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer: "مؤسسة شيك الراقي"`) || !strings.Contains(note, `customer_id: "5598"`) {
+		t.Fatalf("frontmatter kept the bundle's customer:\n%s", note)
+	}
+
+	// The helpdesk's own answer is not thrown away: it is in state.json,
+	// so the two can be compared after the fact.
+	warnings := strings.Join(out.State.Warnings, "\n")
+	for _, want := range []string{"frontmatter customer", "شركة", "frontmatter customer_id", "4561"} {
+		if !strings.Contains(warnings, want) {
+			t.Fatalf("warning %q missing from %q", want, warnings)
+		}
+	}
+}
+
+// A document that leaves the customer blank keeps the bundle's, which is
+// the only value either note ever had before.
+func TestFrontmatterFallsBackToTheBundlesCustomer(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"","customerId":""`, 1)
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer: "شركة"`) || !strings.Contains(note, `customer_id: "4561"`) {
+		t.Fatalf("frontmatter lost the bundle's customer:\n%s", note)
+	}
+	if w := strings.Join(outs[0].State.Warnings, "\n"); strings.Contains(w, "frontmatter") {
+		t.Fatalf("nothing disagreed, so nothing should be warned about: %q", w)
+	}
+}
+
 func TestTriageHappyPath(t *testing.T) {
 	cfg := newWorkspace(t)
 	events := []provider.Event{
@@ -1608,6 +1674,30 @@ func TestSessionSpecCarriesMCPPolicy(t *testing.T) {
 	}
 	if d := spec.Policy.Decide("mcp__grafana__create_incident", nil); d.Allow {
 		t.Error("a write-shaped MCP tool reached the session as allowed")
+	}
+	if !spec.MCPStrict {
+		t.Error("mcp.workspaceOnly must reach the provider as MCPStrict")
+	}
+}
+
+// TestSessionSpecIsStrictWithoutAWorkspaceMCPConfig is N3 of the second
+// dogfood: with mcp.workspaceOnly on and no .mcp.json the run passed the
+// provider nothing at all, and the session quietly loaded every user-level
+// server. Strict travels with the setting, not with the file.
+func TestSessionSpecIsStrictWithoutAWorkspaceMCPConfig(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	spec := p.spec(0)
+	if spec.MCPConfig != "" {
+		t.Errorf("there is no workspace .mcp.json to name, got %q", spec.MCPConfig)
+	}
+	if !spec.MCPStrict {
+		t.Error("the session must still be restricted, or workspaceOnly means nothing here")
 	}
 }
 

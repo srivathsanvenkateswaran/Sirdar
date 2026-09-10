@@ -163,7 +163,11 @@ func applyDefaults(c *Config) {
 		c.Concurrency = 1
 	}
 	if c.Budget.MaxTurns == 0 {
-		c.Budget.MaxTurns = 60
+		// A turn is one model round-trip — one assistant message that
+		// calls a tool or answers — which is the unit the Claude CLI
+		// reports as num_turns. Real triages of a busy ticket run to
+		// 40-60 of them, so the default leaves room for a hard one.
+		c.Budget.MaxTurns = 120
 	}
 	if c.Budget.MaxMinutes == 0 {
 		c.Budget.MaxMinutes = 25

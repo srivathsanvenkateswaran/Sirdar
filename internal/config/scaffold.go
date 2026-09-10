@@ -36,8 +36,14 @@ notes:
     rca: "{key} RCA {slug}.md"
     resolution: "{key} RES {slug}.md"
 budget:
-  maxTurns: 60
+  # A turn is one model round-trip: one assistant message that calls a tool
+  # or gives the final answer. It is the same unit the Claude CLI reports as
+  # num_turns, and a triage of a busy ticket takes 40-60 of them.
+  maxTurns: 120
   maxMinutes: 25
+  # Claude reports cost only when the session ends, so this is an end-of-run
+  # check: it records an overspend, it cannot stop one. maxTurns and
+  # maxMinutes are the budgets that bite while a run is going.
   maxUsd: 5
 concurrency: 1
 attachments:
@@ -61,6 +67,7 @@ permissions:
     - "wc *"
     - "file *"
     - "which *"
+    - "echo *"
   # Globs matched against an MCP tool's full name. While this list is empty,
   # a tool is allowed unless a word of its name is a write verb (create,
   # update, delete, send, deploy, buy, save, log, …). A name that also
@@ -74,7 +81,10 @@ permissions:
 mcp:
   # Start the session against <workspace>/.mcp.json and nothing else, so the
   # operator's own global connectors are not loaded into a triage run. With
-  # no such file the session sees every user-level server; doctor says so.
+  # no such file the session is started against an empty MCP config and has
+  # no MCP tools at all, so a playbook that names one gets nothing; write the
+  # servers the playbooks need into <workspace>/.mcp.json. doctor says which
+  # of the three you are in.
   workspaceOnly: true
 playbooks: .sirdar/playbooks
 `

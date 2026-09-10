@@ -82,6 +82,10 @@ func TestTrackerProbeSkipsANonTracker(t *testing.T) {
 	}
 }
 
+// Without a workspace .mcp.json the session is started against an empty
+// MCP config, so the row's job is to say the agent has no MCP tools and
+// where to put the servers the playbooks need — not, as it once did, that
+// every user-level server is exposed.
 func TestMCPCheckWarnsWithoutAWorkspaceConfig(t *testing.T) {
 	root := newWorkspace(t)
 	cfg, err := config.Load(root)
@@ -93,8 +97,10 @@ func TestMCPCheckWarnsWithoutAWorkspaceConfig(t *testing.T) {
 	if !check.OK {
 		t.Errorf("mcp check should warn, not fail: %+v", check)
 	}
-	if !strings.Contains(check.Detail, "warning: no ") || !strings.Contains(check.Detail, ".mcp.json") {
-		t.Errorf("no exposure warning in %q", check.Detail)
+	if !strings.Contains(check.Detail, "no workspace .mcp.json") ||
+		!strings.Contains(check.Detail, "no MCP tools") ||
+		!strings.Contains(check.Detail, filepath.Join(root, ".mcp.json")) {
+		t.Errorf("the row must say the agent has no MCP tools and where to add them: %q", check.Detail)
 	}
 	if !strings.Contains(check.Detail, "permissions.mcp is empty") {
 		t.Errorf("no permissions note in %q", check.Detail)

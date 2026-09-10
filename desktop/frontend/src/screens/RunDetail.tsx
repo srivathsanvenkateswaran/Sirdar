@@ -8,7 +8,8 @@ import {
   type JSX,
 } from 'react'
 import type { NoteKind, RunDetail as RunDetailData, Transport } from '../api/types'
-import { askedQuestion, elapsed, formatCost, type IndexedEvent } from '../lib/events'
+import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
+import { costOrUnknown } from '../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
@@ -260,7 +261,9 @@ export default function RunDetail(props: {
             {detail.provider} {detail.model}
           </span>
           <span className="run-stat">{elapsed(detail, now)}</span>
-          <span className="run-stat">{formatCost(detail.usage?.costUsd)}</span>
+          <span className="run-stat">
+            {costOrUnknown(detail.usage?.costUsd, detail.status === 'running' || detail.status === 'preparing')}
+          </span>
           <span className="run-stat">
             {detail.usage?.turns ?? 0} {detail.usage?.turns === 1 ? 'turn' : 'turns'}
           </span>

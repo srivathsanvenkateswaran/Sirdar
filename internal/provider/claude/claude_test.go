@@ -590,15 +590,43 @@ func TestMCPArgs(t *testing.T) {
 	if !contains(got, "--strict-mcp-config") {
 		t.Fatalf("missing --strict-mcp-config: %v", got)
 	}
-	for i, a := range got {
-		if a == "--mcp-config" {
-			if i+1 >= len(got) || got[i+1] != "/w/.mcp.json" {
-				t.Fatalf("--mcp-config does not name the file: %v", got)
-			}
-			return
+	if v := flagValue(got, "--mcp-config"); v != "/w/.mcp.json" {
+		t.Fatalf("--mcp-config does not name the file: %v", got)
+	}
+}
+
+// TestMCPArgsWithoutAWorkspaceConfig is N2 of the second dogfood:
+// mcp.workspaceOnly was true, the workspace had no .mcp.json, so neither
+// flag was passed and the session loaded 102 tools from six user-level
+// servers — deploy_to_vercel and buy_domain among them. Strict with an
+// empty inline config is what the setting was always claiming.
+func TestMCPArgsWithoutAWorkspaceConfig(t *testing.T) {
+	spec := provider.SessionSpec{OutputSchema: []byte(`{}`), MCPStrict: true}
+	got := args(spec)
+	if !contains(got, "--strict-mcp-config") {
+		t.Fatalf("missing --strict-mcp-config: %v", got)
+	}
+	if v := flagValue(got, "--mcp-config"); v != `{"mcpServers":{}}` {
+		t.Fatalf("--mcp-config should be an empty inline config, got %q in %v", v, got)
+	}
+
+	// A named file still wins: strict is about what else may load, not
+	// about ignoring the workspace's own servers.
+	spec.MCPConfig = "/w/.mcp.json"
+	if v := flagValue(args(spec), "--mcp-config"); v != "/w/.mcp.json" {
+		t.Fatalf("the workspace config must still be used, got %q", v)
+	}
+}
+
+// flagValue returns the argument after name, or "" when name is absent or
+// last.
+func flagValue(argv []string, name string) string {
+	for i, a := range argv {
+		if a == name && i+1 < len(argv) {
+			return argv[i+1]
 		}
 	}
-	t.Fatalf("missing --mcp-config: %v", got)
+	return ""
 }
 
 // TestAuthDetail is D9: `claude auth status` answers with JSON in 2.1, and
@@ -659,6 +687,84 @@ func TestUsageAccumulatesAndCountsCachedTokens(t *testing.T) {
 	}
 	if usage[2].InputTok != 16054 || usage[2].CostUSD != 0.5 {
 		t.Fatalf("the result line's totals must count cached input: %+v", usage[2])
+	}
+}
+
+// TestTurnsCountModelRoundTrips is N1 of the second dogfood: the running
+// counter incremented once per assistant line, and Claude Code emits one
+// line per content block — thinking, then tool_use, then text, and one
+// line per tool when a response calls several. The count ran about 1.5x
+// ahead of the CLI's own num_turns (61 against 41) and cancelled a session
+// mid-tool, losing $2.50 and producing no note.
+//
+// The fixture is the shape a real run has: thinking lines around tool
+// calls, two parallel tool calls sharing one message id, and a closing
+// text answer. Four round-trips, which is what the result line reports.
+func TestTurnsCountModelRoundTrips(t *testing.T) {
+	usageOf := func(out int) string {
+		return fmt.Sprintf(`"usage":{"input_tokens":10,"cache_creation_input_tokens":0,"cache_read_input_tokens":100,"output_tokens":%d}`, out)
+	}
+	assistant := func(id, block string, out int) string {
+		return `{"type":"assistant","message":{"id":"` + id + `","role":"assistant","content":[` + block + `],` + usageOf(out) + `}}`
+	}
+	thinking := `{"type":"thinking","thinking":"weighing it up"}`
+	toolUse := func(id, name string) string {
+		return `{"type":"tool_use","id":"` + id + `","name":"` + name + `","input":{"command":"git log"}}`
+	}
+	toolResult := func(id string) string {
+		return `{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"` + id + `","content":"ok"}]}}`
+	}
+
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"t1"}`,
+		assistant("m1", thinking, 5),
+		assistant("m1", toolUse("tu1", "Read"), 20),
+		toolResult("tu1"),
+		assistant("m2", thinking, 5),
+		// One response, two tools: two lines, two round-trips, exactly
+		// as the CLI counts them.
+		assistant("m2", toolUse("tu2", "Read"), 20),
+		assistant("m2", toolUse("tu3", "Bash"), 20),
+		toolResult("tu2"),
+		toolResult("tu3"),
+		assistant("m3", thinking, 5),
+		assistant("m3", `{"type":"text","text":"here is the answer"}`, 30),
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":4,"session_id":"t1","result":"done","total_cost_usd":1.25,"usage":{"input_tokens":40,"cache_creation_input_tokens":0,"cache_read_input_tokens":400,"output_tokens":105}}`,
+	)
+
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var turns []int
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvUsage {
+			turns = append(turns, ev.Turns)
+		}
+	}
+	res, err := s.Wait()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Seven assistant lines carried usage; the old counter would have
+	// reported 7 by the end of them.
+	if len(turns) != 8 {
+		t.Fatalf("want a usage event per assistant line plus the result, got %d: %v", len(turns), turns)
+	}
+	if got := turns[len(turns)-2]; got != 4 {
+		t.Fatalf("running turns before the result = %d, want the CLI's 4: %v", got, turns)
+	}
+	// A thinking-only line is part of the round-trip after it, so it
+	// leaves the count alone.
+	if turns[0] != 0 {
+		t.Fatalf("a thinking line advanced the count: %v", turns)
+	}
+	if res.Usage.Turns != 4 {
+		t.Fatalf("the result's num_turns is the authoritative total, got %d", res.Usage.Turns)
+	}
+	if res.Usage.CostUSD != 1.25 {
+		t.Fatalf("result cost %v", res.Usage.CostUSD)
 	}
 }
 

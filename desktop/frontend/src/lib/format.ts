@@ -70,6 +70,18 @@ export function usd(value: number | undefined): string {
   return `$${n.toFixed(2)}`
 }
 
+/**
+ * Cost for a run that may still be going. Claude Code reports cost only in
+ * its result line, so a live session's spend is unknown rather than zero, and
+ * `$0.00` on a run burning a dollar a minute reads as a free one. Once the
+ * run has ended the number is the provider's own and is shown as it is.
+ */
+export function costOrUnknown(value: number | undefined, live: boolean): string {
+  const known = typeof value === 'number' && Number.isFinite(value) && value > 0
+  if (live && !known) return 'n/a'
+  return usd(value)
+}
+
 /** Compact token counts: `840`, `12.4k`, `1.2M`. */
 export function tokens(value: number | undefined): string {
   const n = typeof value === 'number' && Number.isFinite(value) ? Math.max(0, value) : 0

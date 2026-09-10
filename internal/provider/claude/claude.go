@@ -32,6 +32,10 @@ const (
 	// disallowedTools is belt-and-braces with PermissionPolicy: the CLI
 	// refuses these before it ever asks Sirdar.
 	disallowedTools = "Write,Edit,MultiEdit,NotebookEdit"
+	// emptyMCPConfig is an inline MCP configuration that declares no
+	// servers. Passed with --strict-mcp-config it is how a session is
+	// started with no MCP tools at all.
+	emptyMCPConfig = `{"mcpServers":{}}`
 )
 
 // Provider starts Claude Code sessions.
@@ -69,8 +73,18 @@ func args(spec provider.SessionSpec) []string {
 	// With a config named, the session loads those MCP servers and only
 	// those: --strict-mcp-config is what keeps the operator's own global
 	// connectors — deploy, buy, send — out of a read-only triage run.
-	if spec.MCPConfig != "" {
+	//
+	// MCPStrict with no config named means the workspace asked for that
+	// restriction and has no .mcp.json to be restricted to. The flag pair
+	// is still passed, against an empty inline config, because the
+	// alternative — passing neither — silently loads every user-level
+	// server, which is how a dogfood run ended up with 102 MCP tools
+	// including deploy_to_vercel while mcp.workspaceOnly was true.
+	switch {
+	case spec.MCPConfig != "":
 		out = append(out, "--strict-mcp-config", "--mcp-config", spec.MCPConfig)
+	case spec.MCPStrict:
+		out = append(out, "--strict-mcp-config", "--mcp-config", emptyMCPConfig)
 	}
 	return append(out, "--disallowedTools", disallowedTools)
 }
@@ -533,6 +547,11 @@ func (s *session) writeControlResponse(requestID string, response map[string]any
 // numbers on it: a result line reporting a free, zero-turn session was
 // read as a per-turn event and had its totals added to the running count
 // instead of replacing them.
+//
+// The running turn count moves only on a line that is a model round-trip
+// (see isRoundTrip), so it tracks the CLI's own num_turns instead of
+// running ahead of it; when the result line arrives its num_turns is the
+// authoritative total and the meter is reconciled to it.
 func (s *session) measure(ev *provider.Event) {
 	if ev.Kind != provider.EvUsage {
 		return
@@ -546,7 +565,9 @@ func (s *session) measure(ev *provider.Event) {
 		s.meter.costUSD = ev.CostUSD
 		return
 	}
-	s.meter.turns++
+	if isRoundTrip(ev.Raw) {
+		s.meter.turns++
+	}
 	s.meter.inTok += ev.InputTok
 	s.meter.outTok += ev.OutputTok
 	ev.Turns = s.meter.turns
