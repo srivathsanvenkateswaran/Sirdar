@@ -15,16 +15,33 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process) or `zohodesk` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
-| `sources.*.baseUrl` | string | none (required for `zohodesk`) | Zoho Desk API base URL |
+| `sources.*.baseUrl` | string | none (required for `zohodesk`); `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, or the Rally subscription host |
 | `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME` or `keychain:SERVICE`) |
 | `sources.*.auth` | object | none (one of `token`/`auth` required for `zohodesk`) | OAuth refresh-token grant; see Zoho Desk OAuth below |
 | `sources.*.auth.clientId` | string | none (required with `auth`) | Credential reference to the Self Client's client id |
 | `sources.*.auth.clientSecret` | string | none (required with `auth`) | Credential reference to the Self Client's client secret |
 | `sources.*.auth.refreshToken` | string | none (required with `auth`) | Credential reference to the Self Client's refresh token |
 | `sources.*.auth.accountsUrl` | string | derived from `baseUrl` | Zoho accounts server that issues access tokens |
+| `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
+| `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
+| `sources.tracker.email` | string | none (required for `jira` Cloud) | Credential reference to the Jira Cloud account email used with `apiToken` |
+| `sources.tracker.apiToken` | string | none (required for `jira` Cloud) | Credential reference to a Jira Cloud API token |
+| `sources.tracker.pat` | string | none (required for `jira` Data Center or `azdo`) | Credential reference to a Jira Data Center PAT or an Azure DevOps PAT |
+| `sources.tracker.projectKey` | string | unset | `jira` only: scopes `List` to one project |
+| `sources.tracker.epicLinkField` | string | unset (resolved by name via `/rest/api/2/field`) | `jira` only: Data Center epic-link custom field id or name |
+| `sources.tracker.apiKey` | string | none (required for `linear`, `rally`) | Credential reference to a Linear personal API key or a Rally API key |
+| `sources.tracker.teamKey` | string | unset | `linear` only: default team key used to scope `List` |
+| `sources.tracker.orgUrl` | string | none (required for `azdo`) | `https://dev.azure.com/{org}` (Services) or a Server collection URL |
+| `sources.tracker.project` | string | none (required for `azdo`); unset for `rally` | Azure DevOps team project, or a Rally project `_ref`/ObjectID |
+| `sources.tracker.helpdeskLinkDomain` | string | unset | `azdo` only: host suffix marking a `Hyperlink` relation as the helpdesk ticket |
+| `sources.tracker.helpdeskField` | string | unset | `azdo`/`rally` only: custom field name/id carrying the helpdesk ticket reference |
+| `sources.tracker.workspace` | string | none (required for `rally`) | Rally workspace `_ref` or ObjectID, scopes all queries |
+| `sources.tracker.types` | list of string | `[Defect, HierarchicalRequirement]` | `rally` only: artifact types `Get` falls back through and `List` sweeps |
+| `sources.tracker.helpdeskRef.pattern` | string | unset | Planned: regex matched against the ticket description to find a helpdesk link/id when the adapter itself reports none |
+| `sources.tracker.helpdeskRef.idPattern` | string | unset | Planned: regex applied to the `pattern` match to extract the helpdesk ticket id |
 | `notes.dir` | string | `.sirdar/notes` | Where rendered notes are copied; expands `~` and relative paths against the workspace root |
 | `notes.templates` | string | `""` (embedded defaults) | Directory holding `triage.md.tmpl`, `rca.md.tmpl`, `resolution.md.tmpl` overrides |
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |

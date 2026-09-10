@@ -1,11 +1,257 @@
-# Writing a source adapter
+# Adapters
 
 Sirdar reads tickets from a tracker (e.g. Jira) and a helpdesk (e.g. Zoho
-Desk) through *adapters*: separate processes that speak a small
-line-delimited JSON protocol over stdin/stdout. Sirdar spawns the adapter,
-sends it requests, and reads its responses; the adapter can be written in
-any language and can hold whatever credentials or vendor-specific logic it
-needs, none of which touches Sirdar's process or its Go types.
+Desk) through *adapters*. Four trackers ship built into the Sirdar binary —
+Jira, Linear, Azure DevOps, and Rally — configured directly in
+`.sirdar/config.yaml`, no separate process required. Anything else talks to
+Sirdar through the external adapter protocol described below: a small
+line-delimited JSON protocol over stdin/stdout, which also stays available
+for the four built-in trackers if you'd rather run your own integration
+against them.
+
+## Built-in tracker adapters
+
+Each built-in adapter implements the `tracker` role; some also implement
+`helpdesk` where the tracker itself carries (or can be made to carry) the
+customer conversation. Credentials are never literal values in config: use
+`env:NAME` or `keychain:SERVICE` references, same as `sources.helpdesk`'s
+`zohodesk` adapter. See `docs/config.md` for the full key reference.
+
+### Jira
+
+```yaml
+sources:
+  tracker:
+    adapter: jira
+    baseUrl: https://acme.atlassian.net
+    deployment: cloud          # cloud | datacenter | auto (default: probes /rest/api/2/serverInfo)
+    email: env:JIRA_EMAIL
+    apiToken: env:JIRA_API_TOKEN
+    projectKey: OMNI           # optional, scopes List
+    epicLinkField: ""          # optional, Data Center only
+```
+
+Data Center uses a personal access token instead of email/token:
+
+```yaml
+sources:
+  tracker:
+    adapter: jira
+    baseUrl: https://jira.internal.acme.com
+    deployment: datacenter
+    pat: env:JIRA_PAT
+```
+
+**Getting credentials.** Cloud: create an API token at id.atlassian.com
+(Settings → Security → API tokens) and use it with your account email over
+Basic auth. Data Center (8.14+): create a Personal Access Token under your
+profile's Personal Access Tokens page; it inherits your own permissions, so
+create it under a read-only or restricted account if you don't want the
+adapter to see everything you can. No specific scope picker exists for
+either kind — the token/PAT carries whatever the issuing account can already
+read, so use an account whose permissions match what the adapter should see.
+
+**Get / List.** `Get` fetches `/rest/api/2/issue/{key}` (v2 on both Cloud and
+Data Center, so descriptions come back as wiki markup rather than Atlassian
+Document Format JSON). `List` builds a JQL query from the filter
+(`assignee`, `status`, `parent`) and runs it against `/rest/api/2/search`.
+
+**Thread and attachments.** An issue is its own helpdesk ticket when its
+project's `projectTypeKey` is `service_desk` (Jira Service Management):
+`HelpdeskRef` is set to the same issue key, and the helpdesk view reads
+`/rest/servicedeskapi/request/{key}` and its comments, mapping a comment's
+`jsdPublic` flag to `customer` (public) vs `agent` (internal) role.
+Attachments are downloaded from each attachment's `content` URL with the
+same auth header; inline wiki-markup references (`!screenshot.png!`,
+`[^report.pdf]`) in a comment body are matched back to attachment IDs so a
+comment's `AttachmentIDs` reflects what it actually references.
+
+**Known limitations.**
+- On Jira Data Center, a Personal Access Token can be rejected on the
+  attachment-download URL specifically (it's served by the web layer, not
+  the REST layer) and the request redirected to an SSO login page instead of
+  the file. The adapter refuses to follow a redirect off the Jira host and
+  refuses to write an HTML response to disk; a failure like this is reported
+  as a warning on the download, not a fatal error, but it means some
+  attachments may be missing from the bundle on an SSO-fronted DC instance.
+- `HelpdeskRef` is only ever the issue's own key (JSM case). No fallback to
+  a custom field or description text is implemented in the adapter itself —
+  see "helpdeskRef fallback" below.
+
+### Linear
+
+```yaml
+sources:
+  tracker:
+    adapter: linear
+    apiKey: env:LINEAR_API_KEY
+    teamKey: ENG                # optional, scopes List to one team
+```
+
+**Getting credentials.** Create a personal API key under Linear's Settings →
+Security & access → Personal API keys. It's unscoped — it carries whatever
+the creating account can already see in the workspace — so use an account
+with read access only to what the adapter should reach. Sent as the raw key
+value in the `Authorization` header (no `Bearer` prefix).
+
+**Get / List.** `Get` resolves an identifier like `ENG-123` directly through
+Linear's GraphQL `issue(id:)` field. `List` runs the `issues(filter:)`
+connection, translating `assignee`, `status`, and `parent` into an
+`IssueFilter`, paginating with `first`/`after` beyond a single page.
+
+**Thread and attachments.** Linear has no first-class customer/agent
+distinction on a comment — every comment is authored by a workspace member
+— so the helpdesk view's thread is just the issue's own comments, all
+`agent` role, useful when a team runs support conversations directly inside
+Linear rather than through a separate helpdesk. Attachments downloads cover
+files Linear itself hosts: entries in `issue.attachments` pointing at
+`uploads.linear.app`, plus images embedded in the description and in each
+comment's Markdown body. Attachments pointing at another system (a GitHub
+PR, a Zendesk ticket) are links, not files, and are not downloaded.
+
+**Known limitations.**
+- Linear's API does not expose the full body of a linked external
+  helpdesk conversation (Zendesk, Intercom, Front). When an issue was
+  created from a support conversation via Linear's Customer Requests
+  feature, the adapter can only recover a link to that conversation (see
+  `HelpdeskRef` below) — the transcript itself has to come from that
+  helpdesk's own adapter, not from Linear.
+- `HelpdeskRef` is derived from `issue.attachments`: the first entry whose
+  `sourceType` is `zendesk`, `intercom`, or `front`, or — when Linear hasn't
+  classified the attachment — the first attachment URL whose host looks like
+  a known helpdesk (Zendesk, Intercom, Front, Zoho Desk, Freshdesk, Help
+  Scout, Helpshift). If none match, `HelpdeskRef` is left empty.
+
+### Azure DevOps
+
+```yaml
+sources:
+  tracker:
+    adapter: azdo
+    orgUrl: https://dev.azure.com/acme   # or a Server collection URL
+    project: OmniPlatform
+    pat: env:AZDO_PAT
+    helpdeskLinkDomain: acme.service-now.com   # optional
+    helpdeskField: ""                          # optional, custom field fallback
+```
+
+**Getting credentials.** Create a Personal Access Token under User settings
+→ Personal access tokens, with the **Work Items (Read)** scope
+(`vso.work`) — this is the minimum needed for `Get`, `List`, comments, and
+attachment reads. Sent as HTTP Basic auth with an empty username:
+`Authorization: Basic base64(":" + PAT)`.
+
+**Get / List.** `Get` fetches
+`/_apis/wit/workitems/{id}?$expand=all&api-version=7.1` — fields, relations,
+and links in one call. `List` runs a two-step WIQL query: a `POST
+.../wiql` returning matching work item ids, then `POST
+.../workitemsbatch` in chunks of up to 200 to pull field values (Azure
+DevOps' own per-call ceiling), with `errorPolicy: Omit` so one inaccessible
+id doesn't fail the whole batch. A Bug's description prefers `System.State`
+Description text but falls back to `Microsoft.VSTS.TCM.ReproSteps` (Bugs use
+ReproSteps in place of Description on their default form).
+
+**Thread and attachments.** Comments come from
+`/_apis/wit/workItems/{id}/comments?$expand=renderedText`, following
+`continuationToken` across pages; Azure DevOps has no customer/agent
+distinction on a comment, so every message maps to `agent` role. Attachments
+are `AttachedFile` relations on the work item, downloaded from
+`/_apis/wit/attachments/{guid}?fileName=...&download=true` with the same PAT.
+
+**Known limitations.**
+- Azure DevOps' API does not associate an attachment with the specific
+  comment it was added alongside — attachments are work-item-level, not
+  comment-level. The adapter exposes all of a work item's attachments as a
+  flat list; it cannot tell you which comment (if any) a given attachment
+  belongs to.
+- `HelpdeskRef` is derived two ways, in order: a `Hyperlink` relation whose
+  host ends in `helpdeskLinkDomain` (when configured), else the value of the
+  `helpdeskField` custom field (when configured). Leave both unset and
+  `HelpdeskRef` stays empty.
+
+### Rally
+
+```yaml
+sources:
+  tracker:
+    adapter: rally
+    baseUrl: https://rally1.rallydev.com   # default; override for a regional subscription
+    apiKey: env:RALLY_API_KEY
+    workspace: /workspace/12345678901
+    project: /project/12345678902          # optional
+    types: [Defect, HierarchicalRequirement]
+    helpdeskField: c_ZendeskTicketID        # optional
+```
+
+**Getting credentials.** Create an API key under My Settings → Access → API
+Keys, with grant type **ALM WSAPI Read-only** — Rally's own read-only grant,
+the right fit for a harness that never writes back. Sent as the
+`ZSESSIONID` header on every WSAPI request. API keys aren't supported on
+`sandbox.rallydev.com` or on-premises Rally; those still need basic auth,
+which this adapter does not implement.
+
+**Get / List.** Rally has no single "artifact" endpoint — Defect, Story
+(`HierarchicalRequirement`), Task, and the rest are separate WSAPI
+collections. `Get` tries FormattedID-prefix heuristics first (`DE` →
+Defect, `US`/`S` → HierarchicalRequirement, and so on), then falls through
+the configured `types` list in order, querying each collection by
+`FormattedID` until one hits. `List` sweeps the same configured `types` and
+merges results, honoring `workspace`/`project` scoping and Rally's 200-row
+page cap.
+
+**Thread and attachments.** The thread comes from the artifact's
+`Discussion` (`ConversationPost` objects); Rally does not distinguish
+customer from agent authorship, so every message maps to `agent` role, same
+as Azure DevOps. Attachments are fetched via the artifact's `Attachments`
+collection, following each entry's `Content` reference to an
+`AttachmentContent` object and base64-decoding its `Content` field.
+
+**Known limitations.**
+- Trying multiple artifact types in order to resolve one FormattedID means
+  `Get` on a key Rally doesn't have costs one WSAPI query per candidate type
+  until one matches (or all fail) — keep `types` short and ordered by how
+  common each type is in your workspace to minimize this.
+- `HelpdeskRef` comes only from the configured `helpdeskField` custom field
+  (typically `c_`-prefixed). Rally has no native helpdesk linkage — every
+  Zendesk/ServiceNow connector on the market writes to a custom field or a
+  free-text location of its own choosing, so there's no field name the
+  adapter can assume without configuration.
+- Rally throttles a user to 12 concurrent requests; sustained excess slows
+  responses rather than returning a clean error, so a large `List` sweep
+  across several `types` can feel slow under load rather than failing
+  outright.
+
+## helpdeskRef fallback
+
+**Planned; lands with the wiring change.** None of the four adapters above
+guess a helpdesk reference from free text — each only reports `HelpdeskRef`
+when the tracker's own data model gives an unambiguous answer (Jira JSM,
+Linear's Customer Request attachments, an Azure DevOps Hyperlink/custom
+field, a Rally custom field). For a workspace where the link only exists as
+a pasted URL or ticket number in the description, a generic regex fallback
+is planned at the wiring layer, configured per workspace:
+
+```yaml
+sources:
+  tracker:
+    helpdeskRef:
+      pattern: 'https://acme\.zohodesk\.com/agent/.../(\d+)'
+      idPattern: '\d+'
+```
+
+`pattern` matches against the ticket description; `idPattern`, applied to
+the match, extracts the id passed to `helpdesk.get`/`helpdesk.threads`. This
+runs after an adapter's own native `HelpdeskRef`, only filling in when the
+adapter left it empty — it replaces what used to be a hardcoded Zoho-URL
+rule with something any workspace can point at its own helpdesk.
+
+## External adapter protocol
+
+Adapters here are separate processes that speak a small line-delimited JSON
+protocol over stdin/stdout. Sirdar spawns the adapter, sends it requests,
+and reads its responses; the adapter can be written in any language and can
+hold whatever credentials or vendor-specific logic it needs, none of which
+touches Sirdar's process or its Go types.
 
 This keeps vendor integrations, and any credentials they need, out of
 Sirdar's core and out of this repository. An adapter for a proprietary

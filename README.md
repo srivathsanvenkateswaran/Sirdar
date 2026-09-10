@@ -122,10 +122,16 @@ See `docs/research/03-licensing-byo-subscription.md` for the licensing research 
 
 ## Adapters
 
-Sirdar talks to trackers and helpdesks through adapters: small processes speaking a
-line-delimited JSON protocol over stdin/stdout, so a vendor integration and its credentials
-never touch Sirdar's core or this repository. Zoho Desk ships built in; anything else, such as
-Jira or Janus or an internal tracker, is a separate executable named in config. See
+Sirdar talks to trackers and helpdesks through adapters. Several ship built into the binary:
+
+| Kind | Supported |
+|---|---|
+| Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally |
+| Helpdesks | Zoho Desk (more planned, see `docs/research/adapters/helpdesks.md`) |
+
+Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
+executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so
+a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
 ## Configuration
