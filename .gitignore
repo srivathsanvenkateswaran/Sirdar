@@ -1,5 +1,4 @@
 node_modules/
-dist/
 .env
 .env.*
 *.log
@@ -9,3 +8,16 @@ dist/
 /sirdar
 /dist/
 .sirdar/runs/
+
+# Frontend build output, staged into the Go binary by `make ui`.
+# The placeholders are committed so `go build ./...` works on a fresh checkout.
+desktop/frontend/dist/*
+!desktop/frontend/dist/.gitkeep
+internal/httpapi/ui/dist/*
+!internal/httpapi/ui/dist/.gitkeep
+
+# Wails artefacts
+desktop/build/bin/
+desktop/frontend/wailsjs/
+desktop/frontend/package.json.md5
+*.tsbuildinfo
