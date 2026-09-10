@@ -30,6 +30,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
@@ -215,19 +216,41 @@ func writeAttachments(fixtures []attachmentFixture, dir string) ([]ticket.Attach
 			fmt.Fprintf(os.Stderr, "file-adapter: skipping attachment %s: decode: %v\n", af.ID, err)
 			continue
 		}
-		name := fmt.Sprintf("%d-%s", i+1, af.Name)
+		safe := safeName(af.Name)
+		name := fmt.Sprintf("%d-%s", i+1, safe)
 		if err := os.WriteFile(filepath.Join(dir, name), data, 0o644); err != nil {
 			fmt.Fprintf(os.Stderr, "file-adapter: skipping attachment %s: write: %v\n", af.ID, err)
 			continue
 		}
 		atts = append(atts, ticket.Attachment{
 			ID:   af.ID,
-			Name: af.Name,
+			Name: safe,
 			MIME: af.MIME,
 			Path: bundleRel + "/" + name,
 		})
 	}
 	return atts, nil
+}
+
+// safeName reduces an attachment's name to a single filename component, so
+// joining it onto the destination directory cannot land the file somewhere
+// else: a fixture naming an attachment "../../.ssh/authorized_keys" would
+// otherwise be written wherever that resolves to. Directory parts, path
+// separators and control characters are dropped; a name left with nothing
+// usable becomes "attachment".
+func safeName(name string) string {
+	var b strings.Builder
+	for _, r := range filepath.Base(filepath.FromSlash(name)) {
+		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
+			continue
+		}
+		b.WriteRune(r)
+	}
+	clean := strings.TrimSpace(b.String())
+	if clean == "" || clean == "." || clean == ".." {
+		return "attachment"
+	}
+	return clean
 }
 
 func result(id int, v any) plugin.Response {

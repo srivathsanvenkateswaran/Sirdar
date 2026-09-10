@@ -192,6 +192,22 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	return out, nil
 }
 
+var (
+	_ source.Helpdesk = (*Client)(nil)
+	_ source.Warner   = (*Client)(nil)
+)
+
+// Warnings implements source.Warner: it returns the per-attachment
+// failures the most recent Attachments call recorded, so the caller can put
+// them in the prompt and the run state instead of silently serving a short
+// list of attachments.
+func (c *Client) Warnings() []string {
+	if len(c.LastWarnings) == 0 {
+		return nil
+	}
+	return append([]string(nil), c.LastWarnings...)
+}
+
 // downloadAttachment fetches url with the client's auth headers and writes
 // its body to destPath, returning the response's Content-Type.
 func (c *Client) downloadAttachment(ctx context.Context, url, destPath string) (string, error) {

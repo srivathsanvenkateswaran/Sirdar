@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -83,9 +84,27 @@ func runsDir(root string) string {
 	return filepath.Join(root, ".sirdar", "runs")
 }
 
+// ValidKey reports whether key is safe to use as a path segment. A ticket
+// key arrives from the command line and is joined into the runs directory
+// and into note filenames, so one carrying a separator or ".." would put a
+// run's files somewhere nobody is looking for them.
+func ValidKey(key string) bool {
+	if key == "" || key == "." || key == ".." {
+		return false
+	}
+	if strings.Contains(key, "..") || strings.ContainsAny(key, `/\`) ||
+		strings.ContainsRune(key, os.PathSeparator) {
+		return false
+	}
+	return true
+}
+
 // Create makes a new run directory (including its bundle and
 // bundle/attachments subdirectories) for key and returns the Run.
 func Create(root, key string, now time.Time) (Run, error) {
+	if !ValidKey(key) {
+		return Run{}, fmt.Errorf("store: invalid run key %q", key)
+	}
 	runID := NewRunID(now)
 	dir := filepath.Join(runsDir(root), key, runID)
 	if err := os.MkdirAll(filepath.Join(dir, "bundle", "attachments"), 0o755); err != nil {

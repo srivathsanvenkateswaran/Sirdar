@@ -78,6 +78,11 @@ type Result struct {
 	}
 	Handle  string
 	ExitErr error // non-nil if the process failed
+
+	// StderrTail is the last lines the agent process wrote to stderr. It
+	// is the only account of why a session died badly, so it is recorded
+	// whether or not the session failed.
+	StderrTail []string
 }
 
 // Session represents one running (or completed) agent process.

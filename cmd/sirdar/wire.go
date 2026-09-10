@@ -50,8 +50,19 @@ func loadWorkspace(stderr io.Writer) (*config.Config, bool) {
 // releases the signal handler. The runner reacts to the cancellation by
 // stopping its sessions and marking the runs blocked, so an interrupted
 // batch can be picked up again with `sirdar resume`.
+//
+// The handler is released as soon as the first signal lands, so a second
+// Ctrl-C reaches the default handler and kills the process. Otherwise an
+// operator who wants out of a shutdown that is taking too long — an agent
+// ignoring SIGINT, an adapter inside its five-second grace — would have
+// nothing left to press.
 func interruptible() (context.Context, func()) {
-	return signal.NotifyContext(context.Background(), os.Interrupt)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	go func() {
+		<-ctx.Done()
+		stop()
+	}()
+	return ctx, stop
 }
 
 // buildDeps assembles everything a Runner needs: the ticket sources named

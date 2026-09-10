@@ -6,7 +6,10 @@ import (
 	"os"
 )
 
-const version = "0.1.0-dev"
+// version is stamped at release time with -ldflags "-X main.version=...",
+// so it must stay a var: a const is folded into the binary before the
+// linker could ever replace it.
+var version = "0.1.0-dev"
 
 type command func(args []string, stdout, stderr io.Writer) int
 

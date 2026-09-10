@@ -2,10 +2,15 @@ package claude
 
 import (
 	"encoding/json"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
+
+// statusAllowed is the rate_limit_info.status the CLI reports while the
+// window still has room; every other status refuses work.
+const statusAllowed = "allowed"
 
 // streamLine is the union of every stdout line shape Claude Code emits in
 // stream-json mode. Shapes are taken from docs/research/06-wire-formats.md.
@@ -77,10 +82,20 @@ func decode(raw []byte) []provider.Event {
 	case "user":
 		return userEvents(l, raw)
 	case "rate_limit_event":
+		// The CLI reports the window's state on every turn, and status
+		// "allowed" means nothing is being limited. Only a status that
+		// refuses work is a rate limit; treating the routine line as one
+		// parks the whole pool until resetsAt, hours away.
+		info := l.RateLimitInfo
+		if info.Status == statusAllowed {
+			ev := newEvent(provider.EvSystem, raw)
+			ev.Text = strings.TrimSpace("rate limit " + info.Status + " " + info.RateLimitType)
+			return []provider.Event{ev}
+		}
 		ev := newEvent(provider.EvRateLimited, raw)
-		ev.Text = l.RateLimitInfo.RateLimitType
-		if l.RateLimitInfo.ResetsAt > 0 {
-			ev.ResetsAt = time.Unix(l.RateLimitInfo.ResetsAt, 0)
+		ev.Text = info.RateLimitType
+		if info.ResetsAt > 0 {
+			ev.ResetsAt = time.Unix(info.ResetsAt, 0)
 		}
 		return []provider.Event{ev}
 	case "result":

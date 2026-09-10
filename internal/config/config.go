@@ -14,13 +14,15 @@ import (
 type Provider string
 
 // SourceConfig configures one ticket data source (tracker or helpdesk).
+// It takes no inline catch-all map: one would swallow every unknown key
+// under sources.*, which is exactly what KnownFields(true) is there to
+// catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string            `yaml:"adapter"` // "exec" | "zohodesk"
-	Command string            `yaml:"command,omitempty"`
-	OrgID   string            `yaml:"orgId,omitempty"`
-	BaseURL string            `yaml:"baseUrl,omitempty"`
-	Token   string            `yaml:"token,omitempty"` // credential ref
-	Extra   map[string]string `yaml:",inline"`
+	Adapter string `yaml:"adapter"` // "exec" | "zohodesk"
+	Command string `yaml:"command,omitempty"`
+	OrgID   string `yaml:"orgId,omitempty"`
+	BaseURL string `yaml:"baseUrl,omitempty"`
+	Token   string `yaml:"token,omitempty"` // credential ref
 }
 
 // Config is a fully loaded, defaulted, and validated workspace configuration.

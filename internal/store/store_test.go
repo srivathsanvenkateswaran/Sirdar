@@ -10,6 +10,23 @@ import (
 	"time"
 )
 
+// TestCreateRejectsUnsafeKey covers a ticket key that would take the run
+// directory out of the workspace, e.g. `sirdar triage ../x`.
+func TestCreateRejectsUnsafeKey(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 10, 11, 30, 0, 0, time.UTC)
+	for _, key := range []string{"../escape", "a/b", "..", "", ".", "a/../../b"} {
+		if _, err := Create(root, key, now); err == nil {
+			t.Errorf("Create(%q) succeeded, want an error", key)
+		} else if !strings.Contains(err.Error(), "invalid run key") {
+			t.Errorf("Create(%q) error = %v", key, err)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(root, ".sirdar")); !os.IsNotExist(err) {
+		t.Fatalf("a rejected key still created directories: %v", err)
+	}
+}
+
 func TestNewRunIDSortableAndUnique(t *testing.T) {
 	t0 := time.Date(2026, 9, 10, 11, 30, 0, 0, time.UTC)
 	id1 := NewRunID(t0)

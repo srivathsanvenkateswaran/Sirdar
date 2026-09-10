@@ -57,3 +57,14 @@ type Helpdesk interface {
 // Closer is implemented by sources that hold a resource (e.g. a subprocess)
 // which must be released when the source is no longer needed.
 type Closer interface{ Close() error }
+
+// Warner is implemented by sources that record non-fatal problems while
+// serving a call — an attachment that would not download, say, when the
+// rest of them did. The caller reads the warnings after the call it made
+// and puts them in front of the agent and the operator, because a partial
+// result that looks complete is how evidence goes missing unnoticed.
+type Warner interface {
+	// Warnings returns the problems recorded by the most recent call, or
+	// nothing when there were none.
+	Warnings() []string
+}

@@ -112,16 +112,48 @@ func (d Deps) stderr() io.Writer {
 }
 
 // childEnv is the environment the agent process runs with: the caller's
-// base environment plus the billing mode, which tells a provider adapter
-// whether to leave an API key in place.
+// base environment, minus every variable a configured source names as a
+// credential, plus the billing mode, which tells a provider adapter whether
+// to leave an API key in place.
+//
+// The agent has no business holding the helpdesk's token: Sirdar reads the
+// tickets itself and hands the agent the bundle. Leaving the variable in
+// place would put a live support-desk credential inside a session that runs
+// shell commands.
 func (d Deps) childEnv() []string {
 	base := d.Env
 	if base == nil {
 		base = os.Environ()
 	}
-	out := make([]string, len(base), len(base)+1)
-	copy(out, base)
+	secret := credentialEnvNames(d.Config)
+	out := make([]string, 0, len(base)+1)
+	for _, entry := range base {
+		if name, _, ok := strings.Cut(entry, "="); ok && secret[name] {
+			continue
+		}
+		out = append(out, entry)
+	}
 	return append(out, "SIRDAR_BILLING="+d.Config.Billing)
+}
+
+// credentialEnvNames collects the variable names behind every "env:"
+// credential reference in the workspace configuration.
+func credentialEnvNames(cfg *config.Config) map[string]bool {
+	names := make(map[string]bool)
+	if cfg == nil {
+		return names
+	}
+	for _, s := range []*config.SourceConfig{cfg.Sources.Tracker, cfg.Sources.Helpdesk} {
+		if s == nil {
+			continue
+		}
+		for _, ref := range []string{s.Token} {
+			if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
+				names[name] = true
+			}
+		}
+	}
+	return names
 }
 
 func (d Deps) providerName() string {

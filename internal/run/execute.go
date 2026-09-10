@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
@@ -29,6 +30,13 @@ type execution struct {
 	schemaError string
 	malformed   int
 
+	// retrySession is set when the schema retry could not be sent on the
+	// running session and a fresh one was started to carry it; consume
+	// switches to it and keeps going. live is the session being read from
+	// right now, which the wall-clock timer cancels from its own goroutine.
+	retrySession provider.Session
+	live         liveSession
+
 	question    string
 	rateLimited bool
 	resetsAt    time.Time
@@ -36,6 +44,30 @@ type execution struct {
 	overBudget  string
 	interrupted bool
 	failure     string
+}
+
+// liveSession holds the session the run is currently reading from. The
+// wall-clock timer fires on its own goroutine and has to stop whichever
+// session is live, which is not necessarily the one the run started with:
+// a schema retry can replace it partway through.
+type liveSession struct {
+	mu   sync.Mutex
+	sess provider.Session
+}
+
+func (l *liveSession) set(s provider.Session) {
+	l.mu.Lock()
+	l.sess = s
+	l.mu.Unlock()
+}
+
+func (l *liveSession) cancel() {
+	l.mu.Lock()
+	s := l.sess
+	l.mu.Unlock()
+	if s != nil {
+		s.Cancel()
+	}
 }
 
 // execute starts one agent session for a prepared run, streams its events
@@ -66,36 +98,49 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	log, err := p.run.OpenEventLog()
 	if err != nil {
 		sess.Cancel()
-		_, _ = sess.Wait() // reap the child before giving up on the run
+		res, _ := sess.Wait() // reap the child before giving up on the run
+		p.state.StderrTail = res.StderrTail
 		return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
 	}
 	defer log.Close()
+
+	ex := &execution{}
+	ex.live.set(sess)
 
 	var timedOut atomic.Bool
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
 		timer := time.AfterFunc(time.Duration(mins)*time.Minute, func() {
 			timedOut.Store(true)
-			sess.Cancel()
+			ex.live.cancel()
 		})
 		defer timer.Stop()
 	}
 
-	ex := &execution{}
-	r.consume(ctx, p, sess, log, pl, ex)
+	sessions := r.consume(ctx, p, sess, log, pl, ex)
 
-	res, _ := sess.Wait()
-	if res.Handle != "" {
-		p.state.Handle = res.Handle
-	} else if h := sess.Handle(); h != "" {
-		p.state.Handle = h
-	}
-	if res.Usage.Turns > p.state.Usage.Turns {
-		p.state.Usage.Turns = res.Usage.Turns
-		p.state.Usage.InputTokens = res.Usage.InputTok
-		p.state.Usage.OutputTokens = res.Usage.OutputTok
-	}
-	if res.Usage.CostUSD > p.state.Usage.CostUSD {
-		p.state.Usage.CostUSD = res.Usage.CostUSD
+	// Every session started for this run is reaped, and the last one's
+	// result is the run's: a schema retry that had to open a fresh session
+	// carries the answer.
+	var res provider.Result
+	for _, s := range sessions {
+		got, _ := s.Wait()
+		res = got
+		if got.Handle != "" {
+			p.state.Handle = got.Handle
+		} else if h := s.Handle(); h != "" {
+			p.state.Handle = h
+		}
+		if got.Usage.Turns > p.state.Usage.Turns {
+			p.state.Usage.Turns = got.Usage.Turns
+			p.state.Usage.InputTokens = got.Usage.InputTok
+			p.state.Usage.OutputTokens = got.Usage.OutputTok
+		}
+		if got.Usage.CostUSD > p.state.Usage.CostUSD {
+			p.state.Usage.CostUSD = got.Usage.CostUSD
+		}
+		if len(got.StderrTail) > 0 {
+			p.state.StderrTail = got.StderrTail
+		}
 	}
 
 	if len(ex.final) == 0 && ex.rawFinal != "" {
@@ -217,9 +262,27 @@ func noteKind(kind store.Kind) note.Kind {
 	return note.Triage
 }
 
-// consume reads the session's events until it ends, handling an interrupt
-// by cancelling the session and letting the stream drain.
-func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
+// consume reads the run's events until they end, and returns every session
+// it read from, in the order they were started. There is normally one; a
+// schema retry the running session could not take adds the fresh session
+// that carried it, whose events are consumed the same way and into the same
+// execution state.
+func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) []provider.Session {
+	sessions := []provider.Session{sess}
+	for {
+		r.consumeSession(ctx, p, sess, log, pl, ex)
+		if ex.retrySession == nil {
+			return sessions
+		}
+		sess, ex.retrySession = ex.retrySession, nil
+		ex.live.set(sess)
+		sessions = append(sessions, sess)
+	}
+}
+
+// consumeSession reads one session's events until it ends, handling an
+// interrupt by cancelling the session and letting the stream drain.
+func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution) {
 	done := ctx.Done()
 	events := sess.Events()
 	for events != nil {
@@ -390,10 +453,38 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	msg := "Your previous answer did not match the schema: " +
 		strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", "; ") +
 		". Reply again with the corrected JSON object only."
-	if sendErr := sess.Send(ctx, msg); sendErr != nil {
-		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v", sendErr)
-		sess.Cancel()
+	sendErr := sess.Send(ctx, msg)
+	if sendErr == nil {
+		return
 	}
+
+	// `claude -p` exits after its result line, and a Codex session ends its
+	// event stream on the completed turn, so by the time the note fails
+	// validation there is often no session left to answer on. Carry the
+	// retry into a fresh session against the same provider handle instead
+	// of throwing the run away over it.
+	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
+	if startErr != nil {
+		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
+		sess.Cancel()
+		return
+	}
+	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
+	ex.retrySession = next
+}
+
+// resumeForRetry starts a new session that continues the finished one,
+// opening with the retry message. It reports an error when the provider has
+// no handle to resume from, because a fresh session without one would start
+// the whole triage again on a budget meant for a single answer.
+func (r *Runner) resumeForRetry(ctx context.Context, p *prepared, sess provider.Session, msg string) (provider.Session, error) {
+	handle := sess.Handle()
+	if handle == "" {
+		return nil, fmt.Errorf("the session reported no handle to resume")
+	}
+	spec := r.sessionSpec(p, handle)
+	spec.Prompt = msg
+	return r.Provider.Start(ctx, spec)
 }
 
 // firstProblem summarises a validation error in one line: its header plus

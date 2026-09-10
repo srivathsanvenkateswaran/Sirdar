@@ -24,19 +24,38 @@ func sample() Bundle {
 func TestThreadMarkdownGolden(t *testing.T) {
 	got := ThreadMarkdown(sample().Thread, sample().Attachments)
 	want, _ := os.ReadFile("testdata/thread.golden.md")
-	if os.Getenv("UPDATE_GOLDEN") != "" { os.WriteFile("testdata/thread.golden.md", []byte(got), 0o644); return }
-	if got != string(want) { t.Fatalf("golden mismatch:\n%s", got) }
+	if os.Getenv("UPDATE_GOLDEN") != "" {
+		os.WriteFile("testdata/thread.golden.md", []byte(got), 0o644)
+		return
+	}
+	if got != string(want) {
+		t.Fatalf("golden mismatch:\n%s", got)
+	}
 }
 
 func TestWriteBundle(t *testing.T) {
 	dir := t.TempDir()
-	if err := WriteBundle(dir, sample()); err != nil { t.Fatal(err) }
+	if err := WriteBundle(dir, sample()); err != nil {
+		t.Fatal(err)
+	}
 	raw, err := os.ReadFile(filepath.Join(dir, "ticket.json"))
-	if err != nil { t.Fatal(err) }
+	if err != nil {
+		t.Fatal(err)
+	}
 	var back Bundle
-	if err := json.Unmarshal(raw, &back); err != nil { t.Fatal(err) }
-	if back.Tracker.Key != "OMNI-1" || back.Helpdesk.CustomerID != "4561" { t.Fatalf("%+v", back) }
-	if _, err := os.Stat(filepath.Join(dir, "thread.md")); err != nil { t.Fatal(err) }
-	if sample().Key() != "OMNI-1" { t.Fatal("key") }
-	if (Bundle{Helpdesk: &HelpdeskTicket{ID: "9"}}).Key() != "9" { t.Fatal("helpdesk key fallback") }
+	if err := json.Unmarshal(raw, &back); err != nil {
+		t.Fatal(err)
+	}
+	if back.Tracker.Key != "OMNI-1" || back.Helpdesk.CustomerID != "4561" {
+		t.Fatalf("%+v", back)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "thread.md")); err != nil {
+		t.Fatal(err)
+	}
+	if sample().Key() != "OMNI-1" {
+		t.Fatal("key")
+	}
+	if (Bundle{Helpdesk: &HelpdeskTicket{ID: "9"}}).Key() != "9" {
+		t.Fatal("helpdesk key fallback")
+	}
 }

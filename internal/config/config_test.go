@@ -51,6 +51,19 @@ func TestLoadRejectsUnknownKey(t *testing.T) {
 	}
 }
 
+// TestLoadRejectsUnknownSourceKey covers a typo inside a source block. An
+// inline catch-all map used to swallow these, so a misspelled setting was
+// simply never applied and nothing said so.
+func TestLoadRejectsUnknownSourceKey(t *testing.T) {
+	_, err := Load(writeCfg(t, minimal+"    baseurl: https://typo.example\n"))
+	if err == nil {
+		t.Fatal("want an error for an unknown key under sources.helpdesk")
+	}
+	if !strings.Contains(err.Error(), "baseurl") {
+		t.Fatalf("the error must name the offending key, got %v", err)
+	}
+}
+
 func TestValidateExecNeedsCommand(t *testing.T) {
 	_, err := Load(writeCfg(t, minimal+"  tracker:\n    adapter: exec\n"))
 	if err == nil || !strings.Contains(err.Error(), "sources.tracker.command") {
