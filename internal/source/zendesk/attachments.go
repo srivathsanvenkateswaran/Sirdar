@@ -86,15 +86,11 @@ func inlineName(src string, n int) string {
 // those failures are not also recorded as warnings, since the caller
 // already has all of them in the error.
 func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
-	// Discard anything an earlier call for this ticket left behind: every
-	// path out of here, including the early ones, must leave no stale
-	// warning for the next caller to mistake for its own.
-	c.takeWarnings(id)
-
-	comments, _, err := c.fetchComments(ctx, id)
+	comments, _, fetchWarnings, err := c.fetchComments(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	c.addWarnings(id, fetchWarnings)
 
 	refs := collectAttachmentRefs(comments)
 	if len(refs) == 0 {
@@ -140,14 +136,17 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		}
 		return out, errors.Join(errs...)
 	}
-	c.putWarnings(id, warnings)
+	c.addWarnings(id, warnings)
 	return out, nil
 }
 
 // downloadAttachment fetches rawURL and writes its body to destPath,
 // returning the response's Content-Type. It sends this client's
 // Authorization header only when sendAuth is true, per the trust decision
-// hostTrust already made for rawURL's host.
+// hostTrust already made for rawURL's host. Any redirect Zendesk sends back
+// is re-validated against hostTrust before it is followed, so a compromised
+// or unexpected redirect target is refused outright rather than silently
+// fetched (with or without credentials).
 func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth bool, destPath string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
@@ -157,7 +156,7 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth
 		req.Header.Set("Authorization", c.authHeader)
 	}
 
-	resp, err := c.hc.Do(req)
+	resp, err := c.attachmentHTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}
@@ -182,6 +181,26 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth
 		return "", fmt.Errorf("attachment exceeds %d bytes", maxAttachmentBytes)
 	}
 	return resp.Header.Get("Content-Type"), nil
+}
+
+// attachmentHTTPClient is c.hc with its redirect policy replaced: each
+// redirect target is checked with hostTrust exactly like a starting URL
+// would be, and a redirect to an untrusted host is refused before the
+// client ever issues that request. A shallow copy is enough since
+// http.Client's fields are either safe to share (Transport) or being
+// replaced outright (CheckRedirect).
+func (c *Client) attachmentHTTPClient() *http.Client {
+	cl := *c.hc
+	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return errors.New("zendesk: stopped after 10 redirects")
+		}
+		if trusted, _ := c.hostTrust(req.URL.Hostname()); !trusted {
+			return fmt.Errorf("zendesk: redirect to untrusted host: %s", req.URL.Hostname())
+		}
+		return nil
+	}
+	return &cl
 }
 
 // sanitizeName turns an attachment name (or id) from the API response into

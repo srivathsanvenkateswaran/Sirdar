@@ -163,29 +163,48 @@ func (c *Client) requesterID(ctx context.Context, id string) (int64, error) {
 // fetchComments returns every comment on ticket id, in the order the
 // Zendesk API returns them (creation order), following next_page until
 // exhausted, along with every side-loaded user keyed by id.
-func (c *Client) fetchComments(ctx context.Context, id string) ([]zendeskComment, map[int64]zendeskUser, error) {
+//
+// Every request this makes carries the live Authorization header, so
+// next_page is not followed blindly: it must parse as https and name this
+// client's own configured host, or pagination stops where it is (returning
+// everything collected so far, no error) and a warning names the untrusted
+// host. Pagination also stops, with a warning, after maxCommentPages pages,
+// so a misbehaving or malicious feed cannot loop this call forever.
+func (c *Client) fetchComments(ctx context.Context, id string) ([]zendeskComment, map[int64]zendeskUser, []string, error) {
 	q := url.Values{}
 	q.Set("include", "users")
 	next := c.baseURL + "/api/v2/tickets/" + id + "/comments.json?" + q.Encode()
 
 	var comments []zendeskComment
+	var warnings []string
 	usersByID := map[int64]zendeskUser{}
-	for next != "" {
+
+	for pages := 0; next != ""; pages++ {
 		var page commentsPage
 		if err := c.getJSONAbsolute(ctx, next, &page); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		comments = append(comments, page.Comments...)
 		for _, u := range page.Users {
 			usersByID[u.ID] = u
 		}
-		if page.NextPage != nil {
-			next = *page.NextPage
-		} else {
-			next = ""
+
+		next = ""
+		if page.NextPage == nil || *page.NextPage == "" {
+			continue
 		}
+		if pages+1 >= maxCommentPages {
+			warnings = append(warnings, fmt.Sprintf("zendesk: comments pagination stopped after %d pages", maxCommentPages))
+			continue
+		}
+		trustedURL, host, trusted := c.trustedNextPage(*page.NextPage)
+		if !trusted {
+			warnings = append(warnings, fmt.Sprintf("zendesk: next_page host not trusted: %s", host))
+			continue
+		}
+		next = trustedURL
 	}
-	return comments, usersByID, nil
+	return comments, usersByID, warnings, nil
 }
 
 // Threads fetches the full, ordered comment thread for a ticket. Role is
@@ -198,10 +217,11 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	if err != nil {
 		return nil, err
 	}
-	comments, usersByID, err := c.fetchComments(ctx, id)
+	comments, usersByID, warnings, err := c.fetchComments(ctx, id)
 	if err != nil {
 		return nil, err
 	}
+	c.addWarnings(id, warnings)
 
 	msgs := make(ticket.Thread, 0, len(comments))
 	for _, cm := range comments {

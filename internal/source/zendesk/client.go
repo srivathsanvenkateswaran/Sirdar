@@ -30,6 +30,11 @@ const maxBodyBytes = 8 << 20 // 8 MiB
 // and letting the run schedule a retry of its own.
 const maxRetryAfter = 30 * time.Second
 
+// maxCommentPages caps how many pages of a ticket's comment feed this
+// client will follow. A feed still paginating past this many pages stops
+// early with a warning rather than looping without bound.
+const maxCommentPages = 100
+
 // Config configures a Client. Exactly one of (Email and APIToken) or
 // OAuthToken must be set: basic auth (`{email}/token` as username, the API
 // token as password) or a Bearer OAuth token, never both.
@@ -135,6 +140,28 @@ func (c *Client) hostTrust(host string) (trusted, sendAuth bool) {
 		return true, false
 	}
 	return false, false
+}
+
+// trustedNextPage validates a comments page's next_page link before it is
+// followed: unlike an attachment's content_url (which can legitimately
+// live on Zendesk's own CDN hosts), a paginated API response must keep
+// coming from this account's own configured host over https, since the
+// live Authorization header goes on every one of these requests. host is
+// always returned (even when untrusted) so the caller can name it in a
+// warning without re-parsing raw.
+func (c *Client) trustedNextPage(raw string) (urlStr, host string, trusted bool) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", "", false
+	}
+	host = u.Hostname()
+	if !strings.EqualFold(u.Scheme, "https") {
+		return "", host, false
+	}
+	if !strings.EqualFold(host, c.host) {
+		return "", host, false
+	}
+	return raw, host, true
 }
 
 // doOnce issues one authenticated GET against urlStr.
@@ -266,18 +293,23 @@ func statusError(method, urlStr string, status int, body []byte) *source.Error {
 	}
 }
 
-// putWarnings records the failures one Attachments call skipped over.
-func (c *Client) putWarnings(id string, warnings []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
+// addWarnings appends the problems one call for ticket id recorded (a
+// comment feed that stopped paginating early, a skipped attachment) to
+// whatever is already pending for that id. A ticket's bundle is assembled
+// from several calls — Get, Threads, Attachments — and the caller
+// (internal/run/prepare.go) reads WarningsFor once at the end of all of
+// them, so a warning from one call must survive the next call rather than
+// being overwritten by it.
+func (c *Client) addWarnings(id string, warnings []string) {
 	if len(warnings) == 0 {
-		delete(c.warnings, id)
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if c.warnings == nil {
 		c.warnings = map[string][]string{}
 	}
-	c.warnings[id] = warnings
+	c.warnings[id] = append(c.warnings[id], warnings...)
 }
 
 // takeWarnings returns and removes the warnings recorded for ticket id.
@@ -292,10 +324,12 @@ func (c *Client) takeWarnings(id string) []string {
 	return append([]string(nil), w...)
 }
 
-// WarningsFor implements source.Warner: it returns and consumes the
-// per-attachment failures the Attachments call for ticket id recorded (an
-// untrusted host, a failed download), so the caller can surface them
-// instead of silently returning a partial attachment list.
+// WarningsFor implements source.Warner: it returns and consumes every
+// problem recorded across the calls made for ticket id so far — an
+// untrusted attachment host, a failed download, a comment feed whose
+// next_page pointed somewhere untrusted or ran past the pagination cap —
+// so the caller can surface them instead of silently returning a partial
+// result.
 func (c *Client) WarningsFor(id string) []string {
 	return c.takeWarnings(id)
 }

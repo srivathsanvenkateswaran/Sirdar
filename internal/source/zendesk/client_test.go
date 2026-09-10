@@ -242,7 +242,10 @@ func TestGet_MapsFields(t *testing.T) {
 
 // newThreadsServer serves ticket.json and a two-page comments feed, with
 // every "PLACEHOLDER" in the fixtures replaced by the server's own URL so
-// attachment content_url and next_page values resolve back to it.
+// attachment content_url and next_page values resolve back to it. It uses
+// TLS, not plain HTTP, because trustedNextPage requires next_page to be
+// https — a real multi-page fetch has to satisfy that to prove pagination
+// still works end to end under the stricter check.
 func newThreadsServer(t *testing.T) (*httptest.Server, *Client) {
 	t.Helper()
 	ticketJSON := mustReadFile(t, "testdata/ticket.json")
@@ -276,7 +279,7 @@ func newThreadsServer(t *testing.T) (*httptest.Server, *Client) {
 		w.Write([]byte("JPGDATA"))
 	})
 
-	srv := httptest.NewServer(mux)
+	srv := httptest.NewTLSServer(mux)
 	t.Cleanup(srv.Close)
 	srvURL = srv.URL
 
@@ -365,6 +368,109 @@ func TestThreads_RequesterLookupPropagatesNotFound(t *testing.T) {
 	}
 	_, err = c.Threads(context.Background(), "555")
 	assertCode(t, err, source.NotFound)
+}
+
+// TestThreads_NextPageUntrustedHostStopsPaginationWithWarning proves
+// fetchComments does not blindly follow next_page — which would carry this
+// client's live Authorization header wherever it points — to a second
+// server the account's own Zendesk instance never named. Page 1's
+// next_page here points at a second, independent httptest listener; since
+// it is not the client's configured host over https, it must be refused:
+// zero requests reach that second listener, a warning names the problem,
+// and Threads still returns page 1's comments rather than failing outright.
+func TestThreads_NextPageUntrustedHostStopsPaginationWithWarning(t *testing.T) {
+	var secondListenerHits int
+	secondMux := http.NewServeMux()
+	secondMux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		secondListenerHits++
+		w.Write([]byte(`{"comments":[],"next_page":null}`))
+	})
+	secondSrv := httptest.NewServer(secondMux)
+	t.Cleanup(secondSrv.Close)
+
+	ticketJSON := mustReadFile(t, "testdata/ticket.json")
+	mainMux := http.NewServeMux()
+	mainMux.HandleFunc("/api/v2/tickets/555.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(ticketJSON)
+	})
+	mainMux.HandleFunc("/api/v2/tickets/555/comments.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"comments": [{
+				"id": 1, "author_id": 100, "public": true,
+				"plain_body": "page one", "created_at": "2026-09-10T07:00:00Z"
+			}],
+			"users": [{"id": 100, "name": "John Doe", "role": "end-user"}],
+			"next_page": %q
+		}`, secondSrv.URL+"/api/v2/tickets/555/comments.json?page=2")
+	})
+	mainSrv := httptest.NewServer(mainMux)
+	t.Cleanup(mainSrv.Close)
+
+	c, err := New(Config{Subdomain: "acme", BaseURL: mainSrv.URL, Email: testEmail, APIToken: testAPIToken}, mainSrv.Client())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	got, err := c.Threads(context.Background(), "555")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(got) != 1 || got[0].Text != "page one" {
+		t.Fatalf("Threads = %+v, want only page 1's comment", got)
+	}
+	if secondListenerHits != 0 {
+		t.Errorf("second listener hits = %d, want 0", secondListenerHits)
+	}
+
+	warns := c.WarningsFor("555")
+	if len(warns) != 1 || !strings.Contains(warns[0], "zendesk: next_page host not trusted:") {
+		t.Fatalf("WarningsFor(555) = %v, want a single next_page-not-trusted warning", warns)
+	}
+}
+
+// TestThreads_PaginationCappedAtMaxPages proves fetchComments cannot be
+// looped forever by a feed whose next_page keeps validly pointing back at
+// the same trusted host: it stops after maxCommentPages requests, with a
+// warning, rather than following next_page without bound.
+func TestThreads_PaginationCappedAtMaxPages(t *testing.T) {
+	ticketJSON := mustReadFile(t, "testdata/ticket.json")
+	var srvURL string
+	var requests int
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/tickets/555.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(ticketJSON)
+	})
+	mux.HandleFunc("/api/v2/tickets/555/comments.json", func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		fmt.Fprintf(w, `{
+			"comments": [{"id": %d, "author_id": 999, "public": true, "plain_body": "c", "created_at": "2026-09-10T07:00:00Z"}],
+			"users": [],
+			"next_page": %q
+		}`, requests, srvURL+"/api/v2/tickets/555/comments.json?page=next")
+	})
+	srv := httptest.NewTLSServer(mux)
+	t.Cleanup(srv.Close)
+	srvURL = srv.URL
+
+	c, err := New(Config{Subdomain: "acme", BaseURL: srv.URL, Email: testEmail, APIToken: testAPIToken}, srv.Client())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	got, err := c.Threads(context.Background(), "555")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(got) != maxCommentPages {
+		t.Fatalf("len(Threads) = %d, want %d (capped)", len(got), maxCommentPages)
+	}
+	if requests != maxCommentPages {
+		t.Errorf("requests = %d, want %d", requests, maxCommentPages)
+	}
+	warns := c.WarningsFor("555")
+	if len(warns) != 1 || !strings.Contains(warns[0], "pagination stopped after") {
+		t.Fatalf("WarningsFor(555) = %v, want a pagination-cap warning", warns)
+	}
 }
 
 // --- Attachments ---
@@ -586,6 +692,55 @@ func TestAttachments_AllFail_ReturnsJoinedErrorNoWarnings(t *testing.T) {
 	}
 	if warns := c.WarningsFor("555"); len(warns) != 0 {
 		t.Errorf("WarningsFor(555) = %v, want none (failures are in the returned error, not warnings)", warns)
+	}
+}
+
+// TestAttachments_RedirectToUntrustedHostRefused proves a download does not
+// blindly follow a redirect: the attachment's content_url is on the
+// account's own trusted host, which then 302s to an untrusted host. The
+// redirect target must be refused before it is ever fetched, so the
+// attachment fails (rather than being silently retrieved from wherever the
+// redirect pointed).
+func TestAttachments_RedirectToUntrustedHostRefused(t *testing.T) {
+	ticketJSON := mustReadFile(t, "testdata/ticket.json")
+	var srvURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/tickets/555.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(ticketJSON)
+	})
+	mux.HandleFunc("/api/v2/tickets/555/comments.json", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, `{
+			"comments": [{
+				"id": 1, "author_id": 100, "public": true,
+				"plain_body": "hi", "created_at": "2026-09-10T07:00:00Z",
+				"attachments": [{"id": 11, "file_name": "a.png", "content_url": %q}]
+			}],
+			"users": [{"id": 100, "name": "John Doe", "role": "end-user"}],
+			"next_page": null
+		}`, srvURL+"/redirect/a.png")
+	})
+	mux.HandleFunc("/redirect/a.png", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "http://evil.example.com/final.png", http.StatusFound)
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	srvURL = srv.URL
+
+	c, err := New(Config{Subdomain: "acme", BaseURL: srv.URL, Email: testEmail, APIToken: testAPIToken}, srv.Client())
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	dir := t.TempDir()
+	got, err := c.Attachments(context.Background(), "555", dir)
+	if err == nil {
+		t.Fatal("Attachments() error = nil, want a failure: the only attachment's redirect target is untrusted")
+	}
+	if len(got) != 0 {
+		t.Errorf("Attachments = %+v, want none", got)
+	}
+	if !strings.Contains(err.Error(), "untrusted host") {
+		t.Errorf("error = %v, want it to say the redirect was refused for an untrusted host", err)
 	}
 }
 
