@@ -64,7 +64,13 @@ type Outcome struct {
 }
 
 // Runner executes runs against one workspace.
-type Runner struct{ Deps }
+type Runner struct {
+	Deps
+
+	// onPause, when set, is called every time a rate-limit pause is
+	// recorded, so a test can synchronise on it. Production leaves it nil.
+	onPause func(time.Time)
+}
 
 // ExitCode reports the process exit status for a set of outcomes: 1 when
 // any run failed or ran over budget, else 0. A blocked run is resumable,
@@ -76,6 +82,19 @@ func ExitCode(outs []Outcome) int {
 		}
 	}
 	return 0
+}
+
+const skippedReason = "skipped: interrupted before this run started"
+
+// skipped is the outcome of a key the interrupt reached before any work
+// was done for it. Nothing was written, so there is no run to resume; the
+// digest reports it under the reasons block alongside the blocked runs.
+func skipped(key string) Outcome {
+	return Outcome{
+		Key:    key,
+		State:  store.State{Key: key, Kind: store.KindTriage, Status: store.StatusBlocked, Reason: skippedReason},
+		Digest: note.DigestRow{Key: key, State: string(store.StatusBlocked), Reason: skippedReason},
+	}
 }
 
 func (d Deps) now() time.Time {
@@ -142,13 +161,21 @@ func (r *Runner) Triage(ctx context.Context, keys []string, o Options) ([]Outcom
 	}
 	close(queue)
 
-	p := newPool()
+	p := newPool(r.onPause)
 	var wg sync.WaitGroup
 	for w := 0; w < workers; w++ {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 			for i := range queue {
+				// An interrupt stops the queue: a key that never
+				// started is skipped, not failed.
+				select {
+				case <-ctx.Done():
+					outs[i] = skipped(keys[i])
+					continue
+				default:
+				}
 				p.waitUntilResumed(ctx)
 				outs[i], _ = r.runOne(ctx, keys[i], store.KindTriage, o, nil, p)
 			}
@@ -165,7 +192,7 @@ func (r *Runner) RCA(ctx context.Context, key string, o RCAOptions) (Outcome, er
 	if r.Config == nil {
 		return Outcome{}, fmt.Errorf("run: no workspace configuration")
 	}
-	return r.runOne(ctx, key, store.KindRCA, o.Options, &o, nil)
+	return r.runOne(ctx, key, store.KindRCA, o.Options, &o, newPool(r.onPause))
 }
 
 // Resume continues a blocked or interrupted run: it reopens the run, asks
@@ -193,6 +220,10 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 		p.triageNotePath = notePath
 		p.triageNoteCopy, p.triageLink = triageNoteCopy(r.Config.Root, notePath)
 	}
+
+	// The re-run writes its notes afresh, so start from a clean list
+	// rather than duplicating the paths the blocked attempt recorded.
+	p.state.Notes = nil
 
 	text, err := r.resumeText(state)
 	if err != nil {

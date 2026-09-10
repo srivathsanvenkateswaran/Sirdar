@@ -63,6 +63,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	log, err := p.run.OpenEventLog()
 	if err != nil {
 		sess.Cancel()
+		_, _ = sess.Wait() // reap the child before giving up on the run
 		return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
 	}
 	defer log.Close()
@@ -106,21 +107,25 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
 	case ex.overBudget != "":
 		return r.finish(p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
-	case ex.interrupted:
-		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
-	case ex.failure != "":
-		return r.finish(p, store.StatusFailed, ex.failure, note.DigestRow{})
 	case len(ex.final) > 0:
-		// A note that validated is worth keeping even if the process
-		// then exited badly; the exit is recorded as a warning.
+		// A note that validated is worth keeping, whether the process
+		// then exited badly or the operator interrupted the run before
+		// the stream closed. Either is recorded as a warning.
 		if res.ExitErr != nil {
 			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
+		}
+		if ex.interrupted {
+			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
 		}
 		row, err := r.complete(p, ex.final)
 		if err != nil {
 			return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
 		}
 		return r.finish(p, store.StatusCompleted, "", row)
+	case ex.interrupted:
+		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
+	case ex.failure != "":
+		return r.finish(p, store.StatusFailed, ex.failure, note.DigestRow{})
 	case ex.question != "":
 		return r.finish(p, store.StatusBlocked, "agent asked: "+ex.question, note.DigestRow{})
 	case ex.rateLimited:
@@ -371,6 +376,7 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 
 	ex.rawFinal = string(doc)
 	if ex.retried {
+		ex.schemaError = firstProblem(err)
 		ex.failure = "schema validation failed twice: " + ex.schemaError
 		sess.Cancel()
 		return
@@ -602,10 +608,11 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	return filed, nil
 }
 
-// fileNote copies a note into the workspace's notes directory. A triage
-// note is only overwritten while the existing one is still untouched
-// ("status: triaged"); anything else a human has moved on from is left
-// alone, with a warning on the run.
+// fileNote copies a note into the workspace's notes directory. A key's
+// triage note is looked up by key rather than by filename, because a
+// re-triage often retitles the issue: the existing note is overwritten in
+// place while its status is still "triaged", and left alone with a warning
+// once a human has moved it on.
 func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) string {
 	dir := r.Config.ExpandPath(r.Config.Notes.Dir)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -615,12 +622,18 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 	path := filepath.Join(dir, filename)
 
 	if kind == note.Triage {
-		if existing, err := os.ReadFile(path); err == nil {
-			if status := frontmatterValue(string(existing), "status"); status != "triaged" {
+		if existing := r.existingTriageNote(p, dir); existing != "" {
+			status := ""
+			if data, err := os.ReadFile(existing); err == nil {
+				status = frontmatterValue(string(data), "status")
+			}
+			if status != "triaged" {
 				p.state.Warnings = append(p.state.Warnings,
-					fmt.Sprintf("%s has status %q and was left unchanged", path, status))
+					fmt.Sprintf("%s has status %q and was left unchanged", existing, status))
 				return ""
 			}
+			// Keep the filename the vault already links to.
+			path = existing
 		}
 	}
 
@@ -629,6 +642,50 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 		return ""
 	}
 	return path
+}
+
+// existingTriageNote finds this key's triage note in the notes directory,
+// whatever it is called. It prefers the path the last completed triage run
+// recorded, and falls back to scanning the directory for a note filed under
+// the key whose frontmatter tags it as triage — which is how a note written
+// by hand, or before the run state existed, is still found.
+func (r *Runner) existingTriageNote(p *prepared, dir string) string {
+	states, err := store.List(r.Config.Root, p.state.Key)
+	if err == nil {
+		for _, s := range states {
+			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID {
+				continue
+			}
+			for _, path := range s.Notes {
+				if filepath.Dir(path) != dir {
+					continue
+				}
+				if _, err := os.Stat(path); err == nil {
+					return path
+				}
+			}
+		}
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	prefix := p.state.Key + " "
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasPrefix(e.Name(), prefix) || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		path := filepath.Join(dir, e.Name())
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if strings.Contains(frontmatterValue(string(data), "tags"), string(note.Triage)) {
+			return path
+		}
+	}
+	return ""
 }
 
 // writePlaybookSuggestions leaves the agent's playbook additions in the run
@@ -741,17 +798,13 @@ func wikiLink(stem string) string {
 	return `"[[` + stem + `]]"`
 }
 
-const issueMaxLen = 120
-
-// firstSentence is the digest's one-line summary of a complaint: up to the
-// first full stop, or the first 120 characters.
+// firstSentence is the digest's one-line summary of a complaint: up to and
+// including the first full stop. Fitting it to the table is note.Digest's
+// job, not this package's.
 func firstSentence(s string) string {
 	s = strings.TrimSpace(strings.ReplaceAll(s, "\n", " "))
-	if i := strings.IndexByte(s, '.'); i >= 0 && i < issueMaxLen {
+	if i := strings.IndexByte(s, '.'); i >= 0 {
 		return strings.TrimSpace(s[:i+1])
-	}
-	if len(s) > issueMaxLen {
-		return strings.TrimSpace(s[:issueMaxLen])
 	}
 	return s
 }

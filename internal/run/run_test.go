@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -326,7 +327,7 @@ func finalEvent(doc string) provider.Event {
 }
 
 func newRunner(cfg *config.Config, p provider.Provider, tr source.Tracker, hd source.Helpdesk) *Runner {
-	return &Runner{Deps{
+	return &Runner{Deps: Deps{
 		Config:   cfg,
 		Tracker:  tr,
 		Helpdesk: hd,
@@ -689,8 +690,6 @@ func TestPoolRateLimitPause(t *testing.T) {
 
 	gate := make(chan struct{})
 	var once sync.Once
-	pauseObserver = func(time.Time) { once.Do(func() { close(gate) }) }
-	t.Cleanup(func() { pauseObserver = nil })
 
 	p := &stubProvider{script: func(spec provider.SessionSpec, s *stubSession) {
 		defer s.finish()
@@ -706,6 +705,7 @@ func TestPoolRateLimitPause(t *testing.T) {
 		}
 	}}
 	r := newRunner(cfg, p, tr, stubHelpdesk{})
+	r.onPause = func(time.Time) { once.Do(func() { close(gate) }) }
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1", "OMNI-2"}, Options{Concurrency: 2})
 	if err != nil {
@@ -720,6 +720,169 @@ func TestPoolRateLimitPause(t *testing.T) {
 	}
 	if started.Before(resets) {
 		t.Fatalf("second session started %v before the rate limit reset", resets.Sub(started))
+	}
+}
+
+func TestInterruptSkipsUnstartedKeys(t *testing.T) {
+	cfg := newWorkspace(t)
+	started := make(chan struct{})
+	var once sync.Once
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		once.Do(func() { close(started) })
+		<-s.cancelled
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-started
+		cancel()
+	}()
+	defer cancel()
+
+	outs, err := r.Triage(ctx, []string{"OMNI-1", "OMNI-2"}, Options{Concurrency: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusBlocked || outs[0].State.Reason != "interrupted" {
+		t.Fatalf("first run: %+v", outs[0].State)
+	}
+	if outs[1].State.Status != store.StatusBlocked || !strings.Contains(outs[1].State.Reason, "skipped") {
+		t.Fatalf("second run: %+v", outs[1].State)
+	}
+	if outs[1].Digest.Reason != outs[1].State.Reason || outs[1].Digest.State != string(store.StatusBlocked) {
+		t.Fatalf("second digest: %+v", outs[1].Digest)
+	}
+	dirs, err := filepath.Glob(filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-2", "*"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(dirs) != 0 {
+		t.Fatalf("the skipped key got run directories: %v", dirs)
+	}
+	if p.startCount() != 1 {
+		t.Fatalf("sessions started: %d", p.startCount())
+	}
+	if ExitCode(outs) != 0 {
+		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
+func TestInterruptAfterFinalKeepsNote(t *testing.T) {
+	cfg := newWorkspace(t)
+	emitted := make(chan struct{})
+	var once sync.Once
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(triageDoc)) {
+			return
+		}
+		once.Do(func() { close(emitted) })
+		// Hold the stream open until the runner reacts to the interrupt.
+		<-s.cancelled
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-emitted
+		cancel()
+	}()
+	defer cancel()
+
+	outs, err := r.Triage(ctx, []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md")); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRetriageOverwritesTheKeysNote(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	notesDir := filepath.Join(cfg.Root, "notes")
+	notePath := filepath.Join(notesDir, "OMNI-1 export-fails-for-large-orders.md")
+
+	if outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	} else if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("first triage: %+v", outs[0].State)
+	}
+
+	// A re-triage that retitles the issue updates the note it already
+	// filed rather than adding a second one.
+	retitled := strings.Replace(triageDoc, `"title": "Export fails for large orders"`, `"title": "Export still fails"`, 1)
+	if retitled == triageDoc {
+		t.Fatal("the retitled document is identical to the original")
+	}
+	p.script = replay(finalEvent(retitled))
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("second triage: %+v", outs[0].State)
+	}
+	entries, err := os.ReadDir(notesDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 || entries[0].Name() != filepath.Base(notePath) {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Fatalf("notes directory holds %v", names)
+	}
+	if body := readFile(t, notePath); !strings.Contains(body, "# Export still fails") {
+		t.Fatalf("the note was not rewritten:\n%s", body)
+	}
+
+	// Once a human has moved the note on, a later run leaves it alone.
+	if err := note.UpdateTriageStatus(notePath, "resolved", nil); err != nil {
+		t.Fatal(err)
+	}
+	third := strings.Replace(triageDoc, `"title": "Export fails for large orders"`, `"title": "Export fails a third time"`, 1)
+	p.script = replay(finalEvent(third))
+	outs, err = r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("third triage: %+v", out.State)
+	}
+	if body := readFile(t, notePath); !strings.Contains(body, "# Export still fails") {
+		t.Fatalf("the resolved note was overwritten:\n%s", body)
+	}
+	if entries, err := os.ReadDir(notesDir); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 1 {
+		t.Fatalf("notes directory grew to %d files", len(entries))
+	}
+	warned := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "left unchanged") && strings.Contains(w, `"resolved"`) {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Fatalf("warnings: %v", out.State.Warnings)
+	}
+	// With nothing filed, the run keeps its own copy of the note.
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
+		t.Fatal(err)
 	}
 }
 

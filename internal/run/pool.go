@@ -12,13 +12,13 @@ import (
 type pool struct {
 	mu    sync.Mutex
 	until time.Time
+
+	// observe, when set, is called every time a pause is recorded, so a
+	// test can synchronise on it. Production leaves it nil.
+	observe func(time.Time)
 }
 
-// pauseObserver is a test seam: when set, it is called every time a pause
-// is recorded, so a test can synchronise on it. Production leaves it nil.
-var pauseObserver func(time.Time)
-
-func newPool() *pool { return &pool{} }
+func newPool(observe func(time.Time)) *pool { return &pool{observe: observe} }
 
 // pause holds back runs that have not started until the provider says the
 // rate limit lifts. A provider that reports no reset time pauses nothing:
@@ -32,8 +32,8 @@ func (p *pool) pause(until time.Time) {
 		p.until = until
 	}
 	p.mu.Unlock()
-	if pauseObserver != nil {
-		pauseObserver(until)
+	if p.observe != nil {
+		p.observe(until)
 	}
 }
 
