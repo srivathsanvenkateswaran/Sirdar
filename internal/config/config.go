@@ -96,6 +96,12 @@ type PriceConfig struct {
 // dropping old tool results as the prompt approaches it.
 const DefaultMaxContextTokens = 128000
 
+// DefaultAttachmentMaxBytes is the size above which a downloaded
+// attachment is dropped from the bundle. A 17 MB screen recording is 99%
+// of a bundle by bytes and none of it by evidence: the session cannot open
+// it, so it is named in a warning instead.
+const DefaultAttachmentMaxBytes = 10 << 20
+
 // Config is a fully loaded, defaulted, and validated workspace configuration.
 type Config struct {
 	Workspace string   `yaml:"workspace"`
@@ -123,7 +129,25 @@ type Config struct {
 	Concurrency int `yaml:"concurrency"`
 	Permissions struct {
 		Bash []string `yaml:"bash"`
+		// MCP is a list of glob patterns matched against a tool's full
+		// name (e.g. "mcp__grafana__query_*"). When it is non-empty it
+		// is the whole of the MCP allow-list: a tool that matches none
+		// of the patterns is denied. When it is empty, read-shaped MCP
+		// tools are allowed and write-shaped ones are denied by the
+		// heuristic in internal/provider.
+		MCP []string `yaml:"mcp"`
 	} `yaml:"permissions"`
+	// MCP controls which MCP servers the agent session can see at all.
+	// WorkspaceOnly (default true) starts the session with
+	// --strict-mcp-config against <root>/.mcp.json, so the operator's own
+	// global connectors are not loaded into a triage run.
+	MCP struct {
+		WorkspaceOnly *bool `yaml:"workspaceOnly"`
+	} `yaml:"mcp"`
+	// Attachments caps what a helpdesk download may put in the bundle.
+	Attachments struct {
+		MaxBytes int64 `yaml:"maxBytes"`
+	} `yaml:"attachments"`
 	Playbooks string `yaml:"playbooks"`
 	Providers struct {
 		Claude struct {
@@ -199,6 +223,13 @@ func applyDefaults(c *Config) {
 	if c.OpenAI != nil && c.OpenAI.MaxContextTokens == 0 {
 		c.OpenAI.MaxContextTokens = DefaultMaxContextTokens
 	}
+	if c.MCP.WorkspaceOnly == nil {
+		yes := true
+		c.MCP.WorkspaceOnly = &yes
+	}
+	if c.Attachments.MaxBytes == 0 {
+		c.Attachments.MaxBytes = DefaultAttachmentMaxBytes
+	}
 	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
 		if s != nil && s.Auth != nil && s.Auth.AccountsURL == "" {
 			s.Auth.AccountsURL = AccountsURLFor(s.BaseURL)
@@ -248,6 +279,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Budget.MaxUSD <= 0 {
 		return fmt.Errorf("config: budget.maxUsd: must be > 0, got %v", c.Budget.MaxUSD)
+	}
+	if c.Attachments.MaxBytes < 0 {
+		return fmt.Errorf("config: attachments.maxBytes: must be >= 0, got %d", c.Attachments.MaxBytes)
 	}
 	if err := validateSource("sources.tracker", c.Sources.Tracker); err != nil {
 		return err
@@ -375,6 +409,36 @@ func credentialRef(key, ref string) error {
 		return nil
 	}
 	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
+}
+
+// WorkspaceOnlyMCP reports whether an agent session should see only the
+// workspace's own .mcp.json. It is the default, and a Config built by hand
+// (in a test, say) reads as the default rather than as "off".
+func (c *Config) WorkspaceOnlyMCP() bool {
+	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
+}
+
+// AttachmentMaxBytes is the configured attachment size cap, or the default
+// when the workspace did not set one.
+func (c *Config) AttachmentMaxBytes() int64 {
+	if c.Attachments.MaxBytes <= 0 {
+		return DefaultAttachmentMaxBytes
+	}
+	return c.Attachments.MaxBytes
+}
+
+// MCPConfigPath is the workspace's .mcp.json when it exists and MCP
+// servers are restricted to it, else "". A provider that gets a path
+// starts its session against that file alone.
+func (c *Config) MCPConfigPath() string {
+	if !c.WorkspaceOnlyMCP() {
+		return ""
+	}
+	path := filepath.Join(c.Root, ".mcp.json")
+	if _, err := os.Stat(path); err != nil {
+		return ""
+	}
+	return path
 }
 
 // ExpandPath expands a leading ~ and makes relative paths relative to c.Root.

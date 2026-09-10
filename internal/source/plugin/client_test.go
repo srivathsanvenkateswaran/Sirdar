@@ -135,3 +135,32 @@ func TestClientCloseUnblocksHangingCall(t *testing.T) {
 		t.Fatal("Get did not return after Close")
 	}
 }
+
+// TestSplitCommandExpandsTildeEverywhere is D3: only argv[0] was expanded,
+// so an adapter started as
+// `~/bin/sirdar-janus --token-cmd-file ~/.sirdar/janus-token.sh` was handed
+// the literal string "~/.sirdar/janus-token.sh". There is no shell in the
+// path to expand it, the token command failed, and doctor still said the
+// tracker was fine.
+func TestSplitCommandExpandsTildeEverywhere(t *testing.T) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Skip("no home directory")
+	}
+	argv := splitCommand(`~/bin/sirdar-janus --token-cmd-file ~/.sirdar/janus-token.sh --flag value`)
+	want := []string{
+		filepath.Join(home, "bin/sirdar-janus"),
+		"--token-cmd-file",
+		filepath.Join(home, ".sirdar/janus-token.sh"),
+		"--flag",
+		"value",
+	}
+	if len(argv) != len(want) {
+		t.Fatalf("argv %q", argv)
+	}
+	for i := range want {
+		if argv[i] != want[i] {
+			t.Fatalf("argv[%d] = %q, want %q", i, argv[i], want[i])
+		}
+	}
+}

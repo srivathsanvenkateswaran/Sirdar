@@ -313,6 +313,13 @@ func (s *session) Send(ctx context.Context, userText string) error {
 	return err
 }
 
+// CloseInput is a no-op for Codex: a turn's completion already ends the
+// event stream, so there is no stdin EOF the session is waiting on. It is
+// here because the provider contract has it, and because closing the
+// app-server's stdin outright would cut off the shutdown exchange Wait
+// still needs.
+func (s *session) CloseInput() error { return nil }
+
 // Cancel interrupts the running turn and closes stdin.
 func (s *session) Cancel() {
 	s.mu.Lock()

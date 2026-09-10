@@ -2,9 +2,10 @@
 
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
 or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
-model — gathers evidence through your own read-only MCP servers, translates the conversation, and writes a root-cause note for you to
-review. Once a human has made and merged the fix, Sirdar writes the RCA and Resolution notes that
-record it — it never opens a PR itself. Runs on your machine with your logins.
+model — gathers evidence through the MCP servers the workspace grants it, translates the
+conversation, and writes a root-cause note for you to review. Once a human has made and merged
+the fix, Sirdar writes the RCA and Resolution notes that record it — it never opens a PR itself.
+Runs on your machine with your logins.
 
 On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work,
 decides who goes up and when, and answers to the client for the outcome. The name is a tribute

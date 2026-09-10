@@ -348,3 +348,56 @@ func TestDefaultConfigYAMLDocumentsOpenAI(t *testing.T) {
 		t.Fatalf("the scaffolded config does not load: %v", err)
 	}
 }
+
+// TestMCPAndAttachmentDefaults pins the two settings D2 and D7 added: MCP
+// servers are restricted to the workspace unless the operator says
+// otherwise, and an attachment cap exists even in a config that predates
+// it.
+func TestMCPAndAttachmentDefaults(t *testing.T) {
+	root := writeCfg(t, minimal)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.WorkspaceOnlyMCP() {
+		t.Error("mcp.workspaceOnly must default to true")
+	}
+	if cfg.AttachmentMaxBytes() != DefaultAttachmentMaxBytes {
+		t.Errorf("attachments.maxBytes %d", cfg.AttachmentMaxBytes())
+	}
+	if got := cfg.MCPConfigPath(); got != "" {
+		t.Errorf("with no .mcp.json in the workspace there is nothing to point the session at, got %q", got)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := cfg.MCPConfigPath(); got != filepath.Join(root, ".mcp.json") {
+		t.Errorf("MCPConfigPath %q", got)
+	}
+
+	root = writeCfg(t, minimal+`
+mcp:
+  workspaceOnly: false
+attachments:
+  maxBytes: 2048
+permissions:
+  mcp:
+    - "mcp__grafana__query_*"
+`)
+	cfg, err = Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.WorkspaceOnlyMCP() {
+		t.Error("mcp.workspaceOnly: false must be honoured")
+	}
+	if cfg.MCPConfigPath() != "" {
+		t.Error("with workspaceOnly off, no config is forced on the session")
+	}
+	if cfg.AttachmentMaxBytes() != 2048 {
+		t.Errorf("attachments.maxBytes %d", cfg.AttachmentMaxBytes())
+	}
+	if len(cfg.Permissions.MCP) != 1 {
+		t.Errorf("permissions.mcp %v", cfg.Permissions.MCP)
+	}
+}

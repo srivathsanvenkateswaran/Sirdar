@@ -30,6 +30,11 @@ type SessionSpec struct {
 	Images       []string
 	Env          []string // full child env; provider may strip keys
 	Binary       string   // path override; "" = look up on PATH
+
+	// MCPConfig is the path to the only MCP server file the session may
+	// load. Empty means the provider passes nothing and the session sees
+	// whatever the operator has configured globally.
+	MCPConfig string
 }
 
 // EventKind identifies the kind of a Session event.
@@ -95,6 +100,13 @@ type Session interface {
 	// used for the schema-retry turn, when the agent's structured output
 	// failed validation and needs another attempt.
 	Send(ctx context.Context, userText string) error
+
+	// CloseInput tells the session no further user message is coming. A
+	// CLI reading stream-json on stdin keeps its own stdout open waiting
+	// for the next one, so a session that has produced its answer only
+	// ends once its input is closed. It is safe to call more than once,
+	// and a provider that has no input to close does nothing.
+	CloseInput() error
 
 	// Wait blocks until the underlying process exits and returns its
 	// final Result.

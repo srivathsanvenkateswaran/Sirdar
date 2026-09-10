@@ -245,6 +245,7 @@ type session struct {
 	mu           sync.Mutex
 	result       provider.Result
 	streamClosed bool
+	inputClosed  bool
 }
 
 func (s *session) add(t *tool) {
@@ -273,10 +274,13 @@ func (s *session) Send(_ context.Context, userText string) error {
 	default:
 	}
 	s.mu.Lock()
-	closed := s.streamClosed
+	streamClosed, inputClosed := s.streamClosed, s.inputClosed
 	s.mu.Unlock()
-	if closed {
+	if streamClosed {
 		return errors.New("openai: the session's event stream has ended")
+	}
+	if inputClosed {
+		return errors.New("openai: the session's input has been closed")
 	}
 	select {
 	case s.sendCh <- userText:
@@ -284,6 +288,19 @@ func (s *session) Send(_ context.Context, userText string) error {
 	default:
 		return errors.New("openai: a follow-up message is already pending")
 	}
+}
+
+// CloseInput records that no follow-up message is coming. Unlike the CLI
+// providers there is no stdin holding the session open: the loop emits its
+// end-of-session event and returns on its own once nothing has been sent.
+// What this does is shut the door behind it, so a Send racing the runner's
+// endSession is refused rather than resuming a loop the runner has already
+// finished with. Calling it more than once is not an error.
+func (s *session) CloseInput() error {
+	s.mu.Lock()
+	s.inputClosed = true
+	s.mu.Unlock()
+	return nil
 }
 
 // Cancel stops the loop and shuts every MCP server down. It does not
