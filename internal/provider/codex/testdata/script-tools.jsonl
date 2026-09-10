@@ -1,0 +1,11 @@
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-2","sessionId":"th-2","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"never"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-2","items":[],"status":"inProgress"}}}
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"oxo-mysql","tool":"query","arguments":{"sql":"select 1"},"status":"inProgress"},"threadId":"th-2","turnId":"tn-2"}}
+{"$expect_request":"item/tool/requestUserInput","id":88,"params":{"threadId":"th-2","turnId":"tn-2","itemId":"mcp_1","questions":[{"id":"q1","prompt":"Which database should I query?"}]}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"oxo-mysql","tool":"query","status":"completed"},"threadId":"th-2","turnId":"tn-2"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"No structured output this time.","phase":"final_answer"},"threadId":"th-2","turnId":"tn-2"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-2","turn":{"id":"tn-2","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

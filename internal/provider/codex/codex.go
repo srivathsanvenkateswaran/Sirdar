@@ -40,6 +40,11 @@ const (
 // set by Wait once the child has exited; production code should not read it.
 var lastStderrTail []string
 
+// lastPumpDone exposes the most recent session's pump-exit signal to tests, so
+// a failed Start can be checked for a leaked goroutine. Tests in this package
+// therefore must not run in parallel.
+var lastPumpDone chan struct{}
+
 // codexProvider is the provider.Provider implementation for Codex.
 type codexProvider struct{}
 
@@ -84,7 +89,10 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		exited:     make(chan struct{}),
 		stdoutDone: make(chan struct{}),
 		stderrDone: make(chan struct{}),
+		stopped:    make(chan struct{}),
+		pumpDone:   make(chan struct{}),
 	}
+	lastPumpDone = s.pumpDone
 	s.queue.cond = sync.NewCond(&s.queue.mu)
 	s.conn = newConn(stdout, stdin)
 	s.conn.onNotify = s.onNotify
@@ -244,6 +252,12 @@ type session struct {
 	stdoutDone chan struct{}
 	stderrDone chan struct{}
 
+	// stopped is closed by abort to release a pump with no reader;
+	// pumpDone closes when the pump goroutine has returned.
+	stopped  chan struct{}
+	stopOnce sync.Once
+	pumpDone chan struct{}
+
 	waitOnce sync.Once
 	result   provider.Result
 	waitErr  error
@@ -355,8 +369,14 @@ func (s *session) shutdown() {
 	s.queue.close()
 }
 
-// abort tears down a session whose handshake failed.
-func (s *session) abort() { s.shutdown() }
+// abort tears down a session whose handshake failed. Start returns an error in
+// that case, so the caller never receives the session and never reads its
+// events: release the pump before shutting the queue down.
+func (s *session) abort() {
+	s.stopOnce.Do(func() { close(s.stopped) })
+	s.shutdown()
+	<-s.pumpDone
+}
 
 // waitFor reports whether ch closed within d.
 func waitFor(ch <-chan struct{}, d time.Duration) bool {
@@ -431,14 +451,22 @@ func (q *eventQueue) pop() (provider.Event, bool) {
 	return ev, true
 }
 
+// pump moves queued events onto the Events channel. It gives up as soon as
+// abort closes s.stopped: a session whose Start failed is handed to nobody, so
+// there will never be a reader, and a blocked send would leak this goroutine.
 func (s *session) pump() {
 	defer close(s.events)
+	defer close(s.pumpDone)
 	for {
 		ev, ok := s.queue.pop()
 		if !ok {
 			return
 		}
-		s.events <- ev
+		select {
+		case s.events <- ev:
+		case <-s.stopped:
+			return
+		}
 	}
 }
 

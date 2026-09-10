@@ -8,8 +8,10 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
@@ -40,6 +42,7 @@ type inbound struct {
 //	{"$expect":"<method>"}                        block until that client call
 //	                                              arrives; remember its id
 //	{"$reply":{...}}                              respond to the remembered id
+//	{"$error":{...}}                              fail the remembered id
 //	{"$expect_request":"<m>","id":N,"params":{}}  send a server request, then
 //	                                              block until id N is answered
 //
@@ -116,6 +119,13 @@ func fakeServer(scriptPath string) int {
 			}
 			write(`{"jsonrpc":"2.0","id":%s,"result":%s}`, lastID, directive["$reply"])
 
+		case directive["$error"] != nil:
+			if lastID == nil {
+				fmt.Fprintln(os.Stderr, "fake codex: $error with no expected id")
+				return 2
+			}
+			write(`{"jsonrpc":"2.0","id":%s,"error":%s}`, lastID, directive["$error"])
+
 		case directive["$expect_request"] != nil:
 			var method string
 			if err := json.Unmarshal(directive["$expect_request"], &method); err != nil {
@@ -184,6 +194,29 @@ func startSession(t *testing.T, script string, mutate func(*provider.SessionSpec
 		t.Fatalf("Start: %v", err)
 	}
 	return sess
+}
+
+func startFailing(t *testing.T, script string) error {
+	t.Helper()
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatalf("os.Executable: %v", err)
+	}
+	path, err := filepath.Abs(filepath.Join("testdata", script))
+	if err != nil {
+		t.Fatalf("abs: %v", err)
+	}
+	sess, err := New().Start(context.Background(), provider.SessionSpec{
+		Cwd:    t.TempDir(),
+		Prompt: "Triage ticket ABC-1.",
+		Binary: exe,
+		Env:    append(os.Environ(), "SIRDAR_FAKE_CODEX="+path),
+	})
+	if err == nil {
+		sess.Cancel()
+		t.Fatalf("Start succeeded, want an error")
+	}
+	return err
 }
 
 func drain(sess provider.Session) []provider.Event {
@@ -405,5 +438,135 @@ func TestTurnFailed(t *testing.T) {
 	}
 	if n := len(only(t, evs, provider.EvFinal)); n != 0 {
 		t.Errorf("got %d final events for a failed turn, want 0", n)
+	}
+}
+
+// TestHandshakeErrorReleasesPump covers the goroutine leak a failed handshake
+// used to cause: the server emits a notification before the failure, so an
+// event is queued, and nobody ever reads Events() because Start returned an
+// error and the session was discarded.
+func TestHandshakeErrorReleasesPump(t *testing.T) {
+	before := runtime.NumGoroutine()
+
+	err := startFailing(t, "script-handshake-error.jsonl")
+	if !strings.Contains(err.Error(), "thread start refused") {
+		t.Errorf("Start error = %v, want the server's rpc error", err)
+	}
+
+	select {
+	case <-lastPumpDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("pump goroutine is still running after a failed Start")
+	}
+
+	// Belt and braces: the whole session's goroutines should be gone too.
+	deadline := time.Now().Add(5 * time.Second)
+	for runtime.NumGoroutine() > before && time.Now().Before(deadline) {
+		time.Sleep(10 * time.Millisecond)
+	}
+	if after := runtime.NumGoroutine(); after > before {
+		t.Errorf("goroutines: %d before, %d after a failed Start", before, after)
+	}
+}
+
+func TestResumeThread(t *testing.T) {
+	sess := startSession(t, "script-resume.jsonl", func(spec *provider.SessionSpec) {
+		spec.Resume = "th-77"
+	})
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	drain(sess)
+
+	if res.Handle != "th-77" {
+		t.Errorf("Handle = %q, want th-77", res.Handle)
+	}
+	// The final answer came only from turn/completed.turn.items.
+	if got := string(res.Final); got != `{"ok":true}` {
+		t.Errorf("Result.Final = %q, want the item from turn/completed", got)
+	}
+
+	for _, line := range sent(t) {
+		var msg inbound
+		if json.Unmarshal([]byte(line), &msg) == nil && msg.Method == "thread/start" {
+			t.Errorf("thread/start was sent for a resumed session: %s", line)
+		}
+	}
+	resumeLine := findSent(t, "thread/resume")
+	for _, want := range []string{`"threadId":"th-77"`, `"sandbox":"read-only"`, `"approvalPolicy":"never"`} {
+		if !strings.Contains(resumeLine, want) {
+			t.Errorf("thread/resume params missing %s: %s", want, resumeLine)
+		}
+	}
+	if strings.Contains(resumeLine, `"cwd"`) {
+		t.Errorf("thread/resume should not carry cwd: %s", resumeLine)
+	}
+}
+
+func TestMCPToolCallAndUserInput(t *testing.T) {
+	sess := startSession(t, "script-tools.jsonl", nil)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	evs := drain(sess)
+
+	started := only(t, evs, provider.EvToolStarted)
+	if len(started) != 1 || started[0].Tool != "oxo-mysql/query" {
+		t.Fatalf("tool_started = %+v, want one oxo-mysql/query", started)
+	}
+	if !strings.Contains(string(started[0].Input), `"sql":"select 1"`) {
+		t.Errorf("tool_started Input = %s, want the whole item", started[0].Input)
+	}
+	finished := only(t, evs, provider.EvToolFinished)
+	if len(finished) != 1 || finished[0].Tool != "oxo-mysql/query" {
+		t.Errorf("tool_finished = %+v, want one oxo-mysql/query", finished)
+	}
+
+	questions := only(t, evs, provider.EvQuestion)
+	if len(questions) != 1 {
+		t.Fatalf("got %d question events, want 1", len(questions))
+	}
+	if !strings.Contains(string(questions[0].Input), "Which database should I query?") {
+		t.Errorf("question Input = %s, want the request params", questions[0].Input)
+	}
+
+	var answered bool
+	for _, line := range sent(t) {
+		if strings.Contains(line, `"id":88`) && strings.Contains(line, `"answers":{}`) {
+			answered = true
+		}
+	}
+	if !answered {
+		t.Errorf("requestUserInput was not answered with empty answers; sent=%v", sent(t))
+	}
+
+	// Text that is not JSON lands in Text, not Final.
+	if res.Final != nil {
+		t.Errorf("Result.Final = %s, want nil for non-JSON final text", res.Final)
+	}
+	if res.Text != "No structured output this time." {
+		t.Errorf("Result.Text = %q", res.Text)
+	}
+}
+
+func TestParseID(t *testing.T) {
+	cases := []struct {
+		raw  string
+		want int64
+		ok   bool
+	}{
+		{"7", 7, true},
+		{` "7" `, 7, true},
+		{`"abc"`, 0, false},
+		{"null", 0, false},
+		{"", 0, false},
+	}
+	for _, tc := range cases {
+		got, ok := parseID(json.RawMessage(tc.raw))
+		if ok != tc.ok || got != tc.want {
+			t.Errorf("parseID(%s) = %d,%v; want %d,%v", tc.raw, got, ok, tc.want, tc.ok)
+		}
 	}
 }

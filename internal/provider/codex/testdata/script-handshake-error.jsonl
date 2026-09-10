@@ -1,0 +1,5 @@
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"jsonrpc":"2.0","method":"remoteControl/status/changed","params":{"status":"disconnected"}}
+{"$expect":"thread/start"}
+{"$error":{"code":-32000,"message":"thread start refused"}}

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 )
@@ -108,8 +109,8 @@ func (c *conn) run() {
 
 // deliver hands a response to the goroutine waiting on its id.
 func (c *conn) deliver(msg wireMessage) {
-	id, err := strconv.ParseInt(string(bytes.TrimSpace(msg.ID)), 10, 64)
-	if err != nil {
+	id, ok := parseID(msg.ID)
+	if !ok {
 		return
 	}
 	c.mu.Lock()
@@ -236,6 +237,25 @@ func encodeParams(params any) (json.RawMessage, error) {
 		return nil, err
 	}
 	return body, nil
+}
+
+// parseID reads a response id, which JSON-RPC allows to be a number or a
+// string. Sirdar only ever sends numbers, but a server that echoes them
+// quoted must not wedge the call waiting on that id.
+func parseID(raw json.RawMessage) (int64, bool) {
+	trimmed := string(bytes.TrimSpace(raw))
+	if id, err := strconv.ParseInt(trimmed, 10, 64); err == nil {
+		return id, true
+	}
+	var quoted string
+	if err := json.Unmarshal([]byte(trimmed), &quoted); err != nil {
+		return 0, false
+	}
+	id, err := strconv.ParseInt(strings.TrimSpace(quoted), 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return id, true
 }
 
 func hasID(id json.RawMessage) bool {

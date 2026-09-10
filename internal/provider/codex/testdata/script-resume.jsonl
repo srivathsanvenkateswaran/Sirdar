@@ -1,0 +1,7 @@
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/resume"}
+{"$reply":{"thread":{"id":"th-77","sessionId":"th-77","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"never"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-77","items":[],"status":"inProgress"}}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-77","turn":{"id":"tn-77","status":"completed","error":null,"items":[{"type":"agentMessage","phase":"final_answer","text":"{\"ok\":true}"}],"completedAt":1789039400,"durationMs":900}}}
