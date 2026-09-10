@@ -1,0 +1,17 @@
+{
+  "id": "555",
+  "subject": "Export fails",
+  "status": "Open",
+  "priority": "High",
+  "channel": "EMAIL",
+  "contact": { "firstName": "John", "lastName": "Doe" },
+  "accountName": "Acme Co",
+  "cf": { "cf_company_id": "4561" },
+  "webUrl": "https://desk.zoho.com/support/555",
+  "createdTime": "2026-09-10T06:00:00.000Z",
+  "modifiedTime": "2026-09-10T06:30:00.000Z",
+  "departmentId": "d1",
+  "ticketNumber": "1001",
+  "email": "john@example.com",
+  "phone": "+1234567890"
+}

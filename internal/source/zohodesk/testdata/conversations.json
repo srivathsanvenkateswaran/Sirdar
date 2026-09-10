@@ -1,0 +1,27 @@
+{
+  "data": [
+    {
+      "id": "t1",
+      "type": "thread",
+      "direction": "in",
+      "author": { "name": "Alice" },
+      "createdTime": "2026-09-10T08:00:00.000Z"
+    },
+    {
+      "id": "c1",
+      "type": "comment",
+      "commenter": { "name": "Bob" },
+      "commenterType": "AGENT",
+      "isPublic": true,
+      "content": "Working on it",
+      "commentedTime": "2026-09-10T07:00:00.000Z"
+    },
+    {
+      "id": "t2",
+      "type": "thread",
+      "direction": "out",
+      "author": { "name": "Agent Carol" },
+      "createdTime": "2026-09-10T09:00:00.000Z"
+    }
+  ]
+}

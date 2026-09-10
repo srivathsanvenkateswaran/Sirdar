@@ -1,0 +1,18 @@
+{
+  "t1": {
+    "id": "t1",
+    "plainText": "Hello from thread one",
+    "content": "<p>Hi</p><img src=\"/supportapi/x/inlineattachments/i9\">",
+    "attachments": [
+      { "id": "a1", "name": "shot.png", "href": "/api/v1/tickets/555/attachments/a1/content" }
+    ]
+  },
+  "t2": {
+    "id": "t2",
+    "plainText": "Thread two text",
+    "content": "<p>no inline images here</p>",
+    "attachments": [
+      { "id": "c3", "name": "doc.pdf", "href": "/api/v1/im/sessions/s1/attachments/c3/content" }
+    ]
+  }
+}
