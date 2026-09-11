@@ -30,8 +30,24 @@ type Meta struct {
 // Renderer renders notes from Go text/template files. TemplatesDir, when
 // set, is checked first for a "<kind>.md.tmpl" override before falling back
 // to the embedded default for that kind.
+//
+// RTLMarkup turns on the <div dir="rtl"> wrapper the embedded templates put
+// around a right-to-left paragraph. Nil means the default, which is on, so
+// a Renderer built by hand behaves the way a default workspace does. It is
+// ignored while TemplatesDir is set: a workspace with its own templates
+// owns its markup, and Sirdar has no business adding HTML to a template it
+// did not write.
 type Renderer struct {
 	TemplatesDir string // "" = embedded defaults
+	RTLMarkup    *bool  // nil = on
+}
+
+// rtlMarkup reports whether this render should emit the RTL wrapper.
+func (r Renderer) rtlMarkup() bool {
+	if r.TemplatesDir != "" {
+		return false
+	}
+	return r.RTLMarkup == nil || *r.RTLMarkup
 }
 
 //go:embed templates/*.md.tmpl
@@ -46,6 +62,7 @@ var templateFuncs = template.FuncMap{
 	"date":    dateFunc,
 	"default": defaultFunc,
 	"yq":      yqFunc,
+	"rtlWrap": rtlWrapFunc,
 }
 
 func templateFilename(kind Kind) string {
@@ -53,7 +70,8 @@ func templateFilename(kind Kind) string {
 }
 
 // Render decodes doc as JSON and executes the template for kind against
-// map[string]any{"doc": <decoded doc>, "meta": m}. For RCA and Resolution,
+// map[string]any{"doc": <decoded doc>, "meta": m, "rtlMarkup": <bool>}. For RCA and Resolution,
+
 // doc is the combined rca+resolution document, and the template reads
 // .doc.rca or .doc.resolution.
 func (r Renderer) Render(kind Kind, doc []byte, m Meta) (string, error) {
@@ -67,7 +85,8 @@ func (r Renderer) Render(kind Kind, doc []byte, m Meta) (string, error) {
 		return "", fmt.Errorf("note: parse document: %w", err)
 	}
 
-	data := map[string]any{"doc": decoded, "meta": m}
+	data := map[string]any{"doc": decoded, "meta": m, "rtlMarkup": r.rtlMarkup()}
+
 	var buf bytes.Buffer
 	if err := tmpl.Execute(&buf, data); err != nil {
 		return "", fmt.Errorf("note: render %s template: %w", kind, err)
@@ -336,7 +355,47 @@ func yqFunc(v any) string {
 	return b.String()
 }
 
+// rtlWrapFunc renders a paragraph that may be right-to-left. With markup
+// on and the text actually containing right-to-left script, it comes back
+// inside a <div dir="rtl"> block — blank lines kept around the text so the
+// markdown inside still renders — and otherwise unchanged. Obsidian
+// renders the HTML, so an Arabic complaint reads right to left in the
+// vault instead of being laid out backwards.
+//
+// Used in the templates as {{rtlWrap .rtlMarkup .doc.complaintOriginal}}.
+func rtlWrapFunc(markup bool, v any) string {
+	s := strings.TrimSpace(toYQString(v))
+	if !markup || s == "" || !hasRTL(s) {
+		return s
+	}
+	return "<div dir=\"rtl\">\n\n" + s + "\n\n</div>"
+}
+
+// hasRTL reports whether s contains a character from a right-to-left
+// script: Hebrew, Arabic (including the presentation forms and the
+// supplement and extended blocks), Syriac, Thaana and NKo. A Latin
+// quotation inside an Arabic paragraph does not make the paragraph
+// left-to-right, so one such character is enough.
+func hasRTL(s string) bool {
+	for _, r := range s {
+		switch {
+		case r >= 0x0590 && r <= 0x05FF, // Hebrew
+			r >= 0x0600 && r <= 0x06FF, // Arabic
+			r >= 0x0700 && r <= 0x074F, // Syriac
+			r >= 0x0750 && r <= 0x077F, // Arabic Supplement
+			r >= 0x0780 && r <= 0x07BF, // Thaana
+			r >= 0x07C0 && r <= 0x07FF, // NKo
+			r >= 0x08A0 && r <= 0x08FF, // Arabic Extended-A
+			r >= 0xFB1D && r <= 0xFDFF, // Hebrew and Arabic presentation forms
+			r >= 0xFE70 && r <= 0xFEFF: // Arabic Presentation Forms-B
+			return true
+		}
+	}
+	return false
+}
+
 func toYQString(v any) string {
+
 	switch t := v.(type) {
 	case nil:
 		return ""

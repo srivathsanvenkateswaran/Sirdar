@@ -44,7 +44,18 @@
     },
     "title": { "type": "string" },
     "complaint": { "type": "string" },
+    "complaintOriginal": { "type": "string" },
+    "customerReplyDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "text"],
+      "properties": {
+        "language": { "type": "string", "enum": ["ar", "en"] },
+        "text": { "type": "string" }
+      }
+    },
     "timeline": {
+
       "type": "array",
       "items": {
         "type": "object",

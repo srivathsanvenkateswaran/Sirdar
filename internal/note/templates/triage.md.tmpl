@@ -21,7 +21,11 @@ Register: [[_Issue Register]] · RCA: {{fill "RCA" .meta.Links.RCA}} · Resoluti
 ## Customer Complaint (translated)
 
 {{.doc.complaint}}
+{{if .doc.complaintOriginal}}
+## Customer Complaint (original)
 
+{{rtlWrap .rtlMarkup .doc.complaintOriginal}}
+{{end}}
 ## Conversation Summary
 {{range .doc.timeline}}
 - **{{.at}}** ({{.role}}): {{.summary}}
@@ -65,4 +69,12 @@ Risks: {{.doc.proposedFix.risks}}
 ## Open Questions
 {{range .doc.openQuestions}}
 - {{.}}
+{{- end}}
+{{- if .doc.customerReplyDraft}}
+
+## Customer reply draft
+
+Language: {{.doc.customerReplyDraft.language}}. A draft, not a sent reply: read it before you send it. It promises nothing the ticket does not already record.
+
+{{rtlWrap .rtlMarkup .doc.customerReplyDraft.text}}
 {{- end}}

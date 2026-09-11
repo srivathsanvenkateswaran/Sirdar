@@ -105,6 +105,18 @@ notes:
     triage: "{key} {slug}.md"
     rca: "{key} RCA {slug}.md"
     resolution: "{key} RES {slug}.md"
+language:
+  # The engineer's note is written in notes:. Anything the customer will
+  # read — the reply draft on a triage note, the customer summary on an
+  # RCA — is written in customer:, and "auto" means the language of the
+  # ticket's first customer message. The verbatim original complaint is
+  # kept either way.
+  notes: en
+  customer: auto
+  # Wrap a right-to-left paragraph in <div dir="rtl"> so Obsidian lays it
+  # out the way the customer wrote it. Applies to the built-in templates
+  # only; with notes.templates set, your templates own their markup.
+  rtlMarkup: true
 budget:
   # A turn is one model round-trip: one assistant message that calls a tool
   # or gives the final answer. It is the same unit the Claude CLI reports as

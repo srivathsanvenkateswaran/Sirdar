@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { Check, Transport, Workspace } from '../api/types'
+import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
 import '../components/panels.css'
+
 
 type DoctorState =
   | { status: 'loading' }
@@ -32,6 +34,8 @@ export default function Settings(props: {
   /** The workspace whose Remove button is armed, if any. */
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rtl = useSyncExternalStore(subscribePreferRTL, prefersRTL, () => false)
+
 
   function disarm(): void {
     if (confirmTimer.current) clearTimeout(confirmTimer.current)
@@ -168,7 +172,27 @@ export default function Settings(props: {
         {addError && <p className="form-error">{addError}</p>}
       </section>
 
+      <section className="settings-reading">
+        <h2 className="panel-heading">Reading</h2>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={rtl}
+            onChange={(e) => setPreferRTL(e.target.checked)}
+          />
+          <span>Prefer right-to-left layout for Arabic content</span>
+        </label>
+        <p className="about-note">
+          Notes mix an English body with the customer's own Arabic, and each block is laid
+          out from its own first letter either way. This lays the whole note pane out right
+          to left. It is remembered in this browser and changes nothing in the workspace or
+          in the note on disk; the run's event log stays left to right, where paths and tool
+          names are readable.
+        </p>
+      </section>
+
       <section className="settings-about">
+
         <h2 className="panel-heading">About</h2>
         <p className="about-version">Sirdar desktop</p>
         <p>
