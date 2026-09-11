@@ -51,7 +51,11 @@ rather than being silently ignored.
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
 | `notes.filenames.rca` | string | `"{key} RCA {slug}.md"` | Filename pattern for RCA notes |
 | `notes.filenames.resolution` | string | `"{key} RES {slug}.md"` | Filename pattern for resolution notes |
-| `budget.maxTurns` | int | `120` | Model round-trips before a run is marked `over_budget`; see Budgets below |
+| `language.notes` | string | `en` | Language code the engineer's note is written in, including the translated complaint; see Languages below |
+| `language.customer` | string | `auto` | Language code for anything the customer reads (the triage note's reply draft, the RCA's customer summary); `auto` means the language of the ticket's first customer message |
+| `language.rtlMarkup` | bool | `true` | Wrap a right-to-left paragraph the built-in templates emit in `<div dir="rtl">`, which Obsidian renders; ignored while `notes.templates` is set |
+| `budget.maxTurns` | int | `120` |
+ Model round-trips before a run is marked `over_budget`; see Budgets below |
 | `budget.maxMinutes` | int | `25` | Wall-clock minutes before a run is cancelled and marked `over_budget` |
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
@@ -380,7 +384,53 @@ from the bundle, as is any file over `attachments.maxBytes`. Each dropped file i
 its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
 could not read instead of hunting for a transcoder.
 
+## Languages
+
+A support ticket and the note about it are rarely in the same language. Sirdar's workspace
+reads Arabic tickets from Saudi customers, writes the engineer's note in English, and replies
+to the customer in Arabic. The `language` block names both ends of that:
+
+```yaml
+language:
+  notes: en
+  customer: auto
+  rtlMarkup: true
+```
+
+`notes` is the language of the note itself — the title, the timeline, the hypothesis, and the
+translated complaint. There is no `auto` for it: the note is written for one team, and that
+team reads one language.
+
+`customer` is the language of the two fields a customer will see. `auto`, the default, means
+the language of the ticket's first customer message, which is what a helpdesk serving one
+country usually wants; a fixed code (`ar`, `en`, `ar-SA`) pins it regardless of what the
+ticket is in. Both values go into the prompt verbatim, so the session is told which language
+each field belongs in rather than inferring it.
+
+Three schema fields carry the result:
+
+| Field | Note | Content |
+|---|---|---|
+| `complaintOriginal` | Triage | The customer's complaint verbatim, untranslated, under `## Customer Complaint (original)` after the translated one |
+| `customerReplyDraft` | Triage | `{language, text}`: a short status update the engineer could send, under `## Customer reply draft` |
+| `rca.customerSummary` | RCA | `{language, text}`: what happened and what was done, for the support agent to relay, under `## Customer summary` |
+
+All three are optional: a ticket already written in the note's language has no original to
+keep, and a run that stops with a question has no reply to draft. The preamble forbids a
+commitment in either customer-facing field — no fix, no cause, no date, nothing the ticket
+does not already record as promised — because these are drafts a human sends, not replies
+Sirdar sends, and nothing in Sirdar writes to a helpdesk.
+
+`rtlMarkup` wraps a right-to-left paragraph the built-in templates emit in a
+`<div dir="rtl">` block. Obsidian renders that HTML, so an Arabic complaint reads the way the
+customer wrote it instead of being laid out left to right. It applies to the embedded
+templates only: with `notes.templates` set, your templates own their markup and Sirdar adds
+none. The desktop app drops the wrapper and uses `dir="auto"` instead, which resolves each
+block on its own; an engineer who would rather read the whole note pane right to left can say
+so under Settings, and that preference lives in their browser, not in this file.
+
 ## Templates override
+
 
 Each note type (`triage`, `rca`, `resolution`) has a Go `text/template` file. Defaults are
 embedded in the binary; setting `notes.templates` to a directory containing
@@ -390,8 +440,10 @@ embedded in the binary; setting `notes.templates` to a directory containing
 `sirdar init --templates` writes the three embedded defaults into `.sirdar/templates`, ready to
 edit; point `notes.templates` at that directory to use them.
 
-Templates render against `{{.doc ...}}` (the validated note JSON) and `{{.meta ...}}` (run
-metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider). Template functions:
+Templates render against `{{.doc ...}}` (the validated note JSON), `{{.meta ...}}` (run
+metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider), and `{{.rtlMarkup}}`
+(a bool, always false for an override — see Languages). Template functions:
+
 
 | Function | Signature | Use |
 |---|---|---|
@@ -400,6 +452,8 @@ metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider). Templa
 | `date` | `date value` | Passes a date string through unchanged; a named place to format dates from later |
 | `default` | `default fallback value` | Renders `value`, or `fallback` when it's empty |
 | `yq` | `yq value` | Renders `value` as a YAML double-quoted, escaped scalar; used on every frontmatter value so colons, quotes, and non-Latin text can't break the frontmatter block |
+| `rtlWrap` | `rtlWrap .rtlMarkup value` | Wraps `value` in a `<div dir="rtl">` block when it contains right-to-left script and the markup is on, else renders it unchanged |
+
 
 `sirdar doctor` and `sirdar init` both render every active template against a built-in sample
 document and parse the resulting frontmatter as YAML, so a broken override is caught before a
@@ -418,6 +472,20 @@ real run rather than after.
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
   instead.
+- `billing: subscription` also removes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and
+  `CLAUDE_CODE_USE_FOUNDRY` from the agent's child environment, one `EvSystem` event per variable
+  removed. None of them has a legitimate role in a subscription-billed run, and leaving
+  `ANTHROPIC_BASE_URL` in place is what turns a stray shell export into a credential leak: with
+  no gateway credential of its own, the CLI keeps your claude.ai OAuth login active and sends it
+  to whatever host the base URL names. `sirdar doctor`'s `claude environment` row fails when any
+  of these is set in your process environment while `billing: subscription` is in effect, and
+  names which ones Sirdar is about to strip. `billing: api` passes all of them through unchanged
+  — this is the supported way to point Sirdar at an Anthropic-compatible endpoint you control
+  (Ollama, llama.cpp, a vendor gateway) — but the CLI's reported cost is fabricated behind a
+  custom `ANTHROPIC_BASE_URL`, so `budget.maxUsd` cannot be trusted there; `doctor` reports the
+  host (never the full URL) as a reminder. See
+  `docs/research/providers/spike-anthropic-compatible.md` for the full investigation.
 
 ### `provider: openai`
 

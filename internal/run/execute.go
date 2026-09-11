@@ -995,7 +995,8 @@ func (r *Runner) renderer() note.Renderer {
 	if r.Config.Notes.Templates != "" {
 		dir = r.Config.ExpandPath(r.Config.Notes.Templates)
 	}
-	return note.Renderer{TemplatesDir: dir}
+	rtl := r.Config.RTLMarkup()
+	return note.Renderer{TemplatesDir: dir, RTLMarkup: &rtl}
 }
 
 // triageService reads the service out of the triage note this rca run

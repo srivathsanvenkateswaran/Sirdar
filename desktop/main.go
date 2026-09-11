@@ -19,6 +19,11 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// version is stamped at release time with
+// `wails build -ldflags "-X main.version=..."`, mirroring cmd/sirdar/main.go.
+// Unstamped desktop dev builds keep this default.
+var version = "dev"
+
 func main() {
 	if err := run(); err != nil {
 		fmt.Fprintln(os.Stderr, "sirdar-desktop:", err)

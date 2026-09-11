@@ -124,6 +124,75 @@ func TestMCPCheckWarnsWithoutAWorkspaceConfig(t *testing.T) {
 	}
 }
 
+// TestClaudeEnvironmentCheckFlagsGatewayVarsUnderSubscription covers the
+// credential-leak fix: subscription billing (the default) with a gateway
+// variable set in the process environment must fail the check and name
+// every such variable, since Sirdar is about to strip them from the
+// agent's environment.
+func TestClaudeEnvironmentCheckFlagsGatewayVarsUnderSubscription(t *testing.T) {
+	for _, name := range claudeGatewayEnvVars {
+		clearClaudeGatewayEnvVars(t)
+		t.Setenv(name, "set")
+		cfg := &config.Config{Billing: "subscription"}
+		check := claudeEnvironmentCheck(cfg)
+		if check.OK {
+			t.Fatalf("%s: check should fail with billing: subscription, got %+v", name, check)
+		}
+		if !strings.Contains(check.Detail, name) {
+			t.Errorf("%s: detail does not name the variable: %q", name, check.Detail)
+		}
+		if !strings.Contains(check.Detail, "strip") {
+			t.Errorf("%s: detail does not say Sirdar will strip it: %q", name, check.Detail)
+		}
+	}
+}
+
+// TestClaudeEnvironmentCheckOKWhenClean covers the quiet cases: no gateway
+// variable set under subscription billing, and api billing with no base
+// URL, both pass with no alarming detail.
+func TestClaudeEnvironmentCheckOKWhenClean(t *testing.T) {
+	clearClaudeGatewayEnvVars(t)
+	if check := claudeEnvironmentCheck(&config.Config{Billing: "subscription"}); !check.OK {
+		t.Errorf("clean subscription env should pass: %+v", check)
+	}
+	if check := claudeEnvironmentCheck(&config.Config{Billing: "api"}); !check.OK {
+		t.Errorf("api billing with no base URL should pass: %+v", check)
+	}
+}
+
+// TestClaudeEnvironmentCheckAPIBillingNotesUnreliableCost covers the other
+// half: under api billing a custom ANTHROPIC_BASE_URL is the supported
+// configuration, so the check passes but says budget.maxUsd cannot be
+// trusted, naming only the host.
+func TestClaudeEnvironmentCheckAPIBillingNotesUnreliableCost(t *testing.T) {
+	clearClaudeGatewayEnvVars(t)
+	t.Setenv("ANTHROPIC_BASE_URL", "http://localhost:11434/some/path?secret=1")
+	check := claudeEnvironmentCheck(&config.Config{Billing: "api"})
+	if !check.OK {
+		t.Fatalf("api billing should pass even with a custom base URL: %+v", check)
+	}
+	if !strings.Contains(check.Detail, "localhost:11434") {
+		t.Errorf("detail should name the host: %q", check.Detail)
+	}
+	if strings.Contains(check.Detail, "secret=1") {
+		t.Errorf("detail leaked the full URL, not just the host: %q", check.Detail)
+	}
+	if !strings.Contains(check.Detail, "budget.maxUsd") {
+		t.Errorf("detail should say budget.maxUsd cannot be trusted: %q", check.Detail)
+	}
+}
+
+// clearClaudeGatewayEnvVars scrubs every gateway variable via t.Setenv (to
+// "", which os.Getenv reports the same as unset), so the check's tests are
+// isolated from whatever the test runner's own shell happens to export,
+// and are restored automatically once the test ends.
+func clearClaudeGatewayEnvVars(t *testing.T) {
+	t.Helper()
+	for _, name := range claudeGatewayEnvVars {
+		t.Setenv(name, "")
+	}
+}
+
 // TestDoctorReportsTheMCPRow proves the row reaches the report both shells
 // print, not just the helper.
 func TestDoctorReportsTheMCPRow(t *testing.T) {

@@ -4,12 +4,19 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
-// version is stamped at release time with -ldflags "-X main.version=...",
-// so it must stay a var: a const is folded into the binary before the
-// linker could ever replace it.
-var version = "0.1.0-dev"
+// version, commit, and date are stamped at release time with -ldflags
+// "-X main.version=... -X main.commit=... -X main.date=...", so they must
+// stay vars: a const is folded into the binary before the linker could ever
+// replace it. Unstamped (a `go build` or `go run` outside goreleaser) they
+// keep these defaults.
+var (
+	version = "dev"
+	commit  = "unknown"
+	date    = "unknown"
+)
 
 type command func(args []string, stdout, stderr io.Writer) int
 
@@ -23,7 +30,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if args[0] == "version" {
-		fmt.Fprintf(stdout, "sirdar %s\n", version)
+		fmt.Fprintf(stdout, "sirdar %s (%s, %s)\n", displayVersion(version), commit, date)
 		return 0
 	}
 	cmd, ok := commands[args[0]]
@@ -48,4 +55,12 @@ commands:
   register    print the register
   serve       serve the web UI and API on loopback
   version     print version`)
+}
+
+// displayVersion prefixes release versions with "v" and leaves dev builds as they are.
+func displayVersion(v string) string {
+	if v == "" || v == "dev" || strings.HasPrefix(v, "v") {
+		return v
+	}
+	return "v" + v
 }

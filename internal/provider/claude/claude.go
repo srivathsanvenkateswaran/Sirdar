@@ -89,29 +89,104 @@ func args(spec provider.SessionSpec) []string {
 	return append(out, "--disallowedTools", disallowedTools)
 }
 
-// childEnv returns the environment for the child process. ANTHROPIC_API_KEY is
-// stripped so the session bills against the subscription login, unless the
-// caller marked the run as API-billed with SIRDAR_BILLING=api.
-func childEnv(spec provider.SessionSpec) []string {
+// gatewayEnvVars are the variables that can route the child process at a
+// non-Anthropic host, or at a non-Claude-Code backend entirely. Under
+// subscription billing, leaving any of these set is what turns a
+// documented, supported mechanism into a credential leak: with no gateway
+// credential of its own, Claude Code keeps the claude.ai OAuth login as the
+// active credential and sends it to whatever host ANTHROPIC_BASE_URL names.
+// See docs/research/providers/spike-anthropic-compatible.md.
+var gatewayEnvVars = []string{
+	"ANTHROPIC_BASE_URL",
+	"ANTHROPIC_AUTH_TOKEN",
+	"ANTHROPIC_CUSTOM_HEADERS",
+	"CLAUDE_CODE_USE_BEDROCK",
+	"CLAUDE_CODE_USE_VERTEX",
+	"CLAUDE_CODE_USE_FOUNDRY",
+}
+
+// childEnv returns the environment for the child process, plus any
+// EvSystem events the caller should see about what it did.
+//
+// ANTHROPIC_API_KEY is always stripped under subscription billing so the
+// session bills against the subscription login, unless the caller marked
+// the run as API-billed with SIRDAR_BILLING=api.
+//
+// Subscription billing (the default, and what applies when no billing
+// marker is present) additionally strips every var in gatewayEnvVars: none
+// of them has any legitimate role in a subscription-billed run, and
+// leaving ANTHROPIC_BASE_URL in place is the one configuration that ships
+// the operator's claude.ai OAuth material to a third-party host on a stray
+// shell export. API billing passes all of them through unchanged, since
+// that is the supported way to point Sirdar at an Anthropic-compatible
+// endpoint — but it also means the CLI's reported cost is fabricated
+// behind a foreign base URL, so budget.maxUsd cannot be trusted there.
+func childEnv(spec provider.SessionSpec) ([]string, []provider.Event) {
 	base := spec.Env
 	if len(base) == 0 {
 		base = os.Environ()
 	}
-	keepKey := false
+	apiBilling := false
 	for _, e := range base {
 		if e == "SIRDAR_BILLING=api" {
-			keepKey = true
+			apiBilling = true
 			break
 		}
 	}
+
+	if apiBilling {
+		out := append([]string(nil), base...)
+		var events []provider.Event
+		if envValue(base, "ANTHROPIC_BASE_URL") != "" {
+			events = append(events, systemNotice("cost figures are not reliable behind a custom ANTHROPIC_BASE_URL"))
+		}
+		return out, events
+	}
+
 	out := make([]string, 0, len(base))
+	var events []provider.Event
 	for _, e := range base {
-		if !keepKey && strings.HasPrefix(e, "ANTHROPIC_API_KEY=") {
+		if strings.HasPrefix(e, "ANTHROPIC_API_KEY=") {
+			continue
+		}
+		if name, ok := gatewayVarName(e); ok {
+			events = append(events, systemNotice("removed "+name+" from the agent environment: subscription billing must talk to Anthropic directly"))
 			continue
 		}
 		out = append(out, e)
 	}
-	return out
+	return out, events
+}
+
+// envValue returns the value of the first "name=..." entry in env, or "".
+func envValue(env []string, name string) string {
+	prefix := name + "="
+	for _, e := range env {
+		if strings.HasPrefix(e, prefix) {
+			return strings.TrimPrefix(e, prefix)
+		}
+	}
+	return ""
+}
+
+// gatewayVarName reports whether env entry e sets one of gatewayEnvVars,
+// returning its name.
+func gatewayVarName(e string) (string, bool) {
+	for _, name := range gatewayEnvVars {
+		if strings.HasPrefix(e, name+"=") {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// systemNotice builds an EvSystem event carrying an operator-facing message
+// about what childEnv did to the child process's environment.
+func systemNotice(text string) provider.Event {
+	raw, _ := json.Marshal(map[string]string{"type": "system", "subtype": "sirdar_env", "text": text})
+	ev := newEvent(provider.EvSystem, raw)
+	ev.Text = text
+	return ev
 }
 
 func compactJSON(raw []byte) string {
@@ -136,7 +211,8 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
 	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
-	cmd.Env = childEnv(spec)
+	env, envNotices := childEnv(spec)
+	cmd.Env = env
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -169,6 +245,11 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if err := cmd.Start(); err != nil {
 		cancelRun()
 		return nil, fmt.Errorf("start %s: %w", binary, err)
+	}
+	// Sent before the read goroutine starts, so there is no chance of a
+	// send racing its close(s.events) on an already-buffered channel.
+	for _, ev := range envNotices {
+		s.events <- ev
 	}
 	go s.read(stdout)
 	if err := s.writeUser(spec.Prompt); err != nil {
