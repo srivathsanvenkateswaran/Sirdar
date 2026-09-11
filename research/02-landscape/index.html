@@ -1,0 +1,2402 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../01-name-collisions/">
+      
+      
+        <link rel="next" href="../03-licensing-byo-subscription/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Landscape - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#landscape-coding-agent-orchestrators-for-l2l3-support-tickets-checked-2026-09-10" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Landscape
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#orchestrators-harnesses-coding-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orchestrators, harnesses, coding agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-sre-incident-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI SRE / incident tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helpdesk-native-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helpdesk-native AI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#literal-github-searches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Literal GitHub searches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unverified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unverified
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#orchestrators-harnesses-coding-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Orchestrators, harnesses, coding agents
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ai-sre-incident-tools" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        AI SRE / incident tools
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helpdesk-native-ai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Helpdesk-native AI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#literal-github-searches" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Literal GitHub searches
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-gaps" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The gaps
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#unverified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Unverified
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="landscape-coding-agent-orchestrators-for-l2l3-support-tickets-checked-2026-09-10">Landscape: coding-agent orchestrators for L2/L3 support tickets (checked 2026-09-10)<a class="headerlink" href="#landscape-coding-agent-orchestrators-for-l2l3-support-tickets-checked-2026-09-10" title="Permanent link">&para;</a></h1>
+<p>Target workflow used for scoring: helpdesk or tracker ticket in, bring-your-own-subscription
+coding agent, evidence via MCP (DB, logs, APM, Slack), Arabic to English translation,
+root-cause note, optional fix PR, kanban or dashboard. Score 5 = all of it, 1 = one piece.</p>
+<p><strong>Short answer: nothing does the whole loop.</strong> Two SaaS products come closest (Devin
+Auto-Triage, Linear Agent). The open-source pieces exist separately: Symphony's spec for
+tracker-driven runs, Cyrus for a BYO-CLI runner on a webhook, Paperclip and Multica for the
+board, HolmesGPT for evidence gathering. No project found ingests a <em>helpdesk</em> ticket (Zoho
+Desk, Zendesk, Freshdesk, Intercom) directly into a coding agent, and none translates.</p>
+<h2 id="orchestrators-harnesses-coding-agents">Orchestrators, harnesses, coding agents<a class="headerlink" href="#orchestrators-harnesses-coding-agents" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type / license</th>
+<th>BYO subscription?</th>
+<th>Ticket source</th>
+<th>Evidence (MCP?)</th>
+<th>Output</th>
+<th>UI</th>
+<th>Score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenAI Symphony</td>
+<td>OSS Apache-2.0 (spec + Elixir reference)</td>
+<td>Runs local <code>codex app-server</code>, so whatever Codex CLI is logged in with (not stated explicitly)</td>
+<td>Linear, GitHub Issues, Jira Cloud, Asana, GitLab adapters; spec is tracker-agnostic</td>
+<td>Whatever Codex's MCP config provides; MCP elicitation marks issue blocked</td>
+<td>PR; some issues "never touch the codebase"</td>
+<td>Optional Phoenix LiveView dashboard; rich UI is a stated non-goal</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Paperclip</td>
+<td>OSS MIT</td>
+<td>Yes, <code>claude_local</code> adapter uses terminal OAuth login; API key also</td>
+<td>Own issue system; BYO ticket system on roadmap</td>
+<td>MCP tool gateway shipped</td>
+<td>Whatever the agent does</td>
+<td>Org chart + tasks + cost dashboard</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Multica</td>
+<td>OSS, "Multica License" (Apache-2.0 + hosting conditions)</td>
+<td>Yes, drives 26 installed signed-in CLIs</td>
+<td>Own Linear-shaped issues; Slack/Lark/Telegram triggers; Jira sync is an open request</td>
+<td>Not stated</td>
+<td>Progress comments, PR</td>
+<td>Web kanban, desktop, iOS</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Vibe Kanban</td>
+<td>OSS Apache-2.0, <strong>sunsetting</strong> (bloop shut down 10 Apr 2026, now local-only community project)</td>
+<td>Yes</td>
+<td>None</td>
+<td>MCP config exists</td>
+<td>PR</td>
+<td>Kanban</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Conductor</td>
+<td>Proprietary Mac app, Free / $50 / $60 per user</td>
+<td>Yes, "bring your own subscriptions and keys"</td>
+<td>Linear (per reviews, unverified)</td>
+<td>Not documented</td>
+<td>PR</td>
+<td>Workspace list, diff review</td>
+<td>2</td>
+</tr>
+<tr>
+<td>T3 Code</td>
+<td>OSS MIT</td>
+<td>Yes, wraps Codex, Claude Code, Cursor, OpenCode, Grok CLIs</td>
+<td>None</td>
+<td>Not documented</td>
+<td>PR</td>
+<td>Desktop/web/mobile</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Claude Squad</td>
+<td>OSS AGPL-3.0</td>
+<td>Yes (tmux + worktrees)</td>
+<td>None</td>
+<td>No</td>
+<td>Branches</td>
+<td>TUI</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Ralph loop</td>
+<td>OSS</td>
+<td>Yes</td>
+<td>PRD file</td>
+<td>No</td>
+<td>Commits</td>
+<td>None</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Cyrus</td>
+<td>OSS Apache-2.0 (+ hosted)</td>
+<td>"BYOK: bring your keys / subscriptions"</td>
+<td>Linear, GitHub, GitLab, Slack: assign issue, worktree, agent</td>
+<td>Not stated</td>
+<td>Streams activity back with approvals; PRs</td>
+<td>Hosted dashboard or self-host</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Untrivial agent-orchestrator</td>
+<td>OSS Apache-2.0</td>
+<td>Per harness (27 incl. Claude Code, Codex)</td>
+<td>Not documented</td>
+<td>Not stated</td>
+<td>Draft PRs, CI tracking</td>
+<td>Live kanban</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Open SWE (LangChain)</td>
+<td>OSS MIT</td>
+<td>API keys</td>
+<td>GitHub issues, Slack, Linear, schedules</td>
+<td>Not stated</td>
+<td>PR</td>
+<td>Web dashboard</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Kilo Cloud Agents</td>
+<td>SaaS</td>
+<td>Unverified</td>
+<td>Webhook from any system</td>
+<td>Not stated</td>
+<td>PR</td>
+<td>app.kilo.ai</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Kodus</td>
+<td>OSS AGPL-3.0</td>
+<td>BYO model</td>
+<td>PR review only</td>
+<td>n/a</td>
+<td>Review comments</td>
+<td>Web</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Plane</td>
+<td>OSS AGPL-3.0 + commercial</td>
+<td>BYO OpenAI/Anthropic keys</td>
+<td>Own work items</td>
+<td>Plane MCP server (as a source)</td>
+<td>Not documented</td>
+<td>Kanban</td>
+<td>2</td>
+</tr>
+<tr>
+<td>OpenHands</td>
+<td>OSS MIT + Cloud</td>
+<td>BYO LLM key</td>
+<td>GitHub, GitLab, Bitbucket, Slack; Jira DC enterprise</td>
+<td>Not stated</td>
+<td>PR</td>
+<td>Web</td>
+<td>2</td>
+</tr>
+<tr>
+<td>SWE-agent</td>
+<td>OSS MIT</td>
+<td>API key</td>
+<td>GitHub issue</td>
+<td>No</td>
+<td>Patch</td>
+<td>CLI</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Devin (Cognition)</td>
+<td>SaaS, ACU-metered</td>
+<td>No</td>
+<td>Auto-Triage (18 May 2026): Slack, Linear, GitHub, Sentry, Datadog, escalations, webhooks</td>
+<td>"inspect the codebase, check observability tools, look through related tickets"</td>
+<td>Investigation summary, owner tagging, dedup, PR if clear</td>
+<td>Devin web + Linear/Slack</td>
+<td><strong>4</strong></td>
+</tr>
+<tr>
+<td>Factory Droids</td>
+<td>SaaS, BYOK API keys only</td>
+<td>Partial</td>
+<td>Linear, Jira, Slack; reads Sentry</td>
+<td>MCP</td>
+<td>PR</td>
+<td>Web/CLI</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Cursor Automations</td>
+<td>SaaS</td>
+<td>No</td>
+<td>Slack, Linear, GitHub, PagerDuty, Sentry, webhooks, schedules</td>
+<td>Configured MCPs</td>
+<td>PR</td>
+<td>Cursor web</td>
+<td>3</td>
+</tr>
+<tr>
+<td>GitHub Copilot cloud agent</td>
+<td>SaaS</td>
+<td>No</td>
+<td>GitHub issues; Jira (GA Jun 2026); Linear (GA Jul 2026)</td>
+<td>GitHub + Playwright MCP; Atlassian MCP</td>
+<td>Draft PR</td>
+<td>GitHub</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Claude Code routines</td>
+<td>Anthropic cloud, research preview, <strong>subscription only</strong></td>
+<td>Yes</td>
+<td>Schedule, <code>/fire</code> API, GitHub events. Docs' own example is "triages support requests"</td>
+<td>claude.ai connectors or committed <code>.mcp.json</code></td>
+<td>Transcript, draft PR, connector writes</td>
+<td>Routines list; no kanban</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Claude Tag (Slack)</td>
+<td>Team/Enterprise, org-billed</td>
+<td>Org-level</td>
+<td>Slack @mention, channel watching</td>
+<td>Admin connections: Datadog, Sentry, PagerDuty, ticketing, GitHub</td>
+<td>RCA in thread, draft PR</td>
+<td>Slack thread</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Claude Code in Slack (Pro/Max)</td>
+<td>Subscription</td>
+<td>Yes</td>
+<td>Slack @mention to Claude Code on the web</td>
+<td>Web-session connectors</td>
+<td>One PR per session</td>
+<td>claude.ai/code</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Claude Code GitHub Action</td>
+<td>OSS; <code>ANTHROPIC_API_KEY</code> or <code>CLAUDE_CODE_OAUTH_TOKEN</code></td>
+<td>Yes</td>
+<td>GitHub only</td>
+<td><code>--mcp-config</code></td>
+<td>PR/comments</td>
+<td>GitHub</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Claude Agent for Jira (Atlassian, beta)</td>
+<td>SaaS, Claude Console billing</td>
+<td>No</td>
+<td>Assign or @mention in Jira</td>
+<td>None mentioned</td>
+<td>Draft PR</td>
+<td>Jira</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Jira Automation coding-agent steps</td>
+<td>Jira + Rovo</td>
+<td>Depends</td>
+<td>Jira rule triggers</td>
+<td>Agent's own</td>
+<td>PR</td>
+<td>Jira</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Linear Agent</td>
+<td>SaaS Business/Enterprise; "uses harnesses like Claude Code or Codex"</td>
+<td>No</td>
+<td>Zendesk/Intercom conversation to issue; every issue investigated as it comes in</td>
+<td>Codebase + git history only</td>
+<td>Investigation summary on the issue, then PR</td>
+<td>Linear</td>
+<td><strong>4</strong></td>
+</tr>
+<tr>
+<td>Tembo</td>
+<td>SaaS</td>
+<td>Unverified</td>
+<td>Sentry, PagerDuty, Linear, Jira, Slack, git events</td>
+<td>Not stated</td>
+<td>PR with preview</td>
+<td>Web</td>
+<td>3</td>
+</tr>
+</tbody>
+</table>
+<h2 id="ai-sre-incident-tools">AI SRE / incident tools<a class="headerlink" href="#ai-sre-incident-tools" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Type</th>
+<th>BYO model?</th>
+<th>Input</th>
+<th>Evidence</th>
+<th>Output</th>
+<th>Score</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Sentry Seer</td>
+<td>SaaS, closed, $40/contributor</td>
+<td>No</td>
+<td>Sentry issue</td>
+<td>Traces, breadcrumbs, repo</td>
+<td>RCA + Autofix; hands off to Claude Code / Cursor / Copilot with a case file</td>
+<td>3</td>
+</tr>
+<tr>
+<td>Grafana Sift / Investigations</td>
+<td>Grafana Cloud only; <code>mcp-grafana</code> Apache-2.0</td>
+<td>No</td>
+<td>Alerts</td>
+<td>Metrics, logs, traces</td>
+<td>Report</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Cleric</td>
+<td>SaaS</td>
+<td>No</td>
+<td>Alerts/Slack</td>
+<td>Datadog, Prometheus, Grafana</td>
+<td>Diagnosis, read-only</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Resolve AI</td>
+<td>Enterprise SaaS</td>
+<td>No</td>
+<td>Incidents</td>
+<td>Code, infra, observability</td>
+<td>RCA</td>
+<td>2</td>
+</tr>
+<tr>
+<td>Datadog Bits AI SRE</td>
+<td>SaaS, ~$6.50 per investigation</td>
+<td>No</td>
+<td>Datadog alerts</td>
+<td>Datadog</td>
+<td>Investigation</td>
+<td>2</td>
+</tr>
+<tr>
+<td>PagerDuty SRE Agent, incident.io AI SRE, Rootly, Parity, Traversal</td>
+<td>SaaS</td>
+<td>No</td>
+<td>Incidents</td>
+<td>Vendor data</td>
+<td>RCA</td>
+<td>1 to 2</td>
+</tr>
+<tr>
+<td><strong>HolmesGPT</strong> (Robusta, CNCF sandbox)</td>
+<td><strong>OSS Apache-2.0</strong></td>
+<td><strong>Yes</strong> (OpenAI, Anthropic, Azure, Bedrock, Gemini)</td>
+<td>AlertManager, PagerDuty, OpsGenie, Jira; writes findings back</td>
+<td>Prometheus, Loki, Grafana, Datadog, PostgreSQL/MySQL, k8s, Sentry, 50+ toolsets</td>
+<td>Analysis written back; no PRs</td>
+<td>3</td>
+</tr>
+<tr>
+<td>OpenSRE (Tracer)</td>
+<td>OSS Apache-2.0</td>
+<td>Yes</td>
+<td>PagerDuty, Opsgenie, Jira, Alertmanager, ServiceNow</td>
+<td>60+ tools, MCP + ACP</td>
+<td>Slack/PagerDuty/Telegram</td>
+<td>2</td>
+</tr>
+</tbody>
+</table>
+<h2 id="helpdesk-native-ai">Helpdesk-native AI<a class="headerlink" href="#helpdesk-native-ai" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Name</th>
+<th>Coding-agent handoff?</th>
+<th>What it does</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Zoho Desk Zia Agents</td>
+<td>No</td>
+<td>Support Specialist, Resolution Expert, Sentiment Analyst, Quality Manager. Nothing about engineering handoff or BYO LLM.</td>
+</tr>
+<tr>
+<td>Zendesk AI agents</td>
+<td>No</td>
+<td>Agentic procedures, external API calls; Jira as a knowledge source (Aug 2026).</td>
+</tr>
+<tr>
+<td>Freshdesk Freddy</td>
+<td>No</td>
+<td>Copilot drafting, summaries, <strong>translation</strong>, auto triage.</td>
+</tr>
+<tr>
+<td>Intercom Fin</td>
+<td>No</td>
+<td>Fin Tasks can create Linear/Jira tickets.</td>
+</tr>
+<tr>
+<td>Pluno</td>
+<td>No PR</td>
+<td>Attaches a root-cause summary to the Zendesk ticket before a human opens it, pulling Slack, Jira, Sentry, Datadog. Closest helpdesk-side product to the "RCA note first" idea.</td>
+</tr>
+<tr>
+<td>Duckie</td>
+<td>No PR</td>
+<td>Log analysis, links commits/PRs, creates bug reports.</td>
+</tr>
+<tr>
+<td>Brex "AI oncall engineer"</td>
+<td>Internal, unreleased</td>
+<td>Claude SDK + Datadog/Linear/Glean/Snowflake/codebase, Slack-triggered, structured report with citations, read-only by default, 30 to 45 min reduced to about 3 min. Best published reference architecture for our target.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="literal-github-searches">Literal GitHub searches<a class="headerlink" href="#literal-github-searches" title="Permanent link">&para;</a></h2>
+<p>"support ticket" + "claude code"/"agent sdk" + MCP + dashboard, "zendesk" + "claude agent sdk",
+"zoho desk" + claude orchestrator, "L2 support" open-source agent: only MCP connectors (Composio
+Zoho Desk/Zendesk, a Zendesk Claude Code skill, Scalekit's Zendesk example), GitHub-issue triage
+bots, and generic orchestrators. <code>openma-ai/open-managed-agents</code> (Apache-2.0, self-hosted Claude
+Managed Agents runtime) is the only adjacent infrastructure piece.</p>
+<h2 id="the-gaps">The gaps<a class="headerlink" href="#the-gaps" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The helpdesk-to-coding-agent hop does not exist as a product. Orchestrators start at a developer tracker; helpdesk AIs stop at "create a Jira/Linear issue". Linear Agent bridges Zendesk/Intercom to PR but is Linear-hosted, paid tier, code-only evidence, no BYO subscription.</li>
+<li>The evidence layer is split by market. Coding orchestrators treat MCP as a passthrough and never mention DB/APM/log tooling. AI SRE tools (HolmesGPT is the only OSS BYO-key one) never write code.</li>
+<li>RCA note as the primary output is rare (Brex, Pluno, Devin Auto-Triage, Claude Tag). OSS orchestrators are PR-first.</li>
+<li>BYO <em>subscription</em> (not API key): Paperclip, Multica, Cyrus, Conductor, Vibe Kanban, routines, GitHub Action. Vendor-billed: Devin, Linear, Copilot, Factory cloud, Claude Agent for Jira, every SRE tool.</li>
+<li>Translation appears in no agentic tool. Only Freddy Copilot has it, on the support-agent side.</li>
+</ul>
+<p>The combination (Zoho Desk ticket, own Claude Code/Codex login, New Relic/Grafana/MySQL/Slack
+MCPs, Arabic to English, RCA note, optional PR, kanban) is unoccupied. Nearest assembly: Symphony's
+tracker-adapter and state-machine spec + a Cyrus-style BYO-CLI runner + HolmesGPT-style evidence
+toolsets + a Paperclip/Multica board.</p>
+<h2 id="unverified">Unverified<a class="headerlink" href="#unverified" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Symphony: ChatGPT-login vs API-key not stated; inferred from Codex CLI auth docs.</li>
+<li>Conductor's Linear integration: from reviews only.</li>
+<li>Kilo Cloud Agents and Tembo billing.</li>
+<li>MCP support in Multica, Cyrus, Tembo, AO.</li>
+<li>Devin BYO model: no evidence either way.</li>
+</ul>
+<h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
+<p>openai.com/index/open-source-codex-orchestration-symphony · github.com/openai/symphony (SPEC.md, elixir/README.md) · developers.openai.com/codex/auth · github.com/paperclipai/paperclip (discussions/1163, issues/498) · github.com/multica-ai/multica (issues/1634) · github.com/BloopAI/vibe-kanban · vibekanban.com/blog/shutdown · conductor.build/pricing · rywalker.com/research/conductor · github.com/pingdotgg/t3code · github.com/smtg-ai/claude-squad · github.com/anthropics/claude-plugins-official/tree/main/plugins/ralph-loop · github.com/cyrusagents/cyrus · github.com/Untrivial-ai/agent-orchestrator · github.com/langchain-ai/open-swe · blog.kilo.ai/p/cloud-agents-the-missing-layer-in · github.com/kodustech/kodus-ai · plane.so/ai · docs.openhands.dev/openhands/usage/settings/integrations-settings · github.com/swe-agent/swe-agent · cognition.com/blog/auto-triage · docs.devin.ai/integrations/jira · docs.factory.ai/cli/byok/overview · cursor.com/docs/cloud-agent/automations · docs.github.com/copilot/concepts/agents/coding-agent/about-coding-agent · github.blog/changelog/2026-06-25-github-copilot-for-jira-is-now-generally-available · github.blog/changelog/2026-07-23-copilot-cloud-agent-for-linear-is-now-generally-available · code.claude.com/docs/en/routines · code.claude.com/docs/en/slack · claude.com/docs/claude-tag/overview · code.claude.com/docs/en/github-actions · support.atlassian.com/jira-software-cloud/docs/set-up-claude-agent-for-jira · community.atlassian.com/forums/Jira-articles/New-Put-your-coding-agents-to-work-with-Jira-Automation/ba-p/3268918 · linear.app/now/code-intelligence-for-linear-agent · linear.app/now/coding-sessions-for-linear-agent · linear.app/changelog/2025-12-11-linear-agent-for-intercom-zendesk-gong · tembo.io · docs.port.io/guides/all/automatically-resolve-tickets-with-coding-agents · docs.sentry.io/product/ai-in-sentry/seer · docs.sentry.io/integrations/coding-agents · grafana.com/whats-new/2026-07-29-assistant-investigations-is-now-generally-available-in-grafana-cloud · github.com/grafana/mcp-grafana · techcrunch.com/2026/02/04/ai-sre-resolve-ai-confirms-125m-raise-unicorn-valuation · support.pagerduty.com/main/docs/sre-agent · incident.io/blog/ai-sre-agent-definition · rootly.com/blog/introducing-the-rootly-mcp-server · github.com/HolmesGPT/holmesgpt · github.com/tracer-cloud/opensre · zoho.com/desk/zia/agents.html · support.zendesk.com/hc/en-us/articles/11190197817754 · linear.app/docs/intercom · pluno.ai · ycombinator.com/companies/duckie · dosu.dev/pricing · brex.com/journal/how-we-built-an-ai-oncall-engineer · composio.dev/toolkits/zoho_desk/framework/claude-code · github.com/openma-ai/open-managed-agents</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

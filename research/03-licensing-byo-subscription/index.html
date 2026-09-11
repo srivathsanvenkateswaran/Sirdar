@@ -1,0 +1,2258 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../02-landscape/">
+      
+      
+        <link rel="next" href="../04-harness-internals/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Licensing (BYO subscription) - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#bring-your-own-subscription-what-is-allowed-checked-2026-09-10" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Licensing (BYO subscription)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#verdicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verdicts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anthropic-current-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anthropic: current text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#third-party-backends-for-claude-code-primary-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Third-party backends for Claude Code (primary text)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-existing-wrappers-integrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the existing wrappers integrate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openai-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-constraints-anthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical constraints (Anthropic)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-primitives-a-wrapper-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official primitives a wrapper can rely on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#could-not-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Could not verify
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#verdicts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verdicts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#anthropic-current-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Anthropic: current text
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#third-party-backends-for-claude-code-primary-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Third-party backends for Claude Code (primary text)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#how-the-existing-wrappers-integrate" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the existing wrappers integrate
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#openai-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenAI policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#practical-constraints-anthropic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Practical constraints (Anthropic)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#official-primitives-a-wrapper-can-rely-on" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official primitives a wrapper can rely on
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#could-not-verify" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Could not verify
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="bring-your-own-subscription-what-is-allowed-checked-2026-09-10">Bring-your-own-subscription: what is allowed (checked 2026-09-10)<a class="headerlink" href="#bring-your-own-subscription-what-is-allowed-checked-2026-09-10" title="Permanent link">&para;</a></h1>
+<h2 id="verdicts">Verdicts<a class="headerlink" href="#verdicts" title="Permanent link">&para;</a></h2>
+<p><strong>Anthropic (Claude Pro/Max).</strong> Spawning the <em>unmodified</em> official <code>claude</code> binary and letting
+the user sign in through Anthropic's own <code>/login</code> flow is permitted. Using the OAuth token
+directly against the API is prohibited and server-enforced. Using the Agent SDK with a
+subscription login is "not allowed unless previously approved" in the docs, yet Anthropic's own
+Help Center currently meters it as subscription usage. Design for the CLI-spawn path.</p>
+<p><strong>OpenAI (ChatGPT Plus/Pro via Codex).</strong> No written prohibition on third-party tools driving
+<code>codex</code> / <code>codex app-server</code> / the Codex SDK with a ChatGPT login. OpenAI staff have declined to
+give a clear yes. The ecosystem (OpenClaw, Conductor, Paperclip, T3, Vibe Kanban) does it openly.</p>
+<h2 id="anthropic-current-text">Anthropic: current text<a class="headerlink" href="#anthropic-current-text" title="Permanent link">&para;</a></h2>
+<p>Legal and compliance page, section "Authentication and credential use"
+(code.claude.com/docs/en/legal-and-compliance):</p>
+<blockquote>
+<p>OAuth authentication is intended exclusively for purchasers of Claude Free, Pro, Max, Team, and
+Enterprise subscription plans and is designed to support ordinary use of Claude Code and other
+native Anthropic applications. Developers building products or services that interact with
+Claude's capabilities, including those using the Agent SDK, should use API key authentication
+through Claude Console or a supported cloud provider. Anthropic does not permit third-party
+developers to offer Claude.ai login into their own applications, or to route requests through
+Free, Pro, or Max plan credentials on behalf of their users. Moreover, developers may not
+collect, store, or intermediate Claude.ai credentials or session tokens — sign-in to a Claude
+account must complete through Anthropic's own flow. [...] Nor does it prevent an end user from
+signing in to the unmodified Claude Code binary with their own Claude subscription, including
+where a platform hosts Claude Code as described under "Can customers offer Claude Code in your
+products?" above.</p>
+</blockquote>
+<p>"Can customers offer Claude Code in their products?" on the same page: the binary must not be
+modified and no built-in auth method may be removed or restricted; you may not pay for, resell
+or intermediate usage; each end user authenticates with their own credentials and is billed by
+Anthropic. You may say in plain text that your product "runs Claude Code" but cannot use the
+name or logo in branding. "Advertised usage limits for Pro and Max plans assume ordinary,
+individual usage of Claude Code and the Agent SDK."</p>
+<p>The wording softened since February 2026. The previous text was "Using OAuth tokens obtained
+through Claude Free, Pro, or Max accounts in any other product, tool, or service — including the
+Agent SDK — is not permitted" (The Register 2026-02-20). That sentence is gone; the "unmodified
+binary" carve-out is new.</p>
+<p>Agent SDK overview and quickstart Note:</p>
+<blockquote>
+<p>Unless previously approved, Anthropic does not allow third party developers to offer claude.ai
+login or rate limits for their products, including agents built on the Claude Agent SDK. Use the
+API key authentication methods described in the Quickstart instead.</p>
+</blockquote>
+<p>Help Center "Use the Claude Agent SDK with your Claude plan"
+(support.claude.com/en/articles/15036540): on 2026-05-14 Anthropic announced that from June 15
+programmatic usage (Agent SDK, <code>claude -p</code>, GitHub Actions, third-party apps authenticating with
+the subscription) would move to a dollar credit ($20 Pro / $100 Max 5x / $200 Max 20x, API
+rates, no rollover). On June 15 it was paused: "For now, nothing has changed: Claude Agent SDK,
+<code>claude -p</code>, and third-party app usage still draw from your subscription's usage limits." The
+split is paused, not cancelled. Design for the credit-pool scenario returning.</p>
+<p>Enforcement history: 9 Jan 2026 server-side rejection of subscription OAuth tokens from
+non-Claude-Code clients (broke OpenCode/Roo/Cline); 19 to 20 Feb legal page update; 4 Apr billing
+enforcement. Anthropic engineer Thariq Shihipar, Jan 2026: "Third-party harnesses using Claude
+subscriptions create problems for users and are prohibited by our Terms of Service."</p>
+<p>Authentication facts that matter for a wrapper (code.claude.com/docs/en/authentication):</p>
+<ul>
+<li>Precedence: Bedrock/Vertex/Foundry &gt; <code>ANTHROPIC_AUTH_TOKEN</code> &gt; <code>ANTHROPIC_API_KEY</code> &gt;
+  <code>apiKeyHelper</code> &gt; <code>CLAUDE_CODE_OAUTH_TOKEN</code> &gt; profile &gt; subscription <code>/login</code>. In <code>-p</code> mode an
+  API key in the environment always wins. Vibe Kanban strips <code>ANTHROPIC_API_KEY</code> from the child
+  env for this reason.</li>
+<li><code>claude setup-token</code> mints a one-year subscription OAuth token for CI. A wrapper storing it
+  touches the "may not collect, store, or intermediate credentials" clause. Do not store it; let
+  the CLI own its keychain entry.</li>
+<li><code>--bare</code> never reads OAuth credentials. A subscription-backed wrapper must not use <code>--bare</code>,
+  even though the headless doc says it will become the default for <code>-p</code> in a future release.
+  Pin behaviour explicitly.</li>
+</ul>
+<h2 id="third-party-backends-for-claude-code-primary-text">Third-party backends for Claude Code (primary text)<a class="headerlink" href="#third-party-backends-for-claude-code-primary-text" title="Permanent link">&para;</a></h2>
+<p>Checked 2026-09-11. Full working, probes and the Sirdar recommendation are in
+<code>docs/research/providers/spike-anthropic-compatible.md</code>; this section records the quotes.</p>
+<p><strong>The mechanism is documented and supported.</strong> <code>ANTHROPIC_BASE_URL</code>
+(code.claude.com/docs/en/env-vars):</p>
+<blockquote>
+<p>Override the API endpoint to route requests through a proxy or gateway. When set to a
+non-first-party host, MCP tool search is disabled by default. Set <code>ENABLE_TOOL_SEARCH=true</code> if
+your proxy forwards <code>tool_reference</code> blocks. As of v2.1.196, Remote Control is disabled when
+this points at a host other than <code>api.anthropic.com</code>, matching its behavior on Amazon Bedrock,
+Google Cloud's Agent Platform, and Microsoft Foundry</p>
+</blockquote>
+<p><code>ANTHROPIC_AUTH_TOKEN</code> on the same page:</p>
+<blockquote>
+<p>Custom value for the <code>Authorization</code> header (the value you set here will be prefixed with
+<code>Bearer</code>)</p>
+</blockquote>
+<p><strong>Non-Claude models behind it are unsupported, not prohibited.</strong>
+code.claude.com/docs/en/llm-gateway:</p>
+<blockquote>
+<p>Any gateway that exposes a supported API format works. Anthropic doesn't endorse, maintain, or
+audit third-party gateway products, and doesn't support routing Claude Code to non-Claude
+models through any gateway.</p>
+</blockquote>
+<p>That sentence is the whole of Anthropic's position on the question. It is framed as endorsement,
+maintenance and auditing — no "must not", no "not permitted", no enforcement language, in
+contrast to the credential clause quoted above, which carries all three plus "Anthropic reserves
+the right to take measures to enforce these restrictions".</p>
+<p><strong>A gateway credential replacing the subscription is described as ordinary.</strong> Same page:</p>
+<blockquote>
+<p>While a gateway credential variable or <code>apiKeyHelper</code> is active, a developer's claude.ai
+subscription isn't used: the credential replaces the subscription login for that session, and
+the subscription's usage limits don't apply. That traffic is billed per token to whoever owns
+the credential the gateway forwards [...]</p>
+</blockquote>
+<p><strong>Base URL without a credential keeps the subscription active — and ships its OAuth material
+to the configured host.</strong> Same page:</p>
+<blockquote>
+<p><code>ANTHROPIC_BASE_URL</code> is the variable that points Claude Code at the gateway. Setting only that
+variable, without a gateway credential, doesn't replace the subscription. Requests still route
+through the gateway, but a saved claude.ai login remains the active credential, so its usage
+limits and billing apply.</p>
+</blockquote>
+<p>and code.claude.com/docs/en/llm-gateway-protocol, on <code>anthropic-beta</code>:</p>
+<blockquote>
+<p>When the developer authenticates with a claude.ai login, which is possible when
+<code>ANTHROPIC_BASE_URL</code> is set without a gateway credential variable, this header also carries an
+OAuth capability that the upstream requires, and stripping it fails those requests with <code>401</code></p>
+</blockquote>
+<p>This is the combination Sirdar must refuse: <code>billing: subscription</code> strips <code>ANTHROPIC_API_KEY</code>
+but passes <code>ANTHROPIC_BASE_URL</code> through, so a stray export would send the user's subscription
+credential to a third party. <code>billing: api</code> plus an explicit credential is the supported shape.</p>
+<p><strong>Provisioning your own keys is carved out of the credential prohibition.</strong>
+code.claude.com/docs/en/legal-and-compliance, immediately after the "does not permit third-party
+developers" sentence already quoted above:</p>
+<blockquote>
+<p>This does not restrict how customers provision and manage their own API keys or third-party
+inference provider credentials — for example, configuring an API key in a development
+environment, secrets manager, or machine image for use by the customer's own authorized users
+— provided the resulting usage is billed to the key owner under their agreement with Anthropic
+(or the applicable provider) and is not resold or intermediated as described above.</p>
+</blockquote>
+<p><strong>Not addressed anywhere in the terms.</strong> The Consumer Terms, the Commercial Terms and the Usage
+Policy say nothing about <code>ANTHROPIC_BASE_URL</code>, proxies, claude-code-router, LiteLLM, or running
+the harness against a non-Anthropic model (all three fetched 2026-09-11). The nearest Commercial
+Terms language, A.2, disclaims rather than restricts:</p>
+<blockquote>
+<p>Customer may elect (in its sole discretion) to use features, services or other content made
+available by third parties to Customer through the Services ("Third Party Features"). Customer
+acknowledges and agrees that Third Party Features are not Services and, accordingly, Anthropic
+is not responsible for them.</p>
+</blockquote>
+<p>The restriction clauses that do exist are aimed elsewhere: Commercial Terms D.4 ("access the
+Services to build a competing product or service, including to train competing AI models or
+resell the Services"), Consumer Terms section 3 ("To develop any products or services that
+compete with our Services"), and the Usage Policy's bar on "Utilization of inputs and outputs to
+train an AI model (e.g., 'model scraping' or 'model distillation') without prior authorization
+from Anthropic". A session that never reaches Anthropic's inference engages none of them.</p>
+<p><strong>No OpenAI-compatible or generic proxy is documented.</strong> The gateway compatibility guide lists
+three API formats a gateway may expose — Anthropic Messages (<code>ANTHROPIC_BASE_URL</code>), Amazon
+Bedrock InvokeModel (<code>ANTHROPIC_BEDROCK_BASE_URL</code>), and Google Cloud's Agent Platform rawPredict
+(<code>ANTHROPIC_VERTEX_BASE_URL</code>) — with Microsoft Foundry and Claude Platform on AWS implementing
+the Anthropic Messages format under their own variables. Chat Completions is not among them, and
+claude-code-router and LiteLLM are named nowhere in the docs. Neither is discouraged by name
+either. An OpenAI-shaped backend needs a translating proxy, which is the ground Sirdar's
+<code>provider: openai</code> already covers without one.</p>
+<p><strong>Verdict.</strong> Permitted: pointing the unmodified CLI at a non-Anthropic host, with an API key or
+gateway token. Prohibited: third parties routing other people's Free/Pro/Max credentials, and
+intermediating claude.ai credentials or session tokens. Not addressed: whether the model behind
+the base URL may be a non-Claude model — covered only by the support disclaimer, which carries
+no prohibition.</p>
+<h2 id="how-the-existing-wrappers-integrate">How the existing wrappers integrate<a class="headerlink" href="#how-the-existing-wrappers-integrate" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Tool</th>
+<th>Claude mechanism</th>
+<th>Codex mechanism</th>
+<th>Inherits login?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>T3 Code</td>
+<td><code>@anthropic-ai/claude-agent-sdk</code> (<code>apps/server/src/provider/Layers/ClaudeAdapter.ts</code>: <code>query({ pathToClaudeCodeExecutable, settingSources, permissionMode, resume, canUseTool, ... })</code>); reads SDK <code>get_usage</code> and <code>rate_limit_event</code></td>
+<td><code>codex app-server</code> via workspace package <code>effect-codex-app-server</code></td>
+<td>Yes (Max OAuth from <code>~/.claude</code>)</td>
+</tr>
+<tr>
+<td>Vibe Kanban</td>
+<td>Spawns <code>npx -y @anthropic-ai/claude-code@&lt;pinned&gt;</code> with <code>--permission-prompt-tool=stdio --permission-mode &lt;m&gt; --verbose --output-format=stream-json --input-format=stream-json --include-partial-messages --replay-user-messages [--resume &lt;id&gt;]</code>; prompt over stdin; strips <code>ANTHROPIC_API_KEY</code></td>
+<td><code>npx -y @openai/codex@&lt;pinned&gt; app-server</code>, JSON-RPC over stdio, <code>thread/start</code> / <code>thread/fork</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Conductor (closed)</td>
+<td>Bundled or system Claude Code binary; warns that <code>ANTHROPIC_API_KEY</code> flips to API billing</td>
+<td><code>codex login</code> or <code>CODEX_API_KEY</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Multica (<code>server/pkg/agent/claude.go</code>)</td>
+<td><code>claude -p --output-format stream-json --input-format stream-json --verbose --permission-mode bypassPermissions [--strict-mcp-config] [--mcp-config &lt;path&gt;] [--model] [--max-turns] [--resume &lt;id&gt;]</code></td>
+<td><code>codex app-server --listen stdio://</code>; config written to <code>$CODEX_HOME/config.toml</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Paperclip</td>
+<td><code>claude --print --output-format stream-json --verbose --resume --dangerously-skip-permissions --max-turns --mcp-config</code>, or ACP; auth priority <code>ANTHROPIC_API_KEY</code> &gt; <code>CLAUDE_CODE_OAUTH_TOKEN</code> &gt; <code>~/.claude</code> login</td>
+<td><code>codex exec --json</code> or ACP; host <code>auth.json</code> symlinked into a managed <code>CODEX_HOME</code></td>
+<td>Yes</td>
+</tr>
+<tr>
+<td>Claude Squad</td>
+<td>tmux running the interactive <code>claude</code>; scrapes the pane for prompts</td>
+<td>Same with <code>codex</code></td>
+<td>Yes</td>
+</tr>
+</tbody>
+</table>
+<p>Pattern: every open-source wrapper except T3 spawns the official binary; T3 and Zed use the SDK.
+Nobody compliant touches the OAuth token directly.</p>
+<h2 id="openai-policy">OpenAI policy<a class="headerlink" href="#openai-policy" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Codex auth doc: CLI and IDE extension support ChatGPT sign-in and API key for local work;
+  Codex cloud requires ChatGPT. Headless: device-code auth (beta) or copy <code>~/.codex/auth.json</code>
+  ("treat it like a password").</li>
+<li>Codex TypeScript SDK bundles the CLI, injects <code>CODEX_API_KEY</code>, offers <code>resumeThread()</code> and
+  <code>runStreamed()</code>. App-server: "Embed Codex into your product with the app-server protocol",
+  stdio / ws / unix transports. No third-party policy statement.</li>
+<li>openai/codex discussion #8338: staff said the CLI is Apache-licensed and terms are "quite
+  permissive", pointed to the Terms of Use, declined to confirm the BYO-ChatGPT-in-a-third-party
+  case. OpenClaw's docs claim explicit support; not verified against an OpenAI primary source.</li>
+<li>Plan usage: rolling 5-hour windows plus weekly limits; local and cloud share the allowance.</li>
+</ul>
+<h2 id="practical-constraints-anthropic">Practical constraints (Anthropic)<a class="headerlink" href="#practical-constraints-anthropic" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Two windows, 5-hour and weekly, shared across claude.ai, Claude Code, Desktop, web, routines.</li>
+<li>Fan-out counts against the same pool. <code>/usage</code> attributes plan usage to subagents and MCP
+  servers; "each session uses your subscription quota independently"; agent teams roughly 7x
+  tokens. Default cap 20 concurrent subagents, nesting depth 3.</li>
+<li>Headless is documented, not discouraged: <code>-p</code> starts in manual permission mode, so pass
+  <code>--permission-mode</code>, <code>--allowedTools</code>, <code>--permission-prompt-tool</code>, or <code>--permission-prompts none</code>
+  (v2.1.259+); <code>--forward-subagent-text</code> to reconstruct subagent transcripts; SIGINT ends a turn
+  cleanly, SIGTERM leaves it unfinished; <code>-p</code> waits up to 10 min for background subagents.</li>
+<li>Unattended sessions stop when the <code>/login</code> credential expires; warning 3 days out.</li>
+</ul>
+<h2 id="official-primitives-a-wrapper-can-rely-on">Official primitives a wrapper can rely on<a class="headerlink" href="#official-primitives-a-wrapper-can-rely-on" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>claude -p</code> with <code>--output-format stream-json --input-format stream-json --verbose
+  --include-partial-messages</code>, <code>--resume/--session-id/--fork-session</code>,
+  <code>--mcp-config/--strict-mcp-config</code>, <code>--agents &lt;json&gt;</code>, <code>--json-schema</code>, <code>system/init</code>
+  capabilities (code.claude.com/docs/en/headless).</li>
+<li>Agent SDK (TS/Python): hooks, subagents, MCP, <code>canUseTool</code>, sessions, skills, plugins,
+  streaming, <code>get_usage</code> (code.claude.com/docs/en/agent-sdk/overview).</li>
+<li>Background sessions and supervisor: <code>claude --bg</code>, <code>claude agents --json</code>, <code>claude attach
+  &lt;id&gt;</code>, <code>claude daemon status|stop</code> (docs/en/agent-view); cross-session messaging.</li>
+<li>Remote Control (subscription only): <code>claude remote-control</code>, <code>--rc</code>.</li>
+<li>Channels (research preview): Telegram, Discord, iMessage; webhook receiver and permission relay
+  in the reference; works under <code>-p</code>.</li>
+<li>Routines (research preview): schedule, API (<code>/v1/claude_code/routines/&lt;id&gt;/fire</code>), GitHub
+  triggers; subscription-metered with a daily run cap.</li>
+<li>Claude Code on the web: <code>claude --cloud "&lt;task&gt;"</code>, <code>--teleport</code>.</li>
+<li>Codex: <code>codex app-server --listen stdio://|ws://|unix://</code> (<code>thread/start</code>, <code>thread/resume</code>,
+  <code>thread/fork</code>, <code>account/rateLimits/read</code>), <code>codex exec --json</code>, <code>@openai/codex-sdk</code>.</li>
+</ul>
+<h2 id="could-not-verify">Could not verify<a class="headerlink" href="#could-not-verify" title="Permanent link">&para;</a></h2>
+<ul>
+<li>OpenAI help-center articles behind a JS wall; relied on learn.chatgpt.com docs.</li>
+<li>Any OpenAI first-party statement explicitly permitting third-party harnesses on ChatGPT login.</li>
+<li>Conductor's internal mechanism.</li>
+<li>Whether the "unmodified binary" carve-out extends to the binary bundled inside the Agent SDK
+  package. Docs are silent. This is the single most important open question for Sirdar's
+  provider layer; the safe default is spawning the CLI the user installed and logged into.</li>
+</ul>
+<h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
+<p>code.claude.com/docs/en/legal-and-compliance · code.claude.com/docs/en/agent-sdk/overview ·
+code.claude.com/docs/en/agent-sdk/quickstart · support.claude.com/en/articles/15036540 ·
+support.claude.com/en/articles/11145838 · code.claude.com/docs/en/authentication ·
+code.claude.com/docs/en/headless · code.claude.com/docs/en/costs · code.claude.com/docs/en/sub-agents ·
+code.claude.com/docs/en/agent-view · code.claude.com/docs/en/remote-control ·
+code.claude.com/docs/en/channels · code.claude.com/docs/en/routines ·
+code.claude.com/docs/en/claude-code-on-the-web · anthropic.com/legal/consumer-terms ·
+theregister.com/software/2026/02/20/anthropic-clarifies-ban-on-third-party-tool-access-to-claude ·
+zed.dev/blog/anthropic-subscription-changes · github.com/AndyMik90/Aperant/issues/1871 ·
+github.com/pingdotgg/t3code · github.com/BloopAI/vibe-kanban (crates/executors/src/executors/claude.rs, codex.rs) ·
+conductor.build/docs/reference/harnesses/claude-code · github.com/multica-ai/multica (server/pkg/agent/claude.go, issues/2563) ·
+github.com/paperclipai/paperclip (docs/adapters/claude-local.md) · github.com/smtg-ai/claude-squad ·
+learn.chatgpt.com/docs/auth · learn.chatgpt.com/docs/pricing · github.com/openai/codex (sdk/typescript/README.md, discussions/8338) ·
+developers.openai.com/codex/app-server · developers.openai.com/community/codex-for-oss · docs.openclaw.ai/providers/openai ·
+code.claude.com/docs/en/llm-gateway · code.claude.com/docs/en/llm-gateway-connect ·
+code.claude.com/docs/en/llm-gateway-protocol · code.claude.com/docs/en/env-vars ·
+code.claude.com/docs/en/third-party-integrations · anthropic.com/legal/commercial-terms ·
+anthropic.com/legal/aup</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

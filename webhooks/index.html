@@ -1,0 +1,2609 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../credentials/">
+      
+      
+        <link rel="next" href="../notifications/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Webhooks - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#inbound-webhook-triggers" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Webhooks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start-the-endpoints-are-not-reachable-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start: the endpoints are not reachable by default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#match" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cooldown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cooldown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The URL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The URL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-comes-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What comes back
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setting-each-source-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting each source up
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setting each source up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jira-automation-rule-jira" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira — Automation rule (jira)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear-linear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear (linear)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops-service-hook-azdo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps — service hook (azdo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rally-rally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rally (rally)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zendesk-trigger-plus-webhook-zendesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk — trigger plus webhook (zendesk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#freshdesk-automation-rule-freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk — automation rule (freshdesk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intercom-intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom (intercom)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hubspot-private-app-subscriptions-hubspot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot — private app subscriptions (hubspot)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-generic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic (generic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-delivery-does-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a delivery does nothing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#before-you-start-the-endpoints-are-not-reachable-by-default" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Before you start: the endpoints are not reachable by default
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Configuration">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#proxy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        proxy
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#match" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        match
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cooldown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        cooldown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The URL
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The URL">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-comes-back" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What comes back
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#setting-each-source-up" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Setting each source up
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Setting each source up">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jira-automation-rule-jira" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira — Automation rule (jira)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear-linear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear (linear)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops-service-hook-azdo" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps — service hook (azdo)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rally-rally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rally (rally)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zendesk-trigger-plus-webhook-zendesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk — trigger plus webhook (zendesk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#freshdesk-automation-rule-freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk — automation rule (freshdesk)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intercom-intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom (intercom)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hubspot-private-app-subscriptions-hubspot" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot — private app subscriptions (hubspot)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#generic-generic" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Generic (generic)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#verification-at-a-glance" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verification at a glance
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#when-a-delivery-does-nothing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        When a delivery does nothing
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="inbound-webhook-triggers">Inbound webhook triggers<a class="headerlink" href="#inbound-webhook-triggers" title="Permanent link">&para;</a></h1>
+<p>A ticket lands on you; <code>sirdar serve</code> triages it before you have read it. That is the whole of
+this feature: a tracker or helpdesk POSTs to Sirdar when something is assigned, and Sirdar runs
+the same triage <code>sirdar triage KEY</code> would have run.</p>
+<p>Nothing here trusts the webhook body beyond the ticket key it names. The key goes to the normal
+triage path, which reads the ticket through the configured adapter — so a forged payload with a
+plausible signature can, at worst, make Sirdar triage a ticket that already exists.</p>
+<h2 id="before-you-start-the-endpoints-are-not-reachable-by-default">Before you start: the endpoints are not reachable by default<a class="headerlink" href="#before-you-start-the-endpoints-are-not-reachable-by-default" title="Permanent link">&para;</a></h2>
+<p><code>sirdar serve</code> binds <code>127.0.0.1:7777</code>. A hosted tracker cannot reach that, and this is
+deliberate: the JSON API on the same listener has no authentication, so anybody who can reach the
+port can start runs and read your notes.</p>
+<p>Two ways to let a tracker in, both of which need a decision from you:</p>
+<ul>
+<li><strong>A TLS reverse proxy.</strong> <code>sirdar serve --allow-remote --addr 0.0.0.0:7777</code>, with nginx, Caddy or
+  a cloud load balancer terminating TLS in front of it. Restrict the proxy to <code>/hooks/</code> unless you
+  also want the UI exposed — which you almost certainly do not.</li>
+<li><strong>A tunnel.</strong> <code>cloudflared</code>, <code>ngrok</code>, a Tailscale funnel. The listener stays on loopback and the
+  tunnel does the exposure. This is the one to start with.</li>
+</ul>
+<p>Either way, <strong>use TLS</strong>. Five of the nine sources authenticate with a shared secret in a plain
+header; on an unencrypted connection anyone on the path can read it and replay the delivery.</p>
+<p>The <code>/hooks/</code> routes are registered either way, and without <code>webhooks.enabled: true</code> every one of
+them answers 404. They are registered so that a disabled hook gets that 404 rather than falling
+through to the single-page app and answering 200 with a page of HTML; a tracker cannot tell a
+workspace with the hooks off from one that was never configured.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="nt">webhooks</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">enabled</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+<span class="w">  </span><span class="nt">cooldown</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">10m</span><span class="w">            </span><span class="c1"># a key triaged this recently is skipped; 0s disables the cooldown</span>
+<span class="w">  </span><span class="nt">match</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">assignee</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">me</span><span class="w">           </span><span class="c1"># "me" = the account email on sources.tracker, else sources.helpdesk</span>
+<span class="w">    </span><span class="nt">statuses</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Open</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="s">"In</span><span class="nv"> </span><span class="s">Progress"</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">labels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">support</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">sources</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">jira</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:jira-hook-secret</span>
+<span class="w">    </span><span class="nt">linear</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:linear-hook-secret</span>
+<span class="w">    </span><span class="nt">azdo</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">sirdar</span>
+<span class="w">      </span><span class="nt">password</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:azdo-hook-password</span>
+<span class="w">    </span><span class="nt">hubspot</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:hubspot-client-secret</span>
+<span class="w">      </span><span class="nt">proxy</span><span class="p">:</span><span class="w">                 </span><span class="c1"># only hubspot: it signs the URL it called</span>
+<span class="w">        </span><span class="nt">scheme</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https</span>
+<span class="w">        </span><span class="nt">host</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hooks.acme.com</span>
+</code></pre></div>
+<p><code>secret</code> and <code>password</code> are credential references — <code>env:NAME</code> or <code>keychain:SERVICE</code> — never the
+secret itself, like every other credential in the file. They are resolved once at startup: a
+reference that cannot be resolved stops <code>sirdar serve</code> rather than leaving an endpoint up that
+rejects everything.</p>
+<h3 id="proxy"><code>proxy</code><a class="headerlink" href="#proxy" title="Permanent link">&para;</a></h3>
+<p><code>proxy.scheme</code> and <code>proxy.host</code> are the public address a reverse proxy receives deliveries on.
+They matter to <code>hubspot</code> alone — it is the one source whose signature covers the URL it posted to,
+and behind a proxy that is not the URL this process sees. Setting <code>proxy</code> on any other source is a
+configuration error rather than a line that quietly does nothing.</p>
+<p>With no <code>proxy</code> block, the request's own scheme and host are used and <code>X-Forwarded-Proto</code> /
+<code>X-Forwarded-Host</code> are <strong>ignored</strong>: they are the caller's claim about the URL it called, and that
+URL is half of what the signature proves — a receiver that believed them would let a sender choose
+the message it has to sign. Configure <code>proxy</code> and those headers are read again, but only for the
+half you left out (<code>host</code> alone, with the proxy setting <code>X-Forwarded-Proto</code>, is a sound setup).</p>
+<h3 id="match"><code>match</code><a class="headerlink" href="#match" title="Permanent link">&para;</a></h3>
+<p>A tracker fires on every change to every ticket it is configured for. <code>match</code> is what turns that
+firehose into "something landed on my plate".</p>
+<ul>
+<li><code>assignee</code> — the one that matters. Matched case-insensitively against whoever the payload says
+  the ticket now belongs to. <strong>A payload that carries no assignee is rejected when this is set</strong>:
+  "only what is assigned to me" cannot be satisfied by a body that does not say. If your source
+  sends a body without an assignee (a minimal Azure DevOps subscription, a Zendesk template you
+  wrote without one), either add the field to the body or leave <code>assignee</code> unset and filter in the
+  tracker's own rule instead.</li>
+<li><code>statuses</code> and <code>labels</code> — best-effort, and looser on purpose. Sirdar looks through the payload
+  for anything status-shaped (<code>status</code>, <code>ScheduleState</code>, <code>System.State</code>, a plain-string <code>state</code>)
+  or label-shaped (<code>labels</code>, <code>tags</code>, <code>labelIds</code>, <code>System.Tags</code>) and passes the delivery if any of
+  them matches. <strong>A payload carrying none of those fields passes rather than being dropped</strong> —
+  several of these sources can be configured to send nothing but an id. Two known gaps: Linear's
+  workflow state arrives as an object at <code>data.state</code>, which is not harvested (it collides with
+  Rally's whole-snapshot <code>message.state</code>), so filter Linear on labels; and HubSpot sends neither.</li>
+</ul>
+<p><code>assignee: me</code> resolves to the account email on <code>sources.tracker</code>, falling back to
+<code>sources.helpdesk</code>. A Linear API key or an Azure DevOps PAT names nobody, so a workspace using one
+has to write the address out. For HubSpot, write the <strong>numeric owner id</strong> — <code>hubspot_owner_id</code>
+carries an id, not an address.</p>
+<h3 id="cooldown"><code>cooldown</code><a class="headerlink" href="#cooldown" title="Permanent link">&para;</a></h3>
+<p>A key that was triaged inside the cooldown is skipped, as is one with a run already <code>preparing</code> or
+<code>running</code>. Without it, editing a ticket by hand generates a delivery every few seconds and each
+one would be a fresh agent session. A <em>failed</em> triage holds the key too: a workspace whose adapter
+is down should not answer every delivery with another run.</p>
+<p>Both of those are read off the run directory, and a run's first status is written there a moment
+after the delivery has been answered. So a key is also held from the moment a delivery starts a
+triage of it until that job ends: two deliveries for one ticket arriving together start one run,
+not two, and the second is reported as skipped.</p>
+<h2 id="the-url">The URL<a class="headerlink" href="#the-url" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>POST http://&lt;host&gt;:&lt;port&gt;/hooks/&lt;workspace-id&gt;/&lt;source&gt;
+</code></pre></div>
+<p><code>&lt;source&gt;</code> is the key under <code>webhooks.sources</code>: <code>jira</code>, <code>linear</code>, <code>azdo</code>, <code>rally</code>, <code>zendesk</code>,
+<code>freshdesk</code>, <code>intercom</code>, <code>hubspot</code>, <code>generic</code>. <code>&lt;workspace-id&gt;</code> is the workspace <code>sirdar serve</code>
+was started in, whose id the startup line prints; <code>GET /api/workspaces</code> and the UI show it too.</p>
+<p>That is the only workspace id these endpoints accept. A delivery naming another registered
+workspace gets a 404, whatever secret it carries: the receiver holds one workspace's secrets, and
+a secret for one workspace must not start runs in another. Serving a second workspace means a
+second <code>sirdar serve</code> on its own port.</p>
+<h3 id="what-comes-back">What comes back<a class="headerlink" href="#what-comes-back" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Status</th>
+<th>Body</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>202</td>
+<td><code>{"jobId":"job-3","keys":["OMNI-2510"]}</code></td>
+<td>A triage started. <code>jobIds</code> is added when one delivery named several tickets, since each gets its own job.</td>
+</tr>
+<tr>
+<td>202</td>
+<td><code>{"skipped":"OMNI-2510: was triaged 2m ago and the cooldown is 10m"}</code></td>
+<td>Verified, and deliberately did nothing — already running, on cooldown, or filtered out.</td>
+</tr>
+<tr>
+<td>400</td>
+<td><code>{"error":{"code":"bad_request",…}}</code></td>
+<td>Verified, but the body is not JSON or names no ticket.</td>
+</tr>
+<tr>
+<td>401</td>
+<td><code>{"error":{"code":"unauthorized",…}}</code></td>
+<td>The signature or secret did not check out.</td>
+</tr>
+<tr>
+<td>404</td>
+<td><code>{"error":{"code":"not_found",…}}</code></td>
+<td>No such endpoint. One message for all of: no such source, a source that exists but is not enabled, a workspace id nobody knows, and a workspace other than the one being served.</td>
+</tr>
+<tr>
+<td>500</td>
+<td><code>{"error":{"code":"internal",…}}</code></td>
+<td>Verified, but the run could not be started. The reason is in the server's log, not in this body: a webhook sender is not the operator.</td>
+</tr>
+<tr>
+<td>413</td>
+<td><code>{"error":{"code":"too_large",…}}</code></td>
+<td>Over 1 MiB. The body is size-checked before it is verified.</td>
+</tr>
+</tbody>
+</table>
+<p>A skip is a 2xx on purpose: a tracker told its delivery failed will send it again.</p>
+<p>Every delivery also publishes a <code>hook.received</code> event on <code>/api/events</code> —
+<code>{source, key, outcome}</code>, where the outcome is <code>started</code>, <code>skipped</code>, <code>filtered</code>, <code>ignored</code> or
+<code>rejected</code>. It is how you tell a hook that never arrives from one that arrives and is filtered.</p>
+<h2 id="setting-each-source-up">Setting each source up<a class="headerlink" href="#setting-each-source-up" title="Permanent link">&para;</a></h2>
+<h3 id="jira-automation-rule-jira">Jira — Automation rule (<code>jira</code>)<a class="headerlink" href="#jira-automation-rule-jira" title="Permanent link">&para;</a></h3>
+<p>Jira Cloud's own webhooks are unsigned, so use Automation, where you control the headers.</p>
+<ol>
+<li>Project settings → <strong>Automation</strong> → <strong>Create rule</strong>.</li>
+<li>Trigger: <strong>Issue assigned</strong> (or <strong>Field value changed</strong> on Assignee).</li>
+<li>Condition, if you want one: <code>Assignee = &lt;you&gt;</code>. Doing it here rather than in <code>match</code> saves the
+   round trip.</li>
+<li>Action: <strong>Send web request</strong>.</li>
+<li>URL: <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/jira</code></li>
+<li>Method POST, <strong>Webhook body: Issue data (automation format)</strong> — or a custom body, see below.</li>
+<li>Headers: <code>X-Sirdar-Secret: &lt;the secret you put in the config&gt;</code>.</li>
+<li>Put the same value in <code>webhooks.sources.jira.secret</code> as a credential ref.</li>
+</ol>
+<p>Sirdar reads <code>issue.key</code>, <code>webhookEvent</code>, and the assignee from
+<code>issue.fields.assignee.emailAddress</code>, falling back to <code>accountId</code> then <code>displayName</code>. If your rule
+sends a custom body, the flat shape works too:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{issue.key}}"</span><span class="p">,</span><span class="w"> </span><span class="nt">"assignee"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{issue.assignee.emailAddress}}"</span><span class="p">,</span><span class="w"> </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{issue.status.name}}"</span><span class="p">}</span>
+</code></pre></div>
+<p>A platform webhook registered through <code>POST /rest/api/3/webhook</code> also works, provided something in
+front of it adds the <code>X-Sirdar-Secret</code> header — Jira will not. Assignment is not an event of its
+own there: it arrives as <code>jira:issue_updated</code> with an <code>assignee</code> changelog entry, so scope the
+subscription with <code>fieldIdsFilter</code> or lean on <code>match.assignee</code>.</p>
+<h3 id="linear-linear">Linear (<code>linear</code>)<a class="headerlink" href="#linear-linear" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Settings → <strong>API</strong> → <strong>Webhooks</strong> → <strong>New webhook</strong>.</li>
+<li>URL <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/linear</code>; data change events, <strong>Issues</strong>.</li>
+<li>Copy the <strong>signing secret</strong> into <code>webhooks.sources.linear.secret</code>.</li>
+</ol>
+<p>Linear signs the raw body with HMAC-SHA256 and sends the hex digest as <code>Linear-Signature</code>. Sirdar
+also checks <code>webhookTimestamp</code> is within 60 seconds, which is Linear's own recommendation.</p>
+<p>A <code>create</code> always triggers. An <code>update</code> triggers only when <code>updatedFrom</code> shows the assignee or the
+labels changed — an edited description is not a reason to start an agent session. The key is
+<code>data.identifier</code> (<code>ENG-431</code>), and the assignee is read from <code>data.assignee.email</code> where the
+payload embeds the user, <code>data.assigneeId</code> otherwise.</p>
+<h3 id="azure-devops-service-hook-azdo">Azure DevOps — service hook (<code>azdo</code>)<a class="headerlink" href="#azure-devops-service-hook-azdo" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Project settings → <strong>Service hooks</strong> → <strong>+</strong>  → <strong>Web Hooks</strong>.</li>
+<li>Trigger: <strong>Work item updated</strong> (and a second subscription for <strong>Work item created</strong>). Filter by
+   area path, work item type, or changed field — server-side filtering beats filtering here.</li>
+<li>Action → URL <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/azdo</code>, and set <strong>Basic authentication
+   username</strong> and <strong>password</strong>. Those two go in <code>webhooks.sources.azdo.username</code> and <code>.password</code>.</li>
+<li><strong>Resource details to send</strong>: <code>All</code> if you want <code>match</code> to see the state and tags; <code>Minimal</code> is
+   enough for the key alone.</li>
+</ol>
+<p>The key is <code>resource.workItemId</code>, falling back to <code>resource.id</code> — the order matters, because on an
+update <code>resource.id</code> is the revision, not the work item. The assignee comes from
+<code>resource.revision.fields["System.AssignedTo"]</code>, then the <code>newValue</code> of the same field in
+<code>resource.fields</code>; <code>Display Name &lt;addr@example.com&gt;</code> is reduced to the address.</p>
+<h3 id="rally-rally">Rally (<code>rally</code>)<a class="headerlink" href="#rally-rally" title="Permanent link">&para;</a></h3>
+<p>Rally has no UI for webhooks; create one through the API
+(<code>POST https://rally1.rallydev.com/apps/pigeon/api/v2/webhook</code>, authenticated with an API key —
+basic auth is not accepted there):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"Name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Sirdar triage"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"TargetUrl"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/rally"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"ObjectTypes"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Defect"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"Expressions"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"AttributeName"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Owner"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Operator"</span><span class="p">:</span><span class="w"> </span><span class="s2">"="</span><span class="p">,</span><span class="w"> </span><span class="nt">"Value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"&lt;your user ref&gt;"</span><span class="p">}]</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Rally sends no signature, so Sirdar needs <code>X-Sirdar-Secret</code>. If the webhook config will not carry
+a custom header, put the secret in front of Sirdar instead — a proxy that adds the header on a
+path only Rally knows.</p>
+<p>Sirdar reads <code>FormattedID</code> from <code>message.state</code>, falling back to <code>message.changes.FormattedID</code>,
+and the assignee from <code>message.state.Owner</code>. <strong>The delivered payload shape is unverified</strong> — the
+Rally research pass could not load the Webhooks Payload page — so check a real delivery before
+relying on this one.</p>
+<h3 id="zendesk-trigger-plus-webhook-zendesk">Zendesk — trigger plus webhook (<code>zendesk</code>)<a class="headerlink" href="#zendesk-trigger-plus-webhook-zendesk" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Admin Center → <strong>Apps and integrations → Webhooks → Create webhook</strong>.</li>
+<li>Endpoint <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/zendesk</code>, POST, JSON.</li>
+<li>Authentication <strong>None</strong>, but turn <strong>signing</strong> on and copy the <strong>signing secret</strong> into
+   <code>webhooks.sources.zendesk.secret</code>.</li>
+<li>Admin Center → <strong>Objects and rules → Business rules → Triggers → Add trigger</strong>. Condition:
+   <em>Assignee changed to <you></em>. Action: <strong>Notify active webhook</strong>, choosing the one above, with
+   this body:</li>
+</ol>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"ticket_id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{ticket.id}}"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"status"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{ticket.status}}"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"assignee_email"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{ticket.assignee.email}}"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"tags"</span><span class="p">:</span><span class="w"> </span><span class="s2">"{{ticket.tags}}"</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Zendesk signs <code>timestamp + body</code> with HMAC-SHA256 and base64s it into
+<code>X-Zendesk-Webhook-Signature</code>, with the timestamp in <code>X-Zendesk-Webhook-Signature-Timestamp</code>.
+Sirdar rejects a delivery whose timestamp is more than five minutes from now, in either direction.</p>
+<p>The body is yours, so the only fixed requirement is <code>ticket_id</code> (<code>ticket.id</code> and <code>id</code> are accepted
+as fallbacks).</p>
+<h3 id="freshdesk-automation-rule-freshdesk">Freshdesk — automation rule (<code>freshdesk</code>)<a class="headerlink" href="#freshdesk-automation-rule-freshdesk" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Admin → <strong>Workflows → Automations → Ticket updates → New rule</strong>.</li>
+<li>Condition: <em>Agent is <you></em>. Action: <strong>Trigger webhook</strong>.</li>
+<li>URL <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/freshdesk</code>, POST, JSON, <strong>custom headers</strong>
+   <code>X-Sirdar-Secret: &lt;secret&gt;</code>.</li>
+<li>Body: <code>{"ticket": {"id": "{{ticket.id}}", "status": "{{ticket.status}}", "assignee_email": "{{ticket.agent.email}}"}}</code></li>
+</ol>
+<p>Freshdesk signs nothing; the header is the whole of the proof. Sirdar reads <code>ticket.id</code>, with
+<code>freshdesk_webhook.ticket_id</code> and <code>ticket_id</code> as fallbacks.</p>
+<h3 id="intercom-intercom">Intercom (<code>intercom</code>)<a class="headerlink" href="#intercom-intercom" title="Permanent link">&para;</a></h3>
+<ol>
+<li><strong>Developer Hub</strong> → your app → <strong>Webhooks</strong>.</li>
+<li>Endpoint <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/intercom</code>; subscribe to the
+   <strong><code>conversation.admin.assigned</code></strong> topic.</li>
+<li>Copy the app's <strong>client secret</strong> into <code>webhooks.sources.intercom.secret</code> — the signature is
+   computed with it, not with an access token.</li>
+</ol>
+<p>Intercom sends <code>X-Hub-Signature: sha1=&lt;hex&gt;</code>, an HMAC-SHA1 of the body. Sirdar acts only on
+<code>conversation.admin.assigned</code> — every other topic you subscribe to arrives at the same endpoint
+and is accepted and ignored. The key is <code>data.item.id</code>; the assignee is
+<code>data.item.assignee.email</code> where present, else <code>data.item.admin_assignee_id</code>.</p>
+<h3 id="hubspot-private-app-subscriptions-hubspot">HubSpot — private app subscriptions (<code>hubspot</code>)<a class="headerlink" href="#hubspot-private-app-subscriptions-hubspot" title="Permanent link">&para;</a></h3>
+<ol>
+<li>Settings → <strong>Integrations → Private apps</strong> → your app → <strong>Webhooks</strong>.</li>
+<li>Target URL <code>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/hubspot</code>.</li>
+<li>Create subscriptions for <strong><code>ticket.creation</code></strong> and <strong><code>ticket.propertyChange</code></strong> (the
+   <code>hubspot_owner_id</code> property, for assignment).</li>
+<li>Copy the app's <strong>client secret</strong> into <code>webhooks.sources.hubspot.secret</code>.</li>
+</ol>
+<p>The v3 signature is base64(HMAC-SHA256(<code>method + uri + body + timestamp</code>)) in
+<code>X-HubSpot-Signature-v3</code>, with <code>X-HubSpot-Request-Timestamp</code> in epoch milliseconds and a five
+minute window.</p>
+<p><strong>The URI is part of the signed message</strong>, and it is the URL HubSpot called — not the one this
+process sees behind a proxy. Behind one, set <code>webhooks.sources.hubspot.proxy</code> to the address
+HubSpot posts to; without it Sirdar signs over the address the request arrived on and every
+delivery fails verification. The <code>X-Forwarded-*</code> headers alone will not do it: Sirdar ignores them
+until a <code>proxy</code> block says there is a proxy, because they are the caller's own claim about the URL
+it called. See <a href="#proxy"><code>proxy</code></a>.</p>
+<p>HubSpot posts a batch: one JSON array of up to a hundred events, of every type you subscribed to.
+Sirdar takes the ticket events, deduplicates by <code>objectId</code>, and starts one job per ticket.</p>
+<p><strong><code>match.assignee</code> and HubSpot do not combine.</strong> An assignee reaches Sirdar only on a
+<code>ticket.propertyChange</code> for <code>hubspot_owner_id</code> — HubSpot sends one changed property per event, and
+a <code>ticket.creation</code> carries none. So with <code>match.assignee</code> set, every <code>ticket.creation</code> is
+filtered out and only owner changes start a run. That is usually what you want from a hook
+("assigned to me"), but if you also want new tickets triaged, leave <code>match.assignee</code> unset for
+this source's workspace and filter in the subscription instead.</p>
+<h3 id="generic-generic">Generic (<code>generic</code>)<a class="headerlink" href="#generic-generic" title="Permanent link">&para;</a></h3>
+<p>For a tracker with no integration, a script, or a smoke test.</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-X<span class="w"> </span>POST<span class="w"> </span>https://&lt;your-host&gt;/hooks/&lt;workspace-id&gt;/generic<span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s1">'X-Sirdar-Secret: &lt;secret&gt;'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-H<span class="w"> </span><span class="s1">'Content-Type: application/json'</span><span class="w"> </span><span class="se">\</span>
+<span class="w">  </span>-d<span class="w"> </span><span class="s1">'{"key":"OMNI-2510","assignee":"sri@acme.com"}'</span>
+</code></pre></div>
+<p><code>key</code> is required. <code>assignee</code>, <code>event</code>, and anything else you add (<code>status</code>, <code>labels</code>) are read by
+the match filter.</p>
+<h2 id="verification-at-a-glance">Verification at a glance<a class="headerlink" href="#verification-at-a-glance" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Source</th>
+<th>Header</th>
+<th>Scheme</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>jira</code></td>
+<td><code>X-Sirdar-Secret</code></td>
+<td>shared secret, constant-time compare</td>
+</tr>
+<tr>
+<td><code>linear</code></td>
+<td><code>Linear-Signature</code></td>
+<td>hex HMAC-SHA256 over the raw body, + 60 s timestamp window</td>
+</tr>
+<tr>
+<td><code>azdo</code></td>
+<td><code>Authorization</code></td>
+<td>HTTP basic, both halves compared constant-time</td>
+</tr>
+<tr>
+<td><code>rally</code></td>
+<td><code>X-Sirdar-Secret</code></td>
+<td>shared secret</td>
+</tr>
+<tr>
+<td><code>zendesk</code></td>
+<td><code>X-Zendesk-Webhook-Signature</code> (+ <code>-Timestamp</code>)</td>
+<td>base64 HMAC-SHA256 over <code>timestamp + body</code>, 5 min window</td>
+</tr>
+<tr>
+<td><code>freshdesk</code></td>
+<td><code>X-Sirdar-Secret</code></td>
+<td>shared secret</td>
+</tr>
+<tr>
+<td><code>intercom</code></td>
+<td><code>X-Hub-Signature</code></td>
+<td><code>sha1=</code> + hex HMAC-SHA1 over the body</td>
+</tr>
+<tr>
+<td><code>hubspot</code></td>
+<td><code>X-HubSpot-Signature-v3</code> (+ <code>X-HubSpot-Request-Timestamp</code>)</td>
+<td>base64 HMAC-SHA256 over <code>method + uri + body + timestamp</code>, 5 min window</td>
+</tr>
+<tr>
+<td><code>generic</code></td>
+<td><code>X-Sirdar-Secret</code></td>
+<td>shared secret</td>
+</tr>
+</tbody>
+</table>
+<p>Bodies are capped at 1 MiB and the cap is enforced before verification. Every comparison is
+constant-time. A key is trimmed of surrounding whitespace as it is read — a template that rendered
+a padded field would otherwise name a second, separate ticket — and a key that is then not one
+plain path element, anything with a separator, a <code>..</code>, or a glob character, is dropped rather than
+sanitised.</p>
+<p>The signature windows read the sender's own timestamp, and HubSpot's is in <strong>milliseconds</strong>. A
+stamp in seconds parses as a moment in 1970 and falls outside the window, so it fails closed: that
+is what to check if one source starts answering 401 for every delivery.</p>
+<h2 id="when-a-delivery-does-nothing">When a delivery does nothing<a class="headerlink" href="#when-a-delivery-does-nothing" title="Permanent link">&para;</a></h2>
+<p>Watch the event stream while you test:</p>
+<div class="highlight"><pre><span></span><code>curl<span class="w"> </span>-N<span class="w"> </span>http://127.0.0.1:7777/api/events<span class="w"> </span><span class="p">|</span><span class="w"> </span>grep<span class="w"> </span>hook.received
+</code></pre></div>
+<ul>
+<li><code>rejected</code> — the signature failed, the body would not parse, or the run could not be started.
+  Check the secret is the same on both ends, and for HubSpot check <code>proxy</code>. A start that failed
+  says why in the server's own log; the sender is told only that it failed.</li>
+<li><code>ignored</code> — verified, but the payload was not an event Sirdar acts on. A Linear update that
+  changed only the title, an Intercom topic other than <code>conversation.admin.assigned</code>, a HubSpot
+  batch with no ticket events.</li>
+<li><code>filtered</code> — <code>webhooks.match</code> rejected it. The response body says which rule and what it saw.</li>
+<li><code>skipped</code> — the key is already running, or inside the cooldown.</li>
+<li><code>started</code> — a run is going; watch <code>/api/events</code> or the UI.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

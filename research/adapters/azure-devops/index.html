@@ -1,0 +1,2365 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../../09-qwen-wire-formats/">
+      
+      
+        <link rel="next" href="../helpdesks/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Azure DevOps - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#azure-devops-adapter-research" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Azure DevOps
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-work-item-tracking-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Work Item Tracking REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Work Item Tracking REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-a-single-work-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get a single work item
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#links-relations-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Links / relations, history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiql-work-item-queries-for-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WIQL (work item queries) for List
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#html-markdownplain-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTML → markdown/plain text
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#personal-access-token-pat-basic-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Personal Access Token (PAT) — Basic auth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#microsoft-entra-id-oauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Microsoft Entra ID (OAuth)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managed-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managed identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops-server-on-prem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps Server (on-prem)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-azure-devops-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Azure DevOps MCP server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-azure-boards-helpdesk-integrations-and-helpdeskref-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Azure Boards ↔ helpdesk integrations, and HelpdeskRef derivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-service-hooks-future-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Service hooks (future trigger)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-existing-go-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Existing Go clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-work-item-tracking-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Work Item Tracking REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Work Item Tracking REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#get-a-single-work-item" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get a single work item
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#links-relations-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Links / relations, history
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#wiql-work-item-queries-for-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        WIQL (work item queries) for List
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#html-markdownplain-text" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HTML → markdown/plain text
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Authentication
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Authentication">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#personal-access-token-pat-basic-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Personal Access Token (PAT) — Basic auth
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#microsoft-entra-id-oauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Microsoft Entra ID (OAuth)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#managed-identity" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Managed identity
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops-server-on-prem" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps Server (on-prem)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rate-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rate limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-azure-devops-mcp-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Azure DevOps MCP server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-azure-boards-helpdesk-integrations-and-helpdeskref-derivation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Azure Boards ↔ helpdesk integrations, and HelpdeskRef derivation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-service-hooks-future-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Service hooks (future trigger)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-existing-go-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Existing Go clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="azure-devops-adapter-research">Azure DevOps adapter research<a class="headerlink" href="#azure-devops-adapter-research" title="Permanent link">&para;</a></h1>
+<p>Research date: 2026-09-10. Scope: Azure DevOps Services (<code>dev.azure.com</code>) and Azure DevOps Server (on-prem), for a read-only Go <code>tracker</code> (+ optional <code>helpdesk</code>) adapter per Sirdar's adapter contract (stdlib HTTP, env/keychain creds, no third-party Go deps by default).</p>
+<h2 id="1-work-item-tracking-rest-api">1. Work Item Tracking REST API<a class="headerlink" href="#1-work-item-tracking-rest-api" title="Permanent link">&para;</a></h2>
+<h3 id="get-a-single-work-item">Get a single work item<a class="headerlink" href="#get-a-single-work-item" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>GET https://dev.azure.com/{organization}/{project}/_apis/wit/workitems/{id}?api-version=7.1
+GET https://dev.azure.com/{organization}/{project}/_apis/wit/workitems/{id}?fields={fields}&amp;asOf={asOf}&amp;$expand={$expand}&amp;api-version=7.1
+</code></pre></div>
+<p><code>$expand</code> is an enum: <code>None</code>, <code>Relations</code>, <code>Fields</code>, <code>Links</code>, <code>All</code>. <code>All</code> returns fields, relations, and links in one call — this is what Sirdar's <code>GetByKey</code> should use, since the ticket contract needs fields (title/description/state/etc.) and relations (attachments, parent, hyperlinks) together. <code>fields</code> is a comma-separated allow-list, usable instead of <code>$expand=all</code> when only specific fields are needed (e.g. for <code>List</code> follow-up hydration). <code>asOf</code> fetches a historical revision. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.1">Get Work Item</a></p>
+<p>Response shape: <code>{ id, rev, fields: {...}, relations: [{rel, url, attributes}], _links: {...}, url }</code>. <code>fields</code> is a flat map keyed by reference name (e.g. <code>System.Title</code>) to a JSON value — this maps directly onto Sirdar's <code>Fields map</code> concept, with the named fields (<code>Key</code>, <code>Title</code>, etc.) pulled out explicitly. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.1">Get Work Item</a></p>
+<p>Relevant fields, confirmed present in the schema/examples across the docs pulled:
+- <code>System.Title</code> — string
+- <code>System.Description</code> — HTML string (rich-text control)
+- <code>Microsoft.VSTS.TCM.ReproSteps</code> — HTML string, Bug work item type only (Description isn't shown on the default Bug form; ReproSteps is the Bug-specific field for what happened / repro)
+- <code>System.State</code> — string, process-defined (e.g. New/Active/Resolved/Closed, or To Do/Doing/Done depending on process template)
+- <code>Microsoft.VSTS.Common.Priority</code> — integer (1–4 typically)
+- <code>Microsoft.VSTS.Common.Severity</code> — string, Bug-specific (e.g. "2 - High")
+- <code>System.AssignedTo</code> — an identity object: <code>{displayName, url, _links.avatar.href, id, uniqueName, imageUrl, descriptor}</code>
+- <code>System.Tags</code> — semicolon-delimited string
+- <code>System.Parent</code> — integer work item id (present when set; also derivable from the <code>System.LinkTypes.Hierarchy-Reverse</code> relation)
+- <code>System.AreaPath</code>, <code>System.IterationPath</code> — backslash-delimited path strings
+- <code>System.CreatedDate</code>, <code>System.ChangedDate</code> — ISO 8601 UTC timestamps</p>
+<p>All confirmed directly in the sample response body of <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.1">Get Work Item</a> (which shows <code>AssignedTo</code>/<code>CreatedBy</code>/<code>ChangedBy</code> identity objects, <code>CreatedDate</code>, <code>ChangedDate</code>, <code>Title</code>, <code>Priority</code>, <code>Tags</code>, <code>AreaPath</code>, <code>IterationPath</code>) and cross-referenced against the <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/fields/list?view=azure-devops-rest-7.1">Fields - List</a> reference-name catalog. <code>ReproSteps</code> and <code>Severity</code> being Bug-type-specific is standard Azure Boards process-template knowledge (Bug work item type uses <code>Microsoft.VSTS.TCM.ReproSteps</code> in place of <code>System.Description</code> on its default layout) — <strong>not independently re-verified against a live Bug work item's field list in this research pass; treat as high-confidence but unverified by direct API sample.</strong></p>
+<p><code>api-version</code> 7.1 vs 7.2: 7.2 exists as a documented moniker on every WIT endpoint fetched (<code>Get Work Item</code>, <code>Get Work Items Batch</code>, <code>Attachments - Get</code>), but the docs give no changelog delta description between 7.1 and 7.2 for these particular endpoints. Given Sirdar is a new adapter, pin to <code>7.1</code> (stable, GA-documented since the routing header split) and treat <code>7.2</code> as a forward-compat option — <strong>the specific field/behavior differences between 7.1 and 7.2 for WIT are unverified.</strong></p>
+<h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>GET https://dev.azure.com/{organization}/{project}/_apis/wit/workItems/{workItemId}/comments?api-version=7.1-preview.4
+GET .../comments?$top={n}&amp;continuationToken={token}&amp;includeDeleted={bool}&amp;$expand={CommentExpandOptions}&amp;order={asc|desc}&amp;api-version=7.1-preview.4
+</code></pre></div>
+<p>Correction to the brief: comment text is <strong>markdown by default</strong>, not HTML. <code>Comment.format</code> is an enum <code>markdown | html</code> (a comment can natively be either, depending on how it was authored — the modern web UI writes markdown). <code>Comment.text</code> holds the raw text in its native format; <code>Comment.renderedText</code> (only populated when <code>$expand=renderedText</code> or <code>all</code>) holds the HTML-rendered version. For Sirdar's thread-message <code>Text</code> field, request <code>$expand=renderedText</code> (or <code>all</code>) and prefer <code>renderedText</code> when present, falling back to <code>text</code> — this sidesteps having to run a markdown-vs-HTML branch in the adapter and lets a single HTML→plain-text step handle both. Pagination uses <code>continuationToken</code> / <code>nextPage</code>, not offset — the adapter needs a token-following loop, not a page-index loop. <code>mentions[]</code> gives <code>{artifactType, artifactId, targetId}</code> for @-mentions of people or other work items. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/comments/get-comments?view=azure-devops-rest-7.1">Get Comments</a></p>
+<p><code>createdBy</code> / <code>modifiedBy</code> are <code>IdentityRef</code> objects (<code>displayName</code>, <code>uniqueName</code>, <code>id</code>, <code>descriptor</code>) — same shape as <code>System.AssignedTo</code> — giving a consistent identity-to-<code>Author</code> mapping across fields and comments.</p>
+<h3 id="attachments">Attachments<a class="headerlink" href="#attachments" title="Permanent link">&para;</a></h3>
+<p>Discovery: attachments surface as <code>WorkItemRelation</code> entries with <code>rel == "AttachedFile"</code> on the work item fetched with <code>$expand=relations</code> or <code>all</code>. Each relation's <code>url</code> looks like <code>https://dev.azure.com/{org}/{project}/_apis/wit/attachments/{guid}?fileName=...</code>, and <code>attributes</code> carries the original file name, size, and comment (if any) attached at link time. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/attachments/get?view=azure-devops-rest-7.1">Attachments - Get, WorkItemRelation</a></p>
+<p>Download:
+<div class="highlight"><pre><span></span><code>GET https://dev.azure.com/{organization}/{project}/_apis/wit/attachments/{id}?fileName={fileName}&amp;download={bool}&amp;api-version=7.1
+</code></pre></div>
+<code>id</code> is the attachment GUID (from the relation URL, not a small integer). <code>download=true</code> forces <code>Content-Disposition: attachment</code>. Response media types are <code>application/octet-stream</code> or <code>application/zip</code>; no JSON envelope — this is a raw byte stream, same auth header as every other WIT call (PAT/Bearer). <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/attachments/get?view=azure-devops-rest-7.1">Attachments - Get</a></p>
+<p>For Sirdar's <code>AttachmentIDs</code> on thread messages: comment payloads don't carry attachment references directly in the Comments API response shown above — attachment association with a specific comment isn't exposed by this endpoint (attachments are Bug/task-level via <code>AttachedFile</code> relations, not comment-level). If a ticket's thread needs to show "this comment had this attachment," that link has to be inferred out-of-band (e.g. by comment timestamp proximity to relation <code>attributes</code> timestamps) or simply not attempted — <strong>Azure DevOps has no first-class comment↔attachment linkage in this API; unverified whether any preview/newer endpoint changes this.</strong> The pragmatic design is to treat all <code>AttachedFile</code> relations on the work item as belonging to the ticket as a whole (attach them to the synthetic "first message" or expose them separately), not to any one thread message.</p>
+<h3 id="links-relations-history">Links / relations, history<a class="headerlink" href="#links-relations-history" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>relations[]</code> on the work item (from <code>$expand=relations</code>/<code>all</code>) is the single source for: parent/child (<code>System.LinkTypes.Hierarchy-Forward</code>/<code>-Reverse</code>), related (<code>System.LinkTypes.Related</code>), attachments (<code>AttachedFile</code>), and hyperlinks (<code>Hyperlink</code>) — see §4 for the Hyperlink → <code>HelpdeskRef</code> derivation.</li>
+<li>Work item history/updates: <code>GET .../workitems/{id}/updates</code> (from <code>_links.workItemUpdates</code> in the Get Work Item response) returns a revision-by-revision diff feed; <code>GET .../workitems/{id}/revisions</code> returns full historical snapshots. Neither was fetched in full detail this pass since Sirdar's contract doesn't currently need a revision/history field — flagged as <strong>available but out of scope</strong> unless a future <code>Fields</code> entry wants change history.</li>
+</ul>
+<h3 id="wiql-work-item-queries-for-list">WIQL (work item queries) for <code>List</code><a class="headerlink" href="#wiql-work-item-queries-for-list" title="Permanent link">&para;</a></h3>
+<p><div class="highlight"><pre><span></span><code>POST https://dev.azure.com/{organization}/{project}/{team}/_apis/wit/wiql?api-version=7.1
+POST .../wiql?timePrecision={bool}&amp;$top={n}&amp;api-version=7.1
+Body: { "query": "&lt;WIQL text&gt;" }
+</code></pre></div>
+<a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1">Query By Wiql</a></p>
+<p>Two-step pattern is mandatory: <strong>WIQL never returns field values, only IDs (and, for tree/oneHop queries, link pairs).</strong> Response <code>queryType</code> is <code>flat | tree | oneHop</code>; for <code>flat</code> queries the payload is <code>workItems: [{id, url}, ...]</code>; for <code>tree</code>/<code>oneHop</code> it's <code>workItemRelations: [{rel, source: {id,url}, target: {id,url}}, ...]</code>. Step 2 is <code>POST .../_apis/wit/workitemsbatch</code> with the collected IDs to get actual field values. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/wiql/query-by-wiql?view=azure-devops-rest-7.1">Query By Wiql</a></p>
+<p>Example queries for Sirdar's <code>List</code>:
+<div class="highlight"><pre><span></span><code><span class="c1">-- assigned to me, not closed</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="n">Id</span><span class="p">]</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">WorkItems</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="n">AssignedTo</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="o">@</span><span class="n">Me</span><span class="w"> </span><span class="k">AND</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="k">State</span><span class="p">]</span><span class="w"> </span><span class="o">&lt;&gt;</span><span class="w"> </span><span class="s1">'Closed'</span>
+<span class="k">ORDER</span><span class="w"> </span><span class="k">BY</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="n">ChangedDate</span><span class="p">]</span><span class="w"> </span><span class="k">DESC</span>
+
+<span class="c1">-- children of a given parent</span>
+<span class="k">SELECT</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="n">Id</span><span class="p">]</span><span class="w"> </span><span class="k">FROM</span><span class="w"> </span><span class="n">WorkItems</span>
+<span class="k">WHERE</span><span class="w"> </span><span class="p">[</span><span class="k">System</span><span class="p">.</span><span class="n">Parent</span><span class="p">]</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="err">{</span><span class="n">id</span><span class="err">}</span>
+</code></pre></div>
+<code>@Me</code> and comparison/<code>&lt;&gt;</code> operators confirmed in Microsoft's own query-operators reference and syntax examples. <strong><code>[System.Parent] = {id}</code> as a flat-query WHERE clause is a common community pattern but not confirmed verbatim as a supported flat-query filter field in the docs pulled this pass</strong> — the officially documented way to get children of a parent is a <code>tree</code>/<code>oneHop</code> query using <code>MODE (Recursive)</code> over <code>System.LinkTypes.Hierarchy-Forward</code>, e.g. <code>SELECT [System.Id] FROM WorkItemLinks WHERE [Source].[System.Id] = {id} AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' MODE (Recursive)</code>, which returns <code>workItemRelations</code> rather than a flat <code>workItems</code> list. Verify against a live org before shipping the "children of parent" <code>List</code> filter. <a href="https://learn.microsoft.com/en-us/azure/devops/boards/queries/wiql-syntax?view=azure-devops">WIQL syntax reference</a>, <a href="https://learn.microsoft.com/en-us/azure/devops/boards/queries/query-operators-variables?view=azure-devops">Query operators, macros, variables</a></p>
+<p>Limits: WIQL query text itself is capped at 32K characters. <code>$top</code> bounds the WIQL result set size (max IDs the query returns). Separately, <code>workitemsbatch</code> accepts <strong>at most 200 ids per call</strong> — documented explicitly ("Gets work items for a list of work item ids (Maximum 200)") — so <code>List</code> needs to chunk IDs into batches of ≤200 and issue multiple <code>workitemsbatch</code> calls, concatenating results. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1">Get Work Items Batch</a>, <a href="https://learn.microsoft.com/en-us/azure/devops/boards/queries/wiql-syntax?view=azure-devops">WIQL syntax reference</a></p>
+<p><code>workitemsbatch</code> request body: <code>{ ids: [...], fields: [...], $expand, asOf, errorPolicy: "Fail"|"Omit" }</code>. <code>errorPolicy: "Omit"</code> is useful for Sirdar so a single deleted/inaccessible ID in a batch doesn't 404 the whole <code>List</code> call. <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-items-batch?view=azure-devops-rest-7.1">Get Work Items Batch</a></p>
+<h3 id="html-markdownplain-text">HTML → markdown/plain text<a class="headerlink" href="#html-markdownplain-text" title="Permanent link">&para;</a></h3>
+<p><code>System.Description</code> and <code>Microsoft.VSTS.TCM.ReproSteps</code> are rich-text/HTML fields (confirmed by field type in the WIT field catalog and by long-standing Azure Boards behavior — the web UI is a WYSIWYG HTML editor for these fields). Comments default to markdown with optional <code>renderedText</code> HTML (§ above — a correction to the brief's assumption that comments are HTML). Sirdar needs one HTML→text/markdown normalization path (stdlib <code>golang.org/x/net/html</code> is not stdlib proper — pure-stdlib HTML stripping is feasible for the simple tag set Azure Boards' editor produces, but a small vendored/allowed HTML-to-markdown pass is the practical choice; flagged as a design decision, not researched further since it's implementation, not adapter-surface).</p>
+<h2 id="2-authentication">2. Authentication<a class="headerlink" href="#2-authentication" title="Permanent link">&para;</a></h2>
+<h3 id="personal-access-token-pat-basic-auth">Personal Access Token (PAT) — Basic auth<a class="headerlink" href="#personal-access-token-pat-basic-auth" title="Permanent link">&para;</a></h3>
+<p>Format: HTTP Basic with an <strong>empty (or arbitrary, ignored) username</strong> and the PAT as the password, base64-encoded: <code>Authorization: Basic base64(":" + PAT)</code>. curl form: <code>curl -u :{PAT} https://dev.azure.com/{org}/_apis/...</code>. Scope needed for Sirdar's read-only use: <code>vso.work</code> — "Grants the ability to read work items, queries, boards, area and iterations paths, and other work item tracking related metadata. Also grants the ability to execute queries, search work items and to receive notifications about work item events via service hooks." This exact scope is listed as the security requirement on every WIT endpoint fetched (get work item, comments, attachments, WIQL). <a href="https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops">Use personal access tokens</a>, <a href="https://learn.microsoft.com/en-us/rest/api/azure/devops/wit/work-items/get-work-item?view=azure-devops-rest-7.1">Get Work Item - Security</a></p>
+<p>PAT format detail (useful for adapter-side validation/redaction): 84 characters, 52 random, with a fixed <code>AZDO</code> signature at positions 76–80 for leak-scanning tools. Default max lifetime is governed by org policy (commonly 30–90 days); Microsoft's current guidance is to treat PATs as short-lived and prefer Entra tokens for anything long-running — directly relevant since Sirdar adapters are meant to run unattended. <a href="https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops">Use personal access tokens</a></p>
+<h3 id="microsoft-entra-id-oauth">Microsoft Entra ID (OAuth)<a class="headerlink" href="#microsoft-entra-id-oauth" title="Permanent link">&para;</a></h3>
+<p>Azure DevOps' Entra resource id is <code>499b84ac-1321-427f-aa17-267ca6975798</code>; the <code>.default</code> scope form is <code>499b84ac-1321-427f-aa17-267ca6975798/.default</code>, or <code>https://app.vssps.visualstudio.com/.default</code> (equivalent resource URI form — both appear in Microsoft's own current docs). Token acquired via standard OAuth2 client-credentials (service principal) or managed-identity flow against <code>https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token</code>, then sent as <code>Authorization: Bearer {token}</code>. <a href="https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/authentication/entra-oauth.md">Entra OAuth</a>, <a href="https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity">Service principals and managed identities</a></p>
+<h3 id="managed-identity">Managed identity<a class="headerlink" href="#managed-identity" title="Permanent link">&para;</a></h3>
+<p>Same Entra token flow, credential source is Azure's Instance Metadata Service instead of a client secret/certificate: <code>GET http://169.254.169.254/metadata/identity/oauth2/token?api-version=2019-08-01&amp;resource=https://app.vssps.visualstudio.com/</code> with <code>Metadata: true</code> header, only reachable from inside an Azure-hosted compute resource. Not useful if Sirdar runs outside Azure (e.g. locally or on a non-Azure host) — flagged as an auth option only relevant for an Azure-hosted deployment of the harness. The identity (service principal or managed identity) still has to be explicitly added to the Azure DevOps org as a user by a Project Collection Administrator before it can call any API — it does <strong>not</strong> get access automatically from Entra group membership. Tokens expire hourly (vs. PATs' up-to-a-year lifetime), which is the main security argument for preferring this path. <a href="https://learn.microsoft.com/en-us/azure/devops/integrate/get-started/authentication/service-principal-managed-identity">Service principals and managed identities</a></p>
+<h3 id="azure-devops-server-on-prem">Azure DevOps Server (on-prem)<a class="headerlink" href="#azure-devops-server-on-prem" title="Permanent link">&para;</a></h3>
+<p>Same REST surface, different base URL: <code>https://{server}/{collection}/{project}/_apis/...</code> (or <code>http://{server}:{port}/tfs/{collection}/...</code> for older TFS-style paths). PAT basic-auth works identically. NTLM/Windows auth (via IIS/Kerberos) is the traditional on-prem alternative to a PAT; Microsoft's current guidance explicitly recommends <strong>Kerberos over NTLM</strong> for Azure DevOps Server, and separately warns that <strong>enabling IIS Basic Authentication on the server invalidates PAT usage</strong> — an important interaction for on-prem deployments if the collection is also IIS-Basic-Auth-protected. Entra ID auth does not apply to Server (it's an Entra/cloud-only mechanism) — Server auth options are effectively PAT or Windows-integrated (NTLM/Kerberos). <a href="https://github.com/MicrosoftDocs/azure-devops-docs/blob/main/docs/integrate/get-started/authentication/oauth.md">oauth.md</a>, <a href="https://devblogs.microsoft.com/devops/reconfigure-azure-devops-server-to-use-kerberos-instead-of-ntlm/">Kerberos vs NTLM blog</a>, <a href="https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops">PAT FAQ — IIS Basic Auth</a></p>
+<h3 id="rate-limits">Rate limits<a class="headerlink" href="#rate-limits" title="Permanent link">&para;</a></h3>
+<p>Azure DevOps Services throttles by <strong>Azure DevOps Throughput Units (TSTUs)</strong>: 1 TSTU ≈ average 5-minute load of a typical user; global/per-identity sliding-window limit is <strong>200 TSTUs per 5 minutes</strong>. Exceeding it first causes <em>delays</em> (milliseconds up to 30s per request), and sustained excess causes hard <code>429</code> responses with body <code>TF400733: The request has been canceled: Request was blocked due to exceeding usage of resource &lt;resource name&gt; in namespace &lt;namespace ID&gt;.</code> <a href="https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits?view=azure-devops">Rate and usage limits</a></p>
+<p>Response headers to handle in the adapter's HTTP client:
+- <code>Retry-After</code> — seconds to wait; per Microsoft, honoring it means retry logic doesn't even need to inspect the status further (the request itself still returns HTTP 200 in some throttling paths, not just 429 — worth defensive handling either way).
+- <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Limit</code>, <code>X-RateLimit-Reset</code> (Unix epoch), <code>X-RateLimit-Delay</code>, <code>X-RateLimit-Cost</code>, <code>X-RateLimit-Resource</code> (human-readable, not for parsing logic).</p>
+<p><a href="https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits?view=azure-devops">Rate and usage limits</a></p>
+<p>Automation identities (service accounts, bots) can be granted higher limits by temporarily assigning the <strong>Basic + Test Plans</strong> access level — an org-admin action, not something the adapter can do itself, but worth documenting as an operational lever if Sirdar's polling volume trips throttling. <a href="https://learn.microsoft.com/en-us/azure/devops/integrate/concepts/rate-limits?view=azure-devops">Rate and usage limits</a></p>
+<h2 id="3-azure-devops-mcp-server">3. Azure DevOps MCP server<a class="headerlink" href="#3-azure-devops-mcp-server" title="Permanent link">&para;</a></h2>
+<p><code>microsoft/azure-devops-mcp</code> (npm package <code>@azure-devops/mcp</code>) is Microsoft's own, MIT-licensed MCP server, actively published (npm shows frequent releases; the search pass this run saw a release "2 hours old" at v2.10.0 — treat the exact version/cadence as a point-in-time observation, not a stable fact). It's explicitly designed to plug into agent clients including VS Code/GitHub Copilot, Visual Studio 2022, Claude Code, and Cursor via standard MCP config (<code>.vscode/mcp.json</code> or equivalent). <a href="https://github.com/microsoft/azure-devops-mcp">microsoft/azure-devops-mcp</a>, <a href="https://www.npmjs.com/package/@azure-devops/mcp">@azure-devops/mcp on npm</a></p>
+<p>Tool surface: organized into <strong>domains</strong> (<code>core</code>, <code>work</code>, <code>work-items</code>, <code>search</code>, <code>test-plans</code>, <code>repositories</code>, <code>wiki</code>, <code>pipelines</code>, <code>advanced-security</code>) that a client can selectively load to keep the tool list small — the project recently did "a full tool consolidation" with tool renames, so any hardcoded tool-name list should be re-checked against the current Toolset docs before depending on it. <a href="https://github.com/microsoft/azure-devops-mcp">microsoft/azure-devops-mcp</a></p>
+<p>Auth: four modes selected via <code>--authentication</code>: <code>interactive</code> (default), <code>azcli</code> (delegates to an existing <code>az login</code> session), <code>envvar</code> (reads a raw bearer token from <code>ADO_MCP_AUTH_TOKEN</code>), and <code>pat</code> (reads <code>PERSONAL_ACCESS_TOKEN</code>, which must itself be <strong>base64 of <code>&lt;anything&gt;:&lt;PAT&gt;</code></strong>, not the raw PAT — a detail worth getting right if Sirdar ever shells out to or mimics this server). <a href="https://github.com/microsoft/azure-devops-mcp/blob/main/docs/GETTINGSTARTED.md">GETTINGSTARTED.md</a>, <a href="https://deepwiki.com/microsoft/azure-devops-mcp/5.2-authentication-setup">DeepWiki: Authentication Setup</a> (secondary/community-generated source, not Microsoft-primary — cross-check against the repo's own docs before relying on specifics)</p>
+<p>Distinguishing MCP-for-the-agent from Sirdar's host-side adapter: the MCP server is meant to sit <em>inside</em> the coding agent's tool-call loop, giving the LLM live, on-demand Azure DevOps access (including write operations in some domains) during a session. Sirdar's adapter model is the opposite shape — the <strong>host</strong> fetches one ticket (or a filtered list) up front, in Go, over plain REST, and hands a fixed snapshot to the agent; there's no live tool-calling back into Azure DevOps from the agent. The MCP server is not a substitute for the adapter and isn't Go, so it doesn't help with Sirdar's stdlib-only constraint — it's relevant only as a reference for tool/domain naming conventions or as an optional <em>separate</em> integration path if Sirdar ever wants to expose live ADO access to the agent in addition to the host-side fetch.</p>
+<p><strong>Go MCP alternatives</strong>: none found. All Azure DevOps MCP servers turned up in search (<code>microsoft/azure-devops-mcp</code>, <code>Tiberriver256/mcp-server-azure-devops</code>, <code>RyanCardin15/AzureDevOps-MCP</code>, various forks/mirrors) are TypeScript/Node, published as npm packages. <strong>No Go-based Azure DevOps MCP server was found in this research pass; absence is not proof none exists, just that none surfaced in the searches run.</strong></p>
+<h2 id="4-azure-boards-helpdesk-integrations-and-helpdeskref-derivation">4. Azure Boards ↔ helpdesk integrations, and <code>HelpdeskRef</code> derivation<a class="headerlink" href="#4-azure-boards-helpdesk-integrations-and-helpdeskref-derivation" title="Permanent link">&para;</a></h2>
+<p>No native, first-party Azure Boards↔ServiceNow/Zendesk/Dynamics integration ships in the box — all three are third-party (Marketplace) connectors:
+- <strong>ServiceNow</strong>: multiple Marketplace listings (e.g. "ServiceNow &amp; Azure DevOps (TFS or Cloud) Bidirectional Integration", Exalate) offering two-way sync of incidents/tasks/work items including comments, attachments, and links. <a href="https://marketplace.visualstudio.com/items?itemName=vs-publisher-1455028.oim-ServiceNow-adointegration">Marketplace listing</a>, <a href="https://exalate.com/integrations/servicenow-azure-devops/">Exalate</a>
+- <strong>Zendesk</strong>: a Zendesk Support app ("Azure DevOps Integration") lets agents create/link ADO work items from a Zendesk ticket, and syncs comments/status bidirectionally. <a href="https://www.zendesk.com/marketplace/apps/support/394508/azure-devops-integration/">Zendesk Marketplace</a>; there is also a legacy first-party-adjacent "Zendesk" service hook listed on the Visual Studio Marketplace (<code>ms-vsts.services-zendesk</code>), suggesting some historical native service-hook support existed — <strong>not independently verified as still functional/current in 2026.</strong>
+- <strong>Dynamics 365</strong>: connectors (Marketplace "Case Management Tool integrate with Dynamics 365 CRM and Azure DevOps", QuantumWhisper's connector) let a CRM case be linked to, or auto-create, an ADO work item, with bidirectional status visibility. <a href="https://marketplace.microsoft.com/en-us/product/dynamics-365/zelitesolutionspvtltd1675496806065.d365c2ado">Marketplace</a>, <a href="https://www.quantumwhisper.com/microsoft-dynamics-365-crm-azure-devops-integration">QuantumWhisper</a></p>
+<p>How the link actually shows up on the work item side (mechanism, not vendor-specific): Azure Boards' generic mechanism for pointing a work item at an external, non-ADO object is the <strong>Hyperlink</strong> relation type (<code>rel: "Hyperlink"</code>, <code>usage: resourceLink</code>, confirmed via <code>az boards work-item relation list-type</code> output and the Link Types Reference Guide). A <code>Hyperlink</code> relation's <code>url</code> is the linked-to URL — e.g. a ServiceNow incident permalink or a Zendesk ticket URL — and <code>attributes.comment</code> can carry free text (e.g. "ServiceNow INC0012345"). Because <em>any</em> of these third-party connectors could equally choose to write a custom field instead of a Hyperlink relation (several connectors advertise "custom field" sync), <code>HelpdeskRef</code> derivation should be a two-path lookup: (1) scan <code>relations[]</code> for <code>rel == "Hyperlink"</code> entries whose <code>url</code> host matches a configured helpdesk domain pattern (e.g. <code>*.service-now.com</code>, <code>*.zendesk.com</code>), and (2) fall back to a configured custom field name (e.g. <code>Custom.ServiceNowRef</code>) if the org's integration writes one instead. Both paths are config-driven since no single reference name is guaranteed across integrations. <a href="https://learn.microsoft.com/en-us/azure/devops/boards/queries/link-type-reference?view=azure-devops">Link Types Reference Guide</a></p>
+<p>Important: "External link type" (as distinct from Hyperlink) is explicitly documented as <strong>only for linking to other Azure DevOps objects</strong> (builds, commits, wiki pages) — "Use an external link type only to link to an Azure DevOps object. To link work items to objects outside Azure DevOps, use a hyperlink." This confirms Hyperlink, not External link, is the correct relation kind to scan for helpdesk cross-links. <a href="https://learn.microsoft.com/en-us/azure/devops/boards/queries/link-type-reference?view=azure-devops">Link Types Reference Guide</a></p>
+<h2 id="5-service-hooks-future-trigger">5. Service hooks (future trigger)<a class="headerlink" href="#5-service-hooks-future-trigger" title="Permanent link">&para;</a></h2>
+<p>Azure DevOps Service Hooks can fire an HTTP POST (generic Webhooks consumer, or dedicated per-service consumers) on work item lifecycle events. Confirmed event type IDs relevant to a future trigger: <code>workitem.created</code>, <code>workitem.updated</code>, <code>workitem.deleted</code>, <code>workitem.restored</code>, <code>workitem.commented</code> (publisher <code>tfs</code>, resource name <code>workitem</code>). Subscriptions can be filtered server-side by <code>areaPath</code>, <code>workItemType</code>, and (for <code>updated</code>) <code>changedFields</code>, avoiding the need for the trigger receiver to filter noise itself. <a href="https://learn.microsoft.com/en-us/azure/devops/service-hooks/events?view=azure-devops">Service Hook Events</a>, <a href="https://learn.microsoft.com/en-us/azure/devops/service-hooks/services/webhooks?view=azure-devops">Webhooks with Azure DevOps</a></p>
+<p>Payload envelope shape (standard across all ADO service hooks, not work-item-specific): <code>{ id, eventType, publisherId, scope, message: {text, html, markdown}, detailedMessage: {...}, resource: {...}, resourceVersion, resourceContainers, createdDate }</code>. The <code>resource</code> object's exact shape for <code>workitem.created</code>/<code>workitem.updated</code> — and how much of it is populated — is controlled by the subscription's "Resource details to send" setting (<code>All</code> / <code>Minimal</code> / <code>None</code>); <code>Minimal</code> sends only key identifying fields (id, URL), <code>All</code> sends the full work item body similar to a Get Work Item response. <strong>The exact full-<code>All</code> JSON shape for <code>workitem.updated</code> (e.g. whether it includes a fields-diff or just the post-update snapshot) was not directly fetched from a live payload example in this pass</strong> — Microsoft's events reference lists the event types and settings but the specific worked JSON example for work item events wasn't captured verbatim; a real webhook payload sample (e.g. from <code>danhellem/azure-devops-work-items-webhook-sample</code>, a third-party example repo) should be pulled before implementing the trigger receiver. <a href="https://learn.microsoft.com/en-us/azure/devops/service-hooks/events?view=azure-devops">Service Hook Events</a>, <a href="https://github.com/danhellem/azure-devops-work-items-webhook-sample">Sample webhook receiver (community)</a></p>
+<p>For Sirdar's purposes, the practical design is: subscribe to <code>workitem.created</code> and <code>workitem.updated</code> with <code>Minimal</code> resource detail (id + url only), and have the trigger handler call the adapter's existing <code>GetByKey</code> to fetch a full, consistent snapshot rather than trusting the webhook body's field completeness — this also sidesteps the open question above.</p>
+<h2 id="6-existing-go-clients">6. Existing Go clients<a class="headerlink" href="#6-existing-go-clients" title="Permanent link">&para;</a></h2>
+<p><code>microsoft/azure-devops-go-api</code> (MIT license) is Microsoft's own, actively maintained thin Go wrapper over the ADO REST APIs — confirmed via <code>NewPatConnection</code> (PAT-based connection constructor) and <code>GetClientByResourceAreaId</code>, and a <code>workitemtracking</code> sub-package exposing <code>ClientImpl.GetWorkItem(ctx, GetWorkItemArgs)</code> plus related WIT operations (icons, etc. also present, confirming this is a broad wrapper, not narrowly scoped). It tracks the <code>v7</code> API surface (import path includes <code>/v7</code>) and shows active-repo signals (CI via GitHub Actions + Azure Pipelines, open issues/PRs). <a href="https://github.com/microsoft/azure-devops-go-api">microsoft/azure-devops-go-api</a>, <a href="https://pkg.go.dev/github.com/microsoft/azure-devops-go-api/azuredevops/workitemtracking">workitemtracking package docs</a>, <a href="https://pkg.go.dev/github.com/microsoft/azure-devops-go-api/azuredevops">azuredevops package docs</a></p>
+<p><strong>Recommendation: use stdlib <code>net/http</code>, not this library</strong>, consistent with Sirdar's stdlib-only adapter rule. Reasoning:
+- The library is a genuine dependency (MIT, but still a third party pulled into <code>go.mod</code>), and Sirdar's constraint is explicit about avoiding that.
+- The Azure DevOps WIT REST surface Sirdar needs (get-by-id, batch-get, comments, attachments-download, WIQL POST) is small, uniform (<code>api-version</code> query param, PAT/Bearer Basic-or-Bearer auth, plain JSON), and doesn't benefit much from a generated-client abstraction — it's arguably <em>more</em> code to learn the library's type surface than to write five stdlib HTTP calls with a shared auth/retry wrapper.
+- This mirrors whatever pattern Sirdar's other adapters (Jira, etc.) already use for stdlib HTTP + typed response structs — consistency across adapters matters more than saving a few hundred lines here.
+- <strong>Caveat</strong>: <code>azure-devops-go-api</code>'s maturity assessment here is based on repo signals (license, CI presence, import path) pulled via web search/fetch, not a full read of its source or changelog — commit recency, exact latest-release date, and any known bugs/limitations in its WIT client were not directly verified this pass.</p>
+<h2 id="recommended-adapter-design">Recommended adapter design<a class="headerlink" href="#recommended-adapter-design" title="Permanent link">&para;</a></h2>
+<p><strong>Config keys</strong>
+- <code>org</code> (Services) or <code>serverURL</code> + <code>collection</code> (Server) — Services base is fixed at <code>https://dev.azure.com/{org}</code>; Server base is <code>https://{server}/{collection}</code> (or legacy <code>http://{server}:{port}/tfs/{collection}</code>).
+- <code>project</code> — required per WIT endpoint path segment.
+- <code>apiVersion</code> — default <code>7.1</code>.
+- <code>auth.mode</code> — one of <code>pat</code>, <code>entra-client-credentials</code>, <code>entra-managed-identity</code>, <code>ntlm</code> (Server only). Credential material (PAT string, client secret/cert ref, tenant/client IDs) via env/keychain refs per Sirdar's existing adapter convention — never inline in config.
+- <code>helpdeskRef.hyperlinkDomains</code> — list of hostname globs (e.g. <code>*.service-now.com</code>, <code>*.zendesk.com</code>) to match against <code>Hyperlink</code> relation URLs.
+- <code>helpdeskRef.customField</code> — optional reference name (e.g. <code>Custom.ServiceNowRef</code>) as a fallback/alternate source.
+- <code>list.wiqlTemplate</code> or discrete <code>list.assignedToMe</code> / <code>list.stateExclude</code> / <code>list.parentID</code> knobs feeding a generated WIQL string — implementation detail, but the config should let an operator override the WIQL directly for org-specific process templates (state names vary by process: Agile/Scrum/CMMI/custom).</p>
+<p><strong>Endpoints used</strong>
+- <code>GetByKey</code>: <code>GET .../_apis/wit/workitems/{id}?$expand=all&amp;api-version={v}</code> (single call, gets fields + relations + links).
+- Comments for <code>helpdesk</code> thread: <code>GET .../_apis/wit/workItems/{id}/comments?$expand=renderedText&amp;order=asc&amp;api-version=7.1-preview.4</code>, following <code>continuationToken</code> until exhausted.
+- Attachment bytes: <code>GET .../_apis/wit/attachments/{guid}?fileName={name}&amp;download=true&amp;api-version={v}</code>, GUID and filename sourced from <code>AttachedFile</code> relations on the work item.
+- <code>List</code>: <code>POST .../_apis/wit/wiql?api-version={v}</code> → collect IDs (flat query) → chunk into groups of ≤200 → <code>POST .../_apis/wit/workitemsbatch</code> per chunk with <code>errorPolicy: "Omit"</code> and <code>$expand: "All"</code> (or explicit <code>fields[]</code> if <code>All</code> proves too heavy for list views).</p>
+<p><strong>Field mapping to Sirdar's <code>Ticket</code></strong>
+- <code>Key</code> ← <code>id</code> (stringified)
+- <code>Title</code> ← <code>System.Title</code>
+- <code>Description</code> ← <code>System.Description</code>, HTML→text; for Bug work item type, fall back to/prefer <code>Microsoft.VSTS.TCM.ReproSteps</code> (unverified exact precedence rule — decide per-org or expose both under <code>Fields</code>)
+- <code>Priority</code> ← <code>Microsoft.VSTS.Common.Priority</code>
+- <code>Status</code> ← <code>System.State</code>
+- <code>Assignee</code> ← <code>System.AssignedTo.displayName</code> (or <code>.uniqueName</code> for a stable identifier)
+- <code>URL</code> ← work item's <code>_links.html.href</code> (web UI link) or construct from org/project/id
+- <code>HelpdeskRef</code> ← derived per §4 (Hyperlink relation scan, then custom-field fallback)
+- <code>CreatedAt</code> / <code>UpdatedAt</code> ← <code>System.CreatedDate</code> / <code>System.ChangedDate</code>
+- <code>Fields</code> map ← everything else: <code>Severity</code>, <code>Tags</code> (split on <code>;</code>), <code>Parent</code>, <code>AreaPath</code>, <code>IterationPath</code>, and any org-specific custom fields</p>
+<p><strong>Thread messages</strong> (<code>helpdesk</code> role) ← one comment API call per work item, each <code>Comment</code> → <code>{At: createdDate, Author: createdBy.displayName, Role: "internal" (ADO has no external/customer-facing distinction natively — always internal engineering unless a helpdesk-integration convention marks otherwise), Text: renderedText (HTML→text) or text, AttachmentIDs: []}</code> — attachment-to-comment linkage isn't provided by the API (§1), so <code>AttachmentIDs</code> on individual messages will generally be empty, with all work-item-level attachments exposed once (e.g. attached to a synthetic first message, or as a separate ticket-level list if Sirdar's contract allows that).</p>
+<p><strong>Auth</strong>: default to PAT + Basic (<code>Authorization: Basic base64(":"+PAT)</code>, scope <code>vso.work</code>) for simplicity and parity with most self-hosted/personal use; document Entra client-credentials as the production-recommended path per Microsoft's own guidance, with the adapter's HTTP client abstracting the header-building so switching modes doesn't touch call sites. Rate-limit handling (Retry-After honoring, <code>X-RateLimit-*</code> awareness) belongs in the shared HTTP client wrapper, not per-endpoint code.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Exact <code>Microsoft.VSTS.TCM.ReproSteps</code> vs <code>System.Description</code> precedence/co-presence on a real Bug work item — not independently verified against a live API response this pass.</li>
+<li>Whether <code>[System.Parent] = {id}</code> is a valid flat-WIQL WHERE clause, or whether children-of-parent must always go through a tree/<code>MODE (Recursive)</code> query returning <code>workItemRelations</code> instead of <code>workItems</code> — needs a live-org check before shipping the <code>List</code> parent filter.</li>
+<li>Behavioral/field differences between <code>api-version=7.1</code> and <code>7.2</code> for the WIT endpoints Sirdar uses — both are documented monikers but no delta was surfaced.</li>
+<li>Full JSON shape of a <code>workitem.updated</code> service-hook payload at <code>Resource details to send = All</code> (changed-fields diff vs. full snapshot) — not captured from a real payload sample this pass; needed before building the future trigger receiver.</li>
+<li>Whether any Azure DevOps Server (on-prem) version pins to an older max <code>api-version</code> than 7.1/7.2 — Server release cadence and which REST versions it exposes per Server version (2022, 2020, etc.) wasn't researched.</li>
+<li>Current functional status of the legacy <code>ms-vsts.services-zendesk</code> Marketplace service hook (may be deprecated) — flagged but not confirmed either way.</li>
+<li>No Go-based Azure DevOps MCP server was found; this is an absence-of-evidence finding from the searches run, not a confirmed "none exists."</li>
+<li><code>azure-devops-go-api</code>'s current release cadence/last-commit date wasn't independently verified beyond generic "active" repo signals (CI presence, open issue/PR counts) — worth a direct check if the "use stdlib, not the library" recommendation is ever revisited.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

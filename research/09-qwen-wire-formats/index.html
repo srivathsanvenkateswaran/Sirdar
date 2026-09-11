@@ -1,0 +1,2908 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../08-httpx-extraction/">
+      
+      
+        <link rel="next" href="../adapters/azure-devops/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Qwen Code wire formats - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#qwen-code-wire-formats-verified-on-2026-09-11" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Qwen Code wire formats
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-command-sirdar-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command Sirdar runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The command Sirdar runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-sirdar-deliberately-does-not-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flags Sirdar deliberately does not pass
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-lines-stdout-in-the-order-they-occurred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output lines (stdout), in the order they occurred
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output lines (stdout), in the order they occurred">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-this-differs-from-claude-codes-stream-json-line-by-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How this differs from Claude Code's stream-json, line by line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#there-is-no-control_request-in-headless-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        There is no control_request in headless mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-headless-mode-does-instead-a-built-in-deny-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What headless mode does instead: a built-in deny list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow-rule-specifiers-are-not-enforced-for-the-shell-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allow-rule specifiers are not enforced for the shell tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-headless-deny-is-not-settings-proof-exclude-tools-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The headless deny is not settings-proof; --exclude-tools is
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folder-trust-is-the-boundary-the-settings-path-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder trust is the boundary the settings path is not
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-repository-supplied-hook-outranks-the-hosts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A repository-supplied hook outranks the host's
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qwensettingsjson-hooks-displace-the-system-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ~/.qwen/settings.json hooks displace the system layer's
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-host-arbitrated-channel-a-pretooluse-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The host-arbitrated channel: a PreToolUse hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool names
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-output-json-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured output (--json-schema)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes-stderr-and-the-missing-result-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes, stderr, and the missing result line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budgets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-not-exercised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was not exercised
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-command-sirdar-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command Sirdar runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The command Sirdar runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#flags-sirdar-deliberately-does-not-pass" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Flags Sirdar deliberately does not pass
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-lines-stdout-in-the-order-they-occurred" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output lines (stdout), in the order they occurred
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output lines (stdout), in the order they occurred">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#how-this-differs-from-claude-codes-stream-json-line-by-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        How this differs from Claude Code's stream-json, line by line
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#there-is-no-control_request-in-headless-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        There is no control_request in headless mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-headless-mode-does-instead-a-built-in-deny-list" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What headless mode does instead: a built-in deny list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#allow-rule-specifiers-are-not-enforced-for-the-shell-tool" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Allow-rule specifiers are not enforced for the shell tool
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-headless-deny-is-not-settings-proof-exclude-tools-is" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The headless deny is not settings-proof; --exclude-tools is
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#folder-trust-is-the-boundary-the-settings-path-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder trust is the boundary the settings path is not
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-repository-supplied-hook-outranks-the-hosts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A repository-supplied hook outranks the host's
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qwensettingsjson-hooks-displace-the-system-layers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ~/.qwen/settings.json hooks displace the system layer's
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-host-arbitrated-channel-a-pretooluse-hook" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The host-arbitrated channel: a PreToolUse hook
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#tool-names" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Tool names
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#structured-output-json-schema" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Structured output (--json-schema)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes-stderr-and-the-missing-result-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes, stderr, and the missing result line
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#budgets" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Budgets
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-was-not-exercised" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was not exercised
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="qwen-code-wire-formats-verified-on-2026-09-11">Qwen Code wire formats, verified on 2026-09-11<a class="headerlink" href="#qwen-code-wire-formats-verified-on-2026-09-11" title="Permanent link">&para;</a></h1>
+<p>Captured against <strong>Qwen Code 0.23.3</strong> (<code>npm i -g @qwen-code/qwen-code</code>) on macOS by driving the
+real binary from a script. Every shape below was <strong>exercised live</strong> unless a line says
+otherwise: the model behind it was a stub OpenAI-compatible server (a Go program serving
+<code>POST /v1/chat/completions</code> with scripted <code>tool_calls</code>), so the CLI's own emitter, permission
+path, resume path and MCP assembly are real and only the model's choices were fixed. No
+Ollama model and no vendor key were available on the machine, which is why the backend is a
+stub rather than a live model; nothing in the capture depends on which model answered.</p>
+<p>Session ids, paths and token counts are illustrative. Companion to
+<code>docs/research/06-wire-formats.md</code>, which did the same for Claude Code and Codex.</p>
+<h2 id="the-command-sirdar-runs">The command Sirdar runs<a class="headerlink" href="#the-command-sirdar-runs" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>qwen --output-format stream-json \
+  --approval-mode default \
+  --json-schema '&lt;json schema&gt;' \
+  --model &lt;model&gt; --max-session-turns 5 --max-wall-time 25m --max-tool-calls 16 \
+  [--resume &lt;session id&gt;] \
+  [--mcp-config &lt;path&gt; --allowed-mcp-server-names &lt;name&gt; ...] \
+  --exclude-tools write_file --exclude-tools edit --exclude-tools replace \
+  --exclude-tools notebook_edit --exclude-tools image_gen --exclude-tools save_memory \
+  --exclude-tools enter_worktree --exclude-tools exit_worktree \
+  --exclude-tools artifact --exclude-tools record_artifact --exclude-tools record_source \
+  --exclude-tools cron_create --exclude-tools cron_delete --exclude-tools workflow \
+  --exclude-tools update_goal --exclude-tools propose_goal \
+  --exclude-tools monitor --exclude-tools send_message \
+  --exclude-tools create_sub_session --exclude-tools team_create --exclude-tools team_delete \
+  (--allowed-tools run_shell_command | --exclude-tools run_shell_command) \
+  [--auth-type openai]
+</code></pre></div>
+<p>The exclusion block is the read-only guarantee and is not optional; see
+"The headless deny is not settings-proof" below for why the CLI's own default is not enough.
+The shell is the one tool that switches sides: allow-listed when the workspace named
+<code>permissions.bash</code> patterns and excluded when it did not.</p>
+<p>The prompt goes in <strong>on stdin</strong> and stdin is then closed. <code>-p/--prompt</code> is deprecated in
+0.23.3 in favour of a positional argument, and both put the whole triage prompt on the
+command line; stdin has no length limit and is the documented third form
+("Accepts prompts via command line arguments or stdin"). <code>--json-schema</code> with no prompt on
+argv and no piped stdin is rejected at argument-parse time, so the pipe is what makes the
+run legal.</p>
+<p>Environment for a configured endpoint (all three are needed before Qwen Code infers
+<code>openai</code> auth — <code>getAuthTypeFromEnv</code> requires <code>OPENAI_API_KEY</code> <strong>and</strong> <code>OPENAI_BASE_URL</code>
+<strong>and</strong> one of <code>OPENAI_MODEL</code> / <code>QWEN_MODEL</code>):</p>
+<div class="highlight"><pre><span></span><code>OPENAI_API_KEY=&lt;key&gt;  OPENAI_BASE_URL=https://.../v1  OPENAI_MODEL=&lt;model&gt;
+</code></pre></div>
+<p><code>--auth-type openai</code> forces the same choice when only some of them are present. With none of
+them set the CLI falls back to the operator's own <code>qwen</code> login (<code>qwen-oauth</code>, credentials in
+<code>~/.qwen/</code>), which is the Claude-adapter-style "use the login you already have" path.</p>
+<h3 id="flags-sirdar-deliberately-does-not-pass">Flags Sirdar deliberately does not pass<a class="headerlink" href="#flags-sirdar-deliberately-does-not-pass" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>--input-format stream-json</code>: <strong>rejected at parse time together with <code>--json-schema</code></strong>
+  ("The single-shot terminal contract is incompatible with the long-lived stream-json input
+  protocol"). This is the one structural difference from Claude Code and it is what makes a
+  Qwen session single-shot: there is no second <code>user</code> line to send, so <code>Session.Send</code> cannot
+  work and the schema retry has to go through <code>--resume</code> in a fresh process.</li>
+<li><code>--include-partial-messages</code>: only adds <code>stream_event</code> delta lines. The complete
+  <code>assistant</code> / <code>user</code> lines carry everything the adapter reads.</li>
+<li><code>--bare</code> and <code>--safe-mode</code>: both disable settings-sourced inputs, which means <strong>no hooks and
+  no headless deny rules</strong>. A bare run would hand the model an unguarded shell.</li>
+<li><code>--yolo</code> / <code>--approval-mode yolo</code>: auto-approves every tool with no sandbox.</li>
+<li><code>-s/--sandbox</code>: wants a container image or a macOS Seatbelt profile the operator has set up,
+  fails the run outright when it cannot start one, and is orthogonal to the exclusion list
+  above. Left for an operator who wants it to configure on the binary.</li>
+<li><code>--insecure</code>: the TLS equivalent of <code>--yolo</code>. <code>QWEN_TLS_INSECURE</code>, which sets the same thing,
+  is stripped from the child's environment for the same reason.</li>
+</ul>
+<h2 id="output-lines-stdout-in-the-order-they-occurred">Output lines (stdout), in the order they occurred<a class="headerlink" href="#output-lines-stdout-in-the-order-they-occurred" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"init"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"7d235fdb-..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"7d235fdb-..."</span><span class="p">,</span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/work"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tools"</span><span class="p">:[</span><span class="s2">"read_file"</span><span class="p">,</span><span class="s2">"grep_search"</span><span class="p">,</span><span class="s2">"glob"</span><span class="p">,</span><span class="s2">"web_fetch"</span><span class="p">,</span><span class="s2">"run_shell_command"</span><span class="p">,</span><span class="s2">"structured_output"</span><span class="p">,</span><span class="s2">"tool_search"</span><span class="p">,</span><span class="s2">"agent"</span><span class="p">,</span><span class="s2">"skill"</span><span class="p">,</span><span class="s2">"task_stop"</span><span class="p">,</span><span class="s2">"..."</span><span class="p">],</span>
+<span class="w"> </span><span class="nt">"mcp_servers"</span><span class="p">:[],</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"stub-model"</span><span class="p">,</span><span class="nt">"permission_mode"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="nt">"slash_commands"</span><span class="p">:[</span><span class="err">...</span><span class="p">],</span>
+<span class="w"> </span><span class="nt">"qwen_code_version"</span><span class="p">:</span><span class="s2">"0.23.3"</span><span class="p">,</span><span class="nt">"agents"</span><span class="p">:[</span><span class="s2">"general-purpose"</span><span class="p">,</span><span class="s2">"Explore"</span><span class="p">,</span><span class="s2">"statusline-setup"</span><span class="p">,</span><span class="s2">"review-agent"</span><span class="p">]}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"stream_event"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"parent_tool_use_id"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"event"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"goal_state"</span><span class="p">,</span><span class="nt">"goal_state"</span><span class="p">:{</span><span class="nt">"v"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"goal"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"activity"</span><span class="p">:</span><span class="s2">"idle"</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"788c701e-..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"parent_tool_use_id"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"788c701e-..."</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"message"</span><span class="p">,</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"stub-model"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"text"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"Looking at the repository history."</span><span class="p">}],</span>
+<span class="w">   </span><span class="nt">"stop_reason"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"9136b455-..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"9136b455-..."</span><span class="p">,</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"stub-model"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"call_1"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"run_shell_command"</span><span class="p">,</span>
+<span class="w">     </span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"git log -1 --oneline"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"read the last commit"</span><span class="p">}}],</span>
+<span class="w">   </span><span class="nt">"stop_reason"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">1200</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">40</span><span class="p">,</span><span class="nt">"cache_read_input_tokens"</span><span class="p">:</span><span class="mi">800</span><span class="p">,</span><span class="nt">"total_tokens"</span><span class="p">:</span><span class="mi">1240</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"58c8d964-..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"parent_tool_use_id"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_result"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"call_1"</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"9645ba3 (HEAD -&gt; main) first"</span><span class="p">}]}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"eff68a6a-..."</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"call_2"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"write_file"</span><span class="p">,</span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"file_path"</span><span class="p">:</span><span class="s2">"/tmp/probe.txt"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"x"</span><span class="p">}}],</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_result"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"call_2"</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"Qwen Code requires permission to use \"write_file\", but that permission was declined. Matching deny rule: \"edit\"."</span><span class="p">}]}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"7f3394f6-..."</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"call_3"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"structured_output"</span><span class="p">,</span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"greeting"</span><span class="p">:</span><span class="s2">"hello"</span><span class="p">,</span><span class="nt">"n"</span><span class="p">:</span><span class="mi">7</span><span class="p">}}],</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_result"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"call_3"</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"Structured output accepted."</span><span class="p">}]}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"result"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"uuid"</span><span class="p">:</span><span class="s2">"7ed768dc-..."</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"7d235fdb-..."</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"duration_ms"</span><span class="p">:</span><span class="mi">375</span><span class="p">,</span><span class="nt">"duration_api_ms"</span><span class="p">:</span><span class="mi">301</span><span class="p">,</span><span class="nt">"num_turns"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"result"</span><span class="p">:</span><span class="s2">"{\"greeting\":\"hello\",\"n\":7}"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"structured_result"</span><span class="p">:{</span><span class="nt">"greeting"</span><span class="p">:</span><span class="s2">"hello"</span><span class="p">,</span><span class="nt">"n"</span><span class="p">:</span><span class="mi">7</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">3600</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">120</span><span class="p">,</span><span class="nt">"cache_read_input_tokens"</span><span class="p">:</span><span class="mi">2400</span><span class="p">,</span><span class="nt">"total_tokens"</span><span class="p">:</span><span class="mi">3720</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"permission_denials"</span><span class="p">:[{</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"run_shell_command"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"call_1"</span><span class="p">,</span><span class="nt">"tool_input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"git log -1 --oneline"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"read the last commit"</span><span class="p">}},</span>
+<span class="w">                       </span><span class="p">{</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"write_file"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"call_2"</span><span class="p">,</span><span class="nt">"tool_input"</span><span class="p">:{</span><span class="nt">"file_path"</span><span class="p">:</span><span class="s2">"/tmp/probe.txt"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"x"</span><span class="p">}}]}</span>
+</code></pre></div>
+<p>Read <code>structured_result</code> (the object). <code>result</code> is the same payload stringified, kept for
+consumers that always want a string in that field.</p>
+<h3 id="how-this-differs-from-claude-codes-stream-json-line-by-line">How this differs from Claude Code's stream-json, line by line<a class="headerlink" href="#how-this-differs-from-claude-codes-stream-json-line-by-line" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Claude Code</th>
+<th>Qwen Code 0.23.3</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>init line</td>
+<td><code>system</code>/<code>init</code></td>
+<td><code>system</code>/<code>init</code> — same shape, plus <code>qwen_code_version</code>, <code>agents</code>, <code>slash_commands</code></td>
+</tr>
+<tr>
+<td>structured output</td>
+<td><code>result.structured_output</code></td>
+<td><code>result.structured_result</code></td>
+</tr>
+<tr>
+<td>session total cost</td>
+<td><code>total_cost_usd</code></td>
+<td><strong>absent</strong> — no cost signal at all</td>
+</tr>
+<tr>
+<td>input tokens</td>
+<td><code>input_tokens</code> + <code>cache_creation_input_tokens</code> + <code>cache_read_input_tokens</code>, disjoint</td>
+<td><code>input_tokens</code> is the whole prompt; <code>cache_read_input_tokens</code> is a <strong>subset</strong> of it, and <code>total_tokens == input_tokens + output_tokens</code></td>
+</tr>
+<tr>
+<td>permission channel</td>
+<td><code>control_request</code> on stdout, answered on stdin</td>
+<td>not emitted in headless mode (see below)</td>
+</tr>
+<tr>
+<td>rate limits</td>
+<td><code>rate_limit_event</code> lines</td>
+<td>none observed</td>
+</tr>
+<tr>
+<td>follow-up turn</td>
+<td>second <code>user</code> line on stdin</td>
+<td>impossible under <code>--json-schema</code>; resume instead</td>
+</tr>
+<tr>
+<td>tool names</td>
+<td><code>Bash</code>, <code>Read</code>, <code>Write</code>, <code>Grep</code></td>
+<td><code>run_shell_command</code>, <code>read_file</code>, <code>write_file</code>, <code>grep_search</code></td>
+</tr>
+</tbody>
+</table>
+<p>The token arithmetic is the detail most likely to be got wrong by copying the Claude adapter:
+adding <code>cache_read_input_tokens</code> to <code>input_tokens</code> double-counts a cached Qwen turn. Verified
+against a stub that reported <code>prompt_tokens: 1200</code> with <code>cached_tokens: 800</code> — Qwen emitted
+<code>input_tokens: 1200, cache_read_input_tokens: 800, total_tokens: 1240</code>.</p>
+<p>Summing each turn's <code>input_tokens</code> into a running session total looks like it would overstate a
+prompt that is largely the same every turn, but it is exactly what the CLI reports for itself:
+the result line's <code>input_tokens</code> is <code>computeUsageFromMetrics</code>' <code>stats.totalPromptTokens</code>, which
+accumulates <code>modelMetrics.tokens.prompt</code> across every API call of the session. The adapter's
+running total therefore converges on the result line rather than diverging from it, and
+tracking the per-turn maximum instead would understate a run and then jump when the result line
+replaced it.</p>
+<h2 id="permissions">Permissions<a class="headerlink" href="#permissions" title="Permanent link">&para;</a></h2>
+<h3 id="there-is-no-control_request-in-headless-mode">There is no <code>control_request</code> in headless mode<a class="headerlink" href="#there-is-no-control_request-in-headless-mode" title="Permanent link">&para;</a></h3>
+<p><code>emitPermissionRequest</code> — which writes the <code>control_request</code> / <code>control_response</code> pair
+documented under <a href="https://qwenlm.github.io/qwen-code-docs/">Dual Output</a> — is called from the
+interactive TUI's dual-output bridge only. Reading the bundled sources, the only caller is in
+<code>startInteractiveUI</code>; the headless <code>--output-format stream-json</code> path never emits one. A
+headless run therefore has no stdout/stdin approval handshake. The dual-output shapes, for
+reference (from source, not exercised):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_request"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"request"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"can_use_tool"</span><span class="p">,</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"run_shell_command"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"rm -rf /tmp/x"</span><span class="p">},</span><span class="nt">"permission_suggestions"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"blocked_path"</span><span class="p">:</span><span class="kc">null</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_response"</span><span class="p">,</span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"allowed"</span><span class="p">:</span><span class="kc">true</span><span class="p">}}}</span>
+</code></pre></div>
+<p>The host answers by appending <code>{"type":"confirmation_response","request_id":"...","allowed":true}</code>
+to the file named by <code>--input-file</code>, and that channel needs the TUI (and therefore a PTY),
+which rules it out for Sirdar.</p>
+<h3 id="what-headless-mode-does-instead-a-built-in-deny-list">What headless mode does instead: a built-in deny list<a class="headerlink" href="#what-headless-mode-does-instead-a-built-in-deny-list" title="Permanent link">&para;</a></h3>
+<p>From the argument-resolution source (<code>chunks/chunk-DYFOSJHU.js</code>), for any run that is not
+interactive, not ACP, not <code>--bare</code>, and not <code>--input-format stream-json</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="k">case</span><span class="w"> </span><span class="nx">PLAN</span><span class="o">:</span><span class="w"> </span><span class="k">case</span><span class="w"> </span><span class="nx">DEFAULT</span><span class="o">:</span><span class="w"> </span><span class="k">case</span><span class="w"> </span><span class="nx">AUTO</span><span class="o">:</span>
+<span class="w">  </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">SHELL</span><span class="p">);</span><span class="w"> </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">MONITOR</span><span class="p">);</span>
+<span class="w">  </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">EDIT</span><span class="p">);</span><span class="w">  </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">WRITE_FILE</span><span class="p">);</span>
+<span class="k">case</span><span class="w"> </span><span class="nx">AUTO_EDIT</span><span class="o">:</span>
+<span class="w">  </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">SHELL</span><span class="p">);</span><span class="w"> </span><span class="nx">denyUnlessAllowed</span><span class="p">(</span><span class="nx">MONITOR</span><span class="p">);</span>
+<span class="k">case</span><span class="w"> </span><span class="nx">YOLO</span><span class="o">:</span><span class="w"> </span><span class="cm">/* nothing */</span>
+</code></pre></div>
+<p>So a headless <code>--approval-mode default</code> run starts with <code>run_shell_command</code>, <code>monitor</code>, <code>edit</code>
+and <code>write_file</code> denied outright, and the model is told so in the <code>tool_result</code>:
+<code>Qwen Code requires permission to use "write_file", but that permission was declined. Matching
+deny rule: "edit".</code></p>
+<p><code>denyUnlessAllowed</code> skips a tool that is <em>explicitly allowed</em>, which is either
+<code>permissions.allow</code> in a settings file or the <code>--allowed-tools</code> flag. <strong>That makes this default
+a convenience, not a guarantee</strong> — see the next section for what it takes to hold it.</p>
+<h3 id="allow-rule-specifiers-are-not-enforced-for-the-shell-tool">Allow-rule specifiers are not enforced for the shell tool<a class="headerlink" href="#allow-rule-specifiers-are-not-enforced-for-the-shell-tool" title="Permanent link">&para;</a></h3>
+<p>Measured, one tool call per run, the model always asking for <code>git log -1 --oneline</code>:</p>
+<table>
+<thead>
+<tr>
+<th>Rule</th>
+<th><code>git log -1 --oneline</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>(none)</td>
+<td>denied</td>
+</tr>
+<tr>
+<td><code>--allowed-tools run_shell_command</code></td>
+<td>allowed</td>
+</tr>
+<tr>
+<td><code>--allowed-tools "run_shell_command(npm run *)"</code></td>
+<td><strong>allowed</strong></td>
+</tr>
+<tr>
+<td><code>permissions.allow: ["run_shell_command(npm run *)"]</code></td>
+<td><strong>allowed</strong></td>
+</tr>
+<tr>
+<td><code>permissions.allow: ["run_shell_command(git *)"]</code></td>
+<td>allowed</td>
+</tr>
+<tr>
+<td><code>permissions.allow: ["Bash(npm *)"]</code></td>
+<td>denied</td>
+</tr>
+<tr>
+<td><code>permissions.allow: ["Bash(git *)"]</code></td>
+<td><strong>denied</strong></td>
+</tr>
+<tr>
+<td><code>permissions.allow: ["read_file"]</code></td>
+<td>denied</td>
+</tr>
+</tbody>
+</table>
+<p>Two things fall out of that table, and both are load-bearing:</p>
+<ol>
+<li>A rule written against the <strong>canonical</strong> name <code>run_shell_command(...)</code> lifts the headless
+   deny for <em>every</em> shell command — the specifier is ignored. The documented per-command
+   syntax (<code>Bash(git *)</code>) is honoured by the matcher but the alias never lifts the deny, so
+   there is no way to say "shell, but only <code>git log</code>" at the CLI level in 0.23.3.</li>
+<li>Shell access is therefore all-or-nothing. Sirdar passes <code>--allowed-tools run_shell_command</code>
+   <strong>only when the workspace named <code>permissions.bash</code> patterns</strong>, and the per-command
+   allow-list is enforced by the hook below, not by Qwen.</li>
+</ol>
+<p><code>permissions.deny: []</code> changes nothing; the headless deny list is assembled after settings are
+merged and an empty array does not clear it.</p>
+<h3 id="the-headless-deny-is-not-settings-proof-exclude-tools-is">The headless deny is not settings-proof; <code>--exclude-tools</code> is<a class="headerlink" href="#the-headless-deny-is-not-settings-proof-exclude-tools-is" title="Permanent link">&para;</a></h3>
+<p><code>isExplicitlyAllowed</code> consults <code>permissions.allow</code> + <code>tools.allowed</code> (together <code>mergedAllow</code>)
+and <code>tools.core</code> — each of them the <strong>merge</strong> of the system, user (<code>~/.qwen/settings.json</code>) and
+workspace (<code>.qwen/settings.json</code>) layers. <code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code> replaces only the
+system layer, so it does not shut the other two out, and anything they allow cancels the
+headless deny above.</p>
+<p>Measured. A work tree carrying
+<code>.qwen/settings.json</code> = <code>{"permissions":{"allow":["run_shell_command","write_file","edit","monitor","notebook_edit"]}}</code>,
+run headless under <code>--approval-mode default</code> with a Sirdar-style system settings file and <strong>no
+<code>--allowed-tools</code> at all</strong> — the "workspace named no <code>permissions.bash</code> patterns, so no shell"
+case — was offered <code>run_shell_command</code>, <code>monitor</code>, <code>enter_worktree</code>, <code>exit_worktree</code>,
+<code>cron_create</code>, <code>cron_delete</code>, <code>record_artifact</code>, <code>send_message</code> and <code>update_goal</code>. Only
+<code>write_file</code>, <code>edit</code> and <code>notebook_edit</code> stayed out, and only because the system layer's own
+<code>permissions.deny</code> covered them: deny beats allow. The shell and <code>monitor</code> had no such deny
+entry and came straight back.</p>
+<p><code>--exclude-tools</code> closes it, and is the only thing that does. <code>argv.excludeTools</code> is appended to
+<code>mergedDeny</code> with no settings consulted; that becomes both <code>config.excludeTools</code> and
+<code>permissions.deny</code>; <code>isToolEnabled</code> returns false for an excluded name in <strong>both</strong> its branches,
+the empty-<code>coreTools</code> one and the explicit-allow one; and
+<code>PermissionManager.getToolRegistrationStatus</code> maps a whole-tool deny to <code>disabled</code>, which means
+the tool is never registered and its schema never reaches the model. With the same workspace
+file in place and Sirdar's exclusion list passed, none of the tools above were offered.</p>
+<p>Verified against the real 0.23.3 binary driven by a stub OpenAI-compatible endpoint, reading
+both the <code>tools</code> array of the request the CLI sends the model and the <code>tools</code> field of its
+<code>system/init</code> line.</p>
+<h3 id="folder-trust-is-the-boundary-the-settings-path-is-not">Folder trust is the boundary the settings path is not<a class="headerlink" href="#folder-trust-is-the-boundary-the-settings-path-is-not" title="Permanent link">&para;</a></h3>
+<p><code>isFolderTrustEnabled(settings)</code> reads <code>settings.security?.folderTrust?.enabled ?? false</code>, so
+out of the box <strong>every folder is trusted</strong>. Turning it on in the system layer is not something
+the workspace can undo: <code>loadSettings</code> computes the trust verdict from
+<code>customDeepMerge(systemSettings, userSettings)</code> — the workspace layer is not in that merge —
+and <code>mergeSettings</code> puts the system layer last, so it wins the merged view as well.</p>
+<p>The verdict itself comes from the trusted-folders file, whose path is
+<code>process.env.QWEN_CODE_TRUSTED_FOLDERS_PATH</code> when set and <code>~/.qwen/trustedFolders.json</code>
+otherwise. Rules are <code>{path: TRUST_FOLDER | TRUST_PARENT | DO_NOT_TRUST}</code>; <code>resolveTrustRule</code>
+takes the deepest rule that contains the workspace and breaks a tie in favour of an untrusted
+one. An <strong>empty</strong> file is not enough: no matching rule yields <code>undefined</code>, which
+<code>Config.isTrustedFolder()</code> resolves as <code>this.trustedFolder ?? true</code> — trusted. The workspace
+has to be named <code>DO_NOT_TRUST</code> explicitly, which is what Sirdar's 0600 file does (for the path
+and its <code>realpath</code>, since the CLI canonicalises the workspace before matching).</p>
+<p>What untrusted costs, read from 0.23.3: <code>mergeSettings</code> substitutes <code>{}</code> for the whole
+workspace layer; <code>LoadedSettings.getProjectHooks</code> returns nothing; a project-level subagent is
+refused (<code>config.level === "project" &amp;&amp; !isTrustedFolder()</code>) and so are a project skill's
+<code>allowedTools</code> and <code>hooks</code> (<code>canApplySkillSideEffects</code>); <code>discoverAllMcpTools</code>,
+<code>discoverAllMcpToolsIncremental</code> and <code>readMcpResource</code> all return early, so <strong>no MCP server
+loads at all</strong>; project <code>QWEN.md</code> context, LSP servers and auto-skill loading are skipped;
+<code>setApprovalMode</code> refuses anything but the default mode. Headless itself runs perfectly well
+untrusted — measured below.</p>
+<p>Measured against the real 0.23.3 binary with a stub endpoint, in a work tree carrying
+<code>.qwen/settings.json</code> = <code>{"permissions":{"allow":["run_shell_command","write_file","edit","monitor","agent","skill"]}}</code>
+and a <code>.qwen/agents/evil.md</code>:</p>
+<table>
+<thead>
+<tr>
+<th>run</th>
+<th>tools offered to the model</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>trusted, no <code>--exclude-tools</code></td>
+<td><code>agent skill tool_search run_shell_command monitor cron_create cron_delete cron_list enter_worktree exit_worktree get_goal update_goal record_artifact report_findings send_message list_agents loop_wakeup task_stop zoom_image read_file read_mcp_resource grep_search glob web_fetch structured_output</code></td>
+</tr>
+<tr>
+<td>untrusted, no <code>--exclude-tools</code></td>
+<td>the same <strong>minus <code>run_shell_command</code> and <code>monitor</code></strong> — the workspace allow-list was not read</td>
+</tr>
+<tr>
+<td>untrusted, Sirdar's exclusions</td>
+<td><code>glob grep_search read_file read_mcp_resource structured_output web_fetch</code></td>
+</tr>
+<tr>
+<td>trusted, Sirdar's exclusions</td>
+<td>the same six</td>
+</tr>
+</tbody>
+</table>
+<p>In all four the <code>PreToolUse</code> hook was posted for the <code>read_file</code> call and its <code>deny</code> was
+honoured (<code>tool_result</code> = <code>is_error: true</code>, content <code>Sirdar policy: not permitted</code>).</p>
+<h3 id="a-repository-supplied-hook-outranks-the-hosts">A repository-supplied hook outranks the host's<a class="headerlink" href="#a-repository-supplied-hook-outranks-the-hosts" title="Permanent link">&para;</a></h3>
+<p><code>HookRegistry.getHooksForEvent</code> sorts by <code>getSourcePriority</code>: project 1, user 2, system 3,
+extensions 4, <strong>anything else 999</strong> — and <code>addAgentHooks</code>, which wires the <code>hooks:</code> block of a
+declarative subagent into the registry, registers under source <code>session</code>. Skill frontmatter
+hooks go through <code>SessionHooksManager</code> instead, and <code>fireHooks</code> builds
+<code>[...registryHookConfigs, ...sessionHookConfigs]</code>, appending them after every registry hook.</p>
+<p><code>HookAggregator.mergeOutputs</code> sends <code>PreToolUse</code> through <code>mergeWithOrLogic</code>, which for every
+output does <code>otherHookSpecificFields[key] = value</code> — a plain assignment, in order. The
+permission verdict lives in <code>hookSpecificOutput.permissionDecision</code>, and
+<code>PreToolUseHookOutput.getPermissionDecision()</code> reads that field first, ahead of the top-level
+<code>decision</code> that <code>mergeWithOrLogic</code> does harden (<code>hasBlock</code> wins there). So the <strong>last</strong>
+<code>permissionDecision</code> written is the one that counts, and a repo-registered session hook running
+after Sirdar's overwrites Sirdar's deny with an allow.</p>
+<p>Both routes to registering one — the <code>agent</code> tool for <code>.qwen/agents/*.md</code>, the <code>skill</code> tool for
+a project skill — are on Sirdar's exclusion list, and both are additionally dead in an
+untrusted folder. Read from the bundle, not run: making the real CLI spawn a subagent needs a
+model that calls it.</p>
+<h3 id="qwensettingsjson-hooks-displace-the-system-layers"><code>~/.qwen/settings.json</code> hooks displace the system layer's<a class="headerlink" href="#qwensettingsjson-hooks-displace-the-system-layers" title="Permanent link">&para;</a></h3>
+<p><code>loadCliConfig</code> receives <code>{userHooks: settings.getUserHooks(), projectHooks:
+settings.getProjectHooks()}</code>, and <code>LoadedSettings.getUserHooks()</code> returns
+<code>this.user.settings.hooks</code> — the <strong>user scope alone</strong>, not the merge. Config then stores
+<code>userHooks = hooksConfig?.userHooks ?? settings.hooks</code>. So with no user-scope hooks the merged
+settings (carrying the system layer's, which is Sirdar's) are used and the hook is registered
+ungated; with user-scope hooks present, Sirdar's hook is only reachable through
+<code>Config.getProjectHooks()</code>, which is <code>this.projectHooks ?? this.hooks</code> behind an
+<code>isTrustedFolder()</code> gate.</p>
+<p>Measured, same harness, with <code>$HOME/.qwen/settings.json</code> =
+<code>{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"true"}]}]}}</code>:</p>
+<ul>
+<li>untrusted: <strong>no hook post at all</strong>, and the <code>read_file</code> call ran and returned the file — an
+  unmediated session.</li>
+<li>trusted: the hook was posted as usual (the project-slot fallback).</li>
+</ul>
+<p>Sirdar refuses to start a session while that file registers hooks, rather than run one whose
+mediator may not be there.</p>
+<h3 id="the-host-arbitrated-channel-a-pretooluse-hook">The host-arbitrated channel: a <code>PreToolUse</code> hook<a class="headerlink" href="#the-host-arbitrated-channel-a-pretooluse-hook" title="Permanent link">&para;</a></h3>
+<p>Hooks <em>are</em> consulted in headless mode, for every tool call that survives the deny list, and
+they can allow or deny with a reason. That is the per-call mediator Sirdar's
+<code>PermissionPolicy.Decide</code> plugs into. Hooks come from a settings file; Sirdar writes a private
+one, mode 0600, and points the child at it with <strong><code>QWEN_CODE_SYSTEM_SETTINGS_PATH</code></strong>. That
+replaces the system layer only — the user's and the workspace's files are still merged on top,
+which is why the guarantees live on the command line and this file only carries the hook:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"hooks"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"PreToolUse"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">      </span><span class="p">{</span><span class="w"> </span><span class="nt">"matcher"</span><span class="p">:</span><span class="w"> </span><span class="s2">"*"</span><span class="p">,</span>
+<span class="w">        </span><span class="nt">"hooks"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http"</span><span class="p">,</span><span class="w"> </span><span class="nt">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http://127.0.0.1:54321/decide/&lt;64 hex chars&gt;"</span><span class="p">,</span><span class="w"> </span><span class="nt">"timeout"</span><span class="p">:</span><span class="w"> </span><span class="mi">15</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sirdar-policy"</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="p">]</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"permissions"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"deny"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"write_file"</span><span class="p">,</span><span class="w"> </span><span class="s2">"edit"</span><span class="p">,</span><span class="w"> </span><span class="s2">"notebook_edit"</span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"security"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"folderTrust"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"enabled"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The last path segment is a 32-byte random per-session token. Without it the endpoint is
+unauthenticated on a port any local process — or any page the operator has open — can reach,
+which would let anything forge <code>EvPermission</code> records into the run's event log or flood the
+endpoint until a genuine decision missed the 15 s timeout and failed open. Sirdar compares it
+with <code>subtle.ConstantTimeCompare</code> and additionally requires <code>POST</code> with
+<code>Content-Type: application/json</code> and no <code>Origin</code> header; a request that fails any of those gets
+a bare 401 or 415, no decision payload and no event. Reading the bundle's HTTP hook executor
+confirms the CLI's own request matches — <code>fetch(url, {method:"POST", headers:{"Content-Type":
+"application/json"}, redirect:"manual"})</code>, a server-side fetch that sends no <code>Origin</code> — and a
+live run against the real binary confirmed it on the wire.</p>
+<p>HTTP hooks are blocked from private IP ranges but <strong>loopback is explicitly allowed</strong>, and the
+listener is an <code>httptest</code>-style server inside the Sirdar process on <code>127.0.0.1:0</code>, so nothing
+leaves the machine. Request body (exercised live):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"3cb194ec-..."</span><span class="p">,</span><span class="nt">"transcript_path"</span><span class="p">:</span><span class="s2">"~/.qwen/projects/&lt;sanitized-cwd&gt;/chats/&lt;id&gt;.jsonl"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/work"</span><span class="p">,</span><span class="nt">"hook_event_name"</span><span class="p">:</span><span class="s2">"PreToolUse"</span><span class="p">,</span><span class="nt">"timestamp"</span><span class="p">:</span><span class="s2">"2026-09-11T08:23:42.053Z"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"permission_mode"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"run_shell_command"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tool_input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"git log -1 --oneline"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"read the last commit"</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"toolu_1789115022053_n4cka89p7"</span><span class="p">,</span><span class="nt">"tool_call_id"</span><span class="p">:</span><span class="s2">"call_3"</span><span class="p">}</span>
+</code></pre></div>
+<p>The two ids are not interchangeable. <strong><code>tool_call_id</code> is the one the stdout stream uses</strong> — it
+is the <code>id</code> of the assistant line's <code>tool_use</code> block and the <code>tool_use_id</code> of the matching
+<code>tool_result</code> block — while the payload's own <code>tool_use_id</code> (<code>toolu_&lt;millis&gt;_&lt;rand&gt;</code>) is the
+CLI's internal handle and appears nowhere on stdout. Sirdar records both when it answers a
+call, and reconciles on the first, which is what lets it report a tool result that arrived with
+no decision behind it.</p>
+<p>Response body:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"hookSpecificOutput"</span><span class="p">:{</span><span class="nt">"hookEventName"</span><span class="p">:</span><span class="s2">"PreToolUse"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"permissionDecision"</span><span class="p">:</span><span class="s2">"deny"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"permissionDecisionReason"</span><span class="p">:</span><span class="s2">"Sirdar policy: triage runs are read-only"</span><span class="p">}}</span>
+</code></pre></div>
+<p><code>permissionDecision</code> is <code>allow</code>, <code>deny</code> or <code>ask</code>; in a headless run <code>ask</code> falls back to <code>deny</code>.
+The reason reaches the model verbatim as the tool result — a denied call came back as
+<code>{"type":"tool_result","is_error":true,"content":"Sirdar policy: triage runs are read-only"}</code>,
+which is exactly how the Claude adapter's deny message surfaces.</p>
+<p>A <code>command</code> hook works identically (JSON on stdin, JSON on stdout, exit 2 = blocking error);
+the HTTP form is used because it needs no helper binary on disk.</p>
+<p><strong>The hook fails open.</strong> Measured: with <code>--allowed-tools run_shell_command</code> and the hook URL
+pointed at a dead port, and again with a <code>command</code> hook naming a missing executable,
+<code>git log -1 --oneline</code> <em>ran</em>. A non-2xx response, a connection failure and a timeout are all
+treated as a non-blocking hook failure and the call proceeds. The bundle's executor confirms
+it: every one of those three branches returns <code>{success: true, output: {continue: true}}</code>.</p>
+<p>So the hook is a mediator, not a sandbox, and the static guarantee is <code>--exclude-tools</code>. What
+the adapter does about the fail-open itself:</p>
+<ul>
+<li><strong>Probe before handing the session back.</strong> After <code>cmd.Start</code>, Sirdar posts to a <code>/probe/&lt;token&gt;</code>
+  route on the same listener, mux and token, and fails the session outright if it does not get
+  a 204. It is a separate route so the probe judges nothing and leaves no permission record.</li>
+<li><strong>Watch for the listener dying.</strong> If <code>http.Server.Serve</code> returns before the process has been
+  reaped, and it was not Sirdar that closed it, the child's whole process group is SIGKILLed —
+  the child is started with <code>Setpgid</code>, so anything it spawned goes too — and the run ends with
+  an <code>error</code> event and a <code>Result.ExitErr</code> saying the permission hook stopped serving. Half a
+  run with no mediator is not a degraded run, it is an unmediated one.</li>
+<li><strong>Never let a slow consumer become an allow.</strong> The decision is written to the
+  <code>ResponseWriter</code> and explicitly <code>Flush</code>ed before the <code>EvPermission</code> event is published,
+  because <code>net/http</code> buffers a handler's response until it returns and publishing an event can
+  block on the event channel. Emitting first — which is what keeps a permission event ahead of
+  the <code>tool_result</code> line it belongs to — would mean a full 64-slot channel could hold the
+  decision past the 15 s hook timeout, and a deny that arrives late is an allow.</li>
+<li><strong>Report a bypass.</strong> Nothing on stdout says whether the hook was consulted. Sirdar matches
+  each <code>tool_result</code> against the decisions it made, keyed on <code>tool_call_id</code>, and emits an
+  <code>error</code> event reading <code>tool started without a Sirdar decision</code> for a call that succeeded
+  without one. Errored results are passed over: an excluded tool is refused by the CLI before
+  any hook is consulted, and those refusals arrive as errored results.</li>
+</ul>
+<h3 id="tool-names">Tool names<a class="headerlink" href="#tool-names" title="Permanent link">&para;</a></h3>
+<p>Rules and hook payloads use runtime ids, with documented aliases:</p>
+<table>
+<thead>
+<tr>
+<th>Alias</th>
+<th>Runtime id</th>
+<th></th>
+<th>Alias</th>
+<th>Runtime id</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Bash</code>, <code>Shell</code></td>
+<td><code>run_shell_command</code></td>
+<td></td>
+<td><code>Grep</code>, <code>SearchFiles</code></td>
+<td><code>grep_search</code></td>
+</tr>
+<tr>
+<td><code>Read</code>, <code>ReadFile</code></td>
+<td><code>read_file</code></td>
+<td></td>
+<td><code>Glob</code>, <code>FindFiles</code></td>
+<td><code>glob</code></td>
+</tr>
+<tr>
+<td><code>Edit</code>, <code>EditFile</code></td>
+<td><code>edit</code></td>
+<td></td>
+<td><code>ListFiles</code></td>
+<td><code>list_directory</code></td>
+</tr>
+<tr>
+<td><code>Write</code>, <code>WriteFile</code></td>
+<td><code>write_file</code></td>
+<td></td>
+<td><code>WebFetch</code></td>
+<td><code>web_fetch</code></td>
+</tr>
+<tr>
+<td><code>NotebookEdit</code></td>
+<td><code>notebook_edit</code></td>
+<td></td>
+<td><code>Agent</code></td>
+<td><code>task</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>Read</code> and <code>Edit</code> are meta-categories: a <code>Read(...)</code> rule covers <code>read_file</code>, <code>grep_search</code>,
+<code>glob</code> and <code>list_directory</code>; <code>Edit(...)</code> covers <code>edit</code>, <code>write_file</code> and <code>notebook_edit</code>.
+MCP tools are named <code>mcp__&lt;server&gt;__&lt;tool&gt;</code>, the same convention Sirdar's policy already
+parses — the registry renames a colliding MCP tool to that form so the synthetic
+<code>structured_output</code> keeps the bare name.</p>
+<p>The canonical list is <code>ToolNames</code> in <code>packages/core/src/tools/tool-names.ts</code> (49 entries in
+0.23.3), with <code>ToolNamesMigration</code> resolving three legacy names: <code>search_file_content</code> →
+<code>grep_search</code>, <code>replace</code> → <code>edit</code>, <code>task</code> → <code>agent</code>. Sirdar copies that list into
+<code>qwenCoreTools</code> and excludes all of it bar eleven read tools and the conditional shell, so the
+flag reads as a whitelist: a core tool is either judged by the policy under a name it
+understands, or never registered. A tool a later Qwen adds is on neither list, which leaves it
+registered and refused by the hook — the safe direction, and the reason a version bump should
+diff <code>ToolNames</code> against <code>qwenCoreTools</code>.</p>
+<h2 id="structured-output-json-schema">Structured output (<code>--json-schema</code>)<a class="headerlink" href="#structured-output-json-schema" title="Permanent link">&para;</a></h2>
+<p>Accepts an inline JSON literal or <code>@./path/to/schema.json</code>. Qwen registers a synthetic
+<code>structured_output</code> tool, and the session ends on the first call whose arguments validate
+against the schema (Ajv, strict mode). The schema must accept object-typed values at the root
+(a root <code>$ref</code> is rejected; wrap it in <code>allOf</code>), and it is re-sent as the tool's <code>parameters</code>
+block on <strong>every</strong> model request, so a large schema is paid for per turn.</p>
+<p>On a validation failure the tool returns Ajv's message as an error tool result and the model
+gets another turn — Qwen runs its own retry loop inside the session, which is a different
+thing from Sirdar's retry against the <em>note</em> schema after the run.</p>
+<p>Restrictions that matter: <code>--json-schema</code> is rejected with <code>-i/--prompt-interactive</code>, with
+<code>--input-format stream-json</code>, with <code>--acp</code>, and with no prompt at all. It is a per-run flag,
+so it has to be re-passed on every <code>--resume</code>.</p>
+<h2 id="resume">Resume<a class="headerlink" href="#resume" title="Permanent link">&para;</a></h2>
+<p><code>--resume &lt;sessionId&gt;</code> (exercised live) and <code>--continue</code> for the most recent session in the
+project. The handle is the <code>session_id</code> from the <code>init</code> line; transcripts live in
+<code>~/.qwen/projects/&lt;sanitized-cwd&gt;/chats/&lt;sessionId&gt;.jsonl</code>, so resumption is project-scoped.
+A resumed run re-emits an <code>init</code> line carrying <strong>the same</strong> <code>session_id</code> and produces its own
+<code>result</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"init"</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"a2569383-87c7-473b-b321-bca5cd3b6f3f"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"result"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"a2569383-..."</span><span class="p">,</span><span class="nt">"num_turns"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"structured_result"</span><span class="p">:{</span><span class="nt">"greeting"</span><span class="p">:</span><span class="s2">"hello"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+</code></pre></div>
+<p><code>--fork-session</code> starts a branch instead of continuing, and <code>--session-id</code> names the session up
+front. Resumption needs <code>general.chatRecording</code> left on (the default); <code>--chat-recording false</code>
+disables it and breaks <code>--continue</code> / <code>--resume</code>.</p>
+<h2 id="mcp-servers">MCP servers<a class="headerlink" href="#mcp-servers" title="Permanent link">&para;</a></h2>
+<p><code>--mcp-config</code> takes a path or inline JSON in <code>{"mcpServers":{...}}</code> form, and it <strong>merges</strong>
+with the settings-file servers rather than replacing them:
+<code>mcpServers = assembleMcpServers(settings.mcpServers, cwd, cliMcpServers)</code>. There is no
+<code>--strict-mcp-config</code>. The lever that restricts the set is <code>--allowed-mcp-server-names</code>, which
+overrides both <code>mcp.allowed</code> and <code>mcp.excluded</code> from settings. Measured against the
+<code>mcp_servers</code> array on the <code>init</code> line, with one server (<code>globalsrv</code>) in the settings file and
+one (<code>wssrv</code>) in a <code>--mcp-config</code> file:</p>
+<table>
+<thead>
+<tr>
+<th>Flags</th>
+<th><code>init.mcp_servers</code></th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>settings only</td>
+<td><code>[{"name":"globalsrv","status":"disconnected"}]</code></td>
+</tr>
+<tr>
+<td><code>--mcp-config ws.json</code></td>
+<td><code>[globalsrv, wssrv]</code></td>
+</tr>
+<tr>
+<td><code>--mcp-config ws.json --allowed-mcp-server-names wssrv</code></td>
+<td><code>[wssrv]</code></td>
+</tr>
+<tr>
+<td><code>--allowed-mcp-server-names __sirdar_none__</code></td>
+<td><code>[]</code></td>
+</tr>
+</tbody>
+</table>
+<p>So Sirdar's <code>MCPStrict</code> is expressed as: name the workspace file with <code>--mcp-config</code>, then
+repeat <code>--allowed-mcp-server-names &lt;name&gt;</code> once per server the file declares; with no
+workspace file, pass one sentinel name that matches nothing, which yields an empty server
+list. <code>--bare</code> would also give exactly the CLI-supplied servers, but it disables hooks and the
+headless deny list along with them, so it is not usable here.</p>
+<p><strong>The allow-list narrows by name and by nothing else.</strong> <code>allowedMcpServers</code> is a
+<code>Set&lt;string&gt;</code> of names checked against the merged map's keys; it carries no notion of where a
+definition came from. So an operator-configured server that happens to share a name with one
+the workspace's <code>.mcp.json</code> declares passes the filter, and which of the two definitions
+survives <code>assembleMcpServers</code> is the merge's business. <code>mcp.workspaceOnly</code> therefore means
+"only these <em>names</em>", not "only these <em>servers</em>" — the one gap in the restriction, and the
+reason workspace server names should be distinctive.</p>
+<h2 id="exit-codes-stderr-and-the-missing-result-line">Exit codes, stderr, and the missing result line<a class="headerlink" href="#exit-codes-stderr-and-the-missing-result-line" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Meaning</th>
+<th>Result line on stdout?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>success</td>
+<td>yes, <code>subtype:"success"</code></td>
+</tr>
+<tr>
+<td>1</td>
+<td>the model answered in prose instead of calling <code>structured_output</code></td>
+<td>yes, <code>subtype:"error_during_execution"</code>, <code>is_error:true</code></td>
+</tr>
+<tr>
+<td>53</td>
+<td><code>--max-session-turns</code> overrun</td>
+<td><strong>no</strong> — the stream just stops</td>
+</tr>
+<tr>
+<td>55</td>
+<td><code>--max-wall-time</code> / <code>--max-tool-calls</code> overrun (<code>FatalBudgetExceededError</code>)</td>
+<td>not exercised</td>
+</tr>
+<tr>
+<td>130</td>
+<td>SIGINT</td>
+<td>normally no</td>
+</tr>
+</tbody>
+</table>
+<p>Exit 53's stderr, verbatim:</p>
+<div class="highlight"><pre><span></span><code>Reached max session turns for this session. Increase the number of turns by specifying maxSessionTurns in settings.json.
+Note: --json-schema is active. If the model never called structured_output, verify it isn't denied by permissions.deny / --exclude-tools and that the schema is satisfiable.
+</code></pre></div>
+<p>A stream that ends with no <code>result</code> line is therefore a normal outcome, not a parse failure,
+and the adapter has to report the exit code and the stderr tail rather than wait for a final
+event. There is also an always-on loop detector that ends a run with
+<code>subtype:"error_during_execution"</code> and
+<code>error.message: "Loop detection halted the run (global_tool_call_duplicate: ...)"</code> when the
+model repeats a tool call — observed when a denied <code>structured_output</code> was re-issued with the
+same call id.</p>
+<h2 id="budgets">Budgets<a class="headerlink" href="#budgets" title="Permanent link">&para;</a></h2>
+<p><code>--max-session-turns N</code> (exit 53), <code>--max-wall-time 25m</code> (accepts <code>90</code>, <code>30s</code>, <code>5m</code>, <code>1.5h</code>;
+exit 55), <code>--max-tool-calls N</code> (exit 55). <code>structured_output</code> is exempt from <code>--max-tool-calls</code>
+but <strong>not</strong> from <code>--max-session-turns</code>, so a turn budget needs one spare turn for the terminal
+call. There is no spend budget, because there is no cost figure on the wire.</p>
+<h2 id="what-was-not-exercised">What was not exercised<a class="headerlink" href="#what-was-not-exercised" title="Permanent link">&para;</a></h2>
+<ul>
+<li>A real model. The backend was a stub; token counts, <code>duration_api_ms</code> and the model's own
+  behaviour under a schema are all synthetic. The settings-layer and <code>--exclude-tools</code>
+  measurements above were taken the same way, against the real 0.23.3 binary with a stub
+  endpoint: what they establish is which tools the CLI registers and offers, and whether the
+  hook is called, neither of which depends on the model.</li>
+<li>The probe, the mid-run listener death and the abort on an unmediated tool call are exercised
+  against the scripted fake binary in <code>internal/provider/qwen/qwen_test.go</code>, not against the
+  real CLI.</li>
+<li>A repository-supplied subagent or project skill actually registering its <code>hooks:</code> block and
+  overwriting a decision. The mechanism is read from the 0.23.3 bundle (source priority, the
+  session-hook append, <code>mergeWithOrLogic</code>'s assignment); making the real CLI spawn a subagent
+  needs a model that calls the <code>agent</code> tool, which is excluded.</li>
+<li><code>--max-wall-time</code> / <code>--max-tool-calls</code> overruns (exit 55) and SIGINT's exit 130.</li>
+<li>MCP tools actually running — the servers in the MCP table never completed a handshake, which
+  is enough to prove which ones were assembled but not what a <code>mcp__server__tool</code> hook payload
+  looks like. The <code>mcp__</code> naming is from source.</li>
+<li><code>qwen --acp</code> / <code>qwen serve</code>, the ACP bridge and its <code>MultiClientPermissionMediator</code>
+  (<code>local-only</code> policy). That is the other route to a host-decided permission and it is worth
+  revisiting if the hook's fail-open behaviour ever becomes a problem — but ACP is rejected
+  together with <code>--json-schema</code>, so it would cost the structured output.</li>
+<li><code>--continue</code>, <code>--fork-session</code>, <code>--session-id</code>.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

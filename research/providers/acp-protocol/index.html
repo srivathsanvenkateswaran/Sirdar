@@ -1,0 +1,2565 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../../adapters/rally/">
+      
+      
+        <link rel="next" href="../acp-agents/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>ACP protocol - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#agent-client-protocol-acp-evaluated-for-sirdar" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              ACP protocol
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Specification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-acp-does-not-cover-for-sirdars-purposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What ACP does not cover, for Sirdar's purposes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Implementations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Implementations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDKs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-comparison-vs-claude-code-stream-json-and-codex-app-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Comparison vs. Claude Code stream-json and Codex app-server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-specification" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Specification
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-acp-does-not-cover-for-sirdars-purposes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What ACP does not cover, for Sirdar's purposes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-implementations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Implementations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Implementations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Agents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Clients
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#sdks" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        SDKs
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-comparison-vs-claude-code-stream-json-and-codex-app-server" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Comparison vs. Claude Code stream-json and Codex app-server
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="agent-client-protocol-acp-evaluated-for-sirdar">Agent Client Protocol (ACP), evaluated for Sirdar<a class="headerlink" href="#agent-client-protocol-acp-evaluated-for-sirdar" title="Permanent link">&para;</a></h1>
+<p>Researched 2026-09-10, against the current ACP docs site and schema. ACP moved from the
+<code>zed-industries</code> GitHub org to a dedicated <code>agentclientprotocol</code> org at some point before this
+date (the site, registry, and the Claude/Codex adapter packages all live there now; the old
+<code>zed-industries/*</code> names redirect or are marked superseded). Where a fact could not be pinned to
+primary-source text, it is marked <strong>unverified</strong>.</p>
+<p>Sirdar's own captured wire formats for the two protocols it already speaks
+(<code>docs/research/06-wire-formats.md</code>, captured 2026-09-10 against Claude Code 2.1.267 and
+codex-cli 0.154.0) are used as the comparison baseline in section 4. Note also that
+<code>docs/research/05-verdict-and-proposal.md</code> and <code>HANDOFF.md</code> describe Sirdar as a TypeScript/Node
+program, while this research brief was scoped as "Sirdar is a Go program" — flagged here since
+it changes how literally to read section 3's Go-SDK sizing, not resolved by this document.</p>
+<h2 id="1-specification">1. Specification<a class="headerlink" href="#1-specification" title="Permanent link">&para;</a></h2>
+<p><strong>Transport.</strong> JSON-RPC 2.0 over stdio: the client spawns the agent as a subprocess and
+exchanges newline-delimited JSON-RPC objects over stdin/stdout, exactly like Sirdar's existing
+Claude Code and Codex integrations. A remote transport (HTTP/WebSocket) is on the roadmap; a
+"Transports Working Group" was formed 2026-04-22 and "Transports" chapters exist in both the v1
+and v2 docs trees, but as of this research remote transport is not shipped — local stdio is the
+only transport agents actually implement. <a href="https://agentclientprotocol.com/overview/introduction">Overview</a>,
+<a href="https://agentclientprotocol.com/updates">Updates</a>.</p>
+<p><strong>Two protocol versions coexist right now.</strong> v1 is the stable, implemented protocol; v2 was
+published in <strong>draft</strong> form on 2026-07-20 and is not yet what agents/clients speak. Everything
+below is v1 unless stated otherwise. <a href="https://agentclientprotocol.com/protocol/v1/schema">v1 schema</a>,
+<a href="https://agentclientprotocol.com/protocol/v2/overview">v2 overview</a> (fetched but the page did not
+expose a status banner in the fetch — <strong>unverified</strong> beyond the 2026-07-20 draft-publish date from
+the updates log).</p>
+<p><strong><code>initialize</code></strong> — request: <code>protocolVersion</code> (int, required), <code>clientCapabilities</code> (required),
+<code>clientInfo</code> (optional: name/title/version). Response: <code>protocolVersion</code> (required, the agreed
+version — the agent echoes back its own latest supported version if it can't match the client's),
+<code>agentCapabilities</code> (required), <code>agentInfo</code> (optional), <code>authMethods</code> (array, may be empty).</p>
+<p><code>clientCapabilities</code> shape:
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"fs"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"readTextFile"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"writeTextFile"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"terminal"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"session"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"configOptions"</span><span class="p">:</span><span class="w"> </span><span class="p">{}</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<code>agentCapabilities</code> shape:
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"loadSession"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"promptCapabilities"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"image"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"audio"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"embeddedContext"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"mcpCapabilities"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"http"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"sse"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<code>mcpCapabilities.http</code>/<code>.sse</code> gate whether the agent can consume those two MCP transports; stdio
+MCP servers are assumed universally supported and don't need a capability flag.
+<a href="https://agentclientprotocol.com/protocol/v1/initialization">Initialization</a>,
+<a href="https://agentclientprotocol.com/protocol/v1/schema">Schema</a>.</p>
+<p><strong><code>authenticate</code></strong> — request: <code>methodId</code> (required, one of the ids the agent advertised in
+<code>authMethods</code>). Response is an empty result. Used for agents that need an interactive login step
+before <code>session/new</code> will succeed (e.g. a device-code OAuth flow) — largely irrelevant to Sirdar
+since the CLIs it targets are expected to already be logged in outside of Sirdar's process, the
+same assumption it makes for Claude Code and Codex today.</p>
+<p><strong><code>session/new</code></strong> — request: <code>cwd</code> (required, absolute path), <code>mcpServers</code> (required, array),
+<code>additionalDirectories</code> (optional, array of absolute paths, gated by a capability). Response:
+<code>sessionId</code> (required, string), plus optionally <code>configOptions</code> and <code>modes</code> (the session's
+available modes/config toggles, if the agent exposes any — e.g. Claude Code's plan/accept-edits
+modes have an ACP analogue here). MCP server config shapes:</p>
+<p><div class="highlight"><pre><span></span><code><span class="c1">// stdio (the only transport every agent must accept)</span>
+<span class="p">{</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"my-server"</span><span class="p">,</span><span class="w"> </span><span class="nt">"command"</span><span class="p">:</span><span class="w"> </span><span class="s2">"npx"</span><span class="p">,</span><span class="w"> </span><span class="nt">"args"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"-y"</span><span class="p">,</span><span class="w"> </span><span class="s2">"@org/server"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"env"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"TOKEN"</span><span class="p">,</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">// http (optional, gated by agentCapabilities.mcpCapabilities.http)</span>
+<span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"http"</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"my-server"</span><span class="p">,</span><span class="w"> </span><span class="nt">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"headers"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Authorization"</span><span class="p">,</span><span class="w"> </span><span class="nt">"value"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Bearer ..."</span><span class="w"> </span><span class="p">}]</span><span class="w"> </span><span class="p">}</span>
+
+<span class="c1">// sse (optional, gated by mcpCapabilities.sse; marked deprecated in current MCP itself)</span>
+<span class="p">{</span><span class="w"> </span><span class="nt">"type"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sse"</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"my-server"</span><span class="p">,</span><span class="w"> </span><span class="nt">"url"</span><span class="p">:</span><span class="w"> </span><span class="s2">"https://..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"headers"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="err">...</span><span class="p">]</span><span class="w"> </span><span class="p">}</span>
+</code></pre></div>
+<a href="https://agentclientprotocol.com/protocol/v1/session-setup">Session Setup</a>.</p>
+<p><strong><code>session/load</code></strong> — same required fields as <code>session/new</code> (<code>sessionId</code>, <code>cwd</code>, <code>mcpServers</code>),
+gated by <code>agentCapabilities.loadSession</code>. Instead of returning a fresh <code>sessionId</code>, the agent
+replays the entire prior conversation back to the client as a burst of <code>session/update</code>
+notifications, then responds with a null result. The spec's stated intent is explicit —
+"persistence across restarts and sharing sessions between different Client instances" — i.e.
+cross-process resume is a design goal, not just same-process continuation. <a href="https://agentclientprotocol.com/protocol/v1/session-setup">Session
+Setup</a>.</p>
+<p><strong><code>session/prompt</code></strong> — request: <code>sessionId</code> (required), <code>prompt</code> (required, <code>ContentBlock[]</code>).
+Response: <code>stopReason</code> (required). Content blocks in the prompt (and everywhere else in ACP) are:
+- <code>text</code>: <code>{ "type": "text", "text": "..." }</code>
+- <code>image</code>: <code>{ "type": "image", "mimeType": "image/png", "data": "&lt;base64&gt;" }</code> (optional <code>uri</code>)
+- <code>audio</code>: <code>{ "type": "audio", "mimeType": "audio/wav", "data": "&lt;base64&gt;" }</code>
+- <code>resource_link</code>: <code>{ "type": "resource_link", "uri": "file:///...", "name": "...", "mimeType": "...", "size": 123 }</code> — a reference the agent may or may not dereference
+- <code>resource</code> (embedded resource): <code>{ "type": "resource", "resource": { "uri": "file:///...", "mimeType": "...", "text": "..." } }</code> — the content inlined by the client</p>
+<p>Clients must restrict which of these they send to what <code>promptCapabilities</code> (e.g.
+<code>image</code>/<code>audio</code>/<code>embeddedContext</code>) the agent advertised in <code>initialize</code>.
+<a href="https://agentclientprotocol.com/protocol/v1/prompt-turn">Prompt Turn</a>,
+<a href="https://agentclientprotocol.com/protocol/v1/content">Content</a>.</p>
+<p>Important for Sirdar's "text + local image paths" requirement: <strong>there is no first-class
+"local file path" image type.</strong> An <code>image</code> block only carries <code>data</code> (base64) + <code>mimeType</code> (+
+optional <code>uri</code>, whose semantics for a <em>local</em> path are not spelled out in the pages fetched —
+<strong>unverified</strong> whether an agent will read a <code>file://</code> URI on its own vs. requiring inline
+<code>data</code>). The safe, portable move — and what Sirdar already does for Claude Code and the Agent
+SDK — is to read the file and inline it as base64 <code>data</code>.</p>
+<p><strong><code>session/update</code></strong> notifications — method <code>session/update</code>, params <code>{ "sessionId", "update" }</code>
+where <code>update.sessionUpdate</code> is a discriminated-union tag. Confirmed variants and fields:
+- <code>agent_message_chunk</code> — streamed assistant text (chunked <code>ContentBlock</code>, optional <code>messageId</code>)
+- <code>agent_thought_chunk</code> — streamed reasoning/thinking text, same shape
+- <code>tool_call</code> — first sighting of a tool call: <code>toolCallId</code> (required), <code>title</code> (required),
+  <code>kind</code> (optional: <code>read</code>, <code>edit</code>, <code>delete</code>, <code>move</code>, <code>search</code>, <code>execute</code>, <code>think</code>, <code>fetch</code>,
+  <code>switch_mode</code>, <code>other</code>), <code>status</code> (optional, defaults <code>pending</code>), <code>content</code>, <code>locations</code>,
+  <code>rawInput</code>, <code>rawOutput</code>
+- <code>tool_call_update</code> — same fields as <code>tool_call</code>, all optional except <code>toolCallId</code>; "only the
+  fields being changed need to be included" — this is how Sirdar would see a tool call's
+  start→in_progress→completed/failed lifecycle instead of Claude Code's paired
+  <code>tool_use</code>/<code>tool_result</code> messages or Codex's <code>item/started</code>/<code>item/completed</code>
+- <code>plan</code> — the agent's structured task plan
+- <code>available_commands_update</code> — advertises slash-commands the agent currently supports
+- <code>current_mode_update</code> — <code>{ "sessionUpdate": "current_mode_update", "modeId": "code" }</code>,
+  fired when the agent's own session mode changes</p>
+<p><code>ToolCallStatus</code> enum: <code>pending</code>, <code>in_progress</code>, <code>completed</code>, <code>failed</code>. Tool call <code>content</code> can
+itself be regular content blocks, a <code>diff</code> (<code>path</code>/<code>oldText</code>/<code>newText</code>), or a <code>terminal</code>
+reference (<code>{ "type": "terminal", "terminalId": "..." }</code>) pointing at a live <code>terminal/*</code>
+session. <code>locations</code> is <code>[{ "path": "...", "line": 123 }]</code>, meant for "follow the agent" UI.
+<a href="https://agentclientprotocol.com/protocol/v1/tool-calls">Tool Calls</a>,
+<a href="https://agentclientprotocol.com/protocol/v1/session-modes">Session Modes</a>.</p>
+<p>There is now also a <strong><code>usage_update</code></strong> session/update variant (stabilized 2026-06-05, via the
+"Session Context Size and Cost" RFD), which the smaller-model page extraction surfaced alongside
+the other variants during this research. Its shipped shape is intentionally narrow: context
+<code>used</code>/<code>size</code> (tokens currently in context / context window size) and an optional <code>cost</code> object
+(<code>amount</code> + <code>currency</code>). The RFD text explicitly scopes this to session-level context/cost and
+explicitly punts on both fine-grained per-turn token accounting ("end-turn token accounting
+covered separately" — not resolved by the pages fetched) and rate limits ("Rate limits and
+quotas are separate concerns that could be addressed in a future RFD"). <a href="https://agentclientprotocol.com/rfds/session-usage">Session Context Size
+and Cost RFD</a>.</p>
+<p><strong><code>session/request_permission</code></strong> — request: <code>sessionId</code> (required), <code>toolCall</code> (required, a
+<code>ToolCallUpdate</code> describing what's being requested), <code>options</code> (required, array of
+<code>PermissionOption</code>). <code>PermissionOption</code>: <code>optionId</code> (required), <code>name</code> (required,
+agent-authored human-readable label), <code>kind</code> (required, one of <code>allow_once</code>, <code>allow_always</code>,
+<code>reject_once</code>, <code>reject_always</code>). Response: <code>{ "outcome": &lt;RequestPermissionOutcome&gt; }</code>. The
+client answers by picking one <code>optionId</code> from the list the agent offered — <strong>there is no field
+for the client to attach a free-text reason/message to its answer.</strong> The agent chooses the
+option labels; the client can only select among them, it cannot inject its own explanation back
+to the model the way Claude Code's <code>control_response</code> lets Sirdar attach a <code>message</code> on deny.
+<a href="https://agentclientprotocol.com/protocol/v1/schema">Schema</a> (page fetch was truncated before
+fully rendering the <code>cancelled</code> vs. selection-outcome variants of <code>RequestPermissionOutcome</code> —
+<strong>unverified</strong> exact tag names for that union; general-purpose JSON-RPC request cancellation by
+id was separately stabilized 2026-06-29 and would be the likely mechanism if a permission
+request is cancelled mid-flight).</p>
+<p><strong><code>session/cancel</code></strong> — a <strong>notification</strong> (no response expected), <code>{ "sessionId" }</code>. Cancels the
+in-flight prompt turn; the agent should wind down and the eventual <code>session/prompt</code> response (or
+a JSON-RPC error, if it was already in flight) should reflect <code>stopReason: "cancelled"</code>. Any
+outstanding request from the agent to the client (e.g. a pending <code>session/request_permission</code>)
+must still get <em>some</em> response — either a real answer or a <code>-32800</code> "Request Cancelled" JSON-RPC
+error. <a href="https://agentclientprotocol.com/protocol/v1/cancellation">Cancellation</a>.</p>
+<p><strong><code>session/set_mode</code></strong> — request: <code>sessionId</code>, <code>modeId</code> (must be one of the modes the session
+advertised). No meaningful response payload beyond acknowledgement; the mode change itself is
+echoed back to the client asynchronously via a <code>current_mode_update</code> session/update.</p>
+<p><strong><code>fs/read_text_file</code></strong> — client method the agent calls: <code>sessionId</code>, <code>path</code> (absolute),
+optional <code>line</code> (1-based start), <code>limit</code> (max lines). Response: <code>content</code>. <strong><code>fs/write_text_file</code></strong>
+— <code>sessionId</code>, <code>path</code>, <code>content</code>; response is null on success. Both are gated by
+<code>clientCapabilities.fs.readTextFile</code> / <code>.writeTextFile</code> — "If ... is false or not present, the
+Agent MUST NOT attempt to call the corresponding filesystem method." <a href="https://agentclientprotocol.com/protocol/v1/file-system">File
+System</a>.</p>
+<p><strong><code>terminal/*</code></strong> client methods, all keyed by <code>sessionId</code> + <code>terminalId</code> after creation:
+<code>terminal/create</code> (<code>command</code>, optional <code>args</code>, <code>env</code>, <code>cwd</code>, <code>outputByteLimit</code>; returns
+<code>terminalId</code>), <code>terminal/output</code> (returns <code>output</code>, <code>truncated</code>, optional <code>exitStatus</code> with
+<code>exitCode</code>/<code>signal</code>), <code>terminal/wait_for_exit</code> (blocks until exit, returns <code>exitCode</code>/<code>signal</code>),
+<code>terminal/kill</code> (terminal stays queryable afterward), <code>terminal/release</code> (terminal id becomes
+invalid for all other <code>terminal/*</code> calls afterward). <a href="https://agentclientprotocol.com/protocol/v1/terminals">Terminals</a>.</p>
+<p><strong><code>StopReason</code></strong> enum, returned by <code>session/prompt</code>: <code>end_turn</code> ("the language model finishes
+responding without requesting more tools"), <code>max_tokens</code>, <code>max_turn_requests</code>, <code>refusal</code>,
+<code>cancelled</code>. <a href="https://agentclientprotocol.com/protocol/v1/prompt-turn">Prompt Turn</a>.</p>
+<p><strong>Other v1-stable features worth knowing about, not asked for explicitly but adjacent to
+Sirdar's needs:</strong> <code>session/list</code> and <code>session/delete</code> (stabilized 2026-06-05 alongside
+<code>usage_update</code>) for enumerating/removing session history; a generic <code>session</code> config-option
+framework with a <code>model_config</code> category (stabilized 2026-07-20) that lets an agent expose
+model/effort/context-size choices as typed options a client can render near a model picker,
+rather than a hardcoded "model" field on <code>session/new</code>; a <code>logout</code> method (stabilized
+2026-05-21); additional-workspace-roots support (stabilized 2026-06-01); and Elicitation
+(<code>elicitation/create</code> / <code>elicitation/complete</code>, stabilized 2026-07-22/24), which is the
+<em>agent-asks-client-for-structured-input</em> direction — useful for an agent that needs a form filled
+in, not for getting the agent's own output to conform to a schema (see section 2).
+<a href="https://agentclientprotocol.com/updates">Updates</a>,
+<a href="https://agentclientprotocol.com/protocol/v1/elicitation">Elicitation</a>.</p>
+<h2 id="2-what-acp-does-not-cover-for-sirdars-purposes">2. What ACP does not cover, for Sirdar's purposes<a class="headerlink" href="#2-what-acp-does-not-cover-for-sirdars-purposes" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Structured JSON output by schema.</strong> No field anywhere in <code>session/prompt</code>,
+  <code>session/new</code>, or the capability objects lets a client hand the agent a JSON Schema and get
+  a validated final answer back. The only channel is prose in <code>agent_message_chunk</code> content, and
+  the agent decides on its own whether/how to format it. Workaround: prompt-only (ask for JSON
+  in the system/user prompt and parse the concatenated <code>agent_message_chunk</code> text at <code>end_turn</code>),
+  or — better, and consistent with what Sirdar already does for Claude Code, which forces a
+  synthetic <code>StructuredOutput</code> tool call (<code>docs/research/06-wire-formats.md</code>) — expose a
+  Sirdar-owned MCP tool (e.g. <code>submit_result</code>) whose input schema <em>is</em> the target schema, and
+  instruct the agent to call it as its last action. ACP tool calls made against
+  Sirdar-configured MCP servers surface as ordinary <code>tool_call</code>/<code>tool_call_update</code> events with
+  <code>rawInput</code> populated, so Sirdar reads the structured object out of <code>rawInput</code> on that call
+  instead of parsing free text. This needs no protocol support beyond what ACP already has
+  (<code>session/new.mcpServers</code> + normal tool-call reporting), only agent cooperation via the prompt
+  — no worse than the Claude Code and Codex workaround, and it sidesteps free-text parsing
+  entirely if the agent actually calls the tool.</li>
+<li><strong>Token usage / cost, fine-grained.</strong> Partially covered as of 2026-06-05: <code>usage_update</code>
+  gives context-window <code>used</code>/<code>size</code> and an optional session-cumulative <code>cost</code>
+  (<code>amount</code>+<code>currency</code>), but not a per-turn input/output/cache-token breakdown comparable to
+  Claude Code's <code>result.usage</code> (<code>input_tokens</code>, <code>output_tokens</code>,
+  <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>) or Codex's
+  <code>thread/tokenUsage/updated</code> (<code>totalTokens</code>, <code>inputTokens</code>, <code>cachedInputTokens</code>,
+  <code>outputTokens</code>, <code>reasoningOutputTokens</code>). Whether individual agents actually populate
+  <code>usage_update</code> (vs. leaving <code>cost</code> null and only reporting context <code>used</code>/<code>size</code>) is
+  agent-specific and <strong>unverified</strong> here — Sirdar would need to probe each target agent.</li>
+<li><strong>Rate-limit signals.</strong> Not covered at all, and the RFD that added <code>usage_update</code>
+  explicitly says so ("Rate limits and quotas are separate concerns that could be addressed in a
+  future RFD"). Claude Code has <code>rate_limit_event</code> with <code>rateLimitType</code>/<code>unifiedWindows</code>/
+  <code>utilization</code>/<code>resetsAt</code>; Codex app-server has <code>account/rateLimits/updated</code> with
+  <code>usedPercent</code>/<code>windowDurationMins</code>/<code>resetsAt</code>. ACP has neither a stable notification nor an RFD
+  in flight for this as of this research. Sirdar's board feature that pauses the queue when a
+  provider's window is spent has <strong>no ACP signal to drive it</strong> — it would have to fall back to
+  detecting an agent-specific error string/code in a <code>stop_reason</code>/refusal, or simply not support
+  quota-aware pausing for ACP-driven agents.</li>
+<li><strong>Model selection, as a first-class field.</strong> No <code>model</code> parameter on <code>session/new</code> or
+  <code>session/prompt</code>. The 2026-07-20 <code>model_config</code> config-option category gives agents a
+  standard <em>category tag</em> to hang a model/effort/context picker on, but the actual option id/
+  values are agent-defined strings inside the generic <code>configOptions</code> mechanism, not an ACP enum
+  Sirdar can drive uniformly across agents — Sirdar would still need per-agent knowledge of
+  which config option id means "model."</li>
+<li><strong>Permission policy as a client-side rule set, vs. per-request prompts.</strong> ACP's model is
+  interactive: the agent calls <code>session/request_permission</code> per tool call, offering
+  agent-chosen options (<code>allow_once</code>/<code>allow_always</code>/<code>reject_once</code>/<code>reject_always</code>), and the
+  client answers by selecting one. There's no ACP-level concept of the client pre-declaring a
+  policy ("always deny Bash", "always allow Read") the <em>agent</em> consults before even asking —
+  <code>allow_always</code>/<code>reject_always</code> are scoped to the option the agent itself offered and are
+  session/agent-local memory, not a client-side rule Sirdar can hand over at <code>session/new</code>. A
+  Sirdar-side permission engine still has to answer every <code>request_permission</code> call itself
+  (fast, deterministically, based on its own rules) — functionally fine, since Sirdar wants
+  read-only-by-default gating anyway, but it means the "policy" lives entirely in Sirdar's
+  request handler, not in a payload the protocol lets you configure once.
+  There is also, as noted in section 1, <strong>no field for the client to attach a message/reason to
+  its permission answer</strong> — only <code>optionId</code> selection. This directly limits the "deny writes via
+  reject_once with a message" pattern Sirdar uses with Claude Code today (where <code>deny</code> carries a
+  <code>message</code> the model sees, e.g. <code>"Sirdar policy: triage runs are read-only"</code>). In ACP, Sirdar
+  can only select the agent's own <code>reject_once</code>-labeled option; if it wants the model to see a
+  policy explanation, that has to be threaded through the <em>original prompt</em> ("do not write
+  files; if you attempt to, explain in your next message that Sirdar policy is read-only") rather
+  than injected at the moment of denial.</li>
+<li><strong>Resume across processes.</strong> Nominally covered — <code>session/load</code> is explicitly designed for
+  "persistence across restarts and sharing sessions between different Client instances"
+  (section 1) — but whether it's <em>actually implemented</em> by any given agent is a per-agent
+  question gated by <code>agentCapabilities.loadSession</code>, and how widely it's implemented in practice
+  was not stated on the pages fetched (<strong>unverified</strong>, needs a per-agent capability probe; see
+  section 3 for what's known about the two agents Sirdar already targets under other protocols).</li>
+</ul>
+<h2 id="3-implementations">3. Implementations<a class="headerlink" href="#3-implementations" title="Permanent link">&para;</a></h2>
+<h3 id="agents">Agents<a class="headerlink" href="#agents" title="Permanent link">&para;</a></h3>
+<p>The ACP registry (<code>https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json</code>) lists
+~40 registered agents as of this research; selected entries relevant to Sirdar, with launch
+command from the registry:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Native / adapter</th>
+<th>Launch</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Claude (Anthropic)</td>
+<td>Adapter, official, maintained under the ACP org</td>
+<td><code>npx @agentclientprotocol/claude-agent-acp@0.76.0</code> (formerly <code>@zed-industries/claude-code-acp</code>, which "has been renamed... migrate to continue receiving updates")</td>
+</tr>
+<tr>
+<td>Codex (OpenAI)</td>
+<td>Adapter, official-ish (maintained under the ACP org, not OpenAI itself)</td>
+<td><code>npx @agentclientprotocol/codex-acp@1.11.0</code> (formerly <code>@zed-industries/codex-acp</code>)</td>
+</tr>
+<tr>
+<td>Gemini CLI</td>
+<td>Native (Google ships <code>--acp</code> directly)</td>
+<td><code>npx @google/gemini-cli@0.59.0 --acp</code></td>
+</tr>
+<tr>
+<td>Goose (Block)</td>
+<td>Native, binary</td>
+<td>binary, no npx wrapper listed</td>
+</tr>
+<tr>
+<td>Qwen Code (Alibaba)</td>
+<td>Native</td>
+<td><code>npx @qwen-code/qwen-code@0.23.2 --acp --experimental-skills</code></td>
+</tr>
+<tr>
+<td>Kimi CLI (Moonshot)</td>
+<td>Native, binary</td>
+<td>binary</td>
+</tr>
+<tr>
+<td>Crush</td>
+<td>not found in the registry snapshot fetched — <strong>unverified</strong>, may be unregistered or renamed</td>
+<td>—</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>Native, binary</td>
+<td>binary</td>
+</tr>
+<tr>
+<td>Junie (JetBrains)</td>
+<td>Native, binary</td>
+<td>binary; homepage <code>junie.jetbrains.com</code></td>
+</tr>
+<tr>
+<td>Augment (<code>auggie</code>)</td>
+<td>Native (<code>--acp</code> flag)</td>
+<td><code>npx @augmentcode/auggie@0.36.0 --acp</code></td>
+</tr>
+<tr>
+<td>GitHub Copilot CLI</td>
+<td>Native</td>
+<td><code>npx @github/copilot@1.0.83 --acp</code></td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>Native, binary</td>
+<td>binary; docs at <code>cursor.com/docs/cli/acp</code></td>
+</tr>
+<tr>
+<td>Devin (Cognition)</td>
+<td>Native, binary</td>
+<td>binary</td>
+</tr>
+</tbody>
+</table>
+<p><a href="https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json">Registry</a>.</p>
+<p>The two entries Sirdar already has native adapters for are worth detailing, since they show what
+"native or adapter" costs in practice — both <code>claude-agent-acp</code> and <code>codex-acp</code> are maintained,
+actively developed npm/GitHub projects under the <code>agentclientprotocol</code> org (2.5k★/687 commits and
+366★/509 commits respectively at fetch time), not throwaway shims:</p>
+<ul>
+<li><strong><code>claude-agent-acp</code></strong> wraps the official Claude Agent SDK and translates
+  ACP↔Agent-SDK-protocol↔MCP. README-documented feature surface: image handling, tool
+  permission workflows, plan/TODO reporting, nested subagent transcripts, interactive/background
+  terminals, custom slash commands, client-supplied MCP servers, and a "provider-neutral goal
+  extension" for session-scoped long-running goals. Needs <code>ANTHROPIC_API_KEY</code> (or equivalent
+  Claude Agent SDK auth) in the environment — <strong>unverified</strong> whether it supports subscription-CLI
+  login the way Sirdar's direct <code>claude -p</code> spawn does; this is the same
+  BYO-subscription-vs-API-key question <code>docs/research/03-licensing-byo-subscription.md</code> already
+  flags for the Agent SDK generally, and using this adapter would inherit it.
+  <a href="https://github.com/agentclientprotocol/claude-agent-acp">github.com/agentclientprotocol/claude-agent-acp</a>.</li>
+<li><strong><code>codex-acp</code></strong> is a Rust binary (npm-distributed) that "translates ACP requests into Codex
+  operations, and maps Codex events back into the client." Documented feature surface: native
+  ACP subagent sessions, permission-request events, embedded images in prompts, client-supplied
+  MCP servers (stdio + HTTP), per-turn file-change reports, text/resource-link/shell-command/
+  terminal-output/reasoning events.
+  <a href="https://github.com/agentclientprotocol/codex-acp">github.com/agentclientprotocol/codex-acp</a>.</li>
+</ul>
+<p>Since Sirdar already talks Claude Code's native stream-json and Codex's native app-server
+directly, these two ACP adapters are not where ACP adds value for Sirdar — they're a second,
+lossier path to agents Sirdar already drives better. The value is the other ~35 entries in that
+table: agents Sirdar has no other way to reach.</p>
+<h3 id="clients">Clients<a class="headerlink" href="#clients" title="Permanent link">&para;</a></h3>
+<p>Also large and heterogeneous — the get-started/clients page lists 50+ entries across editors
+(Zed native; JetBrains native; Neovim via CodeCompanion/agentic.nvim/avante.nvim/hermes.nvim;
+Emacs via <code>agent-shell.el</code>; multiple VS Code extensions), terminal/TUI clients (<code>acpx</code>, <code>Toad</code>,
+<code>Hydra</code>), and a long tail of desktop/web/mobile wrappers. None of this changes Sirdar's build —
+Sirdar is itself an ACP <em>client</em>, and the existence of many other clients only matters
+insofar as it signals the protocol's health. <a href="https://agentclientprotocol.com/get-started/clients">get-started/clients</a>.</p>
+<h3 id="sdks">SDKs<a class="headerlink" href="#sdks" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Rust</strong> (<code>agent-client-protocol</code> crate): official, used by Zed itself to integrate agents —
+  the highest-confidence, most battle-tested SDK. Provides <code>Agent</code>/<code>Client</code> traits to implement
+  either side; version/1.0 status not confirmed from the docs page fetched (<strong>unverified</strong>, check
+  crates.io directly). <a href="https://agentclientprotocol.com/libraries/rust">libraries/rust</a>.</li>
+<li><strong>TypeScript</strong> (<code>@agentclientprotocol/sdk</code>): official, fluent <code>agent()</code>/<code>client()</code> handler
+  registration API, with the older <code>AgentSideConnection</code>/<code>ClientSideConnection</code> classes kept for
+  back-compat but deprecated in favor of the fluent API. Both Rust and TypeScript SDKs reached
+  1.0.0 on 2026-06-25 per the updates log. <a href="https://agentclientprotocol.com/libraries/typescript">libraries/typescript</a>,
+  <a href="https://agentclientprotocol.com/updates">Updates</a>.</li>
+<li><strong>Python and Kotlin</strong>: both listed as official libraries on the docs site
+  (<code>agentclientprotocol/python-sdk</code>, <code>agentclientprotocol/kotlin-sdk</code> per search results), also a
+  PyPI package <code>agent-client-protocol</code>. Not independently fetched/assessed in this research —
+  <strong>unverified</strong> maturity beyond their existence.</li>
+<li><strong>Go: no official SDK.</strong> The community-libraries page lists <strong>six</strong> unofficial Go
+  implementations: <code>github.com/coder/acp-go-sdk</code>, <code>github.com/ironpark/acp-go</code>,
+  <code>github.com/eino-contrib/acp</code>, <code>github.com/spachava753/acp-sdk</code>, <code>github.com/Tangerg/acp</code>,
+  <code>github.com/caelis-labs/acp-go-sdk</code>. The two inspected directly:</li>
+<li><code>coder/acp-go-sdk</code> (Coder, the company): <code>Agent</code>/<code>Client</code> interfaces, generated types from
+    the official schema, <code>NewAgentSideConnection</code>/<code>NewClientSideConnection</code> stdio transports,
+    extension-method support (<code>_</code>-prefixed methods, <code>_meta</code>), union-type helpers
+    (<code>TextBlock</code>/<code>ImageBlock</code>/<code>ToolContent</code>). 230★, v0.13.5, Apache-2.0, cites production use in
+    Gemini CLI and Claude Code bridge implementations. The most credible of the six on
+    provenance (backed by a company with its own production agent-integration need) and
+    completeness. <code>go get github.com/coder/acp-go-sdk@v0.13.5</code>.
+    <a href="https://github.com/coder/acp-go-sdk">github.com/coder/acp-go-sdk</a>.</li>
+<li><code>ironpark/acp-go</code>: pluggable transport (stdio default, HTTP+SSE also supported — ahead of
+    the official spec's own transport work), middleware system, exhaustive pattern-matching
+    helpers for the discriminated unions, generated types. Explicitly labeled unofficial with a
+    "may lag behind active protocol development" caveat. 30★, no version tags found. Smaller and
+    less proven than <code>coder/acp-go-sdk</code> but has a design (middleware, pluggable transport) that
+    might fit Sirdar's existing provider-adapter shape well.
+    <a href="https://github.com/ironpark/acp-go">github.com/ironpark/acp-go</a>.</li>
+<li>The other four were not fetched — <strong>unverified</strong>.</li>
+</ul>
+<p><strong>If Sirdar is in fact Go</strong> (per this brief's framing; see the note at the top about the
+  TypeScript/Node architecture actually on record), <code>coder/acp-go-sdk</code> is the reasonable starting
+  point rather than hand-rolling, given it already has generated types tracking the official
+  schema and both connection directions implemented. A hand-rolled minimal client, for scope
+  comparison, would need: (1) generated or hand-written Go structs for
+  <code>InitializeRequest/Response</code>, <code>NewSessionRequest/Response</code>, <code>LoadSessionRequest</code>,
+  <code>PromptRequest/Response</code>, <code>ContentBlock</code> (as a manually-tagged union — Go has no native sum
+  types, so this is the most tedious part), <code>SessionUpdate</code> (another manual union, ~7 variants),
+  <code>RequestPermissionRequest/Response</code>, <code>McpServerConfig</code> (3 variants), <code>ToolCallUpdate</code>,
+  <code>StopReason</code> (const enum) — roughly 250-400 lines of types given ACP's field count; (2) a
+  newline-delimited JSON-RPC 2.0 reader/writer over a subprocess's stdin/stdout with id-keyed
+  pending-request tracking for both directions (client calling agent, agent calling client
+  concurrently) — roughly 150-250 lines, very close to what Sirdar's Codex app-server adapter
+  already has since that's also bidirectional JSON-RPC over stdio; (3) a dispatch layer mapping
+  incoming method names to handlers (<code>session/update</code> notifications, <code>session/request_permission</code>
+  /<code>fs/*</code>/<code>terminal/*</code> requests from the agent) — roughly 100-150 lines. All told, a working
+  minimal client purpose-built for exactly Sirdar's needs (skip <code>terminal/*</code>, skip audio,
+  skip elicitation) is plausibly <strong>600-900 lines of Go</strong>, comparable in size to one of Sirdar's
+  existing provider adapters — i.e. not a large lift either way, which weakens the case for
+  taking on a less-proven community dependency over writing it directly against the schema.</p>
+<h2 id="4-comparison-vs-claude-code-stream-json-and-codex-app-server">4. Comparison vs. Claude Code stream-json and Codex app-server<a class="headerlink" href="#4-comparison-vs-claude-code-stream-json-and-codex-app-server" title="Permanent link">&para;</a></h2>
+<p>Baseline for the two existing columns is Sirdar's own captured traffic
+(<code>docs/research/06-wire-formats.md</code>, 2026-09-10, Claude Code 2.1.267 / codex-cli 0.154.0), not
+general documentation — these are the real field names Sirdar's adapters already parse.</p>
+<table>
+<thead>
+<tr>
+<th>Capability</th>
+<th>ACP v1</th>
+<th>Claude Code stream-json</th>
+<th>Codex app-server</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Session start (cwd + prompt text/images)</td>
+<td><code>session/new{cwd, mcpServers}</code> then <code>session/prompt{prompt: ContentBlock[]}</code>; image is inline base64 <code>data</code>+<code>mimeType</code>, no native local-path type</td>
+<td><code>claude -p --input-format stream-json</code>; first <code>user</code> line, image as <code>{"type":"image","source":{"type":"base64",...}}</code> — same inline-base64 pattern</td>
+<td><code>thread/start{cwd}</code> then <code>turn/start{input:[{"type":"text",...},{"type":"localImage","path":"..."}]}</code> — <strong>Codex accepts a literal local file path</strong>, no client-side base64 step needed</td>
+</tr>
+<tr>
+<td>Streamed assistant text</td>
+<td><code>session/update</code> → <code>agent_message_chunk</code> (+ <code>agent_thought_chunk</code> for reasoning)</td>
+<td><code>assistant</code> message lines with <code>content:[{"type":"text"|"thinking",...}]</code>, plus <code>stream_event</code> partials when <code>--include-partial-messages</code></td>
+<td><code>item/started</code>/<code>item/agentMessage/delta</code>/<code>item/completed</code> on an <code>agentMessage</code> item, with a <code>phase</code> (<code>commentary</code> vs <code>final_answer</code>) distinguishing scratch talk from the answer</td>
+</tr>
+<tr>
+<td>Tool call start/end, name + input</td>
+<td><code>session/update</code> → <code>tool_call</code> (creation) then <code>tool_call_update</code> (status transitions); <code>rawInput</code> carries the args</td>
+<td><code>assistant</code> message with <code>content:[{"type":"tool_use","name":...,"input":...}]</code>, paired later with a <code>user</code>/<code>tool_result</code> message</td>
+<td><code>item/started</code>/<code>item/completed</code> on <code>commandExecution</code>/<code>fileChange</code>/<code>mcpToolCall</code> items, with <code>item/commandExecution/outputDelta</code> for streaming output</td>
+</tr>
+<tr>
+<td>Permission request, allow/deny + message</td>
+<td><code>session/request_permission{options:[{optionId,name,kind}]}</code>; client answers by <strong>selecting one agent-defined option</strong> — no client-supplied message/reason field</td>
+<td><code>control_request{subtype:"can_use_tool"}</code>; client answers <code>control_response</code> with <code>behavior:"allow"</code> (optional <code>updatedInput</code>) or <code>"deny"</code> <strong>with a free-text <code>message</code> the model sees</strong></td>
+<td><code>item/*/requestApproval</code> (command execution, file change, permissions) plus <code>item/tool/requestUserInput</code>; approve/decline, exact message-field support on decline <strong>unverified</strong> from the captured probe (no denial was exercised — sandbox refused the write before a request was even sent)</td>
+</tr>
+<tr>
+<td>Usage / token accounting</td>
+<td><code>usage_update</code>: context <code>used</code>/<code>size</code> + optional <code>cost{amount,currency}</code> only; no per-turn input/output/cache breakdown in the schema as shipped</td>
+<td><code>result.usage</code>: <code>input_tokens</code>, <code>output_tokens</code>, <code>cache_creation_input_tokens</code>, <code>cache_read_input_tokens</code>, plus <code>total_cost_usd</code>, <code>modelUsage</code></td>
+<td><code>thread/tokenUsage/updated</code>: <code>totalTokens</code>, <code>inputTokens</code>, <code>cachedInputTokens</code>, <code>outputTokens</code>, <code>reasoningOutputTokens</code>, <code>modelContextWindow</code></td>
+</tr>
+<tr>
+<td>Rate-limit notices</td>
+<td><strong>None.</strong> Explicitly out of scope per the usage RFD</td>
+<td><code>rate_limit_event{rate_limit_info:{status,resetsAt,rateLimitType,unifiedWindows:{five_hour,seven_day}}}</code> — dedicated, structured, native</td>
+<td><code>account/rateLimits/updated{rateLimits:{limitId,primary:{usedPercent,windowDurationMins,resetsAt},secondary,credits}}</code> — dedicated, structured, native</td>
+</tr>
+<tr>
+<td>Final answer as JSON matching a schema</td>
+<td>No schema field anywhere; prose-only, or an MCP tool-call trick (section 2)</td>
+<td>No native <code>--json-schema</code>-style enforcement either <strong>in the base CLI flags</strong>, but Sirdar's own probe used a <code>--json-schema</code> flag and got the model to call a synthetic <code>StructuredOutput</code> tool, with <code>result.structured_output</code> carrying the parsed object — i.e. Claude Code (as Sirdar drives it) has an explicit, first-class structured-output path</td>
+<td><code>turn/start{outputSchema:{...}}</code> accepted directly as a request param; the answer lands as the <code>text</code> of the <code>agentMessage</code> item with <code>phase:"final_answer"</code>, which Sirdar parses as JSON — <strong>native <code>outputSchema</code> support</strong>, no tool-call trick required</td>
+</tr>
+<tr>
+<td>Resume handle</td>
+<td><code>sessionId</code> from <code>session/new</code>, resumed via <code>session/load</code> if <code>agentCapabilities.loadSession</code> is true — designed for cross-process resume, adoption per-agent and <strong>largely unverified</strong> here</td>
+<td><code>session_id</code> from the <code>system/init</code> line, resumed via <code>claude --resume &lt;session_id&gt;</code> — native, cross-process (session state is a file on disk)</td>
+<td><code>threadId</code>/<code>sessionId</code> from <code>thread/start</code>, resumed via <code>thread/resume</code> — native, listed as a top-level app-server method</td>
+</tr>
+<tr>
+<td>Cancel</td>
+<td><code>session/cancel</code> notification (<code>{sessionId}</code>), plus generic by-request-id JSON-RPC cancellation (stabilized 2026-06-29)</td>
+<td>Not directly captured in the probe; interrupt is via the control protocol / SIGINT (Sirdar's existing implementation, not re-verified here)</td>
+<td><code>turn/interrupt</code> — native, dedicated method</td>
+</tr>
+<tr>
+<td>MCP server configuration</td>
+<td><code>session/new.mcpServers</code>: stdio required, http/sse optional and capability-gated</td>
+<td><code>--mcp-config</code> JSON file, <code>mcpServers</code> map, stdio/sse/http, same shape as Claude Desktop's config</td>
+<td>Config-file (<code>config.toml</code>) driven, <code>mcpServer/startupStatus/updated</code> events surface per-server startup; <code>mcpServerStatus/list</code> method for introspection</td>
+</tr>
+</tbody>
+</table>
+<p>The pattern across every row: <strong>ACP is the generic, lowest-common-denominator shape</strong>, and the
+two protocols Sirdar already speaks are each richer than ACP <em>for that specific vendor</em> — which
+is expected, since Claude Code and Codex's own wire protocols aren't trying to also describe
+Gemini CLI or Goose. Rate limits and schema-constrained output are the two rows where ACP isn't
+just "less rich" but genuinely has nothing, not even a lesser version.</p>
+<h2 id="5-recommendation">5. Recommendation<a class="headerlink" href="#5-recommendation" title="Permanent link">&para;</a></h2>
+<p><strong>Add an ACP provider adapter as Sirdar's "everything else" provider.</strong> Not to replace the
+Claude Code or Codex adapters — both of those should stay on their native protocols, since
+section 4 shows ACP is strictly worse for those two vendors specifically (no schema-constrained
+output without a tool-call workaround for Claude, no native rate-limit signal for either, no
+free-text permission-denial message). ACP earns its place by being the only way to reach the
+other ~35 agents in the registry — Gemini CLI, Goose, Qwen Code, Kimi CLI, OpenCode, Junie,
+Augment, Cursor, GitHub Copilot CLI, Devin, and whatever ships next — with one adapter instead of
+N bespoke ones. That matches Sirdar's own stated design principle
+(<code>docs/research/05-verdict-and-proposal.md</code>): "normalised into one event vocabulary," which ACP
+gives close to for free across everything except usage/rate-limits/structured-output, all three
+of which Sirdar already has to special-case per provider anyway.</p>
+<p><strong>Concrete protocol steps for one Sirdar run over ACP:</strong></p>
+<ol>
+<li>Spawn the chosen agent binary (e.g. <code>npx @google/gemini-cli --acp</code>), speak JSON-RPC 2.0
+   over its stdin/stdout.</li>
+<li><code>initialize{protocolVersion, clientCapabilities:{fs:{readTextFile:true,writeTextFile:false},
+   terminal:false}}</code> (Sirdar declines write-fs and terminal capabilities up front where its
+   permission policy would deny them anyway — cheaper than denying every individual request).
+   Read back <code>agentCapabilities</code> to learn <code>loadSession</code>, <code>promptCapabilities</code>,
+   <code>mcpCapabilities.http</code>/<code>.sse</code>.</li>
+<li><code>session/new{cwd: &lt;ticket worktree&gt;, mcpServers: [&lt;Sirdar's evidence-source MCP servers,
+   stdio&gt;, &lt;Sirdar's submit_result MCP server&gt;]}</code> → get back <code>sessionId</code>; persist it as the
+   resume handle.</li>
+<li><code>session/prompt{sessionId, prompt:[{type:"text", text: &lt;triage prompt including the target
+   JSON schema and an instruction to call submit_result&gt;}, {type:"image", mimeType, data:
+   &lt;base64 of each local attachment&gt;}]}</code> — held open as a pending JSON-RPC request while...</li>
+<li>...<code>session/update</code> notifications stream in: <code>agent_message_chunk</code>/<code>agent_thought_chunk</code> for
+   the live transcript view, <code>tool_call</code>/<code>tool_call_update</code> for the tool-call timeline (including
+   the eventual <code>submit_result</code> call, whose <code>rawInput</code> is the structured answer), <code>plan</code> for the
+   task list, <code>usage_update</code> for whatever context/cost signal the agent chooses to send.</li>
+<li>Any <code>session/request_permission</code> arriving mid-turn is answered per Sirdar's policy engine —
+   e.g. for a read-only triage run, select whichever offered option has <code>kind: "reject_once"</code>
+   (there is no message field to attach a policy explanation to the answer itself, per section 2
+   — the read-only instruction has to already be in the step-4 prompt so the model doesn't need
+   telling twice).</li>
+<li><code>session/prompt</code> finally resolves with <code>{stopReason}</code>. On <code>end_turn</code>, read the structured
+   answer out of the <code>submit_result</code> tool call's <code>rawInput</code> (primary path) or, if the agent never
+   called it, fall back to parsing the last <code>agent_message_chunk</code> text as JSON (fallback path,
+   same posture as Sirdar's Claude Code/Codex adapters already take toward malformed output). On
+   <code>refusal</code>/<code>max_turn_requests</code>/<code>max_tokens</code>, surface as a failed run the same way Sirdar
+   already handles those cases for its other two providers. On <code>cancelled</code> (e.g. because Sirdar
+   sent <code>session/cancel{sessionId}</code> due to a timeout/budget), tear down as an aborted run.</li>
+<li>To resume later (new Sirdar process, same ticket): re-spawn the agent, <code>initialize</code> again,
+   <code>session/load{sessionId, cwd, mcpServers}</code>, drain the replayed <code>session/update</code> history, then
+   send a fresh <code>session/prompt</code> continuing the conversation — contingent on that agent's
+   <code>agentCapabilities.loadSession</code> being true, which is not universal (section 2/3).</li>
+</ol>
+<p><strong>Fallback plan for structured output</strong>, since no ACP agent is guaranteed to honor an
+instruction-only JSON request faithfully: ship a Sirdar-owned MCP server exposing one tool
+(<code>submit_result</code>) whose JSON Schema is generated from Sirdar's target output shape per run, tell
+every ACP agent in its prompt "call <code>submit_result</code> exactly once with your final answer," and
+treat the <code>tool_call</code>'s <code>rawInput</code> as authoritative. If the run ends without that tool ever being
+called, fall back to best-effort parsing of the concluding <code>agent_message_chunk</code> text (wrapped in
+a lenient JSON extractor — strip code fences, take the last top-level JSON object found) and mark
+the result low-confidence for the human-review gate. This mirrors what Sirdar's own probe shows
+Claude Code effectively does today with its synthetic <code>StructuredOutput</code> tool call, and needs no
+ACP protocol feature beyond what already exists (MCP servers + normal tool-call reporting).</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Language mismatch</strong>: this brief was scoped assuming Sirdar is a Go program; Sirdar's own
+  <code>HANDOFF.md</code>/<code>05-verdict-and-proposal.md</code> describe a TypeScript/Node architecture instead. If
+  Node is in fact current, the official <code>@agentclientprotocol/sdk</code> (TypeScript, 1.0.0 since
+  2026-06-25) is the correct starting point, not a Go SDK — worth confirming which is live before
+  acting on section 3's Go sizing.</li>
+<li>Which of the priority agents (Gemini CLI, Goose, Qwen Code, Kimi CLI, OpenCode) actually
+  populate <code>usage_update</code> with a non-null <code>cost</code>, and which just report context <code>used</code>/<code>size</code> —
+  not established here, needs a per-agent probe the way <code>06-wire-formats.md</code> did for Claude Code
+  and Codex.</li>
+<li>Real-world <code>session/load</code> (cross-process resume) support rate across agents Sirdar would
+  target — the spec's intent is confirmed, adoption is not.</li>
+<li>Exact <code>RequestPermissionOutcome</code> JSON shape for the <code>cancelled</code> case (schema page fetch was
+  truncated before rendering it) — matters for how Sirdar's ACP adapter should model a permission
+  request that gets cancelled mid-flight by a <code>session/cancel</code>.</li>
+<li>Whether an <code>image</code> content block's optional <code>uri</code> field is ever honored by an agent as a
+  "go read this local/remote file yourself" signal, vs. <code>data</code> being the only reliable path —
+  affects whether Sirdar can skip base64-encoding large images for agents that support it.</li>
+<li>ACP v2's actual scope and timeline to general availability — draft since 2026-07-20, no v1
+  deprecation date found; worth a follow-up check before building against v1 gets locked in for a
+  long time.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,3630 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../acp-agents/">
+      
+      
+        <link rel="next" href="../spike-anthropic-compatible/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Multi-model runtimes - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#running-sirdar-against-other-peoples-models" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Multi-model runtimes
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-sirdar-actually-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Sirdar actually needs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-agent-runtimes-with-a-headless-machine-readable-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Agent runtimes with a headless, machine-readable protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Agent runtimes with a headless, machine-readable protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opencode-anomalycoopencode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenCode — anomalyco/opencode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goose-agentic-ai-foundation-nee-blockgoose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goose — Agentic AI Foundation (née block/goose)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gemini-cli-google-geminigemini-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gemini CLI — google-gemini/gemini-cli
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qwen-code-qwenlmqwen-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qwen Code — QwenLM/qwen-code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kimi-cli-moonshotaikimi-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kimi CLI — MoonshotAI/kimi-cli
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crush-charmbraceletcrush" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crush — charmbracelet/crush
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aider-aider-aiaider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aider — Aider-AI/aider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cline-cli-roo-code-kilo-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cline CLI / Roo Code / Kilo Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#amp-sourcegraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amp — Sourcegraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openhands-cli-openhandsopenhands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenHands CLI — OpenHands/OpenHands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pi-earendil-workspi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pi — earendil-works/pi
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-cli-with-a-custom-model_provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex CLI with a custom model_provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-against-anthropic-compatible-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code against Anthropic-compatible endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-agent-client-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The Agent Client Protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The Agent Client Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-acp-does-not-give-sirdar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What ACP does not give Sirdar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-implements-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who implements it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#go-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#would-one-acp-client-cover-most-third-party-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Would one ACP client cover most third-party agents?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-aggregators-vendor-apis-and-self-hosting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Aggregators, vendor APIs and self-hosting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Aggregators, vendor APIs and self-hosting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aggregators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vendor-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendor APIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-hosting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-hosting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#which-open-models-actually-do-agentic-tool-calling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which open models actually do agentic tool calling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-recommendation-for-sirdar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Recommendation for Sirdar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Recommendation for Sirdar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ranking-against-the-maintainers-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ranking against the maintainer's criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-build-first-and-why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to build first, and why
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-provider-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended provider roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#what-sirdar-actually-needs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Sirdar actually needs
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#1-agent-runtimes-with-a-headless-machine-readable-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Agent runtimes with a headless, machine-readable protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Agent runtimes with a headless, machine-readable protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#opencode-anomalycoopencode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenCode — anomalyco/opencode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#goose-agentic-ai-foundation-nee-blockgoose" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goose — Agentic AI Foundation (née block/goose)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#gemini-cli-google-geminigemini-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gemini CLI — google-gemini/gemini-cli
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#qwen-code-qwenlmqwen-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Qwen Code — QwenLM/qwen-code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#kimi-cli-moonshotaikimi-cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Kimi CLI — MoonshotAI/kimi-cli
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#crush-charmbraceletcrush" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Crush — charmbracelet/crush
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#aider-aider-aiaider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        aider — Aider-AI/aider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#cline-cli-roo-code-kilo-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Cline CLI / Roo Code / Kilo Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#amp-sourcegraph" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Amp — Sourcegraph
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#openhands-cli-openhandsopenhands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        OpenHands CLI — OpenHands/OpenHands
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pi-earendil-workspi" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pi — earendil-works/pi
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-cli-with-a-custom-model_provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex CLI with a custom model_provider
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#claude-code-against-anthropic-compatible-endpoints" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code against Anthropic-compatible endpoints
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-the-agent-client-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. The Agent Client Protocol
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. The Agent Client Protocol">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-acp-does-not-give-sirdar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What ACP does not give Sirdar
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-implements-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who implements it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#go-sdk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Go SDK
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#would-one-acp-client-cover-most-third-party-agents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Would one ACP client cover most third-party agents?
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-aggregators-vendor-apis-and-self-hosting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Aggregators, vendor APIs and self-hosting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Aggregators, vendor APIs and self-hosting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#aggregators" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Aggregators
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#vendor-apis" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Vendor APIs
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#self-hosting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Self-hosting
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#which-open-models-actually-do-agentic-tool-calling" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Which open models actually do agentic tool calling
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-recommendation-for-sirdar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Recommendation for Sirdar
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Recommendation for Sirdar">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#comparison" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comparison
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ranking-against-the-maintainers-criteria" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ranking against the maintainer's criteria
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-to-build-first-and-why" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What to build first, and why
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-provider-roadmap" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended provider roadmap
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="running-sirdar-against-other-peoples-models">Running Sirdar against other people's models<a class="headerlink" href="#running-sirdar-against-other-peoples-models" title="Permanent link">&para;</a></h1>
+<p>Research date: <strong>2026-09-10</strong>. Everything below was checked against live docs, GitHub APIs and
+vendor pages on that date. Claims that could not be confirmed from a primary source are marked
+<strong>UNVERIFIED</strong> inline; do not build on those without re-checking.</p>
+<h2 id="what-sirdar-actually-needs">What Sirdar actually needs<a class="headerlink" href="#what-sirdar-actually-needs" title="Permanent link">&para;</a></h2>
+<p>Read off <code>internal/provider/provider.go</code> and the two shipped adapters, so the rest of this
+document can be scored against something concrete rather than a wish list.</p>
+<table>
+<thead>
+<tr>
+<th>Requirement</th>
+<th>Where it lives</th>
+<th>How Claude adapter gets it</th>
+<th>How Codex adapter gets it</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Streaming events (<code>assistant_text</code>, <code>tool_started</code>, <code>tool_finished</code>, <code>usage</code>, …)</td>
+<td><code>provider.Event</code></td>
+<td><code>--output-format stream-json --verbose --include-partial-messages</code></td>
+<td><code>codex app-server</code> JSON-RPC notifications</td>
+</tr>
+<tr>
+<td>Host-side permission decision</td>
+<td><code>provider.PermissionPolicy.Decide</code></td>
+<td><code>--permission-prompt-tool stdio</code>, answers <code>control_request</code> / <code>can_use_tool</code> (<code>claude.go:339</code>)</td>
+<td><strong>Does not.</strong> <code>sandbox:"read-only"</code>, <code>approvalPolicy:"never"</code>, and every <code>requestApproval</code> is declined (<code>codex.go:717</code>)</td>
+</tr>
+<tr>
+<td>Schema-conforming final answer</td>
+<td><code>SessionSpec.OutputSchema</code></td>
+<td><code>--json-schema &lt;schema&gt;</code> (<code>claude.go:59</code>)</td>
+<td><code>outputSchema</code> on the turn (<code>codex.go:206</code>)</td>
+</tr>
+<tr>
+<td>Resume handle</td>
+<td><code>Session.Handle()</code> / <code>SessionSpec.Resume</code></td>
+<td><code>--resume &lt;id&gt;</code></td>
+<td><code>thread/resume</code></td>
+</tr>
+<tr>
+<td>Follow-up turn for schema retry</td>
+<td><code>Session.Send</code></td>
+<td>stdin <code>stream-json</code> user line</td>
+<td><code>sendUserTurn</code></td>
+</tr>
+<tr>
+<td>Usage and cost</td>
+<td><code>Event.InputTok/OutputTok/CostUSD</code></td>
+<td><code>usage</code> blocks + <code>rate_limit_event</code></td>
+<td>app-server usage notifications</td>
+</tr>
+<tr>
+<td>MCP</td>
+<td>not in the provider contract — inherited from the CLI's own config</td>
+<td></td>
+<td></td>
+</tr>
+</tbody>
+</table>
+<p>Two things follow from this table and they drive every recommendation later.</p>
+<p><strong>A runtime does not need a host-side permission callback to be usable.</strong> The Codex adapter
+already proves the alternative: lean on the runtime's own read-only sandbox and decline anything
+that still asks. Any runtime with a credible read-only or plan mode can be adopted the same way.</p>
+<p><strong>A runtime without schema-constrained output is a real problem.</strong> Sirdar's whole output is a
+validated note document; <code>Session.Send</code> exists purely to re-prompt after a schema failure. A
+runtime that can only emit free text pushes Sirdar back to prompt-and-parse, and the weaker the
+model, the worse that gets — which is precisely the model class this exercise is about.</p>
+<hr />
+<h2 id="1-agent-runtimes-with-a-headless-machine-readable-protocol">1. Agent runtimes with a headless, machine-readable protocol<a class="headerlink" href="#1-agent-runtimes-with-a-headless-machine-readable-protocol" title="Permanent link">&para;</a></h2>
+<p>Two projects changed GitHub org since early 2026. <code>sst/opencode</code> now redirects to
+<strong><code>anomalyco/opencode</code></strong> (<a href="https://github.com/anomalyco">Anomaly org</a>); <code>block/goose</code> redirects
+to an Agentic AI Foundation org after Block donated Goose to the Linux Foundation in April 2026
+(<a href="https://www.linuxfoundation.org/press/linux-foundation-announces-the-formation-of-the-agentic-ai-foundation">LF press release</a>,
+<a href="https://goose-docs.ai/blog/2026/04/07/goose-moves-to-aaif/">Goose blog</a>). The exact new Goose
+path was reported as <code>aaif-goose/goose</code> by one pass and still as <code>block/goose</code> by the ACP registry
+pull — <strong>UNVERIFIED which is canonical</strong>; old URLs redirect either way. Docs moved to
+<code>goose-docs.ai</code>.</p>
+<h3 id="opencode-anomalycoopencode">OpenCode — <code>anomalyco/opencode</code><a class="headerlink" href="#opencode-anomalycoopencode" title="Permanent link">&para;</a></h3>
+<p>MIT. 206,320 stars, <code>v1.18.30</code> released 2026-09-09 (GitHub API, 2026-09-10).</p>
+<p><code>opencode run --format json</code> streams JSON events on stdout; observed types include <code>step_start</code>
+and <code>tool_use</code> (emitted when a call reaches <code>status == "completed"</code>)
+(<a href="https://opencode.ai/docs/cli/">CLI docs</a>). The richer surface is the server:
+<code>opencode serve</code> (default <code>127.0.0.1:4096</code>) exposes <code>GET /event</code> as SSE and, critically,
+<strong><code>POST /session/:id/permissions/:permissionID</code></strong> with body <code>{ response, remember? }</code>
+(<a href="https://opencode.ai/docs/server/">server docs</a>). Per-tool policy is <code>allow</code> / <code>ask</code> / <code>deny</code>
+across <code>edit</code>, <code>bash</code>, <code>webfetch</code>, <code>read</code>, <code>glob</code>, <code>grep</code>, <code>task</code>, <code>skill</code>, <code>lsp</code>, <code>question</code>,
+<code>websearch</code>, <code>external_directory</code>, <code>doom_loop</code> (<a href="https://opencode.ai/docs/permissions/">permissions docs</a>).
+The exact wire shape of the permission-request event on the SSE stream is not spelled out in
+those docs — check the OpenAPI spec at <code>/doc</code> before implementing. <strong>UNVERIFIED.</strong></p>
+<p>Resume: <code>--continue/-c</code>, <code>--session/-s &lt;id&gt;</code>, <code>--fork</code>, <code>--attach</code>. MCP: native, local
+(<code>command</code> array) and remote, under <code>mcp</code> in <code>opencode.json</code>
+(<a href="https://opencode.ai/docs/mcp-servers/">MCP docs</a>). ACP: <code>opencode acp</code> over JSON-RPC/stdio,
+with permissions carried through ACP (<a href="https://opencode.ai/docs/acp/">ACP docs</a>).</p>
+<p>Bring-your-own-model is OpenCode's strongest suit: built on the AI SDK plus
+<a href="https://models.dev">models.dev</a>, documented as 75+ providers, with local runtimes wired through
+<code>@ai-sdk/openai-compatible</code> and <code>provider.&lt;id&gt;.options.baseURL</code>.</p>
+<p><strong>Schema-constrained output: not found.</strong> No <code>--json-schema</code> equivalent, no <code>response_format</code>
+config surfaced. Treat as absent until proven otherwise.</p>
+<h3 id="goose-agentic-ai-foundation-nee-blockgoose">Goose — Agentic AI Foundation (née <code>block/goose</code>)<a class="headerlink" href="#goose-agentic-ai-foundation-nee-blockgoose" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0. 54,081 stars, <code>v1.50.0</code> released 2026-09-08.</p>
+<p><code>goose run --output-format text|json|stream-json</code>; <code>stream-json</code> emits JSONL during execution
+(<a href="https://goose-docs.ai/docs/guides/goose-cli-commands/">CLI commands</a>). Event type names for
+<code>stream-json</code> are not enumerated in the docs — <strong>UNVERIFIED detail, confirmed capability</strong>.</p>
+<p>Permissions come in two flavours. The CLI has four coarse modes — <code>auto</code>/<code>chat</code>, <code>approve</code>
+(confirm every call), <code>smart_approve</code> (an LLM <code>PermissionJudge</code> gates only sensitive calls) —
+selected by <code>GOOSE_MODE</code> or <code>/mode</code>
+(<a href="https://deepwiki.com/block/goose/6.2-permission-modes-and-tool-approval">modes reference</a>).
+Whether a host process can answer individual <code>approve</code>-mode prompts over <code>stream-json</code> rather
+than interactive stdin is <strong>UNVERIFIED and load-bearing</strong>. The solid path is ACP: Goose is a
+native ACP agent over <code>POST /acp</code> with documented permission flows and session resumption
+(<a href="https://goose-docs.ai/docs/guides/acp-providers/">ACP providers</a>,
+<a href="https://aaif.io/blog/goose-doubles-down-on-open-in-latest-two-releases">AAIF blog</a>).</p>
+<p>Structured output exists, but through <strong>recipes</strong>: a recipe declares a <code>response_schema</code> and
+"Goose will validate the agent's output against the schema and retry if invalid"
+(<a href="https://goose-docs.ai/docs/guides/recipes/session-recipes/">recipes guide</a>). That is Sirdar's
+schema-retry loop implemented inside Goose, which is either convenient or a duplicated
+responsibility depending on taste.</p>
+<p>Resume: <code>--resume</code>, <code>--name &lt;name&gt;</code>. MCP: native by design — <code>--with-extension</code> (stdio),
+<code>--with-streamable-http-extension</code> (remote), <code>--with-builtin</code>. Providers: 15+ including Groq,
+Google, OpenRouter, Mistral, and local Ollama / Ramalama / Docker Model Runner
+(<a href="https://goose-docs.ai/docs/getting-started/providers/">provider config</a>). vLLM, LM Studio and
+llama.cpp are not named explicitly — presumably reachable via a generic OpenAI-compatible entry,
+<strong>UNVERIFIED</strong>.</p>
+<h3 id="gemini-cli-google-geminigemini-cli">Gemini CLI — <code>google-gemini/gemini-cli</code><a class="headerlink" href="#gemini-cli-google-geminigemini-cli" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0. 106,892 stars, <code>v0.59.0</code> released 2026-09-08.</p>
+<p>Best-documented headless surface of the six. <code>--output-format json</code> returns one object with
+<code>response</code>, <code>stats</code> and optional <code>error</code>; <code>--output-format stream-json</code> returns JSONL with event
+types <strong><code>init</code></strong>, <strong><code>message</code></strong>, <strong><code>tool_use</code></strong>, <strong><code>tool_result</code></strong>, <strong><code>error</code></strong>, <strong><code>result</code></strong>
+(final aggregated stats with per-model token breakdown)
+(<a href="https://geminicli.com/docs/cli/headless/">headless docs</a>).</p>
+<p>Permissions are coarse: <code>--approval-mode</code> takes <code>default</code>, <code>auto_edit</code>, <code>yolo</code>, <code>plan</code>
+(read-only). The finer mechanism is ACP mode — the flag is now <code>--acp</code>, with
+<code>--experimental-acp</code> still referenced in an open stdout-contamination bug
+(<a href="https://github.com/google-gemini/gemini-cli/issues/22647">#22647</a>) — which exposes
+<code>setSessionMode</code> (<a href="https://geminicli.com/docs/cli/acp-mode/">ACP mode docs</a>). A per-call
+host-arbitrated hook beyond <code>setSessionMode</code> is <strong>UNVERIFIED</strong>.</p>
+<p>Resume is unusually rich: <code>--resume</code>/<code>-r</code> (most recent), <code>--resume 5</code> (by index),
+<code>--resume &lt;uuid&gt;</code>, plus in-session <code>/chat save|resume</code> and a <code>/resume</code> browser
+(<a href="https://geminicli.com/docs/cli/session-management/">session management</a>). MCP via <code>mcpServers</code>
+in <code>settings.json</code>, stdio and remote
+(<a href="https://google-gemini.github.io/gemini-cli/docs/tools/mcp-server.html">MCP docs</a>).</p>
+<p>Schema-constrained output: <strong>not found</strong> as a CLI flag. (Gemini the <em>API</em> has structured output
+at <a href="https://ai.google.dev/gemini-api/docs/structured-output">ai.google.dev</a>; that is a different
+surface.)</p>
+<p><strong>Bring-your-own-model: no.</strong> Gemini/Vertex only. The OpenAI-compatible-endpoint feature request
+is open and unmerged
+(<a href="https://github.com/google-gemini/gemini-cli/issues/23385">#23385</a>): "Gemini CLI currently only
+works with Google's Gemini API… cannot currently [use] OpenAI GPT, Anthropic Claude, local models
+via Ollama/vLLM." The ecosystem's answer to that is to fork it, which is what Qwen Code is.</p>
+<h3 id="qwen-code-qwenlmqwen-code">Qwen Code — <code>QwenLM/qwen-code</code><a class="headerlink" href="#qwen-code-qwenlmqwen-code" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0. 27,744 stars, <code>v0.23.2</code> released 2026-09-09. (The GitHub "latest release" API
+surfaces sub-package tags like <code>sdk-typescript-v0.1.11</code>; filter for plain <code>vX.Y.Z</code>.)</p>
+<p><strong>This is the closest match to Sirdar's contract of anything researched, and it is not a
+near-miss — it hits every box.</strong> It began as a Gemini CLI fork but has diverged: it has its own
+daemon and features upstream lacks.</p>
+<ul>
+<li>Events: <code>--output-format text|json|stream-json</code> plus <code>--include-partial-messages</code>
+  (<a href="https://qwenlm.github.io/qwen-code-docs/en/users/features/headless/">headless docs</a>).</li>
+<li>Permissions: an ACP bridge with a real <strong>multi-client permission mediator</strong> —
+  <code>BridgeClient.requestPermission</code> → <code>MultiClientPermissionMediator.request</code>, under one of four
+  policies: <code>first-responder</code>, <code>designated</code>, <code>consensus</code>, <strong><code>local-only</code></strong>, with
+  <code>permissionResponseTimeoutMs</code>
+  (<a href="https://qwenlm.github.io/qwen-code-docs/en/developers/daemon/03-acp-bridge/">ACP bridge docs</a>).
+  <code>local-only</code> is exactly "the host decides". Started via <code>qwen --acp</code> (stdio subprocess) or
+  <code>qwen serve</code>. Plain-CLI modes also exist: <code>--approval-mode plan|default|auto-edit|auto|yolo</code>.</li>
+<li>Schema output: <strong><code>--json-schema</code></strong>, inline literal or <code>@./path/to/schema.json</code>, validated JSON
+  on stdout
+  (<a href="https://qwenlm.github.io/qwen-code-docs/en/users/features/structured-output/">structured output docs</a>).</li>
+<li>Resume: <code>--continue</code>, <code>--resume [sessionId]</code>, with conversation writer locks and crash recovery.</li>
+<li>MCP: yes.</li>
+<li>BYO model: <code>OPENAI_API_KEY</code>, <code>OPENAI_BASE_URL</code>, <code>OPENAI_MODEL</code> (aliased <code>QWEN_MODEL</code>), set by
+  shell export, <code>.qwen/.env</code>, or <code>~/.qwen/settings.json</code>
+  (<a href="https://qwenlm.github.io/qwen-code-docs/en/users/configuration/auth/">auth docs</a>). Any
+  <code>/v1/chat/completions</code> endpoint — so OpenRouter, Groq, DeepSeek, Ollama, vLLM, LM Studio,
+  llama.cpp.</li>
+</ul>
+<p>The name is misleading. Nothing about it is Qwen-only.</p>
+<h3 id="kimi-cli-moonshotaikimi-cli">Kimi CLI — <code>MoonshotAI/kimi-cli</code><a class="headerlink" href="#kimi-cli-moonshotaikimi-cli" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0 per GitHub metadata; the ACP registry lists it as MIT — <strong>conflicting, UNVERIFIED</strong>.
+11,337 stars, <code>1.50.0</code> released 2026-09-01.</p>
+<p><code>--output-format text|stream-json</code> with a symmetric <code>--input-format</code>, JSONL, documented for
+"programmatic integration"; <code>--final-message-only</code> trims to the final assistant message
+(<a href="https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/reference/kimi-command.md">kimi-command.md</a>).
+Permissions: <code>--yolo</code>/<code>--yes</code>/<code>--auto-approve</code>, <code>--afk</code> (auto-approve tool calls <em>and</em> dismiss
+<code>AskUserQuestion</code>), and <strong><code>--plan</code></strong> which restricts to read-only tools — directly usable for
+Sirdar's enforcement model. Per-call arbitration goes through <code>kimi acp</code>. Resume: <code>--continue/-C</code>,
+<code>--session</code>/<code>--resume</code>/<code>-S</code>/<code>-r</code>. MCP: <code>kimi mcp add</code> with <code>--transport stdio|http</code>, plus
+<code>--mcp-config-file</code>
+(<a href="https://github.com/MoonshotAI/kimi-cli/blob/main/docs/en/reference/kimi-mcp.md">kimi-mcp.md</a>).
+Schema output: <strong>not found</strong>.</p>
+<p><strong>Caveat that should decide this one:</strong> the repo's own docs state Kimi CLI "is evolving into Kimi
+Code CLI, with gradual wind-down planned". A separate <code>MoonshotAI/kimi-code</code> repo exists. Do not
+build a native adapter against a runtime whose maintainers have announced its retirement.</p>
+<h3 id="crush-charmbraceletcrush">Crush — <code>charmbracelet/crush</code><a class="headerlink" href="#crush-charmbraceletcrush" title="Permanent link">&para;</a></h3>
+<p><strong>FSL-1.1-MIT</strong>, which is <em>not</em> OSI-approved — the Functional Source License restricts competing
+commercial use for two years per version before converting to MIT. GitHub's licence API returns
+<code>NOASSERTION</code>. 27,992 stars, <code>v0.93.1</code> released 2026-09-09.</p>
+<p>Reading <code>internal/cmd/run.go</code> directly: <code>crush run</code> has <code>-q/--quiet</code>, <code>-v/--verbose</code>,
+<code>-m/--model</code>, <code>--small-model</code>, <code>-s/--session</code>, <code>-C/--continue</code> — <strong>no <code>--output-format</code> or
+<code>--json</code></strong>. There is a typed internal event stream (<code>proto.Message</code>, <code>proto.RunComplete</code>,
+<code>proto.AgentEvent</code>) but it drives stdout text reconciliation, not a caller-facing mode. The
+machine-readable surface is <code>crush server</code> (<code>internal/cmd/server.go</code>), whose
+<code>internal/server/events.go</code> defines SSE-wrapped <strong><code>PermissionRequest</code></strong> (<code>ToolCallID</code>, <code>ToolName</code>,
+<code>Description</code>, <code>Action</code>, <code>Path</code>, <code>Params</code>) and <strong><code>PermissionNotification</code></strong>
+(<code>ToolCallID</code>, <code>Granted</code>/<code>Denied</code>) — a genuine host-arbitrated channel. The REST path for posting
+the notification back is <strong>UNVERIFIED</strong>; read <code>internal/server/proto.go</code> at a pinned version.</p>
+<p>BYO model via <a href="https://github.com/charmbracelet/catwalk">Catwalk</a>, with provider types
+<code>openai-compat</code>, <code>anthropic</code>, <code>ollama</code>, <code>llamacpp</code>, <code>lmstudio</code>, <code>litellm</code>, <code>omlx</code> — the broadest
+explicit local-runtime list of the six. Schema output: not found. ACP: not found; treat as no.</p>
+<h3 id="aider-aider-aiaider">aider — <code>Aider-AI/aider</code><a class="headerlink" href="#aider-aider-aiaider" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0, 48,878 stars. <code>--message</code>/<code>-m</code> runs one instruction and exits, <code>--message-file</code>/<code>-f</code>
+reads from a file, <code>--yes</code> auto-confirms
+(<a href="https://aider.chat/docs/scripting.html">scripting docs</a>). A Python API exists
+(<code>Coder.create(...)</code>, <code>coder.run(...)</code>, <code>io=InputOutput(yes=True)</code>) which the docs themselves say
+"is not officially supported or documented, and could change".</p>
+<p>No JSON event stream (<code>--stream</code> controls terminal text only). No granular permission hook. No
+schema output. No formal resume flag. <strong>No MCP</strong> — issues #2525, #3314, #4506 remain open;
+users bridge it externally. Provider coverage is excellent via LiteLLM, and that is the only box
+it ticks.</p>
+<p>Maintenance is the deciding factor: the latest GitHub <em>Release</em> object is <code>v0.86.0</code> (2025-08-09),
+the most recent tag is <code>v0.86.3.dev</code> (2026-02-12), and <code>pushed_at</code> is 2026-05-22. Formal releases
+appear stalled. <strong>Not confirmed as actively released in 2026.</strong> Skip.</p>
+<h3 id="cline-cli-roo-code-kilo-code">Cline CLI / Roo Code / Kilo Code<a class="headerlink" href="#cline-cli-roo-code-kilo-code" title="Permanent link">&para;</a></h3>
+<p><strong>Cline</strong> (<code>cline/cline</code>, Apache-2.0, 67,776 stars, last push 2026-09-10) ships a real headless
+CLI. <code>--json</code> produces NDJSON "events for piping into other tools"; headless triggers on <code>--json</code>,
+piped stdin, or redirected output. <code>--auto-approve false</code> forces TTY prompts, <code>--yolo</code> skips them,
+and a desktop-IPC approval mode exists (<code>CLINE_TOOL_APPROVAL_MODE=desktop</code>) — but a documented
+<em>programmatic</em> host-answered approval channel is <strong>UNVERIFIED</strong>; what is documented looks like
+TTY/desktop IPC, not a clean subprocess hook. Native MCP (<code>cline mcp</code>), broad providers including
+"any OpenAI-compatible endpoint". Session history via <code>cline history</code>; the resume flag is
+<strong>UNVERIFIED</strong>. Cline is also a native ACP agent (<code>cline --acp</code>), which is the cleaner way in.</p>
+<p><strong>Roo Code is dead.</strong> <code>RooCodeInc/Roo-Code</code> is archived (<code>"archived": true</code>), last push
+2026-05-15, 24,303 stars. Do not build on it.</p>
+<p><strong>Kilo Code</strong> (<code>Kilo-Org/kilocode</code>, MIT, 27,243 stars, last push 2026-09-10) is built on OpenCode.
+<code>kilo serve</code> gives HTTP+SSE, <strong><code>kilo acp</code></strong> gives an ACP server, <code>kilo attach</code> connects a terminal
+to a running agent, <code>kilo export [sessionID]</code> dumps session JSON, <code>--continue/-c</code> resumes,
+<code>kilo mcp</code> manages MCP servers. 500+ models, <code>--model</code>, <code>KILO_PROVIDER</code>. Permission-hook shape and
+arbitrary-schema output are <strong>UNVERIFIED</strong>. Reachable via ACP, so a native adapter is hard to
+justify.</p>
+<h3 id="amp-sourcegraph">Amp — Sourcegraph<a class="headerlink" href="#amp-sourcegraph" title="Permanent link">&para;</a></h3>
+<p><strong>Closed source.</strong> <code>sourcegraph/amp</code> 404s. The ToS states "Amp owns all right, title, and interest
+in the Services", granting a "limited, revocable, non-exclusive, non-transferable,
+non-sublicensable license" (<a href="https://ampcode.com/terms">ampcode.com/terms</a>).</p>
+<p>Technically it is a strong fit. <code>-x</code>/<code>--execute</code> plus <code>--stream-json</code> gives one JSON object per
+line — <code>init</code> system message, user/assistant messages, final <code>result</code> with duration and stats;
+<code>--stream-json-input</code> reads JSON from stdin for multi-turn steering including a <code>steer</code> boolean
+to interrupt at the next checkpoint
+(<a href="https://ampcode.com/docs/cli/streaming-json">streaming docs</a>). Amp notes that
+<code>--stream-json-thinking</code> "extends the schema and makes it incompatible with Claude Code['s]"
+shape — worth knowing if you hoped one parser would cover both. Permissions are rule-based
+(<code>amp.mcpPermissions</code>, allow/block patterns, <code>permission_denials</code> in the result message); the
+specific <code>--dangerously-allow-all</code> flag name is <strong>UNVERIFIED</strong>. Resume via
+<code>amp threads continue &lt;threadId&gt;</code>. MCP via <code>amp.mcpServers</code> / <code>amp mcp add</code>.</p>
+<p>BYO model is the blocker. The Unconstrained/enterprise tier offers "bring your own keys for
+inference" and users can link ChatGPT or Grok subscriptions, but Amp curates which frontier models
+it supports. Whether BYOK extends to an arbitrary OpenAI-compatible base URL or a local Ollama is
+<strong>UNVERIFIED and probably no</strong>. Also: "the Services utilize third-party LLM providers to process
+User Content" and those providers "may retain or access User Content" — relevant for a
+support-ticket harness.</p>
+<h3 id="openhands-cli-openhandsopenhands">OpenHands CLI — <code>OpenHands/OpenHands</code><a class="headerlink" href="#openhands-cli-openhandsopenhands" title="Permanent link">&para;</a></h3>
+<p>MIT core, 87,208 stars, <code>v1.17.0</code> released 2026-09-09. Actively maintained.</p>
+<p><code>openhands --headless -t "task"</code>, with <code>--json</code> producing structured JSONL — one object per agent
+event (action/observation), i.e. its EventStream exposed
+(<a href="https://docs.openhands.dev/openhands/usage/cli/headless">headless docs</a>). Resume:
+<code>--resume</code>, <code>--resume &lt;id&gt;</code>, <code>--resume --last</code>. MCP over SSE / Streamable HTTP / stdio via
+<code>config.toml</code>'s <code>[mcp]</code> or <code>openhands mcp add</code>, with a documented caveat that OAuth MCP servers
+need interactive auth and are unsuitable for headless. BYO model via LiteLLM,
+<code>provider/model_name</code> convention, 100+ providers including Ollama.</p>
+<p><strong>The disqualifier is the permission model.</strong> The docs state that headless mode "always runs in
+<code>always-approve</code> mode. The agent will execute all actions without any confirmation", and that
+<code>--llm-approve</code> (the security-analyzer gate) is unavailable in headless. Sirdar would be relying
+entirely on the sandbox with no host veto and no read-only mode. Verify this directly before
+dismissing it — it is one sentence doing a lot of work — but as written it rules OpenHands out
+for a read-only triage harness.</p>
+<h3 id="pi-earendil-workspi">Pi — <code>earendil-works/pi</code><a class="headerlink" href="#pi-earendil-workspi" title="Permanent link">&para;</a></h3>
+<p>Mario Zechner's terminal agent toolkit, moved from <code>@mariozechner</code> to Earendil Works in May 2026;
+<code>v0.84.2</code> (2026-08-14). Described as "an agent harness rather than a finished, opinionated coding
+environment", and explicitly: "Pi does not provide a built-in security sandbox or the kind of
+permission system developers may expect after using Claude Code or similar tools." That settles
+it for Sirdar. Its JSON output, MCP, resume and BYO-model support were <strong>not verified</strong>. No other
+"Pi coding agent" was found; treat Parallel/pi-labs interpretations as not found.</p>
+<h3 id="codex-cli-with-a-custom-model_provider">Codex CLI with a custom <code>model_provider</code><a class="headerlink" href="#codex-cli-with-a-custom-model_provider" title="Permanent link">&para;</a></h3>
+<p>Apache-2.0, 123,031 stars, <code>rust-v0.154.0</code> released 2026-09-09. Config shape:</p>
+<div class="highlight"><pre><span></span><code><span class="k">[model_providers.custom_provider]</span>
+<span class="n">name</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"Custom Provider"</span>
+<span class="n">base_url</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"https://.../v1"</span>
+<span class="n">env_key</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"MY_API_KEY"</span>
+<span class="n">wire_api</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="s2">"responses"</span>
+</code></pre></div>
+<p><strong><code>wire_api = "chat"</code> is gone.</strong> It was deprecated in
+<a href="https://github.com/openai/codex/discussions/7782">openai/codex#7782</a> (2025-12-09) and hard-removed
+in PR #10157 around February 2026. Codex now speaks only the Responses API wire protocol, so any
+provider that implements <code>/v1/chat/completions</code> and nothing else <strong>fails at startup</strong>. Confirming
+reports: <code>janhq/jan#7413</code>, <code>farion1231/cc-switch#2806</code>, <code>farion1231/cc-switch#2553</code> (a DeepSeek
+provider 404ing for exactly this reason). The docs and the config schema currently disagree about
+the default (<a href="https://github.com/openai/codex/issues/13628">openai/codex#13628</a>) — trust the
+schema.</p>
+<p>This one change guts the "point Codex at anything" plan. Ollama, vLLM, LM Studio, llama.cpp,
+Groq, Together, Fireworks, DeepInfra, DeepSeek, Moonshot, Zhipu, DashScope and xAI all expose
+Chat Completions; a Responses-API surface is the exception, not the rule. OpenRouter and
+translating proxies are the way through, and third-party guides confirm people do run Codex
+against OpenRouter/DeepSeek/Ollama this way — fragile and provider-dependent.</p>
+<p>Other friction: <code>model_reasoning_effort</code> reportedly ignored at session start for some providers
+(<a href="https://github.com/openai/codex/issues/28113">#28113</a>); custom providers "unusable with existing
+chats and the model picker" in the Desktop app (<a href="https://github.com/openai/codex/issues/29156">#29156</a>);
+<code>apply_patch</code> behaviour under non-OpenAI models <strong>UNVERIFIED</strong>. <code>codex app-server</code> does carry a
+<code>modelProvider</code> field on <code>ThreadStartParams</code>, but <code>TurnStartParams</code> can override <code>model</code> without
+overriding <code>modelProvider</code> — test that. Provider IDs <code>openai</code>, <code>ollama</code>, <code>lmstudio</code> are reserved
+and cannot be redefined.</p>
+<p>No ToS problem: <code>model_providers</code> is a documented first-class feature of an Apache-2.0 binary, and
+in that mode OpenAI's service is not being used at all. Whether OpenAI's <em>subscription</em> terms say
+anything about using ChatGPT auth alongside third-party providers was <strong>not checked</strong>.</p>
+<h3 id="claude-code-against-anthropic-compatible-endpoints">Claude Code against Anthropic-compatible endpoints<a class="headerlink" href="#claude-code-against-anthropic-compatible-endpoints" title="Permanent link">&para;</a></h3>
+<p>The mechanism is <code>ANTHROPIC_BASE_URL</code> plus <code>ANTHROPIC_AUTH_TOKEN</code> (or <code>ANTHROPIC_API_KEY</code>), or
+their <code>settings.json</code> equivalents. Claude Code appends <code>/v1/messages</code> itself, so the base URL is
+given <strong>without</strong> a <code>/v1</code> suffix (<a href="https://code.claude.com/docs/en/settings">settings docs</a>).</p>
+<p>Confirmed endpoints:</p>
+<table>
+<thead>
+<tr>
+<th>Backend</th>
+<th><code>ANTHROPIC_BASE_URL</code></th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DeepSeek</td>
+<td><code>https://api.deepseek.com/anthropic</code></td>
+<td><a href="https://api-docs.deepseek.com/guides/agent_integrations/claude_code">api-docs.deepseek.com</a></td>
+</tr>
+<tr>
+<td>Moonshot / Kimi</td>
+<td><code>https://api.moonshot.ai/anthropic</code> (<code>POST /anthropic/v1/messages</code>)</td>
+<td><a href="https://platform.kimi.ai/docs/guide/claude-code-kimi">platform.kimi.ai</a></td>
+</tr>
+<tr>
+<td>Z.ai / Zhipu GLM</td>
+<td><code>https://api.z.ai/api/anthropic</code> (also <code>https://open.bigmodel.cn/api/anthropic</code> for mainland)</td>
+<td><a href="https://docs.z.ai/scenario-example/develop-tools/claude">docs.z.ai</a></td>
+</tr>
+<tr>
+<td>MiniMax</td>
+<td><code>https://api.minimax.io/anthropic</code></td>
+<td><a href="https://platform.minimax.io/docs/api-reference/text-anthropic-api">platform.minimax.io</a></td>
+</tr>
+<tr>
+<td>Alibaba Model Studio</td>
+<td><code>https://dashscope.aliyuncs.com/apps/anthropic</code>, <code>https://coding-intl.dashscope.aliyuncs.com/apps/anthropic</code>, plus workspace-scoped regional variants</td>
+<td><a href="https://www.alibabacloud.com/help/en/model-studio/claude-code">alibabacloud.com</a></td>
+</tr>
+<tr>
+<td>OpenRouter ("Anthropic Skin")</td>
+<td><code>https://openrouter.ai/api</code></td>
+<td><a href="https://openrouter.ai/docs/cookbook/coding-agents/claude-code-integration">openrouter.ai</a></td>
+</tr>
+<tr>
+<td><strong>Ollama (local)</strong></td>
+<td><code>http://localhost:11434</code></td>
+<td><a href="https://docs.ollama.com/api/anthropic-compatibility">docs.ollama.com</a></td>
+</tr>
+<tr>
+<td><strong>llama.cpp (local)</strong></td>
+<td><code>http://localhost:8080</code></td>
+<td><a href="https://huggingface.co/blog/ggml-org/anthropic-messages-api-in-llamacpp">HF blog</a></td>
+</tr>
+<tr>
+<td>claude-code-router</td>
+<td>local proxy, <code>ccr code</code></td>
+<td><a href="https://github.com/musistudio/claude-code-router">musistudio/claude-code-router</a>, MIT</td>
+</tr>
+</tbody>
+</table>
+<p>OpenRouter's own setup requires <code>ANTHROPIC_API_KEY=""</code> explicitly blanked alongside
+<code>ANTHROPIC_AUTH_TOKEN</code>. Z.ai's guide sets <code>API_TIMEOUT_MS=3000000</code> and maps
+<code>ANTHROPIC_DEFAULT_OPUS_MODEL</code> / <code>SONNET</code> / <code>HAIKU</code> onto GLM tiers. MiniMax has an open bug
+(<a href="https://github.com/MiniMax-AI/MiniMax-M2.7/issues/46">MiniMax-M2.7#46</a>) where <code>/anthropic</code>
+misreports the context window as 200K against an actual 1M, causing Claude Code to compact early.
+LiteLLM proxy's <code>/v1/messages</code> passthrough is widely assumed to exist but was <strong>not confirmed
+from LiteLLM's own docs this pass — UNVERIFIED</strong>.</p>
+<p>That Ollama and llama.cpp both now implement <code>/v1/messages</code> natively is the single most
+consequential finding for Sirdar. Ollama's implementation supports messages, streaming, system
+prompts, multi-turn, base64 vision, tools, tool results and extended thinking; it does <strong>not</strong>
+support <code>tool_choice</code>, prompt caching, or <code>/v1/messages/count_tokens</code>. llama.cpp's converts
+Anthropic wire format to OpenAI internally and reuses its existing tool-calling pipeline,
+including Anthropic-style SSE and <code>count_tokens</code>.</p>
+<p><strong>Licence and terms.</strong> Claude Code is <strong>not open source</strong>: GitHub reports <code>"license": null</code>, and
+<code>LICENSE.md</code> reads "© Anthropic PBC. All rights reserved. Use is subject to Anthropic's Commercial
+Terms of Service." 144,632 stars on a proprietary repo mostly measures issue-watching.</p>
+<p>On whether pointing it at a third-party model is permitted: <strong>no explicit prohibition was found</strong>,
+but the primary text was not retrieved this pass — this rests on secondary legal commentary and is
+<strong>PARTIALLY VERIFIED</strong>. What <em>is</em> firmly established, and already recorded in
+<code>docs/research/03-licensing-byo-subscription.md</code>, is a different restriction: Anthropic bans using
+Claude Free/Pro/Max <strong>subscription OAuth credentials</strong> outside Anthropic's own applications, while
+explicitly carving out "an end user signing in to the unmodified Claude Code binary with their own
+Claude subscription". Setting <code>ANTHROPIC_BASE_URL</code> neither modifies the binary nor touches
+Anthropic's service, so the OAuth ban does not obviously reach it — but that reading is synthesis,
+not a quoted clause. Before Sirdar documents this path, read
+<code>anthropic.com/legal/aup</code> and <code>anthropic.com/legal/commercial-terms</code> directly.</p>
+<p>A second unknown matters just as much and is purely technical: <strong>does <code>--json-schema</code> still
+constrain output when the backend is not Anthropic?</strong> If it is implemented client-side (injected
+tool or prompt), it survives. If it relies on an Anthropic-side feature, it does not, and the
+entire path loses Sirdar's most important guarantee. This is the first thing to test.</p>
+<hr />
+<h2 id="2-the-agent-client-protocol">2. The Agent Client Protocol<a class="headerlink" href="#2-the-agent-client-protocol" title="Permanent link">&para;</a></h2>
+<p>ACP is JSON-RPC 2.0 over stdio between an Agent subprocess and a Client (the editor, or Sirdar).
+Ground truth below comes from the schema itself
+(<code>agentclientprotocol/agent-client-protocol</code>, <code>schema/v1/meta.json</code> and <code>schema/v1/schema.json</code>),
+not from prose docs, which lag.</p>
+<p><strong>Wire <code>protocolVersion</code> is <code>1</code>.</strong> The schema <em>package</em> is separately versioned at <strong>1.21.0</strong>
+(2026-08-20, <a href="https://github.com/agentclientprotocol/agent-client-protocol/blob/main/schema/v1/CHANGELOG.md">v1 CHANGELOG</a>).
+A <code>2.0.0-alpha.3</code> draft exists that renames <code>authenticate</code> → <code>auth/login</code>; not production-current.
+Everything is Apache-2.0.</p>
+<p>Agent methods: <code>initialize</code>, <code>authenticate</code>, <code>session/new</code>, <code>session/load</code>, <code>session/set_mode</code>,
+<code>session/set_config_option</code>, <code>session/prompt</code>, <code>session/cancel</code>, <code>session/list</code>, <code>session/delete</code>,
+<code>session/resume</code>, <code>session/close</code>, <code>logout</code>.</p>
+<p>Client methods: <code>session/request_permission</code>, <code>session/update</code> (notification), <code>fs/read_text_file</code>,
+<code>fs/write_text_file</code>, <code>terminal/create</code>, <code>terminal/output</code>, <code>terminal/release</code>,
+<code>terminal/wait_for_exit</code>, <code>terminal/kill</code>, <code>elicitation/create</code>, <code>elicitation/complete</code>.</p>
+<p><code>session/update</code> has <strong>11</strong> variants, more than the docs list
+(<a href="https://github.com/agentclientprotocol/agent-client-protocol/issues/1694">drift tracked in #1694</a>):
+<code>user_message_chunk</code>, <code>agent_message_chunk</code>, <code>agent_thought_chunk</code>, <code>tool_call</code>,
+<code>tool_call_update</code>, <code>plan</code>, <code>available_commands_update</code>, <code>current_mode_update</code>,
+<code>config_option_update</code>, <code>session_info_update</code>, <code>usage_update</code>.</p>
+<p><code>ToolCall</code> carries <code>toolCallId</code>, <code>title</code>, <code>kind</code>, <code>status</code>, <code>content[]</code>, <code>locations[]</code>, <code>rawInput</code>,
+<code>rawOutput</code>. <code>kind</code> ∈ <code>read | edit | delete | move | search | execute | think | fetch |
+switch_mode | other</code>. <code>status</code> ∈ <code>pending | in_progress | completed | failed</code> (v2 adds <code>cancelled</code>).</p>
+<p>Permissions: <code>session/request_permission</code> takes <code>{sessionId, toolCall, options: PermissionOption[]}</code>
+and returns <code>{outcome}</code>. <code>PermissionOption = {optionId, name, kind}</code> with <code>kind</code> ∈
+<code>allow_once | allow_always | reject_once | reject_always</code>. This is a genuine host-arbitrated
+callback — it maps cleanly onto <code>PermissionPolicy.Decide</code>.</p>
+<p><code>StopReason</code> ∈ <code>end_turn | max_tokens | max_turn_requests | refusal | cancelled</code>.</p>
+<h3 id="what-acp-does-not-give-sirdar">What ACP does not give Sirdar<a class="headerlink" href="#what-acp-does-not-give-sirdar" title="Permanent link">&para;</a></h3>
+<p><strong>Structured output: confirmed absent.</strong> <code>PromptResponse</code> has exactly one field besides <code>_meta</code>:
+<code>stopReason</code>. Grepping <code>schema.json</code> finds no <code>response_format</code>, no <code>outputSchema</code>, nothing
+equivalent. The only JSON-schema-shaped construct is <code>elicitation/create</code>'s <code>requestedSchema</code>,
+which is the client asking the <em>user</em> for structured input mid-turn — the opposite direction. All
+model output travels as free-text <code>agent_message_chunk</code>. A Go host gets zero protocol help
+extracting a validated document.</p>
+<p><strong>Usage: present but shaky.</strong> <code>usage_update</code> → <code>UsageUpdate {used, size, cost?}</code>,
+<code>Cost {amount, currency}</code>. That is context-window occupancy, not a prompt/completion/cache split.
+It landed in <a href="https://github.com/agentclientprotocol/agent-client-protocol/pull/316">PR #316</a>
+(Jan 2026) and <a href="https://github.com/agentclientprotocol/agent-client-protocol/issues/1860">#1860</a>
+is an open bug that the spec's own wording is self-contradictory and implementations already
+diverge. Sirdar's <code>budget.maxUsd</code> would be running on that.</p>
+<p><strong>Model selection: no dedicated method.</strong> No <code>session/set_model</code>. Model choice goes through
+<code>session/set_config_option</code> against a <code>ConfigOption</code> the agent advertises with <code>category: "model"</code>
+(stabilised in schema 1.16.0). The same mechanism supersedes <code>session/set_mode</code>, which the docs say
+"will be removed in a future version"
+(<a href="https://agentclientprotocol.com/protocol/session-config-options">session config options</a>).
+So model selection is an untyped, per-agent-defined string, with no shared notion of context
+limit, pricing or capability.</p>
+<p><strong>Resume: present.</strong> <code>session/load</code> gated on <code>AgentCapabilities.loadSession</code>, plus <code>session/resume</code>,
+<code>session/list</code>, <code>session/delete</code>, <code>session/close</code>.</p>
+<p><strong>MCP: present.</strong> <code>NewSessionRequest.mcpServers</code> is a required field;
+<code>AgentCapabilities.mcpCapabilities = {http, sse}</code> with stdio as the baseline.</p>
+<h3 id="who-implements-it">Who implements it<a class="headerlink" href="#who-implements-it" title="Permanent link">&para;</a></h3>
+<p>The live registry (<code>https://cdn.agentclientprotocol.com/registry/v1/latest/registry.json</code>,
+<a href="https://github.com/agentclientprotocol/registry">repo</a>, Apache-2.0) lists <strong>40 agents</strong>.
+Selected:</p>
+<table>
+<thead>
+<tr>
+<th>Agent</th>
+<th>Native / adapter</th>
+<th>Package</th>
+<th>Licence</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Gemini CLI</td>
+<td>native</td>
+<td><code>@google/gemini-cli --acp</code> (no longer <code>--experimental-acp</code>)</td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>Claude Code</td>
+<td>adapter</td>
+<td><code>@agentclientprotocol/claude-agent-acp</code> (<code>@zed-industries/claude-code-acp</code> deprecated)</td>
+<td>proprietary</td>
+</tr>
+<tr>
+<td>Codex</td>
+<td>adapter</td>
+<td><code>@agentclientprotocol/codex-acp</code> (Rust binary, renamed from <code>@zed-industries/codex-acp</code>)</td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>Goose</td>
+<td>native</td>
+<td><code>goose acp</code></td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>OpenCode</td>
+<td>native</td>
+<td><code>opencode acp</code></td>
+<td>MIT</td>
+</tr>
+<tr>
+<td>Qwen Code</td>
+<td>native</td>
+<td><code>qwen --acp</code></td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>Kimi CLI</td>
+<td>native</td>
+<td><code>kimi acp</code></td>
+<td>MIT (conflicts with repo metadata)</td>
+</tr>
+<tr>
+<td>Cline</td>
+<td>native</td>
+<td><code>cline --acp</code></td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>Amp</td>
+<td>adapter</td>
+<td><code>amp-acp</code> binary</td>
+<td>Apache-2.0</td>
+</tr>
+<tr>
+<td>GitHub Copilot CLI</td>
+<td>native</td>
+<td>npx</td>
+<td>proprietary</td>
+</tr>
+<tr>
+<td>Cursor</td>
+<td>native</td>
+<td>binary</td>
+<td>proprietary</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Not in the registry:</strong> OpenHands (treat "OpenHands speaks ACP" as false for Sept 2026), and
+Crush (no ACP mention found).</p>
+<p>Clients: Zed (reference, <a href="https://zed.dev/docs/ai/external-agents">external agents docs</a>),
+JetBrains across IntelliJ/PyCharm/GoLand/WebStorm, Neovim via <code>olimorris/codecompanion.nvim</code>,
+<code>brianhuster/acp.nvim</code>, <code>hador/emeth.nvim</code>, <code>carlos-algms/agentic.nvim</code>, and Emacs via
+<a href="https://xenodium.com/introducing-acpel"><code>acp.el</code></a>.</p>
+<h3 id="go-sdk">Go SDK<a class="headerlink" href="#go-sdk" title="Permanent link">&para;</a></h3>
+<p><strong>No official Go SDK.</strong> The org ships Rust, TypeScript (<code>@agentclientprotocol/sdk</code>), Python
+(<a href="https://github.com/agentclientprotocol/python-sdk">python-sdk</a>), Kotlin and Java. Go is absent.</p>
+<p>Community options:</p>
+<ul>
+<li><strong><a href="https://github.com/coder/acp-go-sdk"><code>coder/acp-go-sdk</code></a></strong> — the serious one. Maintained by
+  Coder, Apache-2.0, <code>go get github.com/coder/acp-go-sdk</code>, examples for both Agent and Client
+  roles, integration examples against Claude Code and Gemini CLI. Pre-1.0; version reports were
+  inconsistent across fetches, so treat the API as unstable.</li>
+<li><code>ironpark/acp-go</code> — unofficial, stdio + HTTP/SSE transports.</li>
+<li><code>joshgarnett/agent-client-protocol-go</code>.</li>
+</ul>
+<h3 id="would-one-acp-client-cover-most-third-party-agents">Would one ACP client cover most third-party agents?<a class="headerlink" href="#would-one-acp-client-cover-most-third-party-agents" title="Permanent link">&para;</a></h3>
+<p>Yes for reach, no for fidelity.</p>
+<p>One client reaches all 40 registry agents — Google, Anthropic and OpenAI via adapters, plus
+Alibaba, Moonshot, the Goose/OpenCode/Cline/Kilo open-source tier, Cursor and Copilot. For a host
+that mainly needs "stream what the agent did and let me veto tool calls", it is an excellent deal:
+the permission callback and the tool-call metadata are exactly the right shape, and resume is
+first-class.</p>
+<p>What Sirdar specifically loses:</p>
+<ul>
+<li><strong>Schema-conforming final answer — the whole point of a Sirdar run.</strong> Falls back to
+  prompt-and-parse plus <code>Session.Send</code> retries, with no protocol guarantee, against models chosen
+  for being cheap.</li>
+<li><strong>Cost accounting</strong> for <code>budget.maxUsd</code>, which becomes best-effort on a field with an open
+  correctness bug.</li>
+<li><strong>Token split</strong> for <code>InputTok</code>/<code>OutputTok</code> — <code>usage_update</code> gives occupancy, not a breakdown.</li>
+<li><strong>Model configuration</strong> becomes an untyped per-agent string, so <code>SessionSpec.Model</code> cannot be
+  passed through uniformly.</li>
+<li><strong>Tool semantics</strong> flatten into a 10-value <code>kind</code> enum, so <code>PermissionPolicy</code>'s bash-glob
+  matching has to work off <code>rawInput</code> shapes that differ per agent anyway.</li>
+</ul>
+<hr />
+<h2 id="3-aggregators-vendor-apis-and-self-hosting">3. Aggregators, vendor APIs and self-hosting<a class="headerlink" href="#3-aggregators-vendor-apis-and-self-hosting" title="Permanent link">&para;</a></h2>
+<h3 id="aggregators">Aggregators<a class="headerlink" href="#aggregators" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>OpenAI base URL</th>
+<th>Anthropic <code>/v1/messages</code></th>
+<th>Auth env var</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>OpenRouter</td>
+<td><code>https://openrouter.ai/api/v1</code></td>
+<td><strong>Yes</strong> — "Anthropic Skin" at <code>https://openrouter.ai/api</code></td>
+<td><code>OPENROUTER_API_KEY</code></td>
+</tr>
+<tr>
+<td>Groq</td>
+<td><code>https://api.groq.com/openai/v1</code></td>
+<td>No</td>
+<td><code>GROQ_API_KEY</code></td>
+</tr>
+<tr>
+<td>Together AI</td>
+<td><code>https://api.together.ai/v1</code></td>
+<td>No</td>
+<td><code>TOGETHER_API_KEY</code></td>
+</tr>
+<tr>
+<td>Fireworks AI</td>
+<td><code>https://api.fireworks.ai/inference/v1</code></td>
+<td>No</td>
+<td><code>FIREWORKS_API_KEY</code></td>
+</tr>
+<tr>
+<td>DeepInfra</td>
+<td><code>https://api.deepinfra.com/v1/openai</code></td>
+<td>No</td>
+<td><code>DEEPINFRA_TOKEN</code></td>
+</tr>
+<tr>
+<td>Novita AI</td>
+<td><code>https://api.novita.ai/openai</code></td>
+<td>No</td>
+<td>UNVERIFIED var name</td>
+</tr>
+</tbody>
+</table>
+<p><strong>OpenRouter</strong> is the only aggregator with both surfaces, which makes it the single highest-value
+integration target. It exposes per-model capability flags: <code>supported_parameters</code> on the Models
+API, so <code>GET https://openrouter.ai/api/v1/models?supported_parameters=tools</code> enumerates
+tool-capable models, and requests carrying <code>tools</code> are routed only to providers that support them
+(<a href="https://openrouter.ai/docs/api/api-reference/parameters/get-parameters">models API</a>). BYOK is
+supported at a <strong>5% surcharge on upstream cost</strong>, keys encrypted at rest, zero-data-retention
+policies respected (<a href="https://openrouter.ai/docs/guides/overview/auth/byok">BYOK guide</a>).</p>
+<p>Its own caveat on the Anthropic skin deserves quoting: reliable tool use "is only guaranteed on
+Anthropic's own models when routing to alternative backends". So the skin is not a free pass to
+run GLM through Claude Code and expect Claude-grade tool calling.</p>
+<p><strong>Groq's roster has narrowed.</strong> Its live models doc lists Llama 3.1/3.3, gpt-oss-120b and
+gpt-oss-20b, Qwen 3.6-27B/3.8-27B (preview) and MiniMax M2.7 (enterprise preview) —
+<strong>no DeepSeek, no GLM</strong>, and <code>moonshotai/kimi-k2-instruct</code> explicitly <strong>retired</strong> in favour of
+<code>openai/gpt-oss-120b</code> (<a href="https://console.groq.com/docs/deprecations">deprecations</a>). Any 2025-era
+"Kimi K2 on Groq" guidance is stale. Groq's OpenAI compatibility also omits <code>logprobs</code>,
+<code>logit_bias</code>, <code>top_logprobs</code>, <code>messages[].name</code>, and requires <code>n = 1</code>
+(<a href="https://console.groq.com/docs/openai">compat doc</a>).</p>
+<p>Together, Fireworks, DeepInfra and Novita are all plain OpenAI-compatible with per-model tool
+support; none expose capability flags as cleanly as OpenRouter, and BYOK was <strong>not confirmed</strong> for
+any of them this pass. Their exact model rosters churn weekly — check the live catalogue, not a
+snapshot.</p>
+<h3 id="vendor-apis">Vendor APIs<a class="headerlink" href="#vendor-apis" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Vendor</th>
+<th>OpenAI base URL</th>
+<th>Anthropic base URL</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DeepSeek</td>
+<td><code>https://api.deepseek.com</code></td>
+<td><code>https://api.deepseek.com/anthropic</code></td>
+<td>Model ids <code>deepseek-flash</code>, <code>deepseek-v4-pro</code> per the fetched doc — <strong>UNVERIFIED, post-cutoff naming, confirm before hardcoding</strong></td>
+</tr>
+<tr>
+<td>Z.ai / Zhipu</td>
+<td><code>https://api.z.ai/api/paas/v4</code> (<strong>UNVERIFIED</strong>)</td>
+<td><code>https://api.z.ai/api/anthropic</code></td>
+<td><code>API_TIMEOUT_MS=3000000</code>; GLM tier mapping reported as GLM-4.7 / GLM-4.5-Air — <strong>UNVERIFIED</strong></td>
+</tr>
+<tr>
+<td>Moonshot</td>
+<td><code>https://api.moonshot.ai/v1</code></td>
+<td><code>https://api.moonshot.ai/anthropic</code></td>
+<td>Model ids came back garbled (<code>kimi-k3[1m]</code>, <code>kimi-k2.7-code</code>, <code>kimi-k2.6</code>) — <strong>UNVERIFIED</strong></td>
+</tr>
+<tr>
+<td>Alibaba DashScope</td>
+<td><code>dashscope[-intl].aliyuncs.com/compatible-mode/v1</code> <strong>or</strong> workspace-scoped <code>*.maas.aliyuncs.com/compatible-mode/v1</code> — the two schemes need reconciling</td>
+<td>via Model Studio <code>/apps/anthropic</code> (see §1)</td>
+<td><code>DASHSCOPE_API_KEY</code>; region keys not interchangeable</td>
+</tr>
+<tr>
+<td>xAI</td>
+<td><code>https://api.x.ai/v1</code></td>
+<td>not found</td>
+<td><code>XAI_API_KEY</code>, <a href="https://docs.x.ai/developers/tools/function-calling">function-calling guide</a></td>
+</tr>
+<tr>
+<td>Mistral</td>
+<td><code>https://api.mistral.ai/v1</code></td>
+<td>not found</td>
+<td><code>MISTRAL_API_KEY</code>; current Devstral/Codestral/Magistral ids <strong>UNVERIFIED</strong></td>
+</tr>
+<tr>
+<td>Google Gemini</td>
+<td><code>https://generativelanguage.googleapis.com/v1beta/openai/</code></td>
+<td>not found</td>
+<td><code>GEMINI_API_KEY</code>, <a href="https://ai.google.dev/gemini-api/docs/openai">compat doc</a></td>
+</tr>
+<tr>
+<td>Meta Llama</td>
+<td>first-party hosted API in 2026 <strong>UNVERIFIED</strong></td>
+<td>—</td>
+<td>In practice Llama reaches agents through aggregators</td>
+</tr>
+</tbody>
+</table>
+<p>The pattern is clean and worth stating plainly: <strong>every vendor speaks OpenAI; only the Chinese
+labs plus OpenRouter speak Anthropic.</strong> DeepSeek, Zhipu, Moonshot, MiniMax and Alibaba all built
+<code>/anthropic</code> surfaces specifically to capture Claude Code users. xAI, Mistral, Google and the
+Western aggregators did not.</p>
+<h3 id="self-hosting">Self-hosting<a class="headerlink" href="#self-hosting" title="Permanent link">&para;</a></h3>
+<p><strong>Ollama.</strong> OpenAI-compatible at <code>http://localhost:11434/v1/</code> covering <code>/chat/completions</code>,
+<code>/completions</code>, <code>/models</code>, <code>/embeddings</code> and, since v0.13.3, <code>/responses</code> (non-stateful only).
+<code>tools</code> is supported; <strong><code>tool_choice</code> is not</strong>
+(<a href="https://docs.ollama.com/api/openai-compatibility">compat doc</a>). It also now serves
+<code>POST /v1/messages</code> natively — messages, streaming, system prompts, multi-turn, base64 vision,
+tools, tool results, extended thinking; no <code>tool_choice</code>, no prompt caching, no <code>count_tokens</code>
+(<a href="https://docs.ollama.com/api/anthropic-compatibility">Anthropic compat doc</a>).</p>
+<p>The context-length trap is worth a loud line in Sirdar's docs: <strong>the OpenAI-compatible API has no
+per-request way to set context size.</strong> You either set <code>OLLAMA_CONTEXT_LENGTH</code> on the server or
+bake <code>PARAMETER num_ctx</code> into a Modelfile and <code>ollama create</code> a variant. A silently-default context
+window truncating tool schemas and history is a classic agentic failure mode. No evidence was
+found for an <code>ollama launch</code> command — <strong>UNVERIFIED / probably does not exist</strong>. The docs index
+does list a web-search capability and a cloud page, and integrations with VS Code, JetBrains,
+Xcode, Zed, Cline, Goose, Roo Code and Copilot CLI.</p>
+<p><strong>vLLM.</strong> <code>vllm serve</code>, tool calling via <code>--enable-auto-tool-choice --tool-call-parser &lt;parser&gt;</code>.
+Parsers confirmed live (<a href="https://docs.vllm.ai/en/latest/features/tool_calling.html">tool calling docs</a>):
+<code>hermes</code>, <code>mistral</code>, <code>llama3_json</code>, <code>llama4_pythonic</code>, <code>granite</code>/<code>granite4</code>/<code>granite-20b-fc</code>,
+<code>internlm</code>, <code>jamba</code>, <code>xlam</code>, <code>qwen3_xml</code> (Qwen3-Coder), <code>deepseek_v3</code>/<code>deepseek_v31</code>, <code>openai</code>
+(gpt-oss), <code>kimi_k2</code>, <code>hunyuan_a13b</code>, <code>cohere_command3</code>, <code>longcat</code>, <code>glm45</code>/<code>glm47</code>,
+<code>functiongemma</code>, <code>olmo3</code>, <code>gigachat3</code>, <code>apertus</code>, plus a generic <code>pythonic</code> fallback. Note the
+naming has moved: <code>glm4_moe</code> is now <code>glm45</code>/<code>glm47</code>, and <strong>no <code>minimax</code> parser appeared</strong> in this
+fetch. Parser names churn per release — read <code>vllm/entrypoints/openai/tool_parsers/</code> at your
+pinned version. A separate <code>--reasoning-parser</code> handles <code>&lt;think&gt;</code> extraction (<strong>UNVERIFIED</strong> list).</p>
+<p><strong>LM Studio.</strong> Local OpenAI-compatible server (conventionally <code>http://localhost:1234/v1</code>), tool
+calling for compatible models, <code>lms</code> CLI. The docs URL tried this pass 404'd — <strong>this entire entry
+is UNVERIFIED against 2026 docs.</strong></p>
+<p><strong>llama.cpp server.</strong> Native tool-call format recognition for Llama 3.1/3.3, Functionary,
+Hermes 2/3, Qwen 2.5 and Mistral Nemo, with a generic (token-hungrier) fallback for unrecognised
+templates; check a running server with <code>GET /props</code> (<code>chat_template</code>, <code>chat_template_tool_use</code>) or
+override with <code>--chat-template-file</code> / <code>--chat-template</code>. It also serves <code>POST /v1/messages</code>
+natively with no extra flag, including <code>tool_use</code>/<code>tool_result</code> blocks, Anthropic-style SSE,
+vision, extended thinking and <code>count_tokens</code>.</p>
+<p>Its differentiator for Sirdar is <strong>grammar-constrained decoding</strong>:
+<code>response_format: {"type": "json_schema", "json_schema": {...}}</code> compiled to GBNF, plus direct
+<code>--grammar</code>/<code>--grammar-file</code>. That is a hard guarantee of schema conformance, not a request the
+model may ignore — the only place in this entire survey where a weak local model can be <em>forced</em>
+to emit a valid Sirdar note. (Exact parameter names <strong>UNVERIFIED</strong> this pass; the server README
+moved from <code>docs/server.md</code> to <code>tools/server/README.md</code>.)</p>
+<h3 id="which-open-models-actually-do-agentic-tool-calling">Which open models actually do agentic tool calling<a class="headerlink" href="#which-open-models-actually-do-agentic-tool-calling" title="Permanent link">&para;</a></h3>
+<p>Caveat first: BFCL, Terminal-Bench and tau²-bench leaderboards are JS-rendered SPAs that could not
+be scraped this pass, and the Aider polyglot page's visible data appears to stop around <strong>October
+2025</strong>. What follows is model-card self-reports (fetched live from Hugging Face) plus that stale
+leaderboard. Treat vendor numbers as vendor numbers.</p>
+<p>Aider polyglot, as displayed (<a href="https://aider.chat/docs/leaderboards/">leaderboard</a>):
+DeepSeek-V3.2-Exp Reasoner 74.2% (2025-10-03), V3.2-Exp Chat 70.2%, Qwen3 235B A22B 59.6%,
+Kimi K2 59.1% (2025-07-17), DeepSeek V3 (0324) 55.1%, gpt-oss-120b (high) 41.8% (2025-08-06),
+Qwen3 32B 40.0%, <strong>Llama 4 Maverick 15.6%</strong> (2025-04-06), Codestral 25.01 11.1%.</p>
+<p>Model cards:</p>
+<ul>
+<li><strong>Qwen3-Coder-480B-A35B-Instruct</strong> — Apache-2.0, 480B/35B active MoE, 256K native context
+  (1M via YaRN). SWE-bench Pro 38.7, Terminal-Bench 2.0 23.9. Marketed explicitly for agentic
+  tool-calling (<a href="https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct">card</a>).</li>
+<li><strong>Kimi K2-Instruct</strong> — 1T/32B active MoE, 128K. SWE-bench Verified 65.8% single-attempt /
+  71.6% multi-attempt, SWE-bench Multilingual 47.3%, Terminal-Bench 25–30% harness-dependent
+  (<a href="https://huggingface.co/moonshotai/Kimi-K2-Instruct">card</a>).</li>
+<li><strong>DeepSeek-V3.2</strong> — SWE-bench Verified 70, SWE-bench Pro 15.56. Its chat template adds a
+  <code>developer</code> role scoped to search-agent scenarios; check that it doesn't perturb generic tool
+  flows (<a href="https://huggingface.co/deepseek-ai/DeepSeek-V3.2">card</a>).</li>
+<li><strong>GLM-4.6</strong> — 357B, 200K context. SWE-bench Pro 9.67, Terminal-Bench 2.0 24.5. Zhipu claims
+  parity with DeepSeek-V3.1-Terminus and Claude Sonnet 4; the SWE-bench Pro gap against DeepSeek
+  suggests selective benchmarking (<a href="https://huggingface.co/zai-org/GLM-4.6">card</a>).</li>
+<li><strong>Llama 4 Maverick</strong> — 400B/17B active, 1M context. LiveCodeBench 43.4 pass@1, MMLU Pro 80.5,
+  GPQA Diamond 69.8, but 15.6% on Aider polyglot and no explicit tool-calling statement on the
+  card (<a href="https://huggingface.co/meta-llama/Llama-4-Maverick-17B-128E-Instruct">card</a>).</li>
+<li><strong>gpt-oss-120b</strong> — 41.8% Aider polyglot at high reasoning effort; OpenAI's own announcement page
+  403'd. It has a dedicated vLLM parser (<code>openai</code>), and Groq treats it as the recommended
+  replacement for several retired open models — a decent vendor-neutral signal.</li>
+<li><strong>Mistral</strong> — Codestral 25.01 at 11.1% is weak, but Codestral is FIM/completion-oriented, not
+  agentic. Devstral, the line actually built for agent harnesses, was not captured. <strong>UNVERIFIED.</strong></li>
+</ul>
+<p>The practical read: <strong>Qwen3-Coder and Kimi K2 have the strongest first-party agentic framing and
+first-class tool-parser support in both vLLM (<code>qwen3_xml</code>, <code>kimi_k2</code>) and llama.cpp; DeepSeek V3.2
+posts the best confirmed SWE-bench Verified number; GLM-4.6 is credible but self-graded; Llama 4 is
+the weakest of the cohort for agentic coding despite strong general benchmarks.</strong> Having a
+dedicated tool-call parser upstream is a better predictor of "works in an agent loop" than any
+headline benchmark, because it means someone maintains the format.</p>
+<p>Newer names surfaced only by content-farm pages — GLM-5.x, DeepSeek V4, Kimi K3, Qwen3.8-Max —
+were <strong>excluded as unverified</strong>. Some are echoed by vendor docs fetched through a summarising
+layer, which is not good enough to hardcode.</p>
+<hr />
+<h2 id="4-recommendation-for-sirdar">4. Recommendation for Sirdar<a class="headerlink" href="#4-recommendation-for-sirdar" title="Permanent link">&para;</a></h2>
+<h3 id="comparison">Comparison<a class="headerlink" href="#comparison" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Runtime</th>
+<th>Models</th>
+<th>Event stream</th>
+<th>Permission hook</th>
+<th>Schema output</th>
+<th>Resume</th>
+<th>MCP</th>
+<th>Licence</th>
+<th>ACP?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Claude Code + <code>ANTHROPIC_BASE_URL</code></strong></td>
+<td>DeepSeek, GLM, Kimi, MiniMax, DashScope, OpenRouter (→ all), Ollama, llama.cpp</td>
+<td>yes (already wired)</td>
+<td>yes (already wired)</td>
+<td><code>--json-schema</code>, <strong>untested off-Anthropic</strong></td>
+<td>yes</td>
+<td>yes</td>
+<td>proprietary</td>
+<td>via adapter</td>
+</tr>
+<tr>
+<td><strong>Sirdar's own loop (OpenAI-compatible)</strong></td>
+<td>every vendor + every aggregator + Ollama/vLLM/LM Studio/llama.cpp</td>
+<td>Sirdar defines it</td>
+<td>Sirdar owns the tools</td>
+<td>native <code>response_format</code> / GBNF</td>
+<td>Sirdar owns it</td>
+<td>Go SDK v1.7.0</td>
+<td>n/a</td>
+<td>n/a</td>
+</tr>
+<tr>
+<td><strong>Qwen Code</strong></td>
+<td>any OpenAI-compatible</td>
+<td><code>stream-json</code></td>
+<td>ACP <code>local-only</code> mediator</td>
+<td><strong><code>--json-schema</code></strong></td>
+<td><code>--resume</code></td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>ACP client (<code>coder/acp-go-sdk</code>)</strong></td>
+<td>whatever the 40 agents support</td>
+<td><code>session/update</code>, 11 variants</td>
+<td><code>session/request_permission</code></td>
+<td><strong>none</strong></td>
+<td><code>session/load</code>/<code>resume</code></td>
+<td><code>mcpServers</code></td>
+<td>Apache-2.0</td>
+<td>—</td>
+</tr>
+<tr>
+<td><strong>OpenCode</strong></td>
+<td>75+ via models.dev</td>
+<td><code>--format json</code>, server SSE</td>
+<td><code>POST /session/:id/permissions/:id</code></td>
+<td>not found</td>
+<td><code>-c</code>, <code>-s</code></td>
+<td>yes</td>
+<td>MIT</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Goose</strong></td>
+<td>15+ incl. Ollama</td>
+<td><code>--output-format stream-json</code></td>
+<td>coarse via <code>GOOSE_MODE</code>, real via ACP</td>
+<td>recipe <code>response_schema</code></td>
+<td><code>--resume</code></td>
+<td>native</td>
+<td>Apache-2.0</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Crush</strong></td>
+<td>Catwalk: <code>openai-compat</code>, <code>ollama</code>, <code>llamacpp</code>, <code>lmstudio</code>, <code>litellm</code></td>
+<td>server SSE only</td>
+<td>server SSE, path unverified</td>
+<td>not found</td>
+<td><code>-s</code>, <code>-C</code></td>
+<td>yes</td>
+<td><strong>FSL-1.1-MIT</strong></td>
+<td>no</td>
+</tr>
+<tr>
+<td><strong>Gemini CLI</strong></td>
+<td><strong>Gemini/Vertex only</strong></td>
+<td><code>stream-json</code>, 6 event types</td>
+<td>coarse <code>--approval-mode</code></td>
+<td>not found</td>
+<td>rich</td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Kimi CLI</strong></td>
+<td>Moonshot + unclear</td>
+<td><code>stream-json</code></td>
+<td><code>--plan</code> read-only, ACP</td>
+<td>not found</td>
+<td><code>-C</code>, <code>-r</code></td>
+<td>yes</td>
+<td>Apache-2.0 / MIT (conflict)</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Cline</strong></td>
+<td>any OpenAI-compatible</td>
+<td><code>--json</code> NDJSON</td>
+<td>TTY/desktop IPC</td>
+<td>not found</td>
+<td>history, flag unverified</td>
+<td>native</td>
+<td>Apache-2.0</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Kilo Code</strong></td>
+<td>500+</td>
+<td><code>kilo serve</code> SSE</td>
+<td>unverified</td>
+<td>session JSON only</td>
+<td><code>-c</code></td>
+<td>yes</td>
+<td>MIT</td>
+<td>native</td>
+</tr>
+<tr>
+<td><strong>Amp</strong></td>
+<td>curated frontier only</td>
+<td><code>--stream-json</code></td>
+<td>rule-based config</td>
+<td><code>result</code> message</td>
+<td><code>threads continue</code></td>
+<td>yes</td>
+<td>proprietary</td>
+<td>adapter</td>
+</tr>
+<tr>
+<td><strong>OpenHands</strong></td>
+<td>100+ via LiteLLM</td>
+<td><code>--json</code> JSONL</td>
+<td><strong>none in headless</strong></td>
+<td>not found</td>
+<td><code>--resume</code></td>
+<td>yes</td>
+<td>MIT</td>
+<td>no</td>
+</tr>
+<tr>
+<td><strong>Codex + custom provider</strong></td>
+<td>Responses-API providers only</td>
+<td>app-server JSON-RPC</td>
+<td>sandbox only</td>
+<td><code>outputSchema</code></td>
+<td><code>thread/resume</code></td>
+<td>yes</td>
+<td>Apache-2.0</td>
+<td>adapter</td>
+</tr>
+<tr>
+<td><strong>aider</strong></td>
+<td>LiteLLM</td>
+<td>none</td>
+<td><code>--yes</code> only</td>
+<td>none</td>
+<td>none</td>
+<td><strong>none</strong></td>
+<td>Apache-2.0</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ranking-against-the-maintainers-criteria">Ranking against the maintainer's criteria<a class="headerlink" href="#ranking-against-the-maintainers-criteria" title="Permanent link">&para;</a></h3>
+<p><strong>1. Sirdar runs its own tool loop against any OpenAI-compatible API.</strong> Highest coverage of
+anything here — one adapter reaches DeepSeek, Zhipu, Moonshot, DashScope, xAI, Mistral, Gemini,
+OpenRouter, Groq, Together, Fireworks, DeepInfra, Novita, Ollama, vLLM, LM Studio and llama.cpp,
+because they all speak <code>/v1/chat/completions</code>. Perfect fidelity, because Sirdar defines every
+piece it needs: the event stream is its own <code>provider.Event</code> with nothing to translate; read-only
+enforcement stops being a policy applied to someone else's tools and becomes a property of the
+tool set — Sirdar only implements Read/Glob/Grep/allow-listed-Bash/WebFetch, so <code>Write</code> cannot be
+called because it does not exist; structured output uses native <code>response_format: json_schema</code>,
+with llama.cpp's GBNF as a hard floor for local models; resume is Sirdar's own transcript; MCP
+comes from the official <a href="https://github.com/modelcontextprotocol/go-sdk">Go SDK v1.7.0</a>,
+maintained with Google, protocol 2026-07-28 with backward compatibility. Zero licence or ToS
+exposure — no third-party binary in the loop. Largest code footprint of the options, and Sirdar
+inherits responsibility for prompt quality, context management and loop termination.
+Dependencies are small: <a href="https://github.com/openai/openai-go"><code>openai-go</code> v3</a> (<code>option.WithBaseURL</code>,
+tool calling, streaming) plus the MCP SDK.</p>
+<p><strong>2. Claude Code pointed at an Anthropic-compatible endpoint.</strong> Least code by a wide margin —
+config keys and a doctor check, no new adapter. Immediately covers DeepSeek, GLM, Kimi, MiniMax,
+DashScope, OpenRouter (and through it, everything), Ollama and llama.cpp locally. Fidelity is
+where it gets uncertain: the permission hook is client-side and will survive, but <code>--json-schema</code>
+may not, and that is unverified. Maintenance risk is Anthropic changing the flag surface. Licence
+risk is the real cost — the flagship "bring your own model" path would depend on a proprietary
+binary under Anthropic's Commercial ToS, with the third-party-backend question resting on absence
+of prohibition rather than permission.</p>
+<p><strong>3. One ACP client.</strong> 40 agents from ~500 lines of Go against a pre-1.0 community SDK, with a
+permission callback that maps cleanly onto <code>PermissionPolicy</code> and real session resume. It fails on
+the requirement Sirdar cares most about: no structured output anywhere in the protocol, coarse and
+buggy usage data for <code>budget.maxUsd</code>, untyped model selection. Maintenance risk is moderate and
+shared — the protocol is Apache-2.0 with a live registry, but the Go SDK is one company's side
+project and the spec is actively churning (v2 alpha renames methods; <code>session/set_mode</code> is slated
+for removal).</p>
+<p><strong>4. Native Qwen Code adapter.</strong> The only third-party runtime that satisfies every line of
+Sirdar's contract: <code>stream-json</code> events, <code>--json-schema</code>, <code>--resume</code>, MCP, ACP with a <code>local-only</code>
+permission mediator, and any OpenAI-compatible provider. Apache-2.0, actively released. Coverage is
+identical to option 1 since it is an OpenAI-compatible client. Its weakness is being one project's
+fork of another project — 27,744 stars against Gemini CLI's 106,892 — carrying fork-drift risk. If
+you want a third-party runtime to do the work, this is the one.</p>
+<p><strong>5. Native OpenCode adapter.</strong> The largest community here (206,320 stars), MIT, 75+ providers,
+a clean host-arbitrated permission endpoint. No structured output, and that is disqualifying for
+first place. Good second-wave target once a prompt-and-parse fallback exists.</p>
+<p><strong>6. Goose / Cline / Kilo / Crush / Kimi CLI natively.</strong> All reachable through ACP; none justify a
+bespoke adapter. Crush additionally carries a non-OSI licence and has no JSON output on <code>run</code>.
+Kimi CLI is being wound down.</p>
+<p><strong>7. Codex with a custom <code>model_provider</code>.</strong> Effectively dead for this purpose. The removal of
+<code>wire_api = "chat"</code> means every Chat-Completions-only provider — which is almost all of them —
+fails at startup. Keep Codex as the OpenAI adapter it already is.</p>
+<p><strong>Not recommended at all:</strong> aider (no MCP, no events, stalled releases), OpenHands (headless
+forces always-approve), Roo Code (archived), Amp and Gemini CLI (no meaningful BYO model),
+Pi (no permission system by design).</p>
+<h3 id="what-to-build-first-and-why">What to build first, and why<a class="headerlink" href="#what-to-build-first-and-why" title="Permanent link">&para;</a></h3>
+<p><strong>Build the direct provider: <code>provider: openai</code> — Sirdar's own agent loop over any
+OpenAI-compatible endpoint.</strong></p>
+<p>The reasoning turns on one asymmetry. Every option except this one and Qwen Code makes Sirdar's
+structured output a hope rather than a guarantee, and structured output is not a nice-to-have here
+— a Sirdar run's entire deliverable is a schema-validated note. Meanwhile the thing that usually
+argues against writing your own loop, that a mature agent CLI has better tools and prompting than
+you will, is much weaker for Sirdar than for a general coding agent: Sirdar's sessions are
+<strong>read-only triage</strong>. The tool surface it needs is roughly Read, Glob, Grep, an allow-listed Bash,
+WebFetch, and an MCP client. It does not need edit, patch application, diff review, terminal
+management, or any of the machinery that makes a coding CLI expensive to write. <code>AlwaysAllowed</code>
+and <code>AlwaysDenied</code> in <code>internal/provider/policy.go</code> already read as a specification for that tool
+set.</p>
+<p>Coverage settles it: one adapter reaches every vendor, every aggregator and every self-hosting
+runtime on the maintainer's list, because OpenAI-compatibility is the universal surface and the
+Anthropic-compatible surface is the exception. And it carries no licence or terms exposure at a
+moment when the two lowest-code alternatives both route through someone else's proprietary binary
+or a pre-1.0 SDK.</p>
+<p>Ship the Claude-Code-via-proxy config unlock alongside it, because it costs almost nothing and
+serves users who already have <code>claude</code> installed and want GLM or Kimi behind it. But gate the
+documentation on actually testing whether <code>--json-schema</code> survives a non-Anthropic backend.
+If it does not, that path is a demo, not a supported provider.</p>
+<hr />
+<h2 id="recommended-provider-roadmap">Recommended provider roadmap<a class="headerlink" href="#recommended-provider-roadmap" title="Permanent link">&para;</a></h2>
+<p><strong>Phase 0 — settle two unknowns before writing code.</strong>
+Test <code>claude --json-schema</code> against <code>ANTHROPIC_BASE_URL=http://localhost:11434</code> (Ollama) and
+against a vendor <code>/anthropic</code> endpoint, and check whether the schema is honoured or silently
+dropped. Separately, read <code>anthropic.com/legal/aup</code> and <code>anthropic.com/legal/commercial-terms</code>
+directly and record the actual clause text in <code>03-licensing-byo-subscription.md</code>. Both answers
+change how Phase 2 is documented.</p>
+<p><strong>Phase 1 — <code>provider: openai</code>, the direct loop.</strong> <code>openai-go</code> v3 with <code>option.WithBaseURL</code>, the
+official MCP Go SDK, and a read-only tool set mirroring <code>policy.go</code>. Structured output via
+<code>response_format: {"type":"json_schema"}</code>, falling back to a tool-call-shaped extraction for
+providers that reject it. Resume by persisting the message array under the existing run directory
+and returning its id as <code>Handle()</code>. Usage from the OpenAI <code>usage</code> object; cost from a
+per-model price table, or from OpenRouter's generation endpoint when routing through it. Config
+gains <code>providers.openai.baseUrl</code>, <code>.apiKey</code> (as an existing-style <code>env:</code>/<code>keychain:</code> ref),
+<code>.model</code>, <code>.wire</code> (<code>chat</code> now, <code>anthropic</code> later). Validate against Qwen3-Coder and DeepSeek V3.2
+through OpenRouter, then against a local Ollama model, on the seven tickets closed 2026-09-10.</p>
+<p><strong>Phase 2 — Anthropic-wire variants, config only.</strong> Add <code>providers.claude.baseUrl</code> and
+<code>.authToken</code> to the existing Claude adapter so a user with <code>claude</code> installed can point it at
+DeepSeek, Z.ai, Moonshot, MiniMax, DashScope, OpenRouter, Ollama or llama.cpp. Ship a
+compatibility matrix in <code>docs/config.md</code> recording, per backend, whether schema output and the
+<code>can_use_tool</code> hook actually work. Add <code>wire: anthropic</code> to the Phase 1 direct provider using
+<code>anthropic-sdk-go</code> with a base-URL override, so the Chinese-lab endpoints and local Ollama /
+llama.cpp <code>/v1/messages</code> are reachable without the proprietary binary.</p>
+<p><strong>Phase 3 — ACP client.</strong> <code>coder/acp-go-sdk</code>, mapping <code>session/update</code> variants onto
+<code>provider.Event</code>, <code>session/request_permission</code> onto <code>PermissionPolicy.Decide</code>, <code>session/load</code> onto
+<code>Resume</code>. Structured output comes from the Phase 1 prompt-and-parse fallback plus <code>Session.Send</code>
+retries. This is what unlocks Goose, OpenCode, Cline, Kilo, Kimi, Gemini CLI and Cursor in one go —
+worth doing once the event vocabulary has been proven twice.</p>
+<p><strong>Phase 4 — native Qwen Code adapter, only if Phase 3's structured-output fallback proves
+unreliable in practice.</strong> <code>--json-schema</code> plus <code>--output-format stream-json</code> plus the <code>local-only</code>
+permission mediator is a full-fidelity path through a third-party runtime; it is also a second
+adapter to maintain, so make Phase 3 earn it.</p>
+<p><strong>Deliberately not on the roadmap:</strong> OpenCode, Goose, Crush, Cline and Kilo native adapters (ACP
+covers them), Codex custom providers (<code>wire_api = "chat"</code> removed), aider, OpenHands, Roo Code,
+Amp, Pi.</p>
+<p>One precedent is worth keeping in view. Vibe Kanban built native adapters for ten agents — Claude
+Code, Codex, Gemini CLI, Copilot, Amp, Cursor, OpenCode, Droid, CCR, Qwen Code — reached 28,000
+stars under Apache-2.0, and is now <strong>sunsetting</strong>, per the notice on
+<a href="https://github.com/BloopAI/vibe-kanban">its README</a>. Ten hand-written adapters against ten CLIs
+that each ship weekly is a treadmill. Sirdar should own one loop it fully controls, plus one
+protocol client, and resist the rest.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Does Claude Code's <code>--json-schema</code> constrain output when <code>ANTHROPIC_BASE_URL</code> points at a
+  non-Anthropic backend, or is it an Anthropic-side feature? Load-bearing for Phase 2.</li>
+<li>What does Anthropic's actual Commercial ToS / AUP text say about third-party model backends
+  behind Claude Code? Only secondary commentary was obtained this pass.</li>
+<li>Does OpenCode's SSE stream carry a permission-request event whose shape a host can parse? Only
+  the response endpoint is documented; check the OpenAPI spec at <code>/doc</code>.</li>
+<li>Can a host answer Goose's <code>approve</code>-mode prompts over <code>--output-format stream-json</code>, or is that
+  interactive-stdin only?</li>
+<li>What is Crush's exact REST path for posting a <code>PermissionNotification</code> back?</li>
+<li>Is <code>coder/acp-go-sdk</code> stable enough to depend on, and what is its actual version? Reports were
+  inconsistent, and it is pre-1.0.</li>
+<li>Which Goose org is canonical — <code>aaif-goose/goose</code> or <code>block/goose</code>? Both redirect.</li>
+<li>Kimi CLI's licence: repo metadata says Apache-2.0, the ACP registry says MIT.</li>
+<li>Current model ids for DeepSeek (<code>deepseek-flash</code>?), Z.ai (<code>GLM-4.7</code>?) and Moonshot
+  (<code>kimi-k2.7-code</code>?) — all came through a summarising fetch layer and one source URL 404'd on
+  re-fetch.</li>
+<li>Which DashScope base-URL scheme is current: <code>dashscope[-intl].aliyuncs.com/compatible-mode/v1</code>
+  or workspace-scoped <code>*.maas.aliyuncs.com/compatible-mode/v1</code>?</li>
+<li>Does Meta run a first-party hosted Llama API in 2026?</li>
+<li>LM Studio's 2026 docs — the entire section here is unverified.</li>
+<li>Does LiteLLM proxy actually implement an Anthropic-shaped <code>/v1/messages</code> route?</li>
+<li>Live BFCL v4, Terminal-Bench and tau²-bench numbers — all three leaderboards are JS-rendered and
+  could not be scraped; the Aider polyglot data used here appears to stop at October 2025.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

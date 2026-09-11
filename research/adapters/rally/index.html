@@ -1,0 +1,2707 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../linear/">
+      
+      
+        <link rel="next" href="../../providers/acp-protocol/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Rally - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#rally-broadcom-rally-software-formerly-ca-agile-central-adapter-research" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Rally
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-web-services-api-wsapi-v20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Web Services API (WSAPI) v2.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Web Services API (WSAPI) v2.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-url-and-hosts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base URL and hosts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#format-and-rest-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format and REST model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#artifact-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Artifact types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-by-formattedid-vs-objectid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get by FormattedID vs ObjectID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fields-relevant-to-sirdars-ticket-struct" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fields relevant to Sirdar's Ticket struct
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discussion-comment-thread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discussion (comment thread)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#revisionhistory-audit-trail-read-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RevisionHistory (audit trail — read-only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-mcp-server-and-ai-integrations-20252026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. MCP server and AI integrations (2025–2026)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-rally-helpdesk-linkage-for-helpdeskref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Rally ↔ helpdesk linkage (for HelpdeskRef)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-webhooks-rally-webhooks-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Webhooks (Rally Webhooks API)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-existing-clients-prior-art-for-the-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Existing clients (prior art for the adapter)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-web-services-api-wsapi-v20" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Web Services API (WSAPI) v2.0
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. Web Services API (WSAPI) v2.0">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-url-and-hosts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base URL and hosts
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#format-and-rest-model" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Format and REST model
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#artifact-types" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Artifact types
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-by-formattedid-vs-objectid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get by FormattedID vs ObjectID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#fields-relevant-to-sirdars-ticket-struct" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Fields relevant to Sirdar's Ticket struct
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#query-syntax" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Query syntax
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#discussion-comment-thread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Discussion (comment thread)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#revisionhistory-audit-trail-read-only" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RevisionHistory (audit trail — read-only)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-authentication" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Authentication
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-mcp-server-and-ai-integrations-20252026" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. MCP server and AI integrations (2025–2026)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-rally-helpdesk-linkage-for-helpdeskref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Rally ↔ helpdesk linkage (for HelpdeskRef)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-webhooks-rally-webhooks-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Webhooks (Rally Webhooks API)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-existing-clients-prior-art-for-the-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Existing clients (prior art for the adapter)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="rally-broadcom-rally-software-formerly-ca-agile-central-adapter-research">Rally (Broadcom Rally Software, formerly CA Agile Central) — Adapter Research<a class="headerlink" href="#rally-broadcom-rally-software-formerly-ca-agile-central-adapter-research" title="Permanent link">&para;</a></h1>
+<p>Researched 2026-09-10. Primary source is Broadcom TechDocs
+(<code>techdocs.broadcom.com/.../valueops/rally/rally-help/...</code>) plus Broadcom's
+knowledge-base articles (<code>knowledge.broadcom.com/external/article/...</code>) and
+public GitHub client source. Several TechDocs pages required guessing the
+correct path — Broadcom has moved Rally docs between at least two URL trees
+(<code>ca-enterprise-software/agile-development-and-management/...</code> and
+<code>ca-enterprise-software/valueops/rally/...</code>) and some paths 404 even when
+linked from search results. Where I could not load a page directly and relied
+on a search-engine summary of it, or on a third-party client's source instead
+of the spec itself, I've marked the claim <strong>[unverified from primary docs]</strong>.</p>
+<hr />
+<h2 id="1-web-services-api-wsapi-v20">1. Web Services API (WSAPI) v2.0<a class="headerlink" href="#1-web-services-api-wsapi-v20" title="Permanent link">&para;</a></h2>
+<h3 id="base-url-and-hosts">Base URL and hosts<a class="headerlink" href="#base-url-and-hosts" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Production base URL: <code>https://rally1.rallydev.com/slm/webservice/v2.0/</code>
+  — confirmed directly in multiple TechDocs/KB pages, e.g. the WSAPI overview
+  page and the Query Parameters page.
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/integrating-with-rally/building-rally-integrations/web-services-api-wsapi.html">Web Services API (WSAPI)</a>,
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-web-services-api/query-parameters.html">Query Parameters</a></li>
+<li>Object refs returned by the API are full URLs of the form
+  <code>https://rally1.rallydev.com/slm/webservice/v2.0/HierarchicalRequirement/&lt;ObjectID&gt;</code> —
+  same page.</li>
+<li>An <code>eu1.rallydev.com</code> host exists and appears in a Broadcom status-page
+  incident notice, but I could not find primary WSAPI documentation stating a
+  dedicated EU <strong>WSAPI</strong> base URL (as opposed to the EU <strong>web app</strong> host).
+  <strong>[unverified from primary docs]</strong> — treat <code>eu1.rallydev.com</code> as an
+  app/login host, not a confirmed WSAPI endpoint, until a subscription's
+  actual API base URL is checked (Rally subscriptions can apparently be
+  provisioned on region-specific hosts; the adapter should make the base URL
+  configurable rather than hardcoding <code>rally1</code>).
+  <a href="https://status.broadcom.com/notices/jat9navgu65m9iba-rally-eu1-is-current-unavailable-https-eu1-rallydev-com">Rally EU1 unavailable notice</a></li>
+<li>By contrast, Rally's new <strong>MCP server</strong> (see §3) explicitly documents two
+  regional endpoints — <code>https://mcp.rallydev.com/mcp</code> (NA) and
+  <code>https://mcp-eu.rallydev.com/mcp</code> (EMEA) — which at least confirms Broadcom
+  operates EU-resident infrastructure for Rally generally.
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/ai/enable-a-model-context-protocol--mcp--server-/access-an-mcp-server.html">Access an MCP Server</a></li>
+</ul>
+<h3 id="format-and-rest-model">Format and REST model<a class="headerlink" href="#format-and-rest-model" title="Permanent link">&para;</a></h3>
+<ul>
+<li>WSAPI 2.0 is REST-based, JSON only (no XML in 2.0).
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/integrating-with-rally/building-rally-integrations/web-services-api-wsapi.html">Web Services API (WSAPI)</a></li>
+<li>The API generally manipulates one object at a time; referenced objects
+  (Project, Workspace, etc.) must already exist before being referenced.
+  Bulk operations were added later (~2017/2018) but aren't part of the core
+  read path. <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-web-services-api.html">Rally Web Services API</a></li>
+<li>All artifacts are scoped to a Project, which is scoped to a Workspace —
+  same page.</li>
+</ul>
+<h3 id="artifact-types">Artifact types<a class="headerlink" href="#artifact-types" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Core artifact types inherit from a common <code>Artifact</code> type: <strong>HierarchicalRequirement</strong>
+  (= User Story in the UI), <strong>Defect</strong>, <strong>Task</strong>, <strong>DefectSuite</strong>, <strong>TestCase</strong>,
+  <strong>TestSet</strong>. <a href="https://github.com/klehman-rally/pyral/blob/master/doc/source/overview.rst">pyral overview</a></li>
+<li><strong>PortfolioItem</strong> is an abstract type with four standard subtypes — Theme,
+  Strategy, Initiative, Feature — addressable as <code>PortfolioItem/Feature</code> etc.
+  ("dyna-types"). Subscriptions can add custom PortfolioItem subtypes, which
+  is a common source of ambiguity the Python toolkit calls out explicitly.
+  <a href="https://github.com/klehman-rally/pyral/blob/master/doc/source/overview.rst">pyral overview</a></li>
+<li>Custom fields on any artifact type are exposed over WSAPI with a <code>c_</code>
+  prefix on the element name (e.g. <code>c_MyCustomField</code>). <strong>[unverified from
+  primary Broadcom docs — sourced from the pyral toolkit docs, which is a
+  long-standing de facto reference for WSAPI 2.0 behavior]</strong>
+  <a href="https://github.com/klehman-rally/pyral/blob/master/doc/source/overview.rst">pyral overview</a></li>
+</ul>
+<h3 id="get-by-formattedid-vs-objectid">Get by FormattedID vs ObjectID<a class="headerlink" href="#get-by-formattedid-vs-objectid" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>By FormattedID</strong> (human-readable, e.g. <code>DE1234</code>, <code>US1234</code>): FormattedID is
+  not unique enough on its own to be a URL path segment, so it's fetched via
+  the <strong>query</strong> endpoint for the type:
+  <code>GET /defect?query=(FormattedID = "DE1234")&amp;fetch=true</code> (or an explicit
+  fetch list). This pattern is shown consistently across toolkits.
+  <a href="https://knowledge.broadcom.com/external/article/57581/query-discussions-and-their-artifacts.html">Query Discussions and their artifacts</a>,
+  <a href="https://github.com/Cox-Automotive/rally-wsapi/blob/master/README.md">Cox-Automotive rally-wsapi README</a></li>
+<li><strong>By ObjectID</strong>: direct path access on the typed collection,
+  <code>GET /defect/&lt;ObjectID&gt;</code> (equivalently via the <code>_ref</code> URL returned by any
+  prior query) — this is the fast path once you have the internal ID; a
+  Broadcom KB article on query performance recommends using ObjectID over
+  FormattedID when composing complex queries.
+  <a href="https://knowledge.broadcom.com/external/article/125586/rally-wsapi-best-practices-on-filterin.html">WSAPI best practices on filtering/queries</a></li>
+<li>Because Sirdar's <code>Get(key)</code> contract takes a human key (<code>DE1234</code>), and Rally
+  artifact types are distinct REST collections (Defect vs HierarchicalRequirement
+  vs Task vs DefectSuite vs TestCase), <strong>there is no single "artifact" endpoint
+  that takes an arbitrary FormattedID across types</strong> — the adapter must either
+  know/guess the type from the FormattedID prefix (<code>DE</code>, <code>US</code>, <code>TA</code>, <code>TC</code>, …)
+  or query multiple type collections. This prefix convention is widely
+  documented in community/toolkit sources but I did not find a canonical
+  Broadcom page enumerating the full prefix table. <strong>[unverified from primary
+  docs — treat prefix parsing as a heuristic, and confirm/override per
+  workspace via config]</strong></li>
+</ul>
+<h3 id="fields-relevant-to-sirdars-ticket-struct">Fields relevant to Sirdar's Ticket struct<a class="headerlink" href="#fields-relevant-to-sirdars-ticket-struct" title="Permanent link">&para;</a></h3>
+<p>Confirmed via KB articles and toolkit docs (not a single canonical field
+reference I could load):</p>
+<ul>
+<li><code>Name</code> (title), <code>Description</code> (rich-text/HTML field, WSAPI-native), <code>Notes</code>
+  (rich-text/HTML), <code>FormattedID</code>, <code>_ref</code>, <code>ObjectID</code>, <code>CreationDate</code>,
+  <code>LastUpdateDate</code>, <code>Owner</code> (a User reference; references carry a
+  <code>_refObjectName</code> convenience field alongside <code>_ref</code>), <code>Project</code>,
+  <code>Iteration</code>, <code>Release</code>, <code>Tags</code>, <code>Parent</code>/<code>Feature</code> (portfolio hierarchy),
+  <code>State</code>/<code>ScheduleState</code> (Defect uses <code>State</code>, HierarchicalRequirement uses
+  <code>ScheduleState</code>), <code>Priority</code>, <code>Severity</code> (Defect-specific).
+  <a href="https://knowledge.broadcom.com/external/article/57577/how-to-update-description-or-notes-field.html">How to update Description or Notes field via WS API</a>,
+  <a href="https://github.com/klehman-rally/pyral/blob/master/doc/source/overview.rst">pyral overview</a></li>
+<li><code>Description</code> and <code>Notes</code> have a <strong>32KB size limit</strong>; other rich-text
+  fields are capped at 2KB. <a href="https://knowledge.broadcom.com/external/article/57577/how-to-update-description-or-notes-field.html">How to update Description or Notes field via WS
+  API</a></li>
+<li>A KB article warns that WSAPI JSON payload escaping for these fields can
+  fail even when the same text works fine through the UI rich-text editor —
+  worth noting for anyone later writing to Rally, though Sirdar is read-only.
+  <a href="https://knowledge.broadcom.com/external/article/57577/how-to-update-description-or-notes-field.html">How to update Description or Notes field via WS API</a></li>
+<li>I could not verify from primary docs whether <code>Description</code>/<code>Notes</code> are
+  guaranteed well-formed HTML fragments vs. plain text with occasional markup
+  — treat as "HTML-ish rich text, sanitize/strip before handing to the
+  agent." <strong>[unverified]</strong></li>
+</ul>
+<h3 id="query-syntax">Query syntax<a class="headerlink" href="#query-syntax" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Queries are <code>(LHS Operator RHS)</code> expressions, combinable with <code>AND</code>/<code>OR</code>,
+  e.g. <code>(Owner.UserName = "x") AND (State != "Closed")</code>. Nested dotted paths
+  (<code>Owner.UserName</code>) traverse references.
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-web-services-api/query-parameters.html">Query Parameters</a></li>
+<li>Query parameters (from the TechDocs Query Parameters page, loaded
+  directly):</li>
+<li><code>query</code> — the filter expression, URL-encoded, e.g.
+    <code>query=(FormattedID = S40330)</code></li>
+<li><code>fetch</code> — comma-separated attribute list to populate on returned objects,
+    e.g. <code>fetch=FormattedID,Name,Project,Parent</code>. A Broadcom KB "data extract
+    recommendations" article specifically advises <strong>against</strong> <code>fetch=true</code>
+    (fetch everything) for volume/performance reasons — request only the
+    fields you need.
+    <a href="https://knowledge.broadcom.com/external/article/127874/rally-wsapi-data-extract-recommendation.html">WSAPI Data Extract Recommendations</a></li>
+<li><code>order</code> — sort spec, e.g. <code>order=Name desc</code></li>
+<li><code>start</code> — 1-based start index, default 1</li>
+<li><code>pagesize</code> — page size; default reported as 20 in the KB/TechDocs
+    summary, with <strong>a hard cap of 200 per page</strong> repeatedly cited across
+    Broadcom KB and third-party toolkit docs (one summary mentions up to 2000
+    for "v2.x" but the 200 ceiling is the number that recurs in the paging
+    KB article specifically). Treat the safe assumption as <strong>200 max</strong>.
+    <a href="https://knowledge.broadcom.com/external/article/47778/how-to-page-in-ws-api-if-totalresultcoun.html">How to page in Rally WS API if TotalResultCount is above maximum limit of 2000</a>,
+    <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-web-services-api/query-parameters.html">Query Parameters</a></li>
+<li><code>workspace</code> — scope to a workspace ref/ObjectID</li>
+<li><code>project</code> — scope to a project ref/ObjectID</li>
+<li><code>projectScopeUp</code> — include parent projects (default true)</li>
+<li><code>projectScopeDown</code> — include child projects (default true)
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-web-services-api/query-parameters.html">Query Parameters</a></li>
+<li>Response envelope includes <code>TotalResultCount</code>; paging past <code>start=1801</code>
+  region (i.e. beyond ~2000 total results with 200-per-page paging) requires
+  narrowing the query rather than just paging further, per the KB paging
+  article linked above.</li>
+</ul>
+<h3 id="discussion-comment-thread">Discussion (comment thread)<a class="headerlink" href="#discussion-comment-thread" title="Permanent link">&para;</a></h3>
+<ul>
+<li>An Artifact's <code>Discussion</code> attribute is a collection of <code>ConversationPost</code>
+  objects, each queryable/filterable by <code>Artifact</code> ref, with fields including
+  <code>Text</code> (HTML) and <code>CreationDate</code>; posts can be fetched via a
+  <code>conversationpost</code> collection endpoint or through the artifact's
+  <code>Discussion</code> collection ref.
+  <a href="https://knowledge.broadcom.com/external/article/16712/how-to-extract-artifact-discussions-usin.html">How to extract artifact discussions using WSAPI</a>,
+  <a href="https://knowledge.broadcom.com/external/article/57581/query-discussions-and-their-artifacts.html">Query Discussions and their artifacts</a></li>
+<li>I could not directly load a canonical schema page enumerating every
+  <code>ConversationPost</code> field (e.g. whether <code>User</code> on a post exposes the same
+  <code>_refObjectName</code> display-name convenience as <code>Owner</code> elsewhere) — assume
+  yes by WSAPI convention, but <strong>[unverified from primary docs]</strong>.</li>
+<li>This maps naturally to Sirdar's helpdesk-role thread: <code>{At: CreationDate,
+  Author: User._refObjectName, Role: "customer"/"agent" (not exposed by
+  Rally — would need external mapping or default to "unknown"), Text: Text
+  (HTML, needs stripping)}</code>.</li>
+</ul>
+<h3 id="attachments">Attachments<a class="headerlink" href="#attachments" title="Permanent link">&para;</a></h3>
+<ul>
+<li><code>Attachment</code> objects hold metadata (name, description, size, user, content
+  type) and carry a one-to-one reference to a separate <code>AttachmentContent</code>
+  object that holds the actual blob as a <strong>base64-encoded <code>Content</code>
+  field</strong>. This separation (metadata vs. blob object) is repeatedly described
+  across Broadcom KB and the RallyTools export scripts.
+  <a href="https://knowledge.broadcom.com/external/article?articleId=100260">Rally - Attachments: impact of large attachment files</a>,
+  <a href="https://github.com/RallyTools/Rally-Export-Attachments/blob/master/export-workspace-attachments.rb">Rally-Export-Attachments export script</a></li>
+<li>Max attachment size cited is <strong>50MB</strong>, with the usual ~33% base64 size
+  inflation over the wire on top of that.
+  <strong>[unverified from a primary Broadcom docs page — sourced from search-engine
+  synthesis of results, not a page I loaded directly; corroborate against the
+  current TechDocs attachments page before hardcoding a limit]</strong></li>
+<li>Retrieval pattern: get the <code>Attachment</code> (from the artifact's <code>Attachments</code>
+  collection ref), follow its <code>Content</code> ref to the <code>AttachmentContent</code>
+  object, fetch that object with <code>fetch=Content</code>, base64-decode the <code>Content</code>
+  field.</li>
+</ul>
+<h3 id="revisionhistory-audit-trail-read-only">RevisionHistory (audit trail — read-only)<a class="headerlink" href="#revisionhistory-audit-trail-read-only" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Every <code>Artifact</code> has a <code>RevisionHistory</code> attribute pointing to a
+  <code>RevisionHistory</code> object, which has a <code>Revisions</code> collection. Each
+  <code>Revision</code> has <code>Description</code> (auto-generated change summary), <code>RevisionNumber</code>,
+  <code>User</code> (author), and a back-reference to its parent <code>RevisionHistory</code> — but
+  <strong>no</strong> reference from a Revision back to the originating Artifact, so
+  traversal only works artifact → history → revisions, not the reverse.
+  <a href="https://knowledge.broadcom.com/external/article?articleId=57612">Query Revisions in Rally WS API</a></li>
+<li>This is read-only by nature (Rally generates revisions automatically on
+  writes) — fits Sirdar's read-only adapter model well as an optional
+  "history" source, though it's not one of the fields Sirdar's <code>Ticket</code>
+  struct currently models.</li>
+</ul>
+<hr />
+<h2 id="2-authentication">2. Authentication<a class="headerlink" href="#2-authentication" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>API Keys</strong> are the recommended mechanism. Created under <strong>My Settings →
+  Access, API Key → Create</strong>, with a grant type of either "Full Access" or
+  "ALM WSAPI Read-only" — the read-only grant is a good fit for Sirdar's
+  read-only adapter contract. Keys don't expire, obey the creating user's
+  permissions, aren't tied to an additional license, and can be scoped/limited
+  by subscription admins. Only the creator can view the key value after
+  creation.
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/administration/it-administration/how-users-authenticate/rally-authentication-features/api-keys.html">API Keys — Rally TechDocs</a></li>
+<li><strong>Header</strong>: the API key (or a session token from login) is sent as the
+  <code>ZSESSIONID</code> header value on WSAPI requests. This is consistently confirmed
+  across Broadcom KB articles and independent toolkits (including the Go
+  client below).
+  <a href="https://knowledge.broadcom.com/external/article/57528/rally-use-api-key-with-curl.html">Rally: Use API Key with cURL</a>,
+  <a href="https://knowledge.broadcom.com/external/article/11568/rally-wsapi-api-key-and-oauth-client-faq.html">Rally WSAPI: API Key and OAuth Client FAQ</a></li>
+<li><strong>Basic auth</strong>: a Broadcom KB article states basic (username/password)
+  credential auth <strong>has been deprecated in production</strong> in favor of API
+  keys, but remains necessary/available for sandbox environments and
+  on-premises appliances. Toolkits (e.g. the Java REST toolkit) have marked
+  their basic-auth constructors deprecated accordingly.
+  <a href="https://knowledge.broadcom.com/external/article/127054/rally-wsapi-not-authorized-to-perform-a.html">Rally - WSAPI: Not authorized to perform action: Invalid key</a>
+  → Adapter should support API key only; don't build basic-auth as a
+  fallback path for production subscriptions.</li>
+<li>API keys are <strong>not supported</strong> on <code>sandbox.rallydev.com</code> and <strong>not
+  supported on-premises</strong> — those still require basic auth.
+  <a href="https://knowledge.broadcom.com/external/article/11568/rally-wsapi-api-key-and-oauth-client-faq.html">Rally WSAPI: API Key and OAuth Client FAQ</a></li>
+<li><strong>Security tokens</strong> (CSRF-style tokens) matter only for write/mutation
+  requests under basic auth; irrelevant to a read-only, API-key-based
+  adapter. <strong>[stated in KB summaries, not independently re-verified against
+  a loaded primary page — low risk since Sirdar doesn't write]</strong></li>
+<li><strong>SSO</strong>: subscriptions can route login through SSO; a KB article addresses
+  users unexpectedly landing on the native Rally login instead of SSO, which
+  implies SSO is common in enterprise subscriptions, but this affects
+  interactive login, not API-key-based WSAPI calls, which bypass SSO
+  entirely. <a href="https://knowledge.broadcom.com/external/article/202175/rally-users-seeing-rally-login-page-acce.html">Rally: Users seeing Rally login page instead of SSO</a>
+  <strong>[relevance to adapter unverified beyond this inference]</strong></li>
+<li><strong>Rate limiting</strong>: a Broadcom KB article states there's no hard cap on
+  total requests per hour/day, but the service <strong>throttles a user to 12
+  simultaneous (concurrent) requests</strong> — exceeding that causes subsequent
+  requests to slow down rather than being rejected outright.
+  <a href="https://knowledge.broadcom.com/external/article/95713/rally-wsapi-are-there-any-limitations-t.html">Rally - WSAPI: Are there any limitations to the number of API calls?</a>
+  → Adapter should serialize or cap concurrency well under 12 for a given
+  API key/user, and expect slowdown (not necessarily HTTP 429) as the
+  throttle signal — confirm actual HTTP status/behavior empirically since I
+  could not load the article's full body directly to check.
+  <strong>[partially unverified — concurrency number confirmed via KB title/summary,
+  exact throttle response behavior not independently verified]</strong></li>
+</ul>
+<hr />
+<h2 id="3-mcp-server-and-ai-integrations-20252026">3. MCP server and AI integrations (2025–2026)<a class="headerlink" href="#3-mcp-server-and-ai-integrations-20252026" title="Permanent link">&para;</a></h2>
+<p>This is the standout finding: Broadcom has shipped an <strong>official Rally MCP
+server</strong>, which is a different thing from the host-side Go adapter Sirdar
+needs, but changes the "is there prior art" picture significantly.</p>
+<ul>
+<li><strong>Official, Broadcom-built.</strong> Documented at TechDocs under "AI in Rally"
+  and "Enable a Model Context Protocol (MCP) Server."
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/ai.html">AI in Rally</a>,
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/ai/enable-a-model-context-protocol--mcp--server-/access-an-mcp-server.html">Access an MCP Server</a></li>
+<li><strong>General availability announced 2026-03-22</strong> per a third-party coverage
+  post (Custom Agile blog); Broadcom's own TechDocs page for MCP access shows
+  a "Last Updated" stamp near the present date, consistent with active,
+  current documentation rather than a stale/beta page.
+  <a href="https://www.customagile.com/blog/rally-mcp-server-now-generally-available">Rally's MCP Server Is Now Generally Available – Custom Agile</a>
+  <strong>[the exact GA date is sourced from a third-party blog, not a Broadcom
+  press release I loaded directly — treat the date as approximate/unverified]</strong></li>
+<li><strong>Endpoints</strong>: <code>https://mcp.rallydev.com/mcp</code> (North America) and
+  <code>https://mcp-eu.rallydev.com/mcp</code> (EMEA); versioned endpoints also exist
+  per the docs (not enumerated in what I could load).
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/ai/enable-a-model-context-protocol--mcp--server-/access-an-mcp-server.html">Access an MCP Server</a></li>
+<li><strong>Auth</strong>: API key or OAuth client (with callback URL config); requests run
+  as the authenticated user, so permissions are inherited from that
+  user/key — same page.</li>
+<li><strong>Enablement is opt-in per subscription</strong>: a Subscription Admin must open a
+  support ticket with Broadcom to turn it on; it's not a self-service
+  toggle in Rally settings.
+  <a href="https://www.customagile.com/blog/rally-mcp-server-now-generally-available">Rally's MCP Server Is Now Generally Available – Custom Agile</a></li>
+<li><strong>Capability scope</strong>: read/query artifacts (work items, sprint stories,
+  acceptance criteria), create/update stories and defects, and a
+  <code>get-current-rally-user</code> sanity-check command; can switch between
+  workspaces but operates on one workspace at a time. Broadcom is explicit
+  that it covers "the most common workflows," not the full WSAPI surface.
+  <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/ai/enable-a-model-context-protocol--mcp--server-/access-an-mcp-server.html">Access an MCP Server</a>,
+  <a href="https://www.customagile.com/blog/rally-mcp-server-now-generally-available">Rally's MCP Server Is Now Generally Available – Custom Agile</a></li>
+</ul>
+<p><strong>MCP-for-the-agent vs. host-side adapter (Sirdar's actual need):</strong> Rally's
+MCP server is designed to be pointed at directly by an <em>agent's</em> MCP client
+(e.g. wired into Cursor or Claude Code), giving the agent live read/write
+tool-calls into Rally itself — that's a different architecture from Sirdar's
+model, where a Go adapter fetches a ticket <strong>host-side</strong> and hands a static,
+pre-fetched <code>Ticket</code> struct to the agent. Sirdar deliberately doesn't want the
+agent to have live, wide-scoped API access to the tracker; it wants a
+narrow, read-only, host-controlled fetch. So Rally's MCP server is not a
+substitute for a Sirdar adapter — if anything, its existence is evidence
+Broadcom expects WSAPI to remain the durable integration surface (the MCP
+server is very likely built as a thin layer over WSAPI itself, though I found
+no Broadcom statement confirming that <strong>[unverified]</strong>). No other MCP servers
+for Rally (community or generic) turned up in search results beyond this
+official one.</p>
+<hr />
+<h2 id="4-rally-helpdesk-linkage-for-helpdeskref">4. Rally ↔ helpdesk linkage (for <code>HelpdeskRef</code>)<a class="headerlink" href="#4-rally-helpdesk-linkage-for-helpdeskref" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Rally historically shipped/supported connectors, including for <strong>Zendesk</strong>
+  and <strong>ServiceNow</strong>, under the "CA Agile Central Integrations /
+  Connectors" documentation set.
+  <a href="https://docs.ca.com/en-us/ca-agile-central/saas/connectors">CA Agile Central Integrations</a></li>
+<li><code>help.rallydev.com/zendesk</code> redirects to a general Broadcom Rally landing
+  page rather than a live Zendesk-specific doc, suggesting the dedicated
+  Zendesk connector doc may have been retired or folded into general
+  integration docs. <strong>[confirmed only as a redirect target — could not load
+  connector specifics from the destination page]</strong></li>
+<li>Third-party/marketplace connectors are more active in current search
+  results than an official one: <strong>ConnectALL</strong> and <strong>OpsHub</strong> both list
+  Rally↔ServiceNow (and broader ITSM) sync products, and a Broadcom KB
+  article directly answers "is there an integration with ServiceNow?" —
+  confirming ServiceNow integration exists but via connector product(s)
+  rather than a first-party built-in field.
+  <a href="https://www.connectall.com/integration/rally-software/">ConnectALL Rally integration</a>,
+  <a href="https://www.quantumwhisper.com/servicenow-agile-central-rallydev-integration">ServiceNow &amp; Rally Integration Connector</a>,
+  <a href="https://knowledge.broadcom.com/external/article/123105/rally-servicenow-is-there-an-integratio.html">Rally - ServiceNow: Is there an integration?</a></li>
+<li><strong>Mechanism for deriving <code>HelpdeskRef</code></strong>: none of these connectors are
+  documented (in what I could load) as writing to one single guaranteed
+  field. In practice, cross-linking is almost always done via either (a) a
+  <strong>custom field</strong> (<code>c_ZendeskTicketID</code>, <code>c_ServiceNowIncident</code>, etc.,
+  connector- or org-specific) or (b) a <strong>Hyperlink-style field</strong> or a plain
+  URL embedded in <code>Description</code>/<code>Notes</code>/a <code>Tags</code> value pointing at the
+  helpdesk ticket. Rally's <code>c_</code>-prefixed custom-field convention (§1) is the
+  general extension point these connectors would use.
+  <strong>[the specific field name/shape is unverified — it is connector- and
+  org-configuration-dependent, not a fixed WSAPI schema element]</strong></li>
+<li><strong>Recommendation for the adapter</strong>: don't assume a fixed field name.
+  Make <code>HelpdeskRef</code> derivation configurable — e.g. a configured custom-field
+  name to read (<code>c_ZendeskTicketID</code>), or a regex applied to <code>Description</code>/
+  <code>Notes</code>/a specific Tag — since the actual linkage is set up per Rally
+  subscription's connector configuration, not by WSAPI itself.</li>
+</ul>
+<hr />
+<h2 id="5-webhooks-rally-webhooks-api">5. Webhooks (<code>Rally Webhooks API</code>)<a class="headerlink" href="#5-webhooks-rally-webhooks-api" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Base: <code>https://rally1.rallydev.com/apps/pigeon/api/v2</code> (note: a distinct
+  service path — <code>apps/pigeon</code> — from the core WSAPI <code>slm/webservice/v2.0</code>
+  path). <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-webhooks/webhooks-api.html">Webhooks API — TechDocs</a></li>
+<li>Methods: <code>POST /webhook</code> (create), <code>GET /webhook</code> (list, paginated),
+  <code>GET /webhook/{id}</code>, <code>PATCH /webhook/{id}</code> (update), <code>DELETE /webhook/{id}</code>
+  — same page.</li>
+<li>Config object fields: <code>AppName</code>, <code>AppUrl</code>, <code>Name</code>, <code>TargetUrl</code>,
+  <code>ObjectTypes</code> (array — e.g. <code>HierarchicalRequirement</code>, <code>Defect</code>),
+  <code>WebhookFormat</code> (<code>attribute_name</code> seen as an option), and <code>Expressions</code>
+  (filter conditions as <code>AttributeName</code>/<code>Operator</code>/<code>Value</code> triples) — same
+  page.</li>
+<li><strong>Auth</strong>: API key or <code>ZSESSIONID</code> cookie; explicitly <strong>no HTTP Basic</strong>
+  support on the webhooks API; unauthenticated calls get 401 — same page.</li>
+<li>I could not load a page enumerating the actual payload/event schema
+  delivered to <code>TargetUrl</code> (a "Webhooks Payload" TechDocs page exists per
+  search results but wasn't fetched directly) — <strong>[payload shape
+  unverified]</strong>: <a href="https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally/rally-help/reference/rally-webhooks/webhooks-payload.html">Webhooks Payload</a></li>
+<li>Fits Sirdar's "future trigger" note well: webhook → your own receiver →
+  translate to a fetch-by-key call against the adapter, same pattern as
+  other trackers, rather than trusting webhook payload content directly.</li>
+</ul>
+<hr />
+<h2 id="6-existing-clients-prior-art-for-the-adapter">6. Existing clients (prior art for the adapter)<a class="headerlink" href="#6-existing-clients-prior-art-for-the-adapter" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Go</strong>: no first-party Broadcom Go SDK. Community options found:</li>
+<li><a href="https://github.com/Comcast/rally-rest-toolkit">Comcast/rally-rest-toolkit</a> —
+    small Go client; confirmed by reading <code>rallyclient.go</code> directly: auths via
+    <code>ZSESSIONID</code> header, builds URLs as <code>{apiurl}/{queryType}/{objectID}</code>,
+    supports Query/Get/Create/Update/Delete. Notable quirks worth avoiding in
+    a fresh implementation: it uses POST for updates instead of PUT, always
+    forces <code>fetch=true</code> (contrary to Broadcom's own performance guidance —
+    see §1), and swallows HTTP/read errors silently (returns <code>nil</code> even on
+    failure) — don't copy those patterns.</li>
+<li><a href="https://github.com/abourget/rally">abourget/rally</a> — "Golang bindings to
+    the Rally API," not independently inspected beyond the listing.
+    <strong>[unverified — not opened]</strong></li>
+<li><a href="https://github.com/ThomasBS/rally">ThomasBS/rally</a> — Go wrapper,
+    reportedly does not support basic auth per its listing.
+    <strong>[unverified — not opened]</strong></li>
+<li><a href="https://pkg.go.dev/github.com/mcaulfield/github2rally/rally">mcaulfield/github2rally</a> —
+    narrow Go package for querying/creating defects and users, part of a
+    GitHub↔Rally sync tool, not a general client.</li>
+<li>None of these appear actively maintained or canonical enough to depend on
+    as a library; confirms the plan to hand-roll a small stdlib <code>net/http</code>
+    adapter is reasonable and in line with Sirdar's existing adapter pattern.</li>
+<li><strong>Python — <code>pyral</code></strong>: the long-standing reference implementation
+  (RallyTools/RallyRestToolkitForPython, plus an actively-forked
+  <code>klehman-rally/pyral</code>). Notable behavior worth mirroring conceptually:</li>
+<li>Transparently paginates past the 200-row page cap.</li>
+<li>"Chases" reference URLs (e.g. <code>Owner</code>, <code>Project</code>) to resolve
+    human-readable names rather than exposing bare <code>_ref</code>/ObjectID — this
+    matches what Sirdar wants for <code>Assignee</code>/<code>Owner</code> (use <code>_refObjectName</code>
+    directly from the WSAPI response instead of a second round-trip, since
+    WSAPI already returns that convenience field on refs; no need to
+    replicate pyral's extra HTTP chase).</li>
+<li>Strips the <code>c_</code> prefix for custom fields in its Python-facing API,
+    fitting Sirdar's <code>Fields map</code> concept well (store custom fields keyed by
+    their human name, prefix elsewhere).</li>
+<li>Recommends <code>requests-2.32.x</code> or newer — irrelevant to a Go rewrite, but
+    signals nothing exotic about TLS/HTTP requirements.
+  <a href="https://pyral.readthedocs.io/en/latest/overview.html">pyral overview (readthedocs)</a>,
+  <a href="https://github.com/klehman-rally/pyral/blob/master/doc/source/overview.rst">pyral overview.rst (GitHub, klehman-rally fork)</a></li>
+<li><strong>Support status</strong>: per a PyPI project description surfaced in search
+    results, <code>pyral</code> "no longer has active support as of Dec 31, 2025" —
+    worth noting since it's the most commonly cited reference implementation
+    and is now effectively frozen/community-maintained only.
+    <strong>[unverified against the PyPI page directly — sourced from search
+    summary]</strong></li>
+<li><strong>Recommendation</strong>: write the adapter directly against WSAPI with Go's
+  <code>net/http</code> + <code>encoding/json</code>, per Sirdar's existing stdlib-only convention.
+  No community Go client is worth taking as a dependency; the WSAPI surface
+  needed (get-by-query, fetch fields, discussion, attachment content) is
+  small enough to implement directly and matches the read-only, credential-
+  via-env-or-keychain, no-third-party-deps pattern the other adapters follow.</li>
+</ul>
+<hr />
+<h2 id="recommended-adapter-design">Recommended adapter design<a class="headerlink" href="#recommended-adapter-design" title="Permanent link">&para;</a></h2>
+<p><strong>Config keys</strong></p>
+<ul>
+<li><code>base_url</code> (default <code>https://rally1.rallydev.com/slm/webservice/v2.0</code>;
+  overridable per-subscription/region — see §1 EU-host caveat)</li>
+<li><code>api_key_ref</code> — env var or keychain reference resolving to the Rally API
+  key (grant type: ALM WSAPI Read-only, created per §2)</li>
+<li><code>workspace_ref</code> — Workspace <code>_ref</code> or ObjectID to scope all queries to
+  (required; Rally is multi-workspace and unscoped queries are ambiguous/slow)</li>
+<li><code>project_ref</code> — optional Project <code>_ref</code>/ObjectID to further scope</li>
+<li><code>project_scope_down</code> — bool, default true, passed through as
+  <code>projectScopeDown</code></li>
+<li><code>artifact_types</code> — ordered list of WSAPI type collections to try when
+  resolving a bare key (e.g. <code>["defect", "hierarchicalrequirement", "task",
+  "testcase", "defectsuite"]</code>), since FormattedID prefixes aren't a
+  guaranteed/documented mapping (§1) — try in order, or let config map a
+  known prefix (<code>DE</code>, <code>US</code>, <code>TA</code>, <code>TC</code>, <code>DS</code>) straight to a type to avoid
+  multiple round-trips per <code>Get</code></li>
+<li><code>helpdesk_ref_field</code> — name of the custom field (or a small strategy enum:
+  <code>custom_field</code> / <code>tag_regex</code> / <code>description_regex</code>) used to derive
+  <code>HelpdeskRef</code>, since this is connector/org-specific (§4)</li>
+<li><code>max_concurrency</code> — cap well under Rally's 12-simultaneous-request throttle
+  (§2); default something conservative like 4</li>
+</ul>
+<p><strong>Get by FormattedID (tracker role)</strong></p>
+<ol>
+<li>Determine candidate type(s) from config (prefix map or configured
+   ordered list).</li>
+<li>For each candidate type, <code>GET {base_url}/{type}?workspace={workspace_ref}
+   &amp;query=(FormattedID = "{key}")&amp;fetch=Name,Description,Notes,Priority,
+   Severity,State,ScheduleState,Owner,Project,Iteration,Release,Tags,Parent,
+   CreationDate,LastUpdateDate,FormattedID,ObjectID</code> with <code>ZSESSIONID</code>
+   header set to the API key.</li>
+<li>Stop at first non-empty <code>QueryResult.Results</code>.</li>
+<li>Map response to Sirdar's <code>Ticket</code>: <code>Key = FormattedID</code>, <code>Title = Name</code>,
+   <code>Description</code> = HTML-stripped <code>Description</code>, <code>Priority = Priority</code>,
+   <code>Status = State</code> or <code>ScheduleState</code> depending on type, <code>Assignee =
+   Owner._refObjectName</code>, <code>URL</code> = construct from <code>_ref</code> or the app URL
+   pattern (Rally app URLs are of the form
+   <code>https://rally1.rallydev.com/#/detail/{type}/{ObjectID}</code> — <strong>[exact app
+   URL pattern unverified from primary docs; confirm against a live
+   subscription before hardcoding]</strong>), <code>CreatedAt = CreationDate</code>,
+   <code>UpdatedAt = LastUpdateDate</code>, <code>Fields</code> = remaining WSAPI attributes plus
+   any <code>c_</code>-prefixed custom fields (strip the prefix for the map key,
+   per pyral's convention).</li>
+</ol>
+<p><strong>List by filter (tracker role)</strong></p>
+<ul>
+<li>Same query endpoint with a caller-supplied filter translated into WSAPI
+  query syntax (<code>(Owner.UserName = "x") AND (State != "Closed")</code>), paged via
+  <code>start</code>/<code>pagesize</code> (cap <code>pagesize</code> at 200), scoped by <code>workspace</code>/<code>project</code>/
+  <code>projectScopeDown</code>. Explicitly avoid <code>fetch=true</code> per Broadcom's own
+  performance guidance (§1) — always pass an explicit fetch list matching
+  the <code>Ticket</code> struct's needs.</li>
+</ul>
+<p><strong>Thread / attachments (helpdesk role, optional)</strong></p>
+<ul>
+<li>Thread: fetch the artifact's <code>Discussion</code> collection (or query
+  <code>conversationpost?query=(Artifact = "{artifact _ref}")</code>), map each post to
+  <code>{At: CreationDate, Author: User._refObjectName, Role: "unknown" (Rally
+  doesn't distinguish customer/agent — see §1), Text: HTML-stripped Text,
+  AttachmentIDs: nil}</code> (Rally discussion posts don't carry attachments
+  separately from the artifact's own <code>Attachments</code> collection, per what I
+  could verify — <strong>[unverified]</strong>).</li>
+<li>Attachments: fetch the artifact's <code>Attachments</code> collection, for each
+  <code>Attachment</code> follow <code>Content</code> ref to <code>AttachmentContent</code>, <code>GET</code> with
+  <code>fetch=Content,ContentType,Name</code>, base64-decode <code>Content</code>. Enforce a
+  size guard around the ~50MB figure noted in §1 (unverified precisely —
+  confirm/adjust once tested against a real subscription) before decoding
+  into memory.</li>
+</ul>
+<p><strong>HTML handling</strong></p>
+<ul>
+<li><code>Description</code>, <code>Notes</code>, and discussion <code>Text</code> are rich-text/HTML fields
+  (§1). Strip to plain text (or pass through as sanitized HTML, matching
+  whatever convention Sirdar's other helpdesk-capable adapters use) before
+  populating <code>Ticket.Description</code> / thread <code>Text</code> — don't hand raw
+  Rally-authored HTML straight to the coding agent unfiltered.</li>
+</ul>
+<hr />
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Regional WSAPI base URL</strong>: is <code>rally1.rallydev.com</code> universal for WSAPI
+   regardless of subscription region, or do EU/other subscriptions get a
+   distinct WSAPI host (as they apparently do for the MCP server)? Needs
+   checking against an actual non-US subscription or a Broadcom
+   account rep — not resolved from public docs. (§1)</li>
+<li><strong>FormattedID → type mapping</strong>: is there a documented, stable prefix
+   convention (<code>DE</code>→Defect, <code>US</code>→HierarchicalRequirement, <code>TA</code>→Task,
+   <code>TC</code>→TestCase, <code>DS</code>→DefectSuite) guaranteed across all subscriptions, or
+   is it configurable/subscription-specific? If a canonical table exists in
+   Broadcom docs I didn't locate it — worth a follow-up search restricted to
+   <code>techdocs.broadcom.com</code> with a Broadcom account, since some pages appear
+   to sit behind a login/paywall that blocked WebFetch. (§1)</li>
+<li><strong>Exact attachment size ceiling and AttachmentContent fetch limits</strong> —
+   the 50MB figure needs confirming against a current, directly-loaded
+   TechDocs page rather than search synthesis. (§1)</li>
+<li><strong>Concurrency throttle behavior</strong> — does Rally return HTTP 429, or just
+   silently slow down responses, when the 12-simultaneous-request ceiling is
+   exceeded? Matters for the adapter's retry/backoff logic. (§2)</li>
+<li><strong><code>HelpdeskRef</code> derivation</strong> — there's no single guaranteed WSAPI field;
+   confirm with an actual target Rally subscription which connector (if any)
+   is in use and what custom field/pattern it writes, then set
+   <code>helpdesk_ref_field</code> accordingly per deployment. (§4)</li>
+<li><strong>Webhook payload schema</strong> — didn't load
+   <code>rally-help/reference/rally-webhooks/webhooks-payload.html</code> directly;
+   needed before building the future webhook-triggered receiver. (§5)</li>
+<li><strong>MCP server as data-plane, not just agent tool-calls</strong> — worth checking
+   whether Broadcom's MCP server is documented as sitting directly on WSAPI
+   (in which case its tool list is a good sanity-check for "what fields does
+   Broadcom itself consider the important ones") — I found no such
+   confirmation, only inference. (§3)</li>
+<li>Several Broadcom TechDocs pages I attempted returned 404 (e.g. the first
+   WSAPI overview URL under the <code>ca-enterprise-software/valueops/rally/
+   rally-help/integrating-with-rally/...</code> tree) even though the same path
+   worked when reached through a different entry point/redirect — Broadcom's
+   docs site structure appears to be mid-migration or has stale internal
+   links; a next pass should start from the current TechDocs Rally landing
+   page (<code>https://techdocs.broadcom.com/us/en/ca-enterprise-software/valueops/rally.html</code>
+   or equivalent) and crawl subpages from there rather than trusting
+   individual deep links found via search.</li>
+</ol>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,3105 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../config/">
+      
+      
+        <link rel="next" href="../credentials/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Sources - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#adapters" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Sources
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-tracker-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in tracker adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in tracker adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jira" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rally
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-helpdesk-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in helpdesk adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in helpdesk adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zoho-desk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zendesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#help-scout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Help Scout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hubspot-service-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot Service Hub
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helpdeskref-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdeskRef fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-adapter-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External adapter protocol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trackerget-trackerlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tracker.get / tracker.list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskget-helpdeskthreads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdesk.get / helpdesk.threads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskattachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdesk.attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shutdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-file-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The file adapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-private-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a private adapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-tracker-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in tracker adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in tracker adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#jira" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#linear" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Linear
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#azure-devops" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Azure DevOps
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rally" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rally
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#built-in-helpdesk-adapters" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in helpdesk adapters
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Built-in helpdesk adapters">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#zoho-desk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#zendesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#help-scout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Help Scout
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hubspot-service-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot Service Hub
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#helpdeskref-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdeskRef fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#external-adapter-protocol" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External adapter protocol
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#transport" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Transport
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#methods" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Methods
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Methods">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#describe" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        describe
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#trackerget-trackerlist" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        tracker.get / tracker.list
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskget-helpdeskthreads" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdesk.get / helpdesk.threads
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskattachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        helpdesk.attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#shutdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        shutdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-file-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The file adapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#writing-a-private-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Writing a private adapter
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="adapters">Adapters<a class="headerlink" href="#adapters" title="Permanent link">&para;</a></h1>
+<p>Sirdar reads tickets from a tracker (e.g. Jira) and a helpdesk (e.g. Zoho
+Desk) through <em>adapters</em>. Four trackers and three helpdesks ship built into
+the Sirdar binary — Jira, Linear, Azure DevOps, and Rally for trackers; Zoho
+Desk, Zendesk, Freshdesk, Help Scout, Intercom, and HubSpot Service Hub for
+helpdesks — configured directly in
+<code>.sirdar/config.yaml</code>, no separate process required. Anything else talks to
+Sirdar through the external adapter protocol described below: a small
+line-delimited JSON protocol over stdin/stdout, which also stays available
+for the built-in adapters if you'd rather run your own integration against
+them.</p>
+<h2 id="built-in-tracker-adapters">Built-in tracker adapters<a class="headerlink" href="#built-in-tracker-adapters" title="Permanent link">&para;</a></h2>
+<p>Each built-in adapter implements the <code>tracker</code> role; some also implement
+<code>helpdesk</code> where the tracker itself carries (or can be made to carry) the
+customer conversation. Credentials are never literal values in config: use
+<code>env:NAME</code> or <code>keychain:SERVICE</code> references, same as the built-in helpdesk
+adapters below. See <code>docs/config.md</code> for the full key reference.</p>
+<h3 id="jira">Jira<a class="headerlink" href="#jira" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jira</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://acme.atlassian.net</span>
+<span class="w">    </span><span class="nt">deployment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">cloud</span><span class="w">          </span><span class="c1"># cloud | datacenter | auto (default: probes /rest/api/2/serverInfo)</span>
+<span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:JIRA_EMAIL</span>
+<span class="w">    </span><span class="nt">apiToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:JIRA_API_TOKEN</span>
+<span class="w">    </span><span class="nt">projectKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OMNI</span><span class="w">           </span><span class="c1"># optional, scopes List</span>
+<span class="w">    </span><span class="nt">epicLinkField</span><span class="p">:</span><span class="w"> </span><span class="s">""</span><span class="w">          </span><span class="c1"># optional, Data Center only</span>
+</code></pre></div>
+<p>Data Center uses a personal access token instead of email/token:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">jira</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://jira.internal.acme.com</span>
+<span class="w">    </span><span class="nt">deployment</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">datacenter</span>
+<span class="w">    </span><span class="nt">pat</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:JIRA_PAT</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Cloud: create an API token at id.atlassian.com
+(Settings → Security → API tokens) and use it with your account email over
+Basic auth. Data Center (8.14+): create a Personal Access Token under your
+profile's Personal Access Tokens page; it inherits your own permissions, so
+create it under a read-only or restricted account if you don't want the
+adapter to see everything you can. No specific scope picker exists for
+either kind — the token/PAT carries whatever the issuing account can already
+read, so use an account whose permissions match what the adapter should see.</p>
+<p><strong>Get / List.</strong> <code>Get</code> fetches <code>/rest/api/2/issue/{key}</code> (v2 on both Cloud and
+Data Center, so descriptions come back as wiki markup rather than Atlassian
+Document Format JSON). <code>List</code> builds a JQL query from the filter
+(<code>assignee</code>, <code>status</code>, <code>parent</code>) and runs it against <code>/rest/api/2/search</code>.</p>
+<p><strong>Thread and attachments.</strong> An issue is its own helpdesk ticket when its
+project's <code>projectTypeKey</code> is <code>service_desk</code> (Jira Service Management):
+<code>HelpdeskRef</code> is set to the same issue key, and the helpdesk view reads
+<code>/rest/servicedeskapi/request/{key}</code> and its comments, mapping a comment's
+<code>jsdPublic</code> flag to <code>customer</code> (public) vs <code>agent</code> (internal) role.
+Attachments are downloaded from each attachment's <code>content</code> URL with the
+same auth header; inline wiki-markup references (<code>!screenshot.png!</code>,
+<code>[^report.pdf]</code>) in a comment body are matched back to attachment IDs so a
+comment's <code>AttachmentIDs</code> reflects what it actually references.</p>
+<p><strong>Known limitations.</strong>
+- On Jira Data Center, a Personal Access Token can be rejected on the
+  attachment-download URL specifically (it's served by the web layer, not
+  the REST layer) and the request redirected to an SSO login page instead of
+  the file. The adapter refuses to follow a redirect off the Jira host and
+  refuses to write an HTML response to disk; a failure like this is reported
+  as a warning on the download, not a fatal error, but it means some
+  attachments may be missing from the bundle on an SSO-fronted DC instance.
+- <code>HelpdeskRef</code> is only ever the issue's own key (JSM case). No fallback to
+  a custom field or description text is implemented in the adapter itself —
+  see "helpdeskRef fallback" below.</p>
+<h3 id="linear">Linear<a class="headerlink" href="#linear" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">linear</span>
+<span class="w">    </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:LINEAR_API_KEY</span>
+<span class="w">    </span><span class="nt">teamKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">ENG</span><span class="w">                </span><span class="c1"># optional, scopes List to one team</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Create a personal API key under Linear's Settings →
+Security &amp; access → Personal API keys. It's unscoped — it carries whatever
+the creating account can already see in the workspace — so use an account
+with read access only to what the adapter should reach. Sent as the raw key
+value in the <code>Authorization</code> header (no <code>Bearer</code> prefix).</p>
+<p><strong>Get / List.</strong> <code>Get</code> resolves an identifier like <code>ENG-123</code> directly through
+Linear's GraphQL <code>issue(id:)</code> field. <code>List</code> runs the <code>issues(filter:)</code>
+connection, translating <code>assignee</code>, <code>status</code>, and <code>parent</code> into an
+<code>IssueFilter</code>, paginating with <code>first</code>/<code>after</code> beyond a single page.</p>
+<p><strong>Thread and attachments.</strong> Linear has no first-class customer/agent
+distinction on a comment — every comment is authored by a workspace member
+— so the helpdesk view's thread is just the issue's own comments, all
+<code>agent</code> role, useful when a team runs support conversations directly inside
+Linear rather than through a separate helpdesk. Attachments downloads cover
+files Linear itself hosts: entries in <code>issue.attachments</code> pointing at
+<code>uploads.linear.app</code>, plus images embedded in the description and in each
+comment's Markdown body. Attachments pointing at another system (a GitHub
+PR, a Zendesk ticket) are links, not files, and are not downloaded.</p>
+<p><strong>Known limitations.</strong>
+- Linear's API does not expose the full body of a linked external
+  helpdesk conversation (Zendesk, Intercom, Front). When an issue was
+  created from a support conversation via Linear's Customer Requests
+  feature, the adapter can only recover a link to that conversation (see
+  <code>HelpdeskRef</code> below) — the transcript itself has to come from that
+  helpdesk's own adapter, not from Linear.
+- <code>HelpdeskRef</code> is derived from <code>issue.attachments</code>: the first entry whose
+  <code>sourceType</code> is <code>zendesk</code>, <code>intercom</code>, or <code>front</code>, or — when Linear hasn't
+  classified the attachment — the first attachment URL whose host looks like
+  a known helpdesk (Zendesk, Intercom, Front, Zoho Desk, Freshdesk, Help
+  Scout, Helpshift). If none match, <code>HelpdeskRef</code> is left empty.</p>
+<h3 id="azure-devops">Azure DevOps<a class="headerlink" href="#azure-devops" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">azdo</span>
+<span class="w">    </span><span class="nt">orgUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://dev.azure.com/acme</span><span class="w">   </span><span class="c1"># or a Server collection URL</span>
+<span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OmniPlatform</span>
+<span class="w">    </span><span class="nt">pat</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:AZDO_PAT</span>
+<span class="w">    </span><span class="nt">helpdeskLinkDomain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme.service-now.com</span><span class="w">   </span><span class="c1"># optional</span>
+<span class="w">    </span><span class="nt">helpdeskField</span><span class="p">:</span><span class="w"> </span><span class="s">""</span><span class="w">                          </span><span class="c1"># optional, custom field fallback</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Create a Personal Access Token under User settings
+→ Personal access tokens, with the <strong>Work Items (Read)</strong> scope
+(<code>vso.work</code>) — this is the minimum needed for <code>Get</code>, <code>List</code>, comments, and
+attachment reads. Sent as HTTP Basic auth with an empty username:
+<code>Authorization: Basic base64(":" + PAT)</code>.</p>
+<p><strong>Get / List.</strong> <code>Get</code> fetches
+<code>/_apis/wit/workitems/{id}?$expand=all&amp;api-version=7.1</code> — fields, relations,
+and links in one call. <code>List</code> runs a two-step WIQL query: a <code>POST
+.../wiql</code> returning matching work item ids, then <code>POST
+.../workitemsbatch</code> in chunks of up to 200 to pull field values (Azure
+DevOps' own per-call ceiling), with <code>errorPolicy: Omit</code> so one inaccessible
+id doesn't fail the whole batch. A Bug's description prefers <code>System.State</code>
+Description text but falls back to <code>Microsoft.VSTS.TCM.ReproSteps</code> (Bugs use
+ReproSteps in place of Description on their default form).</p>
+<p><strong>Thread and attachments.</strong> Comments come from
+<code>/_apis/wit/workItems/{id}/comments?$expand=renderedText</code>, following
+<code>continuationToken</code> across pages; Azure DevOps has no customer/agent
+distinction on a comment, so every message maps to <code>agent</code> role. Attachments
+are <code>AttachedFile</code> relations on the work item, downloaded from
+<code>/_apis/wit/attachments/{guid}?fileName=...&amp;download=true</code> with the same PAT.</p>
+<p><strong>Known limitations.</strong>
+- Azure DevOps' API does not associate an attachment with the specific
+  comment it was added alongside — attachments are work-item-level, not
+  comment-level. The adapter exposes all of a work item's attachments as a
+  flat list; it cannot tell you which comment (if any) a given attachment
+  belongs to.
+- <code>HelpdeskRef</code> is derived two ways, in order: a <code>Hyperlink</code> relation whose
+  host ends in <code>helpdeskLinkDomain</code> (when configured), else the value of the
+  <code>helpdeskField</code> custom field (when configured). Leave both unset and
+  <code>HelpdeskRef</code> stays empty.</p>
+<h3 id="rally">Rally<a class="headerlink" href="#rally" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">rally</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://rally1.rallydev.com</span><span class="w">   </span><span class="c1"># default; override for a regional subscription</span>
+<span class="w">    </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:RALLY_API_KEY</span>
+<span class="w">    </span><span class="nt">workspace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/workspace/12345678901</span>
+<span class="w">    </span><span class="nt">project</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">/project/12345678902</span><span class="w">          </span><span class="c1"># optional</span>
+<span class="w">    </span><span class="nt">types</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">Defect</span><span class="p p-Indicator">,</span><span class="w"> </span><span class="nv">HierarchicalRequirement</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">helpdeskField</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">c_ZendeskTicketID</span><span class="w">        </span><span class="c1"># optional</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Create an API key under My Settings → Access → API
+Keys, with grant type <strong>ALM WSAPI Read-only</strong> — Rally's own read-only grant,
+the right fit for a harness that never writes back. Sent as the
+<code>ZSESSIONID</code> header on every WSAPI request. API keys aren't supported on
+<code>sandbox.rallydev.com</code> or on-premises Rally; those still need basic auth,
+which this adapter does not implement.</p>
+<p><strong>Get / List.</strong> Rally has no single "artifact" endpoint — Defect, Story
+(<code>HierarchicalRequirement</code>), Task, and the rest are separate WSAPI
+collections. <code>Get</code> tries FormattedID-prefix heuristics first (<code>DE</code> →
+Defect, <code>US</code>/<code>S</code> → HierarchicalRequirement, and so on), then falls through
+the configured <code>types</code> list in order, querying each collection by
+<code>FormattedID</code> until one hits. <code>List</code> sweeps the same configured <code>types</code> and
+merges results, honoring <code>workspace</code>/<code>project</code> scoping and Rally's 200-row
+page cap.</p>
+<p><strong>Thread and attachments.</strong> The thread comes from the artifact's
+<code>Discussion</code> (<code>ConversationPost</code> objects); Rally does not distinguish
+customer from agent authorship, so every message maps to <code>agent</code> role, same
+as Azure DevOps. Attachments are fetched via the artifact's <code>Attachments</code>
+collection, following each entry's <code>Content</code> reference to an
+<code>AttachmentContent</code> object and base64-decoding its <code>Content</code> field.</p>
+<p><strong>Known limitations.</strong>
+- Trying multiple artifact types in order to resolve one FormattedID means
+  <code>Get</code> on a key Rally doesn't have costs one WSAPI query per candidate type
+  until one matches (or all fail) — keep <code>types</code> short and ordered by how
+  common each type is in your workspace to minimize this.
+- <code>HelpdeskRef</code> comes only from the configured <code>helpdeskField</code> custom field
+  (typically <code>c_</code>-prefixed). Rally has no native helpdesk linkage — every
+  Zendesk/ServiceNow connector on the market writes to a custom field or a
+  free-text location of its own choosing, so there's no field name the
+  adapter can assume without configuration.
+- Rally throttles a user to 12 concurrent requests; sustained excess slows
+  responses rather than returning a clean error, so a large <code>List</code> sweep
+  across several <code>types</code> can feel slow under load rather than failing
+  outright.</p>
+<h2 id="built-in-helpdesk-adapters">Built-in helpdesk adapters<a class="headerlink" href="#built-in-helpdesk-adapters" title="Permanent link">&para;</a></h2>
+<p>Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom and HubSpot Service Hub
+implement the <code>helpdesk</code> role only — <code>Get</code>, <code>Threads</code>, <code>Attachments</code>, no
+<code>List</code> — and are compiled into Sirdar the same way the four trackers above
+are, no separate process required.
+Credentials are <code>env:NAME</code> or <code>keychain:SERVICE</code> references, same as
+everywhere else in Sirdar; see <code>docs/config.md</code> for the full key reference.</p>
+<h3 id="zoho-desk">Zoho Desk<a class="headerlink" href="#zoho-desk" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zohodesk</span>
+<span class="w">    </span><span class="nt">orgId</span><span class="p">:</span><span class="w"> </span><span class="s">"60044805777"</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://desk.zoho.com</span>
+<span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-client-id</span>
+<span class="w">      </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-client-secret</span>
+<span class="w">      </span><span class="nt">refreshToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-refresh-token</span>
+</code></pre></div>
+<p>See <code>docs/config.md</code>'s "Zoho Desk OAuth" section for the refresh-token
+grant, the <code>token:</code> alternative for a run you're watching rather than
+scheduling unattended, and the per-data-centre <code>baseUrl</code>/<code>accountsUrl</code>
+table.</p>
+<p><strong>Getting credentials.</strong> Register a Self Client at Zoho's <a href="https://api-console.zoho.com/">API
+console</a> (or the regional equivalent for
+<code>.in</code>/<code>.eu</code>/<code>.com.au</code>), grant it read scopes covering tickets, conversations
+and attachments, and exchange the resulting grant token once for the
+refresh token <code>auth:</code> uses — Sirdar mints its own access tokens from there,
+retrying once with a freshly minted one whenever Desk answers 401.</p>
+<p><strong>Get.</strong> Fetches <code>/api/v1/tickets/{id}</code>; <code>Fields</code> carries <code>departmentId</code>,
+<code>ticketNumber</code>, <code>email</code> and <code>phone</code> when Desk returns them.</p>
+<p><strong>Threads and attachments.</strong> <code>Threads</code> pages <code>/api/v1/tickets/{id}/conversations</code>
+and resolves each <code>thread</code>-type entry's detail (<code>plainText</code>, falling back to
+<code>summary</code> then <code>content</code>), while <code>comment</code>-type entries map directly; role
+comes from the entry's <code>direction</code> (thread: <code>in</code> is customer) or
+<code>commenterType</code> (comment: <code>CONTACT</code>/<code>END_USER</code> is customer), and a private
+comment's author gets the same <code>(internal)</code> suffix the other adapters use.
+<code>Attachments</code> downloads both listed attachments and inline <code>&lt;img&gt;</code>
+references matched out of the HTML content.</p>
+<p><strong>Known limitations.</strong>
+- Attachment <code>href</code>/<code>src</code> values are resolved against <code>baseUrl</code> when
+  relative, but an absolute <code>http(s)://</code> one is downloaded as-is with no
+  host check — unlike Zendesk and Freshdesk below, this adapter trusts
+  whatever host a Desk API response names.
+- <code>doctor</code>'s probe looks up ticket id <code>0</code>, which cannot exist: the 404 Desk
+  returns is treated as proof the token and the transport both work, since
+  there's no cheaper authenticated endpoint to call.</p>
+<h3 id="zendesk">Zendesk<a class="headerlink" href="#zendesk" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zendesk</span>
+<span class="w">    </span><span class="nt">subdomain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme</span><span class="w">                        </span><span class="c1"># acme.zendesk.com</span>
+<span class="w">    </span><span class="nt">email</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_EMAIL</span>
+<span class="w">    </span><span class="nt">apiToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_API_TOKEN</span>
+</code></pre></div>
+<p>An OAuth bearer token works instead of basic auth — set <code>oauthToken</code> and
+drop <code>email</code>/<code>apiToken</code>, never both:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zendesk</span>
+<span class="w">    </span><span class="nt">subdomain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme</span>
+<span class="w">    </span><span class="nt">oauthToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_OAUTH_TOKEN</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Basic auth: enable token access under Admin
+Center → Apps and integrations → APIs → Zendesk API, then generate an API
+token from an agent or admin account; it's sent as <code>{email}/token</code> with the
+token as the password, never the account's own login password. OAuth:
+register an app under the same API settings and mint a bearer token through
+its own flow; either way the token carries whatever the issuing account can
+already see, so use one scoped to what the adapter should read.</p>
+<p><strong>Get.</strong> Fetches <code>/api/v2/tickets/{id}.json</code> with <code>users</code> and
+<code>organizations</code> side-loaded; <code>URL</code> is built from the configured subdomain,
+not from anything the API returns.</p>
+<p><strong>Threads and attachments.</strong> <code>Threads</code> fetches the ticket's <code>requester_id</code>
+then pages <code>/api/v2/tickets/{id}/comments.json</code>; role is customer when a
+comment's author is the requester or the side-loaded author's Zendesk role
+is <code>end-user</code>, else agent, and a non-public comment's author gets an
+<code>(internal)</code> suffix. Text prefers <code>plain_body</code>, falling back to converting
+<code>html_body</code> to Markdown. <code>Attachments</code> downloads both <code>attachments[]</code>
+entries and inline <code>&lt;img&gt;</code> references out of <code>html_body</code>; a host outside
+the configured Zendesk instance, <code>*.zendesk.com</code>, or <code>*.zdusercontent.com</code>
+(Zendesk's attachment CDN) is refused, and the client's Authorization
+header is only ever sent to the configured instance itself — the CDN hosts
+serve pre-signed URLs that need no credential and shouldn't get one.</p>
+<p><strong>Known limitations.</strong>
+- <code>Threads</code> makes two calls per ticket (the ticket itself, for
+  <code>requester_id</code>, then the comments page) rather than one — Zendesk's API
+  doesn't side-load the requester onto the comments endpoint.
+- A 429 is retried once after honouring <code>Retry-After</code> up to 30 seconds;
+  longer or missing values are reported as rate-limited rather than waited
+  out, so a very throttled account does not hang a run.</p>
+<h3 id="freshdesk">Freshdesk<a class="headerlink" href="#freshdesk" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">freshdesk</span>
+<span class="w">    </span><span class="nt">domain</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">acme.freshdesk.com</span>
+<span class="w">    </span><span class="nt">apiKey</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:FRESHDESK_API_KEY</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Copy the account API key from the agent's Profile
+Settings page in the Freshdesk UI. It's sent as HTTP Basic auth — the key
+as the username, the literal string <code>X</code> as the password — Freshdesk's only
+documented auth mode; there's no separate OAuth path and no scope picker,
+so the key carries whatever the owning agent account can already see.</p>
+<p><strong>Get.</strong> Fetches <code>/api/v2/tickets/{id}</code> with <code>requester</code>, <code>company</code> and
+<code>stats</code> side-loaded; numeric <code>status</code>/<code>priority</code>/<code>source</code> fields are mapped
+to names, with an undocumented value falling back to <code>status-&lt;n&gt;</code> /
+<code>priority-&lt;n&gt;</code> / <code>source-&lt;n&gt;</code> rather than going blank.</p>
+<p><strong>Threads and attachments.</strong> Freshdesk has no separate "first message"
+endpoint, so <code>Threads</code> synthesises one from the ticket's own <code>description</code>
+(role: customer) and appends the ticket's <code>conversations</code> (paginated,
+<code>incoming</code> marks customer vs. agent, <code>private</code> marks an internal note with
+an <code>(internal)</code> author suffix); an agent id on a message is resolved to a
+display name through a per-client cache, since the same agent typically
+appears on several messages. <code>Attachments</code> downloads both the ticket-level
+and per-conversation <code>attachments[]</code> entries; the API key is sent only to
+the configured account domain, with Freshdesk's other first-party hosts
+(its attachment CDN) trusted to download from but never given the key,
+since those URLs are pre-signed.</p>
+<p><strong>Known limitations.</strong>
+- <code>Threads</code>' pagination is capped at 100 pages of conversations; a ticket
+  past that (a genuinely pathological thread) is truncated with a run
+  warning rather than swept indefinitely.
+- Freshdesk's numeric <code>source</code> (channel) enum is only reliably documented
+  for a handful of values (email, portal, phone, chat, feedback widget,
+  outbound email); anything else maps to <code>source-&lt;n&gt;</code> instead of a guessed
+  name, same treatment as an undocumented <code>status</code>.
+- Attachment MIME comes from the API's declared <code>content_type</code>; downloads
+  don't sniff the response's own <code>Content-Type</code>.</p>
+<h3 id="help-scout">Help Scout<a class="headerlink" href="#help-scout" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">helpscout</span>
+<span class="w">    </span><span class="nt">clientId</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:helpscout-client-id</span>
+<span class="w">    </span><span class="nt">clientSecret</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:helpscout-client-secret</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Help Scout's Mailbox API 2.0 is OAuth2 only — there
+is no API-key mode. Create an app under Your Profile → My Apps with the
+Client Credentials flow, tied to an active invited user on the account, and
+keep the client id/secret pair. Sirdar mints its own access tokens against
+<code>https://api.helpscout.net/v2/oauth2/token</code>, caches each until it expires,
+and mints again when a call comes back 401 anyway — a token revoked at the
+Help Scout console fails long before the expiry it was issued with.</p>
+<p><strong>Get.</strong> Fetches <code>GET /v2/conversations/{id}?embed=threads</code>; <code>Fields</code>
+carries <code>mailboxId</code>, <code>tags</code>, <code>number</code>, <code>state</code>, <code>assignee</code> and
+<code>customerEmail</code>. <code>Priority</code> is left empty: Help Scout has no priority field,
+leaning on status and tags instead, and a guess made from a tag would read
+like data the API gave. The URL is built from the id the call was made with,
+<code>https://secure.helpscout.net/conversation/{id}</code>.</p>
+<p><strong>Threads and attachments.</strong> Help Scout's thread <code>type</code> answers both of
+Sirdar's questions on its own, which no other vendor's model does:
+<code>customer</code> is the person who wrote in, <code>message</code>/<code>reply</code> a published staff
+reply, <code>note</code> a staff-only note (author suffixed <code>(internal)</code>), <code>lineitem</code>
+a state change with no body (role <code>system</code>). Anything else — <code>chat</code>,
+<code>beaconchat</code>, <code>phone</code>, <code>forwardchild</code>, <code>forwardparent</code> — falls back to
+<code>createdBy.type</code>. Bodies are HTML and go through <code>htmltext</code>. Draft threads
+are left out: an unsent reply is not part of the conversation that happened.
+The single-conversation <code>?embed=threads</code> response carries no pagination link
+of its own, so a full page (the same size Help Scout uses for the dedicated
+thread-list endpoint) is the signal that more threads might exist; the rest
+is fetched from <code>GET /v2/conversations/{id}/threads?page=N</code>, following that
+endpoint's own <code>_links.next</code> and <code>page.totalPages</code>, each page checked against
+<code>api.helpscout.net</code> before it is fetched.
+<code>Attachments</code> reads each thread's <code>_embedded.attachments</code> and fetches the
+bytes from <code>/v2/conversations/{id}/attachments/{attachmentId}/data</code>, which
+returns them base64-encoded inside JSON.</p>
+<p><strong>Known limitations.</strong>
+- Everything, attachment bytes included, comes from <code>api.helpscout.net</code>, so
+  this adapter has no fetch-only CDN tier: the one trusted host is the one
+  that gets the credential, and any other host named by a response — an
+  attachment's <code>_links.data.href</code>, a <code>next</code> page link — is refused with a
+  warning.
+- Thread pagination is capped at 100 pages; a conversation past that is
+  truncated with a run warning rather than swept indefinitely.
+- Help Scout's rate-limit tiers are not published as numbers; a 429 is
+  retried once after honouring <code>Retry-After</code> (or <code>X-RateLimit-Retry-After</code>)
+  up to 30 seconds, and reported as rate-limited otherwise.</p>
+<h3 id="intercom">Intercom<a class="headerlink" href="#intercom" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">intercom</span>
+<span class="w">    </span><span class="nt">accessToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:INTERCOM_ACCESS_TOKEN</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Mint a workspace access token in Intercom's
+Developer Hub (Your apps → Authentication). It carries whatever scopes the
+app was granted, so scope it to reading conversations and contacts. Requests
+are sent to <code>https://api.intercom.io</code> with <code>Intercom-Version: 2.11</code> pinned,
+so a workspace that moves its default version does not silently reshape the
+payloads this adapter decodes.</p>
+<p><strong>Get.</strong> Fetches <code>GET /conversations/{id}?display_as=plaintext</code>. <code>Subject</code>
+is the source message's <code>subject</code> where there is one (an email-originated
+conversation), then the conversation <code>title</code>, then the first line of the
+opening message — which is what the Intercom inbox itself shows for a chat.
+<code>Status</code> is <code>state</code>, <code>Priority</code> is <code>priority</code>. The contact is resolved
+through <code>GET /contacts/{id}</code> (a conversation carries only ids) with a
+per-client cache, and the contact's first company becomes <code>Customer</code>. The
+web URL needs the workspace's app id, which only <code>GET /me</code> carries; it is
+read once and cached, and a workspace that will not give one leaves the URL
+empty with a warning rather than a wrong link.</p>
+<p><strong>Threads and attachments.</strong> The <code>source</code> message comes first, then each
+entry in <code>conversation_parts</code>. Roles come from <code>author.type</code>: <code>user</code> and
+<code>lead</code> are the customer, <code>admin</code> and <code>team</code> are staff, <code>bot</code> is <code>system</code>; a
+part whose <code>part_type</code> is <code>note</code> is admin-to-admin and gets the
+<code>(internal)</code> author suffix. The source message and every part are held to
+the same filter: neither text nor an attachment means it is left out rather
+than filling the thread with an empty entry — Intercom emits a body-less
+part for every assignment, close and reopen, and a source message can
+likewise carry an empty <code>body</code>. <code>Attachments</code> downloads
+the source message's and each part's <code>attachments[]</code>; the access token goes
+only to <code>api.intercom.io</code>, while <code>*.intercom.io</code>, <code>*.intercomcdn.com</code>,
+<code>*.intercomassets.com</code> and the numbered <code>intercom-attachments-N.com</code> family
+are trusted to download from and never given the credential, since those
+URLs are pre-signed.</p>
+<p><strong>Known limitations.</strong>
+- Only the US host is supported. An EU or AU data-residency workspace would
+  need <code>api.eu.intercom.io</code>/<code>api.au.intercom.io</code>; calls to the US host are
+  proxied by Intercom, which works but is not what Intercom recommends.
+- Conversation parts are whatever the single <code>GET /conversations/{id}</code> call
+  returns — Intercom caps that at 500 and offers no parts-pagination
+  endpoint. When the payload's <code>total_count</code> exceeds what it sent, the run
+  gets a warning naming both numbers rather than a thread that quietly
+  stops.
+- Attachment URLs are pre-signed and short-lived (roughly half an hour per a
+  community thread, not Intercom's own reference), so a bundle assembled
+  long after the conversation was fetched can find them expired; the failure
+  is per file, not fatal.</p>
+<h3 id="hubspot-service-hub">HubSpot Service Hub<a class="headerlink" href="#hubspot-service-hub" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">hubspot</span>
+<span class="w">    </span><span class="nt">accessToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:HUBSPOT_PRIVATE_APP_TOKEN</span>
+</code></pre></div>
+<p><strong>Getting credentials.</strong> Create a private app under Settings → Integrations
+→ Private Apps and copy its access token (<code>pat-na1-…</code>), shown only once. It
+needs read scopes for tickets, contacts, companies, conversations and files.
+HubSpot retired API keys in November 2022, so this is the only static
+credential left.</p>
+<p><strong>Get.</strong> Fetches <code>GET /crm/v3/objects/tickets/{id}</code> naming the properties it
+wants (<code>subject</code>, <code>content</code>, <code>hs_pipeline_stage</code>, <code>hs_ticket_priority</code>,
+<code>createdate</code>, <code>hs_lastmodifieddate</code>, <code>hubspot_owner_id</code>) and the
+associations it needs (<code>contacts</code>, <code>companies</code>, <code>conversations</code>) — HubSpot
+returns only what a request names. <code>Status</code> is the pipeline stage id, which
+is what the API gives; the stage's label lives on the pipeline object and is
+not fetched. The contact and company names are resolved through their own
+object endpoints, cached per client. The URL is
+<code>https://app.hubspot.com/contacts/{portalId}/ticket/{id}</code>, with the portal
+id read once from <code>GET /account-info/v3/details</code>.</p>
+<p><strong>Threads and attachments.</strong> A HubSpot ticket does not carry its
+conversation inline: the ticket's own <code>content</code> becomes the first message,
+attributed to the customer only when the ticket has a contact association
+to name — a ticket created without one is staff content, not a customer's
+words, so it maps to <code>agent</code> instead. Everything after it comes
+from the associated Conversations-inbox thread, through
+<code>GET /conversations/v3/conversations/threads/{threadId}/messages</code> (paged by
+<code>paging.next.after</code>, capped at 100 pages). A message's <code>type</code> is the
+public/private split — <code>MESSAGE</code> is customer-facing, <code>COMMENT</code> is the
+internal note that never reaches the visitor and gets the <code>(internal)</code>
+suffix — and the role comes from the sender's <code>actorId</code> prefix, since
+HubSpot has no author-type field: <code>V-</code> visitor and <code>E-</code> email address are
+the customer, <code>A-</code> is an agent, <code>S-</code>/<code>I-</code> are system and integration.
+<code>Attachments</code> resolves each message attachment's <code>fileId</code> through
+<code>GET /files/v3/files/{fileId}/signed-url</code> and downloads from the URL that
+returns; the access token goes only to <code>api.hubapi.com</code>, and HubSpot's file
+hosts (<code>*.hubspotusercontent*.net</code>, <code>*.hubspot.com</code>) are trusted to download
+from without it, since the signed URL carries its own signature.</p>
+<p><strong>Known limitations.</strong>
+- The ticket→conversation association is the weakest-verified part of
+  HubSpot's support model: it is corroborated by a community thread rather
+  than a primary reference page (see
+  <code>docs/research/adapters/helpdesks.md</code>). This adapter is therefore
+  defensive about it — the association block is matched on a substring, so
+  <code>conversations</code>, <code>conversation</code> and a prefixed variant all resolve — and a
+  ticket with no readable conversation association yields the ticket's
+  <code>content</code> plus the warning <code>hubspot: ticket has no associated
+  conversation</code>, never an error.
+- The <code>actorId</code> prefix table is likewise documented in a guide rather than a
+  schema; an unrecognised prefix is treated as staff, which is the safer
+  default, since a message wrongly attributed to the customer would read as
+  the customer's own words.
+- Attachment MIME type is left empty: the message attachment entry carries
+  only a file id, and the signed-url response gives a name and an extension
+  rather than a content type.
+- An <code>L-</code> prefix the source page associated with "customer agent" is not
+  mapped, on the grounds that guessing wrong here is worse than the default.</p>
+<h2 id="helpdeskref-fallback">helpdeskRef fallback<a class="headerlink" href="#helpdeskref-fallback" title="Permanent link">&para;</a></h2>
+<p>None of the four adapters above guess a helpdesk reference from free text —
+each only reports <code>HelpdeskRef</code> when the tracker's own data model gives an
+unambiguous answer (Jira JSM, Linear's Customer Request attachments, an
+Azure DevOps Hyperlink/custom field, a Rally custom field). For a workspace
+where the link only exists as a pasted URL or ticket number in the
+description, the wiring layer applies a generic regex fallback, configured
+per workspace:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">helpdeskRef</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">pattern</span><span class="p">:</span><span class="w"> </span><span class="s">'Zoho</span><span class="nv"> </span><span class="s">Ticket</span><span class="nv"> </span><span class="s">URL:\s*(\S+)'</span>
+<span class="w">      </span><span class="nt">idPattern</span><span class="p">:</span><span class="w"> </span><span class="s">'(\d+)$'</span>
+</code></pre></div>
+<p><code>pattern</code> matches against the ticket description and its one capture group
+is the reference; <code>idPattern</code>, applied to that capture, extracts the id
+passed to <code>helpdesk.get</code>/<code>helpdesk.threads</code>. Both compile at config load and
+both take exactly one capture group. This runs after an adapter's own native
+<code>HelpdeskRef</code>, only filling in when the adapter left it empty — it replaces
+what used to be a hardcoded Zoho-URL rule with something any workspace can
+point at its own helpdesk. See <code>docs/config.md</code> for the full rules.</p>
+<h2 id="external-adapter-protocol">External adapter protocol<a class="headerlink" href="#external-adapter-protocol" title="Permanent link">&para;</a></h2>
+<p>Adapters here are separate processes that speak a small line-delimited JSON
+protocol over stdin/stdout. Sirdar spawns the adapter, sends it requests,
+and reads its responses; the adapter can be written in any language and can
+hold whatever credentials or vendor-specific logic it needs, none of which
+touches Sirdar's process or its Go types.</p>
+<p>This keeps vendor integrations, and any credentials they need, out of
+Sirdar's core and out of this repository. An adapter for a proprietary
+helpdesk can live in a private repo and never be upstreamed.</p>
+<p><code>internal/source/plugin</code> implements the Sirdar-side client (<code>Start</code>,
+<code>Client</code>) that speaks this protocol against a spawned adapter process.
+<code>examples/adapters/file</code> is a reference adapter, used by the client's own
+tests and by <code>sirdar --dry-run</code>, that serves the protocol from a static
+JSON fixture instead of a real API.</p>
+<h2 id="transport">Transport<a class="headerlink" href="#transport" title="Permanent link">&para;</a></h2>
+<p>The adapter is launched as a subprocess. Its stdin carries one JSON
+<strong>request</strong> object per line; its stdout carries one JSON <strong>response</strong>
+object per line, in reply to each request, matched by <code>id</code>. Anything the
+adapter writes to stderr is passed through to Sirdar's own stderr for
+diagnostics and is never parsed — an adapter can log freely there.</p>
+<p>A request:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"method"</span><span class="p">:</span><span class="w"> </span><span class="s2">"tracker.get"</span><span class="p">,</span><span class="w"> </span><span class="nt">"params"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OMNI-1"</span><span class="p">}}</span>
+</code></pre></div>
+<p>A response, on success:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OMNI-1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Export fails"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+</code></pre></div>
+<p>or, on failure:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"not_found"</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"tracker ticket not found: OMNI-1"</span><span class="p">}}</span>
+</code></pre></div>
+<p><code>result</code> and <code>error</code> are mutually exclusive. <code>id</code> echoes the request's
+<code>id</code>; adapter output that doesn't parse as JSON, or whose <code>id</code> doesn't
+match the request just sent, is skipped rather than treated as an error —
+this lets an adapter emit occasional stray lines (e.g. a startup banner)
+without breaking the exchange, though adapters should prefer stderr for
+anything that isn't a response.</p>
+<p>Requests are sent one at a time and each is answered before the next is
+sent, so an adapter does not need to handle concurrent requests or
+out-of-order responses.</p>
+<h2 id="methods">Methods<a class="headerlink" href="#methods" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>method</th>
+<th>params</th>
+<th>result</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>describe</code></td>
+<td>none</td>
+<td><code>{"name","roles","version"}</code></td>
+</tr>
+<tr>
+<td><code>tracker.get</code></td>
+<td><code>{"key"}</code></td>
+<td>a <code>ticket.TrackerTicket</code></td>
+</tr>
+<tr>
+<td><code>tracker.list</code></td>
+<td><code>{"assignee","status","parent","limit"}</code> (any may be absent)</td>
+<td><code>[]ticket.TrackerTicket</code></td>
+</tr>
+<tr>
+<td><code>helpdesk.get</code></td>
+<td><code>{"id"}</code></td>
+<td>a <code>ticket.HelpdeskTicket</code></td>
+</tr>
+<tr>
+<td><code>helpdesk.threads</code></td>
+<td><code>{"id"}</code></td>
+<td>a <code>ticket.Thread</code> (<code>[]ticket.Message</code>)</td>
+</tr>
+<tr>
+<td><code>helpdesk.attachments</code></td>
+<td><code>{"id","dir"}</code></td>
+<td><code>[]ticket.Attachment</code></td>
+</tr>
+<tr>
+<td><code>shutdown</code></td>
+<td>none</td>
+<td><code>null</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>tracker.list</code>'s <code>assignee</code> is matched against the same form the adapter puts in each
+returned ticket's <code>Assignee</code> field. If that field carries display names, an email address
+matches nothing — and an adapter that answers such a filter with an empty list is
+indistinguishable, to the operator, from having no open tickets. An adapter should either
+resolve the value it was given to the form it stores, or reject an <code>assignee</code> it cannot
+resolve with an <code>invalid_request</code> error. Returning <code>[]</code> for an unresolvable filter is the one
+answer it must not give.</p>
+<p>Ticket types are defined in <code>internal/ticket</code>; their JSON field names are
+the Go field names verbatim (<code>Key</code>, <code>Title</code>, <code>HelpdeskRef</code>, and so on —
+capitalized, no renaming). An adapter that fulfils only one role need not
+implement the other role's methods at all; Sirdar checks <code>describe</code>'s
+<code>roles</code> before calling them and never sends a method the adapter didn't
+advertise.</p>
+<h3 id="describe"><code>describe</code><a class="headerlink" href="#describe" title="Permanent link">&para;</a></h3>
+<p>Returns the adapter's identity and capabilities. <code>roles</code> is a subset of
+<code>["tracker", "helpdesk"]</code>; an adapter may support one or both. Sirdar
+calls <code>describe</code> once, lazily, on first use, and caches the result — an
+adapter is not asked to <code>describe</code> itself more than once per process.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"file"</span><span class="p">,</span><span class="w"> </span><span class="nt">"roles"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"tracker"</span><span class="p">,</span><span class="w"> </span><span class="s2">"helpdesk"</span><span class="p">],</span><span class="w"> </span><span class="nt">"version"</span><span class="p">:</span><span class="w"> </span><span class="s2">"1"</span><span class="p">}}</span>
+</code></pre></div>
+<h3 id="trackerget-trackerlist"><code>tracker.get</code> / <code>tracker.list</code><a class="headerlink" href="#trackerget-trackerlist" title="Permanent link">&para;</a></h3>
+<p><code>tracker.get</code> fetches one ticket by key; <code>tracker.list</code> fetches many,
+filtered by <code>assignee</code>, <code>status</code>, <code>parent</code> (all optional, all substring-or-
+equality is the adapter's choice) and capped at <code>limit</code> (0 or absent =
+adapter's own default/no cap). An adapter may choose to ignore filters it
+doesn't support rather than error — the reference file adapter ignores
+all of them and always returns its full fixture.</p>
+<h3 id="helpdeskget-helpdeskthreads"><code>helpdesk.get</code> / <code>helpdesk.threads</code><a class="headerlink" href="#helpdeskget-helpdeskthreads" title="Permanent link">&para;</a></h3>
+<p>Fetch the helpdesk ticket record and its conversation thread,
+respectively, both keyed by the helpdesk ticket's own id (not the tracker
+key — Sirdar resolves <code>TrackerTicket.HelpdeskRef</code>, or falls back to the
+tracker key itself, before calling these).</p>
+<h3 id="helpdeskattachments"><code>helpdesk.attachments</code><a class="headerlink" href="#helpdeskattachments" title="Permanent link">&para;</a></h3>
+<p>Downloads every attachment referenced by the ticket's thread into <code>dir</code>
+(an absolute path; the adapter must create it if missing) and returns
+their metadata. Each file is written as <code>&lt;n&gt;-&lt;name&gt;</code>, where <code>n</code> is the
+attachment's 1-based position, to avoid collisions between attachments
+that share a filename. The returned <code>Attachment.Path</code> is relative to the
+<em>bundle</em> directory — <code>dir</code>'s parent, i.e. the ticket's working directory —
+not to <code>dir</code> itself:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"555"</span><span class="p">,</span><span class="w"> </span><span class="nt">"dir"</span><span class="p">:</span><span class="w"> </span><span class="s2">"/abs/bundle/attachments"</span><span class="p">}</span>
+</code></pre></div>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span><span class="w"> </span><span class="nt">"result"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span>
+<span class="w">  </span><span class="p">{</span><span class="nt">"ID"</span><span class="p">:</span><span class="w"> </span><span class="s2">"a1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"shot.png"</span><span class="p">,</span><span class="w"> </span><span class="nt">"MIME"</span><span class="p">:</span><span class="w"> </span><span class="s2">"image/png"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Path"</span><span class="p">:</span><span class="w"> </span><span class="s2">"attachments/1-shot.png"</span><span class="p">}</span>
+<span class="p">]}</span>
+</code></pre></div>
+<p>An adapter that fails to fetch one attachment should still return the
+others where possible; Sirdar treats an <code>Attachments</code> error as a warning
+on the bundle rather than a fatal one, but a partial return only helps if
+the adapter makes it.</p>
+<h3 id="shutdown"><code>shutdown</code><a class="headerlink" href="#shutdown" title="Permanent link">&para;</a></h3>
+<p>Sent when Sirdar is done with the adapter. The adapter should reply
+<code>{"id": N, "result": null}</code> and then exit; Sirdar closes the adapter's
+stdin right after sending this, so an adapter that instead reads its next
+request in a loop will see EOF and can treat that the same way — stdin
+EOF and an explicit <code>shutdown</code> request are equivalent shutdown signals,
+and an adapter should handle whichever arrives.</p>
+<p>Sirdar does not wait for the <code>{"result": null}</code> reply before proceeding:
+it closes stdin and then waits up to 5 seconds for the process to exit on
+its own, killing it if it hasn't. An adapter with cleanup to do (flushing
+a cache, closing a connection) has that window to do it in before exit;
+an adapter that hangs indefinitely is killed, not waited on.</p>
+<h2 id="error-codes">Error codes<a class="headerlink" href="#error-codes" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>code</th>
+<th>meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>not_found</code></td>
+<td>the requested key/id doesn't exist</td>
+</tr>
+<tr>
+<td><code>auth</code></td>
+<td>the adapter's credentials are missing, expired, or rejected</td>
+</tr>
+<tr>
+<td><code>unsupported</code></td>
+<td>the method isn't implemented by this adapter, or the role wasn't advertised in <code>describe</code></td>
+</tr>
+<tr>
+<td><code>rate_limited</code></td>
+<td>the upstream API is throttling; Sirdar may back off and retry later</td>
+</tr>
+<tr>
+<td><code>internal</code></td>
+<td>anything else — a parse failure, a network error, a bug</td>
+</tr>
+</tbody>
+</table>
+<p>An unrecognized method should return <code>unsupported</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span><span class="w"> </span><span class="nt">"error"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"code"</span><span class="p">:</span><span class="w"> </span><span class="s2">"unsupported"</span><span class="p">,</span><span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="w"> </span><span class="s2">"unknown method foo.bar"</span><span class="p">}}</span>
+</code></pre></div>
+<h2 id="the-file-adapter">The file adapter<a class="headerlink" href="#the-file-adapter" title="Permanent link">&para;</a></h2>
+<p><code>examples/adapters/file</code> is a complete, minimal adapter: it reads a JSON
+fixture (via <code>-file path/to/tickets.json</code> or <code>SIRDAR_FILE_ADAPTER</code>) shaped
+like</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"tracker"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"OMNI-1"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"Key"</span><span class="p">:</span><span class="w"> </span><span class="s2">"OMNI-1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Title"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Export fails"</span><span class="p">,</span><span class="w"> </span><span class="nt">"..."</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">}},</span>
+<span class="w">  </span><span class="nt">"helpdesk"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"555"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"ticket"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="nt">"ID"</span><span class="p">:</span><span class="w"> </span><span class="s2">"555"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Subject"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"..."</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">},</span>
+<span class="w">      </span><span class="nt">"thread"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"At"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"Author"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"Role"</span><span class="p">:</span><span class="w"> </span><span class="s2">"customer"</span><span class="p">,</span><span class="w"> </span><span class="nt">"Text"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">,</span><span class="w"> </span><span class="nt">"AttachmentIDs"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"a1"</span><span class="p">]}],</span>
+<span class="w">      </span><span class="nt">"attachments"</span><span class="p">:</span><span class="w"> </span><span class="p">[{</span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"a1"</span><span class="p">,</span><span class="w"> </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"shot.png"</span><span class="p">,</span><span class="w"> </span><span class="nt">"mime"</span><span class="p">:</span><span class="w"> </span><span class="s2">"image/png"</span><span class="p">,</span><span class="w"> </span><span class="nt">"content_base64"</span><span class="p">:</span><span class="w"> </span><span class="s2">"..."</span><span class="p">}]</span>
+<span class="w">    </span><span class="p">}</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>and serves it: <code>describe</code> reports both roles; <code>tracker.list</code> ignores its
+filter and returns every tracker ticket in the fixture; <code>helpdesk.attachments</code>
+decodes each fixture attachment's <code>content_base64</code> and writes it into the
+requested directory. It's what <code>internal/source/plugin</code>'s tests build and
+drive, and it's the adapter CI's <code>--dry-run</code> mode runs Sirdar against, so
+a full triage pass can be exercised in CI without any real credentials.</p>
+<p>Run it standalone to see the protocol in action:</p>
+<div class="highlight"><pre><span></span><code>go<span class="w"> </span>run<span class="w"> </span>./examples/adapters/file<span class="w"> </span>-file<span class="w"> </span>internal/source/plugin/testdata/tickets.json
+</code></pre></div>
+<p>then type a request line and press enter:</p>
+<div class="highlight"><pre><span></span><code>{"id": 1, "method": "describe"}
+{"id": 2, "method": "tracker.get", "params": {"key": "OMNI-1"}}
+</code></pre></div>
+<h2 id="writing-a-private-adapter">Writing a private adapter<a class="headerlink" href="#writing-a-private-adapter" title="Permanent link">&para;</a></h2>
+<p>An adapter is any executable that:</p>
+<ol>
+<li>Reads JSON request objects from stdin, one per line.</li>
+<li>Writes one JSON response object per line to stdout, matching each
+   request's <code>id</code>, before reading the next request (or as soon as it's
+   ready — nothing stops an adapter from answering out of the order
+   requests were meant to be handled in, but since Sirdar only ever has
+   one request in flight, in practice this just means: answer promptly).</li>
+<li>Treats EOF on stdin the same as an explicit <code>shutdown</code> request, and
+   exits soon after either.</li>
+<li>Sends anything that isn't a protocol response — logs, warnings, stack
+   traces — to stderr, never stdout.</li>
+</ol>
+<p>Point Sirdar's config at it as a shell command; Sirdar will start it,
+speak the protocol above, and stop it when the run ends. Because the
+protocol is language-agnostic, a private adapter for an internal or
+proprietary system (say, an in-house ticketing tool) can be a short Python
+or Node script living entirely outside this repository — it only needs to
+implement whichever of <code>tracker.*</code> or <code>helpdesk.*</code> it advertises in
+<code>describe</code>, and can return <code>unsupported</code> for methods outside its role.</p>
+<p>A minimal sketch in Python:</p>
+<div class="highlight"><pre><span></span><code><span class="kn">import</span><span class="w"> </span><span class="nn">json</span><span class="o">,</span><span class="w"> </span><span class="nn">sys</span>
+
+<span class="k">def</span><span class="w"> </span><span class="nf">handle</span><span class="p">(</span><span class="n">req</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">req</span><span class="p">[</span><span class="s2">"method"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"describe"</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">{</span><span class="s2">"name"</span><span class="p">:</span> <span class="s2">"example"</span><span class="p">,</span> <span class="s2">"roles"</span><span class="p">:</span> <span class="p">[</span><span class="s2">"tracker"</span><span class="p">],</span> <span class="s2">"version"</span><span class="p">:</span> <span class="s2">"1"</span><span class="p">}</span>
+    <span class="k">if</span> <span class="n">req</span><span class="p">[</span><span class="s2">"method"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"tracker.get"</span><span class="p">:</span>
+        <span class="n">key</span> <span class="o">=</span> <span class="n">req</span><span class="p">[</span><span class="s2">"params"</span><span class="p">][</span><span class="s2">"key"</span><span class="p">]</span>
+        <span class="n">ticket</span> <span class="o">=</span> <span class="n">fetch</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>  <span class="c1"># however this adapter talks to its backend</span>
+        <span class="k">if</span> <span class="n">ticket</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">LookupError</span><span class="p">(</span><span class="n">key</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">ticket</span>
+    <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span><span class="n">req</span><span class="p">[</span><span class="s2">"method"</span><span class="p">])</span>
+
+<span class="k">for</span> <span class="n">line</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">stdin</span><span class="p">:</span>
+    <span class="n">req</span> <span class="o">=</span> <span class="n">json</span><span class="o">.</span><span class="n">loads</span><span class="p">(</span><span class="n">line</span><span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">result</span> <span class="o">=</span> <span class="n">handle</span><span class="p">(</span><span class="n">req</span><span class="p">)</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"id"</span><span class="p">:</span> <span class="n">req</span><span class="p">[</span><span class="s2">"id"</span><span class="p">],</span> <span class="s2">"result"</span><span class="p">:</span> <span class="n">result</span><span class="p">}</span>
+    <span class="k">except</span> <span class="ne">LookupError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"id"</span><span class="p">:</span> <span class="n">req</span><span class="p">[</span><span class="s2">"id"</span><span class="p">],</span> <span class="s2">"error"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"code"</span><span class="p">:</span> <span class="s2">"not_found"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="nb">str</span><span class="p">(</span><span class="n">e</span><span class="p">)}}</span>
+    <span class="k">except</span> <span class="ne">NotImplementedError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="n">resp</span> <span class="o">=</span> <span class="p">{</span><span class="s2">"id"</span><span class="p">:</span> <span class="n">req</span><span class="p">[</span><span class="s2">"id"</span><span class="p">],</span> <span class="s2">"error"</span><span class="p">:</span> <span class="p">{</span><span class="s2">"code"</span><span class="p">:</span> <span class="s2">"unsupported"</span><span class="p">,</span> <span class="s2">"message"</span><span class="p">:</span> <span class="sa">f</span><span class="s2">"unknown method </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="s2">"</span><span class="p">}}</span>
+    <span class="nb">print</span><span class="p">(</span><span class="n">json</span><span class="o">.</span><span class="n">dumps</span><span class="p">(</span><span class="n">resp</span><span class="p">),</span> <span class="n">flush</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">req</span><span class="p">[</span><span class="s2">"method"</span><span class="p">]</span> <span class="o">==</span> <span class="s2">"shutdown"</span><span class="p">:</span>
+        <span class="k">break</span>
+</code></pre></div>
+<p>The built-in adapters are in-process Go rather than subprocesses, but they
+face the same HTTP problems a private one does, and they answer them in one
+place: <code>internal/source/httpx</code>. It holds the host trust that decides whether
+a URL taken out of a response body may be fetched and whether the credential
+may go with it (<code>Trust</code>, <code>HostRule</code>), the redirect policy that applies that
+decision to every hop (<code>RedirectPolicy</code>, <code>Client</code>), <code>Retry-After</code> parsing and
+a context-aware sleep (<code>RetryAfter</code>, <code>SleepCtx</code>), body ceilings that fail
+rather than truncate (<code>ReadLimited</code>), attachment downloads that stream to a
+temporary file and rename on success (<code>Download</code>, <code>Save</code>), filename
+sanitising (<code>SanitizeName</code>), the per-ticket warning store behind
+<code>source.Warner</code> (<code>Warnings</code>), and the <code>List</code> bounds from this document
+(<code>Limit</code>, <code>PageSize</code>). A Go adapter written against the stdio protocol can
+import it; an adapter in another language has the same list of things to get
+right, and the package's doc comments say why each one is there.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

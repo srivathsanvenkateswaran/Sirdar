@@ -1,0 +1,3016 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../2026-09-10-sirdar-desktop-design/">
+      
+      
+        <link rel="next" href="../../plans/2026-09-10-provider-roadmap/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>v0 triage core design - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sirdar-v0-triage-core-design" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              v0 triage core design
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" >
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions-carried-into-this-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions carried into this spec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-for-v0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals for v0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concepts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#package-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ticket-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ticket sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ticket sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interfaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-zoho-desk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in: Zoho Desk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-adapters-any-private-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External adapters (any private source)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#playbooks-and-prompt-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playbooks and prompt assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permission-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rendering-is-template-driven" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rendering is template-driven
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#triage-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Triage Note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rca-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RCA Note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolution-note-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution Note (draft)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error handling summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#still-open-not-blocking-v0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open (not blocking v0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#goal" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Goal
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#decisions-carried-into-this-spec" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Decisions carried into this spec
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#non-goals-for-v0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Non-goals for v0
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#concepts" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Concepts
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#cli" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CLI
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#package-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Package layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ticket-sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ticket sources
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Ticket sources">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#interfaces" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Interfaces
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#built-in-zoho-desk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Built-in: Zoho Desk
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#external-adapters-any-private-source" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        External adapters (any private source)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#credentials" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Credentials
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#bundle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Bundle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#playbooks-and-prompt-assembly" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Playbooks and prompt assembly
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#providers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Providers
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Providers">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#claude-code" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permission-policy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission policy
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#run-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Run lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#notes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Notes
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Notes">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#rendering-is-template-driven" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rendering is template-driven
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#triage-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Triage Note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#rca-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        RCA Note
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#resolution-note-draft" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolution Note (draft)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Register
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#error-handling-summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error handling summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#testing" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resolved-open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resolved open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#still-open-not-blocking-v0" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Still open (not blocking v0)
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="sirdar-v0-triage-core-design">Sirdar v0: triage core (design)<a class="headerlink" href="#sirdar-v0-triage-core-design" title="Permanent link">&para;</a></h1>
+<p>Date: 2026-09-10. Status: approved in design session, awaiting written review.
+Companion research: <code>docs/research/00</code> to <code>05</code>.</p>
+<h2 id="goal">Goal<a class="headerlink" href="#goal" title="Permanent link">&para;</a></h2>
+<p>A single Go binary, <code>sirdar</code>, that produces three kinds of note for a support ticket by running
+one coding-agent session per run inside the workspace codebase, with the ticket fetched
+host-side and the evidence gathered through the workspace's existing MCP servers:</p>
+<ul>
+<li>a <strong>Triage Note</strong> when the ticket arrives: what we knew on day one. Complaint, conversation,
+  repro, root-cause hypothesis with confidence, proposed fix, open questions. Never rewritten.</li>
+<li>an <strong>RCA Note</strong> and a <strong>Resolution Note</strong> draft after the ticket is resolved, produced
+  together by one run. The RCA answers why it happened: confirmed cause, evidence, blast
+  radius, prevention, plus a review of the triage note so the agent's accuracy is recorded and
+  its playbooks improve. The Resolution note is the audit record of what changed: PR, files,
+  exact production statements, approvals, verification. The agent drafts it from the PR and
+  the human's account; fields only a human can attest stay marked for the human.</li>
+</ul>
+<p>The three notes mirror the existing vault templates (Triage, RCA, Resolution) and the register
+rule that every issue gets all three, including trivial ones.</p>
+<p>Every run leaves a complete audit trail on disk. No UI, no writes to any external system, no
+code changes. Validated against the seven tickets closed on 2026-09-10.</p>
+<h2 id="decisions-carried-into-this-spec">Decisions carried into this spec<a class="headerlink" href="#decisions-carried-into-this-spec" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Decision</th>
+<th>Choice</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>First sub-project</td>
+<td>Command-line triage core; the board is sub-project two</td>
+</tr>
+<tr>
+<td>Ticket sources in v0</td>
+<td>Zoho Desk built in; Janus as a private external adapter</td>
+</tr>
+<tr>
+<td>Who fetches the ticket</td>
+<td>Sirdar, host-side; the agent receives a bundle on disk</td>
+</tr>
+<tr>
+<td>Workspace config</td>
+<td>Reuse the repo's Claude Code setup; add <code>.sirdar/</code></td>
+</tr>
+<tr>
+<td>Language</td>
+<td>Go, single static binary, lowest footprint</td>
+</tr>
+<tr>
+<td>Providers in v0</td>
+<td>Claude Code and Codex, behind one interface</td>
+</tr>
+<tr>
+<td>Run loop</td>
+<td>One agent session per run, structured JSON at the end</td>
+</tr>
+<tr>
+<td>Note types</td>
+<td>Triage at intake; RCA + Resolution draft after resolution (added mid-session by the user, aligned to the vault templates)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="non-goals-for-v0">Non-goals for v0<a class="headerlink" href="#non-goals-for-v0" title="Permanent link">&para;</a></h2>
+<p>No board or web UI. No fix flow, branches or PRs (the RCA and Resolution notes record a fix
+made by a human, they do not make one). No writes to tracker or helpdesk, including status transitions and
+replies. No separate translation step (the agent translates in-session). No MCP server inside
+Sirdar. No team or shared mode. No Slack. No automatic playbook edits (suggestions are written,
+a human applies them). No evaluation runner beyond the register and the golden bundles.</p>
+<h2 id="concepts">Concepts<a class="headerlink" href="#concepts" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Workspace.</strong> A checked-out codebase with <code>.sirdar/config.yaml</code>. The agent session runs with
+  the workspace as its working directory, so the repo's own <code>.mcp.json</code>, <code>CLAUDE.md</code>, skills
+  and settings apply unchanged.</li>
+<li><strong>Ticket key.</strong> The tracker's identifier (<code>OMNI-1234</code>). The tracker record carries a reference
+  to the helpdesk ticket (for Janus, a URL in the description). If a workspace has no tracker,
+  the key is the helpdesk id.</li>
+<li><strong>Bundle.</strong> Everything the agent needs about the ticket, written to disk before the session
+  starts.</li>
+<li><strong>Playbook.</strong> A markdown file in <code>.sirdar/playbooks/</code> that tells the agent how to use one
+  evidence source and which mistakes to avoid there.</li>
+<li><strong>Run.</strong> One attempt for one key: a directory, a state, an event log, and at the end one or
+  two notes. A key normally has one triage run and, later, one rca run (which writes the RCA
+  note and the Resolution draft).</li>
+<li><strong>Register.</strong> An append-only file in the workspace with one line per note produced: the
+  triage confidence and classification, the resolution type, and the verdict on whether the
+  triage hypothesis held. The audit index.</li>
+</ul>
+<h2 id="cli">CLI<a class="headerlink" href="#cli" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>sirdar init                      scaffold .sirdar/config.yaml and generic playbooks
+sirdar doctor                    check CLIs, logins, adapters, notes directory
+sirdar triage KEY [KEY...]       run triage for each key; prints a digest at the end
+  --provider claude|codex        override config
+  --model NAME                   override config
+  --concurrency N                parallel runs across keys (default from config, default 1)
+  --dry-run                      fetch and write the bundle and prompt, do not start the agent
+sirdar rca KEY                   produce the RCA note and the Resolution draft for a resolved ticket
+  --pr URL                       merged pull request; its diff is fetched with `gh` if available
+  --resolution TEXT|FILE         what was done: remediation SQL, config change, guidance given,
+                                 who authorised and executed it, verification output
+  --provider, --model            as above
+sirdar resume RUN_ID             continue a blocked or interrupted run
+sirdar runs [KEY]                list runs and states
+sirdar register                  print the register as a table (accuracy per ticket)
+</code></pre></div>
+<p>Exit code is non-zero if any run ended in <code>failed</code> or <code>over_budget</code>.</p>
+<h2 id="package-layout">Package layout<a class="headerlink" href="#package-layout" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>cmd/sirdar/            command wiring only
+internal/config        config.yaml schema, credential refs, defaults, validation
+internal/ticket        Ticket, Thread, Message, Attachment; bundle writer
+internal/source        Tracker and Helpdesk interfaces; zohodesk/ (built in); plugin/ (external)
+internal/provider      Provider and Session interfaces; claude/; codex/
+internal/prompt        playbook loading, prompt assembly, embedded note JSON schema
+internal/run           lifecycle, permission policy, budgets, concurrency, resume
+internal/note          schemas for the three note types, validation, template rendering, digest, register
+internal/store         run directory layout, events.jsonl, state.json
+</code></pre></div>
+<p>Each package exposes a small interface and hides its I/O. <code>internal/run</code> is the only package
+that depends on all the others.</p>
+<h2 id="ticket-sources">Ticket sources<a class="headerlink" href="#ticket-sources" title="Permanent link">&para;</a></h2>
+<h3 id="interfaces">Interfaces<a class="headerlink" href="#interfaces" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">Tracker</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Get</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">key</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">TrackerTicket</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w">         </span><span class="c1">// fields + helpdesk reference</span>
+<span class="w">    </span><span class="nx">List</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">filter</span><span class="w"> </span><span class="nx">ListFilter</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">TrackerTicket</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="c1">// optional; used by the board later</span>
+<span class="p">}</span>
+
+<span class="kd">type</span><span class="w"> </span><span class="nx">Helpdesk</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Get</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">HelpdeskTicket</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">Threads</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">Thread</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w">             </span><span class="c1">// chronological, with author role</span>
+<span class="w">    </span><span class="nx">Attachments</span><span class="p">(</span><span class="nx">ctx</span><span class="p">,</span><span class="w"> </span><span class="nx">id</span><span class="w"> </span><span class="kt">string</span><span class="p">,</span><span class="w"> </span><span class="nx">dir</span><span class="w"> </span><span class="kt">string</span><span class="p">)</span><span class="w"> </span><span class="p">([]</span><span class="nx">Attachment</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span><span class="w"> </span><span class="c1">// downloads into dir</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>TrackerTicket</code> carries key, title, description, priority, status, assignee, created/updated
+times, URL, and <code>HelpdeskRef</code> (parsed from the description by a per-adapter rule; for Janus,
+<code>Zoho Ticket URL:\s*(\S+)</code> and the trailing digits). <code>HelpdeskTicket</code> carries id, subject,
+status, priority, channel, contact display name, company or account fields the helpdesk
+exposes, created/updated times, URL. <code>Thread</code> is a list of <code>Message{At, Author, Role
+(customer|agent|system), Text, AttachmentIDs}</code>. <code>Attachment{ID, Name, MIME, Path}</code>.</p>
+<h3 id="built-in-zoho-desk">Built-in: Zoho Desk<a class="headerlink" href="#built-in-zoho-desk" title="Permanent link">&para;</a></h3>
+<p>Reads <code>orgId</code>, base URL and a token ref from config. Uses the Desk REST API for the ticket,
+conversations, thread content in plain text, and attachment download. Handles the three
+attachment URL shapes seen so far (inline, thread, IM session). Refresh-token flow for the
+self-client is in scope only if the stored token is a refresh token; otherwise the ref points to
+a valid access token and <code>doctor</code> reports expiry.</p>
+<h3 id="external-adapters-any-private-source">External adapters (any private source)<a class="headerlink" href="#external-adapters-any-private-source" title="Permanent link">&para;</a></h3>
+<p>An external adapter is an executable path in config. Sirdar spawns it once per run and
+exchanges newline-delimited JSON on stdin/stdout:</p>
+<div class="highlight"><pre><span></span><code>→ {"id":1,"method":"describe"}
+← {"id":1,"result":{"name":"janus","roles":["tracker"],"version":"1"}}
+→ {"id":2,"method":"tracker.get","params":{"key":"OMNI-1234"}}
+← {"id":2,"result":{ ...TrackerTicket... }}
+→ {"id":3,"method":"tracker.list","params":{ ...ListFilter... }}
+← {"id":3,"error":{"code":"unsupported","message":"..."}}
+</code></pre></div>
+<p>Methods: <code>describe</code>, <code>tracker.get</code>, <code>tracker.list</code>, <code>helpdesk.get</code>, <code>helpdesk.threads</code>,
+<code>helpdesk.attachments</code> (params include <code>dir</code>). Errors carry a <code>code</code> from a fixed set
+(<code>not_found</code>, <code>auth</code>, <code>unsupported</code>, <code>rate_limited</code>, <code>internal</code>). The adapter's stderr is
+captured into the run log. Sirdar sends <code>{"method":"shutdown"}</code> and waits up to 5 seconds
+before killing the process. The Janus adapter is a separate, private Go program implementing
+this protocol; a reference adapter that reads tickets from a JSON file ships in the public repo
+under <code>examples/adapters/file/</code> and is what the tests use.</p>
+<h3 id="credentials">Credentials<a class="headerlink" href="#credentials" title="Permanent link">&para;</a></h3>
+<p>Config values of the form <code>env:NAME</code> or <code>keychain:SERVICE</code> are resolved at fetch time.
+<code>keychain:</code> uses the macOS <code>security find-generic-password -s SERVICE -w</code> command; other
+platforms only support <code>env:</code> in v0. Resolved values are held in memory, never written to the
+run directory, and never placed in the agent's environment.</p>
+<h2 id="bundle">Bundle<a class="headerlink" href="#bundle" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>.sirdar/runs/&lt;KEY&gt;/&lt;run-id&gt;/       (kind: triage | rca, recorded in state.json)
+  bundle/ticket.json        normalised TrackerTicket + HelpdeskTicket
+  bundle/thread.md          chronological conversation, original language, roles, timestamps
+  bundle/attachments/       downloaded files, named &lt;index&gt;-&lt;original-name&gt;
+  prompt.md                 exactly what was sent to the agent
+  events.jsonl              raw provider events, one per line, with sirdar timestamps
+  result.json               validated note JSON (absent on failure)
+  result.raw.txt            agent's final text when validation failed
+  note.md                   rendered note (also copied to the notes directory)
+  note-resolution.md        rca runs only: the Resolution draft (also copied)
+  playbook-suggestions.md   rca runs only: proposed additions to playbooks, for human review
+  state.json                run kind and state, provider, session/thread handle, budgets, timings
+</code></pre></div>
+<p>An rca run's bundle also contains <code>bundle/triage-note.md</code> (the triage note being reviewed),
+<code>bundle/resolution.md</code> (the <code>--resolution</code> text) and, when <code>--pr</code> is given and <code>gh</code> is
+installed and authenticated, <code>bundle/pr.md</code> (title, body, merge date) and <code>bundle/pr.diff</code>.</p>
+<p><code>run-id</code> is a sortable timestamp plus a short random suffix. <code>thread.md</code> writes each message as
+a heading with time and role, then the text verbatim, then a list of attachment file names.
+Image attachments are referenced by path so both providers can read them: Claude through its
+file-reading tool, Codex as image input items attached to the turn.</p>
+<h2 id="configuration">Configuration<a class="headerlink" href="#configuration" title="Permanent link">&para;</a></h2>
+<p><code>.sirdar/config.yaml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">workspace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">OXO.APIs</span>
+<span class="nt">provider</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">claude</span><span class="w">            </span><span class="c1"># claude | codex</span>
+<span class="nt">model</span><span class="p">:</span><span class="w"> </span><span class="s">""</span><span class="w">                   </span><span class="c1"># provider default when empty</span>
+<span class="nt">billing</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">subscription</span><span class="w">       </span><span class="c1"># subscription | api   (api keeps ANTHROPIC_API_KEY in the child env)</span>
+<span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">tracker</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">exec</span>
+<span class="w">    </span><span class="nt">command</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/bin/sirdar-janus</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zohodesk</span>
+<span class="w">    </span><span class="nt">orgId</span><span class="p">:</span><span class="w"> </span><span class="s">"60044805777"</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://desk.zoho.in</span>
+<span class="w">    </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:zoho-desk-token</span>
+<span class="nt">notes</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">dir</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">~/Documents/Work/Obsidian/Support Duty</span>
+<span class="w">  </span><span class="nt">templates</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.sirdar/templates</span><span class="w">       </span><span class="c1"># optional; overrides the embedded defaults per note type</span>
+<span class="w">  </span><span class="nt">filenames</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">triage</span><span class="p">:</span><span class="w"> </span><span class="s">"{key}</span><span class="nv"> </span><span class="s">{slug}.md"</span>
+<span class="w">    </span><span class="nt">rca</span><span class="p">:</span><span class="w"> </span><span class="s">"{key}</span><span class="nv"> </span><span class="s">RCA</span><span class="nv"> </span><span class="s">{slug}.md"</span>
+<span class="w">    </span><span class="nt">resolution</span><span class="p">:</span><span class="w"> </span><span class="s">"{key}</span><span class="nv"> </span><span class="s">RES</span><span class="nv"> </span><span class="s">{slug}.md"</span>
+<span class="nt">budget</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">maxTurns</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">60</span>
+<span class="w">  </span><span class="nt">maxMinutes</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">25</span>
+<span class="w">  </span><span class="nt">maxUsd</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">5</span>
+<span class="nt">concurrency</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">1</span>
+<span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">bash</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">log*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">show*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">grep*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"rg</span><span class="nv"> </span><span class="s">*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"dotnet</span><span class="nv"> </span><span class="s">build*"</span>
+<span class="nt">playbooks</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">.sirdar/playbooks</span>
+</code></pre></div>
+<p>Validation happens at load time with clear messages. Unknown keys are errors. <code>sirdar init</code>
+writes this file with placeholders and adds <code>.sirdar/runs/</code> to <code>.git/info/exclude</code>.</p>
+<h2 id="playbooks-and-prompt-assembly">Playbooks and prompt assembly<a class="headerlink" href="#playbooks-and-prompt-assembly" title="Permanent link">&para;</a></h2>
+<p>Playbooks are loaded from the configured directory in filename order. <code>sirdar init</code> scaffolds
+five: <code>10-helpdesk.md</code>, <code>20-logs.md</code>, <code>30-apm.md</code>, <code>40-database.md</code>, <code>50-code.md</code>, each with a
+short generic body and a marked section for workspace-specific gotchas. All note types use the
+same playbooks. The triage prompt is:</p>
+<ol>
+<li>Fixed preamble (embedded in the binary): the agent's role; the run is read-only; every
+   claim in the note must cite a source; an absence claim is invalid without a control query
+   proving the source captures that event type; timestamps must state their timezone; do not
+   guess ticket matches; stop and report when information is missing rather than inventing it.</li>
+<li>The playbooks, verbatim, each under its filename as a heading.</li>
+<li>The ticket: key, title, priority, tracker and helpdesk URLs, the path to the bundle, and the
+   first 40 lines of <code>thread.md</code> inline so the session starts with context.</li>
+<li>The note schema with a sentence of guidance per field.</li>
+<li>The closing instruction: answer only with JSON matching the schema.</li>
+</ol>
+<p>The rca prompt keeps steps 1 and 2, adds the triage note, the resolution text and the PR
+material after step 3, replaces the triage schema in step 4 with the RCA and Resolution
+schemas, and states the audit rule: fill only what the PR or the resolution text supports,
+leave the rest null.</p>
+<p>The assembled prompt is saved as <code>prompt.md</code> before the session starts, so <code>--dry-run</code> shows
+exactly what would be sent.</p>
+<h2 id="providers">Providers<a class="headerlink" href="#providers" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code><span class="kd">type</span><span class="w"> </span><span class="nx">SessionSpec</span><span class="w"> </span><span class="kd">struct</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Cwd</span><span class="w">          </span><span class="kt">string</span>
+<span class="w">    </span><span class="nx">Prompt</span><span class="w">       </span><span class="kt">string</span>
+<span class="w">    </span><span class="nx">Model</span><span class="w">        </span><span class="kt">string</span>
+<span class="w">    </span><span class="nx">OutputSchema</span><span class="w"> </span><span class="p">[]</span><span class="kt">byte</span><span class="w">          </span><span class="c1">// JSON schema for the note</span>
+<span class="w">    </span><span class="nx">Policy</span><span class="w">       </span><span class="nx">PermissionPolicy</span>
+<span class="w">    </span><span class="nx">Budget</span><span class="w">       </span><span class="nx">Budget</span>
+<span class="w">    </span><span class="nx">Resume</span><span class="w">       </span><span class="kt">string</span><span class="w">          </span><span class="c1">// provider session/thread handle, empty for new</span>
+<span class="w">    </span><span class="nx">Images</span><span class="w">       </span><span class="p">[]</span><span class="kt">string</span><span class="w">        </span><span class="c1">// attachment paths for providers that take image input</span>
+<span class="w">    </span><span class="nx">Env</span><span class="w">          </span><span class="p">[]</span><span class="kt">string</span>
+<span class="p">}</span>
+
+<span class="kd">type</span><span class="w"> </span><span class="nx">Provider</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Name</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span>
+<span class="w">    </span><span class="nx">Start</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">,</span><span class="w"> </span><span class="nx">spec</span><span class="w"> </span><span class="nx">SessionSpec</span><span class="p">)</span><span class="w"> </span><span class="p">(</span><span class="nx">Session</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">Doctor</span><span class="p">(</span><span class="nx">ctx</span><span class="w"> </span><span class="nx">context</span><span class="p">.</span><span class="nx">Context</span><span class="p">)</span><span class="w"> </span><span class="p">[]</span><span class="nx">Check</span><span class="w">   </span><span class="c1">// installed, signed in, version</span>
+<span class="p">}</span>
+
+<span class="kd">type</span><span class="w"> </span><span class="nx">Session</span><span class="w"> </span><span class="kd">interface</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nx">Events</span><span class="p">()</span><span class="w"> </span><span class="o">&lt;-</span><span class="kt">chan</span><span class="w"> </span><span class="nx">Event</span>
+<span class="w">    </span><span class="nx">Wait</span><span class="p">()</span><span class="w"> </span><span class="p">(</span><span class="nx">Result</span><span class="p">,</span><span class="w"> </span><span class="kt">error</span><span class="p">)</span>
+<span class="w">    </span><span class="nx">Handle</span><span class="p">()</span><span class="w"> </span><span class="kt">string</span><span class="w">                       </span><span class="c1">// for resume</span>
+<span class="w">    </span><span class="nx">Cancel</span><span class="p">()</span>
+<span class="p">}</span>
+</code></pre></div>
+<p><code>Event</code> is a small tagged union: <code>AssistantText</code>, <code>ToolStarted{Name, Input}</code>, <code>ToolFinished</code>,
+<code>PermissionAsked{Tool, Input, Decision}</code>, <code>Usage{Turns, InputTokens, OutputTokens, CostUSD}</code>,
+<code>RateLimited{Message}</code>, <code>Question{Text}</code> (the agent asked the user something), <code>Final{Text,
+Structured json.RawMessage}</code>. <code>Result</code> carries the final event, cumulative usage, and the
+session handle.</p>
+<h3 id="claude-code">Claude Code<a class="headerlink" href="#claude-code" title="Permanent link">&para;</a></h3>
+<p>Command: the <code>claude</code> binary found on PATH or at <code>providers.claude.path</code>.</p>
+<div class="highlight"><pre><span></span><code>claude -p --output-format stream-json --input-format stream-json --verbose
+       --include-partial-messages --permission-prompt-tool stdio
+       --permission-mode default --json-schema &lt;schema&gt;
+       [--model M] [--max-turns N] [--resume HANDLE]
+</code></pre></div>
+<p>The prompt is written to stdin as a <code>user</code> message and stdin is kept open for control
+responses. Sirdar parses each stdout line: <code>system/init</code> (capture session id), <code>assistant</code>
+deltas, <code>tool_use</code>/<code>tool_result</code>, <code>control_request</code> with <code>can_use_tool</code> (answer from the
+policy with allow or deny plus a message), <code>rate_limit_event</code>, and <code>result</code> (structured output
+and usage). <code>ANTHROPIC_API_KEY</code> is removed from the child environment unless <code>billing: api</code>.
+<code>--bare</code> is never passed. On cancel, Sirdar sends SIGINT and waits up to 10 seconds.</p>
+<h3 id="codex">Codex<a class="headerlink" href="#codex" title="Permanent link">&para;</a></h3>
+<p>Command: <code>codex app-server</code> over stdio. Sequence: <code>initialize</code>, <code>initialized</code>, <code>thread/start</code>
+with <code>cwd</code>, <code>sandbox: readOnly</code>, <code>approvalPolicy: never</code>; on resume <code>thread/resume</code>. Then
+<code>turn/start</code> with the prompt as text plus <code>localImage</code> items for attachments, <code>model</code> if set,
+and <code>outputSchema</code>. Notifications <code>item/*</code>, <code>turn/*</code>, <code>thread/tokenUsage/updated</code> map to
+events. Any <code>requestApproval</code> server request is answered with decline, since the sandbox is
+read-only and the policy denies writes; the denial is logged. <code>turn/completed</code> yields the final
+agent message, parsed as the structured output. Codex reads MCP servers from the user's Codex
+config; Sirdar does not inject them in v0. <code>Doctor</code> calls <code>mcpServerStatus/list</code> and reports.</p>
+<h2 id="permission-policy">Permission policy<a class="headerlink" href="#permission-policy" title="Permanent link">&para;</a></h2>
+<p>Evaluated by Sirdar for every tool request the provider surfaces:</p>
+<table>
+<thead>
+<tr>
+<th>Tool class</th>
+<th>Decision</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Read, Glob, Grep, LS, WebFetch, WebSearch, any MCP tool</td>
+<td>allow</td>
+</tr>
+<tr>
+<td>Edit, Write, MultiEdit, NotebookEdit</td>
+<td>deny, "triage runs are read-only"</td>
+</tr>
+<tr>
+<td>Bash</td>
+<td>allow if the command matches a pattern in <code>permissions.bash</code>, else deny with the pattern list in the message</td>
+</tr>
+<tr>
+<td>Task or subagent spawning</td>
+<td>allow (children inherit the same policy through the same channel)</td>
+</tr>
+<tr>
+<td>Anything unknown</td>
+<td>deny</td>
+</tr>
+</tbody>
+</table>
+<p>Patterns are shell-style globs matched against the trimmed command. Codex enforces the same
+outcome through <code>sandbox: readOnly</code>; the policy still runs for logging.</p>
+<h2 id="run-lifecycle">Run lifecycle<a class="headerlink" href="#run-lifecycle" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>preparing  → running → completed
+                     → failed        (provider crash, fetch error, schema failure twice)
+                     → blocked       (agent asked a question, or rate limited)
+                     → over_budget   (turns, minutes, or USD exceeded)
+</code></pre></div>
+<ul>
+<li>Preparing: resolve config, fetch tracker then helpdesk, download attachments, write bundle
+  and prompt. Any error here fails the run before an agent process exists.</li>
+<li>Running: start the session, stream events to <code>events.jsonl</code> and a one-line-per-event progress
+  view on stderr, watch budgets. Wall-clock budget cancels the session and marks
+  <code>over_budget</code>; turn and USD budgets are enforced from usage events.</li>
+<li>Completion: validate <code>Final.Structured</code> against the schema. On failure, send one follow-up
+  user message quoting the validation errors and asking for corrected JSON; on a second
+  failure, save <code>result.raw.txt</code> and mark <code>failed</code>.</li>
+<li>Blocked: persist the session handle. <code>sirdar resume RUN_ID</code> restarts with <code>Resume</code> set and,
+  for a question, prompts on the terminal for the answer and sends it as the next message.</li>
+<li>Concurrency: a worker pool of <code>concurrency</code> runs across the given keys. Runs never share
+  state. Rate-limit events pause the pool for the interval the provider reports, if any.</li>
+</ul>
+<p><code>state.json</code> is rewritten on every transition and includes timings, usage, and the handle.</p>
+<h2 id="notes">Notes<a class="headerlink" href="#notes" title="Permanent link">&para;</a></h2>
+<p>All three note types are produced the same way: bundle, prompt, one session, structured JSON,
+validation, template rendering. A triage run yields one JSON document and one note. An rca run
+yields one JSON document with two top-level objects, <code>rca</code> and <code>resolution</code>, and two notes.</p>
+<h3 id="rendering-is-template-driven">Rendering is template-driven<a class="headerlink" href="#rendering-is-template-driven" title="Permanent link">&para;</a></h3>
+<p>Each note type has a Go <code>text/template</code> applied to the validated JSON. Defaults are embedded
+in the binary and mirror the vault's three templates, with generic frontmatter keys
+(<code>tracker_key</code>, <code>tracker_url</code>, <code>helpdesk_id</code>, <code>helpdesk_url</code>, <code>customer</code>, <code>customer_id</code>).
+A workspace can drop its own <code>triage.md.tmpl</code>, <code>rca.md.tmpl</code>, <code>resolution.md.tmpl</code> into
+<code>notes.templates</code> to use its vault's exact frontmatter keys and headings (<code>janus_key</code>,
+<code>zoho_url</code>, and so on). <code>sirdar init --templates</code> writes the defaults there as a starting
+point. Sirdar validates that a custom template parses and renders against a sample document
+before it is ever used on a real run.</p>
+<h3 id="triage-note">Triage Note<a class="headerlink" href="#triage-note" title="Permanent link">&para;</a></h3>
+<p>Schema (abridged; full JSON Schema embedded in <code>internal/prompt</code>):</p>
+<div class="highlight"><pre><span></span><code>ticket:         { key, title, trackerUrl, helpdeskId, helpdeskUrl, priority, service,
+                  customer, customerId }
+title:          string                    # one-line issue title
+complaint:      string                    # translated, faithful to tone and urgency
+timeline:       [ { at, role, summary } ] # incl. what L1 already told the customer
+reproSteps:     [ string ]
+rootCause:      { hypothesis, confidence: high|medium|low|unknown,
+                  evidence: [ { source, query, finding } ],
+                  codeRefs: [ "path:line" ] }
+blastRadius:    string
+classification: code|data|config|not-a-bug|unknown
+proposedFix:    { description, files: [string], remediationSql: string, risks: string }
+openQuestions:  [ string ]
+</code></pre></div>
+<p>Frontmatter (default template): <code>tags: [support-duty, triage]</code>, tracker and helpdesk keys and
+URLs, <code>customer</code>, <code>customer_id</code>, <code>date</code>, <code>priority</code>, <code>service</code>, <code>status: triaged</code>, <code>run</code>,
+<code>provider</code>. Body sections in the order of the vault template: Customer Complaint (translated),
+Conversation Summary, Repro Steps, Root Cause Hypothesis, Proposed Fix, Open Questions, with a
+register/RCA/Resolution link line under the title. An existing triage note for the same key is
+overwritten only while its <code>status</code> is still <code>triaged</code>.</p>
+<h3 id="rca-note">RCA Note<a class="headerlink" href="#rca-note" title="Permanent link">&para;</a></h3>
+<p>Produced by <code>sirdar rca KEY</code>. Inputs: the latest triage note for the key (required), the
+resolution supplied by the human, and the merged PR when there is one. The session runs in
+the workspace with the same read-only policy, so the agent can read the merged code, re-query
+evidence sources to confirm the cause, and compare against the triage hypothesis.</p>
+<p>Schema (abridged), following the vault's RCA template section by section:</p>
+<div class="highlight"><pre><span></span><code>rca:
+  title:               string
+  summary:             string                     # 3 to 5 sentences a manager can read alone
+  impact:              { customersAffected, recordsAffected, financialImpact,
+                         firstOccurrence, detection, timeToDetect }
+  timeline:            [ { at, event, evidence } ]
+  rootCause:           { description, codeRefs: ["path:line"], offendingCode, mechanism }
+  contributingFactors: [ string ]
+  evidence:            { database: [..], logs: [..], apm: [..], code: [..], attachments: [..] }
+                       # each entry { query, result } or { ref, note }
+  blastRadius:         { query, count, scope: one-off|systemic, reasoning }
+  whyNotCaughtEarlier: string
+  prevention:          [ { action, type: code|test|monitoring|process, owner, ticket } ]
+  openQuestions:       [ string ]
+  classification:      code|data|config|not-a-bug
+  severity:            high|medium|low
+  confidence:          high|medium|low|unknown
+  origin:              string                     # workspace-defined vocabulary, e.g. omni|legacy|pos|integration
+  triageReview:        { verdict: confirmed|partial|wrong,
+                         gotRight: string, missed: string, whyMissed: string }
+  lessons:             [ string ]
+  playbookSuggestions: [ { playbook, addition, reason } ]
+</code></pre></div>
+<p><code>triageReview</code>, <code>lessons</code> and <code>playbookSuggestions</code> are the self-improvement fields. They are
+rendered at the end of the RCA note under "Triage Review" and "Lessons", and
+<code>playbookSuggestions</code> are additionally written to <code>playbook-suggestions.md</code> in the run
+directory as a ready-to-paste block per playbook. Sirdar never edits a playbook itself.</p>
+<p>Frontmatter (default): <code>tags: [support-duty, rca]</code>, tracker and helpdesk keys and URLs,
+<code>customer</code>, <code>customer_id</code>, <code>date_reported</code>, <code>date_rca</code>, <code>service</code>, <code>classification</code>,
+<code>severity</code>, <code>confidence</code>, <code>origin</code>, <code>triage_verdict</code>, <code>related</code>, <code>run</code>, <code>provider</code>.</p>
+<h3 id="resolution-note-draft">Resolution Note (draft)<a class="headerlink" href="#resolution-note-draft" title="Permanent link">&para;</a></h3>
+<p>Produced by the same rca run. It is the audit record, so the agent may only fill what it can
+source from the PR or the human's <code>--resolution</code> text. Anything it cannot source is left null
+and rendered as a visible <code>&lt;fill: ...&gt;</code> marker; the note's <code>status</code> is <code>proposed</code> until a
+human edits it.</p>
+<p>Schema (abridged), following the vault's Resolution template:</p>
+<div class="highlight"><pre><span></span><code>resolution:
+  title:           string
+  resolutionType:  code-fix|data-fix|config-change|guidance|wont-fix|duplicate
+  whatWasWrong:    string                       # 2 to 3 sentences, no repeat of the RCA
+  whatWeChanged:   string
+  codeChange:      { pr, prStatus, mergedAt, files: [ { path, what } ], reviewer, deployed } | null
+  dataChange:      { authorisedBy, authorisedAt, executedBy, executedAt,
+                     preVerificationSql, preOutput, changeSql, rowsAffected,
+                     postVerificationSql, postOutput, rollbackPlan, sideEffects } | null
+  verification:    [ { check, environment, result, date, by } ]
+  customerOutcome: { told, confirmedFixed, helpdeskClosed, trackerStatus }
+  residualRisk:    [ string ]
+  lessons:         string
+</code></pre></div>
+<p>SQL fields are copied verbatim from the human's resolution text; the agent must not compose
+production statements. Frontmatter (default): <code>tags: [support-duty, resolution]</code>, keys and
+URLs, <code>customer</code>, <code>customer_id</code>, <code>service</code>, <code>resolution_type</code>, <code>status: proposed</code>, <code>pr</code>,
+<code>pr_status</code>, <code>approved_by</code>, <code>applied_by</code>, <code>applied_at</code>, <code>verified_at</code>, <code>related</code>, <code>run</code>.</p>
+<p>After an rca run, the triage note's frontmatter gets <code>status: resolved</code> and <code>rca:</code> and
+<code>resolution:</code> links; nothing else in it changes.</p>
+<h3 id="register">Register<a class="headerlink" href="#register" title="Permanent link">&para;</a></h3>
+<p><code>.sirdar/register.jsonl</code>, one line per note produced:</p>
+<div class="highlight"><pre><span></span><code>{"key","kind":"triage|rca|resolution","runId","date","provider","model","service",
+ "classification","confidence","severity","turns","costUsd","triageVerdict","notePath"}
+</code></pre></div>
+<p><code>sirdar register</code> prints one row per key: triage date, confidence, classification, RCA date,
+resolution type, triage verdict, and which of the three notes exist. <code>--markdown</code> prints the
+rows in the vault's <code>_Issue Register</code> table shape for pasting. Over time this is the record of
+how often the agent's first hypothesis held, per service and per confidence level, and the
+input to later evaluation work. <code>init</code> excludes the register alongside <code>runs/</code>; committing it
+is the user's choice.</p>
+<h2 id="error-handling-summary">Error handling summary<a class="headerlink" href="#error-handling-summary" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Failure</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Config invalid</td>
+<td>exit before any run, message names the key</td>
+</tr>
+<tr>
+<td>Credential ref unresolvable</td>
+<td>fail that run in <code>preparing</code></td>
+</tr>
+<tr>
+<td>Tracker or helpdesk error</td>
+<td>fail that run, adapter error code and message in <code>state.json</code></td>
+</tr>
+<tr>
+<td>Attachment download error</td>
+<td>continue; list the URL under open questions in the prompt</td>
+</tr>
+<tr>
+<td>Provider binary missing or not signed in</td>
+<td>fail fast; <code>doctor</code> explains</td>
+</tr>
+<tr>
+<td>Provider process exits non-zero</td>
+<td>fail; last 50 stderr lines in <code>state.json</code></td>
+</tr>
+<tr>
+<td>Malformed provider line</td>
+<td>log and skip; ten in a row fails the run</td>
+</tr>
+<tr>
+<td>Schema validation fails</td>
+<td>one retry turn, then fail with raw text kept</td>
+</tr>
+<tr>
+<td><code>sirdar rca</code> with no triage note for the key</td>
+<td>exit with a message; run <code>triage</code> first</td>
+</tr>
+<tr>
+<td><code>--pr</code> given but <code>gh</code> missing or unauthenticated</td>
+<td>continue without the diff; noted in <code>state.json</code> and in the prompt</td>
+</tr>
+<tr>
+<td>Budget exceeded</td>
+<td>cancel, <code>over_budget</code>, note not written</td>
+</tr>
+<tr>
+<td>Ctrl-C</td>
+<td>cancel all sessions cleanly, mark runs <code>blocked</code> with handles for resume</td>
+</tr>
+</tbody>
+</table>
+<h2 id="testing">Testing<a class="headerlink" href="#testing" title="Permanent link">&para;</a></h2>
+<ul>
+<li><code>internal/source/zohodesk</code>: unit tests against recorded JSON fixtures (redacted), including
+  all three attachment URL shapes.</li>
+<li><code>internal/source/plugin</code>: tests drive the file-based example adapter through the protocol,
+  including error codes and shutdown timing.</li>
+<li><code>internal/provider/claude</code> and <code>codex</code>: tests point the provider at a fake binary
+  (<code>testdata/fakeclaude</code>, <code>testdata/fakecodex</code>, built from Go test helpers) that replays a
+  scripted transcript: init, tool calls, a permission request that must be denied, a rate-limit
+  event, a malformed final output followed by a valid one. Assertions cover the event
+  sequence, the policy decisions written back, and the resume handle.</li>
+<li><code>internal/prompt</code> and <code>internal/note</code>: golden-file tests for the three note types with the
+  default templates, a custom-template override, the <code>&lt;fill&gt;</code> markers, the register line, and
+  the triage-note frontmatter update performed by an rca run.</li>
+<li><code>internal/run</code>: state transitions with a stub provider and stub sources; budget enforcement;
+  concurrency; Ctrl-C handling.</li>
+<li>Integration: <code>sirdar doctor</code> and <code>sirdar triage --dry-run</code> against the file adapter in CI.</li>
+<li>Golden set: the seven 2026-09-10 tickets' bundles stored under <code>~/.sirdar/golden/&lt;KEY&gt;/</code>
+  (never in the repo). Manual comparison of generated notes against the human-written ones;
+  an eval command is a later sub-project.</li>
+</ul>
+<h2 id="resolved-open-questions">Resolved open questions<a class="headerlink" href="#resolved-open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Notes live in the configured <code>notes.dir</code>, with a copy in the run directory.</li>
+<li>The tracker is the system of record for the key; the helpdesk is the system of record for
+  the conversation. Neither is written in v0.</li>
+<li>Translation happens inside the session; the note holds the English, the bundle holds the
+  original.</li>
+<li>Self-improvement is human-gated: the RCA run proposes playbook additions and records its own
+  triage verdict; a person applies the additions. Nothing in v0 rewrites prompts or playbooks
+  automatically.</li>
+</ul>
+<h2 id="still-open-not-blocking-v0">Still open (not blocking v0)<a class="headerlink" href="#still-open-not-blocking-v0" title="Permanent link">&para;</a></h2>
+<ul>
+<li>GitHub handle to publish under; <code>sirdar</code> is taken by an inactive user.</li>
+<li>Whether Codex should receive MCP config from Sirdar in a later version.</li>
+<li>The meaning of "G1 workflow" from the original brief; no such T3 Code feature was found.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

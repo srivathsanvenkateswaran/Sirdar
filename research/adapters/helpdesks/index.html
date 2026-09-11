@@ -1,0 +1,2880 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../azure-devops/">
+      
+      
+        <link rel="next" href="../jira/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Helpdesks - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#helpdesk-adapters-survey-of-candidate-vendors" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Helpdesks
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#zendesk-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Freshdesk">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freshservice-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshservice differences
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hubspot-service-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot Service Hub
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jira-service-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira Service Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#help-scout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Help Scout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#front" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Front
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gorgias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gorgias
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#servicenow-itsm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceNow ITSM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#salesforce-service-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Salesforce Service Cloud
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zoho-desk-already-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk (already implemented)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ranking-what-to-build-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ranking: what to build next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-common-config-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed common config shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#zendesk-support" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zendesk Support
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#freshdesk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshdesk
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Freshdesk">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#freshservice-differences" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Freshservice differences
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#intercom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Intercom
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#hubspot-service-hub" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HubSpot Service Hub
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#jira-service-management" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira Service Management
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#help-scout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Help Scout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#front" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Front
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gorgias" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Gorgias
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#servicenow-itsm" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ServiceNow ITSM
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#salesforce-service-cloud" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Salesforce Service Cloud
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#zoho-desk-already-implemented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Zoho Desk (already implemented)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#ranking-what-to-build-next" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Ranking: what to build next
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#proposed-common-config-shape" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Proposed common config shape
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="helpdesk-adapters-survey-of-candidate-vendors">Helpdesk adapters: survey of candidate vendors<a class="headerlink" href="#helpdesk-adapters-survey-of-candidate-vendors" title="Permanent link">&para;</a></h1>
+<p>Scope: what a Sirdar <code>helpdesk</code> adapter needs from each vendor — get ticket by id, get the
+ordered conversation thread (author role, public/private), and download attachments — using
+plain Go and stdlib <code>net/http</code>, read-only, with credentials passed as <code>env:</code>/<code>keychain:</code>
+references per <code>docs/config.md</code>. Zoho Desk (<code>internal/source/zohodesk</code>) is the only adapter
+built so far; this survey is for picking and scoping the next ones.</p>
+<p>Research pass: web search and vendor-doc fetches, September 2026. Every non-obvious claim is
+cited; anything that couldn't be confirmed against an official page in this pass is marked
+<strong>unverified</strong>. Two vendor doc sites (<code>developer.salesforce.com</code>, most of
+<code>docs.servicenow.com</code>/<code>developer.servicenow.com</code>) returned 403s to automated fetches during this
+research, so the Salesforce and part of the ServiceNow sections lean more heavily on
+unverified general platform knowledge than the others — flagged inline and again in Open
+questions.</p>
+<hr />
+<h2 id="zendesk-support">Zendesk Support<a class="headerlink" href="#zendesk-support" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL.</strong> <code>https://{subdomain}.zendesk.com/api/v2/...</code> — the subdomain is the whole account
+identifier. No distinct regional/data-centre subdomain variant is documented for the core
+Ticketing API; a config only needs the one subdomain string
+(<a href="https://developer.zendesk.com/api-reference/ticketing/tickets/tickets/">API reference</a>).</p>
+<p><strong>Auth.</strong> API token over HTTP Basic auth — username <code>{agent_email}/token</code>, password the token
+(<code>curl -u agent@example.com/token:TOKEN ...</code>) — or OAuth Bearer, which Zendesk is nudging
+integrations toward but isn't required
+(<a href="https://developer.zendesk.com/api-reference/introduction/security-and-auth/">Security and authentication</a>,
+<a href="https://developer.zendesk.com/documentation/authentication/oauth-migration/">OAuth migration</a>).
+For a static-credential stdlib client, API token + Basic is the simpler fit — no refresh loop.</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /api/v2/tickets/{id}.json</code> → <code>subject</code>, <code>status</code> (<code>new|open|pending|hold|solved|closed</code>),
+  <code>priority</code> (<code>urgent|high|normal|low</code>), <code>via</code> (creation channel), <code>requester_id</code>, <code>submitter_id</code>,
+  <code>organization_id</code>, <code>url</code>, <code>created_at</code>, <code>updated_at</code>
+  (<a href="https://developer.zendesk.com/api-reference/ticketing/tickets/tickets/">Tickets</a>). Contact/org
+  are IDs only — resolving a name/email needs <code>GET /api/v2/users/{requester_id}.json</code> (or
+  <code>?include=users</code> side-loading) and <code>GET /api/v2/organizations/{organization_id}.json</code>.
+- Thread: <code>GET /api/v2/tickets/{ticket_id}/comments.json</code>, paginated, creation order. Each comment
+  has <code>author_id</code>, <code>public</code> (bool), <code>body</code>/<code>html_body</code>/<code>plain_body</code>, <code>created_at</code>, <code>type</code>
+  (<code>Comment</code>/<code>VoiceComment</code>), <code>attachments[]</code> with <code>content_url</code>
+  (<a href="https://developer.zendesk.com/api-reference/ticketing/tickets/ticket_comments/">Ticket Comments</a>).
+  There's no role field on the comment itself — resolve <code>author_id</code> against
+  <code>GET /api/v2/users/{id}.json</code>, whose <code>role</code> is <code>"end-user" | "agent" | "admin"</code>
+  (<a href="https://developer.zendesk.com/api-reference/ticketing/users/users/">Users</a>).
+- Attachment: fetch the comment attachment's <code>content_url</code> with the same auth header; Zendesk
+  responds 302 with a temporary signed <code>Location</code>, which is then GET-able with no further auth
+  (<a href="https://developer.zendesk.com/documentation/ticketing/managing-tickets/accessing-end-user-uploaded-attachments/">Accessing end user uploaded attachments</a>).</p>
+<p><strong>Customer vs. agent / public vs. private.</strong> <code>Ticket Comment.public</code> (bool) is the public/private
+split. Customer vs. agent is derived, not inline: resolve <code>author_id</code> → <code>User.role</code>.</p>
+<p><strong>Side Conversations</strong> (<code>GET /api/v2/tickets/{ticket_id}/side_conversations</code>, Suite
+Professional+) are a separate feature for messaging people <em>outside</em> the primary ticket thread
+(email/Slack/Teams), logged against the ticket but not part of the comment stream
+(<a href="https://developer.zendesk.com/api-reference/ticketing/side_conversation/side_conversation/">Side Conversations</a>).
+Not the same thing as an internal note (those are just <code>public:false</code> comments). Sirdar's
+"conversation thread in order" doesn't need this endpoint.</p>
+<p><strong>Pagination.</strong> Cursor (recommended): <code>page[size]</code> (max 100), <code>page[after]</code>/<code>page[before]</code>,
+<code>meta.has_more</code>, <code>links.next</code>. Offset (legacy default): <code>page</code>/<code>per_page</code> (max 100), capped at
+100 pages / 10,000 resources before it 400s
+(<a href="https://developer.zendesk.com/api-reference/introduction/pagination/">Pagination</a>). Use cursor.</p>
+<p><strong>Rate limits.</strong> Team 200 rpm, Professional 400 rpm, Enterprise 700 rpm; High Volume API add-on
+raises the account ceiling to 2500 rpm. Sub-limits: List Tickets past page 500 → 50 rpm; Update
+Ticket → 30/10min per user per ticket; Incremental Exports → 10 rpm (30 with add-on); Ticket
+Attachment Content → 2500 rpm
+(<a href="https://developer.zendesk.com/api-reference/introduction/rate-limits/">Rate limits</a>). 429s carry
+<code>Retry-After</code>.</p>
+<p><strong>MCP.</strong> Confirmed. Zendesk announced an MCP client and server at Relate, May 2026 (client early
+access from June 2026); the server runs at <code>https://{subdomain}.zendesk.com/api/mcp</code>, OAuth,
+read+write scopes
+(<a href="https://www.techradar.com/pro/zendesk-becomes-the-latest-to-adopt-mcp-to-futureproof-customers-in-the-ai-first-era">TechRadar</a>,
+<a href="https://support.zendesk.com/hc/en-us/articles/10497779528730-Connecting-to-MCP-servers-and-using-MCP-tools-in-action-flows">Zendesk support article</a>,
+<a href="https://www.zendesk.com/blog/zendesk-insights/innovation/zendesk-ai-mcp-client/">Zendesk blog</a>).
+Not relevant to a stdlib REST adapter.</p>
+<p><strong>Go clients.</strong> <code>nukosuke/go-zendesk</code> (<a href="https://github.com/nukosuke/go-zendesk">GitHub</a>,
+<a href="https://pkg.go.dev/github.com/nukosuke/go-zendesk">pkg.go.dev</a>) — MIT, community, reasonably
+active, cursor-pagination iterators, mock package. For three read-only GETs against a plain JSON
+REST API, stdlib <code>net/http</code> is the better call — no dependency, no abstraction to work around.</p>
+<hr />
+<h2 id="freshdesk">Freshdesk<a class="headerlink" href="#freshdesk" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL.</strong> <code>https://{domain}.freshdesk.com/api/v2/{resource}</code>
+(<a href="https://developers.freshdesk.com/api/">API docs</a>). No documented regional host variant —
+<strong>not found</strong>; everything routes through the account subdomain.</p>
+<p><strong>Auth.</strong> HTTP Basic with the account API key as username and the literal string <code>X</code> as password
+(<code>curl -u apikey:X ...</code>). This is the only documented auth mode for the core Ticketing API — no
+OAuth — which makes it trivially the simplest option among all vendors surveyed here
+(<a href="https://developers.freshdesk.com/api/">API docs</a>).</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /api/v2/tickets/{id}</code>, optionally <code>?include=conversations</code>. Fields: <code>id</code>,
+  <code>subject</code>, <code>status</code> (int enum: 2 Open, 3 Pending, 4 Resolved, 5 Closed), <code>priority</code> (int enum:
+  1 Low, 2 Medium, 3 High, 4 Urgent), <code>source</code> (int channel enum: 1 Email, 2 Portal, 3 Phone,
+  7 Chat, 9 Feedback Widget, 10 Outbound Email), <code>requester_id</code>, <code>company_id</code>, <code>created_at</code>,
+  <code>updated_at</code> (<a href="https://developers.freshdesk.com/api/">API docs</a>). No API-returned web URL —
+  construct <code>https://{domain}.freshdesk.com/a/tickets/{id}</code> client-side.
+- Thread: <code>?include=conversations</code> on the ticket GET embeds only up to 10 recent conversations
+  (<a href="https://community.freshworks.com/api-and-webhooks-11406/not-receiving-all-conversations-through-freshdesk-api-23736">community note on the 10-item cap</a>).
+  For a complete ordered thread use the dedicated, paginated
+  <code>GET /api/v2/tickets/{id}/conversations</code> instead. Fields: <code>id</code>, <code>body</code>/<code>body_text</code>, <code>incoming</code>
+  (bool), <code>private</code> (bool), <code>user_id</code>, <code>attachments[]</code> (<code>id</code>, <code>name</code>, <code>content_type</code>, <code>file_size</code>,
+  <code>attachment_url</code>), <code>created_at</code>, <code>updated_at</code>. The numeric <code>source</code> mapping on a conversation
+  (reply vs. note vs. forwarded email) is <strong>unverified</strong> — not confirmed against an official page
+  in this pass.
+- Attachment: attachment objects carry <code>attachment_url</code>, a direct CDN link
+  (<code>https://cdn.freshdesk.com/data/helpdesk/attachments/production/{id}/original/{filename}</code>).
+  Whether that URL needs the same Basic-auth header or is already pre-signed is <strong>unverified</strong> —
+  try authenticated first, fall back to unauthenticated on 401.</p>
+<p><strong>Customer vs. agent / public vs. private.</strong> <code>private</code> (bool) on the conversation object is the
+public/private split — <code>true</code> = internal note, agent-only visibility
+(<a href="https://www.eesel.ai/blog/freshdesk-conversations-api">Freshdesk conversations model</a>;
+field name from <a href="https://developers.freshworks.com/freshdesk-sdk/docs/ConversationsApi.html">Freshworks SDK docs</a>).
+There's no explicit role field for customer vs. agent — use <code>incoming</code> (customer-originated
+inbound = <code>true</code>) combined with resolving <code>user_id</code> against Contacts
+(<code>GET /api/v2/contacts/{id}</code>) or Agents (<code>GET /api/v2/agents/{id}</code>). Entries with no matching
+contact/agent id should be treated as <code>system</code>.</p>
+<p><strong>Pagination.</strong> <code>page</code> (1-indexed), <code>per_page</code> (default 30, max 100); a <code>link</code> response header
+carries the next-page URL.</p>
+<p><strong>Rate limits.</strong> Per the official page: Blossom/Garden 3,000 calls/hour, Estate/Forest
+5,000 calls/hour, with an older per-minute framing also present for other tiers (Growth 100 rpm,
+Pro 400 rpm, Enterprise 700 rpm) — the docs mix hourly and per-minute framing by plan generation,
+so treat the tier mapping as plan-dependent and read <code>X-RateLimit-Remaining</code>/<code>Retry-After</code> off
+live responses rather than hardcoding
+(<a href="https://developers.freshdesk.com/api/#ratelimit">API docs, rate limit section</a>).</p>
+<p><strong>MCP.</strong> Confirmed but limited: Freshworks has an MCP integration in Early Access/Beta, restricted
+to Enterprise-plan Freshdesk accounts, API-key auth
+(<a href="https://support.freshdesk.com/support/solutions/articles/50000012670-model-context-protocol-mcp-integration-in-freshdesk-eap-">Freshdesk MCP EAP</a>,
+<a href="https://developers.freshworks.com/docs/agentic-dev-tools/mcp-server/">Freshworks Developer Docs</a>).
+Not GA, not relevant to a plain REST adapter.</p>
+<p><strong>Go clients.</strong> Several small community projects (<code>abemedia/go-freshdesk</code>,
+<code>mattbaird/freshdesk4go</code>, <code>askasoft/gofresh</code>, others) — none dominant, maturity unverified
+per-repo. Stdlib <code>net/http</code> is the sound choice: Basic-auth REST/JSON, no OAuth dance.</p>
+<h3 id="freshservice-differences">Freshservice differences<a class="headerlink" href="#freshservice-differences" title="Permanent link">&para;</a></h3>
+<p>Same Freshworks platform, same general shape, different base and ITSM object types.</p>
+<ul>
+<li>Base: <code>https://{domain}.freshservice.com/api/v2/</code>; API-key Basic auth (username/password auth
+  for the API was deprecated May 31, 2023) (<a href="https://api.freshservice.com/">api.freshservice.com</a>).</li>
+<li>Ticket: <code>GET /api/v2/tickets/{id}</code> — superset of Freshdesk's fields (<code>requester_id</code>,
+  <code>responder_id</code>, <code>group_id</code>, <code>due_by</code>, <code>custom_fields</code>, <code>tags</code>, plus <code>workspace_id</code> on
+  workspace-enabled accounts).</li>
+<li>Conversations: <code>GET /api/v2/tickets/{id}/conversations</code>, with a reply/note write-endpoint split
+  mirroring Freshdesk's. Whether the conversation object carries the same explicit <code>private</code>
+  boolean is <strong>unverified</strong> in this pass — likely, given the shared platform, but confirm against
+  a live account before relying on it.</li>
+<li>Same <code>page</code>/<code>per_page</code> pagination.</li>
+<li>Rate limits (official, per-minute by plan): Starter 100, Growth 200, Pro 400, Enterprise 500,
+  with endpoint sub-limits (e.g. View Ticket 50/80/140/160 across the same tiers); paid add-ons
+  raise Pro/Enterprise to 1,000–2,000 rpm (<a href="https://api.freshservice.com/v2/#ratelimit">api.freshservice.com</a>).</li>
+<li>MCP: a separately announced, also-EAP "Inbound MCP" for Freshservice
+  (<a href="https://support.freshservice.com/support/solutions/articles/50000012678-model-context-protocol-mcp-integration-in-freshservice-eap-">Freshservice MCP EAP</a>).</li>
+</ul>
+<hr />
+<h2 id="intercom">Intercom<a class="headerlink" href="#intercom" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL.</strong> Three fixed regional hosts by workspace data residency: <code>https://api.intercom.io</code>
+(US, default), <code>https://api.eu.intercom.io</code> (EU), <code>https://api.au.intercom.io</code> (AU). Calling the
+US host from a non-US workspace gets proxied, but Intercom recommends calling the workspace's own
+regional host directly
+(<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io">API reference</a>,
+<a href="https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis">REST APIs overview</a>).</p>
+<p><strong>Auth.</strong> A static access token (Bearer, minted once in Developer Hub) for a single-workspace
+private app, or OAuth for public multi-tenant apps. For Sirdar's static-credential model the
+access token is the intended, simplest mechanism
+(<a href="https://developers.intercom.com/docs/build-an-integration/learn-more/authentication">Authentication</a>).</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /tickets/{ticket_id}</code> → <code>id</code>, <code>ticket_id</code> (the id shown in Intercom's UI),
+  <code>ticket_type</code>, <code>ticket_state</code>, <code>contacts</code>, <code>admin_assignee_id</code>, <code>created_at</code>, <code>updated_at</code>. No
+  documented <code>priority</code> or web-URL field on the Ticket model — priority would need a
+  workspace-defined <code>ticket_attributes</code> value if one exists; no "view in app" link is returned
+  (<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tickets/ticket">Ticket reference</a>).
+  Tickets have their own thread via <code>ticket_parts</code> (cap 500), distinct from any linked
+  Conversation (<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/tickets">Tickets</a>).
+- Thread: <code>GET /conversations/{conversation_id}</code> → <code>state</code>, <code>priority</code> (<code>none|low|medium|high|urgent</code>),
+  <code>admin_assignee_id</code>, <code>team_assignee_id</code>, <code>created_at</code>/<code>updated_at</code>, plus embedded
+  <code>conversation_parts.conversation_parts[]</code> — <strong>hard cap of 500 parts per response</strong>, so a long
+  thread needs its own parts-pagination handling beyond that cap
+  (<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/conversations/retrieveconversation">Retrieve conversation</a>).
+- Attachment: parts carry <code>part_attachment</code> objects (<code>name</code>, <code>url</code>, <code>content_type</code>, <code>filesize</code>,
+  <code>width</code>, <code>height</code>) (<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/models/part_attachment">Part attachment model</a>).
+  Per a community thread (not the formal reference, so <strong>community-sourced, not independently
+  confirmed</strong>), these CDN <code>url</code> values are pre-signed with roughly a 30-minute expiry — download
+  promptly, re-fetch the conversation if expired
+  (<a href="https://community.intercom.com/conversations-9/handling-and-accessing-file-attachment-7598">community thread</a>).</p>
+<p><strong>Customer vs. agent / public vs. private.</strong> Each part's <code>author.type</code> distinguishes
+<code>user</code>/<code>lead</code> (customer) from <code>admin</code>/<code>bot</code>/<code>team</code> (agent) — this enum list is consistent with
+Intercom's documented terminology elsewhere but the full <code>conversation_part</code> schema page 404'd
+during this research, so <strong>not independently re-verified against a live schema</strong>; spot-check
+before hard-coding. <code>part_type</code> is the public/private split: <code>"comment"</code> = customer-visible,
+<code>"note"</code> = internal-only, admin-to-admin
+(<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/models/ticket_reply">Ticket reply model</a>,
+<a href="https://developers.intercom.com/docs/references/rest-api/api.intercom.io/conversations/replyconversation">Reply to a conversation</a>).</p>
+<p><strong>Pagination.</strong> Cursor: <code>per_page</code> (max 150), <code>starting_after</code> from <code>pages.next.starting_after</code>.
+Stateless cursor — concurrent record changes can cause duplicates/gaps
+(<a href="https://developers.intercom.com/docs/build-an-integration/learn-more/rest-apis/pagination-cursor">Cursor pagination</a>).</p>
+<p><strong>Rate limits.</strong> 10,000 req/min per app, 25,000 req/min per workspace, enforced as a rolling
+budget in 10-second windows (~166 req/10s); 429 on breach; higher limits available on request
+(<a href="https://developers.intercom.com/docs/references/rest-api/errors/rate-limiting">Rate limiting</a>).</p>
+<p><strong>MCP.</strong> Confirmed official: the Intercom MCP Server, 14 tools (search/fetch conversations,
+contacts, companies, articles, internal-note creation) — <strong>not read-only</strong>, write scopes required
+for note creation (<a href="https://developers.intercom.com/docs/guides/mcp">MCP guide</a>). A third-party
+directory claims US/EU-only, no AU yet — <strong>unverified against Intercom's own page</strong>.</p>
+<p><strong>Go clients.</strong> Official <code>github.com/intercom/intercom-go</code> — thin wrapper, but the repo's own
+README says Intercom is running it on limited maintenance capacity (critical issues only) while
+building a dedicated SDK team (<a href="https://github.com/intercom/intercom-go">repo</a>). Given that and
+the narrow three-call surface, stdlib <code>net/http</code> is the better choice — no dependency risk, and
+the whole client is a bearer header plus three GETs.</p>
+<hr />
+<h2 id="hubspot-service-hub">HubSpot Service Hub<a class="headerlink" href="#hubspot-service-hub" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL.</strong> Single global host, <code>https://api.hubapi.com</code> — no documented region variant.
+Legacy API keys were deprecated November 30, 2022 in favor of private-app tokens
+(<a href="https://developers.hubspot.com/docs/apps/developer-platform/build-apps/authentication/overview">Authentication overview</a>).</p>
+<p><strong>Auth.</strong> Private-app access token (<code>pat-na1-...</code>/<code>pat-eu1-...</code>, Bearer header), generated once
+under Settings → Integrations → Private Apps, shown only at creation — versus a full OAuth app
+for multi-tenant integrations. For a single-account static-credential stdlib client, the
+private-app token is the direct fit — no refresh flow
+(<a href="https://developers.hubspot.com/docs/apps/developer-platform/build-apps/authentication/overview">Authentication overview</a>).</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /crm/v3/objects/tickets/{ticketId}?properties=...&amp;associations=...</code>. Relevant
+  properties: <code>subject</code>, <code>content</code>, <code>hs_pipeline</code>, <code>hs_pipeline_stage</code> (status),
+  <code>hs_ticket_priority</code>, <code>hs_ticket_category</code>, <code>createdate</code>, <code>hs_lastmodifieddate</code>. Properties are
+  opt-in per request via <code>properties</code>; <code>associations</code> pulls linked contacts/companies in the same
+  call. No API-returned record URL — a UI link (e.g.
+  <code>https://app.hubspot.com/contacts/{portalId}/ticket/{ticketId}</code>) is an inferred pattern, <strong>not
+  confirmed in the reference</strong>
+  (<a href="https://developers.hubspot.com/docs/guides/api/crm/objects/tickets">Tickets guide</a>).
+- Thread: HubSpot tickets don't carry an inline thread — a ticket is associated to a Conversations
+  Inbox thread via the general Associations API
+  (<code>PUT /crm/v3/objects/tickets/{ticketId}/associations/{toObjectType}/{toObjectId}/{associationTypeId}</code>),
+  read back off the ticket's <code>associations</code> block. This specific ticket↔thread association
+  mechanism is corroborated only by a community thread, <strong>not a primary reference page</strong> —
+  flagged as the weakest-verified claim in this survey
+  (<a href="https://community.hubspot.com/t/associating-a-conversation-to-ticket/108218">community thread</a>).
+  Once <code>threadId</code> is known: <code>GET /conversations/v3/conversations/threads/{threadId}/messages</code>
+  (and <code>GET /conversations/v3/conversations/threads</code> to list/filter threads by ticket/contact/inbox)
+  — this part is on HubSpot's own reference
+  (<a href="https://developers.hubspot.com/docs/api-reference/legacy/conversations/guide">Conversations guide</a>).
+- Attachment: message <code>attachments[]</code> holds <code>type: "FILE"</code> objects referencing a file by <code>fileId</code>,
+  resolving to an absolute URL. The exact field set (id/name/size/mime) and whether the download
+  URL needs an <code>Authorization</code> header or is pre-signed is <strong>not spelled out on the reference
+  page — unverified</strong>, needs a live-account check before implementation.</p>
+<p><strong>Customer vs. agent / public vs. private.</strong> Messages carry <code>senders[]</code>/<code>recipients[]</code> with an
+<code>actorId</code> whose <em>prefix</em> encodes role, not an explicit type field: <code>A-</code> agent/HubSpot user, <code>V-</code>
+visitor/contact, <code>E-</code> email address, <code>I-</code> integration, <code>S-</code> system — plus an <code>L-</code> prefix the
+source page associated with "customer agent," which is less certain and should be spot-checked
+against a live payload. The <code>type</code> field on a message is the public/private split: <code>"MESSAGE"</code>
+(customer-facing) vs. <code>"COMMENT"</code> (internal-only, never sent to the visitor); <code>"WELCOME_MESSAGE"</code>
+also appears. <code>direction</code> (<code>INCOMING</code>/<code>OUTGOING</code>) is separate and orthogonal
+(<a href="https://developers.hubspot.com/docs/api-reference/legacy/conversations/guide">Conversations guide</a>).</p>
+<p><strong>Pagination.</strong> Cursor: <code>after</code>/<code>limit</code>, threads/messages endpoints cap at 500 per page — notably
+higher than CRM object endpoints (100/page typical, 10,000-record ceiling per search query before
+needing to chunk by filter). Cursor returned as <code>paging.next.after</code>
+(<a href="https://developers.hubspot.com/docs/api-reference/legacy/conversations/guide">Conversations guide</a>).</p>
+<p><strong>Rate limits.</strong> Private-app tiers (burst/10s, daily cap): Free/Starter 100/10s, 250,000/day;
+Professional 190/10s, 625,000/day; Enterprise 190/10s, 1,000,000/day; a paid add-on raises burst
+to 250/10s plus +1,000,000/day. CRM <strong>search</strong> endpoints are separately capped at 5 req/s per
+account (<a href="https://developers.hubspot.com/docs/developer-tooling/platform/usage-guidelines">Usage guidelines</a>).
+No documented figure specific to the Conversations threads/messages endpoints — <strong>unverified</strong>,
+assume the general app-level limits apply.</p>
+<p><strong>MCP.</strong> Confirmed official: HubSpot MCP Server, public beta announced May 6, 2025 — read/write
+across CRM objects including tickets, plus engagements, with read-only org context and marketing
+assets and an explicit carve-out for sensitive/PHI properties; OAuth 2.0 via HubSpot User-level
+Apps (<a href="https://developers.hubspot.com/changelog/mcp-server-beta">Changelog</a>). A separate claim of
+GA on April 13, 2026 could not be corroborated on HubSpot's own changelog — <strong>treat GA date as
+unverified</strong>, beta is the only officially confirmed state found.</p>
+<p><strong>Go clients.</strong> No official Go SDK found (no <code>hubspot/hubspot-api-go</code> repo, no Go entry on
+HubSpot's SDK listings) — absence-of-evidence, not a confirmed negative from a canonical index,
+but consistent with what's publicly known. Given that and the narrow endpoint surface, stdlib
+<code>net/http</code> is the clear choice.</p>
+<hr />
+<h2 id="jira-service-management">Jira Service Management<a class="headerlink" href="#jira-service-management" title="Permanent link">&para;</a></h2>
+<p>Overlaps with Sirdar's plain Jira tracker adapter: a JSM "customer request" is the same
+underlying Jira issue viewed through the service-desk lens. Fetching the issue body can reuse the
+tracker adapter's plumbing; what's JSM-specific is the request-portal metadata (request type,
+SLA, portal status) and — critically — the public/internal distinction on comments, which vanilla
+Jira issues don't carry natively. The vanilla comment endpoint only exposes a <code>public</code>/<code>jsdPublic</code>
+flag <em>because</em> a Service Desk project is attached
+(<a href="https://community.atlassian.com/forums/Jira-questions/Jira-Cloud-API-for-Creating-Comments-on-Issue-has-a-jsdPublic/qaq-p/868324">community: <code>jsdPublic</code></a>,
+<a href="https://jira.atlassian.com/browse/JSDCLOUD-7997">JSDCLOUD-7997</a>). Practical implication: a JSM
+helpdesk adapter should hit the Service Desk REST API (<code>servicedeskapi</code>) directly rather than
+reimplement JSM semantics over the tracker adapter — they can share HTTP/auth plumbing but should
+be separate adapter implementations.</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET https://{site}.atlassian.net/rest/servicedeskapi/request/{issueIdOrKey}</code> →
+  <code>issueId</code>, <code>issueKey</code>, <code>summary</code>, <code>requestTypeId</code>, <code>serviceDeskId</code>, <code>createdDate</code> (multiple
+  formats), <code>currentStatus</code> (name/category/date), <code>reporter</code> (account id, name, email, timezone),
+  <code>requestFieldValues</code> (label/value pairs; hidden fields excluded for customer-scoped tokens),
+  <code>_links</code> (portal URL, agent view, Jira REST self-link)
+  (<a href="https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/">API group: request</a>).
+  No direct <code>priority</code>/<code>channel</code> field — likely inside <code>requestFieldValues</code> or needs cross-
+  referencing the underlying issue via <code>/rest/api/3/issue/{key}</code> — <strong>unverified exact shape</strong>,
+  check against a live tenant. Customer-scoped tokens only see requests they created,
+  were created on behalf of, or participate in.
+- Thread: <code>GET /rest/servicedeskapi/request/{issueIdOrKey}/comment</code> (paginated <code>start</code>/<code>limit</code>,
+  <code>expand</code>) → <code>author</code>, <code>body</code>, <code>created</code>, and a boolean <code>public</code> — <code>false</code> = internal/agent-only,
+  <code>true</code> = customer-visible
+  (<a href="https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/">API group: request</a>;
+  semantics corroborated by
+  <a href="https://github.com/sooperset/mcp-atlassian/issues/847">mcp-atlassian #847</a> and
+  <a href="https://community.atlassian.com/forums/Jira-questions/create-private-comment-in-jiraservicedesk/qaq-p/2146244">community: private comment in JSD</a>).
+  Single comment: <code>GET .../comment/{commentId}</code>. Exact attachment-id field name on a comment is
+  <strong>unverified</strong> — the OpenAPI schema wasn't retrievable in this pass. JSM has no distinct
+  "system" author on this endpoint — status-transition events would need the issue changelog
+  instead, <strong>unverified</strong>.
+- Attachment: metadata via <code>GET/POST /rest/servicedeskapi/request/{issueIdOrKey}/attachment</code>;
+  byte download via the platform v3 endpoint <code>GET /rest/api/3/attachment/content/{id}</code> (supports
+  <code>Range</code>) — same Basic/OAuth auth header as everything else in normal configurations
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/">Jira Cloud platform: issue attachments</a>;
+  <a href="https://community.developer.atlassian.com/t/download-attachment-from-rest-api/40860">community: download attachment</a>).
+  Atlassian's own support docs caveat that bulk REST attachment downloading "is not a supported
+  use case" in some contexts — a footnote, not a blocker; the endpoint is documented and works
+  (<a href="https://support.atlassian.com/jira/kb/how-to-download-attachments-using-rest-api-and-sso/">support KB</a>).</p>
+<p><strong>Base URL / auth.</strong> <code>https://{site}.atlassian.net</code> for both <code>/rest/api/3/*</code> and
+<code>/rest/servicedeskapi/*</code>. Basic auth with <code>base64(email:api_token)</code> (the fit for Sirdar's
+env/keychain model) or OAuth 2.0 (3LO) for apps acting on a user's behalf
+(<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/">intro</a>,
+<a href="https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/">Basic auth</a>,
+<a href="https://developer.atlassian.com/cloud/jira/software/oauth-2-3lo-apps/">OAuth 2.0 (3LO)</a>).
+Read-only JSM scopes: <code>read:servicedesk-request</code> (classic) or granular
+<code>read:request:jira-service-management</code> + <code>read:user:jira</code>.</p>
+<p><strong>Pagination.</strong> Platform v3 search: <code>startAt</code>/<code>maxResults</code>. <code>servicedeskapi</code> list endpoints
+(comments, attachments, participants): <code>start</code>/<code>limit</code>.</p>
+<p><strong>Rate limits.</strong> Atlassian moved Forge/Connect/OAuth (3LO) apps to a points-based quota
+(effective March 2, 2026); plain API-token traffic — what Sirdar would use — stays on the older
+burst-rate regime. 429s can carry <code>Retry-After</code> and <code>X-RateLimit-Reset</code>
+(<a href="https://developer.atlassian.com/cloud/jira/platform/rate-limiting/">Rate limiting</a>,
+<a href="https://www.atlassian.com/blog/development/evolving-api-rate-limits">Atlassian blog on the change</a>).</p>
+<p><strong>MCP.</strong> Confirmed official and first-party (distinct from the older community project): the
+Atlassian Remote MCP Server at <code>https://mcp.atlassian.com/v1/mcp/authv2</code>, covering Jira,
+Confluence, JSM, Bitbucket, Compass; OAuth 2.1 or API tokens; reported GA February 4, 2026
+(<a href="https://github.com/atlassian/atlassian-mcp-server">GitHub</a>,
+<a href="https://www.atlassian.com/blog/announcements/remote-mcp-server">Atlassian blog</a>,
+<a href="https://www.atlassian.com/platform/remote-mcp-server">product page</a>). The community
+<code>sooperset/mcp-atlassian</code> (~5,400 stars, self-hosted, also works against Server/Data Center
+8.14+) predates it and remains the fallback for self-hosted instances.</p>
+<p><strong>Go clients.</strong> <code>andygrunwald/go-jira</code> — MIT, ~1.6k stars, actively released, mature for core
+Jira issue/comment/attachment operations
+(<a href="https://github.com/andygrunwald/go-jira">repo</a>, <a href="https://pkg.go.dev/github.com/andygrunwald/go-jira">pkg.go.dev</a>).
+It's scoped to the core Jira REST API, not <code>servicedeskapi</code> — <strong>not confirmed</strong> that it wraps
+JSM-specific endpoints, so a JSM adapter likely needs hand-rolled stdlib calls regardless. Given
+Sirdar's stdlib-only constraint this is moot either way, but worth noting go-jira doesn't remove
+the JSM-specific work.</p>
+<hr />
+<h2 id="help-scout">Help Scout<a class="headerlink" href="#help-scout" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL / auth.</strong> <code>https://api.helpscout.net/v2/</code>; token endpoint
+<code>https://api.helpscout.net/v2/oauth2/token</code>
+(<a href="https://developer.helpscout.com/mailbox-api/overview/authentication/">Authentication</a>). OAuth2
+only — no API-key mode. Two flows: Client Credentials (server-to-server, no refresh token,
+~2-day-lived access token re-minted on 401 — the fit for Sirdar's read-only model, stored as a
+client id/secret pair) or Authorization Code (acting on behalf of a specific user). The
+client-credentials app must be tied to an active invited user on the account.</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /v2/conversations/{id}</code> → <code>subject</code>, <code>status</code>
+  (<code>active|open|pending|closed|spam</code>), <code>type</code> (<code>email|chat|phone</code>), <code>primaryCustomer</code> (id, name,
+  email — the contact/account), <code>createdBy</code>, <code>createdAt</code>, a <code>threads</code> count (published,
+  non-note threads), portal/app URL under <code>_links</code>
+  (<a href="https://developer.helpscout.com/mailbox-api/endpoints/conversations/get/">Get Conversation</a>).
+  Threads aren't inlined by default — add <code>?embed=threads</code> or use the dedicated endpoint below. No
+  explicit priority field confirmed — Help Scout leans on status + custom fields/tags instead;
+  needs a live-tenant check.
+- Thread: <code>GET /v2/conversations/{conversationId}/threads</code>, in order. Each has <code>id</code>, <code>type</code>,
+  <code>status</code>, <code>state</code> (<code>published|draft|hidden|review|bounced</code>), <code>body</code>, <code>createdBy</code> (<code>type:
+  "user"</code> or <code>"customer"</code>), <code>createdAt</code>, <code>_embedded.attachments</code>. <code>type</code> alone answers both of
+  Sirdar's questions: <code>"customer"</code> = inbound customer message (public), <code>"message"</code> with
+  <code>createdBy.type: "user"</code> = public staff reply, <code>"note"</code> = internal-only, <code>"lineitem"</code> = a
+  state-change event with no body (maps to <code>system</code>); other values: <code>beaconchat</code>, <code>chat</code>,
+  <code>forwardchild</code>, <code>forwardparent</code>, <code>phone</code>
+  (<a href="https://developer.helpscout.com/mailbox-api/endpoints/conversations/threads/list/">List Threads</a>).
+  This is the cleanest single-field role+visibility model of any vendor surveyed here.
+- Attachment: <code>GET /v2/conversations/{conversationId}/attachments/{attachmentId}/file</code> (raw
+  binary, <code>Content-Disposition</code>) or <code>.../data</code> (JSON <code>{"data": "&lt;base64&gt;"}</code>), both
+  <code>Authorization: Bearer {access_token}</code>. The exact doc-page slugs 404'd on direct fetch during
+  this research (confirmed instead via the docs-portal navigation and the shape of the JSON
+  example) — high-confidence but not screenshot-verified; re-check before finalizing.</p>
+<p><strong>Pagination.</strong> <code>?page=N</code>; most list endpoints default to 50/page, List Conversations defaults to
+25/page. <code>_links</code> carries <code>self</code>/<code>next</code>/<code>previous</code>/<code>first</code>/<code>last</code>, plus a page object with
+<code>size</code>/<code>totalElements</code>/<code>totalPages</code>/<code>number</code>.</p>
+<p><strong>Rate limits.</strong> The official page confirms the mechanism (read = 1 unit, write = 2 units toward
+the per-minute budget; 429 on exceed; <code>X-RateLimit-Limit-Minute</code>,
+<code>X-RateLimit-Remaining-Minute</code>, <code>X-RateLimit-Retry-After</code> headers) but not exact numeric tiers —
+secondary sources cite roughly 200/min Standard, 400/min Plus, 800/min Pro, which is <strong>not
+independently verified from an official page</strong>
+(<a href="https://developer.helpscout.com/mailbox-api/overview/rate-limiting/">Rate limiting</a>).</p>
+<p><strong>MCP.</strong> No official Help Scout MCP server found — Help Scout's own developer navigation makes no
+mention of one; only a third-party community project
+(<code>drewburchfield/help-scout-mcp-server</code>) surfaced. Treated as verified-absent for this pass.</p>
+<p><strong>Go clients.</strong> None found — a GitHub search turned up nothing, and Help Scout's own SDK listing
+covers PHP (and a Laravel wrapper) only. Stdlib <code>net/http</code> is the only real option here.</p>
+<hr />
+<h2 id="front">Front<a class="headerlink" href="#front" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL / auth.</strong> <code>https://api2.frontapp.com</code>. API tokens (Settings → Developers,
+<code>Authorization: Bearer {token}</code>) — the simpler fit for a single-tenant read-only adapter — or
+OAuth 2.0 for public/multi-tenant apps
+(<a href="https://dev.frontapp.com/docs/authentication">Authentication</a>,
+<a href="https://dev.frontapp.com/docs/create-and-revoke-api-tokens">API tokens</a>).</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /conversations/{id}</code> → <code>id</code>, <code>subject</code>, <code>status</code>, <code>status_id</code>/<code>status_category</code>,
+  <code>assignee</code> (teammate object), <code>recipient</code> (contact handle + role), <code>tags</code>, <code>is_private</code>,
+  <code>created_at</code>/<code>updated_at</code> (Unix), <code>ticket_ids</code>, <code>_links.related</code> pointers to <code>messages</code> and
+  <code>comments</code> (<a href="https://dev.frontapp.com/reference/conversations">Conversations</a>). No first-class
+  priority field confirmed — Front models urgency via tags/custom fields; needs a live-tenant
+  check.
+- Thread: Front deliberately splits the thread into two resources rather than one feed with a
+  flag. <code>GET /conversations/{id}/messages</code> — customer-facing, externally sent/received content:
+  <code>id</code>, <code>type</code>, <code>is_inbound</code> (bool), <code>is_draft</code>, <code>created_at</code>, <code>author</code>, <code>recipients</code>,
+  <code>body</code>/<code>text</code>/<code>blurb</code>, <code>attachments</code>. <code>GET /conversations/{id}/comments</code> — internal-only
+  teammate notes ("discussions" in the UI), explicitly "never sent and cannot be shared outside
+  of Front": <code>id</code>, <code>author</code> (teammate), <code>body</code>, <code>posted_at</code>, <code>is_pinned</code>
+  (<a href="https://dev.frontapp.com/reference/messages">Messages</a>,
+  <a href="https://dev.frontapp.com/reference/comments">Comments</a>). Sirdar's adapter merges both, sorts
+  by timestamp, and maps <code>messages</code> with <code>is_inbound: true</code> → customer/public, <code>is_inbound:
+  false</code> → agent/public, all <code>comments</code> → agent/private. No documented <code>system</code> author — status-
+  change/assignment events live in a separate <code>events</code> sub-resource, not either feed
+  (<strong>unverified</strong> whether that's worth surfacing).
+- Attachment: attachment objects carry a <code>url</code> (plus <code>metadata.cid</code> for inline images),
+  authenticated the same way as any other API call — no separate pre-signed/unauthenticated
+  scheme confirmed. Message-level file downloads also work via
+  <code>https://api2.frontapp.com/download/{file_id}</code>. The dedicated attachments schema page 404'd on
+  direct fetch — re-verify before finalizing.</p>
+<p><strong>Pagination.</strong> Cursor: <code>limit</code> (default 50, max 100), opaque <code>page_token</code>; response carries
+<code>_pagination.next</code> as a ready-to-use full URL or <code>null</code> — trust <code>next</code>, don't infer end-of-list
+from a short page.</p>
+<p><strong>Rate limits.</strong> Per-minute by plan: Starter 50, Professional 100, Enterprise 200; partner/OAuth
+integrations get 120 rpm enforced per-company; burst allowance = half the plan rate, 10-minute
+replenishment window; resource tiers layer on top (Tier 1: 1 req/s for analytics/exports; Tier 2:
+5 req/s per resource for conversations/messages/channels; "message seen": 10 req/hour per
+message). Headers: <code>x-ratelimit-limit</code>, <code>-remaining</code>, <code>-reset</code>, <code>-burst-limit</code>, <code>-burst-remaining</code>;
+429s carry <code>retry-after</code> (<a href="https://dev.frontapp.com/docs/rate-limiting">Rate limiting</a>).</p>
+<p><strong>MCP.</strong> Confirmed official, hosted: <code>https://mcp.frontapp.com/mcp</code> (streamable HTTP), OAuth 2.1
++ PKCE, per-user identity (no Dynamic Client Registration — OAuth app credentials must be
+configured explicitly). Exposes <code>search_conversations</code>, <code>read_conversation</code>, <code>read_message</code>,
+<code>get_attachment</code> directly relevant to Sirdar's three operations, plus write tools a read-only
+adapter wouldn't call (<a href="https://dev.frontapp.com/docs/mcp-server">MCP Server docs</a>). An earlier
+MCP server version is deprecated — cite the current page.</p>
+<p><strong>Go clients.</strong> Only <code>spirosoik/go-front</code> (~8 stars, last updated 2018) — not viable as a
+maintained dependency (<a href="https://github.com/spirosoik/go-front">repo</a>). Stdlib <code>net/http</code> is the
+right call.</p>
+<hr />
+<h2 id="gorgias">Gorgias<a class="headerlink" href="#gorgias" title="Permanent link">&para;</a></h2>
+<p><strong>Base URL / auth.</strong> <code>{subdomain}.gorgias.com</code>
+(<a href="https://developers.gorgias.com/docs/oauth2-authentication-for-creating-apps-with-gorgias">OAuth2 docs</a>).
+Private/custom integrations use HTTP Basic auth — username = the account's login email, password
+= the API key (<a href="https://developers.gorgias.com/reference/download-file">Download File reference</a>).
+Public apps must use OAuth2 (authorize at <code>/oauth/authorize</code>, token at <code>/oauth/token</code>; access
+tokens expire in 24h, refresh tokens don't). For Sirdar's single-tenant read-only case, Basic auth
+with a long-lived API key (env/keychain-sourced) fits directly.</p>
+<p><strong>Three calls.</strong>
+- Ticket: <code>GET /api/tickets/{id}</code> (<a href="https://developers.gorgias.com/reference/get-ticket">reference</a>),
+  Basic auth, optional <code>relationships</code> expansion. Fields: <code>subject</code>, <code>status</code>, <code>channel</code>, <code>via</code>,
+  <code>customer</code>, <code>assignee_user</code>, <code>created_datetime</code>, <code>updated_datetime</code>, <code>closed_datetime</code>, <code>uri</code>
+  (an API URI, not a browser link — construct
+  <code>https://{subdomain}.gorgias.com/app/ticket/{id}</code> for a human URL)
+  (<a href="https://developers.gorgias.com/reference/the-ticket-object">Ticket object</a>). <strong>No <code>priority</code>
+  field</strong> on the Ticket object — priority lives in tags/custom fields, not as a first-class
+  attribute, contrary to what a generic field checklist would assume.
+- Thread: <code>GET /api/messages?ticket_id={id}</code> — not a ticket-scoped sub-path — with <code>limit</code>
+  (default 30, max 100), <code>order_by</code> (default <code>created_datetime:desc</code>), <code>cursor</code>
+  (<a href="https://developers.gorgias.com/reference/list-messages">List Messages</a>). The TicketMessage
+  object: <code>sender</code>/<code>receiver</code> (user-or-customer objects), <code>from_agent</code> (bool — this is the
+  customer/agent field), <code>public</code> (bool — "whether the message was sent/received by a customer;
+  internal notes are not public" — this is the public/private field), <code>via</code>/<code>channel</code>/<code>source</code>,
+  <code>body_text</code>/<code>body_html</code>, <code>created_datetime</code>/<code>sent_datetime</code>, <code>attachments[]</code>
+  (<a href="https://developers.gorgias.com/reference/the-ticketmessage-object">TicketMessage object</a>).
+  No distinct "system" sender type is documented — system events, if surfaced at all, would come
+  from the Ticket object's <code>events</code> array, which the schema marks deprecated.
+- Attachment: File objects carry only <code>content_type</code>, <code>name</code>, <code>size</code>, <code>url</code> — no separate id, the
+  URL is the identifier. Download:
+  <code>GET /api/{file_type}/download/{domain_hash}/{resource_name}</code>, Basic auth, 307 redirect to a
+  signed time-limited URL — stdlib <code>net/http</code>'s default redirect-following handles this
+  transparently (<a href="https://developers.gorgias.com/reference/download-file">Download File</a>).</p>
+<p><strong>Pagination.</strong> Cursor: <code>cursor</code>, <code>limit</code> (default 30), <code>order_by</code>; envelope <code>data</code>,
+<code>meta.next_cursor</code>, <code>meta.prev_cursor</code> (<a href="https://developers.gorgias.com/reference/pagination">Pagination</a>).</p>
+<p><strong>Rate limits.</strong> Leaky-bucket: API-key integrations 40 req/20s (2 req/s), OAuth2 apps 80 req/20s
+(4 req/s); Enterprise accounts get the same ratios in a 10s window. 429 with <code>Retry-After</code> and
+<code>X-Gorgias-Account-Api-Call-Limit</code> (<code>current/limit</code>) headers
+(<a href="https://developers.gorgias.com/reference/limitations">Limitations</a>).</p>
+<p><strong>MCP.</strong> No official Gorgias MCP server found in docs or a GitHub org search —
+<strong>unverified rather than confirmed absent</strong>, since search tooling was constrained in this pass.</p>
+<p><strong>Go clients.</strong> None found. Stdlib <code>net/http</code> is the right call — small, well-shaped REST API.</p>
+<hr />
+<h2 id="servicenow-itsm">ServiceNow ITSM<a class="headerlink" href="#servicenow-itsm" title="Permanent link">&para;</a></h2>
+<p>Most of <code>developer.servicenow.com</code> and much of <code>docs.servicenow.com</code> returned 403s to automated
+fetches in this pass; the Table API and Attachment API pages did load and are cited directly, the
+rest leans on general, well-established ServiceNow platform knowledge that should be re-verified
+against a live instance before being treated as settled.</p>
+<p><strong>Ticket mapping.</strong> A "ticket" = a record in the <code>incident</code> table (or <code>sc_task</code>/
+<code>sn_customerservice_case</code> for other ITSM/CSM flows; <code>incident</code> is the default helpdesk analogue).</p>
+<p><strong>Base URL / Table API.</strong> <code>https://{instance}.service-now.com</code>. Table API:
+<code>/api/now/table/{tableName}</code> (list, filterable) or <code>/api/now/table/{tableName}/{sys_id}</code> (single
+record; 200 with the record, 404 if missing)
+(<a href="https://www.servicenow.com/docs/access?topicname=c_TableAPI.html">Table API docs</a>, fetched
+live). Confirmed live this pass. For <code>incident</code>, expect <code>short_description</code>, <code>state</code> (status),
+<code>priority</code>, <code>sys_created_on</code>/<code>sys_updated_on</code>, <code>caller_id</code> (contact), <code>company</code> (customer/
+account), <code>sys_id</code> (build a human URL as
+<code>https://{instance}.service-now.com/nav_to.do?uri=incident.do?sys_id={sys_id}</code>) — these specific
+field names are drawn from general ServiceNow schema knowledge, <strong>not confirmed against the
+incident dictionary itself</strong> in this pass.</p>
+<p><strong>Thread — journal fields.</strong> <code>comments</code> and <code>work_notes</code> on <code>incident</code> are journal-type fields;
+their history is retrievable from the <code>sys_journal_field</code> table, e.g.
+<code>GET /api/now/table/sys_journal_field?sysparm_query=element_id={sys_id}^element=comments</code> for
+customer-visible comments and <code>element=work_notes</code> for internal-only notes, ordered by
+<code>sys_created_on</code>. This is well-established, widely documented ServiceNow behavior, but <strong>could
+not be re-confirmed against a live official doc page in this pass</strong> (repeated 404s, and no search
+budget left to chase it further) — flag as the single most important claim in this section to
+verify before an adapter ships, including whether a newer dedicated Journal/Comments API has
+superseded this pattern.</p>
+<p><strong>Attachments.</strong> Confirmed live this pass
+(<a href="https://www.servicenow.com/docs/access?topicname=c_AttachmentAPI.html">Attachment API docs</a>):
+<code>GET /api/now/attachment</code> lists metadata (<code>sysparm_query</code>, e.g. <code>table_sys_id={sys_id}</code>, plus
+<code>sysparm_limit</code>/<code>sysparm_offset</code>, default limit 1000) — filename, size, content-type, download
+links. <code>GET /api/now/attachment/{sys_id}/file</code> streams the binary; metadata also comes back in an
+<code>X-Attachment-Metadata</code> response header; <code>Accept</code> filters by content type. Auth is HTTP Basic in
+the documented examples; requires read role on the target table plus attachment-read role.</p>
+<p><strong>Auth.</strong> The fetched Table API doc's examples use HTTP Basic; OAuth2 and API-key auth are
+well-documented general ServiceNow REST capabilities but weren't spelled out on the page fetched
+in this pass — <strong>not directly confirmed from that page</strong>.</p>
+<p><strong>Pagination.</strong> <code>sysparm_limit</code> (default 10,000), <code>sysparm_offset</code> (default 0); <code>Link</code> header
+(<code>next</code>/<code>prev</code>/<code>first</code>/<code>last</code>) and <code>X-Total-Count</code>.</p>
+<p><strong>Rate limits.</strong> Not a fixed global number — ServiceNow rate limits are configured per-instance by
+the customer's admin via REST API rate limit rules. A design doc should say "check the target
+instance's configured limits," not cite a figure.</p>
+<p><strong>MCP.</strong> No official, product-grade ServiceNow MCP server confirmed. A search of the ServiceNow
+GitHub org surfaced only small, mostly archived research/internal repos referencing MCP — not a
+supported ITSM data-access server. Whether Now Assist / AI Agent Studio separately acts as an MCP
+client is <strong>unverified — not confirmed either way</strong> in this pass, web search budget ran out
+before it could be chased down.</p>
+<p><strong>Go clients.</strong> No mature official or widely-adopted Go SDK found; stdlib <code>net/http</code> against the
+Table/Attachment REST APIs matches what community tooling also does.</p>
+<hr />
+<h2 id="salesforce-service-cloud">Salesforce Service Cloud<a class="headerlink" href="#salesforce-service-cloud" title="Permanent link">&para;</a></h2>
+<p><code>developer.salesforce.com</code> returned 403s to every fetch attempted in this pass, and
+<code>help.salesforce.com</code> served a JS shell with no extractable content. Everything below is general,
+well-established Salesforce platform knowledge, <strong>not confirmed against a live official page in
+this research pass</strong> — the highest-priority section to re-verify before an adapter is built.</p>
+<p><strong>Ticket mapping / base URL.</strong> The Case object is the ticket. Base URL is the org's instance URL,
+typically <code>https://{instance}.my.salesforce.com</code> (My Domain) or the legacy
+<code>https://{instance}.salesforce.com</code>.</p>
+<p><strong>Ticket.</strong> <code>GET /services/data/v{version}/sobjects/Case/{id}</code> → <code>Subject</code>, <code>Status</code>, <code>Priority</code>,
+<code>Origin</code> (channel), <code>ContactId</code>/<code>AccountId</code>, <code>CreatedDate</code>/<code>LastModifiedDate</code>/<code>ClosedDate</code>. Human
+URL is typically <code>https://{instance}.lightning.force.com/lightning/r/Case/{id}/view</code>.</p>
+<p><strong>Thread.</strong> No single unified conversation endpoint — build one by querying two object types via
+SOQL against <code>/services/data/v{version}/query?q=...</code> and interleaving by timestamp:
+<code>CaseComment</code> (internal-only by design, distinguished by <code>IsPublished</code> bool, plus <code>CommentBody</code>,
+<code>CreatedById</code>, <code>CreatedDate</code>, <code>ParentId</code>) and <code>EmailMessage</code> (the customer-facing email thread,
+<code>Incoming</code> bool distinguishing inbound customer email from outbound agent email, plus
+<code>TextBody</code>/<code>HtmlBody</code>, <code>FromAddress</code>, <code>ToAddress</code>, <code>MessageDate</code>, <code>ParentId</code>). <code>CaseComment.IsPublished</code>
+and <code>EmailMessage.Incoming</code> are the standard, widely-documented field names for this — but
+<strong>unverified against a live Object Reference page in this pass</strong>; confirm before an adapter
+depends on them.</p>
+<p><strong>Attachments.</strong> Two mechanisms: the legacy <code>Attachment</code> object (Salesforce is moving away from
+it) and the current <code>ContentDocumentLink</code> → <code>ContentVersion</code> model (Salesforce Files), which new
+development should target. Binary download is via <code>ContentVersion.VersionData</code> (a base64 field)
+or <code>/sobjects/ContentVersion/{id}/VersionData</code>.</p>
+<p><strong>Auth.</strong> OAuth2 via connected apps. JWT bearer flow is the recommended non-interactive,
+server-to-server pattern for a headless read-only adapter; the username-password OAuth flow has
+been getting phased out across recent Salesforce releases — treat JWT bearer as the only durable
+non-interactive option, though the exact deprecation release/date is <strong>not confirmed</strong> in this
+pass.</p>
+<p><strong>Pagination.</strong> SOQL results page via <code>nextRecordsUrl</code> in the response body once results exceed
+the default batch size (2,000 records/page).</p>
+<p><strong>Rate limits.</strong> Per-org rolling 24-hour API call limits that scale by edition/license
+(materially higher for Enterprise/Unlimited than Professional) — exact current numbers <strong>not
+confirmed</strong> in this pass; these shift by release and edition, so treat as "check the org's
+current limit," not a fixed figure.</p>
+<p><strong>MCP.</strong> Confirmed via GitHub: <code>salesforcecli/mcp</code>, Apache 2.0, 60+ tools across 14 toolsets
+(SOQL queries, metadata deploy/retrieve, Apex, LWC, DevOps Center)
+(<a href="https://github.com/salesforcecli/mcp">repo</a>). It's a CLI-adjacent org-development/admin tool,
+not purpose-built as a read-only case/thread reader — but since it exposes arbitrary SOQL it
+could technically answer Sirdar's three operations. Worth a mention as an alternative integration
+path, distinct from a bespoke adapter.</p>
+<p><strong>Go clients.</strong> No mature official Go SDK; community libraries are thin REST wrappers. The main
+implementation cost for a stdlib adapter is SOQL query construction (string-building with correct
+escaping for the <code>q=</code> parameter), not the HTTP mechanics.</p>
+<hr />
+<h2 id="zoho-desk-already-implemented">Zoho Desk (already implemented)<a class="headerlink" href="#zoho-desk-already-implemented" title="Permanent link">&para;</a></h2>
+<p><code>internal/source/zohodesk</code> is the one adapter that exists today: API v1
+(<code>{BaseURL}/api/v1/tickets/{id}</code> for the ticket, <code>orgId</code> header plus
+<code>Authorization: Zoho-oauthtoken {token}</code> for auth, an OAuth refresh-token flow sitting outside
+the adapter itself to keep the token fresh). Three quirks worth calling out for anyone building
+the next adapter against this one as a template, all confirmed directly from the working code
+(<code>internal/source/zohodesk/client.go</code>, <code>attachments.go</code>) rather than the vendor docs: (1) the
+conversation feed is two-tier — <code>GET /api/v1/tickets/{id}/conversations</code> lists entries typed
+<code>"thread"</code> or <code>"comment"</code>, and a <code>"thread"</code> entry only carries a summary until you follow up with
+<code>GET /api/v1/tickets/{id}/threads/{threadId}?include=plainText</code>, which is the only way to get a
+clean text body instead of raw HTML (falling back to <code>summary</code> then <code>content</code> if <code>plainText</code> is
+empty); (2) inline attachments aren't in any <code>attachments[]</code> array at all — they're <code>&lt;img
+src="...inlineattachments..."&gt;</code> tags buried in a thread or comment's HTML <code>content</code>, which the
+adapter has to regex out and resolve into synthetic <code>inline-N.png</code> attachment references
+alongside the real <code>attachments[]</code> entries; (3) role/visibility aren't uniform across entry
+types — a <code>"thread"</code> entry's customer/agent split comes from <code>direction</code> (<code>"in"</code> = customer), a
+<code>"comment"</code> entry's comes from <code>commenterType</code> (<code>CONTACT</code>/<code>END_USER</code> = customer), and a
+comment's public/private split comes from <code>isPublic</code> (absent/true = public), so there's no single
+field name that works across the whole feed the way Help Scout's or Gorgias's does. IM-session
+(chat) transcripts were expected to need separate handling but turned out to surface through the
+same <code>inlineattachments</code>-style URL pattern as other inline images, so no separate code path was
+needed for them in practice — flagged as based on the implemented behavior, not a vendor doc
+statement, since Zoho's own API reference page (<code>desk.zoho.com/DeskAPIDocument</code>) renders as an
+SPA that this pass's fetch tooling couldn't extract text from.</p>
+<hr />
+<h2 id="ranking-what-to-build-next">Ranking: what to build next<a class="headerlink" href="#ranking-what-to-build-next" title="Permanent link">&para;</a></h2>
+<p>By rough SMB/mid-market support-team share and how much of the "three calls" surface is already
+clean vs. needs derivation/cross-referencing:</p>
+<ol>
+<li><strong>Zendesk Support</strong> — the largest SMB/mid-market installed base of the group and the most
+   thoroughly documented API surveyed here. The only real friction is that customer/agent role
+   isn't inline on a comment (needs a <code>users/{id}</code> lookup), which is a one-line cache, not a
+   design problem.</li>
+<li><strong>Freshdesk</strong> — comparable share to Zendesk in the price-sensitive SMB segment, and the
+   simplest auth of any vendor here (API key as a Basic-auth username, no OAuth at all). The
+   <code>private</code> boolean is inline on every conversation; only the attachment-URL auth requirement is
+   genuinely unverified and worth a five-minute check against a trial account before shipping.</li>
+<li><strong>Intercom</strong> — strong share among PLG/SaaS support teams, and a clean single <code>part_type</code>
+   split for public/private. The 500-part cap and the separate Ticket/Conversation split add real
+   but manageable complexity.</li>
+<li><strong>Help Scout</strong> — smaller install base than the above three, but the cleanest data model
+   surveyed: one <code>type</code> enum on the thread endpoint answers both the role and the visibility
+   question at once, and OAuth2 client-credentials is a good match for Sirdar's static-credential
+   model. High value-per-hour-of-implementation, worth doing early even though its market share
+   doesn't justify first place on its own.</li>
+<li><strong>HubSpot Service Hub</strong> — large SMB reach through the CRM bundle, but the ticket→conversation-
+   thread association is the least officially documented mechanism in this survey (one community
+   thread, no primary reference page). Confirm that association call against a live portal before
+   committing to it.</li>
+<li><strong>Front</strong> — solid small-team share; the messages/comments split is a minor extra merge step,
+   not a real obstacle.</li>
+<li><strong>Gorgias</strong> — narrow but deep share specifically in e-commerce/Shopify-adjacent support teams;
+   worth it if that's a segment Sirdar wants to reach, otherwise lower priority given the smaller
+   overall addressable base.</li>
+<li><strong>Jira Service Management</strong> — high overlap with the tracker adapter Sirdar already has lowers
+   the marginal cost, but the JSM-specific pieces (public/private comments, request metadata) are
+   still a distinct implementation, and JSM's addressable base skews toward teams that already
+   have a Jira tracker adapter anyway.</li>
+<li><strong>Salesforce Service Cloud</strong> — huge overall CRM footprint but skews enterprise, and is the
+   most expensive to build of the group: SOQL query construction, JWT-bearer OAuth, and a
+   two-object (CaseComment + EmailMessage) thread merge, on top of being the least-verified
+   section in this survey.</li>
+<li><strong>ServiceNow ITSM</strong> — enterprise IT-ops niche, the least aligned with an SMB/mid-market
+    support target. The journal-field comment model and per-instance-configurable rate limits are
+    the most bespoke of any vendor here.</li>
+</ol>
+<h2 id="proposed-common-config-shape">Proposed common config shape<a class="headerlink" href="#proposed-common-config-shape" title="Permanent link">&para;</a></h2>
+<p>Extending the existing <code>sources.helpdesk</code> block in <code>docs/config.md</code> (which today only knows
+<code>adapter: exec | zohodesk</code>) with one <code>adapter</code> value per built-in vendor, a shared <code>auth</code> object,
+and vendor-specific extras kept to the minimum each API actually requires:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">sources</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">helpdesk</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">adapter</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">zendesk</span><span class="w">        </span><span class="c1"># zendesk | freshdesk | freshservice | intercom | hubspot |</span>
+<span class="w">                             </span><span class="c1"># jsm | helpscout | front | gorgias | servicenow | salesforce |</span>
+<span class="w">                             </span><span class="c1"># zohodesk | exec</span>
+<span class="w">    </span><span class="nt">baseUrl</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">https://acme.zendesk.com</span><span class="w">   </span><span class="c1"># or {subdomain}/{instance}/{domain} where a vendor</span>
+<span class="w">                                         </span><span class="c1"># config would rather take a bare name than a full URL</span>
+<span class="w">    </span><span class="nt">auth</span><span class="p">:</span>
+<span class="w">      </span><span class="nt">type</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">basic</span><span class="w">            </span><span class="c1"># basic | bearer | oauth2_client_credentials | oauth2_jwt_bearer</span>
+<span class="w">      </span><span class="nt">username</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_EMAIL</span><span class="w">       </span><span class="c1"># present only for basic</span>
+<span class="w">      </span><span class="nt">token</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">env:ZENDESK_API_TOKEN</span><span class="w">      </span><span class="c1"># credential ref, per docs/config.md's env:/keychain: rule</span>
+</code></pre></div>
+<p>Per-vendor deltas on top of that shared shape, following the pattern the Zoho Desk adapter
+already sets with <code>orgId</code>:</p>
+<table>
+<thead>
+<tr>
+<th>adapter</th>
+<th>extra fields</th>
+<th>auth.type</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>zendesk</code></td>
+<td>—</td>
+<td><code>basic</code> (<code>{email}/token</code> as username, API token as password)</td>
+</tr>
+<tr>
+<td><code>freshdesk</code> / <code>freshservice</code></td>
+<td>—</td>
+<td><code>basic</code> (API key as username, literal <code>X</code> as password)</td>
+</tr>
+<tr>
+<td><code>intercom</code></td>
+<td><code>region: us\|eu\|au</code> (selects the host)</td>
+<td><code>bearer</code></td>
+</tr>
+<tr>
+<td><code>hubspot</code></td>
+<td>—</td>
+<td><code>bearer</code> (private-app token)</td>
+</tr>
+<tr>
+<td><code>jsm</code></td>
+<td>—</td>
+<td><code>basic</code> (email + API token)</td>
+</tr>
+<tr>
+<td><code>helpscout</code></td>
+<td><code>clientId</code>, <code>clientSecret</code> (both credential refs)</td>
+<td><code>oauth2_client_credentials</code></td>
+</tr>
+<tr>
+<td><code>front</code></td>
+<td>—</td>
+<td><code>bearer</code> (API token)</td>
+</tr>
+<tr>
+<td><code>gorgias</code></td>
+<td>—</td>
+<td><code>basic</code> (login email as username, API key as password)</td>
+</tr>
+<tr>
+<td><code>servicenow</code></td>
+<td><code>instance</code></td>
+<td><code>basic</code> (or <code>bearer</code> once OAuth2 support is confirmed)</td>
+</tr>
+<tr>
+<td><code>salesforce</code></td>
+<td><code>instance</code>, <code>clientId</code>, <code>privateKey: keychain:...</code></td>
+<td><code>oauth2_jwt_bearer</code></td>
+</tr>
+<tr>
+<td><code>zohodesk</code></td>
+<td><code>orgId</code></td>
+<td><code>bearer</code> (<code>Zoho-oauthtoken</code> scheme; refresh sits outside the adapter)</td>
+</tr>
+</tbody>
+</table>
+<p>Every field carrying a secret stays a credential reference (<code>env:NAME</code> or <code>keychain:SERVICE</code>),
+never a literal, per the existing rule in <code>docs/config.md</code>.</p>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>HubSpot's ticket→conversation-thread association</strong> is corroborated only by a community
+  forum post in this pass, not a primary HubSpot reference page. Confirm the exact association
+  type/endpoint against a live portal before building the adapter.</li>
+<li><strong>ServiceNow's <code>sys_journal_field</code> comments/work_notes query pattern</strong> is standard, widely
+  known ServiceNow behavior but couldn't be re-verified against a live official doc page here
+  (403s, then exhausted search budget). Also check whether a newer dedicated Journal/Comments API
+  has superseded it.</li>
+<li><strong>The entire Salesforce section</strong> needs a follow-up pass with working access to
+  <code>developer.salesforce.com</code> (this session's fetches were all blocked). <code>CaseComment.IsPublished</code>,
+  <code>EmailMessage.Incoming</code>, the JWT-bearer-only auth guidance, and the rate-limit figures are all
+  standard Salesforce platform knowledge but none were confirmed live here.</li>
+<li><strong>Attachment-URL auth requirements are unconfirmed for three vendors</strong>: Freshdesk/Freshservice
+  (<code>attachment_url</code> — Basic-auth-protected or pre-signed?), HubSpot (<code>fileId</code>-derived URL —
+  Bearer-protected or pre-signed?), Front (message-level <code>url</code> — same question). Each is a
+  five-minute check against a trial/sandbox account and should happen before the corresponding
+  adapter ships, not be assumed from the pattern of other vendors.</li>
+<li><strong>MCP servers are moving targets and not adapter-relevant either way.</strong> Zendesk (announced May
+  2026, client early access from June), HubSpot (beta since May 2025, a claimed April 2026 GA
+  unconfirmed), Freshdesk/Freshservice (separate EAP programs), Intercom, Front, and Atlassian all
+  have official or semi-official MCP offerings; Help Scout, Gorgias, and ServiceNow do not appear
+  to (though the ServiceNow negative is weakly verified). None of this changes the adapter design
+  — Sirdar's adapters are hand-rolled stdlib Go clients, not MCP clients — but it's worth
+  revisiting if Sirdar ever wants an MCP-based integration path as an alternative to writing
+  adapters.</li>
+<li><strong>Several vendors' ticket objects don't carry every field the harness wants.</strong> Gorgias and
+  Intercom have no first-class <code>priority</code> field on the ticket/ticket resource itself (Gorgias:
+  tags/custom fields; Intercom: workspace-defined <code>ticket_attributes</code>), and several vendors
+  return no ticket URL at all (HubSpot, Front, Gorgias — client-constructed instead). The
+  <code>ticket.HelpdeskTicket.Fields</code> map the Zoho Desk adapter already uses for <code>departmentId</code>/
+  <code>ticketNumber</code>/etc. is the existing escape hatch for this; each new adapter will need its own
+  judgment call about what goes in the typed fields vs. <code>Fields</code>.</li>
+<li><strong>Rate limits are plan-tier dependent for almost every vendor surveyed</strong> (Zendesk, Freshdesk,
+  Freshservice, HubSpot, Front, Gorgias) and instance-configurable for ServiceNow. An adapter
+  should read <code>Retry-After</code>/<code>X-RateLimit-*</code> response headers and back off accordingly rather than
+  hardcoding a number from this document, which will drift.</li>
+<li><strong>Intercom's attachment-URL TTL (~30 minutes)</strong> comes from a community post, not the formal
+  API reference — worth confirming directly (fetch, then immediately re-fetch after 35 minutes
+  against a real attachment) before an adapter relies on "download promptly" as its only
+  mitigation.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2842 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../helpdesks/">
+      
+      
+        <link rel="next" href="../linear/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Jira - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#jira-adapter-research" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Jira
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-issue-by-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get issue by key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-jql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search (JQL)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changelog-transitions-read-only-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changelog / transitions (read-only history)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jira-service-management-jsm-specifics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira Service Management (JSM) specifics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-atlassian-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Atlassian MCP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Atlassian MCP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#official-atlassian-remote-mcp-server-mcpatlassiancom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official Atlassian Remote MCP Server (mcp.atlassian.com)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#soopersetmcp-atlassian-oss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sooperset/mcp-atlassian (OSS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcps-role-relative-to-sirdars-host-side-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP's role relative to Sirdar's host-side adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mapping-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mapping recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Mapping recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adf-markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADF → markdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HelpdeskRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-jql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List → JQL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-existing-go-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Existing Go clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-automation-webhooks-future-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Automation / webhooks (future trigger)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-rest-api" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. REST API
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. REST API">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-paths" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base paths
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#get-issue-by-key" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Get issue by key
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#search-jql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Search (JQL)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#comments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Comments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#attachments" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attachments
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#changelog-transitions-read-only-history" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Changelog / transitions (read-only history)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#jira-service-management-jsm-specifics" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Jira Service Management (JSM) specifics
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-auth" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Auth
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-atlassian-mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Atlassian MCP
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Atlassian MCP">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#official-atlassian-remote-mcp-server-mcpatlassiancom" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Official Atlassian Remote MCP Server (mcp.atlassian.com)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#soopersetmcp-atlassian-oss" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        sooperset/mcp-atlassian (OSS)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mcps-role-relative-to-sirdars-host-side-adapter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP's role relative to Sirdar's host-side adapter
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-mapping-recommendations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Mapping recommendations
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="4. Mapping recommendations">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#adf-markdown" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        ADF → markdown
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#helpdeskref" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        HelpdeskRef
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#list-jql" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        List → JQL
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-existing-go-clients" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Existing Go clients
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-automation-webhooks-future-trigger" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Automation / webhooks (future trigger)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#recommended-adapter-design" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Recommended adapter design
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#open-questions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Open questions
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="jira-adapter-research">Jira adapter research<a class="headerlink" href="#jira-adapter-research" title="Permanent link">&para;</a></h1>
+<p>Scope: a read-only Sirdar adapter for Jira as a <strong>tracker</strong> (issue get/list) and, where the
+instance runs Jira Service Management (JSM), as a <strong>helpdesk</strong> (customer conversation thread +
+attachments). Covers Jira Cloud and Jira Data Center/Server. All claims are sourced; anything I
+couldn't verify against a primary or credible secondary source is flagged as unverified.</p>
+<h2 id="1-rest-api">1. REST API<a class="headerlink" href="#1-rest-api" title="Permanent link">&para;</a></h2>
+<h3 id="base-paths">Base paths<a class="headerlink" href="#base-paths" title="Permanent link">&para;</a></h3>
+<ul>
+<li>Jira Cloud platform REST API is versioned; the current version is v3, reached at
+  <code>/rest/api/3/...</code> on the site's own base URL (<code>https://your-domain.atlassian.net</code>) or via
+  <code>https://api.atlassian.com/ex/jira/{cloudId}/rest/api/3/...</code> when using OAuth 2.0 (3LO)
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/intro/">Jira Cloud platform REST API intro</a>).</li>
+<li>Jira Cloud v2 (<code>/rest/api/2/...</code>) is still live and fully supported in parallel with v3 —
+  Atlassian has repeatedly said they'll keep developing both "until such time as we tell you
+  otherwise." The only functional difference is how rich-text fields are represented (see ADF
+  below), not endpoint coverage
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/">Jira Cloud Platform REST API v2</a>;
+  <a href="https://community.developer.atlassian.com/t/addon-migration-from-jira-cloud-rest-v2-to-v3/26986">Atlassian Developer Community thread on v2→v3 migration</a>).</li>
+<li>Jira Data Center/Server exposes <code>/rest/api/2/...</code> as its REST API; Data Center has not adopted
+  ADF or a v3 API — it remains wiki-markup for rich text
+  (<a href="https://community.atlassian.com/forums/Jira-questions/Is-there-a-plan-to-support-REST-API-v3-ADF-in-Jira-Server/qaq-p/988943">Atlassian Community: "Is there a plan to support REST API v3 / ADF in Jira Server?"</a>).</li>
+</ul>
+<h3 id="get-issue-by-key">Get issue by key<a class="headerlink" href="#get-issue-by-key" title="Permanent link">&para;</a></h3>
+<p><code>GET /rest/api/3/issue/{issueIdOrKey}</code> (Cloud) or <code>GET /rest/api/2/issue/{issueIdOrKey}</code> (DC)
+returns the issue with its <code>fields</code> map. Adding <code>?expand=renderedFields</code> requests HTML-rendered
+versions of rich-text fields alongside the raw ones
+(<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/">Jira Cloud Rest API — Issues group</a>).</p>
+<p>Two caveats worth designing around:</p>
+<ul>
+<li>On Cloud v3, <code>expand=renderedFields</code> does <strong>not</strong> reliably render comment bodies — it can
+  return raw ADF instead of HTML for comments even though the issue description itself renders
+  correctly. This is a documented, longstanding Jira bug, not adapter error
+  (<a href="https://jira.atlassian.com/browse/JRACLOUD-75825">JRACLOUD-75825</a>;
+  <a href="https://community.developer.atlassian.com/t/jira-cloud-rest-api-v3-get-issue-does-not-render-adf-comment-bodies/46624">Atlassian Developer Community thread</a>).</li>
+<li>On Cloud, <code>description</code> (and other rich-text fields) is Atlassian Document Format (ADF) — a
+  nested JSON document, not a plain string — when fetched via v3. The <strong>same field fetched via
+  v2</strong> comes back as plain wiki markup text instead, because v2 is a compatibility layer that
+  converts to/from ADF under the hood
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v2/intro/">Jira Cloud REST API v2 intro</a>).
+  This means an adapter that wants plain text/wiki markup without writing an ADF walker can
+  simply call the <strong>v2</strong> endpoint on Cloud instead of v3 — full field/expand parity, different
+  text representation. On DC, <code>/rest/api/2/issue/{key}</code> already returns wiki markup natively;
+  there is no ADF version to choose between.</li>
+</ul>
+<h3 id="search-jql">Search (JQL)<a class="headerlink" href="#search-jql" title="Permanent link">&para;</a></h3>
+<p>This is the most consequential recent change for any new Jira client:</p>
+<ul>
+<li>Atlassian announced on 2024-10-31 that the legacy search endpoints
+  (<code>GET</code>/<code>POST /rest/api/3/search</code>, and the <code>/2</code> and <code>/latest</code> equivalents) would be removed on
+  <strong>Jira Cloud</strong>, with the shutdown process completing by end of August 2025. Cloud now returns
+  <strong><code>410 Gone</code></strong> on those endpoints
+  (<a href="https://docs.adaptavist.com/sr4jc/latest/release-notes/breaking-changes/atlassian-rest-api-search-endpoints-deprecation">Adaptavist: Atlassian REST API Search Endpoints Deprecation</a>;
+  <a href="https://github.com/ctreminiom/go-atlassian/issues/345">go-atlassian issue #345</a>;
+  <a href="https://github.com/apache/incubator-devlake/issues/8544">devlake issue reporting the 410</a>).</li>
+<li>The replacement is <strong><code>POST /rest/api/3/search/jql</code></strong> (and <code>/2/search/jql</code>, <code>/latest/search/jql</code>).
+  It takes <code>jql</code>, <code>fields</code>, <code>expand</code>, <code>maxResults</code> in the body. Pagination changed from
+  <code>startAt</code>/<code>total</code> to a cursor: the response includes <code>nextPageToken</code>, which you pass back in
+  the next request; there is no longer a <code>total</code> count in the standard response
+  (<a href="https://github.com/ctreminiom/go-atlassian/issues/345">go-atlassian issue #345</a>;
+  <a href="https://community.atlassian.com/forums/Jira-questions/Optimizing-Data-Retrieval-with-rest-api-3-search-jql-Pagination/qaq-p/2957628">Atlassian Community: Optimizing Data Retrieval with /rest/api/3/search/jql Pagination</a>).
+  The <code>validate</code> query parameter that the old search had has no replacement on the new endpoint
+  (<a href="https://github.com/ctreminiom/go-atlassian/issues/345">go-atlassian issue #345</a>).</li>
+<li>This deprecation is <strong>Cloud-only</strong>. Jira Data Center/Server's <code>/rest/api/2/search</code> is
+  unaffected and continues to use the classic <code>startAt</code>/<code>maxResults</code>/<code>total</code> pagination — DC has
+  its own multi-year deprecation cadence separate from Cloud's
+  (<a href="https://community.atlassian.com/forums/Jira-questions/When-are-JQL-search-endpoints-rest-api-2-search-and-rest-api-3/qaq-p/3029221">Atlassian Community: "When are JQL search endpoints /rest/api/2/search and /rest/api/3/search
+  really being removed?"</a>).</li>
+<li>Real-world reports say the new <code>nextPageToken</code> mechanism has rough edges: some integrations
+  have hit tokens that loop back to page one instead of advancing, and general reports of
+  "intermittent problems" with cursor-based search
+  (<a href="https://community.atlassian.com/forums/Jira-questions/REST-The-new-rest-api-3-search-jql-endpoint-is-a-complete/qaq-p/3101716">Atlassian Community: "REST: The new /rest/api/3/search/jql endpoint is a complete disaster"</a>;
+  <a href="https://github.com/atlassian/atlassian-mcp-server/issues/118">atlassian-mcp-server issue #118</a>;
+  <a href="https://github.com/sooperset/mcp-atlassian/issues/1295">sooperset/mcp-atlassian issue #1295, "jira_search returns empty results — deprecated GET /search
+  (410)"</a>). An adapter should treat a
+  <code>nextPageToken</code> that repeats as a hard stop (cap total pages fetched) rather than trust it
+  unconditionally.</li>
+</ul>
+<h3 id="comments">Comments<a class="headerlink" href="#comments" title="Permanent link">&para;</a></h3>
+<p><code>GET</code>/<code>POST /rest/api/3/issue/{issueIdOrKey}/comment</code> (v2 equivalent on DC and Cloud-v2). On
+Cloud v3, comment <code>body</code> is ADF (a <code>{"type":"doc","version":1,"content":[...]}</code> document); a
+plain string body is rejected with a 400
+(<a href="https://community.atlassian.com/forums/Jira-questions/JIRA-Cloud-V3-API-Issue-creating-comment/qaq-p/940351">Atlassian Community: "JIRA Cloud V3 API: Issue creating comment"</a>;
+<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-comments/">Jira Cloud Rest API — Issue comments group</a>).
+As noted above, <code>expand=renderedFields</code>/rendered comment bodies are unreliable on v3, so for a
+read-only adapter, fetching comments via v2 (plain text) is the simpler path on Cloud; on DC,
+v2 is the only option and already returns wiki markup.</p>
+<h3 id="attachments">Attachments<a class="headerlink" href="#attachments" title="Permanent link">&para;</a></h3>
+<p><code>fields.attachment[]</code> on the issue payload carries each attachment's metadata, including a
+<code>content</code> URL to download the binary
+(<a href="https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issue-attachments/">Jira Cloud Rest API — Issue attachments group</a>).
+Two authentication subtleties matter for a stdlib-HTTP adapter:</p>
+<ul>
+<li><code>X-Atlassian-Token: no-check</code> is required when <strong>uploading</strong> an attachment (it defeats Jira's
+  XSRF check on multipart POSTs) — it is not relevant to downloads
+  (<a href="https://support.atlassian.com/jira/kb/how-to-add-an-attachment-to-a-jira-cloud-issue-using-rest-api/">Atlassian Support: how to add an attachment via REST API</a>).</li>
+<li><strong>Downloading</strong> is the trickier side. On Cloud, <code>fields.attachment[].content</code> is generally
+  fetchable with the same Basic-auth header (email + API token) used for the rest of the REST
+  API. On Data Center/Server, attachment download URLs (<code>/secure/attachment/{id}/{filename}</code>)
+  are served by the web application layer rather than the REST layer, and several
+  Atlassian-support and community threads report that a <strong>Personal Access Token in the
+  <code>Authorization: Bearer</code> header does not reliably authenticate against that URL</strong> — the request
+  can get redirected to an SSO/login page instead of the file. The documented workaround is to
+  authenticate once (Basic auth or cookie-based login) to obtain a session cookie and use that
+  cookie jar for the download request
+  (<a href="https://support.atlassian.com/jira/kb/how-to-download-attachments-using-rest-api-and-sso/">Atlassian Support: How to download attachments using REST API and SSO</a>;
+  <a href="https://community.atlassian.com/forums/Jira-questions/Personal-Access-token-is-not-effective-to-authenticate-to-get/qaq-p/1580163">Atlassian Community: "Personal Access token is not effective to authenticate to get
+  attachments"</a>;
+  <a href="https://jira.atlassian.com/browse/JRASERVER-72019">JRASERVER-72019</a>). This is a real risk for
+  a stdlib-only, cookie-free adapter design on DC and should be flagged as an edge case (see
+  §7) — it may need a fallback to session-cookie auth specifically for the attachment-download
+  code path even when PAT/Bearer works everywhere else.</li>
+</ul>
+<h3 id="changelog-transitions-read-only-history">Changelog / transitions (read-only history)<a class="headerlink" href="#changelog-transitions-read-only-history" title="Permanent link">&para;</a></h3>
+<p>Not deep-dived beyond confirming it's a standard, documented part of the issue resource
+(<code>?expand=changelog</code>, and <code>/issue/{key}/transitions</code> for the <em>available</em> transitions) — this is
+uncontroversial and I did not find anything version- or deprecation-relevant here, so it's not
+elaborated further; <strong>unverified in depth</strong> beyond that it exists in both API versions.</p>
+<h3 id="jira-service-management-jsm-specifics">Jira Service Management (JSM) specifics<a class="headerlink" href="#jira-service-management-jsm-specifics" title="Permanent link">&para;</a></h3>
+<p>JSM "requests" are Jira issues underneath — the same issue key is addressable both via the
+plain Jira issue API and via the Service Management API, which adds customer-facing shape on
+top. This matters directly for Sirdar's dual tracker/helpdesk role, because for Jira+JSM the
+tracker and the helpdesk may be <em>the same issue</em>, not two systems joined by a reference (see §4).</p>
+<ul>
+<li>Request detail: <code>GET /rest/servicedeskapi/request/{issueIdOrKey}</code> on Cloud
+  (<a href="https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/">Jira Service Management Cloud REST API — request group</a>);
+  the DC/Server equivalent is documented under
+  <a href="https://developer.atlassian.com/server/jira-servicedesk/rest/v1005/api-group-customer-request/"><code>api-group-customer-request</code></a>.</li>
+<li>Comments: <code>/rest/servicedeskapi/request/{issueIdOrKey}/comment</code>, with a boolean <code>public</code> field
+  distinguishing a customer-visible comment from an internal (agent-only) one. A customer caller
+  of the API only ever sees public comments; an agent/licensed caller sees both
+  (<a href="https://developer.atlassian.com/cloud/jira/service-desk/rest/api-group-request/">Atlassian dev docs, summarized via web search</a>).
+  This is the natural mapping for Sirdar's <code>Thread</code>/<code>Message.Role</code> (customer vs agent) and for
+  deciding which comments are safe to hand to a coding agent versus internal-only chatter.</li>
+<li>Participants: <code>GET /rest/servicedeskapi/request/{issueIdOrKey}/participant</code> lists the people
+  copied on the request, with <code>POST</code>/<code>DELETE</code> to manage them
+  (<a href="https://docs.go-atlassian.io/jira-service-management/request/participants">go-atlassian docs: Participants</a>).</li>
+<li>Detecting whether a given Jira project/issue is JSM-backed: a project fetched via the platform
+  API carries <code>projectTypeKey: "service_desk"</code> for JSM projects
+  (<a href="https://community.developer.atlassian.com/t/distinguish-jira-service-desk-and-other-jira-project-types/3945">Atlassian Developer Community: "Distinguish JIRA Service Desk and other JIRA project
+  types"</a>).
+  There's a 1:1 mapping between a Service Desk and a project, and <code>GET
+  /rest/servicedeskapi/servicedesk</code> lets you resolve a project to its <code>serviceDeskId</code>
+  (<a href="https://support.atlassian.com/jira/kb/find-the-service-desk-id-for-your-jira-service-management-cloud-project/">Atlassian Support: Find the service desk ID for your JSM Cloud project</a>).</li>
+</ul>
+<h2 id="2-auth">2. Auth<a class="headerlink" href="#2-auth" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Cloud, API token (Basic auth)</strong>: <code>Authorization: Basic base64(email:api_token)</code>, generated
+  from id.atlassian.com. This is the simplest, most widely documented path and works against
+  both v2 and v3
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/basic-auth-for-rest-apis/">Basic auth for REST APIs — Jira Cloud platform</a>).</li>
+<li><strong>Cloud, OAuth 2.0 (3LO)</strong>: authorization-code grant through a browser consent screen; scopes
+  are declared per-app and enforced alongside (not instead of) Jira/JSM's own permission model.
+  Relevant read scopes: <code>read:jira-work</code> (issues, projects, etc.), <code>read:jira-user</code> (user
+  profiles), and <code>read:servicedesk-request</code> (JSM requests)
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/scopes-for-oauth-2-3LO-and-forge-apps/">Jira scopes for OAuth 2.0 (3LO) and Forge apps</a>;
+  <a href="https://developer.atlassian.com/cloud/jira/service-desk/scopes-for-oauth-2-3LO-and-forge-apps/">JSM scopes for OAuth 2.0 (3LO) and Forge apps</a>).
+  Atlassian's own guidance is to prefer "classic" scopes and to consult the REST API docs
+  operation-by-operation to build the scope list
+  (<a href="https://developer.atlassian.com/cloud/oauth/getting-started/determining-scopes/">Determining the Scopes Required for an Operation</a>).
+  With 3LO, calls are made to <code>https://api.atlassian.com/ex/jira/{cloudId}/...</code> rather than the
+  site's own domain, and the <code>cloudId</code> for a given site is resolved via <code>GET
+  https://api.atlassian.com/oauth/token/accessible-resources</code> using the access token — there is
+  no other supported way to derive it from the token itself
+  (<a href="https://developer.atlassian.com/cloud/oauth/getting-started/making-calls-to-api/">Making Calls to API</a>;
+  <a href="https://community.atlassian.com/forums/Jira-questions/How-to-identify-the-site-cloudId-from-an-OAuth-2-0-3LO-access/qaq-p/3022480">Atlassian Community: "How to identify the site (cloudId) from an OAuth 2.0 (3LO) access
+  token?"</a>).
+  OAuth 3LO is a much heavier lift for a headless Go adapter (needs a redirect URI, a consent
+  step, and refresh-token handling) than an API token, and given Sirdar's read-only,
+  single-operator design, an API token is the pragmatic default; 3LO is worth supporting only if
+  multi-user/delegated access becomes a requirement.</li>
+<li><strong>Data Center/Server, Personal Access Tokens (PAT)</strong>: <code>Authorization: Bearer &lt;token&gt;</code>,
+  available since Jira Server/Data Center 8.14.0; a PAT inherits the creator's own permissions
+  (<a href="https://confluence.atlassian.com/enterprise/using-personal-access-tokens-1026032365.html">Using Personal Access Tokens — Atlassian Confluence docs</a>;
+  <a href="https://jira.atlassian.com/browse/JRASERVER-67869">JRASERVER-67869: Ability to generate API token</a>).
+  As noted in §1, PAT Bearer auth is reliable against <code>/rest/api/2/...</code> but can be unreliable
+  against the attachment-download URL specifically.</li>
+<li><strong>Rate limits</strong>: Cloud enforces three independent limiting mechanisms simultaneously — an
+  hourly points-based quota (most GETs on core objects cost 1 point; identity/user endpoints cost
+  more; the default Global Pool tier is roughly 65,000 points/hour shared across tenants),
+  per-second burst limits on individual endpoints, and per-issue write-rate limits. On any
+  breach, Jira returns <code>429</code> with <code>Retry-After</code> (seconds to wait), <code>X-RateLimit-Limit</code>,
+  <code>X-RateLimit-Remaining</code>, <code>X-RateLimit-Reset</code> (on 429 responses), and a <code>RateLimit-Reason</code>
+  header identifying which of the three limits tripped
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rate-limiting/">Rate limiting — Jira Cloud platform</a>).
+  Atlassian's own recommendation is: honor <code>Retry-After</code> as a floor, then exponential backoff
+  with jitter, capped at a handful of retries, and to react differently by <code>RateLimit-Reason</code>
+  (back off entirely on quota exhaustion; only throttle the specific endpoint on a burst limit)
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/rate-limiting/">same source</a>). Data
+  Center has its own, separately configured, admin-controlled rate limiting
+  (<a href="https://confluence.atlassian.com/adminjiraserver/improving-instance-stability-with-rate-limiting-983794911.html">Improving instance stability with rate limiting — Confluence docs</a>),
+  which a read-only adapter mostly just needs to honor the same <code>Retry-After</code>-and-backoff pattern
+  for, without assuming the specific headers match Cloud's.</li>
+</ul>
+<h2 id="3-atlassian-mcp">3. Atlassian MCP<a class="headerlink" href="#3-atlassian-mcp" title="Permanent link">&para;</a></h2>
+<p>Two distinct options exist, and they answer different questions.</p>
+<h3 id="official-atlassian-remote-mcp-server-mcpatlassiancom">Official Atlassian Remote MCP Server (<code>mcp.atlassian.com</code>)<a class="headerlink" href="#official-atlassian-remote-mcp-server-mcpatlassiancom" title="Permanent link">&para;</a></h3>
+<p>Atlassian's own hosted, remote MCP server, now GA, connecting Jira, Confluence, JSM, Bitbucket,
+and Compass to any MCP-capable client
+(<a href="https://github.com/atlassian/atlassian-mcp-server">atlassian/atlassian-mcp-server on GitHub</a>;
+<a href="https://www.atlassian.com/platform/rovo-mcp">Atlassian: Extend Atlassian into any AI assistant using MCP</a>).</p>
+<ul>
+<li><strong>Tools</strong>: exposed as permission-scoped groups rather than one tool per REST endpoint —
+  <code>read_jira</code>, <code>write_jira</code>, <code>search_jira</code>, and equivalents for the other products — behind
+  natural-language-driven workflows like "find all open bugs" or "create a story"
+  (<a href="https://github.com/atlassian/atlassian-mcp-server">atlassian/atlassian-mcp-server README, via WebFetch summary</a>).
+  I could not confirm an exhaustive, stable list of individual tool names from what's public;
+  treat the exact tool surface as <strong>unverified in detail</strong> beyond the permission-group framing.</li>
+<li><strong>Auth</strong>: two modes. The default, interactive path is a browser-based OAuth 2.1 flow — the
+  client opens a consent screen, the user logs in, and the resulting token is cached by the MCP
+  client (Claude Code, Claude Desktop, Cursor, VS Code, etc.), with periodic re-auth as tokens
+  expire. There is also a <strong>headless mode</strong>: API-token authentication (personal API tokens over
+  Basic auth, or service-account API keys over Bearer) intended for backend/automated,
+  non-interactive setups — but an organization admin must explicitly enable API-token auth for
+  the site before a headless client can use it
+  (<a href="https://github.com/atlassian/atlassian-mcp-server">atlassian/atlassian-mcp-server, via WebFetch summary</a>).
+  It's explicitly documented as usable from Claude Code and Codex among other clients
+  (<a href="https://github.com/atlassian/atlassian-mcp-server">same source</a>).</li>
+<li><strong>Read-only</strong>: the permission-group model (<code>read_jira</code> vs <code>write_jira</code>) implies a read-only
+  posture is available by only granting the read groups, though I did not find an explicit
+  single "read-only mode" toggle documented the way sooperset/mcp-atlassian has one — <strong>this
+  granularity claim should be treated as likely but not confirmed against primary docs</strong>.</li>
+</ul>
+<h3 id="soopersetmcp-atlassian-oss"><code>sooperset/mcp-atlassian</code> (OSS)<a class="headerlink" href="#soopersetmcp-atlassian-oss" title="Permanent link">&para;</a></h3>
+<p>A widely used, independently maintained, self-hosted MCP server for Jira and Confluence
+(<a href="https://github.com/sooperset/mcp-atlassian">sooperset/mcp-atlassian on GitHub</a>).</p>
+<ul>
+<li>Exposes a large tool surface (reported as up to 98 tools across Jira+Confluence, including
+  <code>jira_search</code>, <code>jira_get_issue</code>, <code>jira_create_issue</code>, <code>jira_update_issue</code>,
+  <code>jira_transition_issue</code>, etc.) (<a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">README, via WebFetch summary</a>).</li>
+<li>Supports <strong>both</strong> Cloud and Server/Data Center (DC v8.14+) in one codebase, unlike the official
+  server which is Cloud-first (<a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">README, via WebFetch summary</a>).</li>
+<li>Auth: Cloud API tokens, DC Personal Access Tokens, and OAuth 2.0, configured via environment
+  variables (<code>JIRA_URL</code>, <code>JIRA_USERNAME</code>, <code>JIRA_API_TOKEN</code>, <code>JIRA_PERSONAL_TOKEN</code> for DC, etc.)
+  (<a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">README, via WebFetch summary</a>).</li>
+<li>Has a documented <code>READ_ONLY_MODE</code> environment flag that blocks write tools entirely — the
+  explicit read-only control the official server doesn't clearly document
+  (<a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">README, via WebFetch summary</a>).</li>
+<li>Runs headless out of the box (uvx, Docker, pip, from source; env-var config), so it's fully
+  scriptable without any browser step when using API token/PAT auth
+  (<a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">README, via WebFetch summary</a>).</li>
+<li>It inherited the same Cloud search-endpoint deprecation pain as everyone else — there's an open
+  issue where <code>jira_search</code> returned empty results because it was still hitting the deprecated
+  <code>GET /search</code> (now <code>410</code>) before being updated to the new endpoint
+  (<a href="https://github.com/sooperset/mcp-atlassian/issues/1295">sooperset/mcp-atlassian issue #1295</a>).</li>
+</ul>
+<h3 id="mcps-role-relative-to-sirdars-host-side-adapter">MCP's role relative to Sirdar's host-side adapter<a class="headerlink" href="#mcps-role-relative-to-sirdars-host-side-adapter" title="Permanent link">&para;</a></h3>
+<p>These are solving different problems and Sirdar needs both, not one instead of the other:</p>
+<ul>
+<li>The <strong>host-side adapter</strong> (this document's subject) is Sirdar's own deterministic fetch: it
+  runs before the coding agent is invoked, assembles a fixed ticket bundle (fields, description,
+  thread, attachments) via a small number of known REST calls, and hands that bundle to the
+  agent as static input. It's auditable, reproducible, and doesn't depend on what the agent
+  decides to ask for.</li>
+<li>An <strong>MCP server</strong> (either Atlassian's own or <code>sooperset/mcp-atlassian</code>) is useful <em>inside</em> the
+  agent's own session — evidence gathering the agent does interactively, mid-task, when it
+  discovers it needs something the initial bundle didn't include: "what's the current status of
+  the blocking ticket," "are there other tickets against this same component," "what did the
+  triage note on the parent epic say." That's exploratory and open-ended in a way the host-side
+  adapter's fixed <code>Get</code>/<code>List</code> calls are not, and it's naturally scoped to what the agent decides
+  it needs rather than what Sirdar pre-fetches.</li>
+<li><strong>Can an MCP be driven headlessly by a Go program?</strong> Only the token/API-key auth paths of
+  either server qualify — the official server's headless mode (admin-enabled API-token auth) and
+  <code>sooperset/mcp-atlassian</code>'s env-var-configured token/PAT auth both avoid the interactive
+  browser OAuth step
+  (<a href="https://github.com/atlassian/atlassian-mcp-server">atlassian/atlassian-mcp-server, via WebFetch summary</a>;
+  <a href="https://github.com/sooperset/mcp-atlassian/blob/main/README.md">sooperset/mcp-atlassian README, via WebFetch summary</a>).
+  In principle a Go program could speak MCP's JSON-RPC-over-stdio or Streamable-HTTP transport to
+  either server directly, the same way it would to any MCP server, but doing so just to fetch a
+  ticket would duplicate the REST calls the host-side adapter already makes directly and adds a
+  process/protocol layer for no benefit — MCP is the right tool for the agent's own tool-calling
+  loop, not for Sirdar's host-side fetch step. I found no evidence either server exposes anything
+  a plain REST call doesn't already give a stdlib HTTP client.</li>
+</ul>
+<h2 id="4-mapping-recommendations">4. Mapping recommendations<a class="headerlink" href="#4-mapping-recommendations" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Sirdar field</th>
+<th>Jira Cloud v3</th>
+<th>Jira DC v2</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>Key</code></td>
+<td><code>key</code></td>
+<td><code>key</code></td>
+<td>e.g. <code>PROJ-123</code>.</td>
+</tr>
+<tr>
+<td><code>Title</code></td>
+<td><code>fields.summary</code></td>
+<td><code>fields.summary</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>Description</code></td>
+<td><code>fields.description</code> (ADF)</td>
+<td><code>fields.description</code> (wiki markup string)</td>
+<td>On Cloud, fetch via v2 instead of v3 to get plain wiki markup and skip ADF parsing (§1); see below for ADF→markdown if v3 is used anyway.</td>
+</tr>
+<tr>
+<td><code>Priority</code></td>
+<td><code>fields.priority.name</code></td>
+<td><code>fields.priority.name</code></td>
+<td></td>
+</tr>
+<tr>
+<td><code>Status</code></td>
+<td><code>fields.status.name</code></td>
+<td><code>fields.status.name</code></td>
+<td>Consider also <code>fields.status.statusCategory.key</code> (<code>new</code>/<code>indeterminate</code>/<code>done</code>) for JQL-style filtering logic without hardcoding workflow status names.</td>
+</tr>
+<tr>
+<td><code>Assignee</code></td>
+<td><code>fields.assignee.displayName</code></td>
+<td><code>fields.assignee.displayName</code></td>
+<td>Null when unassigned.</td>
+</tr>
+<tr>
+<td><code>URL</code></td>
+<td><code>self</code> is the API URL; build the browser URL as <code>{site}/browse/{key}</code></td>
+<td>same pattern</td>
+<td><code>self</code> is not user-facing.</td>
+</tr>
+<tr>
+<td><code>HelpdeskRef</code></td>
+<td>see below</td>
+<td>see below</td>
+<td></td>
+</tr>
+<tr>
+<td><code>CreatedAt</code> / <code>UpdatedAt</code></td>
+<td><code>fields.created</code> / <code>fields.updated</code></td>
+<td>same</td>
+<td>ISO-8601 with offset.</td>
+</tr>
+<tr>
+<td><code>Fields</code> (map)</td>
+<td><code>issuetype</code> (<code>fields.issuetype.name</code>), <code>parent</code> (<code>fields.parent.key</code>, present when the issue is a sub-task or, in the new hierarchy, has any parent), <code>labels</code> (<code>fields.labels</code>, <code>[]string</code>)</td>
+<td>same for <code>issuetype</code>/<code>labels</code>; <strong>epic link</strong> is <code>fields.customfield_XXXXX</code> (commonly, but not guaranteed, <code>customfield_10014</code> — it's configurable per-instance and must be discovered via <code>/rest/api/2/field</code> by name, not hardcoded)</td>
+<td>Cloud has replaced the old "Epic Link" custom field with a standard <code>parent</code> field in the issue view and on creation/transition, and is deprecating the Epic Link/Parent Link custom fields in the REST API and webhooks; Data Center has <strong>not</strong> received this change and still uses a per-instance custom field for epic linkage (<a href="https://support.atlassian.com/jira-software-cloud/docs/upcoming-changes-epic-link-replaced-with-parent/">Atlassian Support: Introducing the new Parent field</a>; <a href="https://community.developer.atlassian.com/t/deprecation-of-the-epic-link-parent-link-and-other-related-fields-in-rest-apis-and-webhooks/54048">Atlassian Developer Community: Deprecation of the Epic Link, Parent Link and other related fields</a>; <a href="https://community.atlassian.com/forums/Jira-questions/Will-quot-epic-link-replaced-with-parent-quot-feature-come-to/qaq-p/2773775">Atlassian Community: "Will 'epic-link replaced with parent' feature come to the Data Center version?"</a>). An adapter targeting both Cloud and DC needs a small discovery step (<code>GET /rest/api/2/field</code>, match on field <code>name == "Epic Link"</code>) rather than a hardcoded <code>customfield_10014</code>, since the numeric ID is instance-specific even on DC.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="adf-markdown">ADF → markdown<a class="headerlink" href="#adf-markdown" title="Permanent link">&para;</a></h3>
+<p>If the adapter does use Cloud v3 (e.g., because it also wants <code>renderedFields</code> HTML, or wants to
+stay on the "current" API), the description/comment bodies arrive as ADF JSON, not text. Options:</p>
+<ul>
+<li><strong><code>github.com/ajbeck/adf-to-markdown</code></strong> — a Go package converting ADF JSON to Markdown; per its
+  Go package listing it targets Go 1.25+ and needs <code>GOEXPERIMENT=jsonv2</code>, which is a nontrivial
+  toolchain constraint for a stdlib-only project
+  (<a href="https://pkg.go.dev/github.com/ajbeck/adf-to-markdown">pkg.go.dev: adfmarkdown</a>).</li>
+<li><strong><code>github.com/jcstorino/jira-cli/pkg/adf</code></strong> — an ADF package embedded inside a <code>jira-cli</code> fork,
+  translating ADF to other formats including markdown; it's a sub-package of an application, not
+  a standalone library, so pulling it in means vendoring or reimplementing rather than a clean
+  <code>go get</code>
+  (<a href="https://pkg.go.dev/github.com/jcstorino/jira-cli/pkg/adf">pkg.go.dev: adf package</a>).
+  <strong>Unverified</strong>: I did not confirm this package's stability or maintenance status beyond the
+  pkg.go.dev listing.</li>
+<li>No other mature, standalone Go ADF→text library turned up in research; the ecosystem is
+  stronger in TypeScript (<code>adf-to-markdown</code> npm package, <code>julianlam/adf-to-md</code>) and Python
+  (<code>atlas_doc_parser</code>) than in Go
+  (<a href="https://www.npmjs.com/package/adf-to-markdown">npm: adf-to-markdown</a>;
+  <a href="https://github.com/julianlam/adf-to-md">julianlam/adf-to-md</a>;
+  <a href="https://atlas-doc-parser.readthedocs.io/en/latest/01-Atlassian-Document-Format-Parser/">atlas_doc_parser docs</a>).</li>
+<li>Given Sirdar's stdlib-only rule and read-only scope, the pragmatic recommendation is: <strong>don't
+  parse ADF at all.</strong> ADF is a documented, versioned JSON schema
+  (<a href="https://developer.atlassian.com/cloud/jira/platform/apis/document/structure/">Atlassian Document Format structure</a>),
+  simple enough that a minimal recursive walker (handle <code>paragraph</code>, <code>text</code> with <code>marks</code>,
+  <code>heading</code>, <code>bulletList</code>/<code>orderedList</code>/<code>listItem</code>, <code>codeBlock</code>, <code>blockquote</code>, <code>hardBreak</code>, link
+  marks, and fall through unknown nodes to their text content) covers the overwhelming majority
+  of real ticket descriptions in under ~150 lines of Go, with zero new dependencies. Reserve this
+  only for Cloud, since DC never produces ADF; and prefer fetching the same field via v2 on Cloud
+  when only plain text is needed, sidestepping the walker entirely for the common case.</li>
+</ul>
+<h3 id="helpdeskref"><code>HelpdeskRef</code><a class="headerlink" href="#helpdeskref" title="Permanent link">&para;</a></h3>
+<p>Three shapes are plausible depending on how the instance is configured; the adapter should
+support the first two and treat the third as a fallback:</p>
+<ol>
+<li><strong>Same-issue JSM request</strong> (most common, and the cleanest mapping): if the issue's project has
+   <code>projectTypeKey == "service_desk"</code> (<a href="https://community.developer.atlassian.com/t/distinguish-jira-service-desk-and-other-jira-project-types/3945">Atlassian Developer Community: distinguishing JSM
+   projects</a>),
+   the tracker ticket <em>is</em> the helpdesk ticket — <code>HelpdeskRef</code> is simply the same <code>Key</code>, and
+   <code>helpdesk.get</code>/<code>helpdesk.threads</code> call the <code>/rest/servicedeskapi/request/{key}</code> and
+   <code>/rest/servicedeskapi/request/{key}/comment</code> endpoints against that same key rather than
+   resolving a separate ID.</li>
+<li><strong>A URL or ticket ID parsed from the description</strong> (Sirdar's documented fallback pattern,
+   per the harness's existing interface note that <code>HelpdeskRef</code> is "a reference to a helpdesk
+   ticket parsed from the description") — relevant when the <em>helpdesk</em> is a different product
+   entirely (e.g., a Zoho Desk ticket number pasted into a Jira bug's description by whoever
+   triaged it in). This is vendor-specific text scraping, not a Jira API concern.</li>
+<li><strong>A custom field</strong> carrying an external ticket ID/URL — some instances wire up a dedicated
+   custom field (via an app or manual convention) rather than embedding it in free text; if
+   present, this is more reliable than description-scraping and the adapter's config should let
+   an operator name which <code>customfield_XXXXX</code> (or field name, resolved via <code>/rest/api/2/field</code>)
+   to check first, falling back to description-parsing.</li>
+</ol>
+<h3 id="list-jql"><code>List</code> → JQL<a class="headerlink" href="#list-jql" title="Permanent link">&para;</a></h3>
+<p>Sirdar's filter fields map onto JQL clauses directly:</p>
+<div class="highlight"><pre><span></span><code>assignee = currentUser() AND statusCategory != Done
+</code></pre></div>
+<p>for the default (unfiltered-assignee) case, or explicit values for <code>assignee</code>/<code>status</code>; <code>parent</code>
+maps to <code>parent = KEY</code> (sub-tasks/children) — note that on Cloud, <code>parent</code> in JQL now covers both
+classic sub-task parents and the new Epic-as-parent hierarchy uniformly, which is part of why
+Cloud collapsed Epic Link into <code>parent</code> (§ mapping table above). <code>limit</code> maps to <code>maxResults</code> in
+the <code>/search/jql</code> request body, capped and paginated via <code>nextPageToken</code> as described in §1.</p>
+<h2 id="5-existing-go-clients">5. Existing Go clients<a class="headerlink" href="#5-existing-go-clients" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong><code>andygrunwald/go-jira</code></strong> — MIT licensed, actively maintained (repository activity as recent
+  as August 2026) (<a href="https://github.com/andygrunwald/go-jira">andygrunwald/go-jira on GitHub</a>;
+  <a href="https://pkg.go.dev/github.com/andygrunwald/go-jira">pkg.go.dev: jira package</a>). It does not
+  implement every Jira endpoint, but supports calling arbitrary/unimplemented endpoints directly
+  through its underlying HTTP client as an escape hatch
+  (<a href="https://github.com/andygrunwald/go-jira">same source</a>). I found <strong>no confirmation</strong> that it
+  has adopted the new <code>/search/jql</code> endpoint or ADF-native v3 request/response shapes — its
+  design historically centers on v2-shaped structs, and I could not verify current v3/ADF/new-
+  search support from available sources. <strong>Treat go-jira's v3/ADF/new-search-endpoint support as
+  unverified — likely partial or absent</strong> and confirm directly against its source before relying
+  on it for anything beyond basic v2-style GET/search.</li>
+<li><strong><code>ctreminiom/go-atlassian</code></strong> — MIT licensed
+  (<a href="https://github.com/ctreminiom/go-atlassian/blob/main/README.md">README</a>), with explicit,
+  separately versioned clients for Jira v2, Jira v3, Jira Agile, Jira Service Management,
+  Confluence v1/v2, Admin, Assets, and Bitbucket, and documented ADF support "in a subset of the
+  API" for the v3 client (<a href="https://github.com/ctreminiom/go-atlassian/blob/main/README.md">README</a>).
+  It was directly affected by the Cloud search-endpoint deprecation (its existing code used the
+  removed <code>/search</code> endpoints) and has an open, maintainer-assigned issue tracking migration to
+  <code>/search/jql</code> and <code>nextPageToken</code> — as of the issue's last confirmed state, the fix was
+  "in progress" and I could not verify it had shipped and released
+  (<a href="https://github.com/ctreminiom/go-atlassian/issues/345">go-atlassian issue #345</a>). This is
+  materially more Jira-API-version-aware than <code>go-jira</code> (it actually has a v3/ADF-specific
+  client), which makes it the better <em>reference</em> even if Sirdar doesn't vendor it.</li>
+<li><strong>Recommendation given Sirdar's stdlib-only rule</strong>: don't take a dependency on either. Neither
+  library changes the underlying calculus — Jira's REST API is plain JSON over HTTP with Basic
+  or Bearer auth, well within reach of <code>net/http</code> and <code>encoding/json</code>, and the one place a
+  library would save real effort (ADF parsing) is narrow enough to hand-roll (§4). Both libraries
+  are, however, useful as <strong>reference implementations</strong> — <code>go-atlassian</code> in particular, given its
+  v3-aware design and its issue tracker's live documentation of the search-endpoint migration —
+  worth reading when implementing the adapter's search and ADF-adjacent code, even without
+  importing them.</li>
+</ul>
+<h2 id="6-automation-webhooks-future-trigger">6. Automation / webhooks (future trigger)<a class="headerlink" href="#6-automation-webhooks-future-trigger" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Jira Cloud webhooks are registered via <code>POST /rest/api/3/webhook</code> (apps using OAuth 2.0 or
+  Connect) and can subscribe to events including <code>jira:issue_created</code>, <code>jira:issue_updated</code>, and
+  <code>jira:issue_deleted</code>, optionally scoped with a <code>jqlFilter</code> or <code>fieldIdsFilter</code> so the webhook
+  only fires for matching issues
+  (<a href="https://community.atlassian.com/forums/Jira-questions/How-can-I-register-a-webhook-programmatically-from-a-connected/qaq-p/2895205">Atlassian Community: "How can I register a webhook programmatically from a connected
+  app?"</a>;
+  <a href="https://developer.atlassian.com/cloud/jira/platform/webhooks/">Webhooks — Jira Cloud platform</a>).
+  There is no single webhook event specifically named "issue assigned" — assignment is a field
+  change captured under <code>jira:issue_updated</code>, so a "new ticket assigned to me → triage" trigger
+  needs to inspect the webhook payload's changelog for an <code>assignee</code> field change (or use
+  <code>fieldIdsFilter</code> to restrict delivery to updates touching the assignee field) rather than
+  subscribing to a dedicated assignment event.</li>
+<li><strong>Jira Automation</strong> (the no-code rule engine built into both Cloud and Data Center) offers this
+  more directly at the product level: its trigger library includes an issue-transition/edit
+  trigger that can be scoped to "create, edit, transition, or assign" operations specifically,
+  and a rule's <code>THEN</code> action can be an outbound webhook POST to an external URL — effectively
+  letting a Jira Automation rule be the thing that calls into a Sirdar-adjacent trigger endpoint
+  when an issue is assigned, without Sirdar needing to poll or run its own webhook receiver logic
+  beyond accepting the POST
+  (<a href="https://confluence.atlassian.com/spaces/AUTOMATION/pages/993924804/Jira+automation+triggers">Confluence: Jira automation triggers</a>;
+  <a href="https://developer.atlassian.com/cloud/jira/service-desk/automation-webhooks/">Atlassian Developer: Automation webhooks (JSM)</a>).
+  Automation rule webhook calls include a configurable <code>X-Automation-Webhook-Token</code> header for
+  the receiver to verify the caller
+  (<a href="https://confluence.atlassian.com/spaces/AUTOMATION/pages/993924804/Jira+automation+triggers">Confluence: Jira automation triggers</a>).</li>
+<li>Given Sirdar's design as a locally-run harness (not a hosted service with a public endpoint),
+  webhooks imply either (a) exposing a receiver via a tunnel while Sirdar is running — awkward
+  for a tool meant to be invoked on demand — or (b) treating this as a later, optional
+  "watch mode" rather than the default <code>tracker.list</code>-driven triage flow. Worth revisiting once
+  Sirdar has any long-running component at all; premature for the current fetch-and-hand-off
+  design.</li>
+</ul>
+<h2 id="recommended-adapter-design">Recommended adapter design<a class="headerlink" href="#recommended-adapter-design" title="Permanent link">&para;</a></h2>
+<p><strong>Role</strong>: <code>tracker</code> always; <code>helpdesk</code> conditionally, only for issues in a <code>service_desk</code>-type
+project (JSM). An instance without JSM should advertise <code>tracker</code> only in <code>describe</code>.</p>
+<p><strong>Config keys</strong> (env or Sirdar's credential-ref convention):</p>
+<ul>
+<li><code>JIRA_BASE_URL</code> — site URL (<code>https://foo.atlassian.net</code> for Cloud, or the DC instance's own
+  base URL).</li>
+<li><code>JIRA_DEPLOYMENT</code> — <code>cloud</code> | <code>datacenter</code>, or auto-detected (see below) with this as an
+  override.</li>
+<li><code>JIRA_AUTH_MODE</code> — <code>token</code> (Cloud API token, Basic) | <code>pat</code> (DC Bearer) | <code>oauth</code> (Cloud 3LO,
+  lower priority — see §2).</li>
+<li><code>JIRA_EMAIL</code> + <code>JIRA_API_TOKEN</code> (Cloud Basic), or <code>JIRA_PAT</code> (DC Bearer), or
+  <code>JIRA_OAUTH_CLIENT_ID</code>/<code>JIRA_OAUTH_CLIENT_SECRET</code>/stored refresh token (Cloud 3LO) — credential
+  values themselves sourced via Sirdar's env/keychain-ref convention, never inline.</li>
+<li><code>JIRA_EPIC_LINK_FIELD</code> — optional override for the DC epic-link custom field name/ID, to skip
+  the <code>/rest/api/2/field</code> discovery call on repeated runs once known.</li>
+<li><code>JIRA_HELPDESK_REF_FIELD</code> — optional custom-field name carrying an external helpdesk
+  reference, checked before falling back to description-parsing (§4, option 3).</li>
+</ul>
+<p><strong>Endpoints used</strong>:</p>
+<ul>
+<li><code>GET /rest/api/2/issue/{key}</code> for <code>tracker.get</code> (v2 on Cloud too, for plain-text description —
+  §1/§4), with <code>?expand=changelog</code> only if/when change history is needed.</li>
+<li><code>POST /rest/api/2/search/jql</code> (Cloud) / <code>GET /rest/api/2/search</code> (DC) for <code>tracker.list</code>,
+  building JQL from the filter params per §4.</li>
+<li><code>GET /rest/api/2/field</code> once per process (cached), for epic-link/custom-field discovery.</li>
+<li>JSM role: <code>GET /rest/servicedeskapi/request/{key}</code> for <code>helpdesk.get</code>,
+  <code>GET /rest/servicedeskapi/request/{key}/comment</code> for <code>helpdesk.threads</code> (mapping <code>public</code> to
+  customer/agent <code>Role</code>), and the issue's own <code>fields.attachment[]</code> (from the already-fetched
+  tracker payload) for <code>helpdesk.attachments</code>.</li>
+<li><code>GET /rest/api/2/serverInfo</code> (DC) or hitting <code>/rest/api/3/...</code> and checking for a <code>410</code>/<code>404</code>
+  vs. success (Cloud) as part of deployment auto-detection, described next.</li>
+</ul>
+<p><strong>Cloud vs. DC detection</strong>: rather than trusting a config flag alone, probe once at startup:
+attempt <code>GET {base}/rest/api/2/serverInfo</code> (present on both) and inspect the response's
+<code>deploymentType</code> field if present, or fall back to whether the base URL matches
+<code>*.atlassian.net</code>/a configured Cloud pattern. Cache the result for the adapter process's
+lifetime; this decides which search endpoint and pagination style to use, and whether ADF is a
+possible response shape at all.</p>
+<p><strong>Edge cases to handle explicitly</strong>:</p>
+<ul>
+<li><strong>ADF</strong>: only possible on Cloud, and only if v3 is used anywhere (prefer v2 to avoid it per
+  §4); if it must be parsed, use a small hand-rolled walker, not a dependency requiring
+  <code>GOEXPERIMENT=jsonv2</code>.</li>
+<li><strong>Pagination</strong>: Cloud <code>/search/jql</code> uses <code>nextPageToken</code>; cap the number of pages fetched (e.g.
+  20) and treat a repeated token as a bug in the upstream API, not an infinite scroll, given the
+  documented looping issue (§1). DC keeps <code>startAt</code>/<code>total</code>; use that directly, no token.
+  Whichever mode, respect <code>limit</code> from Sirdar's filter as a hard cap on total issues returned,
+  independent of page size.</li>
+<li><strong>Attachments auth</strong>: Basic/Bearer works for the JSON metadata call on both Cloud and DC. For
+  the actual binary download, expect Basic auth to work reliably on Cloud; on DC, be prepared for
+  a PAT/Bearer 401/redirect-to-login on the attachment URL specifically, and fall back to
+  authenticating once via a session (cookie-based) request to obtain a cookie jar for that one
+  call, per the documented DC workaround (§1). This is a genuine risk area worth a specific
+  integration test against a real DC instance before shipping.</li>
+<li><strong>Rate limiting</strong>: implement the <code>Retry-After</code>-then-exponential-backoff-with-jitter pattern
+  from §2 for both deployments; on Cloud, branch on <code>RateLimit-Reason</code> if present to decide
+  whether to pause globally or just for the current endpoint.</li>
+<li><strong>JSM detection</strong>: check <code>projectTypeKey</code> once per project (cache by project key) rather than
+  per-issue, to avoid an extra API call per ticket.</li>
+<li><strong>Missing/renamed fields</strong>: epic-link field ID is instance-specific and not guaranteed to be
+  <code>customfield_10014</code>; always resolve by name via <code>/rest/api/2/field</code>, never hardcode the number.</li>
+</ul>
+<h2 id="open-questions">Open questions<a class="headerlink" href="#open-questions" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Whether Sirdar wants OAuth 2.0 (3LO) support at all in v1, given the added complexity
+  (redirect URI, consent flow, refresh-token storage) versus a single-operator API-token/PAT
+  design — recommend deferring it until there's a concrete multi-user need.</li>
+<li>Whether to support Data Center's classic pre-8.14 auth (Basic auth with username/password, or
+  Jira's older OAuth 1.0a "application links") for instances that haven't rolled out PATs yet —
+  not researched here; PAT (8.14+) is assumed to be the baseline.</li>
+<li>The DC attachment-download-auth edge case (§1, "Edge cases") needs to be validated against a
+  real Data Center instance; all sourcing for it is secondary (support KB articles and community
+  threads), not confirmed firsthand.</li>
+<li>Exact, current tool list and scope-mapping for the official Atlassian Remote MCP Server
+  (<code>mcp.atlassian.com</code>) is not fully documented publicly in a way I could verify beyond
+  permission-group names (<code>read_jira</code>, <code>write_jira</code>, <code>search_jira</code>); if Sirdar's agent-side
+  tooling ever depends on specific tool names/schemas from that server, verify directly against
+  a live connection rather than this document.</li>
+<li>Whether <code>ctreminiom/go-atlassian</code>'s <code>/search/jql</code> migration (tracked in issue #345) has
+  shipped in a released version as of today (2026-09-10) — the issue's state as researched was
+  "in progress," not confirmed released; check the changelog directly if this library is ever
+  reconsidered as a reference or dependency.</li>
+<li>No first-party Go ADF→markdown library with confirmed stability was found; the two candidates
+  surfaced (<code>ajbeck/adf-to-markdown</code>, <code>jcstorino/jira-cli/pkg/adf</code>) are both lightly verified —
+  worth a second look before the recommendation to hand-roll a walker is treated as final,
+  in case either has matured since this research.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

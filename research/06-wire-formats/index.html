@@ -1,0 +1,2294 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../05-verdict-and-proposal/">
+      
+      
+        <link rel="next" href="../07-dogfood-findings/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Wire formats - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#wire-formats-verified-on-2026-09-10" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Wire formats
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_13" id="__nav_13_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_13_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_13">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#claude-code-claude-p-with-stream-json-in-both-directions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code, claude -p with stream-json in both directions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code, claude -p with stream-json in both directions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#permission-request-permission-prompt-tool-stdio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission request (--permission-prompt-tool stdio)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-exercised-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not exercised yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codex-codex-app-server-over-stdio-json-rpc-20-one-object-per-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex, codex app-server over stdio (JSON-RPC 2.0, one object per line)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codex, codex app-server over stdio (JSON-RPC 2.0, one object per line)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codex-mcp-servers-which-mechanism-can-restrict-a-thread-probed-2026-09-11-codex-cli-01540" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex MCP servers: which mechanism can restrict a thread (probed 2026-09-11, codex-cli 0.154.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-approvals-what-gates-an-mcp-tool-call-probed-2026-09-11-codex-cli-01540" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex approvals: what gates an MCP tool call (probed 2026-09-11, codex-cli 0.154.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-and-the-mcp-childs-environment-probed-2026-09-11-codex-cli-01540-no-turn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex and the MCP child's environment (probed 2026-09-11, codex-cli 0.154.0, no turn)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stripmcpservers-known-limits-round-2-hardening-2026-09-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stripMCPServers: known limits (round 2 hardening, 2026-09-11)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_11" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_11" id="__nav_13_11_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_11_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_11">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_13_12" >
+        
+          
+          <label class="md-nav__link" for="__nav_13_12" id="__nav_13_12_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_13_12_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_13_12">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_1" id="__nav_14_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_2" id="__nav_14_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#claude-code-claude-p-with-stream-json-in-both-directions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Claude Code, claude -p with stream-json in both directions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Claude Code, claude -p with stream-json in both directions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#permission-request-permission-prompt-tool-stdio" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permission request (--permission-prompt-tool stdio)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#not-exercised-yet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Not exercised yet
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#codex-codex-app-server-over-stdio-json-rpc-20-one-object-per-line" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex, codex app-server over stdio (JSON-RPC 2.0, one object per line)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Codex, codex app-server over stdio (JSON-RPC 2.0, one object per line)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#codex-mcp-servers-which-mechanism-can-restrict-a-thread-probed-2026-09-11-codex-cli-01540" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex MCP servers: which mechanism can restrict a thread (probed 2026-09-11, codex-cli 0.154.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-approvals-what-gates-an-mcp-tool-call-probed-2026-09-11-codex-cli-01540" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex approvals: what gates an MCP tool call (probed 2026-09-11, codex-cli 0.154.0)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#codex-and-the-mcp-childs-environment-probed-2026-09-11-codex-cli-01540-no-turn" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Codex and the MCP child's environment (probed 2026-09-11, codex-cli 0.154.0, no turn)
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#stripmcpservers-known-limits-round-2-hardening-2026-09-11" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        stripMCPServers: known limits (round 2 hardening, 2026-09-11)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="wire-formats-verified-on-2026-09-10">Wire formats, verified on 2026-09-10<a class="headerlink" href="#wire-formats-verified-on-2026-09-10" title="Permanent link">&para;</a></h1>
+<p>Captured against Claude Code 2.1.267 and codex-cli 0.154.0 on macOS by driving both binaries
+over stdio from a script. These are the shapes the provider adapters and their fake-binary
+tests are built on. Session ids, paths and token counts are illustrative.</p>
+<h2 id="claude-code-claude-p-with-stream-json-in-both-directions">Claude Code, <code>claude -p</code> with stream-json in both directions<a class="headerlink" href="#claude-code-claude-p-with-stream-json-in-both-directions" title="Permanent link">&para;</a></h2>
+<p>Command used:</p>
+<div class="highlight"><pre><span></span><code>claude -p --output-format stream-json --input-format stream-json --verbose \
+  --include-partial-messages --permission-prompt-tool stdio --permission-mode default \
+  --json-schema '&lt;json schema&gt;' --max-turns 4 --model &lt;model&gt;
+</code></pre></div>
+<p><code>ANTHROPIC_API_KEY</code> removed from the environment so the subscription login is used.</p>
+<p>Input line (stdin), one JSON object per line:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"&lt;prompt text&gt;"</span><span class="p">}}</span>
+</code></pre></div>
+<p>Output lines (stdout), in the order they occurred. <code>stream_event</code> lines (partial deltas) are
+omitted; they carry <code>event.type</code> of <code>message_start</code>, <code>content_block_start</code>,
+<code>content_block_delta</code>, <code>content_block_stop</code>, <code>message_delta</code>, <code>message_stop</code>.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"hook_started"</span><span class="p">,</span><span class="nt">"hook_name"</span><span class="p">:</span><span class="s2">"SessionStart:startup"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"hook_response"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="w"> </span><span class="nt">"exit_code"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="nt">"outcome"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"init"</span><span class="p">,</span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/work"</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"ab02..."</span><span class="p">,</span><span class="nt">"tools"</span><span class="p">:[</span><span class="s2">"Task"</span><span class="p">,</span><span class="s2">"Bash"</span><span class="p">,</span><span class="s2">"Read"</span><span class="p">,</span><span class="err">...</span><span class="p">],</span>
+<span class="w"> </span><span class="nt">"mcp_servers"</span><span class="p">:[</span><span class="err">...</span><span class="p">],</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"claude-haiku-4-5-20251001"</span><span class="p">,</span><span class="nt">"permissionMode"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"apiKeySource"</span><span class="p">:</span><span class="s2">"none"</span><span class="p">,</span><span class="nt">"claude_code_version"</span><span class="p">:</span><span class="s2">"2.1.267"</span><span class="p">,</span><span class="nt">"output_style"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"status"</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"requesting"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"thinking_tokens"</span><span class="p">,</span><span class="nt">"estimated_tokens"</span><span class="p">:</span><span class="mi">50</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"thinking"</span><span class="p">,</span><span class="nt">"thinking"</span><span class="p">:</span><span class="s2">""</span><span class="p">,</span><span class="nt">"signature"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">}],</span><span class="nt">"usage"</span><span class="p">:{</span><span class="err">...</span><span class="p">}},</span><span class="w"> </span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"toolu_01Y1..."</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Bash"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"echo hello-from-bash"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Run the requested shell command"</span><span class="p">}}],</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"rate_limit_event"</span><span class="p">,</span><span class="nt">"rate_limit_info"</span><span class="p">:{</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"allowed"</span><span class="p">,</span><span class="nt">"resetsAt"</span><span class="p">:</span><span class="mi">1789049400</span><span class="p">,</span><span class="nt">"rateLimitType"</span><span class="p">:</span><span class="s2">"five_hour"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"overageStatus"</span><span class="p">:</span><span class="s2">"rejected"</span><span class="p">,</span><span class="nt">"isUsingOverage"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"unifiedWindows"</span><span class="p">:{</span><span class="nt">"five_hour"</span><span class="p">:{</span><span class="nt">"utilization"</span><span class="p">:</span><span class="mf">0.5</span><span class="p">,</span><span class="nt">"resetsAt"</span><span class="p">:</span><span class="mi">1789049400</span><span class="p">},</span><span class="nt">"seven_day"</span><span class="p">:{</span><span class="nt">"utilization"</span><span class="p">:</span><span class="mf">0.4</span><span class="p">,</span><span class="nt">"resetsAt"</span><span class="p">:</span><span class="mi">1789531200</span><span class="p">}}},</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"toolu_01Y1..."</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_result"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"hello-from-bash"</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">false</span><span class="p">}]},</span>
+<span class="w"> </span><span class="nt">"parent_tool_use_id"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"tool_use_result"</span><span class="p">:{</span><span class="nt">"stdout"</span><span class="p">:</span><span class="s2">"hello-from-bash"</span><span class="p">,</span><span class="nt">"stderr"</span><span class="p">:</span><span class="s2">""</span><span class="p">,</span><span class="nt">"interrupted"</span><span class="p">:</span><span class="kc">false</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"toolu_01E9..."</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"StructuredOutput"</span><span class="p">,</span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"greeting"</span><span class="p">:</span><span class="s2">"Hello!"</span><span class="p">,</span><span class="nt">"n"</span><span class="p">:</span><span class="mi">7</span><span class="p">}}],</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"toolu_01E9..."</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"tool_result"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"Structured output provided successfully"</span><span class="p">}]},</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"result"</span><span class="p">,</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"is_error"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span><span class="nt">"num_turns"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"ab02..."</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"result"</span><span class="p">:</span><span class="s2">"{\"greeting\":\"Hello!\",\"n\":7}"</span><span class="p">,</span><span class="nt">"structured_output"</span><span class="p">:{</span><span class="nt">"greeting"</span><span class="p">:</span><span class="s2">"Hello!"</span><span class="p">,</span><span class="nt">"n"</span><span class="p">:</span><span class="mi">7</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"total_cost_usd"</span><span class="p">:</span><span class="mf">0.0698</span><span class="p">,</span><span class="nt">"duration_ms"</span><span class="p">:</span><span class="mi">9000</span><span class="p">,</span><span class="nt">"duration_api_ms"</span><span class="p">:</span><span class="mi">7586</span><span class="p">,</span><span class="nt">"stop_reason"</span><span class="p">:</span><span class="s2">"tool_use"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">18</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">516</span><span class="p">,</span><span class="nt">"cache_creation_input_tokens"</span><span class="p">:</span><span class="mi">32277</span><span class="p">,</span><span class="nt">"cache_read_input_tokens"</span><span class="p">:</span><span class="mi">26899</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"modelUsage"</span><span class="p">:{</span><span class="err">...</span><span class="p">},</span><span class="nt">"permission_denials"</span><span class="p">:[</span><span class="err">...</span><span class="p">],</span><span class="nt">"subagent_stats"</span><span class="p">:{</span><span class="err">...</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}</span>
+</code></pre></div>
+<p>Structured output arrives twice: the model calls a synthetic <code>StructuredOutput</code> tool, and the
+<code>result</code> line carries the parsed object in <code>structured_output</code>. Read the latter.</p>
+<h3 id="permission-request-permission-prompt-tool-stdio">Permission request (<code>--permission-prompt-tool stdio</code>)<a class="headerlink" href="#permission-request-permission-prompt-tool-stdio" title="Permanent link">&para;</a></h3>
+<p>When a tool is not already allowed by the user's settings, the CLI writes a control request
+and waits:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_request"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"ad91bf9a-..."</span><span class="p">,</span><span class="nt">"request"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"can_use_tool"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"Write"</span><span class="p">,</span><span class="nt">"display_name"</span><span class="p">:</span><span class="s2">"Write"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"file_path"</span><span class="p">:</span><span class="s2">"/work/probe.txt"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"x"</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"probe.txt"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"permission_suggestions"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"setMode"</span><span class="p">,</span><span class="nt">"mode"</span><span class="p">:</span><span class="s2">"acceptEdits"</span><span class="p">,</span><span class="nt">"destination"</span><span class="p">:</span><span class="s2">"session"</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"toolu_016d..."</span><span class="p">}}</span>
+</code></pre></div>
+<p>For Bash the request also carries <code>"blocked_path"</code> and <code>addRules</code> suggestions:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_request"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"1ebc..."</span><span class="p">,</span><span class="nt">"request"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"can_use_tool"</span><span class="p">,</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"Bash"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"input"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"touch probe2.txt"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Create probe2.txt file"</span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"permission_suggestions"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"addRules"</span><span class="p">,</span><span class="nt">"rules"</span><span class="p">:[{</span><span class="nt">"toolName"</span><span class="p">:</span><span class="s2">"Bash"</span><span class="p">,</span><span class="nt">"ruleContent"</span><span class="p">:</span><span class="s2">"touch probe2.txt"</span><span class="p">}],</span><span class="nt">"behavior"</span><span class="p">:</span><span class="s2">"allow"</span><span class="p">,</span><span class="nt">"destination"</span><span class="p">:</span><span class="s2">"localSettings"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"blocked_path"</span><span class="p">:</span><span class="s2">"/work/probe2.txt"</span><span class="p">,</span><span class="nt">"tool_use_id"</span><span class="p">:</span><span class="s2">"toolu_01Sm..."</span><span class="p">}}</span>
+</code></pre></div>
+<p>Reply on stdin. Deny:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_response"</span><span class="p">,</span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"ad91bf9a-..."</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"behavior"</span><span class="p">:</span><span class="s2">"deny"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"Sirdar policy: triage runs are read-only"</span><span class="p">}}}</span>
+</code></pre></div>
+<p>Allow (optionally with modified input):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"control_response"</span><span class="p">,</span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"subtype"</span><span class="p">:</span><span class="s2">"success"</span><span class="p">,</span><span class="nt">"request_id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"response"</span><span class="p">:{</span><span class="nt">"behavior"</span><span class="p">:</span><span class="s2">"allow"</span><span class="p">,</span><span class="nt">"updatedInput"</span><span class="p">:{</span><span class="err">...origi</span><span class="kc">nal</span><span class="w"> </span><span class="err">or</span><span class="w"> </span><span class="err">modi</span><span class="kc">f</span><span class="err">ied</span><span class="w"> </span><span class="err">i</span><span class="kc">n</span><span class="err">pu</span><span class="kc">t</span><span class="err">...</span><span class="p">}}}}</span>
+</code></pre></div>
+<p>After a deny the model sees a <code>tool_result</code> with <code>is_error: true</code> and the message text, and
+continues. Some Bash commands (<code>echo ...</code>) were auto-allowed without a request in default mode.
+The final <code>result.permission_denials</code> lists denials.</p>
+<h3 id="not-exercised-yet">Not exercised yet<a class="headerlink" href="#not-exercised-yet" title="Permanent link">&para;</a></h3>
+<p><code>--resume &lt;session_id&gt;</code> (resume handle is <code>session_id</code> from <code>init</code>), <code>control_request</code> with
+other subtypes (hooks, MCP elicitation), sending a second <code>user</code> line after <code>result</code> in the
+same process.</p>
+<h2 id="codex-codex-app-server-over-stdio-json-rpc-20-one-object-per-line">Codex, <code>codex app-server</code> over stdio (JSON-RPC 2.0, one object per line)<a class="headerlink" href="#codex-codex-app-server-over-stdio-json-rpc-20-one-object-per-line" title="Permanent link">&para;</a></h2>
+<p>Client to server:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"initialize"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"clientInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"sirdar"</span><span class="p">,</span><span class="nt">"title"</span><span class="p">:</span><span class="s2">"Sirdar"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"0.0.1"</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"initialized"</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/start"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/work"</span><span class="p">,</span><span class="nt">"sandbox"</span><span class="p">:</span><span class="s2">"read-only"</span><span class="p">,</span><span class="nt">"approvalPolicy"</span><span class="p">:</span><span class="s2">"never"</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"turn/start"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"01a08b0e-..."</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"input"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"text"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"&lt;prompt&gt;"</span><span class="p">},{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"localImage"</span><span class="p">,</span><span class="nt">"path"</span><span class="p">:</span><span class="s2">"/work/bundle/attachments/1-shot.png"</span><span class="p">}],</span>
+<span class="w">   </span><span class="nt">"outputSchema"</span><span class="p">:{</span><span class="w"> </span><span class="err">...jso</span><span class="kc">n</span><span class="w"> </span><span class="err">schema...</span><span class="w"> </span><span class="p">}}}</span>
+</code></pre></div>
+<p>Enum values: <code>sandbox</code> is <code>read-only | workspace-write | danger-full-access</code>; <code>approvalPolicy</code>
+is <code>untrusted | on-request | never</code> (or a granular object). <code>thread/start</code> also accepts <code>model</code>,
+<code>baseInstructions</code>, <code>developerInstructions</code>, <code>config</code>, <code>ephemeral</code>. <code>turn/start</code> also accepts
+<code>model</code>, <code>effort</code>, <code>cwd</code>, <code>sandboxPolicy</code>.</p>
+<p>Server to client, in order:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"userAgent"</span><span class="p">:</span><span class="s2">"sirdar/0.154.0 (...)"</span><span class="p">,</span><span class="nt">"codexHome"</span><span class="p">:</span><span class="s2">"/Users/x/.codex"</span><span class="p">,</span><span class="nt">"platformOs"</span><span class="p">:</span><span class="s2">"macos"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"remoteControl/status/changed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"thread"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"01a08b0e-..."</span><span class="p">,</span><span class="nt">"sessionId"</span><span class="p">:</span><span class="s2">"01a08b0e-..."</span><span class="p">,</span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/work"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"sandbox"</span><span class="p">:{</span><span class="err">...</span><span class="p">},</span><span class="nt">"approvalPolicy"</span><span class="p">:</span><span class="s2">"never"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"thread"</span><span class="p">:{</span><span class="err">...</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"mcpServer/startupStatus/updated"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"codex_apps"</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"starting"</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"turn"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"01a08b0e-9c04-..."</span><span class="p">,</span><span class="nt">"items"</span><span class="p">:[],</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"inProgress"</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/status/changed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"active"</span><span class="p">,</span><span class="nt">"activeFlags"</span><span class="p">:[]}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"turn/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"turn"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"inProgress"</span><span class="p">,</span><span class="nt">"startedAt"</span><span class="p">:</span><span class="mi">1789039385</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"userMessage"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"text"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">}]},</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"turnId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"startedAtMs"</span><span class="p">:</span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"userMessage"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"reasoning"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"rs_..."</span><span class="p">,</span><span class="nt">"summary"</span><span class="p">:[],</span><span class="nt">"content"</span><span class="p">:[]},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/reasoning/summaryTextDelta"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"reasoning"</span><span class="p">,</span><span class="w"> </span><span class="err">...</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"agentMessage"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"msg_..."</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">""</span><span class="p">,</span><span class="nt">"phase"</span><span class="p">:</span><span class="s2">"commentary"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/agentMessage/delta"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"agentMessage"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"msg_..."</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"{\"greeting\":\"...\",\"n\":7}"</span><span class="p">,</span><span class="nt">"phase"</span><span class="p">:</span><span class="s2">"commentary"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/tokenUsage/updated"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"turnId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"tokenUsage"</span><span class="p">:{</span><span class="nt">"total"</span><span class="p">:{</span><span class="nt">"totalTokens"</span><span class="p">:</span><span class="mi">17270</span><span class="p">,</span><span class="nt">"inputTokens"</span><span class="p">:</span><span class="mi">17104</span><span class="p">,</span><span class="nt">"cachedInputTokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="nt">"outputTokens"</span><span class="p">:</span><span class="mi">166</span><span class="p">,</span><span class="nt">"reasoningOutputTokens"</span><span class="p">:</span><span class="mi">40</span><span class="p">},</span><span class="nt">"last"</span><span class="p">:{</span><span class="err">...</span><span class="p">},</span><span class="nt">"modelContextWindow"</span><span class="p">:</span><span class="err">...</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"account/rateLimits/updated"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"rateLimits"</span><span class="p">:{</span><span class="nt">"limitId"</span><span class="p">:</span><span class="s2">"codex"</span><span class="p">,</span><span class="nt">"primary"</span><span class="p">:{</span><span class="nt">"usedPercent"</span><span class="p">:</span><span class="mi">91</span><span class="p">,</span><span class="nt">"windowDurationMins"</span><span class="p">:</span><span class="mi">43200</span><span class="p">,</span><span class="nt">"resetsAt"</span><span class="p">:</span><span class="mi">1789819250</span><span class="p">},</span><span class="nt">"secondary"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"credits"</span><span class="p">:{</span><span class="err">...</span><span class="p">}}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/started"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"agentMessage"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"msg_..."</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">""</span><span class="p">,</span><span class="nt">"phase"</span><span class="p">:</span><span class="s2">"final_answer"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"agentMessage"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"msg_..."</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"{\"greeting\":\"Hello! ... writes are not permitted.\",\"n\":7}"</span><span class="p">,</span><span class="nt">"phase"</span><span class="p">:</span><span class="s2">"final_answer"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/status/changed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"idle"</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"turn/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"turn"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"..."</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"completed"</span><span class="p">,</span><span class="nt">"error"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"items"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"agentMessage"</span><span class="p">,</span><span class="nt">"phase"</span><span class="p">:</span><span class="s2">"final_answer"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"{...}"</span><span class="p">},</span><span class="w"> </span><span class="err">...</span><span class="p">],</span><span class="nt">"completedAt"</span><span class="p">:</span><span class="err">...</span><span class="p">,</span><span class="nt">"durationMs"</span><span class="p">:</span><span class="err">...</span><span class="p">}}}</span>
+</code></pre></div>
+<p>The structured output is the <code>text</code> of the <code>agentMessage</code> item whose <code>phase</code> is
+<code>final_answer</code> (also present in <code>turn/completed.turn.items</code>). Parse it as JSON. Other item
+types seen in the schema: <code>commandExecution</code> (with <code>item/commandExecution/outputDelta</code>),
+<code>fileChange</code>, <code>mcpToolCall</code> (with <code>item/mcpToolCall/progress</code>), <code>webSearch</code>, <code>plan</code>,
+<code>reasoning</code>, <code>userMessage</code>, <code>hookPrompt</code>. <code>Turn.status</code> is
+<code>completed | interrupted | failed | inProgress</code>; <code>Turn.error.message</code> when failed.</p>
+<p>Server-to-client requests (carry an <code>id</code>, must be answered):
+<code>item/commandExecution/requestApproval</code>, <code>item/fileChange/requestApproval</code>,
+<code>item/permissions/requestApproval</code>, <code>item/tool/requestUserInput</code>,
+<code>mcpServer/elicitation/request</code>. With <code>sandbox: read-only</code> and <code>approvalPolicy: never</code> the
+write attempt was refused inside the sandbox and no request was sent; the model reported the
+failure in its final answer. Sirdar still answers any request that does arrive with a decline.</p>
+<p>Rate-limit note from the probe: the Codex account showed <code>usedPercent: 91</code> on a 30-day
+window. Keep Codex test runs minimal.</p>
+<p>Other useful methods: <code>thread/resume</code>, <code>thread/fork</code>, <code>turn/interrupt</code>, <code>turn/steer</code>,
+<code>account/rateLimits/read</code>, <code>mcpServerStatus/list</code>, <code>model/list</code>. Bindings:
+<code>codex app-server generate-json-schema --out &lt;dir&gt;</code> writes one JSON Schema per type plus a
+combined <code>codex_app_server_protocol.v2.schemas.json</code>.</p>
+<h3 id="codex-mcp-servers-which-mechanism-can-restrict-a-thread-probed-2026-09-11-codex-cli-01540">Codex MCP servers: which mechanism can restrict a thread (probed 2026-09-11, codex-cli 0.154.0)<a class="headerlink" href="#codex-mcp-servers-which-mechanism-can-restrict-a-thread-probed-2026-09-11-codex-cli-01540" title="Permanent link">&para;</a></h3>
+<p>Codex reads its MCP servers from <code>[mcp_servers.&lt;name&gt;]</code> tables in <code>config.toml</code> under
+<code>CODEX_HOME</code>. Three mechanisms were probed against the installed CLI to find one that gives a
+thread the workspace's servers <em>and no others</em>. Only the third does. No turn was started in any
+of these probes, so none of them spent model quota.</p>
+<p><strong><code>-c mcp_servers=...</code> merges, it does not replace.</strong> With a home whose <code>config.toml</code> declares
+<code>notes</code>, both an empty override and one naming a different server left <code>notes</code> in place:</p>
+<div class="highlight"><pre><span></span><code>$ codex app-server -c 'mcp_servers={}'            → mcpServerStatus/list: codex_apps, notes
+$ codex app-server -c 'mcp_servers={swapped=...}' → mcpServerStatus/list: codex_apps, notes, swapped
+</code></pre></div>
+<p><strong><code>thread/start</code>'s <code>config</code> object merges too.</strong> <code>ThreadStartParams.config</code> is an untyped
+<code>object|null</code> in the app-server schema, and an <code>mcp_servers</code> key in it is added to the home's
+table rather than replacing it. With <code>notes</code> in <code>config.toml</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"thread/start"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/tmp"</span><span class="p">,</span><span class="nt">"sandbox"</span><span class="p">:</span><span class="s2">"read-only"</span><span class="p">,</span><span class="nt">"approvalPolicy"</span><span class="p">:</span><span class="s2">"never"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"config"</span><span class="p">:{</span><span class="nt">"mcp_servers"</span><span class="p">:{</span><span class="nt">"injected"</span><span class="p">:{</span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"/usr/bin/python3"</span><span class="p">,</span><span class="nt">"args"</span><span class="p">:[</span><span class="s2">"&lt;fake-mcp&gt;"</span><span class="p">],</span><span class="nt">"env"</span><span class="p">:{</span><span class="nt">"FAKE_MCP_NAME"</span><span class="p">:</span><span class="s2">"injected"</span><span class="p">}}}}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"thread"</span><span class="p">:{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"01a08f9f-…"</span><span class="p">,</span><span class="nt">"modelProvider"</span><span class="p">:</span><span class="s2">"openai"</span><span class="p">,</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"gpt-5.6-luna"</span><span class="p">,</span><span class="w"> </span><span class="err">…</span><span class="p">}}}</span>
+</code></pre></div>
+<p>then <code>mcpServerStatus/list</code> with that <code>threadId</code> answers <code>codex_apps, injected, notes</code> — the
+injected server is live, the home's server is still there. So the <code>config</code> object can add a
+server to a thread but can never take the operator's away.</p>
+<p><strong>A generated <code>CODEX_HOME</code> does what is wanted.</strong> A directory holding a <code>config.toml</code> that
+declares only the workspace's servers, a copy of the operator's <code>auth.json</code>, and symlinks to
+every other entry of their real home:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"initialize"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"clientInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"sirdar"</span><span class="p">,</span><span class="nt">"title"</span><span class="p">:</span><span class="s2">"Sirdar"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"0.1.0-dev"</span><span class="p">}}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"userAgent"</span><span class="p">:</span><span class="s2">"sirdar/0.154.0 (Mac OS 26.6.2; arm64) …"</span><span class="p">,</span><span class="nt">"codexHome"</span><span class="p">:</span><span class="s2">"/private/var/folders/…/sirdar-codex-home-…"</span><span class="p">,</span><span class="nt">"platformFamily"</span><span class="p">:</span><span class="s2">"unix"</span><span class="p">,</span><span class="nt">"platformOs"</span><span class="p">:</span><span class="s2">"macos"</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"initialized"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"mcpServerStatus/list"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{}}</span>
+<span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"data"</span><span class="p">:[</span>
+<span class="w">  </span><span class="p">{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"codex_apps"</span><span class="p">,</span><span class="nt">"authStatus"</span><span class="p">:</span><span class="s2">"bearerToken"</span><span class="p">,</span><span class="nt">"serverInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"plugin-runtime"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"0.1.0"</span><span class="p">},</span><span class="nt">"tools"</span><span class="p">:{</span><span class="nt">"codex_document_control.list_document_sessions"</span><span class="p">:{</span><span class="err">…</span><span class="p">},</span><span class="w"> </span><span class="err">…</span><span class="p">},</span><span class="nt">"toolsError"</span><span class="p">:</span><span class="kc">null</span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"notes"</span><span class="p">,</span><span class="nt">"authStatus"</span><span class="p">:</span><span class="s2">"unsupported"</span><span class="p">,</span><span class="nt">"serverInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"notes"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"1.0.0"</span><span class="p">},</span><span class="nt">"tools"</span><span class="p">:{</span><span class="nt">"notes_lookup"</span><span class="p">:{</span><span class="err">…</span><span class="p">}},</span><span class="nt">"toolsError"</span><span class="p">:</span><span class="kc">null</span><span class="p">},</span>
+<span class="w">  </span><span class="p">{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"timeteller"</span><span class="p">,</span><span class="nt">"authStatus"</span><span class="p">:</span><span class="s2">"unsupported"</span><span class="p">,</span><span class="nt">"serverInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"timeteller"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"1.0.0"</span><span class="p">},</span><span class="nt">"tools"</span><span class="p">:{</span><span class="nt">"timeteller_lookup"</span><span class="p">:{</span><span class="err">…</span><span class="p">}},</span><span class="nt">"toolsError"</span><span class="p">:</span><span class="kc">null</span><span class="p">}],</span>
+<span class="w">  </span><span class="nt">"nextCursor"</span><span class="p">:</span><span class="kc">null</span><span class="p">}}</span>
+</code></pre></div>
+<p>Notes on the shapes and the caveats, all observed rather than assumed:</p>
+<ul>
+<li><code>mcpServerStatus/list</code> answers <code>{"data":[…],"nextCursor":…}</code> in 0.154.0, not <code>{"servers":…}</code>.
+  Each entry carries <code>name</code>, <code>authStatus</code>, <code>runtimeStatus</code>, <code>serverInfo</code>, a <code>tools</code> map and
+  <code>toolsError</code>; <code>ListMcpServerStatusParams</code> also takes <code>threadId</code>, <code>detail</code>, <code>limit</code>, <code>cursor</code>.</li>
+<li><code>codex_apps</code> (<code>serverInfo.name</code> <code>plugin-runtime</code>) is listed even in a home with an empty
+  <code>config.toml</code> and no <code>plugins</code> directory. It is built into the CLI; nothing in the config
+  removes it.</li>
+<li>The login travels in <code>auth.json</code> alone: <code>CODEX_HOME=&lt;scratch&gt; codex login status</code> says
+  <code>Logged in using ChatGPT</code> with the file copied in and <code>Not logged in</code> without it. The file
+  carries <code>auth_mode</code>, <code>tokens.{id_token,access_token,refresh_token,account_id}</code> and
+  <code>last_refresh</code> — Codex rewrites it when it refreshes, so the copy must stay writable.</li>
+<li>A server whose command fails to start is still listed, with its <code>toolsError</code>, e.g.
+  <code>MCP startup failed: handshaking with MCP server failed: connection closed: initialize
+  response</code>. <code>RUST_LOG=codex_rmcp_client=trace</code> puts the child's own stderr in the app-server's
+  (<code>MCP server stderr (/usr/bin/python3): … No such file or directory</code>), which is how a bad
+  <code>command</code> or <code>args</code> in <code>.mcp.json</code> is diagnosed.</li>
+<li><code>thread/resume</code> reads the thread's rollout from <code>CODEX_HOME/sessions</code>: resuming an id from a
+  home that never held it fails with <code>{"code":-32600,"message":"no rollout found for thread id
+  &lt;id&gt;"}</code>. That is why Sirdar symlinks the real home's state into the generated one instead of
+  leaving it empty. (An empty thread is not written to <code>sessions</code> at all, so the probe could
+  not tell a missing rollout from an unwritten one without spending a turn.)</li>
+</ul>
+<h3 id="codex-approvals-what-gates-an-mcp-tool-call-probed-2026-09-11-codex-cli-01540">Codex approvals: what gates an MCP tool call (probed 2026-09-11, codex-cli 0.154.0)<a class="headerlink" href="#codex-approvals-what-gates-an-mcp-tool-call-probed-2026-09-11-codex-cli-01540" title="Permanent link">&para;</a></h3>
+<p>Sirdar ran Codex with <code>approvalPolicy: "never"</code> on the reading that the read-only sandbox was
+the whole confinement and no approval would ever arrive. For MCP tool calls that reading was
+wrong in both directions: <code>never</code> does not mean "runs ungated", it means <strong>refused</strong>, and the
+policy that does gate them routes the approval somewhere the adapter was not looking.</p>
+<p>Two turns were spent establishing this, against a scratch <code>CODEX_HOME</code> whose <code>config.toml</code>
+declared one stdio MCP server — a Python stub exposing <code>delete_everything</code> with no
+<code>readOnlyHint</code> annotation — in a throwaway <code>cwd</code>. Same prompt both times: <em>Call the MCP tool
+delete_everything on the server named probe, with an empty arguments object.</em></p>
+<p><strong><code>approvalPolicy: "never"</code> refuses the call.</strong> No server-to-client request of any kind; the
+item completes as failed:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"item/completed"</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span><span class="nt">"item"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"mcpToolCall"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"exec-54932ee5-…"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"server"</span><span class="p">:</span><span class="s2">"probe"</span><span class="p">,</span><span class="nt">"tool"</span><span class="p">:</span><span class="s2">"delete_everything"</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"failed"</span><span class="p">,</span><span class="nt">"arguments"</span><span class="p">:{},</span>
+<span class="w">  </span><span class="nt">"readOnlyHint"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:</span><span class="kc">null</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"error"</span><span class="p">:{</span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"MCP tool call requires approval, but approval policy is never"</span><span class="p">}},</span><span class="w"> </span><span class="err">…</span><span class="p">}}</span>
+</code></pre></div>
+<p>So a workspace <code>.mcp.json</code> attached to a Codex session was being started, listed, offered to
+the model — and then unusable. The string is in the binary next to <code>core/src/mcp_tool_call.rs</code>
+and <code>mcp_tool_call_approval</code>, alongside <code>internal error: … only MCP actions can request MCP
+tool approval</code>, which is also why a client-initiated <code>mcpServer/tool/call</code> runs under every
+policy: probed directly, <code>never</code>, <code>on-request</code> and <code>untrusted</code> all returned the tool's result
+without asking. Only the <em>model's</em> call is gated.</p>
+<p><strong><code>approvalPolicy: "untrusted"</code> asks — on the elicitation channel.</strong> The approval does not
+arrive as <code>item/permissions/requestApproval</code> (whose params are a filesystem/network profile,
+with no tool in them) and there is no <code>item/mcpToolCall/requestApproval</code> in <code>ServerRequest</code> at
+all. It arrives as an <code>mcpServer/elicitation/request</code> marked by <code>_meta</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"method"</span><span class="p">:</span><span class="s2">"mcpServer/elicitation/request"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="nt">"params"</span><span class="p">:{</span>
+<span class="w">  </span><span class="nt">"threadId"</span><span class="p">:</span><span class="s2">"01a08fb9-8f31-…"</span><span class="p">,</span><span class="nt">"turnId"</span><span class="p">:</span><span class="s2">"01a08fb9-8f93-…"</span><span class="p">,</span><span class="nt">"serverName"</span><span class="p">:</span><span class="s2">"probe"</span><span class="p">,</span><span class="nt">"mode"</span><span class="p">:</span><span class="s2">"form"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"_meta"</span><span class="p">:{</span><span class="nt">"codex_approval_kind"</span><span class="p">:</span><span class="s2">"mcp_tool_call"</span><span class="p">,</span><span class="nt">"persist"</span><span class="p">:[</span><span class="s2">"session"</span><span class="p">,</span><span class="s2">"always"</span><span class="p">],</span>
+<span class="w">           </span><span class="nt">"tool_description"</span><span class="p">:</span><span class="s2">"Deletes every record in the probe store. Destructive."</span><span class="p">,</span>
+<span class="w">           </span><span class="nt">"tool_params"</span><span class="p">:{},</span><span class="nt">"tool_params_display"</span><span class="p">:[]},</span>
+<span class="w">  </span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"Allow the probe MCP server to run tool \"delete_everything\"?"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"requestedSchema"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"object"</span><span class="p">,</span><span class="nt">"properties"</span><span class="p">:{}}}}</span>
+</code></pre></div>
+<p>Answered <code>{"action":"decline"}</code> (the response is <code>{action, content?}</code>, actions
+<code>accept | decline | cancel</code>), the call completes as <code>failed</code> with <code>user rejected MCP tool
+call</code>, and the turn carries on. Ordering matters and is reliable: the <code>item/started</code> for the
+<code>mcpToolCall</code> — which carries <code>server</code>, <code>tool</code> and <code>arguments</code> as <em>data</em> — precedes the
+elicitation, then <code>serverRequest/resolved</code> follows the reply.</p>
+<div class="highlight"><pre><span></span><code>26: item/started            mcpToolCall exec-2d15e1cc… server=probe tool=delete_everything
+28: mcpServer/elicitation/request id=0
+30: serverRequest/resolved  requestId=0
+32: item/completed          mcpToolCall … status=failed
+</code></pre></div>
+<p>That ordering is what Sirdar decides on: the elicitation names the server in a field but the
+tool only inside a sentence written for a person, so the preceding item supplies the tool name
+and the quoted name in <code>message</code> is the fallback.</p>
+<p>Notes and limits:</p>
+<ul>
+<li><strong><code>on-request</code> was not turn-verified.</strong> The <code>never</code> branch is a special case in the refusal
+  string, so any other policy plausibly asks; <code>untrusted</code> is what was actually observed, so
+  that is what Sirdar sends. <code>untrusted</code> also puts shell commands up for approval, which is
+  the point — <code>permissions.bash</code> had no way to reach a Codex session before this.</li>
+<li><strong><code>approvalPolicy: {"granular":{…}}</code></strong> would be the narrower instrument
+  (<code>mcp_elicitations</code>, <code>sandbox_approval</code>, <code>rules</code>, <code>request_permissions</code>, <code>skill_approval</code>),
+  but the app-server rejects it without an opt-in: <code>askForApproval.granular requires
+  experimentalApi capability</code>, declared in <code>initialize.capabilities.experimentalApi</code>. Not a
+  thing to build a permission gate on while it is flagged experimental.</li>
+<li><strong>What Codex auto-approves never reaches Sirdar.</strong> A tool the CLI decides needs no approval
+  raises no request, so <code>permissions.mcp</code> never sees it. The stub's tool carried no
+  <code>readOnlyHint</code>; whether an annotation a <em>server</em> supplies can win itself an exemption was
+  not established, and the annotation would be the untrusted party's own claim. Worth a probe
+  before trusting the gate with a server nobody has read.</li>
+<li>0.154.0 also has hooks (<code>hooks/list</code>, <code>HookEventName</code> including <code>preToolUse</code> and
+  <code>permissionRequest</code>, <code>HookRunStatus</code> <code>blocked</code>). A <code>preToolUse</code> hook is a second, policy-
+  independent way to gate tool calls and does not depend on the approval policy at all. Not
+  used here; noted as the thing to reach for if the approval channel proves porous.</li>
+</ul>
+<h3 id="codex-and-the-mcp-childs-environment-probed-2026-09-11-codex-cli-01540-no-turn">Codex and the MCP child's environment (probed 2026-09-11, codex-cli 0.154.0, no turn)<a class="headerlink" href="#codex-and-the-mcp-childs-environment-probed-2026-09-11-codex-cli-01540-no-turn" title="Permanent link">&para;</a></h3>
+<p>The worry was that Codex hands its MCP servers the app-server's whole inherited environment,
+where Sirdar's own <code>mcpclient</code> gives them PATH, HOME and LANG and nothing else — so the same
+<code>.mcp.json</code> would expose a workspace's credentials on the Codex path and not on the openai
+one. It does not. Probed by declaring two servers whose <code>tools/list</code> names one tool per
+variable it can see (<code>user__present</code>, <code>zoho_refresh_token__absent</code>, …) and reading the answer
+off <code>mcpServerStatus/list</code>, with the app-server itself started with every variable set:</p>
+<table>
+<thead>
+<tr>
+<th>Variable in the app-server's env</th>
+<th>Reaches the MCP child</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>PATH</code>, <code>HOME</code>, <code>LANG</code>, <code>LOGNAME</code>, <code>SHELL</code>, <code>TERM</code>, <code>TMPDIR</code>, <code>USER</code></td>
+<td>yes</td>
+</tr>
+<tr>
+<td><code>ZOHO_REFRESH_TOKEN</code>, <code>OPENAI_API_KEY</code>, <code>ANTHROPIC_API_KEY</code>, <code>SIRDAR_BILLING</code>, <code>PWD</code>, <code>PYTHONPATH</code>, <code>NODE_PATH</code>, and every other name tried</td>
+<td>no</td>
+</tr>
+</tbody>
+</table>
+<p>And an <code>[mcp_servers.&lt;name&gt;.env]</code> table <strong>merges</strong> with that core set rather than replacing
+it: the server declaring <code>PROBE_DECLARED</code> saw it <em>and</em> still saw PATH, HOME and LANG, and
+still did not see the parent's other variables.</p>
+<p>So Codex filters by the same principle <code>mcpclient.childEnv</code> does, over a slightly wider core
+set — the difference being <code>LOGNAME</code>, <code>SHELL</code>, <code>TERM</code>, <code>TMPDIR</code> and <code>USER</code>, which a server
+started by the openai loop does not get and one started by Codex does. No credential crosses
+either way. Nothing is emitted into the generated <code>config.toml</code> to change this; the difference
+is documented in <code>docs/config.md</code> instead.</p>
+<p>A side note from the same probes: a <code>CODEX_HOME</code> that symlinks the real home's <code>sessions</code> is
+enough for <code>thread/resume</code> — a thread started in a generated home resumed cleanly in a second
+process against the same home, and <code>thread/items/list</code> returned its items. Codex also creates
+its own state files in whatever <code>CODEX_HOME</code> it is given (<code>state_*.sqlite</code>, <code>logs_*.sqlite</code>,
+<code>queue_*.sqlite</code>, <code>shell_snapshots/</code>, <code>tmp/</code>, <code>thread-writer-locks/</code>), which in Sirdar's
+generated home are symlinks to the operator's, so those writes land in the real files.</p>
+<h3 id="stripmcpservers-known-limits-round-2-hardening-2026-09-11"><code>stripMCPServers</code>: known limits (round 2 hardening, 2026-09-11)<a class="headerlink" href="#stripmcpservers-known-limits-round-2-hardening-2026-09-11" title="Permanent link">&para;</a></h3>
+<p>Two edge cases in the TOML-aware scan (<code>mcphome.go</code>'s <code>scanTOML</code>/<code>stripMCPServers</code>) are known
+gaps rather than bugs fixed this round — noted here rather than chased, since both need a real
+TOML parser to close and this one deliberately stays stdlib-only:</p>
+<ul>
+<li><strong>The four-quote scan residual.</strong> TOML lets a multi-line basic string's content end in up to
+  two literal <code>"</code> by writing extra quotes before the closing fence — <code>""""</code> immediately after
+  an opening <code>"""</code> is a valid <em>empty</em> multi-line string followed by one literal <code>"</code>, not an
+  unterminated one. <code>skipString</code> does not special-case this: it looks for the next <code>"""</code> after
+  the opening fence, finds none in a lone trailing quote, and treats the string as running to
+  EOF. A <code>config.toml</code> that does this near a <code>[mcp_servers…]</code> header would have that header
+  swallowed into the "string" and survive the strip. Rare in a hand-written config; not
+  something <code>codex mcp add</code> generates.</li>
+<li><strong>The <code>profiles.*</code> residual.</strong> <code>stripMCPServers</code> only drops <code>mcp_servers</code> at the <em>root</em>
+  table — deliberately, since <code>[profiles.dev.mcp_servers.foo]</code> is that profile's own list, not
+  Codex's default one (see the doc comment on <code>stripMCPServers</code>). But if the operator's
+  <code>config.toml</code> also sets <code>profile = "dev"</code> as the active profile, Codex will read a profile's
+  <code>mcp_servers</code> in preference to the root table's, and a profile-scoped table the strip left in
+  place reaches the session same as the root table would have — the generated home's workspace
+  servers would not be the only ones the thread sees. Not probed against 0.154.0's actual
+  profile-resolution order; flagged here as the thing to check before trusting <code>mcp.workspaceOnly</code>
+  against a config that uses profiles.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>
