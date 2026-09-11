@@ -4,82 +4,24 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"mime"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
-	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
 // maxRedirects bounds how far a same-host redirect chain is followed before
 // the download is abandoned.
-const maxRedirects = 5
+const maxRedirects = 3
 
-// normalizeHost renders a URL host comparable: lowercased, with the DNS root's
-// trailing dot removed and the scheme's default port dropped, so
-// "JIRA.Example.com.:443" and "jira.example.com" are recognised as one host.
-func normalizeHost(scheme, host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-
-	name, port, err := net.SplitHostPort(host)
-	if err != nil {
-		// No port at all, or a bare IPv6 literal.
-		return strings.TrimSuffix(host, ".")
-	}
-	name = strings.TrimSuffix(name, ".")
-	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
-		return name
-	}
-	return net.JoinHostPort(name, port)
-}
-
-// trustedURL reports whether u may be fetched with this client's credential,
-// and returns the host it named so a warning can say where the request would
-// have gone.
-//
-// An attachment's content URL arrives inside an API response body, which makes
-// it input rather than configuration: nothing in the protocol stops a hostile
-// or compromised instance from pointing one at a host it controls, and sending
-// the Authorization header there would hand over the API token or PAT in full.
-// So the credential only ever leaves for the host the operator configured, and
-// that is checked before the request is built — not only on the redirects that
-// follow it.
-func (c *Client) trustedURL(u *url.URL) (string, bool) {
-	if u == nil || u.Host == "" {
-		return "(no host)", false
-	}
-	// "https://jira.example.com@attacker.example/x" parses with the real
-	// destination in Host and the decoy in User. The host comparison below
-	// already catches that; userinfo has no business on an attachment URL
-	// either way.
-	if u.User != nil {
-		return u.Host, false
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "https" && scheme != c.scheme {
-		return u.Host, false
-	}
-	if normalizeHost(scheme, u.Host) != c.host {
-		return u.Host, false
-	}
-	return u.Host, true
-}
-
-// trustedRawURL is trustedURL for a URL still in string form.
-func (c *Client) trustedRawURL(raw string) (string, bool) {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return "(unparseable)", false
-	}
-	return c.trustedURL(u)
-}
+// maxAttachmentBytes caps one download. Past it the file is refused rather
+// than written: an attachment nobody can vouch for should not be able to
+// fill the disk the run is using.
+const maxAttachmentBytes = 64 << 20
 
 // Attachments implements source.Helpdesk: it downloads every file attached to
 // the issue into dir, named "<1-based index>-<sanitised filename>".
@@ -129,14 +71,15 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		// somebody else's host costs no round trip and, more to the point,
 		// never sees the credential. The warning names the host and not the
 		// URL: the rest of it is attacker-chosen text headed for a log.
-		if host, ok := c.trustedRawURL(a.Content); !ok {
+		if fetch, _, _ := c.trust.CheckRaw(a.Content); !fetch {
+			host := httpx.HostOf(a.Content)
 			warnCtx(ctx, "jira: attachment host not trusted: %s", host)
 			failures = append(failures, fmt.Errorf("attachment %s: host not trusted: %s", a.ID, host))
 			continue
 		}
-		name := sanitizeName(a.Filename)
-		if name == "attachment" && a.ID != "" {
-			name = sanitizeName(a.ID)
+		name := httpx.SanitizeName(a.Filename)
+		if name == httpx.FallbackName && a.ID != "" {
+			name = httpx.SanitizeName(a.ID)
 		}
 		filename := fmt.Sprintf("%d-%s", i+1, name)
 
@@ -176,30 +119,6 @@ func pickMIME(declared, served string) string {
 	return served
 }
 
-// downloadClient returns a copy of the HTTP client that stops following
-// redirects the moment they leave the Jira host. On Data Center the
-// attachment URL is served by the web layer rather than the REST layer, and
-// a bearer PAT is not always accepted there: the request is answered with a
-// redirect to the SSO login page instead of the file. Following that would
-// write an HTML login form to disk under the attachment's name.
-func (c *Client) downloadClient() *http.Client {
-	dl := *c.hc
-	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		// Same trust rule as the initial request, so a redirect cannot walk
-		// the credential off the configured host either. Go re-sends the
-		// Authorization header only on a same-host hop, but the check does
-		// not rely on that.
-		if _, ok := c.trustedURL(req.URL); !ok {
-			return http.ErrUseLastResponse
-		}
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxRedirects)
-		}
-		return nil
-	}
-	return &dl
-}
-
 // download fetches one attachment into destPath and returns the response's
 // Content-Type. It refuses anything that looks like a login page: a redirect
 // off the Jira host, or an HTML body where a binary was expected.
@@ -214,35 +133,29 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	req.Header.Set("X-Atlassian-Token", "no-check")
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := c.downloadClient().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body)
-		resp.Body.Close()
-	}()
+	// Redirects stop the moment they leave the Jira host. On Data Center
+	// the attachment URL is served by the web layer rather than the REST
+	// layer, and a bearer PAT is not always accepted there: the request is
+	// answered with a redirect to the SSO login page instead of the file,
+	// and following that would write an HTML login form to disk under the
+	// attachment's name. An untrusted hop stops the chain rather than
+	// failing it, so the 3xx comes back here and the warning can name where
+	// the request was being sent without quoting the SSO query string.
+	dl := *c.hc
+	dl.CheckRedirect = httpx.RedirectPolicyStop(c.trust, maxRedirects)
 
-	if resp.StatusCode >= 300 && resp.StatusCode < 400 {
-		return "", fmt.Errorf("redirected to %s: the credential was not accepted for the attachment URL (SSO login page?)", redirectTarget(resp))
+	ct, err := httpx.Download(ctx, &dl, req, destPath, httpx.DownloadOptions{
+		Max:        maxAttachmentBytes,
+		RefuseHTML: true,
+	})
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		if se.Status >= 300 && se.Status < 400 {
+			return "", fmt.Errorf("redirected to %s: the credential was not accepted for the attachment URL (SSO login page?)", redirectTarget(se.Header.Get("Location")))
+		}
+		return "", fmt.Errorf("status %d", se.Status)
 	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-	ct := resp.Header.Get("Content-Type")
-	if isHTML(ct) {
-		return "", fmt.Errorf("server answered with %s instead of the file: the request was probably redirected to a login page", ct)
-	}
-
-	f, err := os.Create(destPath)
 	if err != nil {
-		return "", err
-	}
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		f.Close()
-		return "", err
-	}
-	if err := f.Close(); err != nil {
 		return "", err
 	}
 	return ct, nil
@@ -251,71 +164,13 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 // redirectTarget describes where a download was being sent, by scheme and
 // host only: the query string of an SSO redirect carries the original URL
 // and sometimes a token, neither of which belongs in a warning.
-func redirectTarget(resp *http.Response) string {
-	loc, err := resp.Location()
-	if err != nil || loc == nil {
+func redirectTarget(location string) string {
+	loc, err := url.Parse(location)
+	if err != nil || loc == nil || location == "" {
 		return "an unnamed location"
 	}
 	if loc.Host == "" {
 		return loc.Path
 	}
 	return loc.Scheme + "://" + loc.Host
-}
-
-func isHTML(contentType string) bool {
-	if contentType == "" {
-		return false
-	}
-	mt, _, err := mime.ParseMediaType(contentType)
-	if err != nil {
-		mt = strings.ToLower(strings.TrimSpace(strings.SplitN(contentType, ";", 2)[0]))
-	}
-	return mt == "text/html" || mt == "application/xhtml+xml"
-}
-
-// sanitizeName turns an attachment filename from the API into a safe filename
-// component: it strips any directory portion (so a name like "../../evil.txt"
-// cannot write outside the destination dir), drops path separators and
-// control characters, falls back to "attachment" for an empty/"."/".."
-// result, and caps the result at 120 bytes while preserving the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := strings.TrimSpace(b.String())
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-// capBytes truncates name to at most max bytes, preserving its extension
-// where possible and never splitting a multi-byte UTF-8 rune.
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }

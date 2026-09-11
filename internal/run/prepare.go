@@ -130,6 +130,8 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		Playbooks:           playbooks,
 		ThreadHead:          threadHead,
 		ThreadHeadTruncated: truncated,
+		NotesLanguage:       cfg.NotesLanguage(),
+		CustomerLanguage:    cfg.CustomerLanguage(),
 	}
 
 	switch kind {

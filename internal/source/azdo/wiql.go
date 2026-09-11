@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -26,20 +27,6 @@ const (
 	defaultListLimit = 100
 	maxListLimit     = 200
 )
-
-// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
-// zero or negative takes defaultListLimit, and nothing above maxListLimit is
-// honored. Both bounds sit well under WIQL's own $top ceiling, so no further
-// capping against the API is needed here.
-func effectiveLimit(n int) int {
-	if n <= 0 {
-		return defaultListLimit
-	}
-	if n > maxListLimit {
-		return maxListLimit
-	}
-	return n
-}
 
 // batchFields is the fixed field list requested from workitemsbatch. The
 // batch endpoint returns fields only — no relations, no _links — so it asks
@@ -154,7 +141,7 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("azure devops: encode wiql: %v", err)}
 	}
 
-	limit := effectiveLimit(f.Limit)
+	limit, _ := httpx.Limit(f.Limit, defaultListLimit, maxListLimit)
 	u := c.projectURL("/_apis/wit/wiql?api-version=" + apiVersion)
 	u += "&$top=" + strconv.Itoa(limit)
 	var wr wiqlResponse

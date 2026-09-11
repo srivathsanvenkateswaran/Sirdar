@@ -223,7 +223,7 @@ func TestArgsAndEnv(t *testing.T) {
 	if contains(got, "--bare") {
 		t.Fatal("--bare must never be passed")
 	}
-	env := childEnv(spec)
+	env, _ := childEnv(spec)
 	for _, e := range env {
 		if strings.HasPrefix(e, "ANTHROPIC_API_KEY=") {
 			t.Fatal("api key leaked")
@@ -233,8 +233,93 @@ func TestArgsAndEnv(t *testing.T) {
 		t.Fatalf("child env dropped entries: %v", env)
 	}
 	spec.Env = append(spec.Env, "SIRDAR_BILLING=api")
-	if !containsPrefix(childEnv(spec), "ANTHROPIC_API_KEY=") {
+	apiEnv, _ := childEnv(spec)
+	if !containsPrefix(apiEnv, "ANTHROPIC_API_KEY=") {
 		t.Fatal("api billing must keep the key")
+	}
+}
+
+// TestChildEnvSubscriptionStripsGatewayVars covers the credential-leak fix:
+// under subscription billing (the default, and what applies with no
+// billing marker at all), every gateway variable that could route the
+// child process's claude.ai OAuth material to a third-party host must be
+// removed, each with its own EvSystem notice.
+func TestChildEnvSubscriptionStripsGatewayVars(t *testing.T) {
+	gatewayVars := []string{
+		"ANTHROPIC_BASE_URL=http://evil.example",
+		"ANTHROPIC_AUTH_TOKEN=tok",
+		"ANTHROPIC_CUSTOM_HEADERS=x:y",
+		"CLAUDE_CODE_USE_BEDROCK=1",
+		"CLAUDE_CODE_USE_VERTEX=1",
+		"CLAUDE_CODE_USE_FOUNDRY=1",
+	}
+	for _, marker := range []string{"", "SIRDAR_BILLING=subscription"} {
+		t.Run("marker="+marker, func(t *testing.T) {
+			base := []string{"A=1"}
+			base = append(base, gatewayVars...)
+			if marker != "" {
+				base = append(base, marker)
+			}
+			spec := provider.SessionSpec{Env: base}
+			env, events := childEnv(spec)
+			for _, e := range gatewayVars {
+				name := strings.SplitN(e, "=", 2)[0]
+				if containsPrefix(env, name+"=") {
+					t.Fatalf("%s leaked into child env: %v", name, env)
+				}
+				found := false
+				for _, ev := range events {
+					if ev.Kind != provider.EvSystem {
+						continue
+					}
+					if strings.Contains(ev.Text, name) && strings.Contains(ev.Text, "removed") {
+						found = true
+					}
+					if len(ev.Raw) == 0 {
+						t.Errorf("notice for %s has no Raw", name)
+					}
+				}
+				if !found {
+					t.Errorf("no removal notice for %s: %+v", name, events)
+				}
+			}
+			if !contains(env, "A=1") {
+				t.Fatalf("child env dropped unrelated entry: %v", env)
+			}
+			if len(events) != len(gatewayVars) {
+				t.Fatalf("events %+v, want one per gateway var", events)
+			}
+		})
+	}
+}
+
+// TestChildEnvAPIPassesGatewayVarsThrough covers the other half: under
+// SIRDAR_BILLING=api the gateway variables are the supported way to reach
+// an Anthropic-compatible endpoint, so they must survive unchanged — with
+// a notice that the CLI's reported cost cannot be trusted behind a custom
+// base URL.
+func TestChildEnvAPIPassesGatewayVarsThrough(t *testing.T) {
+	spec := provider.SessionSpec{Env: []string{
+		"A=1",
+		"ANTHROPIC_BASE_URL=http://localhost:11434",
+		"ANTHROPIC_AUTH_TOKEN=tok",
+		"SIRDAR_BILLING=api",
+	}}
+	env, events := childEnv(spec)
+	for _, want := range []string{"ANTHROPIC_BASE_URL=http://localhost:11434", "ANTHROPIC_AUTH_TOKEN=tok", "A=1"} {
+		if !contains(env, want) {
+			t.Fatalf("api billing dropped %q: %v", want, env)
+		}
+	}
+	if len(events) != 1 || events[0].Kind != provider.EvSystem || !strings.Contains(events[0].Text, "not reliable") {
+		t.Fatalf("cost-reliability notice missing: %+v", events)
+	}
+
+	// Without ANTHROPIC_BASE_URL set, api billing gets no notice at all.
+	spec.Env = []string{"A=1", "SIRDAR_BILLING=api"}
+	_, events = childEnv(spec)
+	if len(events) != 0 {
+		t.Fatalf("unexpected notices with no base URL: %+v", events)
 	}
 }
 

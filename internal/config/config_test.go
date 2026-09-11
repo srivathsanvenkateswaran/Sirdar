@@ -315,7 +315,29 @@ func TestValidateOpenAI(t *testing.T) {
 		{
 			"an unknown provider",
 			"workspace: demo\nprovider: gemini\n",
-			"claude, codex or openai",
+			"claude, codex, openai or acp",
+		},
+		{
+			"acp with no block",
+			"workspace: demo\nprovider: acp\n",
+			"acp: is required",
+		},
+		{
+			"acp with no command",
+			"workspace: demo\nprovider: acp\nacp:\n  args: [\"--experimental-acp\"]\n",
+			"acp.command",
+		},
+		{
+			"acp configured",
+			"workspace: demo\nprovider: acp\nacp:\n  command: gemini\n  args: [\"--experimental-acp\"]\n  env:\n    GEMINI_ACP: \"1\"\n",
+			"",
+		},
+		{
+			// An acp block left behind while the workspace runs on claude
+			// is not an error, the same as an unused openai block.
+			"unused acp block on another provider",
+			"workspace: demo\nprovider: claude\nacp:\n  command: goose\n",
+			"",
 		},
 	}
 	for _, c := range cases {
@@ -832,5 +854,93 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 	// The read-only list stays its own thing.
 	if len(cfg.Permissions.Bash) != 0 {
 		t.Errorf("permissions.bash was filled in from fixBash: %v", cfg.Permissions.Bash)
+	}
+}
+
+// --- language ---
+
+func TestLoadAppliesLanguageDefaults(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.NotesLanguage() != "en" {
+		t.Errorf("language.notes default = %q, want en", c.NotesLanguage())
+	}
+	if c.CustomerLanguage() != "auto" {
+		t.Errorf("language.customer default = %q, want auto", c.CustomerLanguage())
+	}
+	if !c.RTLMarkup() {
+		t.Error("language.rtlMarkup default = false, want true")
+	}
+}
+
+func TestLoadReadsLanguageBlock(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal+"\nlanguage:\n  notes: en\n  customer: ar\n  rtlMarkup: false\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.NotesLanguage() != "en" || c.CustomerLanguage() != "ar" {
+		t.Fatalf("language = %+v", c.Language)
+	}
+	if c.RTLMarkup() {
+		t.Error("rtlMarkup: false was not applied")
+	}
+}
+
+// A Config built by hand — in a test, or by the desktop wiring — reads as
+// the defaults rather than as "no language, no markup".
+func TestZeroConfigReadsAsTheLanguageDefaults(t *testing.T) {
+	var c Config
+	if c.NotesLanguage() != "en" || c.CustomerLanguage() != "auto" || !c.RTLMarkup() {
+		t.Fatalf("zero Config: notes=%q customer=%q rtl=%v", c.NotesLanguage(), c.CustomerLanguage(), c.RTLMarkup())
+	}
+}
+
+func TestLoadRejectsBadLanguageCodes(t *testing.T) {
+	cases := []struct{ name, body, want string }{
+		{"notes is a sentence", "\nlanguage:\n  notes: English please\n", "language.notes"},
+		{"notes cannot be auto", "\nlanguage:\n  notes: auto\n", "language.notes"},
+		{"customer is a sentence", "\nlanguage:\n  customer: whatever the ticket is\n", "language.customer"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, minimal+c.body))
+			if err == nil {
+				t.Fatalf("want an error naming %s, got nil", c.want)
+			}
+			if !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error does not name %s: %v", c.want, err)
+			}
+		})
+	}
+}
+
+func TestLoadAcceptsARegionalLanguageTag(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal+"\nlanguage:\n  customer: ar-SA\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.CustomerLanguage() != "ar-SA" {
+		t.Fatalf("customer = %q", c.CustomerLanguage())
+	}
+}
+
+// TestDefaultConfigYAMLDocumentsLanguage: `sirdar init` has to write the
+// language block, and it has to carry the values a fresh workspace runs
+// with rather than leaving the operator to discover them in the docs.
+func TestDefaultConfigYAMLDocumentsLanguage(t *testing.T) {
+	for _, want := range []string{"language:", "notes: en", "customer: auto", "rtlMarkup: true"} {
+		if !strings.Contains(DefaultConfigYAML, want) {
+			t.Errorf("DefaultConfigYAML does not mention %q", want)
+		}
+	}
+	body := strings.Replace(DefaultConfigYAML, "<name>", "demo", 1)
+	c, err := Load(writeCfg(t, body))
+	if err != nil {
+		t.Fatalf("the scaffold does not load: %v", err)
+	}
+	if c.NotesLanguage() != "en" || c.CustomerLanguage() != "auto" || !c.RTLMarkup() {
+		t.Fatalf("scaffolded language block: notes=%q customer=%q rtl=%v", c.NotesLanguage(), c.CustomerLanguage(), c.RTLMarkup())
 	}
 }

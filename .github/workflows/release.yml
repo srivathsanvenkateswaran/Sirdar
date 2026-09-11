@@ -1,0 +1,128 @@
+name: release
+
+# Cutting a release is: tag main as vX.Y.Z, push the tag, watch this run,
+# review the draft it opens, publish it by hand. See docs/release.md.
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  # Builds the `sirdar` CLI for darwin/linux/windows x amd64/arm64, packages
+  # deb/rpm, opens the draft GitHub release, and (for a real, non-prerelease
+  # tag) pushes the Homebrew formula to the tap repo. See .goreleaser.yaml.
+  goreleaser:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # goreleaser's changelog groups commits since the previous tag, so
+          # it needs the full history, not the default shallow clone.
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      # The `make ui` before-hook in .goreleaser.yaml builds the shared
+      # frontend that internal/httpapi/ui embeds into the CLI binary.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Only needed because the `brews:` pipe in .goreleaser.yaml pushes
+          # a formula to a separate repo (srivathsanvenkateswaran/homebrew-sirdar);
+          # the default GITHUB_TOKEN can't write across repositories. A
+          # classic PAT (repo scope) or a fine-grained token scoped to the
+          # tap repo, saved as this secret. Until the tap repo exists and the
+          # secret is set, the brews pipe simply has nothing to push to on a
+          # draft (skip_upload: auto skips drafts) — see docs/release.md.
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+  # Builds the Wails desktop shell on all three platforms, zips each OS's
+  # build/bin output, and uploads the zips onto the same draft release the
+  # goreleaser job opened. Unsigned: see the Gatekeeper note in docs/release.md.
+  desktop:
+    needs: goreleaser
+    name: desktop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          # wails v2.15.0 declares `go 1.25.0`, so the module's go directive
+          # is 1.25.0 and an older toolchain refuses to build it (matches
+          # desktop.yml).
+          go-version: '1.25'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      # Ubuntu 24.04 (ubuntu-latest) dropped libwebkit2gtk-4.0-dev. Wails v2
+      # builds against 4.1 only with the webkit2_41 build tag.
+      - name: Install WebKitGTK (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
+      - name: Install wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: Build (Linux)
+        if: runner.os == 'Linux'
+        shell: bash
+        working-directory: desktop
+        run: wails build -tags webkit2_41 -ldflags "-X main.version=${GITHUB_REF_NAME#v}"
+
+      - name: Build (macOS and Windows)
+        if: runner.os != 'Linux'
+        shell: bash
+        working-directory: desktop
+        run: wails build -ldflags "-X main.version=${GITHUB_REF_NAME#v}"
+
+      - name: Zip build output (macOS, Linux)
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          os=$(echo "${{ runner.os }}" | tr '[:upper:]' '[:lower:]')
+          [ "$os" = "macos" ] && os=darwin
+          arch=$(echo "${{ runner.arch }}" | tr '[:upper:]' '[:lower:]')
+          name="sirdar-desktop_${GITHUB_REF_NAME}_${os}_${arch}.zip"
+          (cd desktop/build/bin && zip -r "$GITHUB_WORKSPACE/$name" .)
+          echo "ZIP_NAME=$name" >> "$GITHUB_ENV"
+
+      - name: Zip build output (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $arch = "${{ runner.arch }}".ToLower()
+          $name = "sirdar-desktop_${env:GITHUB_REF_NAME}_windows_$arch.zip"
+          Compress-Archive -Path "desktop/build/bin/*" -DestinationPath $name
+          echo "ZIP_NAME=$name" >> $env:GITHUB_ENV
+
+      - name: Upload to the draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release upload "$GITHUB_REF_NAME" "$ZIP_NAME" --clobber

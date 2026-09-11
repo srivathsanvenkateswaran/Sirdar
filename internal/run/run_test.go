@@ -2190,3 +2190,46 @@ func TestFixRunNeedsAPrompt(t *testing.T) {
 		t.Fatal("a fix run with no prompt was accepted")
 	}
 }
+
+// --- language ---
+
+// TestWorkspaceLanguagesReachThePrompt: the session is the only thing that
+// translates, so it is the one that has to be told which language the note
+// is in and which language the customer reads.
+func TestWorkspaceLanguagesReachThePrompt(t *testing.T) {
+	cfg := newWorkspaceWith(t, configYAML+"language:\n  notes: en\n  customer: ar\n")
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, outs[0]), "prompt.md"))
+	for _, want := range []string{
+		"# Language",
+		"Write the note in en (language.notes: en)",
+		"Write customer-facing text in ar (language.customer: ar)",
+	} {
+		if !strings.Contains(promptText, want) {
+			t.Fatalf("prompt is missing %q:\n%s", want, promptText)
+		}
+	}
+}
+
+// The default workspace names no language at all, and the prompt still has
+// to say what to do: English note, customer's own language for the reply.
+func TestDefaultWorkspaceStillStatesBothLanguages(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, outs[0]), "prompt.md"))
+	if !strings.Contains(promptText, "language.notes: en") || !strings.Contains(promptText, "language.customer: auto") {
+		t.Fatalf("default prompt does not state both languages:\n%s", promptText)
+	}
+}

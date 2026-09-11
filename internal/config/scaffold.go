@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai
+provider: claude            # claude | codex | openai | acp
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -23,6 +23,15 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   temperature: 0
 #   extraHeaders:
 #     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+# provider: acp drives any agent that speaks the Agent Client Protocol —
+# Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
+# more — over one adapter. There is no cost signal, and a whole prompt turn
+# counts as one turn, so budget.maxMinutes is what bounds an acp run.
+# Uncomment the block and set provider: acp to use it.
+# acp:
+#   command: gemini                         # or goose, opencode, qwen, npx
+#   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]
+#   env: {}                                 # added to the agent's environment
 sources:
   tracker:
     adapter: exec
@@ -105,6 +114,18 @@ notes:
     triage: "{key} {slug}.md"
     rca: "{key} RCA {slug}.md"
     resolution: "{key} RES {slug}.md"
+language:
+  # The engineer's note is written in notes:. Anything the customer will
+  # read — the reply draft on a triage note, the customer summary on an
+  # RCA — is written in customer:, and "auto" means the language of the
+  # ticket's first customer message. The verbatim original complaint is
+  # kept either way.
+  notes: en
+  customer: auto
+  # Wrap a right-to-left paragraph in <div dir="rtl"> so Obsidian lays it
+  # out the way the customer wrote it. Applies to the built-in templates
+  # only; with notes.templates set, your templates own their markup.
+  rtlMarkup: true
 budget:
   # A turn is one model round-trip: one assistant message that calls a tool
   # or gives the final answer. It is the same unit the Claude CLI reports as

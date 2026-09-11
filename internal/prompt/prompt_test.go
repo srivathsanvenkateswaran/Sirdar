@@ -327,3 +327,72 @@ func TestFixPromptIncludesTheRCANoteWhenThereIsOne(t *testing.T) {
 		t.Errorf("the RCA note is missing from the fix prompt:\n%s", out)
 	}
 }
+
+// --- Language ---
+
+func TestTriageLanguageSectionDefaultsToNotesEnglishAndCustomerAuto(t *testing.T) {
+	got := Triage(fixedTriageInput())
+	mustContain(t, got, "# Language")
+	mustContain(t, got, "Write the note in en (language.notes: en)")
+	mustContain(t, got, "the language of the ticket's first customer message (language.customer: auto)")
+}
+
+func TestTriageLanguageSectionNamesAFixedCustomerLanguage(t *testing.T) {
+	in := fixedTriageInput()
+	in.NotesLanguage = "en"
+	in.CustomerLanguage = "ar"
+	got := Triage(in)
+	mustContain(t, got, "Write customer-facing text in ar (language.customer: ar)")
+	if strings.Contains(got, "language.customer: auto") {
+		t.Fatal("a fixed customer language still told the session to detect one")
+	}
+}
+
+func TestRCAStatesBothLanguages(t *testing.T) {
+	in := RCAInput{TriageInput: fixedTriageInput()}
+	in.NotesLanguage = "en"
+	in.CustomerLanguage = "ar"
+	got := RCA(in)
+	mustContain(t, got, "Write the note in en (language.notes: en)")
+	mustContain(t, got, "Write customer-facing text in ar (language.customer: ar)")
+}
+
+// --- Bilingual schema fields ---
+
+func TestTriagePromptCarriesTheBilingualFields(t *testing.T) {
+	got := Triage(fixedTriageInput())
+	mustContain(t, got, "complaintOriginal is that same complaint verbatim")
+	mustContain(t, got, "customerReplyDraft is a short, polite status update")
+	mustContain(t, got, `"complaintOriginal"`)
+	mustContain(t, got, `"customerReplyDraft"`)
+}
+
+func TestRCAPromptCarriesTheCustomerSummaryField(t *testing.T) {
+	got := RCA(RCAInput{TriageInput: fixedTriageInput()})
+	mustContain(t, got, "rca.customerSummary is what happened and what was done")
+	mustContain(t, got, `"customerSummary"`)
+}
+
+// TestTriageSchemaKeepsTheBilingualFieldsOptional guards the reason they
+// are optional: a ticket already written in the note's language has no
+// original to keep, and a run that answers a question rather than drafting
+// a reply should not be failed by the validator for it.
+func TestTriageSchemaKeepsTheBilingualFieldsOptional(t *testing.T) {
+	var schema struct {
+		Required   []string                   `json:"required"`
+		Properties map[string]json.RawMessage `json:"properties"`
+	}
+	if err := json.Unmarshal(TriageSchema, &schema); err != nil {
+		t.Fatalf("unmarshal triage schema: %v", err)
+	}
+	for _, field := range []string{"complaintOriginal", "customerReplyDraft"} {
+		if _, ok := schema.Properties[field]; !ok {
+			t.Fatalf("triage schema has no %q property", field)
+		}
+		for _, r := range schema.Required {
+			if r == field {
+				t.Fatalf("triage schema requires %q; it must stay optional", field)
+			}
+		}
+	}
+}

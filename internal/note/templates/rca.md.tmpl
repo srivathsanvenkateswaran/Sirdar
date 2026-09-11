@@ -126,3 +126,11 @@ Why missed: {{.doc.rca.triageReview.whyMissed}}
 {{range .doc.rca.lessons}}
 - {{.}}
 {{- end}}
+{{- if .doc.rca.customerSummary}}
+
+## Customer summary
+
+Language: {{.doc.rca.customerSummary.language}}. What the support agent can relay to the customer: what happened and what was done, and nothing beyond it.
+
+{{rtlWrap .rtlMarkup .doc.rca.customerSummary.text}}
+{{- end}}

@@ -34,8 +34,19 @@
   --st-done: #15803d;
   --st-failed: #b91c1c;
 
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  /*
+   * Arabic faces come first in each stack and are only ever fallbacks: they
+   * carry no Latin glyphs the browser will reach for, so Latin text still
+   * renders in the system face behind them. Nothing is downloaded — these are
+   * the faces macOS, Windows and the common Linux font packages already ship,
+   * and a machine with none of them falls through to its own Arabic default.
+   */
+  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+    "Noto Naskh Arabic", "Geeza Pro", "Segoe UI Arabic", "Noto Sans Arabic", sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
+    "Noto Sans Arabic", monospace;
+
+
 
   --radius: 3px;
   --gutter: 12px;

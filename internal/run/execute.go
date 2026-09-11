@@ -258,10 +258,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	}
 
 	// Claude Code reads image files from the bundle directory itself.
-	// Codex has to be handed them on the command line, and the openai
-	// loop names them in its first user message, so both need the list.
+	// Codex has to be handed them on the command line, the openai loop
+	// names them in its first user message, and an ACP agent takes them as
+	// inline base64 content blocks, so all three need the list.
 	switch r.providerName() {
-	case "codex", "openai":
+	case "codex", "openai", "acp":
 		spec.Images = imageAttachments(p)
 	}
 	return spec
@@ -1031,7 +1032,8 @@ func (r *Runner) renderer() note.Renderer {
 	if r.Config.Notes.Templates != "" {
 		dir = r.Config.ExpandPath(r.Config.Notes.Templates)
 	}
-	return note.Renderer{TemplatesDir: dir}
+	rtl := r.Config.RTLMarkup()
+	return note.Renderer{TemplatesDir: dir, RTLMarkup: &rtl}
 }
 
 // triageService reads the service out of the triage note this rca run

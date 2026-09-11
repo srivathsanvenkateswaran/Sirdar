@@ -23,12 +23,12 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -42,7 +42,14 @@ const (
 // maxRetryAfter bounds how long a 429's Retry-After will be honoured before
 // the client gives up and reports source.RateLimited instead of blocking the
 // triage run behind an hour-long quota reset.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
+
+// maxJSONBody bounds an ordinary API response. An issue with its comments is
+// measured in kilobytes; a body at this size is a fault or a hostile
+// response, and either way it should not be read into memory whole. The read
+// fails rather than truncating, so a short but well-formed document is never
+// decoded as if it were the whole thing.
+const maxJSONBody = 8 << 20
 
 // Config is the adapter's configuration. Secrets arrive already resolved by
 // the wiring layer, so every field is a plain string.
@@ -70,12 +77,14 @@ type Config struct {
 // Client is a Jira REST client implementing source.Tracker. Call Helpdesk
 // for the source.Helpdesk view of the same issues.
 type Client struct {
-	cfg    Config
-	base   string // BaseURL, trailing slash trimmed
-	scheme string // scheme of BaseURL, lowercased
-	// host is the one host this client will ever send its credential to,
-	// normalised (lowercased, trailing dot and default port removed) so a
-	// URL taken out of an API response can be compared against it.
+	cfg  Config
+	base string // BaseURL, trailing slash trimmed
+	// trust is the one host this client will ever send its credential to:
+	// the configured site. A URL taken out of an API response is checked
+	// against it before a request is built.
+	trust *httpx.Trust
+	// host is the configured site's normalised host, used to guess the
+	// deployment from the hostname.
 	host string
 	hc   *http.Client
 
@@ -85,14 +94,12 @@ type Client struct {
 	deployment   string // resolved deployment; "" until detected
 	epicField    string // resolved epic-link custom field id; "" when none
 	epicResolved bool
-	// warnings holds the non-fatal problems each call recorded, keyed by the
-	// ticket key it was called with ("" for List, which is not about one
-	// ticket). An entry is written when the call ends and removed when it is
-	// read.
-	warnings map[string][]string
-	// lastID is the ticket whose call finished most recently, which is all
-	// the argument-less Warnings can offer.
-	lastID string
+
+	// warnings holds the non-fatal problems each call recorded, keyed by
+	// the ticket key it was called with ("" for List, which is not about
+	// one ticket). An entry is written when the call ends and removed when
+	// it is read.
+	warnings httpx.Warnings
 }
 
 // New validates cfg and returns a Client. hc may be nil, in which case a
@@ -123,8 +130,11 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
 
-	scheme := strings.ToLower(u.Scheme)
-	c := &Client{cfg: cfg, base: base, scheme: scheme, host: normalizeHost(scheme, u.Host), hc: hc}
+	trust, err := httpx.NewTrust(base)
+	if err != nil {
+		return nil, fmt.Errorf("jira: baseUrl %q must be an absolute http(s) URL", cfg.BaseURL)
+	}
+	c := &Client{cfg: cfg, base: base, trust: trust, host: httpx.NormalizeHost(u.Scheme, u.Host), hc: hc}
 	if cfg.Deployment != DeploymentAuto {
 		c.deployment = cfg.Deployment
 	}
@@ -301,12 +311,12 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		if err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("jira: %s %s: %v", method, path, err)}
 		}
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if d, ok := retryAfter(resp.Header); ok {
-				if err := sleepCtx(ctx, d); err != nil {
+			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("jira: %s %s: %v", method, path, err)}
 				}
 				continue
@@ -319,48 +329,6 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("jira: %s %s: read body: %v", method, path, readErr)}
 		}
 		return body, nil
-	}
-}
-
-// retryAfter reads a Retry-After header in either of its documented forms
-// (delta-seconds or an HTTP date) and reports whether the wait is short
-// enough to sit through.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		return 0, false
-	}
-	var d time.Duration
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0, false
-		}
-		d = time.Duration(secs) * time.Second
-	} else if t, err := http.ParseTime(v); err == nil {
-		d = time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-	} else {
-		return 0, false
-	}
-	if d > maxRetryAfter {
-		return 0, false
-	}
-	return d, true
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
 	}
 }
 
@@ -431,38 +399,11 @@ func (col *collector) take() []string {
 // a later WarningsFor(id) finds them. id is "" for List, which is not about
 // one ticket.
 //
-// It appends rather than replaces. One ticket's bundle is assembled from
-// several calls — internal/run/prepare.go runs Get, then Threads, then
-// Attachments, and reads WarningsFor once at the end — so a warning from an
-// earlier call has to survive a later one. Replacing meant a clean
-// Attachments erased the comment-pagination warning Threads had just
-// recorded, and the agent read a truncated thread with nothing saying so.
-//
-// An identical line is dropped: Threads and Attachments both walk the same
-// comment feed, so a feed that stops at the page cap says the same sentence
-// on each pass, and two copies in the prompt read as two problems.
+// The store appends and drops a repeat (see httpx.Warnings): one ticket's
+// bundle is Get, then Threads, then Attachments, with a single WarningsFor
+// at the end.
 func (c *Client) publish(id string, col *collector) {
-	msgs := col.take()
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.lastID = id
-	if len(msgs) == 0 {
-		return
-	}
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(msgs))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range msgs {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
+	c.warnings.Add(id, col.take()...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the
@@ -473,14 +414,7 @@ func (c *Client) publish(id string, col *collector) {
 // so a caller running several tickets at once cannot be handed another
 // ticket's missing evidence.
 func (c *Client) WarningsFor(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	return c.warnings.Take(id)
 }
 
 // --- issue fetch ---
