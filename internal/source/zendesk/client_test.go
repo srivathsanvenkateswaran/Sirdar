@@ -786,12 +786,12 @@ func TestHostTrust_RequiresHTTPSAndRejectsUserinfo(t *testing.T) {
 		if perr != nil {
 			t.Fatalf("parse %q: %v", tc.raw, perr)
 		}
-		trusted, sendAuth := httpsClient.hostTrust(u)
+		trusted, sendAuth, _ := httpsClient.trust.Check(u)
 		if trusted != tc.trusted || sendAuth != tc.sendAuth {
-			t.Errorf("hostTrust(%q) = (%v, %v), want (%v, %v)", tc.raw, trusted, sendAuth, tc.trusted, tc.sendAuth)
+			t.Errorf("trust.Check(%q) = (%v, %v), want (%v, %v)", tc.raw, trusted, sendAuth, tc.trusted, tc.sendAuth)
 		}
-		if trusted, _ := httpClient.hostTrust(u); trusted != tc.httpBaseTrusted {
-			t.Errorf("hostTrust(%q) with an http baseUrl = %v, want %v", tc.raw, trusted, tc.httpBaseTrusted)
+		if trusted, _, _ := httpClient.trust.Check(u); trusted != tc.httpBaseTrusted {
+			t.Errorf("trust.Check(%q) with an http baseUrl = %v, want %v", tc.raw, trusted, tc.httpBaseTrusted)
 		}
 	}
 }

@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -25,54 +24,6 @@ type attachmentRef struct {
 	ID   string
 	Name string
 	URL  string
-}
-
-// sanitizeName turns a file name taken from an API response into a safe
-// filename component: it strips any directory portion (so a name like
-// "../../evil.txt" cannot write outside the destination dir), drops path
-// separators and control characters, falls back to "attachment" for an
-// empty/"."/".." result, and caps the result at 120 bytes while preserving
-// the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := b.String()
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-// capBytes truncates name to at most max bytes, preserving its extension
-// where possible and never splitting a multi-byte UTF-8 rune.
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 // attachmentURL rebuilds an attachment URL with the file name and API
@@ -100,64 +51,6 @@ func attachmentID(rawURL string) string {
 		return rawURL
 	}
 	return path.Base(u.Path)
-}
-
-// trusted reports whether u may be fetched with the organisation's PAT.
-//
-// This gate exists because a work item's description, repro steps and
-// relations are attacker-editable: anyone who can edit a work item can put
-// <img src="https://attacker.example/x"> in its description, or point a
-// relation at their own host. Every attachment fetch carries the PAT in an
-// Authorization header, so following such a URL would hand the credential
-// to whoever wrote it. Only the organisation's own host — and, for Azure
-// DevOps Services, the well-known attachment hosts that serve the same
-// organisation — are fetched.
-//
-// The comparison keeps the port, so a URL on the same hostname but a
-// different port is not trusted; a default port for the scheme is
-// normalised away first.
-func (c *Client) trusted(u *url.URL) bool {
-	if u == nil || u.Host == "" {
-		return false
-	}
-	base, err := url.Parse(c.base)
-	if err != nil {
-		return false
-	}
-	// https always, plus the base's own scheme so a plain-HTTP Azure DevOps
-	// Server collection still works.
-	if !strings.EqualFold(u.Scheme, "https") && !strings.EqualFold(u.Scheme, base.Scheme) {
-		return false
-	}
-
-	target := normalizedHost(u)
-	if target == "" {
-		return false
-	}
-	if target == normalizedHost(base) {
-		return true
-	}
-	if org := orgName(base); org != "" {
-		return target == "dev.azure.com" || target == org+".visualstudio.com"
-	}
-	return false
-}
-
-// normalizedHost renders a URL's host for comparison: lower-cased, the root
-// label's trailing dot removed, and the port kept unless it is the default
-// for the scheme.
-func normalizedHost(u *url.URL) string {
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
-	if host == "" {
-		return ""
-	}
-	port := u.Port()
-	if port == "" ||
-		(port == "443" && strings.EqualFold(u.Scheme, "https")) ||
-		(port == "80" && strings.EqualFold(u.Scheme, "http")) {
-		return host
-	}
-	return host + ":" + port
 }
 
 // orgName reads the Azure DevOps Services organisation out of the base URL,
@@ -195,8 +88,10 @@ func untrustedWarning(rawURL string) string {
 // into the description reaches the bundle, and they are served by the same
 // attachments route with the same auth.
 //
-// Both sources are attacker-editable, so both are filtered through trusted
-// before anything is fetched. A URL that does not pass is dropped and named
+// Both sources are attacker-editable, so both are filtered through the
+// client's trust before anything is fetched: every attachment fetch carries
+// the PAT in an Authorization header, so following a URL somebody put in a
+// work item description would hand the credential to whoever wrote it. A URL that does not pass is dropped and named
 // in the returned skips, which become warnings on the call.
 func (c *Client) refs(wi workItem) (out []attachmentRef, skipped []string) {
 	seen := map[string]bool{}
@@ -294,7 +189,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 
 	var out []ticket.Attachment
 	for i, r := range refs {
-		name := sanitizeName(r.Name)
+		name := httpx.SanitizeName(r.Name)
 		filename := fmt.Sprintf("%d-%s", i+1, name)
 
 		mime, derr := c.download(ctx, r.URL, filepath.Join(dir, filename))
@@ -322,28 +217,15 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 // is followed before the download is abandoned.
 const maxRedirects = 3
 
-// downloadClient returns a copy of the HTTP client whose redirect policy
-// applies the same trust check the starting URL got. Azure DevOps answers
-// an unauthenticated (or expired) attachment request with a redirect to the
-// Entra sign-in page rather than a 401, and a Location header is a server
-// response like any other: following one off the org's hosts would write a
-// sign-in page to disk under the attachment's name, and put the request on
-// a host that was never checked.
-//
-// A shallow copy is enough: the Transport is safe to share, and
-// CheckRedirect is being replaced outright.
-func (c *Client) downloadClient() *http.Client {
-	dl := *c.hc
-	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxRedirects)
-		}
-		if !c.trusted(req.URL) {
-			return fmt.Errorf("refusing to follow a redirect to %s", req.URL.Hostname())
-		}
-		return nil
-	}
-	return &dl
+// maxAttachmentBytes caps one download. Past it the file is refused rather
+// than written: an attachment nobody can vouch for should not be able to
+// fill the disk the run is using.
+const maxAttachmentBytes = 64 << 20
+
+// trusted reports whether u may be fetched with the organisation's PAT.
+func (c *Client) trusted(u *url.URL) bool {
+	fetch, _, _ := c.trust.Check(u)
+	return fetch
 }
 
 // download fetches rawURL with the client's auth and writes the body to
@@ -362,29 +244,24 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	}
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := c.downloadClient().Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-	ct := resp.Header.Get("Content-Type")
 	// A sign-in page here would otherwise be written to disk as if it were
 	// the file.
-	if resp.StatusCode == http.StatusNonAuthoritativeInfo || strings.Contains(strings.ToLower(ct), "text/html") {
-		return "", fmt.Errorf("sign-in page returned instead of file content")
+	// The redirect policy applies the same trust check the starting URL
+	// got. Azure DevOps answers an unauthenticated (or expired) attachment
+	// request with a redirect to the Entra sign-in page rather than a 401,
+	// and a Location header is a server response like any other: following
+	// one off the org's hosts would write a sign-in page to disk under the
+	// attachment's name, and put the request on a host that was never
+	// checked.
+	ct, err := httpx.Download(ctx, httpx.Client(c.hc, c.trust, maxRedirects), req, destPath, httpx.DownloadOptions{
+		Max:        maxAttachmentBytes,
+		RefuseHTML: true,
+	})
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		return "", fmt.Errorf("status %d", se.Status)
 	}
-
-	f, err := os.Create(destPath)
 	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	if _, err := io.Copy(f, resp.Body); err != nil {
 		return "", err
 	}
 	return ct, nil

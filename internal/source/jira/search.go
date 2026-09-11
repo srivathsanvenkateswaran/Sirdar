@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -27,19 +28,6 @@ const (
 	maxSearchPages = 20
 )
 
-// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
-// zero or negative takes defaultListResults, and nothing above
-// maxListResults is honored.
-func effectiveLimit(n int) int {
-	if n <= 0 {
-		return defaultListResults
-	}
-	if n > maxListResults {
-		return maxListResults
-	}
-	return n
-}
-
 // List implements source.Tracker, translating the filter into JQL and
 // paginating whichever search endpoint this deployment serves.
 func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
@@ -48,10 +36,10 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	ctx, col := withCollector(ctx)
 	defer c.publish("", col)
 
-	if f.Limit > maxListResults {
+	limit, capped := httpx.Limit(f.Limit, defaultListResults, maxListResults)
+	if capped {
 		warnCtx(ctx, "jira: list limit %d capped at %d", f.Limit, maxListResults)
 	}
-	limit := effectiveLimit(f.Limit)
 
 	jql := c.buildJQL(f)
 	fields := c.issueFieldList(ctx)
@@ -124,13 +112,7 @@ func quoteJQL(v string) string {
 
 // pageSize is the number of issues to ask for next: never more than the
 // endpoint's comfortable page, never more than the caller still wants.
-func pageSize(limit, have int) int {
-	n := limit - have
-	if n > maxPageSize {
-		n = maxPageSize
-	}
-	return n
-}
+func pageSize(limit, have int) int { return httpx.PageSize(limit-have, maxPageSize) }
 
 // --- Cloud ---
 

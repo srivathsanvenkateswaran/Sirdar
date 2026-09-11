@@ -16,25 +16,23 @@ package freshdesk
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 // maxRetryAfter bounds how long a 429's Retry-After is honoured before the
 // call gives up and reports source.RateLimited instead of blocking a triage
 // run behind a long quota reset.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // Response body ceilings, enforced with a limited reader that fails closed:
 // a truncated body is never decoded as if it were complete.
@@ -57,11 +55,16 @@ var conversationsPerPage = 100
 // var for the same reason: a test can shrink it rather than serve 64 MiB.
 var maxAttachmentBytes int64 = 64 << 20
 
-// trustedSuffixes are the first-party Freshworks hosts an attachment
-// download is allowed to reach even when they are not the configured
-// account domain — but never with the API key, since a request to any of
-// them but the configured domain itself goes out unauthenticated.
-var trustedSuffixes = []string{"freshdesk.com", "freshcloud.io", "freshworksapi.com"}
+// trustedHosts are the first-party Freshworks hosts an attachment download
+// is allowed to reach even when they are not the configured account domain
+// — but never with the API key, since a request to any of them but the
+// configured domain itself goes out unauthenticated. Their URLs are
+// pre-signed, so they need no credential of ours.
+var trustedHosts = []httpx.HostRule{
+	{Suffix: ".freshdesk.com"},
+	{Suffix: ".freshcloud.io"},
+	{Suffix: ".freshworksapi.com"},
+}
 
 // Config holds one Freshdesk account's settings. Secrets arrive already
 // resolved by the wiring layer, so every field is a plain string.
@@ -79,20 +82,19 @@ type Config struct {
 type Client struct {
 	cfg     Config
 	baseURL string // "https://" + cfg.Domain, no trailing slash
-	// host is the one host this client's credential is ever sent to,
-	// normalised (lowercased, default port dropped) so a URL taken out of
-	// an API response can be compared against it.
-	host string
-	hc   *http.Client
+	// trust is the configured account domain — the one host this client's
+	// credential is ever sent to — plus Freshworks' own attachment hosts,
+	// which are fetched from unauthenticated.
+	trust *httpx.Trust
+	hc    *http.Client
 
-	// mu guards the caches below. One Client serves every ticket in a run,
+	// warnings holds the non-fatal problems each call recorded, keyed by
+	// the ticket id it was called with; reading is what clears an entry.
+	warnings httpx.Warnings
+
+	// mu guards the agent cache. One Client serves every ticket in a run,
 	// so two tickets can be inside a call at once.
 	mu sync.Mutex
-	// warnings holds the non-fatal problems each Attachments call recorded,
-	// keyed by the ticket id it was called with. An entry is written when
-	// the call ends and removed when it is read, so a stale warning from an
-	// earlier call for the same ticket is never handed to the next reader.
-	warnings map[string][]string
 	// agents caches resolved agent display names by id, since the same
 	// agent typically appears on several messages in one ticket's thread.
 	agents map[int64]string
@@ -121,10 +123,9 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	c := &Client{
-		cfg:     cfg,
-		baseURL: "https://" + domain,
-		host:    hostKey("https", domain),
+	trust, err := httpx.NewTrust("https://"+domain, trustedHosts...)
+	if err != nil {
+		return nil, fmt.Errorf("freshdesk: invalid domain %q: %w", cfg.Domain, err)
 	}
 	// A shallow copy: the Transport (and any pooled connections) is shared
 	// with the caller's client, only the redirect policy is ours. Every
@@ -132,102 +133,25 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	// much as attachment downloads — goes through this same *http.Client,
 	// so a server response that tries to redirect any of them off the
 	// trusted hosts is refused uniformly, not just on the download path.
-	dl := *hc
-	dl.CheckRedirect = c.checkRedirect
-	c.hc = &dl
-	return c, nil
+	//
+	// A redirect Location comes back inside a server response, which makes
+	// it input, not configuration, and nothing stops a hostile or
+	// compromised endpoint — including a CDN host whose pre-signed link
+	// expired into a generic error/login redirect — from pointing one at a
+	// host it controls. Go already strips the Authorization header on a
+	// cross-host hop, but that still lets the request happen and the
+	// response get written to disk as if it were the real attachment.
+	return &Client{
+		cfg:     cfg,
+		baseURL: "https://" + domain,
+		trust:   trust,
+		hc:      httpx.Client(hc, trust, maxRedirects),
+	}, nil
 }
 
 // maxRedirects bounds how far a same-trust-boundary redirect chain is
 // followed before the request is abandoned.
 const maxRedirects = 3
-
-// checkRedirect refuses to follow a redirect off the hosts this client
-// trusts with its credential or its downloads (see attachmentTrust): a
-// redirect Location comes back inside a server response, which makes it
-// input, not configuration, and nothing stops a hostile or compromised
-// endpoint — including a legitimately trusted one that has been
-// compromised, or a CDN host whose pre-signed link expired into a generic
-// error/login redirect — from pointing one at a host it controls. Go
-// already strips the Authorization header on a cross-host hop, but that
-// still lets the request happen and the response get written to disk as if
-// it were the real attachment; refusing the hop entirely, with an error
-// that names the offending host, is the actual fix.
-func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= maxRedirects {
-		return fmt.Errorf("freshdesk: stopped after %d redirects", maxRedirects)
-	}
-	host, trusted, _ := c.urlTrust(req.URL)
-	if !trusted {
-		return fmt.Errorf("freshdesk: redirect to untrusted host %s", host)
-	}
-	return nil
-}
-
-// urlTrust is attachmentTrust plus the two things a bare host comparison
-// cannot see.
-//
-// The transport: an attachment_url arrives inside an API response body, so
-// a hostile or compromised instance can put "http://" in front of a
-// perfectly legitimate Freshworks host and watch the file — and, on the
-// configured domain, the API key — cross the network in the clear. This
-// adapter's base URL is always https (Config.Domain is normalised into
-// one), so there is no plain-HTTP workspace to make an exception for.
-//
-// And the userinfo: "https://acme.freshdesk.com@attacker.example/x" parses
-// with the real destination in Host and the decoy in User. The host
-// comparison catches that on its own; userinfo has no business on one of
-// these URLs either way.
-func (c *Client) urlTrust(u *url.URL) (host string, trusted, sendAuth bool) {
-	if u == nil || u.Host == "" {
-		return "(no host)", false, false
-	}
-	host = hostKey(u.Scheme, u.Host)
-	if u.User != nil {
-		return host, false, false
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return host, false, false
-	}
-	trusted, sendAuth = c.attachmentTrust(host)
-	return host, trusted, sendAuth
-}
-
-// hostKey renders a scheme+host pair comparable: lowercased, with the DNS
-// root's trailing dot removed and the scheme's default port dropped, so
-// "Acme.Freshdesk.com.:443" and "acme.freshdesk.com" are recognised as one
-// host.
-func hostKey(scheme, host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-	name, port, err := net.SplitHostPort(host)
-	if err != nil {
-		// No port at all, or a bare IPv6 literal.
-		return strings.TrimSuffix(host, ".")
-	}
-	name = strings.TrimSuffix(name, ".")
-	scheme = strings.ToLower(scheme)
-	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
-		return name
-	}
-	return net.JoinHostPort(name, port)
-}
-
-// attachmentTrust reports whether host (already hostKey-normalised) may be
-// downloaded from at all, and whether the client's API key may be sent
-// there. Only the exact configured domain gets the credential: Freshdesk's
-// other first-party hosts (its attachment CDN, principally) are trusted for
-// download because their URLs are pre-signed, but they never see the key.
-func (c *Client) attachmentTrust(host string) (trusted, sendAuth bool) {
-	if host == c.host {
-		return true, true
-	}
-	for _, suf := range trustedSuffixes {
-		if host == suf || strings.HasSuffix(host, "."+suf) {
-			return true, false
-		}
-	}
-	return false, false
-}
 
 // Ping checks the credential by reading the authenticated agent's own
 // record, giving doctor a real round trip against the configured account.
@@ -277,12 +201,12 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 		if err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
 		}
-		body, readErr := readLimited(resp.Body, limit)
+		body, readErr := httpx.ReadLimited(resp.Body, limit)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if d, ok := retryAfter(resp.Header); ok {
-				if err := sleepCtx(ctx, d); err != nil {
+			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
 				}
 				continue
@@ -315,93 +239,17 @@ func (c *Client) downloadTo(ctx context.Context, rawURL string, withAuth bool, d
 	}
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
-	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxJSONBody))
-		resp.Body.Close()
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := readLimited(resp.Body, maxJSONBody)
-		return statusError(logPath(rawURL), resp.StatusCode, body)
-	}
-
-	f, err := os.Create(destPath)
-	if err != nil {
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: create %s: %v", filepath.Base(destPath), err)}
-	}
-	n, copyErr := io.Copy(f, io.LimitReader(resp.Body, maxAttachmentBytes+1))
-	closeErr := f.Close()
+	_, err = httpx.Download(ctx, c.hc, req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	var se *httpx.StatusError
 	switch {
-	case copyErr != nil:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: read body: %v", logPath(rawURL), copyErr)}
-	case closeErr != nil:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: write %s: %v", filepath.Base(destPath), closeErr)}
-	case n > maxAttachmentBytes:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
+	case err == nil:
+		return nil
+	case errors.As(err, &se):
+		return statusError(logPath(rawURL), se.Status, se.Body)
+	case errors.Is(err, httpx.ErrTooLarge):
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
 	default:
-		return nil
-	}
-	_ = os.Remove(destPath)
-	return err
-}
-
-// readLimited reads at most limit bytes and fails when the reader had more
-// to give, rather than returning a body that would decode as a short but
-// well-formed result.
-func readLimited(r io.Reader, limit int64) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, limit+1))
-	if err != nil {
-		return body, err
-	}
-	if int64(len(body)) > limit {
-		return body[:limit], fmt.Errorf("response exceeds the %d byte limit", limit)
-	}
-	return body, nil
-}
-
-// retryAfter reads a Retry-After header in either of its documented forms
-// (delta-seconds or an HTTP date) and reports whether the wait is short
-// enough to sit through.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		return 0, false
-	}
-	var d time.Duration
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0, false
-		}
-		d = time.Duration(secs) * time.Second
-	} else if t, err := http.ParseTime(v); err == nil {
-		d = time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-	} else {
-		return 0, false
-	}
-	if d > maxRetryAfter {
-		return 0, false
-	}
-	return d, true
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
 	}
 }
 
@@ -450,37 +298,7 @@ func statusError(path string, status int, body []byte) *source.Error {
 // conversation feed, so a feed that stops at the page cap says so once
 // rather than twice.
 func (c *Client) addWarnings(id string, warnings []string) {
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
-}
-
-// takeWarnings returns and removes the warnings recorded for ticket id.
-func (c *Client) takeWarnings(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	c.warnings.Add(id, warnings...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the
@@ -490,7 +308,7 @@ func (c *Client) takeWarnings(id string) []string {
 // what a caller running several tickets at once needs: it cannot be handed
 // another ticket's missing evidence.
 func (c *Client) WarningsFor(id string) []string {
-	return c.takeWarnings(id)
+	return c.warnings.Take(id)
 }
 
 // --- agent name resolution ---

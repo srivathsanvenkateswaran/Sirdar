@@ -7,16 +7,16 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 // maxBodyBytes caps how much of a JSON response body this client will
@@ -28,7 +28,7 @@ const maxBodyBytes = 8 << 20 // 8 MiB
 // before giving up and returning source.RateLimited instead. A caller
 // blocked longer than this on one ticket is worse than surfacing the limit
 // and letting the run schedule a retry of its own.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // maxCommentPages caps how many pages of a ticket's comment feed this
 // client will follow. A feed still paginating past this many pages stops
@@ -55,17 +55,19 @@ type Config struct {
 
 // Client is a Zendesk Support API client implementing source.Helpdesk.
 type Client struct {
-	baseURL    string // request target, no trailing slash
-	host       string // lowercase hostname of baseURL; the "configured host" for attachment trust
-	scheme     string // lowercase scheme of baseURL; an http baseUrl is the only way a URL off https is trusted
+	baseURL string // request target, no trailing slash
+	// trust is the account's own host (which gets the credential) plus
+	// Zendesk's first-party attachment hosts (which are fetched from but
+	// never credentialed). An http baseUrl is the only way a URL off https
+	// is trusted.
+	trust      *httpx.Trust
 	subdomain  string
 	authHeader string
 	hc         *http.Client
 
-	// mu guards warnings. One Client can serve several tickets whose
-	// Attachments calls overlap, so the map is keyed by ticket id.
-	mu       sync.Mutex
-	warnings map[string][]string
+	// warnings is keyed by ticket id: one Client can serve several tickets
+	// whose Attachments calls overlap.
+	warnings httpx.Warnings
 }
 
 // New validates cfg and returns a Client. hc may be nil, in which case a
@@ -107,14 +109,27 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		client = &http.Client{Timeout: 30 * time.Second}
 	}
 
+	trust, terr := httpx.NewTrust(base, zendeskHosts...)
+	if terr != nil {
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: invalid baseUrl %q", cfg.BaseURL)}
+	}
+
 	return &Client{
 		baseURL:    base,
-		host:       strings.ToLower(u.Hostname()),
-		scheme:     strings.ToLower(u.Scheme),
+		trust:      trust,
 		subdomain:  cfg.Subdomain,
 		authHeader: authHeader,
 		hc:         client,
 	}, nil
+}
+
+// zendeskHosts are Zendesk's own attachment hosts. An attachment's
+// content_url legitimately lives on one of them, and those URLs carry their
+// own token, so they are fetched from but never see this client's
+// credential.
+var zendeskHosts = []httpx.HostRule{
+	{Suffix: ".zendesk.com"},
+	{Suffix: ".zdusercontent.com"},
 }
 
 // Ping implements a health check for `sirdar doctor`: it fetches the
@@ -124,65 +139,21 @@ func (c *Client) Ping(ctx context.Context) error {
 	return err
 }
 
-// hostTrust reports whether u is safe to download an attachment from at all
-// (trusted), and whether this client's Authorization header should be sent
-// to it (sendAuth). The configured host (the account's own Zendesk
-// instance) gets both; any other *.zendesk.com or *.zdusercontent.com host
-// is trusted to fetch from — Zendesk's own attachment CDN — but never gets
-// this client's credentials, since those URLs carry their own token.
-//
-// The transport matters as much as the host. An attachment URL arrives
-// inside an API response body, so a hostile or compromised instance can put
-// "http://" in front of a perfectly legitimate host and watch the
-// credential — and the file — cross the network in the clear. https is
-// therefore required, with one exception: a workspace whose configured
-// baseUrl is itself http has already chosen plain HTTP.
-func (c *Client) hostTrust(u *url.URL) (trusted, sendAuth bool) {
-	if u == nil || u.Hostname() == "" {
-		return false, false
-	}
-	// "https://acme.zendesk.com@attacker.example/x" parses with the real
-	// destination in Host and the decoy in User. The host comparison below
-	// already catches that; userinfo has no business on an attachment URL
-	// either way.
-	if u.User != nil {
-		return false, false
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "https" && scheme != c.scheme {
-		return false, false
-	}
-
-	h := strings.ToLower(u.Hostname())
-	if h == c.host {
-		return true, true
-	}
-	if h == "zendesk.com" || strings.HasSuffix(h, ".zendesk.com") {
-		return true, false
-	}
-	if h == "zdusercontent.com" || strings.HasSuffix(h, ".zdusercontent.com") {
-		return true, false
-	}
-	return false, false
-}
-
 // trustedNextPage validates a comments page's next_page link before it is
 // followed: unlike an attachment's content_url (which can legitimately
 // live on Zendesk's own CDN hosts), a paginated API response must keep
-// coming from this account's own configured host over https, since the
-// live Authorization header goes on every one of these requests. host is
-// always returned (even when untrusted) so the caller can name it in a
-// warning without re-parsing raw.
+// coming from this account's own configured host, since the live
+// Authorization header goes on every one of these requests — which is
+// exactly the hosts hostTrust would send the credential to. host is always
+// returned (even when untrusted) so the caller can name it in a warning
+// without re-parsing raw.
 func (c *Client) trustedNextPage(raw string) (urlStr, host string, trusted bool) {
 	u, err := url.Parse(raw)
 	if err != nil {
 		return "", "", false
 	}
 	host = u.Hostname()
-	if !strings.EqualFold(u.Scheme, "https") {
-		return "", host, false
-	}
-	if !strings.EqualFold(host, c.host) {
+	if _, sendAuth, _ := c.trust.Check(u); !sendAuth {
 		return "", host, false
 	}
 	return raw, host, true
@@ -215,10 +186,10 @@ func (c *Client) do(ctx context.Context, urlStr string) (*http.Response, error) 
 		return resp, nil
 	}
 
-	wait, ok := parseRetryAfter(resp.Header.Get("Retry-After"))
+	wait, ok := httpx.RetryAfter(resp.Header, maxRetryAfter)
 	_, _ = io.Copy(io.Discard, resp.Body)
 	resp.Body.Close()
-	if !ok || wait > maxRetryAfter {
+	if !ok {
 		return nil, &source.Error{Code: source.RateLimited, Message: fmt.Sprintf("zendesk: GET %s: 429", logPath(urlStr))}
 	}
 
@@ -228,25 +199,6 @@ func (c *Client) do(ctx context.Context, urlStr string) (*http.Response, error) 
 	case <-time.After(wait):
 	}
 	return c.doOnce(ctx, urlStr)
-}
-
-// parseRetryAfter parses a Retry-After header value, which Zendesk sends
-// either as a count of seconds or an HTTP-date.
-func parseRetryAfter(v string) (time.Duration, bool) {
-	if v == "" {
-		return 0, false
-	}
-	if secs, err := strconv.Atoi(v); err == nil {
-		return time.Duration(secs) * time.Second, true
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		d := time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-		return d, true
-	}
-	return 0, false
 }
 
 // getRaw issues an authenticated GET against urlStr (absolute) and returns
@@ -259,17 +211,16 @@ func (c *Client) getRaw(ctx context.Context, urlStr string) ([]byte, error) {
 	}
 	defer resp.Body.Close()
 
-	limited := io.LimitReader(resp.Body, maxBodyBytes+1)
-	body, readErr := io.ReadAll(limited)
+	body, readErr := httpx.ReadLimited(resp.Body, maxBodyBytes)
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, statusError(http.MethodGet, urlStr, resp.StatusCode, body)
 	}
+	if errors.Is(readErr, httpx.ErrTooLarge) {
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: response exceeds %d bytes", logPath(urlStr), maxBodyBytes)}
+	}
 	if readErr != nil {
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: read body: %v", logPath(urlStr), readErr)}
-	}
-	if len(body) > maxBodyBytes {
-		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: response exceeds %d bytes", logPath(urlStr), maxBodyBytes)}
 	}
 	return body, nil
 }
@@ -348,37 +299,7 @@ func statusError(method, urlStr string, status int, body []byte) *source.Error {
 // pass, and three copies of one warning in the prompt read as three
 // problems.
 func (c *Client) addWarnings(id string, warnings []string) {
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
-}
-
-// takeWarnings returns and removes the warnings recorded for ticket id.
-func (c *Client) takeWarnings(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	c.warnings.Add(id, warnings...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes every
@@ -388,7 +309,7 @@ func (c *Client) takeWarnings(id string) []string {
 // so the caller can surface them instead of silently returning a partial
 // result.
 func (c *Client) WarningsFor(id string) []string {
-	return c.takeWarnings(id)
+	return c.warnings.Take(id)
 }
 
 var (

@@ -4,17 +4,16 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -116,7 +115,10 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			warnings = append(warnings, fmt.Sprintf("zendesk: attachment %s: invalid url", r.ID))
 			continue
 		}
-		trusted, sendAuth := c.hostTrust(u)
+		// The account's own host gets the credential; Zendesk's own
+		// attachment hosts are fetched from but never see it, and anything
+		// else is skipped before a request is built.
+		trusted, sendAuth, _ := c.trust.Check(u)
 		if !trusted {
 			// The warning names the scheme and host and nothing else: the
 			// rest of the URL is attacker-chosen text headed for a log.
@@ -124,7 +126,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			continue
 		}
 
-		name := sanitizeName(r.Name)
+		name := httpx.SanitizeName(r.Name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
 		mime, derr := c.downloadAttachment(ctx, r.URL, sendAuth, filepath.Join(dir, filename))
@@ -162,97 +164,19 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth
 		req.Header.Set("Authorization", c.authHeader)
 	}
 
-	resp, err := c.attachmentHTTPClient().Do(req)
-	if err != nil {
-		return "", err
+	// Each redirect target is checked exactly like a starting URL would be,
+	// so a redirect to an untrusted host is refused before the client ever
+	// issues that request.
+	ct, err := httpx.Download(ctx, httpx.Client(c.hc, c.trust, maxRedirects), req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		return "", fmt.Errorf("status %d", se.Status)
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	f, err := os.Create(destPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	limited := io.LimitReader(resp.Body, maxAttachmentBytes+1)
-	n, err := io.Copy(f, limited)
-	if err != nil {
-		return "", err
-	}
-	if n > maxAttachmentBytes {
+	if errors.Is(err, httpx.ErrTooLarge) {
 		return "", fmt.Errorf("attachment exceeds %d bytes", maxAttachmentBytes)
 	}
-	return resp.Header.Get("Content-Type"), nil
-}
-
-// attachmentHTTPClient is c.hc with its redirect policy replaced: each
-// redirect target is checked with hostTrust exactly like a starting URL
-// would be, and a redirect to an untrusted host is refused before the
-// client ever issues that request. A shallow copy is enough since
-// http.Client's fields are either safe to share (Transport) or being
-// replaced outright (CheckRedirect).
-func (c *Client) attachmentHTTPClient() *http.Client {
-	cl := *c.hc
-	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("zendesk: stopped after %d redirects", maxRedirects)
-		}
-		if trusted, _ := c.hostTrust(req.URL); !trusted {
-			return fmt.Errorf("zendesk: redirect to untrusted host: %s (over %s)", req.URL.Hostname(), req.URL.Scheme)
-		}
-		return nil
+	if err != nil {
+		return "", err
 	}
-	return &cl
-}
-
-// sanitizeName turns an attachment name (or id) from the API response into
-// a safe filename component: it strips any directory portion (so a name
-// like "../../evil.txt" cannot write outside the destination dir), drops
-// path separators and control characters, falls back to "attachment" for
-// an empty/"."/".." result, and caps the result at 120 bytes while
-// preserving the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := b.String()
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-// capBytes truncates name to at most max bytes, preserving its extension
-// where possible and never splitting a multi-byte UTF-8 rune.
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
+	return ct, nil
 }

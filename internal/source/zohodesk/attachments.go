@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -12,9 +11,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -31,54 +30,6 @@ type attachmentRef struct {
 // attachment, e.g. src="/supportapi/x/inlineattachments/i9".
 var inlineImgRe = regexp.MustCompile(`src="([^"]*inlineattachments[^"]*)"`)
 
-// sanitizeName turns an attachment name (or ID) taken from the API response
-// into a safe filename component: it strips any directory portion (so a
-// name like "../../evil.txt" cannot write outside the destination dir),
-// drops path separators and control characters, falls back to "attachment"
-// for an empty/"."/".." result, and caps the result at 120 bytes while
-// preserving the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := b.String()
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-// capBytes truncates name to at most max bytes, preserving its extension
-// where possible and never splitting a multi-byte UTF-8 rune.
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
-}
-
 // resolveURL turns a possibly-relative href/src from a Zoho Desk payload
 // into an absolute URL against BaseURL. An absolute href is kept as it is
 // and judged by trustedURL before anything is sent to it: these values
@@ -94,60 +45,49 @@ func (c *Client) resolveURL(href string) string {
 	return c.BaseURL + href
 }
 
-// trustedURL reports whether a credentialed request may be sent to raw.
-// Every request this client makes carries the org id and a live Desk
-// access token, and attachment hrefs and inline <img src> values arrive
-// inside ticket HTML a customer wrote. Without this gate, one <img
+// trust reports which hosts a credentialed request may be sent to. Every
+// request this client makes carries the org id and a live Desk access
+// token, and attachment hrefs and inline <img src> values arrive inside
+// ticket HTML a customer wrote. Without this gate, one <img
 // src="https://attacker.example/x"> in a ticket is a Zoho access token
-// delivered to the attacker — and a 401 from them would have been
-// answered with a freshly minted one.
+// delivered to the attacker — and a 401 from them would have been answered
+// with a freshly minted one.
 //
 // Trusted is: the configured Desk endpoint itself, at the scheme it was
-// configured with; or an https host in the same Zoho data centre, meaning
-// a subdomain of zoho, zohostatic or zohopublic under the TLD baseUrl
-// uses.
-func (c *Client) trustedURL(raw string) bool {
-	u, err := url.Parse(raw)
-	if err != nil || u.Host == "" {
-		return false
+// configured with; or an https host in the same Zoho data centre, meaning a
+// subdomain of zoho, zohostatic or zohopublic under the TLD baseUrl uses.
+//
+// It is cached against the BaseURL it was built from, since BaseURL is an
+// exported field a caller can still change.
+func (c *Client) trust() *httpx.Trust {
+	base := strings.TrimSuffix(c.BaseURL, "/")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.hostTrust != nil && c.trustBase == base {
+		return c.hostTrust
 	}
-	base, err := url.Parse(strings.TrimSuffix(c.BaseURL, "/"))
-	if err != nil || base.Host == "" {
-		return false
+	// A base URL that will not parse trusts nothing, which is what a nil
+	// Trust answers.
+	t, err := httpx.NewTrust(base, zohoRules(base)...)
+	if err != nil {
+		t = nil
 	}
-	if sameEndpoint(u, base) {
-		return true
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return false
-	}
-	host := normalizeHost(u)
-	for _, suffix := range zohoSuffixes(normalizeHost(base)) {
-		if strings.HasSuffix(host, suffix) {
-			return true
-		}
-	}
-	return false
+	c.hostTrust, c.trustBase = t, base
+	return t
 }
 
-// sameEndpoint reports whether two URLs name the same scheme and host.
-func sameEndpoint(a, b *url.URL) bool {
-	return strings.EqualFold(a.Scheme, b.Scheme) && normalizeHost(a) == normalizeHost(b)
-}
-
-// normalizeHost lowercases a URL's host, drops a trailing dot on the name,
-// and drops the port when it is the default for the scheme, so
-// "DESK.Zoho.in.:443" and "desk.zoho.in" compare equal.
-func normalizeHost(u *url.URL) string {
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
-	port := u.Port()
-	switch {
-	case port == "",
-		port == "443" && strings.EqualFold(u.Scheme, "https"),
-		port == "80" && strings.EqualFold(u.Scheme, "http"):
-		return host
+// zohoRules turns a base URL into the sibling host rules for its data
+// centre. They carry the credential: they are the same workspace.
+func zohoRules(base string) []httpx.HostRule {
+	u, err := url.Parse(base)
+	if err != nil {
+		return nil
 	}
-	return host + ":" + port
+	var rules []httpx.HostRule
+	for _, suffix := range zohoSuffixes(httpx.NormalizeHost(u.Scheme, u.Host)) {
+		rules = append(rules, httpx.HostRule{Suffix: suffix, SendCredential: true})
+	}
+	return rules
 }
 
 // zohoSuffixes returns the host suffixes that belong to the same Zoho data
@@ -209,12 +149,9 @@ func (c *Client) collectEntryAttachments(direct []zohoAttachmentRef, htmlContent
 // failures) — and in that case the failures are not also recorded as
 // warnings, since the caller already has every one of them in the error.
 func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Attachment, error) {
-	// Discard anything an earlier call for this ticket left behind before
-	// doing anything else: every path out of here from this point on,
-	// including the ones that return early, must leave no stale warning
-	// for the next caller to pick up as its own.
-	c.takeWarnings(id)
-
+	// Whatever an earlier call in the same bundle (Get, Threads) recorded
+	// for this ticket stays where it is: the caller reads WarningsFor once
+	// after all three, and reading is what clears the entry.
 	entries, err := c.listConversations(ctx, id)
 	if err != nil {
 		return nil, err
@@ -251,10 +188,10 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		if name == "" {
 			name = r.ID
 		}
-		name = sanitizeName(name)
+		name = httpx.SanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
-		if !c.trustedURL(r.URL) {
+		if fetch, _, _ := c.trust().CheckRaw(r.URL); !fetch {
 			// Only the host is reported: the rest of the URL is
 			// attacker-authored and has no business in a log line.
 			warnings = append(warnings, "zoho desk: attachment host not trusted: "+hostOf(r.URL))
@@ -280,30 +217,13 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	return out, nil
 }
 
-// putWarnings records the failures one Attachments call skipped over.
+// putWarnings records the failures one Attachments call skipped over,
+// alongside whatever an earlier call for the same ticket recorded: one
+// ticket's bundle is Get, then Threads, then Attachments, with a single
+// WarningsFor at the end, and reading is what clears the entry (see
+// httpx.Warnings).
 func (c *Client) putWarnings(id string, warnings []string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if len(warnings) == 0 {
-		delete(c.warnings, id)
-		return
-	}
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	c.warnings[id] = warnings
-}
-
-// takeWarnings returns and removes the warnings recorded for ticket id.
-func (c *Client) takeWarnings(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	c.warnings.Add(id, warnings...)
 }
 
 var (
@@ -318,7 +238,7 @@ var (
 // what a caller running several tickets at once needs: it cannot be handed
 // another ticket's missing evidence.
 func (c *Client) WarningsFor(id string) []string {
-	return c.takeWarnings(id)
+	return c.warnings.Take(id)
 }
 
 // hostOf returns a URL's host for a log line, or "" when it does not parse.
@@ -341,56 +261,33 @@ const (
 	maxRedirects = 3
 )
 
-// downloadClient is the HTTP client attachment downloads use: the
-// configured one, with a redirect policy that re-applies the trust gate on
-// every hop and stops after maxRedirects.
-func (c *Client) downloadClient() *http.Client {
-	dl := *c.http()
-	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxRedirects)
-		}
-		if !c.trustedURL(req.URL.String()) {
-			return fmt.Errorf("redirected to an untrusted host: %s", req.URL.Host)
-		}
-		return nil
-	}
-	return &dl
-}
-
 // downloadAttachment fetches url with the client's auth headers and writes
 // its body to destPath, returning the response's Content-Type. The caller
-// has already checked url against trustedURL; every redirect off it is
-// checked again here.
+// has already checked url against the client's trust; every redirect off it
+// is checked again by the redirect policy, so a trusted host cannot bounce
+// the credentialed request onto an untrusted one.
 func (c *Client) downloadAttachment(ctx context.Context, rawURL, destPath string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
 
-	resp, err := c.sendWith(ctx, req, c.downloadClient())
+	// sendWith, not httpx.Download: a 401 from the Desk endpoint buys one
+	// fresh token and a replay, which needs the response in hand.
+	resp, err := c.sendWith(ctx, req, httpx.Client(c.http(), c.trust(), maxRedirects))
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
+	ct, err := httpx.Save(resp, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		return "", fmt.Errorf("status %d", se.Status)
 	}
-
-	f, err := os.Create(destPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	written, err := io.Copy(f, io.LimitReader(resp.Body, maxAttachmentBytes+1))
-	if err != nil {
-		return "", err
-	}
-	if written > maxAttachmentBytes {
-		os.Remove(destPath)
+	if errors.Is(err, httpx.ErrTooLarge) {
 		return "", fmt.Errorf("larger than the %d byte limit", int64(maxAttachmentBytes))
 	}
-	return resp.Header.Get("Content-Type"), nil
+	if err != nil {
+		return "", err
+	}
+	return ct, nil
 }

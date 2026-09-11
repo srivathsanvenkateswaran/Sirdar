@@ -1,8 +1,12 @@
 # Follow-up: the HTTP helpers every adapter now carries its own copy of (2026-09-10)
 
-Written after the whole-branch review of `adapters`. Nothing here is implemented; this is the
-inventory a later extraction task starts from, plus the reason each helper is worth sharing and
-the reason none of them was shared while the adapters were being written.
+Status: implemented on 2026-09-11 as `internal/source/httpx`; all seven adapters moved onto it
+and their private copies are gone. The rulings the extraction had to make are recorded at the
+bottom of this file.
+
+Written after the whole-branch review of `adapters`. This was the inventory the extraction
+started from, plus the reason each helper is worth sharing and the reason none of them was
+shared while the adapters were being written.
 
 Seven adapters live under `internal/source`: `jira`, `linear`, `azdo`, `rally` (trackers),
 `zendesk`, `freshdesk`, `zohodesk` (helpdesks). Each is a self-contained stdlib HTTP client, and
@@ -42,3 +46,30 @@ The proposed home is `internal/source/httpx`. The proposed contents:
   `prepare.go`, so it needs its own test pass rather than riding along with the move.
 - **Do not extract the mapping.** `source.Error` codes, role mapping, and the response envelopes
   are genuinely per-API. This is an HTTP-plumbing package, not an adapter framework.
+
+## What the extraction decided (2026-09-11)
+
+- **`Trust` is a base URL plus host rules.** `NewTrust(baseURL, extra ...HostRule)`; the base
+  host is trusted with the credential, each `HostRule` is a dot-boundary suffix (".zendesk.com")
+  or an exact host ("dev.azure.com") carrying its own `SendCredential` flag. `Check` returns
+  (fetch, sendCredential, reason). The comparison normalises the host and keeps the port, which
+  tightened Linear: `uploads.linear.app:8443` is no longer the upload host.
+- **The http exception is the base URL's own scheme**, as proposed, and every adapter now records
+  it by construction: the `Trust` holds the parsed base URL.
+- **Warnings append and dedupe, and are cleared by the read.** That was already six adapters'
+  behaviour; Zoho Desk replaced and cleared at the start of a call, and now does not. The test
+  that pinned the old behaviour was rewritten, not deleted.
+- **Backslashes are separators in `SanitizeName`.** Rally and Linear split on them, the other
+  five stripped them; splitting is the safer reading of a Windows-shaped name, so Jira's test
+  case changed from `windows\path\note.txt` → `windowspathnote.txt` to `note.txt`.
+- **Hop caps are three everywhere.** Jira's five had no reason behind it.
+- **Jira keeps a redirect policy of its own shape.** `RedirectPolicyStop` hands the 3xx back
+  instead of failing, because Go wraps a `CheckRedirect` error in a `*url.Error` carrying the
+  full redirect target — and an SSO `Location` has the original URL, sometimes a token, in its
+  query. Jira names the target by scheme and host and drops the rest.
+- **`Download` streams to a temporary file and renames**, so no failure leaves a partial file
+  under the real name, and it reports a non-2xx as a `*StatusError` the adapter maps onto its own
+  `source.Error` codes. `Save` is its second half, for Zoho Desk, whose 401 handling needs the
+  response in hand to mint a token and replay.
+- **Byte ceilings reached the three adapters that had none** (Jira, Azure DevOps, Linear
+  downloads), at the 64 MiB the other four already used.

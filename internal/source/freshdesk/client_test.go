@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,6 +15,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 const (
@@ -773,8 +775,8 @@ func TestSanitizeName(t *testing.T) {
 		{"bad\x00name.txt", "badname.txt"},
 	}
 	for _, tc := range cases {
-		if got := sanitizeName(tc.in); got != tc.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := httpx.SanitizeName(tc.in); got != tc.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
@@ -797,10 +799,17 @@ func TestAttachmentTrust(t *testing.T) {
 		{"evilfreshdesk.com", false, false},
 		{"evil.example.com", false, false},
 	}
+	// The check is now the shared one, which takes the whole URL rather
+	// than a bare host: https is required either way, so the hosts below
+	// are asked about over https.
 	for _, tc := range cases {
-		trusted, sendAuth := c.attachmentTrust(tc.host)
+		u, err := url.Parse("https://" + tc.host + "/x.png")
+		if err != nil {
+			t.Fatalf("parse %q: %v", tc.host, err)
+		}
+		trusted, sendAuth, _ := c.trust.Check(u)
 		if trusted != tc.trusted || sendAuth != tc.sendAuth {
-			t.Errorf("attachmentTrust(%q) = (%v, %v), want (%v, %v)", tc.host, trusted, sendAuth, tc.trusted, tc.sendAuth)
+			t.Errorf("trust.Check(%q) = (%v, %v), want (%v, %v)", tc.host, trusted, sendAuth, tc.trusted, tc.sendAuth)
 		}
 	}
 }
@@ -949,7 +958,9 @@ func TestAttachments_TrustedHostRedirectSkippedOthersStillDownload(t *testing.T)
 	}
 
 	warnings := c.WarningsFor("123")
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "freshdesk: redirect to untrusted host evil.example.com") {
+	// The refusal comes from the shared redirect policy now, which names
+	// the host it would not follow to and the reason, in that order.
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "redirect to evil.example.com: untrusted host") {
 		t.Errorf("warnings = %v, want one naming the untrusted redirect target", warnings)
 	}
 }

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -469,8 +470,8 @@ func TestEffectiveLimit(t *testing.T) {
 		{500, maxListLimit},
 	}
 	for _, tc := range cases {
-		if got := effectiveLimit(tc.in); got != tc.want {
-			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		if got, _ := httpx.Limit(tc.in, defaultListLimit, maxListLimit); got != tc.want {
+			t.Errorf("Limit(%d) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
 	if defaultListLimit != 100 || maxListLimit != 200 {
