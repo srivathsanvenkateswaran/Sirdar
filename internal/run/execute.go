@@ -254,7 +254,12 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	// Sirdar's own loop offers write_file and edit_file at all.
 	if p.kind == store.KindFix {
 		spec.Mode = provider.ModeFix
-		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP)
+		// A repository that sets core.hooksPath (husky, lefthook, a
+		// checked-in .githooks/) keeps the code git runs on commit and
+		// push in an ordinary source directory, which the .git rule does
+		// not cover. It is read once, here, and reserved for this session.
+		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
+			extraReserved(cfg.Root))
 	}
 
 	// Claude Code reads image files from the bundle directory itself.
@@ -266,6 +271,20 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Images = imageAttachments(p)
 	}
 	return spec
+}
+
+// extraReserved is the per-run reserved list a fix session is judged
+// against on top of .git and .sirdar: the repository's core.hooksPath when
+// it sets one.
+func extraReserved(root string) []string {
+	// A bounded context: this is one local `git config` read, and a fix
+	// session must not hang behind a git that does not answer.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if hooks := provider.HooksPath(ctx, root); hooks != "" {
+		return []string{hooks}
+	}
+	return nil
 }
 
 // binary is the configured path override for the provider in use, empty

@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ func writeCall(tool, path string) json.RawMessage {
 // both are judged by the same policy object.
 func TestFixPolicyAllowsTheEditingTools(t *testing.T) {
 	root := t.TempDir()
-	fix := FixPolicy(root, []string{"git log*", "go test*"}, nil)
+	fix := FixPolicy(root, []string{"git log*", "go test*"}, nil, nil)
 	triage := &PermissionPolicy{BashAllow: []string{"git log*"}, Root: root}
 
 	for _, tool := range []string{"Edit", "Write", "MultiEdit", "write_file", "edit_file"} {
@@ -61,7 +62,7 @@ func TestFixPolicyConfinesWritesToTheWorkspace(t *testing.T) {
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
 		t.Skipf("symlinks unavailable: %v", err)
 	}
-	p := FixPolicy(root, nil, nil)
+	p := FixPolicy(root, nil, nil, nil)
 
 	allowed := []struct{ name, path string }{
 		{"a file in the workspace", filepath.Join(root, "export", "csv.go")},
@@ -109,7 +110,7 @@ func TestFixPolicyConfinesWritesToTheWorkspace(t *testing.T) {
 // config whose permission lists this policy is built from.
 func TestFixPolicyRefusesGitAndSirdarDirectories(t *testing.T) {
 	root := t.TempDir()
-	p := FixPolicy(root, nil, nil)
+	p := FixPolicy(root, nil, nil, nil)
 
 	for _, path := range []string{
 		".git/hooks/pre-commit",
@@ -139,7 +140,7 @@ func TestFixPolicyRefusesGitAndSirdarDirectories(t *testing.T) {
 // TestFixPolicyWithNoRootRefusesEveryWrite: a policy that cannot say where
 // the workspace is cannot confine anything, and fails closed.
 func TestFixPolicyWithNoRootRefusesEveryWrite(t *testing.T) {
-	p := FixPolicy("", nil, nil)
+	p := FixPolicy("", nil, nil, nil)
 	for _, tool := range []string{"Edit", "Write", "MultiEdit", "write_file", "edit_file"} {
 		if d := p.Decide(tool, writeCall(tool, "main.go")); d.Allow {
 			t.Errorf("%s was allowed with no workspace root", tool)
@@ -151,7 +152,7 @@ func TestFixPolicyWithNoRootRefusesEveryWrite(t *testing.T) {
 // is easy to lose: "write-enabled" is two named tools wider than read-only,
 // not open season.
 func TestFixPolicyStillRefusesEverythingElse(t *testing.T) {
-	fix := FixPolicy("/work", []string{"git *"}, nil)
+	fix := FixPolicy("/work", []string{"git *"}, nil, nil)
 
 	if d := fix.Decide("NotebookEdit", nil); d.Allow {
 		t.Error("fix policy allowed NotebookEdit; nothing in the flow edits a notebook")
@@ -168,7 +169,7 @@ func TestFixPolicyStillRefusesEverythingElse(t *testing.T) {
 // permissions.fixBash, so widening it for builds does not widen what a
 // triage run may do.
 func TestFixPolicyUsesItsOwnBashList(t *testing.T) {
-	fix := FixPolicy("/work", []string{"go test*", "git *"}, nil)
+	fix := FixPolicy("/work", []string{"go test*", "git *"}, nil, nil)
 
 	bash := func(cmd string) Decision {
 		in, _ := json.Marshal(map[string]string{"command": cmd})
@@ -197,5 +198,218 @@ func TestModeIsFix(t *testing.T) {
 	var nilPolicy *PermissionPolicy
 	if nilPolicy.IsFix() {
 		t.Error("a nil policy reported itself as a fix policy")
+	}
+}
+
+// TestFixPolicyFoldsCaseForReservedDirectories is the macOS half of the
+// rule, checked on the real filesystem the test is running on. APFS and
+// NTFS are case-insensitive by default, so "<root>/.GIT/hooks/pre-commit"
+// and "<root>/.git/hooks/pre-commit" are the same file — and a
+// case-sensitive segment comparison refused the second and approved the
+// first. The directories are really created, so on a case-insensitive
+// filesystem the path resolves to an existing .git and the refusal has to
+// come from the fold rather than from the path not existing.
+func TestFixPolicyFoldsCaseForReservedDirectories(t *testing.T) {
+	root := t.TempDir()
+	for _, dir := range []string{".git/hooks", ".sirdar/playbooks"} {
+		if err := os.MkdirAll(filepath.Join(root, filepath.FromSlash(dir)), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := FixPolicy(root, nil, nil, nil)
+
+	for _, path := range []string{
+		".GIT/hooks/pre-commit",
+		".Git/hooks/pre-commit",
+		".giT/config",
+		filepath.Join(root, ".GIT", "hooks", "pre-push"),
+		"vendor/thing/.Git/hooks/pre-commit",
+		".SIRDAR/config.yaml",
+		".Sirdar/config.yaml",
+		filepath.Join(root, ".SIRDAR", "playbooks", "50-code.md"),
+	} {
+		for _, tool := range []string{"Edit", "Write", "MultiEdit", "write_file", "edit_file"} {
+			if d := p.Decide(tool, writeCall(tool, path)); d.Allow {
+				t.Errorf("%s was allowed to write %s", tool, path)
+			}
+		}
+	}
+}
+
+// TestFixPolicyReservesTheRepositoryHooksPath: a repository with husky,
+// lefthook or a checked-in .githooks/ sets core.hooksPath, and git then
+// runs code from an ordinary source directory that the .git rule never
+// sees. The run reserves that directory for itself, case folded like the
+// two constants.
+func TestFixPolicyReservesTheRepositoryHooksPath(t *testing.T) {
+	root := t.TempDir()
+	hooks := filepath.Join(root, ".husky")
+	if err := os.MkdirAll(hooks, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	p := FixPolicy(root, nil, nil, []string{hooks})
+
+	for _, path := range []string{
+		".husky/pre-commit",
+		".husky/_/husky.sh",
+		".HUSKY/pre-push",
+		"./.husky/pre-commit",
+		hooks,
+		filepath.Join(hooks, "pre-commit"),
+	} {
+		for _, tool := range []string{"Edit", "Write", "MultiEdit", "write_file", "edit_file"} {
+			d := p.Decide(tool, writeCall(tool, path))
+			if d.Allow {
+				t.Errorf("%s was allowed to write the hooks directory entry %s", tool, path)
+			}
+			if !strings.Contains(d.Message, ".husky") {
+				t.Errorf("the refusal for %s does not name the reserved directory: %s", path, d.Message)
+			}
+		}
+	}
+	// A relative entry in the reserved list means the same directory.
+	rel := FixPolicy(root, nil, nil, []string{".husky"})
+	if d := rel.Decide("Write", writeCall("Write", ".husky/pre-commit")); d.Allow {
+		t.Error("a relative reserved entry did not reserve the directory")
+	}
+	// Neighbours with the same prefix are ordinary source.
+	for _, path := range []string{".huskyrc", ".husky-notes/readme.md", "husky/pre-commit"} {
+		if d := p.Decide("Write", writeCall("Write", path)); !d.Allow {
+			t.Errorf("Write was refused an ordinary file %s: %s", path, d.Message)
+		}
+	}
+	// Without the extra list, the same directory is ordinary source: the
+	// reservation is per run, not a new constant.
+	plain := FixPolicy(root, nil, nil, nil)
+	if d := plain.Decide("Write", writeCall("Write", ".husky/pre-commit")); !d.Allow {
+		t.Errorf("a run that reserved nothing still refused .husky: %s", d.Message)
+	}
+}
+
+// TestGitFlagsAreDeniedWhateverThePatternSays covers the hole under the
+// allow-list: a pattern approves the words of a command, and git has flags
+// that change where it reads configuration, writes output and runs code
+// from. `git -c core.hooksPath=/tmp/h status` matches "git status*" style
+// patterns and installs a hook directory; `git diff --output=/path` matches
+// "git diff*" and writes a file anywhere on the machine.
+func TestGitFlagsAreDeniedWhateverThePatternSays(t *testing.T) {
+	root := t.TempDir()
+	allow := []string{"git status*", "git diff*", "git log*", "git grep*", "git *", "go test*"}
+
+	denied := []string{
+		"git -c core.hooksPath=/tmp/hooks status",
+		"git -c core.hooksPath=.husky status",
+		"git -C /etc log",
+		"git --git-dir=/tmp/other/.git log",
+		"git --work-tree=/tmp/other status",
+		"git --exec-path=/tmp/bin status",
+		"git diff --output=" + filepath.Join(root, "out.diff"),
+		"git diff --output " + filepath.Join(root, "out.diff"),
+		"git diff -o " + filepath.Join(root, "out.diff"),
+		"git format-patch --output-directory=/tmp/p HEAD~1",
+		"git config --get core.hooksPath",
+		"git config core.hooksPath .husky",
+		"go test ./... | git config --global alias.x '!sh'",
+	}
+	for _, cmd := range denied {
+		if ok, _ := MatchCommand(root, allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		}
+	}
+
+	allowed := []string{
+		"git status --porcelain",
+		"git diff --stat",
+		"git diff --cached HEAD~1",
+		"git log --pretty=format:%H --max-count=5",
+		"git log --since=2 days ago",
+		"git grep -n foo internal/",
+		"git show HEAD:go.mod",
+	}
+	for _, cmd := range allowed {
+		if ok, reason := MatchCommand(root, allow, cmd); !ok {
+			t.Errorf("MatchCommand refused a read-only git command %q: %s", cmd, reason)
+		}
+	}
+}
+
+// TestFlagValuesAreCheckedAgainstTheRoot: escapesRoot used to skip every
+// token starting with "-", so a path riding in on the same token as its
+// flag was never looked at.
+func TestFlagValuesAreCheckedAgainstTheRoot(t *testing.T) {
+	root := t.TempDir()
+	allow := []string{"go test*", "make *", "npm test*"}
+
+	for _, cmd := range []string{
+		"go test --coverprofile=/Users/you/.zshrc ./...",
+		"go test --coverprofile=~/.zshrc ./...",
+		"go test --coverprofile=../../escape.out ./...",
+		"npm test --prefix=/etc",
+	} {
+		if ok, _ := MatchCommand(root, allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		}
+	}
+	for _, cmd := range []string{
+		"go test -run=TestThing ./...",
+		"go test --coverprofile=cover.out ./...",
+		"go test --coverprofile=" + filepath.Join(root, "cover.out") + " ./...",
+		"make -j4",
+	} {
+		if ok, reason := MatchCommand(root, allow, cmd); !ok {
+			t.Errorf("MatchCommand refused %q: %s", cmd, reason)
+		}
+	}
+}
+
+// TestHooksPathReadsTheRepositoryConfiguration is the per-run half of the
+// reservation: where the directory comes from.
+func TestHooksPathReadsTheRepositoryConfiguration(t *testing.T) {
+	root := t.TempDir()
+	gitInit(t, root)
+
+	if p := HooksPath(t.Context(), root); p != "" {
+		t.Errorf("HooksPath on a repository that sets none = %q, want \"\"", p)
+	}
+	if got, want := HooksDir(t.Context(), root), filepath.Join(root, ".git", "hooks"); got != want {
+		t.Errorf("HooksDir = %q, want %q", got, want)
+	}
+
+	gitRun(t, root, "config", "core.hooksPath", ".husky")
+	if got, want := HooksPath(t.Context(), root), filepath.Join(root, ".husky"); got != want {
+		t.Errorf("HooksPath = %q, want %q", got, want)
+	}
+	if got, want := HooksDir(t.Context(), root), filepath.Join(root, ".husky"); got != want {
+		t.Errorf("HooksDir = %q, want %q", got, want)
+	}
+
+	// An absolute value is taken as it stands.
+	outside := t.TempDir()
+	gitRun(t, root, "config", "core.hooksPath", outside)
+	if got := HooksPath(t.Context(), root); got != outside {
+		t.Errorf("HooksPath = %q, want %q", got, outside)
+	}
+
+	// Somewhere that is not a repository at all answers with nothing
+	// rather than failing the run.
+	if p := HooksPath(t.Context(), t.TempDir()); p != "" {
+		t.Errorf("HooksPath outside a repository = %q, want \"\"", p)
+	}
+}
+
+func gitInit(t *testing.T, dir string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	gitRun(t, dir, "init", "-q")
+}
+
+func gitRun(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %s: %v: %s", strings.Join(args, " "), err, out)
 	}
 }

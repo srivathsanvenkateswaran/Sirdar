@@ -99,12 +99,17 @@ func (a writeArgs) target() string {
 // workspace's permissions.fixBash list rather than permissions.bash.
 // Everything else is still refused, so a fix session is a triage session
 // that may edit its own workspace, not an unsupervised shell.
-func FixPolicy(root string, fixBash, mcpAllow []string) *PermissionPolicy {
+//
+// extraReserved holds the paths this run reserves on top of .git and
+// .sirdar — the repository's core.hooksPath, when it sets one. See
+// ReservedWrite.
+func FixPolicy(root string, fixBash, mcpAllow, extraReserved []string) *PermissionPolicy {
 	return &PermissionPolicy{
-		Mode:      ModeFix,
-		BashAllow: fixBash,
-		MCPAllow:  mcpAllow,
-		Root:      root,
+		Mode:          ModeFix,
+		BashAllow:     fixBash,
+		MCPAllow:      mcpAllow,
+		Root:          root,
+		ExtraReserved: extraReserved,
 	}
 }
 
@@ -163,6 +168,11 @@ type PermissionPolicy struct {
 	BashAllow []string
 	MCPAllow  []string
 	Root      string
+
+	// ExtraReserved names directories this run refuses writes to on top of
+	// .git and .sirdar: the repository's core.hooksPath when it sets one,
+	// which is an ordinary-looking source directory git runs code from.
+	ExtraReserved []string
 
 	// Mode is ModeTriage (the zero value) for a read-only run and ModeFix
 	// for a run allowed to edit the workspace.
@@ -238,7 +248,7 @@ func (p *PermissionPolicy) decideWrite(tool string, input json.RawMessage) Decis
 		return Decision{Allow: false, Message: "Sirdar policy: write outside the workspace: " +
 			quote(target) + " does not resolve to a path inside " + quote(p.Root)}
 	}
-	if reserved := ReservedWrite(p.Root, real); reserved != "" {
+	if reserved := ReservedWrite(p.Root, real, p.ExtraReserved); reserved != "" {
 		return Decision{Allow: false, Message: "Sirdar policy: " + quote(target) +
 			" is inside " + reserved + "/, which a fix never writes to"}
 	}
@@ -289,6 +299,9 @@ func MatchCommand(root string, allow []string, command string) (bool, string) {
 				"; a read-only run allows no redirection or " +
 				"substitution other than 2>&1 and 2>/dev/null"
 		}
+		if denial := gitDenial(segment); denial != "" {
+			return false, denial
+		}
 		matched := false
 		for _, pattern := range allow {
 			if MatchGlob(pattern, segment) {
@@ -313,8 +326,22 @@ func MatchCommand(root string, allow []string, command string) (bool, string) {
 // See MatchCommand on how far this reaches: it reads the command as text.
 func escapesRoot(root, segment string) string {
 	for _, arg := range argTokens(segment) {
-		if arg == "" || strings.HasPrefix(arg, "-") {
+		if arg == "" {
 			continue
+		}
+		if strings.HasPrefix(arg, "-") {
+			// A flag carrying its value in the same token hides a path
+			// from a check that skipped every token starting with "-":
+			// `git diff --output=/Users/you/.zshrc` matched a `git diff*`
+			// pattern and wrote outside the workspace. The value half is
+			// judged like any other argument. A flag whose value is a
+			// separate token needs nothing special — that token is an
+			// argument in its own right and was always checked.
+			_, value, ok := strings.Cut(arg, "=")
+			if !ok || value == "" {
+				continue
+			}
+			arg = value
 		}
 		switch {
 		case strings.HasPrefix(arg, "~"):
@@ -332,6 +359,71 @@ func escapesRoot(root, segment string) string {
 		}
 	}
 	return ""
+}
+
+// gitDeniedFlags are the git options no allow-list pattern can approve,
+// because each one moves where git reads its configuration, writes its
+// output, or runs code from — outside the workspace, or back into it
+// through a door the path checks do not watch. `git -c
+// core.hooksPath=/tmp/h status` installs a hook directory for every git
+// command that follows, and `git diff --output=~/.zshrc` writes a file the
+// allow-list thought it was only reading.
+//
+// The denial is by flag name, over every git invocation, whatever pattern
+// matched it: a workspace that allow-lists `git status*` is saying it wants
+// to read the repository, not that it has audited the flags git accepts.
+// The cost is a handful of read-only uses that share a letter — `git grep
+// -c` counts matches — which is the right side of that trade.
+var gitDeniedFlags = map[string]bool{
+	"--output":           true,
+	"--output-directory": true,
+	"-o":                 true,
+	"--git-dir":          true,
+	"--work-tree":        true,
+	"-C":                 true,
+	"-c":                 true,
+	"--exec-path":        true,
+}
+
+// gitDenial reports why a git command segment is refused outright, or ""
+// when nothing in it is. Besides the flags, `git config` is refused: it
+// writes the very settings — core.hooksPath among them — that decide what
+// the next git command does.
+func gitDenial(segment string) string {
+	args := argTokens(segment)
+	if len(args) == 0 || !isGit(args[0]) {
+		return ""
+	}
+	sawSubcommand := false
+	for _, arg := range args[1:] {
+		if !strings.HasPrefix(arg, "-") {
+			if !sawSubcommand {
+				sawSubcommand = true
+				if arg == "config" {
+					return quote(segment) + " runs `git config`, which writes the settings " +
+						"(core.hooksPath among them) that decide what every later git command does"
+				}
+			}
+			continue
+		}
+		flag := arg
+		if name, _, ok := strings.Cut(arg, "="); ok {
+			flag = name
+		}
+		if gitDeniedFlags[flag] {
+			return quote(segment) + " passes git " + quote(flag) +
+				", which moves where git reads its configuration, writes its output, " +
+				"or runs code from; no allow-list pattern approves it"
+		}
+	}
+	return ""
+}
+
+// isGit reports whether a command word invokes git, by the name or by a
+// path ending in it.
+func isGit(word string) bool {
+	word = strings.TrimSuffix(word, ".exe")
+	return word == "git" || strings.HasSuffix(word, "/git")
 }
 
 // withinRoot reports whether an absolute path is root or sits under it.

@@ -19,8 +19,12 @@ Rules:
    does all of that after you answer, and a commit you make yourself is a commit nobody
    reviewed. Read-only git commands (`git log`, `git show`, `git diff`, `git grep`) are fine.
 5. Do not touch `.sirdar/`, and do not edit the triage note. Writes are confined to this
-   workspace: a path outside it, anything under a `.git/` directory (hooks included), and
-   anything under `.sirdar/` are refused by the harness, not by your judgement.
+   workspace: a path outside it, anything under a `.git/` directory (hooks included), anything
+   under `.sirdar/`, and anything under the directory this repository sets `core.hooksPath` to
+   (`.husky/`, `.githooks/` and the like) are refused by the harness, not by your judgement.
+   The same files are checksummed before and after this session, and a change to any of them
+   fails the run outright — there is no commit and no pull request. Do not try to install,
+   edit or disable a hook to make a check pass; fix the code the check is complaining about.
 6. Every segment of a Bash command is checked against the allow-list separately, so a pipeline
    or a compound command is allowed only if each part between `|`, `&&` and `;` is allowed on
    its own.

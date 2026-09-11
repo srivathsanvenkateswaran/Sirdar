@@ -42,6 +42,14 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   `sandbox: read-only` for Codex, and for `provider: openai` the tool set itself plus
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
   and `2>/dev/null`) and the MCP write-verb heuristic behind `permissions.mcp`.
+- On `evalfix`, the confinement is stated per provider, because the layers are not the same for
+  all three: Claude and `openai` get policy + in-tool path check + the snapshot guard; Codex
+  gets its own `workspace-write` sandbox + the snapshot guard (`decideWrite` is never consulted
+  — Codex approves its own tool calls with `approvalPolicy: never`); ACP gets whatever the
+  agent implements + the snapshot guard. The guard (`internal/fix/guard.go`) sha256s `.sirdar/`
+  (bar `runs/`, `register.jsonl`, `eval/`) and `provider.HooksDir` before the session and again
+  the moment it ends, before any git command; a difference fails the run, restores nothing, and
+  commits and pushes nothing.
 - On `evalfix`, `sirdar fix` is the one session that writes, and it flips all three layers at
   once through `SessionSpec.Mode`: `--disallowedTools` drops to `NotebookEdit` alone, Codex's
   `workspace-write` sandbox, and `agenttools.WriteSet` in the openai loop. `provider.FixPolicy`
@@ -50,8 +58,14 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   read-only ones: Sirdar commits and pushes, never the agent). Where a write may land is
   checked on every call, in the policy and again inside `agenttools`, through one shared
   helper — `provider.ResolveWithin` confines it to the root through symlinks and
-  `provider.ReservedWrite` refuses `.git/` at any depth and the workspace `.sirdar/`. Sirdar's
-  own commit passes `--no-verify`. The human gate is the triage note's `status`, and a
+  `provider.ReservedWrite` refuses `.git/` at any depth, the workspace `.sirdar/`, and the
+  repository's `core.hooksPath` when it sets one (read once per run by `provider.HooksPath`,
+  carried on `PermissionPolicy.ExtraReserved` and `agenttools.Options.ExtraReserved`). Every
+  segment comparison folds case: macOS is the dogfood machine and `.GIT/hooks/pre-commit` is
+  the same file as `.git/hooks/pre-commit` there. `provider.MatchCommand` additionally refuses
+  git's `--output`, `--output-directory`, `-o`, `--git-dir`, `--work-tree`, `-C`, `-c` and
+  `--exec-path`, and `git config`, on every git invocation whatever pattern matched it.
+  Sirdar's own commit and push both pass `--no-verify`. The human gate is the triage note's `status`, and a
   non-empty `deviationFromNote` in the agent's report stops the push until
   `--accept-deviation`, which on a rerun pushes the commit that was reviewed rather than
   starting a second session.

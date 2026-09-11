@@ -156,3 +156,23 @@ And nothing downstream mistakes the replay for the key's newest triage. `sirdar 
 `sirdar fix` both start from the newest completed triage note for a key, and they skip eval
 runs when they look — so replaying `OMNI-1234` today cannot put tomorrow's fix to work on a
 bundle captured six months ago.
+
+## What an eval and a fix are each trusted with
+
+A replay is read-only in the same sense every triage run is: the session gets the read tools,
+no editing tool at all, and a shell allow-list (`permissions.bash`) matched segment by segment.
+Scoring a replay changes nothing in the workspace except the report under `.sirdar/eval/`.
+
+`sirdar fix` is the exception, and it is worth being plain about the size of it. A fix session
+may edit files — confined to the workspace's source, never `.git/`, never `.sirdar/`, never the
+directory `core.hooksPath` names — and its shell allow-list (`permissions.fixBash`) defaults to
+the read-only git commands plus `make *`, `go build*`, `go test*`, `npm test*`, `dotnet build*`
+and `dotnet test*`.
+
+Those build and test entries execute the workspace's own build system, which executes whatever
+the repository tells it to: a Makefile target, a `go:generate` directive, an npm `pretest`
+script. Sirdar does not read any of that and no allow-list can. A fix has to build and test
+what it changed or its report is worth nothing, so fix mode trusts the workspace's build system
+the way your own shell does when you check out a branch and type `make test`. The gate on what
+the session actually did is the pull request it opens, reviewed like any other change. A
+workspace that cannot extend that trust should run `sirdar fix` in a container.

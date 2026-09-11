@@ -382,12 +382,39 @@ permissions:
     - "pnpm test*"
 ```
 
+Some git flags are refused whatever pattern you write. `--output`, `--output-directory`, `-o`,
+`--git-dir`, `--work-tree`, `-C`, `-c` and `--exec-path`, and the `config` subcommand, are
+denied on every git invocation, because each of them moves where git reads its configuration,
+writes its output, or runs code from: `git -c core.hooksPath=/tmp/h status` installs a hook
+directory for every git command that follows, and `git diff --output=~/.zshrc` writes a file
+through a pattern that was only meant to read one. The cost is a handful of read-only uses
+that share a letter — `git grep -c` counts matches and is refused with them.
+
 What the list does not do is decide whether the session may edit files: a fix session gets
 `Edit`, `Write` and `MultiEdit` regardless, and a triage session never does. Where those may
 write is a separate rule, and not a configurable one — every edit is resolved through symlinks
 and refused unless it lands inside the workspace root, and refused again for anything under a
-`.git/` directory at any depth or under the workspace's own `.sirdar/`. A fix changes source,
-not hooks and not Sirdar's records.
+`.git/` directory at any depth, under the workspace's own `.sirdar/`, or under the directory
+this repository sets `core.hooksPath` to, which Sirdar reads once at the start of the session.
+The comparison folds case, so `.GIT/hooks/pre-commit` is the same refusal as
+`.git/hooks/pre-commit` on the case-insensitive filesystem macOS and Windows ship. A fix
+changes source, not hooks and not Sirdar's records.
+
+### What the allow-list does not confine
+
+`make *`, `go test*`, `npm test*` and `dotnet test*` run the workspace's own build system, and
+a build system runs whatever the repository tells it to: a Makefile target, a `go:generate`
+directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of that, and no
+allow-list can — approving `make test` is approving the Makefile on the branch the session is
+standing on.
+
+That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
+what it changed or its report is worthless, and the trust it asks for is the trust you already
+extend when you check out a branch and type `make test` in your own shell. Sirdar narrows what
+an ordinary mistake or an ordinary prompt injection reaches; it is not a sandbox around a build.
+The review gate for what the session actually did is the pull request, which is the same gate
+every other change in the repository goes through. If a workspace needs more than that, run
+`sirdar fix` in a container.
 
 ## `fix.prIncludesComplaint`
 

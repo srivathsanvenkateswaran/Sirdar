@@ -167,7 +167,11 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}
 	s.messages = append(s.messages, Message{Role: "user", Content: UserMessage(spec.Prompt, spec.Images)})
 
-	toolOpts := agenttools.Options{Root: spec.Cwd, BashAllow: policy.BashAllow}
+	toolOpts := agenttools.Options{
+		Root:          spec.Cwd,
+		BashAllow:     policy.BashAllow,
+		ExtraReserved: policy.ExtraReserved,
+	}
 	locals := agenttools.ReadOnlySet(toolOpts)
 	// A fix session is the only one that may change the workspace, so the
 	// two writing tools exist only for it. A triage session is not offered

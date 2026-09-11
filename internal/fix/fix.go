@@ -158,6 +158,16 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	res.Base, res.Branch = base, branch
 	fmt.Fprintf(stderr, "[%s] branch %s from origin/%s\n", key, branch, base)
 
+	// The third confinement layer, and the only one that does not depend on
+	// a provider honouring a policy: what .sirdar/ and the hooks directory
+	// look like before the session, to compare with what they look like
+	// after it. Taken after the branch is cut, because checking out a
+	// branch is itself allowed to change a checked-in hooks directory.
+	before, err := takeSnapshot(ctx, cfg.Root)
+	if err != nil {
+		return res, fmt.Errorf("fix: the reserved files could not be read before the session, so the run cannot be checked afterwards: %w", err)
+	}
+
 	text := prompt.Fix(prompt.FixInput{
 		Key:        key,
 		Branch:     branch,
@@ -180,6 +190,22 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	if o.DryRun {
 		return res, nil
 	}
+
+	// Before anything reads the report and before the first git command:
+	// a hook the session installed is only code the machine runs at the
+	// next commit or push, and this is the last moment before both.
+	after, snapErr := takeSnapshot(ctx, cfg.Root)
+	if snapErr != nil {
+		markRunFailed(cfg.Root, out.State.RunID, "the reserved files could not be re-read after the session", stderr, key)
+		return res, fmt.Errorf("fix: the reserved files could not be re-read after the session, so the run cannot be trusted; nothing was committed or pushed: %w", snapErr)
+	}
+	if changed := diffSnapshots(before, after); len(changed) > 0 {
+		err := tamperError(changed)
+		markRunFailed(cfg.Root, out.State.RunID, "the session changed reserved files", stderr, key)
+		res.State.Status, res.State.Reason = store.StatusFailed, "the session changed reserved files"
+		return res, err
+	}
+
 	if out.State.Status != store.StatusCompleted {
 		return res, fmt.Errorf("fix: the session ended %s: %s", out.State.Status, out.State.Reason)
 	}
@@ -228,8 +254,16 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 // the two copies of the triage note. Both the ordinary flow and the
 // --accept-deviation rerun end here, so a commit reaches the remote the
 // same way whichever of them made it.
+//
+// The push is made with --no-verify: see the comment on the call.
 func publish(ctx context.Context, g git, cfg *config.Config, key string, tn triageNote, o Options, res *Result, stderr io.Writer) error {
-	if err := g.run(ctx, "push", "-u", "origin", res.Branch); err != nil {
+	// --no-verify for the same reason the commit carries it: a pre-push
+	// hook is code, and this push happens minutes after an agent session
+	// had write access to the tree. A repository that keeps its hooks in
+	// core.hooksPath rather than .git/hooks keeps them in an ordinary
+	// source directory, which is one edit away from being the shell the
+	// session was refused everywhere else.
+	if err := g.run(ctx, "push", "--no-verify", "-u", "origin", res.Branch); err != nil {
 		return err
 	}
 	res.Pushed = true

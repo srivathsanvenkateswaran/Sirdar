@@ -69,6 +69,12 @@ type Options struct {
 	BashAllow      []string
 	HTTP           *http.Client
 	MaxOutputBytes int
+
+	// ExtraReserved names directories the writing tools refuse on top of
+	// .git and .sirdar: the repository's core.hooksPath when it sets one.
+	// It comes from the session's permission policy, so the tool and the
+	// policy in front of it reserve the same paths.
+	ExtraReserved []string
 }
 
 // DefaultMaxOutputBytes is the per-call output cap when Options leaves
@@ -165,17 +171,19 @@ func (o Options) resolve(p string) (string, error) {
 }
 
 // resolveWrite is resolve for the tools that change a file: confined to the
-// workspace, and then refused for the two directories inside it a fix has
-// no business writing to. A file under .git/ is not source — a pre-commit
-// hook written there is code the commit Sirdar makes would execute — and
-// .sirdar/ holds the run records, the register and the configuration whose
-// permission lists decide what this session may do at all.
+// workspace, and then refused for the directories inside it a fix has no
+// business writing to. A file under .git/ is not source — a pre-commit hook
+// written there is code the commit Sirdar makes would execute — .sirdar/
+// holds the run records, the register and the configuration whose
+// permission lists decide what this session may do at all, and
+// ExtraReserved carries the repository's own core.hooksPath, which is the
+// same hook problem wearing an ordinary directory name.
 func (o Options) resolveWrite(p string) (string, error) {
 	abs, err := o.resolve(p)
 	if err != nil {
 		return "", err
 	}
-	if reserved := provider.ReservedWrite(o.Root, abs); reserved != "" {
+	if reserved := provider.ReservedWrite(o.Root, abs, o.ExtraReserved); reserved != "" {
 		return "", fmt.Errorf("%s is inside %s/, which a fix never writes to", p, reserved)
 	}
 	return abs, nil

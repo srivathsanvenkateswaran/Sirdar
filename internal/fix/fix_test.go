@@ -230,10 +230,11 @@ func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (pr
 }
 
 // editCSV is the change the stub agent makes. It also drops a file under
-// .sirdar/, which a real session does by existing: that file must not reach
-// the commit.
+// .sirdar/runs/, which a real session does by existing: that file must not
+// reach the commit. It goes under runs/ and not beside it because a write
+// anywhere else in .sirdar/ is what the guard stops the run for.
 func editCSV(root string) error {
-	if err := os.WriteFile(filepath.Join(root, ".sirdar", "scratch.txt"), []byte("run notes\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(root, ".sirdar", "runs", "scratch.txt"), []byte("run notes\n"), 0o644); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(root, "export", "csv.go"),
@@ -344,7 +345,7 @@ func TestFixCommitsPushesAndRecords(t *testing.T) {
 	if strings.Contains(files, ".sirdar") {
 		t.Errorf("the run directory was committed: %q", files)
 	}
-	if _, err := os.Stat(filepath.Join(w.root, ".sirdar", "scratch.txt")); err != nil {
+	if _, err := os.Stat(filepath.Join(w.root, ".sirdar", "runs", "scratch.txt")); err != nil {
 		t.Fatalf("the fixture file under .sirdar is missing: %v", err)
 	}
 
@@ -776,7 +777,7 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 	}
 	// The first session's scratch file under .sirdar/ is not part of the
 	// repository; the ordinary flow refuses a dirty tree, so clear it.
-	if err := os.Remove(filepath.Join(w.root, ".sirdar", "scratch.txt")); err != nil {
+	if err := os.Remove(filepath.Join(w.root, ".sirdar", "runs", "scratch.txt")); err != nil {
 		t.Fatal(err)
 	}
 
@@ -863,5 +864,164 @@ func TestPullRequestTextKeepsTheComplaintOut(t *testing.T) {
 	_, withIt := pullRequestText("OMNI-1", tn, rep, true)
 	if !strings.Contains(withIt, "Ahmed") {
 		t.Errorf("fix.prIncludesComplaint did not include the complaint:\n%s", withIt)
+	}
+}
+
+// --- round 2 review: hooks paths and the reserved-file guard -----------
+
+// writeHook installs an executable hook that leaves a marker and fails.
+func writeHook(t *testing.T, path, marker string) {
+	t.Helper()
+	mustWrite(t, path, "#!/bin/sh\ntouch \"$(git rev-parse --show-toplevel)/"+marker+"\"\nexit 1\n")
+	if err := os.Chmod(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// TestThePushDoesNotRunRepositoryHooks: --no-verify on the commit covered
+// pre-commit and left pre-push, which runs minutes later on the same tree
+// and with the same shell. A repository using husky has both.
+func TestThePushDoesNotRunRepositoryHooks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the hook is a shell script")
+	}
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	writeHook(t, filepath.Join(w.root, ".git", "hooks", "pre-push"), "push-hook-ran")
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Pushed {
+		t.Fatalf("the pre-push hook stopped the push: %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(w.root, "push-hook-ran")); err == nil {
+		t.Error("the repository's pre-push hook was executed by Sirdar's own push")
+	}
+}
+
+// editThen returns a stub edit that makes the ordinary source change and
+// then writes one more file, the way a provider that ignores the
+// permission policy would.
+func editThen(path, body string) func(root string) error {
+	return func(root string) error {
+		if err := editCSV(root); err != nil {
+			return err
+		}
+		full := path
+		if !filepath.IsAbs(full) {
+			full = filepath.Join(root, filepath.FromSlash(path))
+		}
+		if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(full, []byte(body), 0o755)
+	}
+}
+
+// TestTheGuardStopsARunThatTouchedAReservedFile is the layer that does not
+// depend on a provider honouring anything: the policy and the tool both
+// refuse these paths, and this catches the write anyway — which is the
+// case that matters for Codex, whose sandbox Sirdar configures but does
+// not implement, and for any ACP agent.
+func TestTheGuardStopsARunThatTouchedAReservedFile(t *testing.T) {
+	cases := []struct {
+		name   string
+		path   string
+		hooks  string // core.hooksPath to configure, if any
+		expect string
+	}{
+		{name: "a git hook", path: ".git/hooks/pre-commit", expect: ".git/hooks/pre-commit"},
+		{name: "the workspace configuration", path: ".sirdar/config.yaml", expect: ".sirdar/config.yaml"},
+		{name: "a playbook", path: ".sirdar/playbooks/50-code.md", expect: ".sirdar/playbooks/50-code.md"},
+		{name: "the configured hooks path", path: ".githooks/pre-commit", hooks: ".githooks", expect: ".githooks/pre-commit"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			w := newWorkspace(t, "triaged")
+			noGH(t)
+			if c.hooks != "" {
+				run(t, w.root, "git", "config", "core.hooksPath", c.hooks)
+			}
+
+			res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editThen(c.path, "#!/bin/sh\nowned\n"), t: t}), "OMNI-1", Options{})
+			if err == nil {
+				t.Fatalf("Run accepted a session that wrote %s: %+v", c.path, res)
+			}
+			for _, want := range []string{c.expect, "nothing was committed and nothing was pushed"} {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("the refusal does not mention %q:\n%v", want, err)
+				}
+			}
+			if res.Commit != "" || res.Pushed {
+				t.Errorf("the run committed or pushed anyway: %+v", res)
+			}
+			// Nothing was restored, and nothing reached the remote.
+			if head := run(t, w.root, "git", "log", "-1", "--pretty=%s"); head != "init" {
+				t.Errorf("a commit was made: %q", head)
+			}
+			if out := run(t, w.origin, "git", "branch", "--list"); strings.Contains(out, "fix-omni-1") {
+				t.Errorf("the fix branch reached the remote: %q", out)
+			}
+			// The run is recorded as failed rather than as the completed
+			// session it was until the guard ran.
+			if res.RunID != "" {
+				_, state, err := store.Open(w.root, res.RunID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if state.Status != store.StatusFailed {
+					t.Errorf("the run state is %s, want failed", state.Status)
+				}
+			}
+		})
+	}
+}
+
+// TestTheGuardLetsAnOrdinaryFixThrough is the other half: the run writes
+// its own records under .sirdar/runs/ while the session is going on, and
+// none of that is tampering.
+func TestTheGuardLetsAnOrdinaryFixThrough(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	run(t, w.root, "git", "config", "core.hooksPath", ".githooks")
+	mustWrite(t, filepath.Join(w.root, ".githooks", "pre-commit"), "#!/bin/sh\nexit 0\n")
+	run(t, w.root, "git", "add", "-A")
+	run(t, w.root, "git", "commit", "-q", "-m", "hooks")
+	run(t, w.root, "git", "push", "-q", "origin", "main")
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Commit == "" || !res.Pushed {
+		t.Fatalf("an ordinary fix was stopped: %+v", res)
+	}
+}
+
+// TestTheFixSessionReservesTheConfiguredHooksPath: the session is told
+// about the directory as well as being watched over it, so the policy and
+// the tools refuse the write before the guard has to notice it.
+func TestTheFixSessionReservesTheConfiguredHooksPath(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	run(t, w.root, "git", "config", "core.hooksPath", ".githooks")
+
+	specs := make(chan provider.SessionSpec, 1)
+	if _, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, specs: specs, t: t}), "OMNI-1", Options{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	spec := <-specs
+	if spec.Policy == nil {
+		t.Fatal("the fix session started with no policy")
+	}
+	want := filepath.Join(w.root, ".githooks")
+	if len(spec.Policy.ExtraReserved) != 1 || spec.Policy.ExtraReserved[0] != want {
+		t.Fatalf("the session reserved %v, want [%s]", spec.Policy.ExtraReserved, want)
+	}
+	in, _ := json.Marshal(map[string]string{"file_path": ".githooks/pre-commit"})
+	if d := spec.Policy.Decide("Write", in); d.Allow {
+		t.Error("the session's policy allowed a write to the configured hooks path")
 	}
 }

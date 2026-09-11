@@ -153,9 +153,28 @@ the tracker or the helpdesk, in any mode.
 (see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
 `MultiEdit`; everything else is refused exactly as before. Being allowed to edit is not being
 allowed to edit anything: every write's path is resolved through symlinks and refused unless it
-lands inside the workspace root, and refused again under any `.git/` directory or the
-workspace's own `.sirdar/`. Sirdar's own commit passes `--no-verify`, so a hook written during
-the session is not executed by it.
+lands inside the workspace root, and refused again under any `.git/` directory, the workspace's
+own `.sirdar/`, or the directory this repository sets `core.hooksPath` to — husky, lefthook or
+a checked-in `.githooks/` — which Sirdar reads once when the session starts. Those comparisons
+fold case, so `.GIT/hooks/pre-commit` is refused on macOS's case-insensitive filesystem as
+surely as `.git/hooks/pre-commit` is on Linux. Sirdar's own commit and push both pass
+`--no-verify`, so a hook written during the session is not executed by either.
+
+How much of that a given provider enforces depends on the provider, so the third layer does not
+depend on any of them:
+
+| Provider | What confines the session |
+| --- | --- |
+| `claude`, `openai` | The permission policy judges every editing call, the tools re-check the path themselves, and the snapshot check runs afterwards |
+| `codex` | Codex's own `workspace-write` sandbox confines the session; Sirdar's policy is not consulted, and the snapshot check runs afterwards |
+| `acp` | Whatever the agent implements, plus the snapshot check |
+
+**The snapshot check** is that third layer. Before the session starts, `sirdar fix` takes a
+sha256 of every file under `.sirdar/` (bar its own run records) and under the directory git runs
+this repository's hooks from. The moment the session ends — before the first git command — it
+takes them again. Any difference fails the run and says which files changed: nothing is
+restored, nothing is committed, and nothing is pushed, which is the half that matters, because
+a hook only becomes code the machine runs at the next commit or push.
 
 ## Fix flow
 

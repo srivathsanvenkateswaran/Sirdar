@@ -12,7 +12,12 @@ import (
 // at dir.
 func writeTools(t *testing.T, dir string) (Tool, Tool) {
 	t.Helper()
-	set := WriteSet(Options{Root: dir})
+	return writeToolsReserving(t, dir, nil)
+}
+
+func writeToolsReserving(t *testing.T, dir string, extra []string) (Tool, Tool) {
+	t.Helper()
+	set := WriteSet(Options{Root: dir, ExtraReserved: extra})
 	if len(set) != 2 {
 		t.Fatalf("WriteSet returned %d tools, want 2", len(set))
 	}
@@ -253,5 +258,80 @@ func TestReadOnlySetHasNoWrites(t *testing.T) {
 		case "write_file", "edit_file":
 			t.Errorf("%s is in the read-only set", tool.Spec().Name)
 		}
+	}
+}
+
+// TestWriteToolsFoldCaseForReservedDirectories is the same rule as the
+// policy's, checked in the tool: on the case-insensitive filesystem macOS
+// and Windows ship, "<root>/.GIT/hooks/pre-commit" is the same file as
+// "<root>/.git/hooks/pre-commit", and the segment comparison has to see
+// that. The directories are really created and the hook really written, so
+// a filesystem that folds case sends the write at the real hook.
+func TestWriteToolsFoldCaseForReservedDirectories(t *testing.T) {
+	dir := t.TempDir()
+	hook := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("original\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, ".sirdar"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".sirdar", "config.yaml"), []byte("original\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	write, edit := writeTools(t, dir)
+
+	for _, path := range []string{
+		".GIT/hooks/pre-commit",
+		".Git/hooks/pre-commit",
+		".giT/config",
+		filepath.Join(dir, ".GIT", "hooks", "pre-push"),
+		".SIRDAR/config.yaml",
+		".Sirdar/config.yaml",
+	} {
+		if _, err := callJSON(t, write, map[string]string{"path": path, "content": "#!/bin/sh\nowned\n"}); err == nil {
+			t.Errorf("write_file accepted %q", path)
+		}
+		if _, err := callJSON(t, edit, map[string]string{"path": path, "old": "original", "new": "owned"}); err == nil {
+			t.Errorf("edit_file accepted %q", path)
+		}
+	}
+	if body, err := os.ReadFile(hook); err != nil || string(body) != "original\n" {
+		t.Fatalf("the git hook was modified: %q (%v)", body, err)
+	}
+}
+
+// TestWriteToolsRefuseTheRepositoryHooksPath: the per-run reservation
+// reaches the tool as well as the policy, so a session that talks to the
+// tool directly meets the same refusal.
+func TestWriteToolsRefuseTheRepositoryHooksPath(t *testing.T) {
+	dir := t.TempDir()
+	hook := filepath.Join(dir, ".husky", "pre-commit")
+	if err := os.MkdirAll(filepath.Dir(hook), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hook, []byte("original\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	write, edit := writeToolsReserving(t, dir, []string{filepath.Join(dir, ".husky")})
+
+	for _, path := range []string{".husky/pre-commit", ".HUSKY/pre-commit", hook, ".husky/_/husky.sh"} {
+		if _, err := callJSON(t, write, map[string]string{"path": path, "content": "owned\n"}); err == nil {
+			t.Errorf("write_file accepted %q", path)
+		}
+		if _, err := callJSON(t, edit, map[string]string{"path": path, "old": "original", "new": "owned"}); err == nil {
+			t.Errorf("edit_file accepted %q", path)
+		}
+	}
+	if body, err := os.ReadFile(hook); err != nil || string(body) != "original\n" {
+		t.Fatalf("the hook was modified: %q (%v)", body, err)
+	}
+	// The same tool set without the reservation treats it as source.
+	plain, _ := writeTools(t, dir)
+	if _, err := callJSON(t, plain, map[string]string{"path": ".husky/pre-commit", "content": "x\n"}); err != nil {
+		t.Errorf("a run that reserved nothing refused .husky: %v", err)
 	}
 }
