@@ -57,6 +57,7 @@ nav:
   - Webhooks: webhooks.md
   - Notifications: notifications.md
   - Evaluation: eval.md
+  - Fix flow: fix.md
   - Release: release.md
   - Architecture: architecture.md
   - Research:
