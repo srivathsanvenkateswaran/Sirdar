@@ -149,6 +149,16 @@ and redirection are refused outright — bar `2>&1` and `2>/dev/null`, which wri
 so is an argument that points outside the workspace root — a guard rail rather than a sandbox, described in `docs/config.md`. Sirdar never writes to
 the tracker or the helpdesk, in any mode.
 
+Fetching a URL is judged the same way, by destination rather than by tool name:
+`permissions.fetch` lists the hosts a session may reach — `docs.example.com`, `*.example.com`
+for its subdomains, `http://localhost:3000` for a service you run yourself — and it is empty by
+default, so a workspace that has not said where a run may fetch from fetches nowhere. One list
+covers Claude, qwen, Sirdar's own agent loop and an ACP agent's fetch requests; https is
+required outside a loopback entry, and userinfo, IP literals and private addresses are refused
+whatever the list says. It exists because a triage reads attacker-supplied text all day: without
+it, an instruction hidden in a ticket comment could pick the destination and take the run's
+context with it.
+
 `sirdar fix` is the one session that may change files, and only after a human has read the note
 (see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
 `MultiEdit`; everything else is refused exactly as before. Being allowed to edit is not being

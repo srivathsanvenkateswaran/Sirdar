@@ -1264,17 +1264,18 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 			Input: toolInput(u),
 			Raw:   raw,
 		})
-		if u.Status == "completed" && writeKinds[call.kind] && !call.asked {
+		if u.Status == "completed" && authoritativeKinds[call.kind] && !call.asked {
 			// ACP leaves it to the agent to decide what is worth asking
-			// about, so a completed write that never produced a
-			// session/request_permission is the harness finding out after
-			// the fact. It cannot be undone; it can be made impossible to
-			// miss.
+			// about, so a completed write — or a completed fetch, whose
+			// destination permissions.fetch exists to judge — that never
+			// produced a session/request_permission is the harness finding
+			// out after the fact. It cannot be undone; it can be made
+			// impossible to miss.
 			s.emit(provider.Event{
 				Kind: provider.EvError,
 				Text: fmt.Sprintf("acp: the agent completed a %q tool call (%s) without asking permission; "+
 					"this agent does not route that kind through session/request_permission, "+
-					"so Sirdar's read-only policy could not be applied to it", call.kind, call.name),
+					"so Sirdar's permission policy could not be applied to it", call.kind, call.name),
 				Tool:  call.name,
 				Input: toolInput(u),
 				Raw:   raw,
@@ -1614,26 +1615,34 @@ var kindTools = map[string]string{
 	"think":   "TodoWrite",
 }
 
-// writeKinds are the kinds whose ACP kind is authoritative and cannot be
-// talked out of by a title. The title is agent-authored text, so an agent
-// that titles an edit "mcp__editor__apply_diff" would otherwise route a
-// write through permissions.mcp, where a read-shaped name is allowed by
-// default — a self-chosen string deciding whether a write is permitted.
-// These four kinds are judged on the kind alone.
-var writeKinds = map[string]bool{
-	"edit": true, "delete": true, "move": true, "execute": true,
+// authoritativeKinds are the kinds whose ACP kind decides the name the
+// policy judges, and which cannot be talked out of by a title. The title is
+// agent-authored text, so an agent that titles an edit
+// "mcp__editor__apply_diff" would otherwise route a write through
+// permissions.mcp, where a read-shaped name is allowed by default — a
+// self-chosen string deciding whether a write is permitted.
+//
+// "fetch" is on the list for the same reason as the four writes. A fetch
+// titled "mcp__browser__get_page" would otherwise be judged by
+// permissions.mcp, whose heuristic reads "get" as a read and allows it,
+// and the destination would never be looked at. Under the kind it goes to
+// WebFetch and through permissions.fetch, which is the whole point of
+// having the list.
+var authoritativeKinds = map[string]bool{
+	"edit": true, "delete": true, "move": true, "execute": true, "fetch": true,
 }
 
 // policyTool is the name the permission policy judges.
 //
-// A kind that describes a change (writeKinds) wins outright. Otherwise an
-// MCP tool names itself in full and is passed through, so mcp__ rules
-// apply; then the kind's Sirdar equivalent; and a kind with no equivalent
-// (switch_mode, other, or none at all) falls back to the agent's title,
-// which the policy denies — the read-only posture applied to a tool call
-// whose nature the protocol did not state.
+// A kind whose meaning is settled by the protocol (authoritativeKinds: the
+// four writes and fetch) wins outright. Otherwise an MCP tool names itself
+// in full and is passed through, so mcp__ rules apply; then the kind's
+// Sirdar equivalent; and a kind with no equivalent (switch_mode, other, or
+// none at all) falls back to the agent's title, which the policy denies —
+// the read-only posture applied to a tool call whose nature the protocol
+// did not state.
 func policyTool(kind, title string) string {
-	if writeKinds[kind] {
+	if authoritativeKinds[kind] {
 		return kindTools[kind]
 	}
 	if strings.HasPrefix(title, "mcp__") {

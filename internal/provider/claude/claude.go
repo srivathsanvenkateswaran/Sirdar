@@ -37,6 +37,10 @@ const (
 	// but nothing in the flow edits a notebook, so NotebookEdit is refused
 	// by the CLI as well as by the policy.
 	fixDisallowedTools = "NotebookEdit"
+	// fetchTool is the name Claude Code gives the tool that retrieves a
+	// URL. It joins the refusal list when the workspace named no
+	// permissions.fetch hosts — see disallowed.
+	fetchTool = "WebFetch"
 	// emptyMCPConfig is an inline MCP configuration that declares no
 	// servers. Passed with --strict-mcp-config it is how a session is
 	// started with no MCP tools at all.
@@ -98,10 +102,37 @@ func args(spec provider.SessionSpec) []string {
 	// which resolves the path and refuses anything outside the workspace
 	// root or inside .git/ or .sirdar/ — the CLI's Edit and Write take an
 	// absolute path, so the tool name on its own approves nothing.
+	return append(out, "--disallowedTools", disallowed(spec))
+}
+
+// disallowed builds the --disallowedTools value for a session.
+//
+// WebFetch is on it whenever permissions.fetch is empty, and that is not
+// belt-and-braces the way the editing tools are: it is the only thing that
+// holds. A user-level `WebFetch(domain:…)` rule in the operator's own
+// ~/.claude/settings.json is an allow rule the CLI applies itself, and a
+// tool call the CLI has already allowed never reaches
+// --permission-prompt-tool, so Sirdar's policy is never asked about it.
+// --disallowedTools is a deny rule, and a deny rule wins over an allow
+// rule, so naming WebFetch there is what makes "no permissions.fetch
+// entries" mean no fetches rather than "whatever the operator once
+// allowed globally".
+//
+// With entries configured the flag is dropped, because keeping it would
+// refuse the hosts the workspace just allowed — and the residual comes
+// back with it: a user-level WebFetch(domain:evil.example) rule then
+// approves that host inside the CLI without Sirdar seeing the call. There
+// is no flag that turns off the user settings' allow rules; the
+// workspace's answer is to keep such a rule out of them.
+func disallowed(spec provider.SessionSpec) string {
+	list := disallowedTools
 	if spec.Mode.IsFix() {
-		return append(out, "--disallowedTools", fixDisallowedTools)
+		list = fixDisallowedTools
 	}
-	return append(out, "--disallowedTools", disallowedTools)
+	if spec.Policy == nil || len(spec.Policy.FetchAllow) == 0 {
+		list += "," + fetchTool
+	}
+	return list
 }
 
 // gatewayEnvVars are the variables that can route the child process at a

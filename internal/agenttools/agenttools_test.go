@@ -6,12 +6,15 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 // toolByName finds one tool in a set, failing the test when it is missing.
@@ -448,6 +451,22 @@ func allowLoopback(t *testing.T) {
 	t.Cleanup(func() { allowPrivateAddrs = previous })
 }
 
+// fetchAllow turns httptest server URLs into the permissions.fetch entries
+// a workspace would write for a service on this machine. Every web_fetch
+// test necessarily talks to 127.0.0.1, which the allow-list refuses unless
+// it is named — TestWebFetchRefusesPrivateAddresses covers the unnamed case.
+func fetchAllow(urls ...string) []string {
+	out := make([]string, 0, len(urls))
+	for _, raw := range urls {
+		u, err := url.Parse(raw)
+		if err != nil {
+			continue
+		}
+		out = append(out, "http://"+u.Host)
+	}
+	return out
+}
+
 func TestWebFetchRefusesPrivateAddresses(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -471,13 +490,13 @@ func TestWebFetchRefusesPrivateAddresses(t *testing.T) {
 		t.Fatalf("metadata fetch: err = %v", err)
 	}
 	for _, addr := range []string{"10.0.0.5", "192.168.1.1", "172.16.0.9", "127.0.0.1", "169.254.169.254", "100.64.0.1", "::1", "fd00::1", "fe80::1", "0.0.0.0"} {
-		if !blockedIP(net.ParseIP(addr)) {
-			t.Errorf("blockedIP(%s) = false, want true", addr)
+		if !provider.BlockedIP(net.ParseIP(addr)) {
+			t.Errorf("BlockedIP(%s) = false, want true", addr)
 		}
 	}
 	for _, addr := range []string{"93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946", "8.8.8.8"} {
-		if blockedIP(net.ParseIP(addr)) {
-			t.Errorf("blockedIP(%s) = true, want false", addr)
+		if provider.BlockedIP(net.ParseIP(addr)) {
+			t.Errorf("BlockedIP(%s) = true, want false", addr)
 		}
 	}
 }
@@ -503,7 +522,9 @@ func TestWebFetchAcceptsTextAndJSON(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	fetch := toolByName(t, ReadOnlySet(Options{Root: t.TempDir(), HTTP: srv.Client()}), "web_fetch")
+	fetch := toolByName(t, ReadOnlySet(Options{
+		Root: t.TempDir(), HTTP: srv.Client(), FetchAllow: fetchAllow(srv.URL),
+	}), "web_fetch")
 
 	if got := mustCall(t, fetch, `{"url":"`+srv.URL+`/json"}`); got != `{"status":"ok"}` {
 		t.Fatalf("web_fetch json = %q", got)
@@ -531,6 +552,46 @@ func TestWebFetchAcceptsTextAndJSON(t *testing.T) {
 	}
 }
 
+// TestWebFetchEnforcesTheFetchAllowList is the inner gate: the permission
+// policy in front of the loop judges the same URL, and the tool judges it
+// again, so a host the workspace never named cannot be reached by calling
+// the tool directly.
+func TestWebFetchEnforcesTheFetchAllowList(t *testing.T) {
+	allowLoopback(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		_, _ = w.Write([]byte("ticket contents"))
+	}))
+	defer srv.Close()
+
+	// The workspace named a different service on this machine, not this one.
+	unlisted := toolByName(t, ReadOnlySet(Options{
+		Root: t.TempDir(), HTTP: srv.Client(), FetchAllow: []string{"http://localhost:1"},
+	}), "web_fetch")
+	out, err := call(t, unlisted, `{"url":"`+srv.URL+`/"}`)
+	if err == nil || !strings.Contains(err.Error(), "permissions.fetch") {
+		t.Fatalf("a host outside permissions.fetch: out = %q, err = %v", out, err)
+	}
+	if strings.Contains(out, "ticket contents") {
+		t.Fatalf("a refused fetch must return nothing: %q", out)
+	}
+
+	// With no list at all, nothing is fetchable.
+	none := toolByName(t, ReadOnlySet(Options{Root: t.TempDir(), HTTP: srv.Client()}), "web_fetch")
+	if _, err := call(t, none, `{"url":"https://docs.example.com/"}`); err == nil ||
+		!strings.Contains(err.Error(), "permissions.fetch is empty") {
+		t.Fatalf("empty permissions.fetch: err = %v", err)
+	}
+
+	// And the same URL goes through once the workspace names it.
+	listed := toolByName(t, ReadOnlySet(Options{
+		Root: t.TempDir(), HTTP: srv.Client(), FetchAllow: fetchAllow(srv.URL),
+	}), "web_fetch")
+	if got := mustCall(t, listed, `{"url":"`+srv.URL+`/"}`); got != "ticket contents" {
+		t.Fatalf("an allow-listed host: %q", got)
+	}
+}
+
 func TestWebFetchCapsBodyAtOneMiB(t *testing.T) {
 	allowLoopback(t)
 	body := strings.Repeat("0123456789abcdef", (maxFetchBytes/16)+4096)
@@ -543,6 +604,7 @@ func TestWebFetchCapsBodyAtOneMiB(t *testing.T) {
 	fetch := toolByName(t, ReadOnlySet(Options{
 		Root:           t.TempDir(),
 		HTTP:           srv.Client(),
+		FetchAllow:     fetchAllow(srv.URL),
 		MaxOutputBytes: 4 << 20,
 	}), "web_fetch")
 
@@ -578,7 +640,9 @@ func TestWebFetchRefusesOffHostRedirect(t *testing.T) {
 	}))
 	defer origin.Close()
 
-	fetch := toolByName(t, ReadOnlySet(Options{Root: t.TempDir(), HTTP: origin.Client()}), "web_fetch")
+	fetch := toolByName(t, ReadOnlySet(Options{
+		Root: t.TempDir(), HTTP: origin.Client(), FetchAllow: fetchAllow(origin.URL),
+	}), "web_fetch")
 
 	out, err := call(t, fetch, `{"url":"`+origin.URL+`/away"}`)
 	if err == nil || !strings.Contains(err.Error(), "refusing redirect off the original host") {

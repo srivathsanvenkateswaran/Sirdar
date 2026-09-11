@@ -188,6 +188,20 @@ permissions:
   mcp: []
     # - "mcp__grafana__query_*"
     # - "mcp__grafana__list_*"
+  # Hosts a session may fetch a URL from — Claude's WebFetch, the openai
+  # loop's and qwen's web_fetch, an ACP fetch request. While this list is
+  # empty nothing is fetchable, on any provider, and each refusal names the
+  # host it turned down. "docs.example.com" is that host exactly;
+  # "*.example.com" is its subdomains and not the bare domain; a service on
+  # this machine is named as "http://localhost:3000", which is the only way
+  # http and the only way a loopback address gets through.
+  #
+  # Keep it to hosts a triage genuinely reads. A fetch the session chooses
+  # the destination of is how text a read tool pulled in — a ticket
+  # comment, a page, a file — gets to send what the run knows somewhere.
+  fetch: []
+    # - "docs.microsoft.com"
+    # - "*.readthedocs.io"
 mcp:
   # Start the session against <workspace>/.mcp.json and nothing else, so the
   # operator's own global connectors are not loaded into a triage run. With

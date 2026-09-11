@@ -231,9 +231,10 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Model:        p.state.Model,
 		OutputSchema: schemaFor(p.kind),
 		Policy: &provider.PermissionPolicy{
-			BashAllow: cfg.Permissions.Bash,
-			MCPAllow:  cfg.Permissions.MCP,
-			Root:      cfg.Root,
+			BashAllow:  cfg.Permissions.Bash,
+			MCPAllow:   cfg.Permissions.MCP,
+			FetchAllow: cfg.Permissions.Fetch,
+			Root:       cfg.Root,
 		},
 		Mode: provider.ModeTriage,
 		// mcp.workspaceOnly travels as these two fields for every
@@ -265,6 +266,10 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// not cover. It is read once, here, and reserved for this session.
 		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
 			extraReserved(cfg.Root))
+		// Where a fix may fetch from is the same list a triage may: the
+		// destination question does not change because the session is
+		// allowed to edit files.
+		spec.Policy.FetchAllow = cfg.Permissions.Fetch
 	}
 
 	// Claude Code reads image files from the bundle directory itself.

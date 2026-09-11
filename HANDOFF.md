@@ -9,7 +9,7 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
 | `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
 | `~/Documents/Personal/Sirdar-qwen`, `~/Documents/Personal/Sirdar-codexmcp` | `qwen`, `codexmcp` | Merged into `main` (a411cfa, 38104a8); worktrees removed. |
 
@@ -64,6 +64,20 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
   (`docs/architecture.md`); a MkDocs site published through GitHub Pages.
 - i18n: a `language:` config block plus bilingual note fields (the original-language complaint,
   a customer-language draft) and an RTL-aware desktop UI.
+- Web fetches are judged by destination, not by tool name. `permissions.fetch` is one
+  allow-list of hosts (`docs.example.com`, `*.example.com` for subdomains only,
+  `http://localhost:3000` for a loopback service), empty by default, and empty denies every
+  fetch. `provider.DecideFetchURL` is the single entry point: https outside a loopback entry,
+  no userinfo, no IP literals, nothing `provider.BlockedIP` refuses — that check moved out of
+  `internal/agenttools` so the policy and the dial guard share it. It reaches Claude (WebFetch
+  is on `--disallowedTools` while the list is empty, because a user-level `WebFetch(domain:…)`
+  allow rule would otherwise let the CLI approve a fetch before Sirdar is asked), qwen (the
+  existing PreToolUse hook, under the name `WebFetch`), the openai loop (the policy, and again
+  inside `agenttools.web_fetch`, including per redirect hop) and ACP (`fetch` is now judged on
+  the kind, so an agent cannot retitle it into the laxer MCP rules). Not Codex: its web search
+  is a built-in tool it never asks approval for, governed only by its own `config.toml`
+  `web_search` key and `sandbox: read-only` — `thread/start` exposes no separate network flag.
+  `WebSearch`/`web_search` stay allowed; the query text remains a residual channel.
 - On `sirdar fix`, the confinement is stated per provider, because the layers are not the same for
   all three: Claude and `openai` get policy + in-tool path check + the snapshot guard; Codex
   gets its own `workspace-write` sandbox + the snapshot guard (`decideWrite` is never consulted
@@ -114,10 +128,11 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
    then two or three more tickets and a comparison against hand-written notes; fold gotchas into
    `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
    sees the commands it is asked about.
-5. A URL allow-list for `web_fetch`/`WebFetch`, shared across providers: `internal/provider/
-   policy.go`'s `AlwaysAllowed` approves both with no inspection of the destination, so a prompt
-   injected into something a read tool already pulled in can direct a fetch to an attacker's own
-   host (see the qwen section of `docs/config.md`).
+5. Live-check `permissions.fetch` against a real Claude Code install: confirm that a
+   `WebFetch(domain:…)` rule in `~/.claude/settings.json` is in fact what it is documented to
+   be — an allow rule the CLI applies before `--permission-prompt-tool`, and one that
+   `--disallowedTools WebFetch` still beats. Both halves are read off Claude Code's documented
+   precedence, not watched on a live turn.
 
 ## What is unverified
 
@@ -126,7 +141,11 @@ or `sirdar fix`. Each has only been exercised against a scripted fake server or 
 real model or a real destination. `provider: qwen`'s fail-closed loopback permission hook has
 never been run against a real Qwen login — only against the scripted fake CLI in tests. Help
 Scout's `threadsPageSize` (50) is inferred from the vendor's documented default for list
-endpoints, not observed against a real paginated account. Codex's fix-mode sandbox is a
+endpoints, not observed against a real paginated account. `permissions.fetch` has been exercised against the fake CLIs and the tool
+set, never against a real agent's fetch: the argument shape a live Qwen `web_fetch` or a given
+ACP agent's fetch request actually uses is read off the protocol and the tool schemas, and a
+shape carrying the URL under none of `url`, `urls` or `prompt` would be denied as "named no
+URL" rather than judged. Codex's fix-mode sandbox is a
 `workspace-write` config Sirdar sets but does not implement or verify; the snapshot guard
 (`internal/fix/guard.go`) is the actual backstop if that sandbox lets a write through, including
 onto `.git`.

@@ -15,6 +15,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 // webTimeout bounds one fetch, including redirects and body read.
@@ -72,6 +74,13 @@ func (o Options) webFetch(ctx context.Context, args json.RawMessage) (string, er
 	}
 	if u.Host == "" {
 		return "", errors.New("web_fetch: url must be absolute, e.g. https://example.com/page")
+	}
+	// The workspace's permissions.fetch list, applied here as well as in
+	// the permission policy in front of the loop. The policy is the outer
+	// gate and this is the inner one, the same pairing the writing tools
+	// have: a tool that is only as safe as its caller is not safe.
+	if d := provider.DecideFetchURL(o.FetchAllow, raw); !d.Allow {
+		return "", fmt.Errorf("web_fetch: %s", d.Message)
 	}
 
 	reqCtx, cancel := context.WithTimeout(ctx, webTimeout)
@@ -165,27 +174,10 @@ func guardAddress(_, address string, _ syscall.RawConn) error {
 	if ip == nil {
 		return fmt.Errorf("refusing to connect to %s: unresolved address", address)
 	}
-	if blockedIP(ip) {
+	if provider.BlockedIP(ip) {
 		return fmt.Errorf("refusing to connect to %s: private, loopback and link-local addresses are not fetchable", ip)
 	}
 	return nil
-}
-
-// blockedIP reports whether an address falls in one of the ranges
-// web_fetch refuses. net.IP.IsPrivate covers both RFC1918 and IPv6
-// unique-local (fc00::/7).
-func blockedIP(ip net.IP) bool {
-	switch {
-	case ip.IsLoopback(), ip.IsUnspecified(), ip.IsPrivate():
-		return true
-	case ip.IsLinkLocalUnicast(), ip.IsLinkLocalMulticast(), ip.IsInterfaceLocalMulticast(), ip.IsMulticast():
-		return true
-	}
-	// 100.64.0.0/10, carrier-grade NAT: not routed on the public internet.
-	if v4 := ip.To4(); v4 != nil && v4[0] == 100 && v4[1] >= 64 && v4[1] <= 127 {
-		return true
-	}
-	return false
 }
 
 // httpClient builds the client web_fetch uses: a transport of its own,
@@ -240,6 +232,15 @@ func (o Options) httpClient() *http.Client {
 		}
 		if req.URL.Scheme != "http" && req.URL.Scheme != "https" {
 			return fmt.Errorf("refusing redirect to scheme %q", req.URL.Scheme)
+		}
+		// The same-host rule above already implies this one, since the
+		// requested URL was judged before the request went out. It is
+		// checked again per hop anyway, so that the allow-list is what
+		// says where a fetch may end up even if the host rule is ever
+		// relaxed — a redirect is the obvious way to turn one approved
+		// destination into another.
+		if d := provider.DecideFetchURL(o.FetchAllow, req.URL.String()); !d.Allow {
+			return fmt.Errorf("refusing redirect to %s: %s", req.URL.Host, d.Message)
 		}
 		return nil
 	}

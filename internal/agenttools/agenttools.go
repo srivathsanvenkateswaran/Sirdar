@@ -60,13 +60,17 @@ type Tool interface {
 // the directory bash commands run in and are expected to stay inside.
 // BashAllow holds the glob patterns from the workspace policy; a bash
 // command runs only when provider.MatchCommand approves it against them
-// and against Root. HTTP is
+// and against Root. FetchAllow holds the host globs from
+// permissions.fetch; web_fetch retrieves a URL only when
+// provider.DecideFetchURL approves it against them, and an empty list —
+// the default — allows nothing. HTTP is
 // the client web_fetch borrows its transport from (nil means a default
 // client). MaxOutputBytes caps every tool's output; 0 means
 // DefaultMaxOutputBytes.
 type Options struct {
 	Root           string
 	BashAllow      []string
+	FetchAllow     []string
 	HTTP           *http.Client
 	MaxOutputBytes int
 

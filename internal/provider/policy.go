@@ -16,14 +16,25 @@ import (
 // loop offers (internal/agenttools), which this same policy judges. Both
 // halves are read-only — they look at the workspace and at the network and
 // change neither — so a name missing from here is refused, which is how
-// the five agenttools names came to be added: without them every read the
+// the four agenttools names came to be added: without them every read the
 // loop's model attempted fell through to "not permitted".
+//
+// WebFetch and web_fetch used to be here and are not any more. They are
+// read-only in the sense that matters to a filesystem and not in the sense
+// that matters to a support ticket: the destination is chosen per call, so
+// approving one unseen lets text a read tool pulled in decide where what
+// the session knows is sent. They go through decideFetch and
+// permissions.fetch instead (see FetchTools).
+//
+// WebSearch stays. It carries a query, not a URL, so there is no
+// destination to judge — which also means the query text is a residual
+// channel: an injected instruction can put what the session read into a
+// search term. Nothing in the allow-list closes that; see docs/config.md.
 var AlwaysAllowed = map[string]bool{
 	"Read":             true,
 	"Glob":             true,
 	"Grep":             true,
 	"LS":               true,
-	"WebFetch":         true,
 	"WebSearch":        true,
 	"TodoWrite":        true,
 	"Task":             true,
@@ -33,7 +44,6 @@ var AlwaysAllowed = map[string]bool{
 	"list_dir":  true,
 	"grep":      true,
 	"glob":      true,
-	"web_fetch": true,
 }
 
 // AlwaysDenied lists tool names that are always refused because Sirdar
@@ -169,6 +179,13 @@ type PermissionPolicy struct {
 	MCPAllow  []string
 	Root      string
 
+	// FetchAllow holds the host globs from permissions.fetch, matched
+	// against the host of every URL a fetch tool names (see
+	// DecideFetchURL). Empty — the default — means no host is fetchable:
+	// a workspace that has not said where a session may fetch from has not
+	// said "anywhere".
+	FetchAllow []string
+
 	// ExtraReserved names directories this run refuses writes to on top of
 	// .git and .sirdar: the repository's core.hooksPath when it sets one,
 	// which is an ordinary-looking source directory git runs code from.
@@ -186,6 +203,12 @@ func (p *PermissionPolicy) IsFix() bool { return p != nil && p.Mode.IsFix() }
 func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	if strings.HasPrefix(tool, mcpPrefix) {
 		return p.decideMCP(tool)
+	}
+	// Before AlwaysAllowed, because a fetch is the one read whose
+	// destination the caller chooses: the tool name approves nothing on
+	// its own, only the URL in its arguments does.
+	if FetchTools[tool] {
+		return p.decideFetch(tool, input)
 	}
 	if AlwaysAllowed[tool] {
 		return Decision{Allow: true}

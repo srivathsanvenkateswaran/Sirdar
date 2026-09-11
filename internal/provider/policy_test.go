@@ -51,7 +51,7 @@ func TestMatchGlob(t *testing.T) {
 // know them refuses every read the loop's model attempts.
 func TestPolicyJudgesSirdarLoopToolNames(t *testing.T) {
 	p := &PermissionPolicy{BashAllow: []string{"git log*"}}
-	for _, tool := range []string{"read_file", "list_dir", "grep", "glob", "web_fetch"} {
+	for _, tool := range []string{"read_file", "list_dir", "grep", "glob"} {
 		if d := p.Decide(tool, json.RawMessage(`{"path":"x"}`)); !d.Allow {
 			t.Errorf("%s: denied (%s), want allowed", tool, d.Message)
 		}
