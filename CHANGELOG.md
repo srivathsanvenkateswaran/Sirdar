@@ -43,3 +43,36 @@ write-verb heuristic.
 Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, deb/rpm
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
+
+- Tagging a release now builds and drafts it end to end: CLI archives for all three platforms,
+  deb/rpm packages, checksums, a Homebrew tap formula, and desktop app zips, all attached to one
+  GitHub release that stays a draft until a human clicks Publish (`docs/release.md`).
+- Added CONTRIBUTING, SECURITY and CODE_OF_CONDUCT, issue and pull request templates, and
+  Dependabot version updates, plus an architecture map for new contributors
+  (`docs/architecture.md`).
+- Added a documentation site built with MkDocs and published to GitHub Pages, covering
+  concepts and getting started alongside the existing reference docs.
+- Added support for triaging Arabic and other right-to-left tickets: a `language` config block,
+  note fields that keep the customer's original-language complaint alongside a draft in the
+  customer's language, and an RTL-aware desktop UI.
+- Credentials can now be stored in a `file:` or a `cmd:` reference, in the Linux Secret Service
+  (libsecret), or in Windows Credential Manager, alongside the existing `env:` and macOS
+  Keychain support (`docs/credentials.md`).
+- Every built-in adapter, tracker and helpdesk alike, now shares one internal HTTP client with
+  consistent host-trust checks, redirect handling, and response-size caps.
+- Added `provider: acp`, an Agent Client Protocol client that can drive any ACP-speaking coding
+  agent (Gemini CLI, Goose, OpenCode, and others) the same way Sirdar already drives Claude Code
+  and Codex.
+- Added inbound webhooks: `sirdar serve` can now be triggered directly by a tracker or helpdesk
+  when a ticket is assigned, with per-source signature verification (`docs/webhooks.md`).
+- Added run-completion notifications to Slack, Microsoft Teams, or any HTTP endpoint you run
+  yourself, posting a metadata-only digest (never the note's content) with a timestamped HMAC
+  signature (`docs/notifications.md`).
+- Added three more built-in helpdesk adapters: Help Scout, Intercom, and HubSpot Service Hub.
+- Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
+  run against the assertions and note you recorded for each one, and `sirdar golden add` to build
+  that set from a completed run (`docs/eval.md`).
+- Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
+  request for an approved triage note, confined by a per-provider write policy and a snapshot
+  guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
+  (`docs/eval.md`).
