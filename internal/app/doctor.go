@@ -52,7 +52,9 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 	switch cfg.Provider {
 	case "codex":
 		binary = cfg.Providers.Codex.Path
-	case "openai":
+	case "openai", "acp":
+		// provider: acp has no path setting either: the agent's launch
+		// command is acp.command, which the provider already holds.
 		binary = ""
 	}
 	if binary != "" {

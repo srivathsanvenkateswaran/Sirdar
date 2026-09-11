@@ -1,0 +1,2 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":false,"promptCapabilities":{"image":false}},"agentInfo":{"name":"crush","version":"0.9.0"}}}

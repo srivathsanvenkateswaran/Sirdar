@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai
+provider: claude            # claude | codex | openai | acp
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -23,6 +23,14 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   temperature: 0
 #   extraHeaders:
 #     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+# provider: acp drives any agent that speaks the Agent Client Protocol —
+# Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
+# more — over one adapter. There is no cost signal, so budgets are by turns
+# and minutes. Uncomment the block and set provider: acp to use it.
+# acp:
+#   command: gemini                         # or goose, opencode, qwen, npx
+#   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]
+#   env: {}                                 # added to the agent's environment
 sources:
   tracker:
     adapter: exec

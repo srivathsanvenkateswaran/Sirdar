@@ -247,10 +247,11 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Binary: r.binary(),
 	}
 	// Claude Code reads image files from the bundle directory itself.
-	// Codex has to be handed them on the command line, and the openai
-	// loop names them in its first user message, so both need the list.
+	// Codex has to be handed them on the command line, the openai loop
+	// names them in its first user message, and an ACP agent takes them as
+	// inline base64 content blocks, so all three need the list.
 	switch r.providerName() {
-	case "codex", "openai":
+	case "codex", "openai", "acp":
 		spec.Images = imageAttachments(p)
 	}
 	return spec

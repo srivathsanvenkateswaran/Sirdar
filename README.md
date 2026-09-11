@@ -118,14 +118,24 @@ human already made.
 
 ## Models
 
-Sirdar drives a run in one of two ways. `provider: claude` and `provider: codex` spawn the
-Claude Code or Codex CLI you already have installed and signed in, so the work counts against
-the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop
-itself against any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together,
-DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own
-read-only tool set and your workspace's MCP servers, and a per-million-token price you set in
-config for the USD budget. See `docs/config.md` for the `openai:` block, and
-`docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after it.
+`provider: claude` and `provider: codex` spawn the Claude Code or Codex CLI you already have
+installed and signed in, so the work counts against the plan you already pay for.
+`provider: openai` spawns nothing: Sirdar runs the agent loop itself against any
+OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together, DeepSeek, Moonshot,
+Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own read-only tool set and
+your workspace's MCP servers, and a per-million-token price you set in config for the USD
+budget.
+
+`provider: acp` reaches the widest: one Agent Client Protocol client that drives
+any agent speaking it — Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
+more, plus Claude Code and Codex through the ACP adapters. Name the agent's launch command in
+the `acp:` block and Sirdar spawns it, hands it the workspace's MCP servers and answers its
+permission requests from the same policy every other provider uses. ACP reports no cost, so
+budget those runs by turns and minutes; it also has no schema field, so the note comes back as
+JSON in the agent's own message rather than as structured output. See `docs/config.md` for the
+`openai:` and `acp:` blocks, `docs/research/providers/acp-agents.md` for the agents and their
+launch commands, and `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes
+after.
 
 ## Bring your own agent login
 
