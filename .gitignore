@@ -21,3 +21,6 @@ desktop/build/bin/
 desktop/frontend/wailsjs/
 desktop/frontend/package.json.md5
 *.tsbuildinfo
+
+# mkdocs build output
+site/
