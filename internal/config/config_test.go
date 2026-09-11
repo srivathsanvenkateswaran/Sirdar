@@ -224,6 +224,114 @@ func TestDefaultConfigYAMLShowsTheAuthBlock(t *testing.T) {
 	}
 }
 
+// --- provider: openai ----------------------------------------------------
+
+const openaiConfig = `
+workspace: demo
+provider: openai
+openai:
+  baseUrl: https://openrouter.ai/api/v1
+  apiKey: env:OPENROUTER_API_KEY
+  model: qwen/qwen3-coder
+  price:
+    inputPerMTok: 0.2
+    outputPerMTok: 0.8
+  temperature: 0
+  extraHeaders:
+    HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+`
+
+func TestLoadOpenAIBlock(t *testing.T) {
+	c, err := Load(writeCfg(t, openaiConfig))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Provider != "openai" {
+		t.Fatalf("provider = %q", c.Provider)
+	}
+	o := c.OpenAI
+	if o == nil {
+		t.Fatal("openai block was not loaded")
+	}
+	if o.BaseURL != "https://openrouter.ai/api/v1" || o.Model != "qwen/qwen3-coder" {
+		t.Fatalf("openai = %+v", o)
+	}
+	if o.MaxContextTokens != DefaultMaxContextTokens {
+		t.Errorf("maxContextTokens = %d, want the %d default", o.MaxContextTokens, DefaultMaxContextTokens)
+	}
+	if o.Price == nil || o.Price.InputPerMTok != 0.2 || o.Price.OutputPerMTok != 0.8 {
+		t.Errorf("price = %+v", o.Price)
+	}
+	if o.Temperature == nil || *o.Temperature != 0 {
+		t.Errorf("temperature = %v, want an explicit 0 rather than unset", o.Temperature)
+	}
+	if o.ExtraHeaders["HTTP-Referer"] == "" {
+		t.Errorf("extraHeaders = %v", o.ExtraHeaders)
+	}
+}
+
+func TestValidateOpenAI(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string // substring of the expected error; "" means it must load
+	}{
+		{"complete", openaiConfig, ""},
+		{"no block", "workspace: demo\nprovider: openai\n", "openai:"},
+		{
+			"no baseUrl",
+			"workspace: demo\nprovider: openai\nopenai:\n  model: m\n",
+			"openai.baseUrl",
+		},
+		{
+			"no model",
+			"workspace: demo\nprovider: openai\nopenai:\n  baseUrl: https://api.example/v1\n",
+			"openai.model",
+		},
+		{
+			"relative baseUrl",
+			"workspace: demo\nprovider: openai\nopenai:\n  baseUrl: /v1\n  model: m\n",
+			"openai.baseUrl",
+		},
+		{
+			"a literal key instead of a reference",
+			"workspace: demo\nprovider: openai\nopenai:\n  baseUrl: https://api.example/v1\n  model: m\n  apiKey: sk-live-1234\n",
+			"openai.apiKey",
+		},
+		{
+			"a negative price",
+			"workspace: demo\nprovider: openai\nopenai:\n  baseUrl: https://api.example/v1\n  model: m\n  price:\n    inputPerMTok: -1\n",
+			"openai.price.inputPerMTok",
+		},
+		{
+			// An openai block left behind while the workspace runs on
+			// claude is not an error: only its own fields are checked.
+			"unused block on another provider",
+			"workspace: demo\nprovider: claude\nopenai:\n  baseUrl: https://api.example/v1\n",
+			"",
+		},
+		{
+			"an unknown provider",
+			"workspace: demo\nprovider: gemini\n",
+			"claude, codex or openai",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, c.body))
+			switch {
+			case c.want == "" && err != nil:
+				t.Fatalf("Load: %v", err)
+			case c.want == "":
+			case err == nil:
+				t.Fatalf("want an error mentioning %q, got none", c.want)
+			case !strings.Contains(err.Error(), c.want):
+				t.Fatalf("error = %v, want it to mention %q", err, c.want)
+			}
+		})
+	}
+}
+
 // --- built-in tracker adapters ---
 
 // trackerCfg builds a workspace whose only source is the tracker block
@@ -573,6 +681,23 @@ func TestValidateHelpdeskRef(t *testing.T) {
 				t.Fatalf("error %v does not contain %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// TestDefaultConfigYAMLDocumentsOpenAI keeps the scaffold and the
+// implementation in step: `sirdar init` has to show the block, and the
+// file it writes has to load.
+func TestDefaultConfigYAMLDocumentsOpenAI(t *testing.T) {
+	for _, want := range []string{"claude | codex | openai", "# openai:", "#   baseUrl:", "#   model:"} {
+		if !strings.Contains(DefaultConfigYAML, want) {
+			t.Errorf("DefaultConfigYAML does not mention %q", want)
+		}
+	}
+	body := strings.ReplaceAll(DefaultConfigYAML, "<name>", "demo")
+	body = strings.ReplaceAll(body, "<tracker-adapter>", "adapter")
+	body = strings.ReplaceAll(body, "<org-id>", "1")
+	if _, err := Load(writeCfg(t, body)); err != nil {
+		t.Fatalf("the scaffolded config does not load: %v", err)
 	}
 }
 

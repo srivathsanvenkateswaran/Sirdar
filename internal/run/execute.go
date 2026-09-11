@@ -233,6 +233,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Policy: &provider.PermissionPolicy{
 			BashAllow: cfg.Permissions.Bash,
 			MCPAllow:  cfg.Permissions.MCP,
+			Root:      cfg.Root,
 		},
 		MCPConfig: cfg.MCPConfigPath(),
 		MCPStrict: cfg.WorkspaceOnlyMCP(),
@@ -245,19 +246,26 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Env:    r.childEnv(),
 		Binary: r.binary(),
 	}
-	// Claude Code reads image files from the bundle directory itself;
-	// Codex has to be handed them on the command line.
-	if r.providerName() == "codex" {
+	// Claude Code reads image files from the bundle directory itself.
+	// Codex has to be handed them on the command line, and the openai
+	// loop names them in its first user message, so both need the list.
+	switch r.providerName() {
+	case "codex", "openai":
 		spec.Images = imageAttachments(p)
 	}
 	return spec
 }
 
 // binary is the configured path override for the provider in use, empty
-// when the provider should be looked up on PATH.
+// when the provider should be looked up on PATH — or, for the openai
+// provider, because there is no binary at all: that loop runs in this
+// process.
 func (r *Runner) binary() string {
-	path := r.Config.Providers.Claude.Path
-	if r.providerName() == "codex" {
+	var path string
+	switch r.providerName() {
+	case "claude":
+		path = r.Config.Providers.Claude.Path
+	case "codex":
 		path = r.Config.Providers.Codex.Path
 	}
 	if path == "" {

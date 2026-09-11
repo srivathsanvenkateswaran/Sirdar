@@ -41,13 +41,19 @@ func checkOf(c provider.Check) Check {
 }
 
 func providerChecks(ctx context.Context, cfg *config.Config) []Check {
-	p, err := ProviderFor(cfg.Provider)
+	p, err := ProviderFor(cfg, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
 		return []Check{{Name: "provider", Detail: err.Error()}}
 	}
+	// provider: openai has no binary to find — the loop runs in this
+	// process — so its Doctor ignores the argument and probes the endpoint
+	// instead.
 	binary := cfg.Providers.Claude.Path
-	if cfg.Provider == "codex" {
+	switch cfg.Provider {
+	case "codex":
 		binary = cfg.Providers.Codex.Path
+	case "openai":
+		binary = ""
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)

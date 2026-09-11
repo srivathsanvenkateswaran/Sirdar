@@ -15,6 +15,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/openai"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
@@ -46,7 +47,7 @@ func BuildDeps(cfg *config.Config, providerName, model string, stderr io.Writer)
 	if model != "" {
 		cfg.Model = model
 	}
-	p, err := ProviderFor(cfg.Provider)
+	p, err := ProviderFor(cfg, creds)
 	if err != nil {
 		return runner.Deps{}, cleanup, err
 	}
@@ -84,16 +85,70 @@ func BuildDeps(cfg *config.Config, providerName, model string, stderr io.Writer)
 	return deps, cleanup, nil
 }
 
-// ProviderFor returns the adapter for a configured provider name.
-func ProviderFor(name config.Provider) (provider.Provider, error) {
-	switch name {
+// ProviderFor returns the adapter for the provider a workspace names. The
+// credential resolver is taken alongside the config because one of them —
+// openai — authenticates from the workspace's own configuration rather
+// than from a binary the operator already logged in.
+func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, error) {
+	switch cfg.Provider {
 	case "claude":
 		return claude.New(), nil
 	case "codex":
 		return codex.New(), nil
+	case "openai":
+		return openAIProvider(cfg, creds)
 	default:
-		return nil, fmt.Errorf("unknown provider %q: use claude or codex", name)
+		return nil, fmt.Errorf("unknown provider %q: use claude, codex or openai", cfg.Provider)
 	}
+}
+
+// openAIProvider builds the provider that runs Sirdar's own loop against
+// an OpenAI-compatible endpoint. The API key is resolved here, held in
+// memory, and passed only to the HTTP client that authenticates the chat
+// calls: it is never written to a run directory and never printed by
+// doctor. The session's own child processes never see Sirdar's environment
+// at all — an allow-listed shell command gets PATH, HOME and LANG
+// (agenttools.execEnv) and an MCP server gets those plus its own env block
+// (mcpclient.childEnv) — so the key is absent by construction rather than
+// by being stripped. The exception is a .mcp.json that names the key's
+// variable in that env block: ${VAR} there expands from Sirdar's process
+// environment, and the server is handed it.
+//
+// SIRDAR_BILLING says nothing here. It exists to tell the Claude adapter
+// whether to leave ANTHROPIC_API_KEY in place for a subscription login;
+// this provider has no subscription to draw on and is always billed
+// against the configured key.
+func openAIProvider(cfg *config.Config, creds config.Resolver) (provider.Provider, error) {
+	o := cfg.OpenAI
+	if o == nil {
+		return nil, fmt.Errorf("provider openai: the openai block is missing from config")
+	}
+	loop := openai.LoopConfig{
+		Chat: openai.Config{
+			BaseURL:      o.BaseURL,
+			Model:        o.Model,
+			Temperature:  o.Temperature,
+			ExtraHeaders: o.ExtraHeaders,
+		},
+		MaxContextTokens: o.MaxContextTokens,
+		MCPWorkspaceOnly: true,
+	}
+	if cfg.Model != "" {
+		loop.Chat.Model = cfg.Model
+	}
+	if o.Price != nil {
+		loop.PriceInputPerMTok = o.Price.InputPerMTok
+		loop.PriceOutputPerMTok = o.Price.OutputPerMTok
+	}
+	if o.APIKey != "" {
+		key, err := creds.Resolve(o.APIKey)
+		if err != nil {
+			// The reference is named, the secret is not.
+			return nil, fmt.Errorf("openai.apiKey %s: %w", o.APIKey, err)
+		}
+		loop.Chat.APIKey = key
+	}
+	return openai.NewProvider(loop), nil
 }
 
 // adapterSet owns the adapter subprocesses a command starts. One process

