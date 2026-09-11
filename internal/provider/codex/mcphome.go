@@ -6,8 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
@@ -26,10 +28,18 @@ const (
 	// recognises its own leftovers by.
 	homePrefix = "sirdar-codex-home-"
 	// staleHomeAge is how old a leftover generated home has to be before
-	// Start removes it. A session that runs longer than this keeps its
-	// own home: the sweep only ever looks at directories whose mtime is
-	// older, and a live session's home is written as it starts.
+	// Start removes it, for the ordinary case: a home whose session has
+	// already reaped it via remove() never reaches the sweep at all, so
+	// this only ever prunes what a hard kill left behind. A live session
+	// that outlives this is still protected by its lock file (see
+	// lockFileName) regardless of how old its directory's mtime gets.
 	staleHomeAge = 24 * time.Hour
+	// lockFileName holds the pid and start time of the session a
+	// generated home belongs to, so the sweep can tell a home whose
+	// session is still running from a SIGKILL leftover without trusting
+	// mtime alone — a long-running turn is not guaranteed to touch its
+	// own home, but its process either is or is not still there.
+	lockFileName = ".sirdar-lock"
 )
 
 // scratchHome is a generated CODEX_HOME for one session: the user's own
@@ -92,6 +102,10 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
+	if err := writeLock(dir); err != nil {
+		_ = os.RemoveAll(dir)
+		return nil, nil, err
+	}
 	h := &scratchHome{dir: dir, keep: envValue(env, envKeepHome) == "1"}
 	for _, s := range servers {
 		h.servers = append(h.servers, s.Name)
@@ -113,8 +127,11 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 
 // sweepStaleHomes removes generated homes left behind by sessions that
 // were killed outright. Only directories this package names, and only
-// those untouched for staleHomeAge, so a long-running session's home is
-// never taken out from under it.
+// those a live session does not own: a home whose lock file names a pid
+// that is still running is kept whatever its mtime says — mtime alone
+// would let a long, quiet turn's home be swept out from under it — and
+// everything else falls back to the staleHomeAge check that catches a
+// SIGKILL leftover, which has nobody left to hold its lock.
 func sweepStaleHomes(tmp string, now time.Time) {
 	entries, err := os.ReadDir(tmp)
 	if err != nil {
@@ -124,12 +141,54 @@ func sweepStaleHomes(tmp string, now time.Time) {
 		if !e.IsDir() || !strings.HasPrefix(e.Name(), homePrefix) {
 			continue
 		}
+		dir := filepath.Join(tmp, e.Name())
+		if pid, ok := lockPID(dir); ok && processAlive(pid) {
+			continue
+		}
 		info, err := e.Info()
 		if err != nil || now.Sub(info.ModTime()) < staleHomeAge {
 			continue
 		}
-		_ = os.RemoveAll(filepath.Join(tmp, e.Name()))
+		_ = os.RemoveAll(dir)
 	}
+}
+
+// writeLock records this session's pid and start time in the generated
+// home, so a later sweep — this session's own next run, or another
+// session's — can tell it apart from a leftover nobody is holding.
+func writeLock(dir string) error {
+	body := fmt.Sprintf("%d\n%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339))
+	return os.WriteFile(filepath.Join(dir, lockFileName), []byte(body), 0o600)
+}
+
+// lockPID reads the pid a generated home's lock file names. ok is false
+// when the home has no lock file (older than this mechanism, or already
+// half torn down) or the file does not parse, in which case the sweep
+// falls back to mtime alone rather than treat an unreadable lock as a
+// license to keep the directory forever.
+func lockPID(dir string) (pid int, ok bool) {
+	b, err := os.ReadFile(filepath.Join(dir, lockFileName))
+	if err != nil {
+		return 0, false
+	}
+	line, _, _ := strings.Cut(string(b), "\n")
+	n, err := strconv.Atoi(strings.TrimSpace(line))
+	if err != nil || n <= 0 {
+		return 0, false
+	}
+	return n, true
+}
+
+// processAlive reports whether pid names a running process. Signal 0
+// delivers nothing; the kernel call still fails with ESRCH when no process
+// by that pid exists, which is enough to tell a live session's lock from a
+// leftover one a dead process cannot renew. syscall.Kill is used directly
+// rather than os.FindProcess().Signal: on Unix the latter tracks its own
+// "already finished" state per Process value and reports that instead of
+// asking the kernel, which is wrong for a Process obtained by pid rather
+// than from the exec that started it.
+func processAlive(pid int) bool {
+	return syscall.Kill(pid, syscall.Signal(0)) == nil
 }
 
 // inherit copies the login and links everything else. auth.json is copied

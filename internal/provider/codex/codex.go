@@ -145,7 +145,7 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		spec:       spec,
 		policy:     policy,
 		home:       home,
-		pendingMCP: map[string]string{},
+		pendingMCP: map[string][]string{},
 		events:     make(chan provider.Event),
 		turnDone:   make(chan struct{}),
 		exited:     make(chan struct{}),
@@ -358,13 +358,17 @@ type session struct {
 	mu       sync.Mutex
 	threadID string
 	turnID   string
-	// pendingMCP is the tool each MCP server has in flight, by server
-	// name. An MCP tool-call approval arrives as an elicitation, which
-	// names the server in a field and the tool only inside a sentence
-	// meant for a person; the item/started that precedes it carries both
-	// as data. Keyed by server because a turn can have calls to several
-	// servers open at once, and the elicitation says which one is asking.
-	pendingMCP map[string]string
+	// pendingMCP is, per server, the FIFO of tool names whose item/started
+	// has arrived but whose approval has not yet been decided. An MCP
+	// tool-call approval arrives as an elicitation, which names the server
+	// in a field and the tool only inside a sentence meant for a person;
+	// the item/started that precedes it carries both as data. A FIFO
+	// rather than one name per server because a turn can have several
+	// calls to the same server open at once — two item/started before
+	// either is approved — and a single remembered name would have the
+	// second call's start overwrite the first's before its elicitation
+	// arrived, judging call one's approval under call two's name.
+	pendingMCP map[string][]string
 	finalText  string
 	usage      struct{ in, out int64 }
 	turns      int
@@ -746,13 +750,16 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 			// An MCP call announces itself here, with its server and tool
 			// as separate fields, before Codex asks whether it may run.
 			// Remembering it is what lets the approval be decided under
-			// the tool's real name.
-			if it.Type == "mcpToolCall" && it.Server != "" {
+			// the tool's real name. item/completed also drops it: a call
+			// Codex auto-approves raises no elicitation to pop it off the
+			// FIFO, and a stale entry left behind would wrongly name a
+			// later call's approval.
+			if it.Type == "mcpToolCall" && it.Server != "" && it.Tool != "" {
 				s.mu.Lock()
 				if kind == provider.EvToolStarted {
-					s.pendingMCP[it.Server] = it.Tool
+					s.pendingMCP[it.Server] = append(s.pendingMCP[it.Server], it.Tool)
 				} else {
-					delete(s.pendingMCP, it.Server)
+					s.dropPending(it.Server, it.Tool)
 				}
 				s.mu.Unlock()
 			}
@@ -921,6 +928,19 @@ func (s *session) onRequest(id json.RawMessage, method string, params json.RawMe
 		s.decideElicitation(id, params, raw)
 
 	default:
+		if strings.HasSuffix(method, "/requestApproval") {
+			// An approval-shaped request Sirdar does not recognise —
+			// a future app-server version, most likely. Replying {}
+			// to a method this package has never seen would answer
+			// with whatever shape happens to look like an accept to
+			// that version; only a refusal is safe to guess at, and
+			// it is worth an EvError rather than the quiet EvSystem
+			// line an ordinary unknown notification gets, since a
+			// human should know an approval request went unhandled.
+			_ = s.conn.reply(id, map[string]string{"action": "decline"})
+			s.emit(provider.Event{Kind: provider.EvError, Text: "codex: unrecognised approval request " + method, Raw: raw})
+			return
+		}
 		_ = s.conn.reply(id, map[string]any{})
 		s.emit(provider.Event{Kind: provider.EvSystem, Text: method, Raw: raw})
 	}
@@ -977,7 +997,29 @@ func (s *session) decideElicitation(id, params, raw json.RawMessage) {
 		return
 	}
 
-	tool := mcpclient.ToolName(e.ServerName, s.toolInFlight(e.ServerName, e.Message))
+	name, mismatch := s.toolInFlight(e.ServerName, e.Message)
+	if name == "" {
+		// Neither the item/started bookkeeping nor the message named a
+		// tool. Deciding under mcp__<server>__ — the empty tool name —
+		// would run it through permissions.mcp's write-verb heuristic,
+		// which sees no words in an empty name and allows; with an
+		// explicit allow-list, mcp__<server>__* matches it too. An
+		// unresolved name is refused outright rather than let either
+		// reading fail open.
+		_ = s.conn.reply(id, map[string]string{"action": "decline"})
+		s.denied(mcpclient.ToolName(e.ServerName, ""), params, raw, "tool name unknown")
+		return
+	}
+	tool := mcpclient.ToolName(e.ServerName, name)
+	if mismatch {
+		// The message's own quoted name disagrees with the oldest
+		// started-but-unapproved call Sirdar was tracking for this
+		// server. The two bookkeeping paths should never disagree;
+		// when they do, neither is trusted enough to decide under.
+		_ = s.conn.reply(id, map[string]string{"action": "decline"})
+		s.denied(tool, params, raw, "tool name mismatch")
+		return
+	}
 	d := s.policy.Decide(tool, nil)
 	if d.Allow {
 		_ = s.conn.reply(id, map[string]any{"action": "accept", "content": map[string]any{}})
@@ -991,19 +1033,48 @@ func (s *session) decideElicitation(id, params, raw json.RawMessage) {
 	s.denied(tool, params, raw, d.Message)
 }
 
-// toolInFlight names the tool an MCP approval is about. The item/started
-// notification for the call arrives before the approval and carries the
-// name as data, which is what this reads; the quoted name in the message
-// Codex wrote for a person is the fallback, and an empty string — which
-// permissions.mcp will not match — is what is left when neither works.
-func (s *session) toolInFlight(server, message string) string {
+// toolInFlight names the tool an MCP approval is about, and reports whether
+// the message's own claim disagrees with what Sirdar was tracking. The
+// message Codex writes for a person always quotes the tool's name (see
+// docs/research/06-wire-formats.md), so it is preferred; the server's FIFO
+// of started-but-unapproved calls is the fallback for a message that does
+// not quote one, and it is also popped whenever the message does, so the
+// two can be cross-checked — a disagreement is reported as mismatch=true
+// rather than silently preferring one. An empty name — which
+// permissions.mcp will not match — is what is left when neither source has
+// one.
+func (s *session) toolInFlight(server, message string) (name string, mismatch bool) {
 	s.mu.Lock()
-	tool := s.pendingMCP[server]
-	s.mu.Unlock()
-	if tool != "" {
-		return tool
+	var oldest string
+	if q := s.pendingMCP[server]; len(q) > 0 {
+		oldest, s.pendingMCP[server] = q[0], q[1:]
 	}
-	return quotedToolName(message)
+	s.mu.Unlock()
+
+	quoted := quotedToolName(message)
+	switch {
+	case quoted != "" && oldest != "" && quoted != oldest:
+		return quoted, true
+	case quoted != "":
+		return quoted, false
+	default:
+		return oldest, false
+	}
+}
+
+// dropPending removes one occurrence of tool from server's FIFO of
+// started-but-unapproved calls, for a call that completed without ever
+// raising an elicitation — Codex auto-approved it, so nothing popped the
+// entry toolInFlight would otherwise have consumed. Must be called with
+// s.mu held.
+func (s *session) dropPending(server, tool string) {
+	q := s.pendingMCP[server]
+	for i, t := range q {
+		if t == tool {
+			s.pendingMCP[server] = append(q[:i], q[i+1:]...)
+			return
+		}
+	}
 }
 
 // quotedToolName lifts the tool name out of a message such as

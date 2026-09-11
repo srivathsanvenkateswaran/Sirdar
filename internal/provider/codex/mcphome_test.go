@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -749,6 +750,91 @@ func TestSweepStaleHomes(t *testing.T) {
 		if _, err := os.Stat(keep); err != nil {
 			t.Errorf("the sweep removed %s: %v", filepath.Base(keep), err)
 		}
+	}
+}
+
+// TestNewScratchHomeWritesALock pins the write side of the sweep's
+// liveness check: every generated home carries a lock naming the process
+// that created it, from the moment newScratchHome returns.
+func TestNewScratchHomeWritesALock(t *testing.T) {
+	real := writeRealHome(t)
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	if err != nil {
+		t.Fatalf("newScratchHome: %v", err)
+	}
+	defer home.forceRemove()
+
+	pid, ok := lockPID(home.dir)
+	if !ok || pid != os.Getpid() {
+		t.Errorf("lockPID(%s) = %d, %v; want this process's pid %d, true", home.dir, pid, ok, os.Getpid())
+	}
+}
+
+// TestSweepSkipsALiveLock covers the ordinary long, quiet turn: even past
+// staleHomeAge, a home whose lock names a process that is still running is
+// kept. Mtime alone would have taken it out from under a session that
+// simply had not touched its own directory in 24 hours.
+func TestSweepSkipsALiveLock(t *testing.T) {
+	tmp := t.TempDir()
+	now := time.Now()
+
+	dir := filepath.Join(tmp, homePrefix+"live")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// This test process is certainly alive for the duration of the test,
+	// so its own pid stands in for the session that owns the home.
+	if err := writeLock(dir); err != nil {
+		t.Fatalf("writeLock: %v", err)
+	}
+	// Writing the lock file just touched the directory, so back-date it
+	// afterwards: this simulates a home whose lock was written at session
+	// start and whose directory has not been touched since.
+	old := now.Add(-48 * time.Hour)
+	if err := os.Chtimes(dir, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	sweepStaleHomes(tmp, now)
+
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("the sweep removed a home whose session is still running: %v", err)
+	}
+}
+
+// TestSweepRemovesADeadLock is the SIGKILL case a lock file does not
+// change: once a home is old enough and nothing holds its lock's pid any
+// more, the sweep takes it, same as a home with no lock file at all.
+func TestSweepRemovesADeadLock(t *testing.T) {
+	tmp := t.TempDir()
+	now := time.Now()
+
+	// A pid guaranteed to have exited by the time the sweep reads it.
+	cmd := exec.Command("true")
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("run a throwaway process: %v", err)
+	}
+	dead := cmd.Process.Pid
+
+	dir := filepath.Join(tmp, homePrefix+"dead")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	body := fmt.Sprintf("%d\n%s\n", dead, now.Format(time.RFC3339))
+	if err := os.WriteFile(filepath.Join(dir, lockFileName), []byte(body), 0o600); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+	// Back-date the directory after writing the lock file, the same as
+	// TestSweepSkipsALiveLock: the write itself touches the directory.
+	old := now.Add(-48 * time.Hour)
+	if err := os.Chtimes(dir, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	sweepStaleHomes(tmp, now)
+
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("a stale home with a dead lock survived the sweep: %v", err)
 	}
 }
 

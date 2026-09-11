@@ -349,3 +349,27 @@ process against the same home, and `thread/items/list` returned its items. Codex
 its own state files in whatever `CODEX_HOME` it is given (`state_*.sqlite`, `logs_*.sqlite`,
 `queue_*.sqlite`, `shell_snapshots/`, `tmp/`, `thread-writer-locks/`), which in Sirdar's
 generated home are symlinks to the operator's, so those writes land in the real files.
+
+### `stripMCPServers`: known limits (round 2 hardening, 2026-09-11)
+
+Two edge cases in the TOML-aware scan (`mcphome.go`'s `scanTOML`/`stripMCPServers`) are known
+gaps rather than bugs fixed this round — noted here rather than chased, since both need a real
+TOML parser to close and this one deliberately stays stdlib-only:
+
+- **The four-quote scan residual.** TOML lets a multi-line basic string's content end in up to
+  two literal `"` by writing extra quotes before the closing fence — `""""` immediately after
+  an opening `"""` is a valid *empty* multi-line string followed by one literal `"`, not an
+  unterminated one. `skipString` does not special-case this: it looks for the next `"""` after
+  the opening fence, finds none in a lone trailing quote, and treats the string as running to
+  EOF. A `config.toml` that does this near a `[mcp_servers…]` header would have that header
+  swallowed into the "string" and survive the strip. Rare in a hand-written config; not
+  something `codex mcp add` generates.
+- **The `profiles.*` residual.** `stripMCPServers` only drops `mcp_servers` at the *root*
+  table — deliberately, since `[profiles.dev.mcp_servers.foo]` is that profile's own list, not
+  Codex's default one (see the doc comment on `stripMCPServers`). But if the operator's
+  `config.toml` also sets `profile = "dev"` as the active profile, Codex will read a profile's
+  `mcp_servers` in preference to the root table's, and a profile-scoped table the strip left in
+  place reaches the session same as the root table would have — the generated home's workspace
+  servers would not be the only ones the thread sees. Not probed against 0.154.0's actual
+  profile-resolution order; flagged here as the thing to check before trusting `mcp.workspaceOnly`
+  against a config that uses profiles.

@@ -484,7 +484,9 @@ instead:
 - the directory is 0700 and the files in it 0600, and it is removed once the session's
   process has exited. Set `SIRDAR_KEEP_CODEX_HOME=1` to keep it and read the generated
   `config.toml`. A hard kill (SIGKILL, a power cut) leaves one behind; the next session
-  sweeps `sirdar-codex-*` directories in `TMPDIR` that nothing has touched for 24 hours.
+  sweeps `sirdar-codex-home-*` directories in `TMPDIR` that nothing has touched for 24 hours
+  and whose lock file names no live process — a session that is still running keeps its home
+  regardless of age.
 
 **"Sirdar never modifies your `~/.codex`" means `config.toml` and `auth.json`.** Those two are
 copied, and `config.toml` is never written back at all; `auth.json` only under the conditions

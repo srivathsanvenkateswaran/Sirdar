@@ -756,6 +756,93 @@ func TestApprovalsGoThroughThePolicy(t *testing.T) {
 	}
 }
 
+// TestUnknownApprovalMethodIsRefused pins the round-2 hardening on the
+// default arm of onRequest: an approval-shaped server request this package
+// does not recognise must be refused and put on the record as an error, not
+// answered with {} — a shape that could read as an accept to a future
+// app-server version nobody has tested against.
+func TestUnknownApprovalMethodIsRefused(t *testing.T) {
+	sess := startSession(t, "script-unknown-approval.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if got := replyTo(t, res, 201); got != `{"action":"decline"}` {
+		t.Errorf("reply to the unrecognised approval = %s, want a decline", got)
+	}
+
+	var found bool
+	for _, ev := range only(t, evs, provider.EvError) {
+		if strings.Contains(ev.Text, "item/foo/requestApproval") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no EvError named the unrecognised approval method; events=%+v", evs)
+	}
+}
+
+// TestMCPApprovalOrderingAndFailSafes is the round-2 hardening on MCP
+// tool-call resolution: same-server concurrency is judged from a per-server
+// FIFO rather than one name a second call can overwrite before the first is
+// approved, a message that quotes a different tool than the FIFO expects is
+// refused outright rather than trusted either way, and an approval with
+// neither a preceding item nor a quoted name is refused rather than decided
+// under an empty tool name — which the old code would have waved through,
+// since an empty name carries no write verb for the heuristic to catch.
+func TestMCPApprovalOrderingAndFailSafes(t *testing.T) {
+	sess := startSession(t, "script-mcp-fifo.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	// Two calls to "notes" start before either is approved, and neither
+	// approval message quotes a name, so the reply can only be right if
+	// the FIFO kept them in order: the oldest queued call — a read,
+	// allowed by the unconfigured default — is decided first, the second
+	// — a write — after it.
+	if got := replyTo(t, res, 301); got != `{"action":"accept","content":{}}` {
+		t.Errorf("reply to 301 (oldest queued call) = %s, want accept", got)
+	}
+	if got := replyTo(t, res, 302); got != `{"action":"decline"}` {
+		t.Errorf("reply to 302 (second queued call) = %s, want decline", got)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__lookup_alpha"); !ok || ev.Decision != "allow" {
+		t.Errorf("permission for lookup_alpha = %+v, ok=%v, want allow", ev, ok)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__delete_beta"); !ok || ev.Decision != "deny" {
+		t.Errorf("permission for delete_beta = %+v, ok=%v, want deny", ev, ok)
+	}
+
+	// A call starts under one name; its elicitation's own message quotes
+	// a different one. Both are refused rather than have one guessed.
+	if got := replyTo(t, res, 303); got != `{"action":"decline"}` {
+		t.Errorf("reply to 303 (name mismatch) = %s, want decline", got)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__delta_lookup"); !ok || ev.Decision != "deny" || !strings.Contains(ev.Text, "mismatch") {
+		t.Errorf("mismatch permission event = %+v, ok=%v, want a deny naming the mismatch", ev, ok)
+	}
+
+	// No preceding item, no quoted name: there is nothing to decide
+	// under, and an empty tool name must not fail open.
+	if got := replyTo(t, res, 304); got != `{"action":"decline"}` {
+		t.Errorf("reply to 304 (unresolved name) = %s, want decline", got)
+	}
+	var unknownDenied bool
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Decision == "deny" && strings.Contains(ev.Text, "tool name unknown") {
+			unknownDenied = true
+		}
+	}
+	if !unknownDenied {
+		t.Error("no permission event denied the unresolved tool name")
+	}
+}
+
 // TestUnconfiguredPolicyStillDecides pins the default reading: a session
 // started with no policy at all refuses shell commands and write-shaped
 // MCP tools rather than waving them through.
