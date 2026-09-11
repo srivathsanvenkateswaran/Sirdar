@@ -15,7 +15,7 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
@@ -28,6 +28,9 @@ rather than being silently ignored.
 | `sources.helpdesk.subdomain` | string | none (required for `zendesk`) | Zendesk account identifier, e.g. `acme` for `acme.zendesk.com` |
 | `sources.helpdesk.oauthToken` | string | none (`zendesk` only; alternative to `email`+`apiToken`) | Credential reference to a Zendesk OAuth bearer token |
 | `sources.helpdesk.domain` | string | none (required for `freshdesk`) | Freshdesk account host, e.g. `acme.freshdesk.com` |
+| `sources.helpdesk.clientId` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client id |
+| `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
+| `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -144,14 +147,22 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk` and `freshdesk` are compiled into Sirdar; only `zohodesk` needs a separate
-"Zoho Desk OAuth" section below because of its refresh-token grant. Config load checks what
-`zendesk` and `freshdesk` cannot work without:
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom` and `hubspot` are compiled into
+Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
+refresh-token grant. Config load checks what each of the others cannot work without:
 
 | Adapter | Required | Notes |
 |---|---|---|
 | `zendesk` | `subdomain`, and either `email` + `apiToken` or `oauthToken` | `baseUrl` optionally overrides `https://{subdomain}.zendesk.com` |
 | `freshdesk` | `domain`, `apiKey` | `domain` is the full account host, e.g. `acme.freshdesk.com` |
+| `helpscout` | `clientId`, `clientSecret` | Help Scout has no API-key mode; Sirdar mints its own access tokens from the pair |
+| `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
+| `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
+
+The last three talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
+`api.hubapi.com` — so none of them takes a `baseUrl`. An Intercom workspace on the EU or AU
+data-residency host is not supported by this adapter yet; calls to the US host are proxied by
+Intercom, which works but is not what Intercom recommends.
 
 ```yaml
 sources:
@@ -170,17 +181,45 @@ sources:
     apiKey: env:FRESHDESK_API_KEY
 ```
 
-`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — fetching
-the signed-in user for `zendesk`, the signed-in agent for `freshdesk` — and names who the
+```yaml
+sources:
+  helpdesk:
+    adapter: helpscout
+    clientId: keychain:helpscout-client-id
+    clientSecret: keychain:helpscout-client-secret
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: intercom
+    accessToken: env:INTERCOM_ACCESS_TOKEN
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: hubspot
+    accessToken: env:HUBSPOT_PRIVATE_APP_TOKEN
+```
+
+`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
+signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
+`helpscout`, `/me` for `intercom`, the account details for `hubspot` — and names who the
 connection authenticates as, never the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
 [OK] sources.helpdesk (freshdesk) — reachable as acme.freshdesk.com
+[OK] sources.helpdesk (helpscout) — reachable as the Help Scout app
+[OK] sources.helpdesk (intercom) — reachable as the workspace access token
+[OK] sources.helpdesk (hubspot) — reachable as the private app token
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant.
+as oauth`, since there is no account email to show for that grant. The last three name the kind
+of grant rather than an account, because none of their probes returns an account identifier worth
+printing — the row itself is the proof the credential was accepted.
 
 ## Credential references
 

@@ -1,0 +1,6 @@
+{
+  "type": "admin",
+  "id": "a-0",
+  "email": "ops@acme.com",
+  "app": {"type": "app", "id_code": "abc1234", "name": "Acme"}
+}

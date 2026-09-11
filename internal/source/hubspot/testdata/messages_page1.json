@@ -1,0 +1,29 @@
+{
+  "results": [
+    {
+      "id": "m-1",
+      "type": "MESSAGE",
+      "createdAt": "2026-09-01T10:05:00Z",
+      "text": "Every checkout returns a 500.",
+      "direction": "INCOMING",
+      "senders": [
+        {
+          "actorId": "V-501",
+          "name": "Ada Lovelace",
+          "deliveryIdentifier": {"type": "HS_EMAIL_ADDRESS", "value": "ada@example.com"}
+        }
+      ],
+      "attachments": []
+    },
+    {
+      "id": "m-2",
+      "type": "MESSAGE",
+      "createdAt": "2026-09-01T11:00:00Z",
+      "richText": "<p>Looking into it <b>now</b>.</p>",
+      "direction": "OUTGOING",
+      "senders": [{"actorId": "A-77", "name": "Grace Hopper"}],
+      "attachments": [{"id": "at-1", "type": "FILE", "fileId": "9001"}]
+    }
+  ],
+  "paging": {"next": {"after": "cur-2", "link": "https://api.hubapi.com/conversations/v3/conversations/threads/8001/messages?after=cur-2"}}
+}
