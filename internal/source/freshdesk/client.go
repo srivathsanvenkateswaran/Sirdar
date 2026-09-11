@@ -199,6 +199,9 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 
 		resp, err := c.hc.Do(req)
 		if err != nil {
+			if host, ok := httpx.RedirectHost(err); ok {
+				return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: redirect to untrusted host %s", logPath(rawURL), host)}
+			}
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: %v", logPath(rawURL), err)}
 		}
 		body, readErr := httpx.ReadLimited(resp.Body, limit)
@@ -241,9 +244,14 @@ func (c *Client) downloadTo(ctx context.Context, rawURL string, withAuth bool, d
 
 	_, err = httpx.Download(ctx, c.hc, req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
 	var se *httpx.StatusError
+	host, refused := httpx.RedirectHost(err)
 	switch {
 	case err == nil:
 		return nil
+	case refused:
+		// Only the host: Go's *url.Error carries the refused target's path
+		// and query, and this error becomes a per-ticket warning.
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("freshdesk: GET %s: redirect to untrusted host %s", logPath(rawURL), host)}
 	case errors.As(err, &se):
 		return statusError(logPath(rawURL), se.Status, se.Body)
 	case errors.Is(err, httpx.ErrTooLarge):

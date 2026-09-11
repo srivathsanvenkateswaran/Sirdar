@@ -45,6 +45,11 @@ const (
 	// httpTimeout is the per-request timeout used when the caller does not
 	// supply its own *http.Client.
 	httpTimeout = 30 * time.Second
+
+	// maxJSONBody bounds an ordinary API response (a work item, a page of
+	// comments, a batch). The read fails rather than truncating, so a short
+	// but well-formed document is never decoded as if it were complete.
+	maxJSONBody = 8 << 20
 )
 
 // Config is the resolved configuration for one Azure DevOps organisation and
@@ -247,7 +252,7 @@ func (c *Client) do(ctx context.Context, method, rawURL string, body []byte) ([]
 		if err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("azure devops: %s %s: %v", method, displayPath(rawURL), err)}
 		}
-		b, readErr := io.ReadAll(resp.Body)
+		b, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {

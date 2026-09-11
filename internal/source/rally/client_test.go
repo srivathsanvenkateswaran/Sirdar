@@ -495,23 +495,30 @@ func TestRateLimitedHonoursOneRetryAfter(t *testing.T) {
 	}
 
 	// The header parsing itself now lives in httpx; these are the three
-	// values this adapter's 429 path turns on.
-	retryAfter := func(v string) time.Duration {
+	// values this adapter's 429 path turns on. An unusable header is
+	// refused outright (ok false), not reported as a zero wait, which is
+	// what stops the 429 path from retrying immediately.
+	retryAfter := func(v string) (time.Duration, bool) {
 		h := http.Header{}
 		if v != "" {
 			h.Set("Retry-After", v)
 		}
-		d, _ := httpx.RetryAfter(h, maxRetryAfter)
-		return d
+		return httpx.RetryAfter(h, maxRetryAfter)
 	}
-	if got := retryAfter("5"); got != 5*time.Second {
-		t.Errorf("RetryAfter(5) = %v, want 5s", got)
+	if got, ok := retryAfter("5"); got != 5*time.Second || !ok {
+		t.Errorf("RetryAfter(5) = (%v, %v), want (5s, true)", got, ok)
 	}
-	if got := retryAfter("nonsense"); got != 0 {
-		t.Errorf("RetryAfter(nonsense) = %v, want 0", got)
+	if got, ok := retryAfter("nonsense"); got != 0 || ok {
+		t.Errorf("RetryAfter(nonsense) = (%v, %v), want (0, false)", got, ok)
 	}
-	if got := retryAfter(""); got != 0 {
-		t.Errorf("RetryAfter(empty) = %v, want 0", got)
+	if got, ok := retryAfter(""); got != 0 || ok {
+		t.Errorf("RetryAfter(empty) = (%v, %v), want (0, false)", got, ok)
+	}
+	if got, ok := retryAfter("-1"); got != 0 || ok {
+		t.Errorf("RetryAfter(-1) = (%v, %v), want (0, false)", got, ok)
+	}
+	if got, ok := retryAfter("3600"); got != 0 || ok {
+		t.Errorf("RetryAfter(3600) = (%v, %v), want (0, false): longer than this client will sit out", got, ok)
 	}
 }
 

@@ -44,6 +44,13 @@ const (
 // triage run behind an hour-long quota reset.
 const maxRetryAfter = httpx.MaxRetryAfter
 
+// maxJSONBody bounds an ordinary API response. An issue with its comments is
+// measured in kilobytes; a body at this size is a fault or a hostile
+// response, and either way it should not be read into memory whole. The read
+// fails rather than truncating, so a short but well-formed document is never
+// decoded as if it were the whole thing.
+const maxJSONBody = 8 << 20
+
 // Config is the adapter's configuration. Secrets arrive already resolved by
 // the wiring layer, so every field is a plain string.
 type Config struct {
@@ -304,7 +311,7 @@ func (c *Client) doRaw(ctx context.Context, method, path string, query url.Value
 		if err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("jira: %s %s: %v", method, path, err)}
 		}
-		body, readErr := io.ReadAll(resp.Body)
+		body, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {

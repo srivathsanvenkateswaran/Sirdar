@@ -911,7 +911,10 @@ func TestAttachments_TrustedHostRedirectSkippedOthersStillDownload(t *testing.T)
 		_, _ = w.Write([]byte("stolen-bytes"))
 	})
 	cdn := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "https://evil.example.com/steal", http.StatusFound)
+		// The query is the point: an expired pre-signed link falls back to
+		// a login URL that carries a token, and that token must not reach
+		// the warning through Go's *url.Error.
+		http.Redirect(w, r, "https://evil.example.com/steal?token=abc", http.StatusFound)
 	}))
 	t.Cleanup(cdn.Close)
 
@@ -958,10 +961,15 @@ func TestAttachments_TrustedHostRedirectSkippedOthersStillDownload(t *testing.T)
 	}
 
 	warnings := c.WarningsFor("123")
-	// The refusal comes from the shared redirect policy now, which names
-	// the host it would not follow to and the reason, in that order.
-	if len(warnings) != 1 || !strings.Contains(warnings[0], "redirect to evil.example.com: untrusted host") {
+	// The warning names the refused host and nothing else: Go wraps a
+	// CheckRedirect failure in a *url.Error carrying the target's path and
+	// query, and an expired pre-signed link can redirect to a login URL
+	// with a token in it.
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "redirect to untrusted host evil.example.com") {
 		t.Errorf("warnings = %v, want one naming the untrusted redirect target", warnings)
+	}
+	if strings.Contains(warnings[0], "token") || strings.Contains(warnings[0], "/steal") {
+		t.Errorf("warning carries the redirect target's path or query: %q", warnings[0])
 	}
 }
 

@@ -114,12 +114,16 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: invalid baseUrl %q", cfg.BaseURL)}
 	}
 
+	// Every request this adapter makes goes through this one client, so a
+	// server response that tries to redirect any of them — an attachment
+	// download as much as a next_page fetch carrying the live Authorization
+	// header — off the trusted hosts is refused uniformly.
 	return &Client{
 		baseURL:    base,
 		trust:      trust,
 		subdomain:  cfg.Subdomain,
 		authHeader: authHeader,
-		hc:         client,
+		hc:         httpx.Client(client, trust, maxRedirects),
 	}, nil
 }
 
@@ -170,6 +174,11 @@ func (c *Client) doOnce(ctx context.Context, urlStr string) (*http.Response, err
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
+		// A refused redirect is reported by host alone: the *url.Error Go
+		// wraps it in carries the target's path and query.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: redirect to untrusted host %s", logPath(urlStr), host)}
+		}
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zendesk: GET %s: %v", logPath(urlStr), err)}
 	}
 	return resp, nil

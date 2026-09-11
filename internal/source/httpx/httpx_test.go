@@ -78,8 +78,67 @@ func TestRedirectPolicyRefusesAnOffHostHop(t *testing.T) {
 		t.Errorf("error = %v, want it to say the host was not trusted", err)
 	}
 	// Go wraps the refusal in a *url.Error carrying the target URL, query
-	// and all, which is why a caller whose message reaches a log or a prompt
-	// uses RedirectPolicyStop and names the host itself.
+	// and all — which is why the refusal is a typed error carrying the host
+	// on its own, and why every caller that puts a download failure in a
+	// warning reports RedirectHost rather than the error string.
+	host, ok := RedirectHost(err)
+	if !ok {
+		t.Fatalf("RedirectHost(%v) = _, false, want the refused host", err)
+	}
+	if host != strings.TrimPrefix(foreign.URL, "http://") {
+		t.Errorf("RedirectHost = %q, want the refused target's host", host)
+	}
+	if strings.Contains(host, "RelayState") || strings.Contains(host, "/signin") {
+		t.Errorf("RedirectHost = %q, want the host alone", host)
+	}
+	if _, ok := RedirectHost(errors.New("something else")); ok {
+		t.Error("RedirectHost claimed an unrelated error was a refused redirect")
+	}
+}
+
+// TestRedirectRefusedIsTypedAndCarriesOnlyTheHost: the hop cap is a plain
+// error (there is no one host to name), an untrusted hop is a
+// *RedirectRefused, and neither carries the target's query.
+func TestRedirectRefusedIsTypedAndCarriesOnlyTheHost(t *testing.T) {
+	t.Parallel()
+	policy := RedirectPolicy(mustTrust(t, "https://acme.example"), 3)
+
+	req, err := http.NewRequest(http.MethodGet, "https://EVIL.example.:443/steal?token=abc", nil)
+	if err != nil {
+		t.Fatalf("new request: %v", err)
+	}
+	err = policy(req, []*http.Request{req})
+	var refused *RedirectRefused
+	if !errors.As(err, &refused) {
+		t.Fatalf("err = %v, want a *RedirectRefused", err)
+	}
+	if refused.Host != "evil.example" {
+		t.Errorf("Host = %q, want the normalised host", refused.Host)
+	}
+	if strings.Contains(err.Error(), "token") || strings.Contains(err.Error(), "steal") {
+		t.Errorf("error carries the redirect target's path or query: %v", err)
+	}
+
+	capErr := policy(req, []*http.Request{req, req, req})
+	if _, ok := RedirectHost(capErr); ok {
+		t.Errorf("the hop cap = %v, want a plain error with no host to report", capErr)
+	}
+}
+
+func TestSaveRejectsANilResponse(t *testing.T) {
+	t.Parallel()
+	if _, err := Save(nil, filepath.Join(t.TempDir(), "x"), DownloadOptions{}); err == nil {
+		t.Error("Save(nil) = nil error, want a failure")
+	}
+	// A hand-built response with no body saves an empty file rather than
+	// panicking.
+	dest := filepath.Join(t.TempDir(), "empty.bin")
+	if _, err := Save(&http.Response{StatusCode: 200, Header: http.Header{}}, dest, DownloadOptions{Max: 10}); err != nil {
+		t.Fatalf("Save with no body: %v", err)
+	}
+	if b, err := os.ReadFile(dest); err != nil || len(b) != 0 {
+		t.Errorf("file = %q (err %v), want an empty file", b, err)
+	}
 }
 
 // TestRedirectPolicyStopHandsBackTheRedirect: an untrusted hop stops the

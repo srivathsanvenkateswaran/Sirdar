@@ -71,5 +71,19 @@ The proposed home is `internal/source/httpx`. The proposed contents:
   under the real name, and it reports a non-2xx as a `*StatusError` the adapter maps onto its own
   `source.Error` codes. `Save` is its second half, for Zoho Desk, whose 401 handling needs the
   response in hand to mint a token and replay.
+- **`SanitizeName` trims surrounding whitespace** after stripping separators and control
+  characters, which four of the seven already did: a name that is nothing but spaces becomes
+  "attachment" rather than a file whose name is a space. Internal spaces are kept ("crash
+  log.txt").
+- **A refused redirect is a typed `*RedirectRefused` carrying the host alone**, recovered with
+  `RedirectHost`. Go wraps a `CheckRedirect` error in a `*url.Error` that includes the target's
+  path and query, and six adapters put a download failure straight into a per-ticket warning, so
+  an SSO Location with a token in it would have reached the prompt. Every adapter now reports the
+  host and nothing else.
+- **Zendesk's `next_page` check follows the base URL's scheme** rather than demanding https
+  outright: it is now "the hosts the credential may go to", which for an https workspace (every
+  real one) is the same rule, and for an http baseUrl — a local test server — matches what that
+  workspace already chose.
 - **Byte ceilings reached the three adapters that had none** (Jira, Azure DevOps, Linear
-  downloads), at the 64 MiB the other four already used.
+  downloads), at the 64 MiB the other four already used, and an 8 MiB ceiling reached the three
+  JSON paths that read a response whole with no bound at all (Jira, Azure DevOps, Linear).

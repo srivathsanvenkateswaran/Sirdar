@@ -164,10 +164,15 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL string, sendAuth
 		req.Header.Set("Authorization", c.authHeader)
 	}
 
-	// Each redirect target is checked exactly like a starting URL would be,
-	// so a redirect to an untrusted host is refused before the client ever
-	// issues that request.
-	ct, err := httpx.Download(ctx, httpx.Client(c.hc, c.trust, maxRedirects), req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	// c.hc already carries the redirect policy, so each redirect target is
+	// checked exactly like a starting URL would be and a redirect to an
+	// untrusted host is refused before the client ever issues that request.
+	ct, err := httpx.Download(ctx, c.hc, req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	// Only the host: Go's *url.Error carries the refused target's path and
+	// query, and this error becomes a per-ticket warning.
+	if host, ok := httpx.RedirectHost(err); ok {
+		return "", fmt.Errorf("redirect to untrusted host %s", host)
+	}
 	var se *httpx.StatusError
 	if errors.As(err, &se) {
 		return "", fmt.Errorf("status %d", se.Status)

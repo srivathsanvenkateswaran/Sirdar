@@ -301,6 +301,12 @@ func (c *Client) do(ctx context.Context, rawURL string, limit int64) ([]byte, in
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		// A refused redirect is reported by host alone: the *url.Error Go
+		// wraps it in carries the target's path and query, and this message
+		// reaches a per-ticket warning.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: refusing to follow a redirect to %s", logPath(rawURL), host)}
+		}
 		return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: %v", logPath(rawURL), err)}
 	}
 	defer resp.Body.Close()

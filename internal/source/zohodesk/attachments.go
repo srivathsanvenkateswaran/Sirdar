@@ -276,6 +276,11 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL, destPath string
 	// fresh token and a replay, which needs the response in hand.
 	resp, err := c.sendWith(ctx, req, httpx.Client(c.http(), c.trust(), maxRedirects))
 	if err != nil {
+		// Only the host: Go's *url.Error carries the refused target's path
+		// and query, and this error becomes a per-ticket warning.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return "", fmt.Errorf("redirected to an untrusted host: %s", host)
+		}
 		return "", err
 	}
 	ct, err := httpx.Save(resp, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})

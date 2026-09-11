@@ -299,6 +299,30 @@ func TestGetMapsIssue(t *testing.T) {
 	}
 }
 
+// TestGetRefusesAnOversizedBody: a GraphQL response is read under a ceiling
+// that fails rather than truncating, so a body that would otherwise be
+// decoded as a short but well-formed issue is an error instead.
+func TestGetRefusesAnOversizedBody(t *testing.T) {
+	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
+		_, _ = w.Write([]byte(`{"data":{"issue":{"identifier":"ENG-1","title":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", maxJSONBody)))
+		_, _ = w.Write([]byte(`"}}}`))
+		return true
+	})
+	c := newTestClient(t, f, "")
+
+	_, err := c.Get(context.Background(), "ENG-1")
+	if err == nil {
+		t.Fatal("Get accepted an oversized body, want an error")
+	}
+	if got := sourceCode(t, err); got != source.Internal {
+		t.Errorf("code = %q, want %q", got, source.Internal)
+	}
+	if !strings.Contains(err.Error(), "read body") {
+		t.Errorf("error = %v, want it to name the body read", err)
+	}
+}
+
 func TestGetNotFoundWhenIssueIsNull(t *testing.T) {
 	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
 		w.Write([]byte(`{"data":{"issue":null}}`))

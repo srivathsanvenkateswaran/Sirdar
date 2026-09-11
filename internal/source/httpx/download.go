@@ -90,6 +90,14 @@ func Download(ctx context.Context, hc *http.Client, req *http.Request, dest stri
 // itself — an adapter whose auth needs the response in hand, to mint a new
 // token and replay a 401, say. It consumes and closes resp.
 func Save(resp *http.Response, dest string, opts DownloadOptions) (contentType string, err error) {
+	if resp == nil {
+		return "", errors.New("httpx: nil response")
+	}
+	if resp.Body == nil {
+		// http.Client never hands back a nil body, but a hand-built
+		// response (a RoundTripper stub in a test, say) can.
+		resp.Body = io.NopCloser(strings.NewReader(""))
+	}
 	defer func() {
 		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxStatusBody))
 		resp.Body.Close()

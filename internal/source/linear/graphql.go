@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"strings"
 
@@ -139,6 +138,11 @@ const maxErrBody = 200
 // giving up and reporting rate limiting to the caller.
 const maxRetryAfter = httpx.MaxRetryAfter
 
+// maxJSONBody bounds one GraphQL response. A page of issues or comments is
+// measured in kilobytes; the read fails rather than truncating, so a short
+// but well-formed document is never decoded as if it were complete.
+const maxJSONBody = 8 << 20
+
 // query POSTs a GraphQL operation and decodes the response's data object into
 // out. A 429 with a Retry-After of at most maxRetryAfter is waited out and
 // retried once; every other failure is mapped to a *source.Error.
@@ -166,7 +170,7 @@ func (c *Client) query(ctx context.Context, q string, vars map[string]any, out a
 		if err != nil {
 			return internalf("linear: POST %s: %v", c.Endpoint, err)
 		}
-		raw, readErr := io.ReadAll(resp.Body)
+		raw, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {

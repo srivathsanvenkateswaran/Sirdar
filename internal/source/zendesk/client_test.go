@@ -475,6 +475,66 @@ func TestThreads_PaginationCappedAtMaxPages(t *testing.T) {
 	}
 }
 
+// TestThreads_NextPageRedirectOffHostRefused: next_page is checked before it
+// is followed, but the page it points at can still answer with a redirect,
+// and that Location is server output like any other. The live Authorization
+// header goes on every one of these requests, so the hop is refused rather
+// than followed with the credential stripped — and the warning names the
+// host without the target's query.
+func TestThreads_NextPageRedirectOffHostRefused(t *testing.T) {
+	ticketJSON := mustReadFile(t, "testdata/ticket.json")
+
+	var foreignHits int
+	foreign := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		foreignHits++
+		t.Errorf("credentialed request reached a foreign host: %s %s (Authorization %q)",
+			r.Method, r.URL.Path, r.Header.Get("Authorization"))
+	}))
+	t.Cleanup(foreign.Close)
+
+	var srvURL string
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v2/tickets/555.json", func(w http.ResponseWriter, r *http.Request) {
+		w.Write(ticketJSON)
+	})
+	mux.HandleFunc("/api/v2/tickets/555/comments.json", func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("page") == "2" {
+			http.Redirect(w, r, foreign.URL+"/steal?token=abc", http.StatusFound)
+			return
+		}
+		fmt.Fprintf(w, `{
+			"comments": [{"id": 1, "author_id": 999, "public": true, "plain_body": "c", "created_at": "2026-09-10T07:00:00Z"}],
+			"users": [],
+			"next_page": %q
+		}`, srvURL+"/api/v2/tickets/555/comments.json?page=2")
+	})
+	srv := httptest.NewTLSServer(mux)
+	t.Cleanup(srv.Close)
+	srvURL = srv.URL
+
+	// One client for both listeners: each server's certificate is its own,
+	// so the transport has to trust the pair.
+	hc := srv.Client()
+	c, err := New(Config{Subdomain: "acme", BaseURL: srv.URL, Email: testEmail, APIToken: testAPIToken}, hc)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	if _, err := c.Threads(context.Background(), "555"); err == nil {
+		t.Fatal("Threads followed a next_page that redirected off-host, want an error")
+	} else {
+		if strings.Contains(err.Error(), "token") || strings.Contains(err.Error(), "/steal") {
+			t.Errorf("error carries the redirect target's path or query: %v", err)
+		}
+		if !strings.Contains(err.Error(), "untrusted host") {
+			t.Errorf("error = %v, want it to name the refused hop", err)
+		}
+	}
+	if foreignHits != 0 {
+		t.Errorf("foreign host received %d requests, want 0", foreignHits)
+	}
+}
+
 // --- Attachments ---
 
 func TestAttachments_DownloadsAndSanitizesNames(t *testing.T) {

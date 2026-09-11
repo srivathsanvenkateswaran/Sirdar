@@ -493,6 +493,11 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	// hop, but stripping the credential is not the same as refusing the
 	// request.
 	ct, err := httpx.Download(ctx, httpx.Client(c.HTTP, uploadTrust, maxRedirects), req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	// Only the host: Go's *url.Error carries the refused target's path and
+	// query, and this error becomes a per-ticket warning.
+	if host, ok := httpx.RedirectHost(err); ok {
+		return "", fmt.Errorf("refusing to follow a redirect to %s", host)
+	}
 	var se *httpx.StatusError
 	if errors.As(err, &se) {
 		return "", fmt.Errorf("status %d", se.Status)

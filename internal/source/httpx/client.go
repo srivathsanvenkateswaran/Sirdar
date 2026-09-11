@@ -1,6 +1,7 @@
 package httpx
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 )
@@ -10,16 +11,49 @@ import (
 // service uses and short enough that a redirect loop costs nothing.
 const DefaultMaxRedirects = 3
 
+// RedirectRefused is the error RedirectPolicy returns for a hop off the
+// trusted hosts. It carries the target's host and nothing else, because the
+// caller's own error message must not carry anything else: Go wraps a
+// CheckRedirect error in a *url.Error that includes the target's path and
+// query, and an SSO Location routinely carries the original URL and
+// sometimes a token there. An adapter that puts a download failure in a
+// per-ticket warning would otherwise put that token in front of the agent.
+//
+// Use RedirectHost to recover the host from the wrapped error, and report
+// that alone.
+type RedirectRefused struct {
+	// Host is the normalised host the redirect named.
+	Host string
+	// Reason is why it was refused, in Check's vocabulary.
+	Reason string
+}
+
+func (e *RedirectRefused) Error() string {
+	return fmt.Sprintf("refusing to follow a redirect to %s: %s", e.Host, e.Reason)
+}
+
+// RedirectHost reports the host of a refused redirect, unwrapping the
+// *url.Error Go wraps a CheckRedirect failure in. It is how an adapter turns
+// a transport error into a warning that names the host without quoting the
+// URL the server chose.
+func RedirectHost(err error) (host string, ok bool) {
+	var refused *RedirectRefused
+	if errors.As(err, &refused) {
+		return refused.Host, true
+	}
+	return "", false
+}
+
 // RedirectPolicy returns an http.Client.CheckRedirect that applies t to
-// every hop and stops the chain after maxHops.
+// every hop and stops the chain after maxHops, refusing an untrusted hop
+// with a *RedirectRefused.
 //
 // It exists because Go's own handling is not enough: Go strips the
 // Authorization header on a cross-host hop but still makes the request and
 // still writes the answer to disk, and it strips nothing at all from a
 // custom auth header like Rally's ZSESSIONID. A Location header arrives
 // inside a server response, which makes it input rather than configuration,
-// so refusing the hop outright — with an error that names the host it was
-// sent to and nothing else — is the actual fix.
+// so refusing the hop outright is the actual fix.
 func RedirectPolicy(t *Trust, maxHops int) func(*http.Request, []*http.Request) error {
 	if maxHops <= 0 {
 		maxHops = DefaultMaxRedirects
@@ -29,7 +63,7 @@ func RedirectPolicy(t *Trust, maxHops int) func(*http.Request, []*http.Request) 
 			return fmt.Errorf("stopped after %d redirects", maxHops)
 		}
 		if fetch, _, reason := t.Check(req.URL); !fetch {
-			return fmt.Errorf("refusing to follow a redirect to %s: %s", req.URL.Hostname(), reason)
+			return &RedirectRefused{Host: NormalizeHost(req.URL.Scheme, req.URL.Host), Reason: reason}
 		}
 		return nil
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
@@ -253,7 +254,26 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	// one off the org's hosts would write a sign-in page to disk under the
 	// attachment's name, and put the request on a host that was never
 	// checked.
-	ct, err := httpx.Download(ctx, httpx.Client(c.hc, c.trust, maxRedirects), req, destPath, httpx.DownloadOptions{
+	resp, err := httpx.Client(c.hc, c.trust, maxRedirects).Do(req)
+	if err != nil {
+		// Only the host: Go's *url.Error carries the refused target's path
+		// and query, and this error becomes a per-ticket warning.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return "", fmt.Errorf("refusing to follow a redirect to %s", host)
+		}
+		return "", err
+	}
+	// The sign-in page again, in its other disguise: Azure DevOps answers an
+	// unusable PAT with 203 Non-Authoritative Information rather than a 401,
+	// and a 203 is a success as far as the transfer is concerned. RefuseHTML
+	// catches the usual text/html body; this catches the status whatever the
+	// body claims to be.
+	if resp.StatusCode == http.StatusNonAuthoritativeInfo {
+		drain(resp)
+		return "", fmt.Errorf("sign-in page returned instead of file content")
+	}
+
+	ct, err := httpx.Save(resp, destPath, httpx.DownloadOptions{
 		Max:        maxAttachmentBytes,
 		RefuseHTML: true,
 	})
@@ -261,8 +281,18 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	if errors.As(err, &se) {
 		return "", fmt.Errorf("status %d", se.Status)
 	}
+	if errors.Is(err, httpx.ErrHTMLBody) {
+		return "", fmt.Errorf("sign-in page returned instead of file content")
+	}
 	if err != nil {
 		return "", err
 	}
 	return ct, nil
+}
+
+// drain empties and closes a response body that is not going to be read, so
+// the connection can be reused.
+func drain(resp *http.Response) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
+	resp.Body.Close()
 }

@@ -1020,6 +1020,27 @@ func TestRateLimitedSkipsALongRetryAfter(t *testing.T) {
 	}
 }
 
+// TestGetRefusesAnOversizedBody: a JSON response is read under a ceiling
+// that fails rather than truncating, so a body that would otherwise be
+// decoded as a short but well-formed issue is an error instead.
+func TestGetRefusesAnOversizedBody(t *testing.T) {
+	t.Parallel()
+	ts, mux := startServer(t)
+	mux.HandleFunc("/rest/api/2/issue/SUP-42", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"key":"SUP-42","fields":{"summary":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", maxJSONBody)))
+		_, _ = w.Write([]byte(`"}}`))
+	})
+
+	c := newClient(t, ts, cloudConfig())
+	_, err := c.Get(context.Background(), "SUP-42")
+	wantSourceError(t, err, source.Internal)
+	if err != nil && !strings.Contains(err.Error(), "read body") {
+		t.Errorf("error = %v, want it to name the body read", err)
+	}
+}
+
 func TestRetryAfter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
