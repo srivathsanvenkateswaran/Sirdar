@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 const (
@@ -493,14 +494,31 @@ func TestRateLimitedHonoursOneRetryAfter(t *testing.T) {
 		t.Errorf("code = %q, want %q", code, source.RateLimited)
 	}
 
-	if got := parseRetryAfter("5"); got != 5*time.Second {
-		t.Errorf("parseRetryAfter(5) = %v, want 5s", got)
+	// The header parsing itself now lives in httpx; these are the three
+	// values this adapter's 429 path turns on. An unusable header is
+	// refused outright (ok false), not reported as a zero wait, which is
+	// what stops the 429 path from retrying immediately.
+	retryAfter := func(v string) (time.Duration, bool) {
+		h := http.Header{}
+		if v != "" {
+			h.Set("Retry-After", v)
+		}
+		return httpx.RetryAfter(h, maxRetryAfter)
 	}
-	if got := parseRetryAfter("nonsense"); got != 0 {
-		t.Errorf("parseRetryAfter(nonsense) = %v, want 0", got)
+	if got, ok := retryAfter("5"); got != 5*time.Second || !ok {
+		t.Errorf("RetryAfter(5) = (%v, %v), want (5s, true)", got, ok)
 	}
-	if got := parseRetryAfter(""); got != 0 {
-		t.Errorf("parseRetryAfter empty = %v, want 0", got)
+	if got, ok := retryAfter("nonsense"); got != 0 || ok {
+		t.Errorf("RetryAfter(nonsense) = (%v, %v), want (0, false)", got, ok)
+	}
+	if got, ok := retryAfter(""); got != 0 || ok {
+		t.Errorf("RetryAfter(empty) = (%v, %v), want (0, false)", got, ok)
+	}
+	if got, ok := retryAfter("-1"); got != 0 || ok {
+		t.Errorf("RetryAfter(-1) = (%v, %v), want (0, false)", got, ok)
+	}
+	if got, ok := retryAfter("3600"); got != 0 || ok {
+		t.Errorf("RetryAfter(3600) = (%v, %v), want (0, false): longer than this client will sit out", got, ok)
 	}
 }
 
@@ -1037,17 +1055,17 @@ func TestSanitizeName(t *testing.T) {
 		"a\x00b.txt":           "ab.txt",
 	}
 	for in, want := range cases {
-		if got := sanitizeName(in); got != want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", in, got, want)
+		if got := httpx.SanitizeName(in); got != want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", in, got, want)
 		}
 	}
 	long := strings.Repeat("n", 300) + ".png"
-	got := sanitizeName(long)
+	got := httpx.SanitizeName(long)
 	if len(got) > 120 {
-		t.Errorf("sanitizeName kept %d bytes, want at most 120", len(got))
+		t.Errorf("SanitizeName kept %d bytes, want at most 120", len(got))
 	}
 	if !strings.HasSuffix(got, ".png") {
-		t.Errorf("sanitizeName lost the extension: %q", got)
+		t.Errorf("SanitizeName lost the extension: %q", got)
 	}
 }
 
@@ -1358,19 +1376,19 @@ func TestListRejectsMalformedFilters(t *testing.T) {
 // --- body ceilings ---
 
 func TestReadLimitedFailsClosed(t *testing.T) {
-	got, err := readLimited(strings.NewReader("hello"), 16)
+	got, err := httpx.ReadLimited(strings.NewReader("hello"), 16)
 	if err != nil {
-		t.Fatalf("readLimited: %v", err)
+		t.Fatalf("ReadLimited: %v", err)
 	}
 	if string(got) != "hello" {
-		t.Errorf("readLimited = %q, want the whole body", got)
+		t.Errorf("ReadLimited = %q, want the whole body", got)
 	}
-	if _, err := readLimited(strings.NewReader("hello"), 4); err == nil {
-		t.Error("readLimited accepted a body past its limit, want an error")
+	if _, err := httpx.ReadLimited(strings.NewReader("hello"), 4); err == nil {
+		t.Error("ReadLimited accepted a body past its limit, want an error")
 	}
 	// A body exactly at the limit is not over it.
-	if _, err := readLimited(strings.NewReader("hello"), 5); err != nil {
-		t.Errorf("readLimited at exactly the limit = %v, want no error", err)
+	if _, err := httpx.ReadLimited(strings.NewReader("hello"), 5); err != nil {
+		t.Errorf("ReadLimited at exactly the limit = %v, want no error", err)
 	}
 }
 

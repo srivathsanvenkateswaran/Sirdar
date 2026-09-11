@@ -5,14 +5,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/textproto"
-	"strconv"
 	"strings"
-	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 // --- Query documents ---
@@ -139,7 +136,12 @@ const maxErrBody = 200
 
 // maxRetryAfter is the longest Retry-After wait the client will honour before
 // giving up and reporting rate limiting to the caller.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
+
+// maxJSONBody bounds one GraphQL response. A page of issues or comments is
+// measured in kilobytes; the read fails rather than truncating, so a short
+// but well-formed document is never decoded as if it were complete.
+const maxJSONBody = 8 << 20
 
 // query POSTs a GraphQL operation and decodes the response's data object into
 // out. A 429 with a Retry-After of at most maxRetryAfter is waited out and
@@ -168,12 +170,12 @@ func (c *Client) query(ctx context.Context, q string, vars map[string]any, out a
 		if err != nil {
 			return internalf("linear: POST %s: %v", c.Endpoint, err)
 		}
-		raw, readErr := io.ReadAll(resp.Body)
+		raw, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if wait, ok := retryAfter(resp.Header); ok {
-				if err := sleepCtx(ctx, wait); err != nil {
+			if wait, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+				if err := httpx.SleepCtx(ctx, wait); err != nil {
 					return internalf("linear: POST %s: %v", c.Endpoint, err)
 				}
 				continue
@@ -295,48 +297,6 @@ func fieldValidationError(err error) bool {
 		return false
 	}
 	return strings.Contains(err.Error(), "Cannot query field")
-}
-
-// retryAfter reads a Retry-After header in either of its documented forms
-// (delta-seconds or an HTTP date) and reports whether the wait is short enough
-// to sit through.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		return 0, false
-	}
-	if secs, err := strconv.Atoi(v); err == nil {
-		d := time.Duration(secs) * time.Second
-		if d < 0 || d > maxRetryAfter {
-			return 0, false
-		}
-		return d, true
-	}
-	if t, err := http.ParseTime(textproto.TrimString(v)); err == nil {
-		d := time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-		if d > maxRetryAfter {
-			return 0, false
-		}
-		return d, true
-	}
-	return 0, false
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
 }
 
 func internalf(format string, args ...any) *source.Error {
