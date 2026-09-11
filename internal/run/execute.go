@@ -235,6 +235,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MCPAllow:  cfg.Permissions.MCP,
 			Root:      cfg.Root,
 		},
+		Mode: provider.ModeTriage,
 		// mcp.workspaceOnly travels as these two fields for every
 		// provider that spawns a CLI: Claude Code turns them into
 		// --strict-mcp-config --mcp-config, and Codex into a generated
@@ -251,6 +252,21 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Env:    r.childEnv(),
 		Binary: r.binary(),
 	}
+	// A fix session is the one run that may change the workspace, so it
+	// gets the write-enabled policy and its own shell allow-list, and the
+	// providers are told which mode they are starting in: it is what
+	// decides Claude's --disallowedTools, Codex's sandbox, and whether
+	// Sirdar's own loop offers write_file and edit_file at all.
+	if p.kind == store.KindFix {
+		spec.Mode = provider.ModeFix
+		// A repository that sets core.hooksPath (husky, lefthook, a
+		// checked-in .githooks/) keeps the code git runs on commit and
+		// push in an ordinary source directory, which the .git rule does
+		// not cover. It is read once, here, and reserved for this session.
+		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
+			extraReserved(cfg.Root))
+	}
+
 	// Claude Code reads image files from the bundle directory itself.
 	// Codex has to be handed them on the command line, the openai loop
 	// names them in its first user message, and an ACP agent takes them as
@@ -260,6 +276,20 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		spec.Images = imageAttachments(p)
 	}
 	return spec
+}
+
+// extraReserved is the per-run reserved list a fix session is judged
+// against on top of .git and .sirdar: the repository's core.hooksPath when
+// it sets one.
+func extraReserved(root string) []string {
+	// A bounded context: this is one local `git config` read, and a fix
+	// session must not hang behind a git that does not answer.
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if hooks := provider.HooksPath(ctx, root); hooks != "" {
+		return []string{hooks}
+	}
+	return nil
 }
 
 // binary is the configured path override for the provider in use, empty
@@ -298,17 +328,25 @@ func imageAttachments(p *prepared) []string {
 }
 
 func schemaFor(kind store.Kind) []byte {
-	if kind == store.KindRCA {
+	switch kind {
+	case store.KindRCA:
 		return prompt.RCASchema
+	case store.KindFix:
+		return prompt.FixSchema
+	default:
+		return prompt.TriageSchema
 	}
-	return prompt.TriageSchema
 }
 
 func noteKind(kind store.Kind) note.Kind {
-	if kind == store.KindRCA {
+	switch kind {
+	case store.KindRCA:
 		return note.RCA
+	case store.KindFix:
+		return note.Fix
+	default:
+		return note.Triage
 	}
-	return note.Triage
 }
 
 // consume reads the run's events until they end, and returns every session
@@ -646,10 +684,14 @@ func (r *Runner) complete(p *prepared, doc []byte) (note.DigestRow, error) {
 	if err := os.WriteFile(filepath.Join(p.run.Dir, "result.json"), doc, 0o644); err != nil {
 		return note.DigestRow{}, fmt.Errorf("run: write result.json: %w", err)
 	}
-	if p.kind == store.KindRCA {
+	switch p.kind {
+	case store.KindRCA:
 		return r.completeRCA(p, doc)
+	case store.KindFix:
+		return r.completeFix(p, doc)
+	default:
+		return r.completeTriage(p, doc)
 	}
-	return r.completeTriage(p, doc)
 }
 
 func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error) {
@@ -791,6 +833,13 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	}
 	p.state.Notes = append(p.state.Notes, runPath)
 
+	// An eval replay's note is a measurement of the agent, not a record of
+	// a ticket: filing it would overwrite the note a human wrote for the
+	// same key and reads in their vault.
+	if p.state.Eval {
+		return runPath, nil
+	}
+
 	filed := r.fileNote(p, kind, filename, body)
 	if filed == "" {
 		return runPath, nil
@@ -852,7 +901,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
 		for _, s := range states {
-			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID {
+			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID || s.Eval {
 				continue
 			}
 			for _, path := range s.Notes {
@@ -928,6 +977,12 @@ func (r *Runner) writePlaybookSuggestions(p *prepared, f rcaFields) error {
 // it. A register that cannot be written is a warning, not a failed run:
 // the notes are already on disk.
 func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
+	// The register is the audit index of tickets that were worked. An
+	// eval replayed a stored bundle to score a prompt change, so it has
+	// nothing to add to it; its own report is .sirdar/eval/<stamp>.json.
+	if p.state.Eval {
+		return
+	}
 	row.Key = p.state.Key
 	row.RunID = p.state.RunID
 	row.Provider = p.state.Provider

@@ -930,3 +930,57 @@ func TestSystemPromptAndUserMessage(t *testing.T) {
 		t.Errorf("UserMessage with no images = %q", plain)
 	}
 }
+
+// TestFixModeOffersTheWritingTools: Sirdar's own loop hands the model a
+// tool set, so the difference between a triage and a fix is which tools
+// exist at all — not a refusal after the model asks.
+func TestFixModeOffersTheWritingTools(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		mode      provider.Mode
+		wantWrite bool
+	}{
+		{"triage", provider.ModeTriage, false},
+		{"fix", provider.ModeFix, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cs := newChatServer(t, scripted(toolCallReply("c1", submitNoteTool, noteJSON, 10, 5)))
+			sess := newSession(t, cs, LoopConfig{}, provider.SessionSpec{Cwd: t.TempDir(), Mode: tc.mode})
+			drain(t, sess)
+
+			reqs := cs.captured()
+			if len(reqs) == 0 {
+				t.Fatal("the loop made no chat request")
+			}
+			offered := map[string]bool{}
+			for _, tool := range reqs[0].Tools {
+				offered[tool.Function.Name] = true
+			}
+			for _, name := range []string{"read_file", "grep", submitNoteTool} {
+				if !offered[name] {
+					t.Errorf("%s was not offered in %s mode; tools=%v", name, tc.mode, offered)
+				}
+			}
+			for _, name := range []string{"write_file", "edit_file"} {
+				if offered[name] != tc.wantWrite {
+					t.Errorf("%s offered=%v in %s mode, want %v", name, offered[name], tc.mode, tc.wantWrite)
+				}
+			}
+		})
+	}
+}
+
+// TestFixModeSystemPromptDoesNotClaimReadOnly: the standing instruction has
+// to describe the tools the session actually has.
+func TestFixModeSystemPromptDoesNotClaimReadOnly(t *testing.T) {
+	fix := SystemFor(provider.ModeFix)
+	if strings.Contains(fix, "Your tools are read-only") {
+		t.Error("the fix system prompt still tells the model its tools are read-only")
+	}
+	if !strings.Contains(fix, submitNoteTool) {
+		t.Errorf("the fix system prompt does not name %s", submitNoteTool)
+	}
+	if SystemFor(provider.ModeTriage) != System() {
+		t.Error("triage mode did not get the triage system prompt")
+	}
+}

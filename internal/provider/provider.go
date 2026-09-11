@@ -18,6 +18,23 @@ type Budget struct {
 	MaxUSD     float64
 }
 
+// Mode says what kind of run a session is. A triage or rca session is
+// read-only: it reads the workspace and writes nothing but its own JSON
+// answer. A fix session implements the note's proposed fix, so it needs the
+// editing tools a read-only session is refused. Providers read it to decide
+// which tool set and which sandbox to start with; the zero value is
+// ModeTriage, so a caller that never sets it gets the read-only session it
+// used to get.
+type Mode string
+
+const (
+	ModeTriage Mode = "triage"
+	ModeFix    Mode = "fix"
+)
+
+// IsFix reports whether m is the write-enabled fix mode.
+func (m Mode) IsFix() bool { return m == ModeFix }
+
 // SessionSpec configures a single agent session.
 type SessionSpec struct {
 	Cwd          string
@@ -30,6 +47,10 @@ type SessionSpec struct {
 	Images       []string
 	Env          []string // full child env; provider may strip keys
 	Binary       string   // path override; "" = look up on PATH
+
+	// Mode selects the read-only triage session or the write-enabled fix
+	// session. Empty means ModeTriage.
+	Mode Mode
 
 	// MCPConfig is the path to the only MCP server file the session may
 	// load. Empty means there is no such file.

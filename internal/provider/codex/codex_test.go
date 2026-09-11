@@ -869,3 +869,115 @@ func TestUnconfiguredPolicyStillDecides(t *testing.T) {
 		}
 	}
 }
+
+// TestFixModeFileChangesGoThroughThePolicy is the other half of fix mode on
+// the Codex path: workspace-write lets Codex write inside the workspace, and
+// this is what decides which file inside it. The approval names only the
+// item, so the paths come from the fileChange item that preceded it, and
+// each one goes through the fix policy — the same rules a Claude fix's Edit
+// calls are judged by.
+func TestFixModeFileChangesGoThroughThePolicy(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+		spec.Policy = provider.FixPolicy(spec.Cwd, nil, nil, nil)
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		id   int
+		want string
+	}{
+		{"a patch to the workspace's own source is applied", 401, `{"decision":"accept"}`},
+		{"a patch that also writes a git hook is not", 402, `{"decision":"decline"}`},
+		{"an approval whose paths are unknown is not", 403, `{"decision":"decline"}`},
+		{"a standing grant for a whole root is not", 404, `{"decision":"decline"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replyTo(t, res, tc.id); got != tc.want {
+				t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+			}
+		})
+	}
+
+	var allowed, denials []provider.Event
+	for _, ev := range evs {
+		if ev.Kind != provider.EvPermission || ev.Tool != "fileChange" {
+			continue
+		}
+		if ev.Decision == "allow" {
+			allowed = append(allowed, ev)
+		} else {
+			denials = append(denials, ev)
+		}
+	}
+	if len(allowed) != 1 || !strings.Contains(allowed[0].Text, "internal/svc/handler.go") {
+		t.Errorf("file-change allows = %+v, want one naming the file it wrote", allowed)
+	}
+	if len(denials) != 3 {
+		t.Fatalf("file-change denials = %d, want 3: %+v", len(denials), denials)
+	}
+	// The reason the agent is shown is the policy's own, so it can tell a
+	// reserved path from a patch nobody could check.
+	if !strings.Contains(denials[0].Text, ".git/hooks/x") {
+		t.Errorf("the hook denial does not name the reserved path: %q", denials[0].Text)
+	}
+	if !strings.Contains(denials[1].Text, "named no path") {
+		t.Errorf("the unknown-paths denial does not say why: %q", denials[1].Text)
+	}
+	if !strings.Contains(denials[2].Text, "root") {
+		t.Errorf("the grantRoot denial does not say why: %q", denials[2].Text)
+	}
+}
+
+// TestTriageFileChangesStayRefused: outside a fix run nothing makes the
+// session a writer, so a file change is refused before its paths are even
+// looked for.
+func TestTriageFileChangesStayRefused(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	for _, id := range []int{401, 402, 403, 404} {
+		if got := replyTo(t, res, id); got != `{"decision":"decline"}` {
+			t.Errorf("reply to %d = %s, want a decline", id, got)
+		}
+	}
+	ev, ok := permissionFor(evs, "fileChange")
+	if !ok || ev.Decision != "deny" || !strings.Contains(ev.Text, "read-only") {
+		t.Errorf("triage file-change permission = %+v, ok=%v, want a read-only deny", ev, ok)
+	}
+}
+
+// TestFixModeUsesWorkspaceWriteSandbox: Codex enforces read-only through
+// its own sandbox, so a fix thread has to be started in the one that lets
+// it write the files it is fixing — and only those. The approval policy is
+// unchanged by the mode: "untrusted" is what puts each file change, command
+// and MCP call to Sirdar in either kind of run.
+func TestFixModeUsesWorkspaceWriteSandbox(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	startLine := findSent(t, res, "thread/start")
+	if !strings.Contains(startLine, `"sandbox":"workspace-write"`) {
+		t.Errorf("fix thread/start did not ask for workspace-write: %s", startLine)
+	}
+	if strings.Contains(startLine, `"sandbox":"read-only"`) {
+		t.Errorf("fix thread/start still asked for read-only: %s", startLine)
+	}
+	if !strings.Contains(startLine, `"approvalPolicy":"untrusted"`) {
+		t.Errorf("fix thread/start changed the approval policy: %s", startLine)
+	}
+}

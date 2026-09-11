@@ -1,12 +1,14 @@
 // Package codex adapts the OpenAI Codex CLI to Sirdar's provider contract by
 // driving `codex app-server`, its line-delimited JSON-RPC 2.0 stdio protocol.
 //
-// Sessions run with sandbox "read-only", so the sandbox itself refuses writes,
-// and with approvalPolicy "untrusted", so every action Codex would otherwise
-// take unattended is put to Sirdar first. Each request is answered from
-// SessionSpec.Policy — the same PermissionPolicy Claude Code's permission
-// prompts go through — and every answer is surfaced as an EvPermission event,
-// so an operator can see what the agent asked for and what it was told.
+// A triage session runs with sandbox "read-only", so the sandbox itself
+// refuses writes; a fix session runs with "workspace-write", which confines
+// it to the thread's cwd. Both run with approvalPolicy "untrusted", so every
+// action Codex would otherwise take unattended is put to Sirdar first. Each
+// request is answered from SessionSpec.Policy — the same PermissionPolicy
+// Claude Code's permission prompts go through — and every answer is surfaced
+// as an EvPermission event, so an operator can see what the agent asked for
+// and what it was told.
 package codex
 
 import (
@@ -40,9 +42,16 @@ const (
 	// diagnostics.
 	stderrTailLines = 50
 
-	// sandboxMode is Codex's own confinement: the filesystem is read-only
-	// whatever the permission policy says.
+	// sandboxMode is Codex's own confinement for a triage session: the
+	// filesystem is read-only whatever the permission policy says.
 	sandboxMode = "read-only"
+
+	// fixSandboxMode is what a fix session runs in instead. A fix has to
+	// write the files it is fixing, and workspace-write confines Codex's
+	// own writes to the thread's cwd — the workspace root. It is the
+	// outer wall; which file inside it may be written is still decided by
+	// the policy, one approval at a time (see decideFileChange).
+	fixSandboxMode = "workspace-write"
 
 	// approvalPolicy decides which actions Codex asks about instead of
 	// deciding for itself, and it is the only reason Sirdar's permission
@@ -71,7 +80,8 @@ const (
 	// approvals rather than a server asking the user a question.
 	mcpApprovalKind = "mcp_tool_call"
 
-	// readOnlyReason is what the agent is told when it asks for a write.
+	// readOnlyReason is what the agent is told when it asks for a write
+	// outside a fix run.
 	readOnlyReason = "Sirdar policy: triage runs are read-only"
 )
 
@@ -141,18 +151,19 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		policy = &provider.PermissionPolicy{Root: spec.Cwd}
 	}
 	s := &session{
-		cmd:        cmd,
-		spec:       spec,
-		policy:     policy,
-		home:       home,
-		pendingMCP: map[string][]string{},
-		events:     make(chan provider.Event),
-		turnDone:   make(chan struct{}),
-		exited:     make(chan struct{}),
-		stdoutDone: make(chan struct{}),
-		stderrDone: make(chan struct{}),
-		stopped:    make(chan struct{}),
-		pumpDone:   make(chan struct{}),
+		cmd:            cmd,
+		spec:           spec,
+		policy:         policy,
+		home:           home,
+		pendingMCP:     map[string][]string{},
+		pendingChanges: map[string][]string{},
+		events:         make(chan provider.Event),
+		turnDone:       make(chan struct{}),
+		exited:         make(chan struct{}),
+		stdoutDone:     make(chan struct{}),
+		stderrDone:     make(chan struct{}),
+		stopped:        make(chan struct{}),
+		pumpDone:       make(chan struct{}),
 	}
 	lastPumpDone = s.pumpDone
 	s.queue.cond = sync.NewCond(&s.queue.mu)
@@ -259,9 +270,21 @@ func (s *session) handshake(ctx context.Context) error {
 		return fmt.Errorf("codex: initialized: %w", err)
 	}
 
+	// A triage thread runs in Codex's read-only sandbox; a fix thread has
+	// to write the files it is fixing, so it gets workspace-write, which
+	// confines it to the cwd the thread was started in. approvalPolicy is
+	// "untrusted" either way, so Codex asks before it runs a command, calls
+	// an MCP tool or writes a file, and Sirdar's policy answers. In a fix
+	// thread that approval is the gate that decides which file inside the
+	// workspace may be written; in a triage thread it is what refuses the
+	// write the sandbox would have refused anyway.
+	sandbox := sandboxMode
+	if s.spec.Mode.IsFix() {
+		sandbox = fixSandboxMode
+	}
 	method := "thread/start"
 	params := map[string]any{
-		"sandbox":        sandboxMode,
+		"sandbox":        sandbox,
 		"approvalPolicy": approvalPolicy,
 	}
 	if s.spec.Resume != "" {
@@ -369,12 +392,20 @@ type session struct {
 	// second call's start overwrite the first's before its elicitation
 	// arrived, judging call one's approval under call two's name.
 	pendingMCP map[string][]string
-	finalText  string
-	usage      struct{ in, out int64 }
-	turns      int
-	turnDone   chan struct{}
-	turnClosed bool
-	turnErr    error
+	// pendingChanges is, per fileChange item id, the paths that item's
+	// patch would touch. A file-change approval carries only the item's
+	// id (FileChangeRequestApprovalParams is threadId, turnId, itemId,
+	// startedAtMs and an optional reason and grantRoot — no paths), and
+	// the item/started that precedes it is what carries changes[].path.
+	// Without the paths there is nothing for the fix policy to confine,
+	// so the entry recorded here is what makes the approval decidable.
+	pendingChanges map[string][]string
+	finalText      string
+	usage          struct{ in, out int64 }
+	turns          int
+	turnDone       chan struct{}
+	turnClosed     bool
+	turnErr        error
 
 	// streamClosed records that the event queue has been closed, so
 	// Events() has ended and no further turn can be started on this
@@ -722,7 +753,14 @@ type item struct {
 	Phase     string          `json:"phase"`
 	Server    string          `json:"server"`
 	Tool      string          `json:"tool"`
+	Changes   []fileChange    `json:"changes"`
 	Questions json.RawMessage `json:"questions"`
+}
+
+// fileChange is one entry of a fileChange item's patch. Only the path is
+// read: it is what the fix policy judges.
+type fileChange struct {
+	Path string `json:"path"`
 }
 
 func (s *session) onNotify(method string, params json.RawMessage) {
@@ -763,6 +801,19 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 				}
 				s.mu.Unlock()
 			}
+			// A file change announces its paths here, the same way an MCP
+			// call announces its tool, and its approval names only the
+			// item id. The entry is dropped once the item completes, so a
+			// later approval cannot be decided against a finished patch.
+			if it.Type == "fileChange" && it.ID != "" {
+				s.mu.Lock()
+				if kind == provider.EvToolStarted {
+					s.pendingChanges[it.ID] = changePaths(it.Changes)
+				} else {
+					delete(s.pendingChanges, it.ID)
+				}
+				s.mu.Unlock()
+			}
 			s.emit(provider.Event{Kind: kind, Tool: toolName(it), Input: itemRaw.Item, Raw: raw})
 			return
 		}
@@ -781,6 +832,22 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		case "commentary":
 			s.emit(provider.Event{Kind: provider.EvAssistantText, Text: it.Text, Raw: raw})
 		}
+
+	case "item/fileChange/patchUpdated":
+		// Codex revises a patch before it asks about it, and the revision
+		// can name files the item/started did not. The approval must be
+		// judged against what would actually be written, so the tracked
+		// paths are replaced by the ones this notification carries.
+		var payload struct {
+			ItemID  string       `json:"itemId"`
+			Changes []fileChange `json:"changes"`
+		}
+		if err := json.Unmarshal(params, &payload); err != nil || payload.ItemID == "" {
+			return
+		}
+		s.mu.Lock()
+		s.pendingChanges[payload.ItemID] = changePaths(payload.Changes)
+		s.mu.Unlock()
 
 	case "turn/started":
 		var payload struct {
@@ -907,10 +974,7 @@ func (s *session) onRequest(id json.RawMessage, method string, params json.RawMe
 		s.decideCommand(id, params, raw)
 
 	case "item/fileChange/requestApproval":
-		// The sandbox is read-only and no permission setting makes a
-		// triage run a writer, so this one is not the policy's to weigh.
-		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
-		s.denied(approvalTool(method), params, raw, readOnlyReason)
+		s.decideFileChange(id, params, raw)
 
 	case "item/permissions/requestApproval":
 		// A request to widen the sandbox: more filesystem, or network.
@@ -969,6 +1033,91 @@ func (s *session) decideCommand(id, params, raw json.RawMessage) {
 	// allow-list covers instead of dying on the first refusal.
 	_ = s.conn.reply(id, map[string]string{"decision": "decline"})
 	s.denied("commandExecution", params, raw, d.Message)
+}
+
+// fileChangeTool is the tool name a file-change approval is decided under.
+// Codex's own name for the operation is the item type, which no permission
+// rule is written against; "Edit" is the name the same write carries on the
+// Claude path and in PermissionPolicy's fixAllowed set, so deciding under it
+// is what puts a Codex patch through exactly the rules a Claude fix goes
+// through.
+const fileChangeTool = "Edit"
+
+// decideFileChange answers item/fileChange/requestApproval.
+//
+// Outside a fix run there is nothing to weigh: no permission setting makes a
+// triage session a writer, and the read-only sandbox would have refused the
+// write anyway. Inside one, the patch is the point of the run, and the
+// question is only which files it may touch — so each path the item would
+// write goes through the same policy that judges a Claude fix's Edit calls,
+// which resolves it through symlinks, refuses anything outside the workspace
+// root and refuses .git/, .sirdar/ and the repository's hooks directory.
+//
+// The paths come from the fileChange item, not from the request: the request
+// carries only the item's id (see pendingChanges). An approval whose paths
+// are not known is declined rather than guessed at — an accept would hand
+// Codex a patch nobody checked the destination of.
+func (s *session) decideFileChange(id, params, raw json.RawMessage) {
+	tool := approvalTool("item/fileChange/requestApproval")
+	if !s.policy.IsFix() {
+		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+		s.denied(tool, params, raw, readOnlyReason)
+		return
+	}
+
+	var req struct {
+		ItemID    string `json:"itemId"`
+		GrantRoot string `json:"grantRoot"`
+	}
+	_ = json.Unmarshal(params, &req)
+	if strings.TrimSpace(req.GrantRoot) != "" {
+		// Not this patch but a standing permission to write under a root
+		// for the rest of the session, which would take the decision away
+		// from the policy for every change after it. Sirdar answers one
+		// patch at a time.
+		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+		s.denied(tool, params, raw, "Sirdar policy: a fix decides one file change at a time, "+
+			"so writes are not granted for a whole root")
+		return
+	}
+
+	s.mu.Lock()
+	paths := s.pendingChanges[req.ItemID]
+	s.mu.Unlock()
+	if len(paths) == 0 {
+		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+		s.denied(tool, params, raw, "Sirdar policy: the file change named no path, "+
+			"so where it would write cannot be checked")
+		return
+	}
+
+	// Every path has to pass: a patch is applied whole, so one file the
+	// policy refuses refuses the patch.
+	for _, path := range paths {
+		input, _ := json.Marshal(map[string]string{"file_path": path})
+		if d := s.policy.Decide(fileChangeTool, input); !d.Allow {
+			_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+			s.denied(tool, params, raw, d.Message)
+			return
+		}
+	}
+	_ = s.conn.reply(id, map[string]string{"decision": "accept"})
+	s.emit(provider.Event{
+		Kind: provider.EvPermission, Decision: "allow",
+		Tool: tool, Input: params, Text: strings.Join(paths, ", "), Raw: raw,
+	})
+}
+
+// changePaths lifts the paths out of a fileChange item's changes, dropping
+// entries that name none.
+func changePaths(changes []fileChange) []string {
+	var out []string
+	for _, c := range changes {
+		if strings.TrimSpace(c.Path) != "" {
+			out = append(out, c.Path)
+		}
+	}
+	return out
 }
 
 // elicitation is the subset of mcpServer/elicitation/request Sirdar reads.

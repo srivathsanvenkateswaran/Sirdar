@@ -32,6 +32,11 @@ const (
 	// disallowedTools is belt-and-braces with PermissionPolicy: the CLI
 	// refuses these before it ever asks Sirdar.
 	disallowedTools = "Write,Edit,MultiEdit,NotebookEdit"
+	// fixDisallowedTools is what stays refused in a fix session. The three
+	// editing tools have to come off the list for a fix to edit anything,
+	// but nothing in the flow edits a notebook, so NotebookEdit is refused
+	// by the CLI as well as by the policy.
+	fixDisallowedTools = "NotebookEdit"
 	// emptyMCPConfig is an inline MCP configuration that declares no
 	// servers. Passed with --strict-mcp-config it is how a session is
 	// started with no MCP tools at all.
@@ -85,6 +90,16 @@ func args(spec provider.SessionSpec) []string {
 		out = append(out, "--strict-mcp-config", "--mcp-config", spec.MCPConfig)
 	case spec.MCPStrict:
 		out = append(out, "--strict-mcp-config", "--mcp-config", emptyMCPConfig)
+	}
+	// A fix session is started to edit the workspace, so the three editing
+	// tools come off the refusal list; NotebookEdit stays on it, because
+	// nothing in the flow edits a notebook. Where a fix may write is still
+	// decided by the permission policy on every call (provider.FixPolicy),
+	// which resolves the path and refuses anything outside the workspace
+	// root or inside .git/ or .sirdar/ — the CLI's Edit and Write take an
+	// absolute path, so the tool name on its own approves nothing.
+	if spec.Mode.IsFix() {
+		return append(out, "--disallowedTools", fixDisallowedTools)
 	}
 	return append(out, "--disallowedTools", disallowedTools)
 }

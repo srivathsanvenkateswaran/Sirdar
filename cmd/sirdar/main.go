@@ -50,6 +50,9 @@ commands:
   doctor      check CLIs, logins, adapters, notes directory
   triage      run triage for one or more ticket keys
   rca         produce the RCA note and Resolution draft
+  fix         implement an approved triage note's fix on a branch and open a PR
+  eval        replay the golden bundles and score the notes they produce
+  golden      manage the golden set (add, list)
   resume      continue a blocked or interrupted run
   runs        list runs and states
   register    print the register

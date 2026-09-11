@@ -1,0 +1,45 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Sirdar Fix Report",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "summary",
+    "filesChanged",
+    "testsRun",
+    "risks",
+    "deviationFromNote"
+  ],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "description": "What was changed, in one line first: that line becomes the commit subject."
+    },
+    "filesChanged": {
+      "type": "array",
+      "description": "Every workspace file this session created, edited or deleted, as a path relative to the workspace root.",
+      "items": { "type": "string" }
+    },
+    "testsRun": {
+      "type": "array",
+      "description": "Each build or test command that was run and what it reported.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["command", "result"],
+        "properties": {
+          "command": { "type": "string" },
+          "result": { "type": "string" }
+        }
+      }
+    },
+    "risks": {
+      "type": "string",
+      "description": "What a reviewer should look at hardest, or \"none\"."
+    },
+    "deviationFromNote": {
+      "type": "string",
+      "description": "Empty when the change is exactly the note's Proposed Fix. Otherwise say plainly what was done differently and why; a non-empty value stops the push until a human accepts it."
+    }
+  }
+}

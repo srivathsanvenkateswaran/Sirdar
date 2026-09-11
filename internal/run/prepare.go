@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io/fs"
 	"mime"
 	"os"
 	"os/exec"
@@ -99,6 +100,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		Model:     model,
 		StartedAt: now,
 		UpdatedAt: now,
+		Eval:      o.Eval,
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
@@ -118,14 +120,11 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		p.triageNoteCopy, p.triageLink = triageNoteCopy(cfg.Root, notePath)
 	}
 
-	bundle, err := r.fetchBundle(ctx, key, p)
+	bundle, err := r.stageBundle(ctx, key, p, o)
 	if err != nil {
 		return p, err
 	}
 	p.bundle = bundle
-	if err := ticket.WriteBundle(rn.BundleDir(), bundle); err != nil {
-		return p, err
-	}
 
 	playbooks, err := prompt.LoadPlaybooks(cfg.ExpandPath(cfg.Playbooks))
 	if err != nil {
@@ -166,6 +165,61 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return p, err
 	}
 	return p, nil
+}
+
+// stageBundle puts the ticket bundle in the run directory: normally by
+// fetching it from the configured sources, and, when the caller named a
+// BundleDir, by copying that directory in instead. A replayed bundle is
+// taken as it stands — its warnings, its attachments and its thread are
+// whatever the run that produced it recorded — so an eval run reasons over
+// exactly the evidence the original session saw.
+func (r *Runner) stageBundle(ctx context.Context, key string, p *prepared, o Options) (ticket.Bundle, error) {
+	if o.BundleDir == "" {
+		bundle, err := r.fetchBundle(ctx, key, p)
+		if err != nil {
+			return bundle, err
+		}
+		return bundle, ticket.WriteBundle(p.run.BundleDir(), bundle)
+	}
+	if err := copyTree(o.BundleDir, p.run.BundleDir()); err != nil {
+		return ticket.Bundle{}, fmt.Errorf("run: copy bundle %s: %w", o.BundleDir, err)
+	}
+	bundle, err := readBundle(p.run.BundleDir())
+	if err != nil {
+		return bundle, err
+	}
+	p.state.Warnings = append(p.state.Warnings, "bundle replayed from "+o.BundleDir+"; no ticket source was called")
+	return bundle, nil
+}
+
+// copyTree copies src over dst recursively, creating directories as it
+// goes. Symlinks are skipped rather than followed: a golden bundle is data,
+// and a link in one has nothing to point at on another machine.
+func copyTree(src, dst string) error {
+	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, err := filepath.Rel(src, path)
+		if err != nil {
+			return err
+		}
+		target := filepath.Join(dst, rel)
+		switch {
+		case d.IsDir():
+			return os.MkdirAll(target, 0o755)
+		case !d.Type().IsRegular():
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return err
+		}
+		if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+			return err
+		}
+		return os.WriteFile(target, data, 0o644)
+	})
 }
 
 // fetchBundle reads the tracker record, then the helpdesk record, thread
