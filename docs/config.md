@@ -56,6 +56,7 @@ rather than being silently ignored.
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
+| `permissions.fixBash` | list of string | `git *`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
@@ -314,6 +315,51 @@ that catches the obvious ways out.
 - Matching is case-sensitive.
 - The pattern is anchored to the whole command string, not a prefix or substring: `git log`
   without a trailing `*` matches only the exact command `git log`, with no arguments.
+
+## `permissions.fixBash`
+
+`sirdar fix` is the one session allowed to change the workspace, and it needs a different set
+of shell commands than a triage run does: it has to branch, build and test. Rather than widen
+`permissions.bash` — which would hand every read-only triage run the same reach — a fix session
+is matched against its own list.
+
+The syntax is exactly the one above: the same segment splitting, the same refusal of
+substitution and redirection, the same workspace-root check on anything that looks like a path.
+Only the list changes, and only for `sirdar fix`.
+
+The default is the version-control commands the flow needs and the build and test commands a
+fix has to run before it can claim to work:
+
+```yaml
+permissions:
+  fixBash:
+    - "git *"
+    - "dotnet build*"
+    - "dotnet test*"
+    - "npm test*"
+    - "go build*"
+    - "go test*"
+    - "make *"
+```
+
+Naming your own list replaces the default outright — it is a starting point, not a floor — so
+include whatever of it you still want:
+
+```yaml
+permissions:
+  fixBash:
+    - "git *"
+    - "just *"
+    - "pnpm test*"
+```
+
+Two things the list does not do. It does not decide whether the session may edit files: a fix
+session gets `Edit`, `Write` and `MultiEdit` regardless, and a triage session never does.
+And `git *` covering `git commit` and `git push` does not mean the agent makes them — the
+prompt tells it not to, and Sirdar does the committing and pushing itself, after the JSON
+report comes back and after the deviation check. If you would rather the agent could not reach
+those at all, narrow the entry to the read-only ones (`git log*`, `git show*`, `git diff*`,
+`git grep*`); nothing in the flow depends on the agent running git.
 
 ## MCP access
 

@@ -86,6 +86,13 @@ func args(spec provider.SessionSpec) []string {
 	case spec.MCPStrict:
 		out = append(out, "--strict-mcp-config", "--mcp-config", emptyMCPConfig)
 	}
+	// A fix session is started to edit the workspace, so the flag that
+	// refuses the editing tools outright has to come off. What a fix may
+	// do is still decided by the permission policy on every call
+	// (provider.FixPolicy), which is the one gate both modes share.
+	if spec.Mode.IsFix() {
+		return out
+	}
 	return append(out, "--disallowedTools", disallowedTools)
 }
 

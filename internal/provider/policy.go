@@ -45,6 +45,37 @@ var AlwaysDenied = map[string]bool{
 	"NotebookEdit": true,
 }
 
+// fixAllowed lists the editing tools a fix run may use, and only those: a
+// fix implements the note's Proposed Fix in the workspace's source, so it
+// needs Edit, Write and MultiEdit. NotebookEdit is deliberately absent —
+// nothing in the flow edits a notebook, and a tool nobody needs is one
+// fewer way for a prompt injection to reach a file.
+//
+// The lower-case names are the same two writes in Sirdar's own agent loop
+// (agenttools.WriteSet), judged by this same policy.
+var fixAllowed = map[string]bool{
+	"Edit":      true,
+	"Write":     true,
+	"MultiEdit": true,
+
+	"write_file": true,
+	"edit_file":  true,
+}
+
+// FixPolicy is the permission policy for a fix run: the read-only set plus
+// Edit, Write and MultiEdit, with shell commands judged against the
+// workspace's permissions.fixBash list rather than permissions.bash.
+// Everything else is still refused, so a fix session is a triage session
+// that may edit its own workspace, not an unsupervised shell.
+func FixPolicy(root string, fixBash, mcpAllow []string) *PermissionPolicy {
+	return &PermissionPolicy{
+		Mode:      ModeFix,
+		BashAllow: fixBash,
+		MCPAllow:  mcpAllow,
+		Root:      root,
+	}
+}
+
 // Decision is the outcome of a permission check: whether the tool call is
 // allowed, and, when denied, a human-readable reason to surface to the
 // agent or the operator.
@@ -100,7 +131,14 @@ type PermissionPolicy struct {
 	BashAllow []string
 	MCPAllow  []string
 	Root      string
+
+	// Mode is ModeTriage (the zero value) for a read-only run and ModeFix
+	// for a run allowed to edit the workspace.
+	Mode Mode
 }
+
+// IsFix reports whether this policy is a fix policy.
+func (p *PermissionPolicy) IsFix() bool { return p != nil && p.Mode.IsFix() }
 
 // Decide applies the policy rules to one tool call.
 func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
@@ -110,7 +148,10 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	if AlwaysAllowed[tool] {
 		return Decision{Allow: true}
 	}
-	if AlwaysDenied[tool] {
+	if p.IsFix() && fixAllowed[tool] {
+		return Decision{Allow: true}
+	}
+	if AlwaysDenied[tool] || fixAllowed[tool] {
 		return Decision{Allow: false, Message: "Sirdar policy: triage runs are read-only"}
 	}
 	// "Bash" is Claude Code's and Codex's name for the shell tool; "bash"

@@ -828,3 +828,30 @@ func TestResultLineIsRecognisedByItsType(t *testing.T) {
 		t.Fatalf("the result line's own totals must be reported as they are: %+v", usage[1])
 	}
 }
+
+// TestFixModeDropsDisallowedTools: --disallowedTools is what stops the CLI
+// editing files before Sirdar is ever asked, so a fix session — which
+// exists to edit files — must not be started with it.
+func TestFixModeDropsDisallowedTools(t *testing.T) {
+	spec := provider.SessionSpec{OutputSchema: []byte(`{}`)}
+
+	triage := args(spec)
+	if !contains(triage, "--disallowedTools") {
+		t.Fatalf("a triage session lost --disallowedTools: %v", triage)
+	}
+
+	spec.Mode = provider.ModeFix
+	fix := args(spec)
+	if contains(fix, "--disallowedTools") {
+		t.Fatalf("a fix session was started with --disallowedTools: %v", fix)
+	}
+	if contains(fix, disallowedTools) {
+		t.Fatalf("a fix session was still handed the disallowed list: %v", fix)
+	}
+	// Everything else about the command line is unchanged.
+	for _, want := range []string{"-p", "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--json-schema"} {
+		if !contains(fix, want) {
+			t.Errorf("fix args missing %q: %v", want, fix)
+		}
+	}
+}

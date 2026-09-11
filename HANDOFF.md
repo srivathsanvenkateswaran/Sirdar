@@ -10,7 +10,8 @@ via the includeIf rule; never set `user.email` by hand):
 | Worktree | Branch | State |
 |---|---|---|
 | `~/Documents/Personal/Sirdar` | `main` | Everything landed, including `provider: openai`: CLI (`init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`), Wails v2 desktop app under `desktop/`, built-in sources (Zoho Desk with OAuth refresh, Zendesk, Freshdesk, Jira, Linear, Azure DevOps, Rally, external stdio adapters), generic `helpdeskRef` regex, both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
-| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. Only the `main` worktree remains. |
+| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
+| `~/Documents/Personal/Sirdar-evalfix` | `evalfix` | `sirdar eval` + `sirdar golden add` (replay a golden bundle through a real triage run and score it, `internal/eval`, `docs/eval.md`) and `sirdar fix` (the human-gated fix flow, `internal/fix`). Not merged. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -41,6 +42,12 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   `sandbox: read-only` for Codex, and for `provider: openai` the tool set itself plus
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
   and `2>/dev/null`) and the MCP write-verb heuristic behind `permissions.mcp`.
+- On `evalfix`, `sirdar fix` is the one session that writes, and it flips all three layers at
+  once through `SessionSpec.Mode`: no `--disallowedTools`, Codex's `workspace-write` sandbox,
+  and `agenttools.WriteSet` in the openai loop. `provider.FixPolicy` still refuses everything
+  but `Edit`/`Write`/`MultiEdit`, and matches shell commands against `permissions.fixBash`
+  rather than `permissions.bash`. The human gate is the triage note's `status`, and a non-empty
+  `deviationFromNote` in the agent's report stops the push until `--accept-deviation`.
 
 ## Next steps, in order
 
@@ -63,8 +70,8 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 
 ## Known gaps (deliberate)
 
-No fix flow (the tool records a human's fix, it never makes one). No writes to any helpdesk or
-tracker. No auth on `sirdar serve` (loopback only unless `--allow-remote`). Register markdown
+No writes to any helpdesk or tracker (`sirdar fix`, on `evalfix`, writes to git and GitHub and
+to nothing else). No auth on `sirdar serve` (loopback only unless `--allow-remote`). Register markdown
 export lacks title/company columns (`RegisterRow` has none). `provider: openai` has no resume
 handle (a blocked run must be re-run). Two concurrent runs of the same key can mis-pair the UI's
 Cancel button within a 2 s window.

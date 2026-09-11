@@ -1,6 +1,10 @@
 package openai
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+)
 
 // systemPrompt is the standing instruction for a Sirdar-driven session. It
 // is deliberately short: the run's own prompt (the ticket bundle, the
@@ -15,8 +19,26 @@ Your tools are read-only: read files, list directories, search, run the workspac
 
 Gather evidence with those tools first. Then finish by calling submit_note exactly once, with the note as its arguments, matching that tool's schema. The note is the only output that counts: do not answer in prose, and do not paste the JSON into a message instead of calling the tool.`
 
-// System returns the system message text.
+// fixSystemPrompt is the standing instruction for a fix session. It differs
+// from the triage one in exactly the place the run differs: the tool set
+// can write, and saying otherwise would be false. The rest — one
+// submit_note call, no prose answer — is the same contract.
+const fixSystemPrompt = `You are running inside Sirdar, a support-fix harness, in a checkout of the workspace you are fixing.
+
+You can read files, list directories, search, fetch a URL, call the workspace's MCP servers, run the workspace's allow-listed shell commands, and write or edit files in this workspace. A command outside the allow-list is refused rather than run, and a path outside the workspace cannot be read or written.
+
+Make the change the triage note's Proposed Fix describes, and nothing else. Then finish by calling submit_note exactly once, with the summary as its arguments, matching that tool's schema. Do not answer in prose, and do not paste the JSON into a message instead of calling the tool.`
+
+// System returns the triage system message text.
 func System() string { return systemPrompt }
+
+// SystemFor returns the system message for a session in mode.
+func SystemFor(mode provider.Mode) string {
+	if mode.IsFix() {
+		return fixSystemPrompt
+	}
+	return systemPrompt
+}
 
 // nudgeText is sent once when the model replies with prose instead of
 // calling a tool. A second prose-only reply ends the session: a model that

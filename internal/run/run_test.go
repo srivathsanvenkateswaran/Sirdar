@@ -2077,3 +2077,115 @@ func TestFailureAfterTheNoteIsAWarning(t *testing.T) {
 		t.Fatalf("warnings %v, want the provider failure reported as one", out.State.Warnings)
 	}
 }
+
+// TestTriageReplaysABundleInsteadOfFetching is what makes an evaluation
+// run a real run: the session is prepared from a bundle on disk and no
+// ticket source is touched, but everything after that — prompt, session,
+// validation, note, register row — is the ordinary path.
+func TestTriageReplaysABundleInsteadOfFetching(t *testing.T) {
+	cfg := newWorkspace(t)
+	golden := t.TempDir()
+	if err := ticket.WriteBundle(golden, sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	refuse := errors.New("the source must not be called during a replay")
+	r := newRunner(cfg, p, stubTracker{err: refuse}, stubHelpdesk{getErr: refuse})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{BundleDir: golden})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	dir := runDir(t, cfg, out)
+	for _, name := range []string{"ticket.json", "thread.md"} {
+		if _, err := os.Stat(filepath.Join(dir, "bundle", name)); err != nil {
+			t.Errorf("the golden bundle's %s was not copied in: %v", name, err)
+		}
+	}
+	if prompt := readFile(t, filepath.Join(dir, "prompt.md")); !strings.Contains(prompt, "Export fails") {
+		t.Error("the prompt was not assembled from the replayed bundle")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "note.md")); err != nil {
+		t.Errorf("a replayed run wrote no note: %v", err)
+	}
+
+	var said bool
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "bundle replayed from") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("the run state does not say the bundle was replayed: %v", out.State.Warnings)
+	}
+}
+
+// TestFixRunRecordsItsKindAndPrompt: a fix run has no bundle and no note,
+// so what it leaves on disk is the prompt, the report and a state that says
+// which branch the work went to.
+func TestFixRunRecordsItsKindAndPrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	const report = `{"summary":"Stream the export","filesChanged":["export/csv.go"],"testsRun":[],"risks":"none","deviationFromNote":""}`
+	p := &stubProvider{script: replay(finalEvent(report))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{
+		Prompt: "implement the fix",
+		Branch: "fix-omni-1-export",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if out.State.Kind != store.KindFix {
+		t.Fatalf("kind %q", out.State.Kind)
+	}
+
+	dir := runDir(t, cfg, out)
+	if got := readFile(t, filepath.Join(dir, "prompt.md")); got != "implement the fix" {
+		t.Errorf("prompt %q", got)
+	}
+	doc, err := FixReport(cfg.Root, "OMNI-1", out.State.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(doc), "Stream the export") {
+		t.Errorf("the report was not filed: %s", doc)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "note.md")); err == nil {
+		t.Error("a fix run rendered a note")
+	}
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("a fix run wrote a register row before anything was pushed: %+v", rows)
+	}
+
+	spec := p.spec(0)
+	if !spec.Mode.IsFix() || !spec.Policy.IsFix() {
+		t.Errorf("the fix run started a triage session: mode=%q", spec.Mode)
+	}
+	if len(spec.Policy.BashAllow) == 0 || spec.Policy.BashAllow[0] != "git *" {
+		t.Errorf("the fix session's bash list is %v", spec.Policy.BashAllow)
+	}
+}
+
+// TestFixRunNeedsAPrompt guards the one way to call Fix wrongly.
+func TestFixRunNeedsAPrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay()}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	if _, err := r.Fix(context.Background(), "OMNI-1", FixOptions{}); err == nil {
+		t.Fatal("a fix run with no prompt was accepted")
+	}
+}

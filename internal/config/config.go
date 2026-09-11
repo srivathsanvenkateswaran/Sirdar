@@ -151,6 +151,22 @@ const DefaultMaxContextTokens = 128000
 // when it names none: Rally's North American production instance.
 const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 
+// DefaultFixBash is the shell allow-list a fix session gets when the
+// workspace configures none: the version-control commands the flow itself
+// needs, and the build and test commands a fix has to run before it can
+// claim to work. It is deliberately a build-and-test list, not a general
+// one: anything else a workspace needs is an explicit permissions.fixBash
+// entry somebody chose to write.
+var DefaultFixBash = []string{
+	"git *",
+	"dotnet build*",
+	"dotnet test*",
+	"npm test*",
+	"go build*",
+	"go test*",
+	"make *",
+}
+
 // DefaultAttachmentMaxBytes is the size above which a downloaded
 // attachment is dropped from the bundle. A 17 MB screen recording is 99%
 // of a bundle by bytes and none of it by evidence: the session cannot open
@@ -191,6 +207,13 @@ type Config struct {
 		// tools are allowed and write-shaped ones are denied by the
 		// heuristic in internal/provider.
 		MCP []string `yaml:"mcp"`
+		// FixBash is the allow-list a `sirdar fix` session's shell
+		// commands are matched against, in place of Bash. A fix has to
+		// branch, build and test, which a read-only triage list has no
+		// reason to permit; keeping the two lists apart means widening
+		// one does not widen the other. DefaultFixBash fills it in when
+		// the workspace names none.
+		FixBash []string `yaml:"fixBash"`
 	} `yaml:"permissions"`
 	// MCP controls which MCP servers the agent session can see at all.
 	// WorkspaceOnly (default true) starts the session with
@@ -288,6 +311,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Attachments.MaxBytes == 0 {
 		c.Attachments.MaxBytes = DefaultAttachmentMaxBytes
+	}
+	if len(c.Permissions.FixBash) == 0 {
+		c.Permissions.FixBash = append([]string(nil), DefaultFixBash...)
 	}
 	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
 		if s == nil {

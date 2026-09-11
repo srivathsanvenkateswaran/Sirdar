@@ -45,6 +45,15 @@ type Options struct {
 	Model       string
 	Concurrency int
 	DryRun      bool
+
+	// BundleDir replaces the fetch: when it is set, prepare copies that
+	// directory into the run's bundle and never calls the tracker or the
+	// helpdesk. Everything downstream — the prompt, the session, the
+	// validation, the note, the register row — is identical, which is the
+	// point: the evaluation runner (internal/eval) replays a stored
+	// bundle through the same code path a live run takes, so what it
+	// scores is the run and not a simulation of one.
+	BundleDir string
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull

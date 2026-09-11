@@ -771,3 +771,41 @@ permissions:
 		t.Errorf("permissions.mcp %v", cfg.Permissions.MCP)
 	}
 }
+
+func TestFixBashDefaultsAndOverride(t *testing.T) {
+	cfg, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.FixBash) != len(DefaultFixBash) {
+		t.Fatalf("fixBash = %v, want the default list", cfg.Permissions.FixBash)
+	}
+	for _, want := range []string{"git *", "dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
+		var found bool
+		for _, got := range cfg.Permissions.FixBash {
+			if got == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("the default fixBash list is missing %q: %v", want, cfg.Permissions.FixBash)
+		}
+	}
+
+	// A workspace that names its own list gets exactly that list: the
+	// default is a starting point, not a floor.
+	cfg, err = Load(writeCfg(t, minimal+`permissions:
+  fixBash:
+    - "just *"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.FixBash) != 1 || cfg.Permissions.FixBash[0] != "just *" {
+		t.Fatalf("fixBash = %v", cfg.Permissions.FixBash)
+	}
+	// The read-only list stays its own thing.
+	if len(cfg.Permissions.Bash) != 0 {
+		t.Errorf("permissions.bash was filled in from fixBash: %v", cfg.Permissions.Bash)
+	}
+}

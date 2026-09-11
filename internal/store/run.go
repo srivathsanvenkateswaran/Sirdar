@@ -20,6 +20,7 @@ type Kind string
 const (
 	KindTriage Kind = "triage"
 	KindRCA    Kind = "rca"
+	KindFix    Kind = "fix"
 )
 
 // Status identifies where a run is in its lifecycle.

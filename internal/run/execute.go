@@ -235,6 +235,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MCPAllow:  cfg.Permissions.MCP,
 			Root:      cfg.Root,
 		},
+		Mode:      provider.ModeTriage,
 		MCPConfig: cfg.MCPConfigPath(),
 		MCPStrict: cfg.WorkspaceOnlyMCP(),
 		Budget: provider.Budget{
@@ -246,6 +247,16 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		Env:    r.childEnv(),
 		Binary: r.binary(),
 	}
+	// A fix session is the one run that may change the workspace, so it
+	// gets the write-enabled policy and its own shell allow-list, and the
+	// providers are told which mode they are starting in: it is what
+	// decides Claude's --disallowedTools, Codex's sandbox, and whether
+	// Sirdar's own loop offers write_file and edit_file at all.
+	if p.kind == store.KindFix {
+		spec.Mode = provider.ModeFix
+		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP)
+	}
+
 	// Claude Code reads image files from the bundle directory itself.
 	// Codex has to be handed them on the command line, and the openai
 	// loop names them in its first user message, so both need the list.
@@ -292,17 +303,25 @@ func imageAttachments(p *prepared) []string {
 }
 
 func schemaFor(kind store.Kind) []byte {
-	if kind == store.KindRCA {
+	switch kind {
+	case store.KindRCA:
 		return prompt.RCASchema
+	case store.KindFix:
+		return prompt.FixSchema
+	default:
+		return prompt.TriageSchema
 	}
-	return prompt.TriageSchema
 }
 
 func noteKind(kind store.Kind) note.Kind {
-	if kind == store.KindRCA {
+	switch kind {
+	case store.KindRCA:
 		return note.RCA
+	case store.KindFix:
+		return note.Fix
+	default:
+		return note.Triage
 	}
-	return note.Triage
 }
 
 // consume reads the run's events until they end, and returns every session
@@ -640,10 +659,14 @@ func (r *Runner) complete(p *prepared, doc []byte) (note.DigestRow, error) {
 	if err := os.WriteFile(filepath.Join(p.run.Dir, "result.json"), doc, 0o644); err != nil {
 		return note.DigestRow{}, fmt.Errorf("run: write result.json: %w", err)
 	}
-	if p.kind == store.KindRCA {
+	switch p.kind {
+	case store.KindRCA:
 		return r.completeRCA(p, doc)
+	case store.KindFix:
+		return r.completeFix(p, doc)
+	default:
+		return r.completeTriage(p, doc)
 	}
-	return r.completeTriage(p, doc)
 }
 
 func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error) {

@@ -290,3 +290,40 @@ func compareGolden(t *testing.T, path, got string) {
 		t.Fatalf("output does not match golden %s\n--- got ---\n%s\n--- want ---\n%s", path, got, string(want))
 	}
 }
+
+func TestFixPromptCarriesTheApprovedNoteAndTheScopeRule(t *testing.T) {
+	out := Fix(FixInput{
+		Key:        "OMNI-1",
+		Branch:     "fix-omni-1-export",
+		Playbooks:  []Playbook{{Name: "50-code", Body: "Read the handler first."}},
+		TriageNote: "---\nstatus: triaged\n---\n\n## Proposed Fix\n\nStream the export.\n",
+	})
+	for _, want := range []string{
+		"# Fix",
+		"Ticket: OMNI-1",
+		"Branch: fix-omni-1-export",
+		"Read the handler first.",
+		"## Proposed Fix",
+		"Do not widen the scope",
+		"Do not commit",
+		"deviationFromNote",
+		"Respond with the JSON object only.",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("the fix prompt does not carry %q", want)
+		}
+	}
+	if strings.Contains(out, "This run is read-only") {
+		t.Error("the fix prompt still tells the agent the run is read-only")
+	}
+	if strings.Contains(out, "# RCA note") {
+		t.Error("an RCA section appeared with no RCA note")
+	}
+}
+
+func TestFixPromptIncludesTheRCANoteWhenThereIsOne(t *testing.T) {
+	out := Fix(FixInput{Key: "OMNI-1", TriageNote: "triage", RCANote: "CONFIRMED-CAUSE-MARKER"})
+	if !strings.Contains(out, "# RCA note") || !strings.Contains(out, "CONFIRMED-CAUSE-MARKER") {
+		t.Errorf("the RCA note is missing from the fix prompt:\n%s", out)
+	}
+}
