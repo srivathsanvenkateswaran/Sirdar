@@ -21,6 +21,7 @@ type registerEntry struct {
 	triageDate, confidence, class string
 	rcaDate, verdict, severity    string
 	resolutionType                string
+	fixDate                       string
 	triagePath, rcaPath, resPath  string
 }
 
@@ -77,6 +78,10 @@ func groupRegister(rows []store.RegisterRow) []registerEntry {
 			}
 		case note.Resolution:
 			e.resolutionType, e.resPath = row.Classification, row.NotePath
+		case note.Fix:
+			// A fix writes no note of its own; what the register records
+			// is that one happened, and when.
+			e.fixDate = row.Date
 		}
 	}
 	return entries
@@ -84,10 +89,10 @@ func groupRegister(rows []store.RegisterRow) []registerEntry {
 
 func printRegisterTable(stdout, stderr io.Writer, entries []registerEntry) int {
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "KEY\tTRIAGE\tCONF\tCLASS\tRCA\tVERDICT\tSEV\tRESOLUTION\tNOTES")
+	fmt.Fprintln(w, "KEY\tTRIAGE\tCONF\tCLASS\tFIX\tRCA\tVERDICT\tSEV\tRESOLUTION\tNOTES")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-			e.key, e.triageDate, e.confidence, e.class,
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+			e.key, e.triageDate, e.confidence, e.class, e.fixDate,
 			e.rcaDate, e.verdict, e.severity, e.resolutionType, e.notesPresent())
 	}
 	return flush(w, stderr)
@@ -131,12 +136,16 @@ func printRegisterMarkdown(stdout io.Writer, entries []registerEntry) {
 }
 
 // status is where the ticket has got to: resolved once the rca run has
-// filed its notes, triaged before that.
+// filed its notes, fix-pushed once a fix went out, triaged before either.
 func (e registerEntry) status() string {
-	if e.resPath != "" || e.rcaPath != "" {
+	switch {
+	case e.resPath != "" || e.rcaPath != "":
 		return "resolved"
+	case e.fixDate != "":
+		return "fix-pushed"
+	default:
+		return "triaged"
 	}
-	return "triaged"
 }
 
 // wikiLink turns a note path into the `[[stem]]` link the vault uses, or an

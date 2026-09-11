@@ -3,7 +3,8 @@
 Sirdar reads tickets from a tracker (e.g. Jira) and a helpdesk (e.g. Zoho
 Desk) through *adapters*. Four trackers and three helpdesks ship built into
 the Sirdar binary — Jira, Linear, Azure DevOps, and Rally for trackers; Zoho
-Desk, Zendesk, and Freshdesk for helpdesks — configured directly in
+Desk, Zendesk, Freshdesk, Help Scout, Intercom, and HubSpot Service Hub for
+helpdesks — configured directly in
 `.sirdar/config.yaml`, no separate process required. Anything else talks to
 Sirdar through the external adapter protocol described below: a small
 line-delimited JSON protocol over stdin/stdout, which also stays available
@@ -224,9 +225,10 @@ collection, following each entry's `Content` reference to an
 
 ## Built-in helpdesk adapters
 
-Zoho Desk, Zendesk and Freshdesk implement the `helpdesk` role only —
-`Get`, `Threads`, `Attachments`, no `List` — and are compiled into Sirdar
-the same way the four trackers above are, no separate process required.
+Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom and HubSpot Service Hub
+implement the `helpdesk` role only — `Get`, `Threads`, `Attachments`, no
+`List` — and are compiled into Sirdar the same way the four trackers above
+are, no separate process required.
 Credentials are `env:NAME` or `keychain:SERVICE` references, same as
 everywhere else in Sirdar; see `docs/config.md` for the full key reference.
 
@@ -374,6 +376,182 @@ since those URLs are pre-signed.
   name, same treatment as an undocumented `status`.
 - Attachment MIME comes from the API's declared `content_type`; downloads
   don't sniff the response's own `Content-Type`.
+
+### Help Scout
+
+```yaml
+sources:
+  helpdesk:
+    adapter: helpscout
+    clientId: keychain:helpscout-client-id
+    clientSecret: keychain:helpscout-client-secret
+```
+
+**Getting credentials.** Help Scout's Mailbox API 2.0 is OAuth2 only — there
+is no API-key mode. Create an app under Your Profile → My Apps with the
+Client Credentials flow, tied to an active invited user on the account, and
+keep the client id/secret pair. Sirdar mints its own access tokens against
+`https://api.helpscout.net/v2/oauth2/token`, caches each until it expires,
+and mints again when a call comes back 401 anyway — a token revoked at the
+Help Scout console fails long before the expiry it was issued with.
+
+**Get.** Fetches `GET /v2/conversations/{id}?embed=threads`; `Fields`
+carries `mailboxId`, `tags`, `number`, `state`, `assignee` and
+`customerEmail`. `Priority` is left empty: Help Scout has no priority field,
+leaning on status and tags instead, and a guess made from a tag would read
+like data the API gave. The URL is built from the id the call was made with,
+`https://secure.helpscout.net/conversation/{id}`.
+
+**Threads and attachments.** Help Scout's thread `type` answers both of
+Sirdar's questions on its own, which no other vendor's model does:
+`customer` is the person who wrote in, `message`/`reply` a published staff
+reply, `note` a staff-only note (author suffixed ` (internal)`), `lineitem`
+a state change with no body (role `system`). Anything else — `chat`,
+`beaconchat`, `phone`, `forwardchild`, `forwardparent` — falls back to
+`createdBy.type`. Bodies are HTML and go through `htmltext`. Draft threads
+are left out: an unsent reply is not part of the conversation that happened.
+The single-conversation `?embed=threads` response carries no pagination link
+of its own, so a full page (the same size Help Scout uses for the dedicated
+thread-list endpoint) is the signal that more threads might exist; the rest
+is fetched from `GET /v2/conversations/{id}/threads?page=N`, following that
+endpoint's own `_links.next` and `page.totalPages`, each page checked against
+`api.helpscout.net` before it is fetched.
+`Attachments` reads each thread's `_embedded.attachments` and fetches the
+bytes from `/v2/conversations/{id}/attachments/{attachmentId}/data`, which
+returns them base64-encoded inside JSON.
+
+**Known limitations.**
+- Everything, attachment bytes included, comes from `api.helpscout.net`, so
+  this adapter has no fetch-only CDN tier: the one trusted host is the one
+  that gets the credential, and any other host named by a response — an
+  attachment's `_links.data.href`, a `next` page link — is refused with a
+  warning.
+- Thread pagination is capped at 100 pages; a conversation past that is
+  truncated with a run warning rather than swept indefinitely.
+- Help Scout's rate-limit tiers are not published as numbers; a 429 is
+  retried once after honouring `Retry-After` (or `X-RateLimit-Retry-After`)
+  up to 30 seconds, and reported as rate-limited otherwise.
+
+### Intercom
+
+```yaml
+sources:
+  helpdesk:
+    adapter: intercom
+    accessToken: env:INTERCOM_ACCESS_TOKEN
+```
+
+**Getting credentials.** Mint a workspace access token in Intercom's
+Developer Hub (Your apps → Authentication). It carries whatever scopes the
+app was granted, so scope it to reading conversations and contacts. Requests
+are sent to `https://api.intercom.io` with `Intercom-Version: 2.11` pinned,
+so a workspace that moves its default version does not silently reshape the
+payloads this adapter decodes.
+
+**Get.** Fetches `GET /conversations/{id}?display_as=plaintext`. `Subject`
+is the source message's `subject` where there is one (an email-originated
+conversation), then the conversation `title`, then the first line of the
+opening message — which is what the Intercom inbox itself shows for a chat.
+`Status` is `state`, `Priority` is `priority`. The contact is resolved
+through `GET /contacts/{id}` (a conversation carries only ids) with a
+per-client cache, and the contact's first company becomes `Customer`. The
+web URL needs the workspace's app id, which only `GET /me` carries; it is
+read once and cached, and a workspace that will not give one leaves the URL
+empty with a warning rather than a wrong link.
+
+**Threads and attachments.** The `source` message comes first, then each
+entry in `conversation_parts`. Roles come from `author.type`: `user` and
+`lead` are the customer, `admin` and `team` are staff, `bot` is `system`; a
+part whose `part_type` is `note` is admin-to-admin and gets the
+` (internal)` author suffix. The source message and every part are held to
+the same filter: neither text nor an attachment means it is left out rather
+than filling the thread with an empty entry — Intercom emits a body-less
+part for every assignment, close and reopen, and a source message can
+likewise carry an empty `body`. `Attachments` downloads
+the source message's and each part's `attachments[]`; the access token goes
+only to `api.intercom.io`, while `*.intercom.io`, `*.intercomcdn.com`,
+`*.intercomassets.com` and the numbered `intercom-attachments-N.com` family
+are trusted to download from and never given the credential, since those
+URLs are pre-signed.
+
+**Known limitations.**
+- Only the US host is supported. An EU or AU data-residency workspace would
+  need `api.eu.intercom.io`/`api.au.intercom.io`; calls to the US host are
+  proxied by Intercom, which works but is not what Intercom recommends.
+- Conversation parts are whatever the single `GET /conversations/{id}` call
+  returns — Intercom caps that at 500 and offers no parts-pagination
+  endpoint. When the payload's `total_count` exceeds what it sent, the run
+  gets a warning naming both numbers rather than a thread that quietly
+  stops.
+- Attachment URLs are pre-signed and short-lived (roughly half an hour per a
+  community thread, not Intercom's own reference), so a bundle assembled
+  long after the conversation was fetched can find them expired; the failure
+  is per file, not fatal.
+
+### HubSpot Service Hub
+
+```yaml
+sources:
+  helpdesk:
+    adapter: hubspot
+    accessToken: env:HUBSPOT_PRIVATE_APP_TOKEN
+```
+
+**Getting credentials.** Create a private app under Settings → Integrations
+→ Private Apps and copy its access token (`pat-na1-…`), shown only once. It
+needs read scopes for tickets, contacts, companies, conversations and files.
+HubSpot retired API keys in November 2022, so this is the only static
+credential left.
+
+**Get.** Fetches `GET /crm/v3/objects/tickets/{id}` naming the properties it
+wants (`subject`, `content`, `hs_pipeline_stage`, `hs_ticket_priority`,
+`createdate`, `hs_lastmodifieddate`, `hubspot_owner_id`) and the
+associations it needs (`contacts`, `companies`, `conversations`) — HubSpot
+returns only what a request names. `Status` is the pipeline stage id, which
+is what the API gives; the stage's label lives on the pipeline object and is
+not fetched. The contact and company names are resolved through their own
+object endpoints, cached per client. The URL is
+`https://app.hubspot.com/contacts/{portalId}/ticket/{id}`, with the portal
+id read once from `GET /account-info/v3/details`.
+
+**Threads and attachments.** A HubSpot ticket does not carry its
+conversation inline: the ticket's own `content` becomes the first message,
+attributed to the customer only when the ticket has a contact association
+to name — a ticket created without one is staff content, not a customer's
+words, so it maps to `agent` instead. Everything after it comes
+from the associated Conversations-inbox thread, through
+`GET /conversations/v3/conversations/threads/{threadId}/messages` (paged by
+`paging.next.after`, capped at 100 pages). A message's `type` is the
+public/private split — `MESSAGE` is customer-facing, `COMMENT` is the
+internal note that never reaches the visitor and gets the ` (internal)`
+suffix — and the role comes from the sender's `actorId` prefix, since
+HubSpot has no author-type field: `V-` visitor and `E-` email address are
+the customer, `A-` is an agent, `S-`/`I-` are system and integration.
+`Attachments` resolves each message attachment's `fileId` through
+`GET /files/v3/files/{fileId}/signed-url` and downloads from the URL that
+returns; the access token goes only to `api.hubapi.com`, and HubSpot's file
+hosts (`*.hubspotusercontent*.net`, `*.hubspot.com`) are trusted to download
+from without it, since the signed URL carries its own signature.
+
+**Known limitations.**
+- The ticket→conversation association is the weakest-verified part of
+  HubSpot's support model: it is corroborated by a community thread rather
+  than a primary reference page (see
+  `docs/research/adapters/helpdesks.md`). This adapter is therefore
+  defensive about it — the association block is matched on a substring, so
+  `conversations`, `conversation` and a prefixed variant all resolve — and a
+  ticket with no readable conversation association yields the ticket's
+  `content` plus the warning `hubspot: ticket has no associated
+  conversation`, never an error.
+- The `actorId` prefix table is likewise documented in a guide rather than a
+  schema; an unrecognised prefix is treated as staff, which is the safer
+  default, since a message wrongly attributed to the customer would read as
+  the customer's own words.
+- Attachment MIME type is left empty: the message attachment entry carries
+  only a file id, and the signed-url response gives a name and an extension
+  rather than a content type.
+- An `L-` prefix the source page associated with "customer agent" is not
+  mapped, on the grounds that guessing wrong here is worse than the default.
 
 ## helpdeskRef fallback
 

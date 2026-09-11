@@ -21,7 +21,7 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
@@ -56,6 +56,17 @@ type SourceConfig struct {
 
 	// Freshdesk.
 	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
+
+	// Help Scout. Its Mailbox API has no API-key mode: every call carries
+	// an OAuth2 token the adapter mints for itself from this pair, so both
+	// are credential references and there is nothing else to configure.
+	ClientID     string `yaml:"clientId,omitempty"`     // credential ref
+	ClientSecret string `yaml:"clientSecret,omitempty"` // credential ref
+
+	// Intercom (workspace access token) and HubSpot Service Hub
+	// (private-app access token). Both are a single bearer credential
+	// against a single fixed API host, so neither needs a base URL.
+	AccessToken string `yaml:"accessToken,omitempty"` // credential ref
 
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
@@ -191,6 +202,35 @@ const DefaultMaxContextTokens = 128000
 // when it names none: Rally's North American production instance.
 const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 
+// DefaultFixBash is the shell allow-list a fix session gets when the
+// workspace configures none: the git commands that read the repository,
+// and the build and test commands a fix has to run before it can claim to
+// work. It is deliberately a read-and-build list, not a general one:
+// anything else a workspace needs is an explicit permissions.fixBash entry
+// somebody chose to write.
+//
+// The git entries are the read-only ones by name rather than a blanket
+// "git *". Sirdar makes the branch, the commit and the push itself, after
+// the report comes back and after the deviation check, so nothing in the
+// flow depends on the agent reaching `git commit`, `git push`, `git reset`
+// or `git config` — and a default that hands them over is a default that
+// lets one prompt injection rewrite history or push a branch nobody
+// reviewed.
+var DefaultFixBash = []string{
+	"git status*",
+	"git diff*",
+	"git log*",
+	"git show*",
+	"git grep*",
+	"git blame*",
+	"dotnet build*",
+	"dotnet test*",
+	"npm test*",
+	"go build*",
+	"go test*",
+	"make *",
+}
+
 // DefaultAttachmentMaxBytes is the size above which a downloaded
 // attachment is dropped from the bundle. A 17 MB screen recording is 99%
 // of a bundle by bytes and none of it by evidence: the session cannot open
@@ -312,6 +352,13 @@ type Config struct {
 		// tools are allowed and write-shaped ones are denied by the
 		// heuristic in internal/provider.
 		MCP []string `yaml:"mcp"`
+		// FixBash is the allow-list a `sirdar fix` session's shell
+		// commands are matched against, in place of Bash. A fix has to
+		// branch, build and test, which a read-only triage list has no
+		// reason to permit; keeping the two lists apart means widening
+		// one does not widen the other. DefaultFixBash fills it in when
+		// the workspace names none.
+		FixBash []string `yaml:"fixBash"`
 	} `yaml:"permissions"`
 	// MCP controls which MCP servers the agent session can see at all.
 	// WorkspaceOnly (default true) starts the session with
@@ -324,6 +371,13 @@ type Config struct {
 	Attachments struct {
 		MaxBytes int64 `yaml:"maxBytes"`
 	} `yaml:"attachments"`
+	// Fix configures the one flow that writes. PRIncludesComplaint puts
+	// the customer's own words in the pull request body; it is off by
+	// default because a pull request is often public and the complaint is
+	// a quotation from a support ticket.
+	Fix struct {
+		PRIncludesComplaint bool `yaml:"prIncludesComplaint"`
+	} `yaml:"fix"`
 	Playbooks string `yaml:"playbooks"`
 	Providers struct {
 		Claude struct {
@@ -428,6 +482,9 @@ func applyDefaults(c *Config) {
 	}
 	if c.Attachments.MaxBytes == 0 {
 		c.Attachments.MaxBytes = DefaultAttachmentMaxBytes
+	}
+	if len(c.Permissions.FixBash) == 0 {
+		c.Permissions.FixBash = append([]string(nil), DefaultFixBash...)
 	}
 	for _, s := range []*SourceConfig{c.Sources.Tracker, c.Sources.Helpdesk} {
 		if s == nil {
@@ -738,7 +795,14 @@ var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": 
 // conversations and have no issue list to sweep, so naming one under
 // sources.tracker leaves a workspace that loads and then fails on its first
 // run — worth catching at load time instead.
-var helpdeskOnlyAdapters = map[string]bool{"zendesk": true, "freshdesk": true, "zohodesk": true}
+var helpdeskOnlyAdapters = map[string]bool{
+	"zendesk":   true,
+	"freshdesk": true,
+	"zohodesk":  true,
+	"helpscout": true,
+	"intercom":  true,
+	"hubspot":   true,
+}
 
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	if s == nil {
@@ -802,6 +866,21 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		if s.APIKey == "" {
 			return fmt.Errorf("config: %s.apiKey: is required for adapter freshdesk", prefix)
 		}
+	case "helpscout":
+		if s.ClientID == "" {
+			return fmt.Errorf("config: %s.clientId: is required for adapter helpscout", prefix)
+		}
+		if s.ClientSecret == "" {
+			return fmt.Errorf("config: %s.clientSecret: is required for adapter helpscout", prefix)
+		}
+	case "intercom":
+		if s.AccessToken == "" {
+			return fmt.Errorf("config: %s.accessToken: is required for adapter intercom", prefix)
+		}
+	case "hubspot":
+		if s.AccessToken == "" {
+			return fmt.Errorf("config: %s.accessToken: is required for adapter hubspot", prefix)
+		}
 	case "jira":
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
@@ -847,6 +926,9 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		{"pat", s.PAT},
 		{"apiKey", s.APIKey},
 		{"oauthToken", s.OAuthToken},
+		{"clientId", s.ClientID},
+		{"clientSecret", s.ClientSecret},
+		{"accessToken", s.AccessToken},
 	} {
 		if f.ref == "" {
 			continue
@@ -915,11 +997,14 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 
 // credentialRef rejects a value that carries a secret instead of naming one.
 // The set of schemes lives in creds.go, with the resolver that reads them.
+// The error names the key and the accepted prefixes only, never the value: a
+// misconfigured field is as likely to hold the secret itself as a typo, and
+// that must never end up in a log line or a warning.
 func credentialRef(key, ref string) error {
 	if IsCredentialRef(ref) {
 		return nil
 	}
-	return fmt.Errorf("config: %s: must start with %s, got %q", key, credSchemeList, ref)
+	return fmt.Errorf("config: %s: must start with %s", key, credSchemeList)
 }
 
 // WorkspaceOnlyMCP reports whether an agent session should see only the

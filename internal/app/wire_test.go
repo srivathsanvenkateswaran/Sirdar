@@ -8,10 +8,14 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zendesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
@@ -795,5 +799,279 @@ func TestQwenProviderMissingKeyNamesTheReference(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "qwen.apiKey") || !strings.Contains(err.Error(), "DASHSCOPE_API_KEY") {
 		t.Fatalf("error does not name the reference: %v", err)
+	}
+}
+
+// --- built-in helpdesk adapters (helpscout, intercom, hubspot) ---
+
+// rewriteTransport sends every request to addr while leaving the request's
+// own URL (and so the adapter's host checks, which run before the
+// transport) untouched. Help Scout, Intercom and HubSpot each talk to one
+// fixed vendor host over https with no baseUrl override to point at a test
+// server, so this is how their wiring gets exercised for real.
+type rewriteTransport struct {
+	addr string
+	base http.RoundTripper
+}
+
+func (rt rewriteTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	r2 := req.Clone(req.Context())
+	r2.URL.Host = rt.addr
+	return rt.base.RoundTrip(r2)
+}
+
+// helpdeskTestServer starts a TLS server, routes every built-in helpdesk
+// request to it, and returns it.
+func helpdeskTestServer(t *testing.T, h http.HandlerFunc) *httptest.Server {
+	t.Helper()
+	srv := httptest.NewTLSServer(h)
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, rewriteTransport{addr: srv.Listener.Addr().String(), base: srv.Client().Transport})
+	return srv
+}
+
+// TestNewBuiltinHelpdeskHelpScout proves the resolved client id and secret,
+// not the env: refs, are what reach Help Scout's token endpoint, and that
+// the token it hands back is what the API call then carries.
+func TestNewBuiltinHelpdeskHelpScout(t *testing.T) {
+	var mu sync.Mutex
+	var gotID, gotSecret, gotAuth string
+	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		if r.URL.Path == "/v2/oauth2/token" {
+			_ = r.ParseForm()
+			gotID = r.PostFormValue("client_id")
+			gotSecret = r.PostFormValue("client_secret")
+			w.Write([]byte(`{"token_type":"bearer","access_token":"minted-1","expires_in":172800}`))
+			return
+		}
+		gotAuth = r.Header.Get("Authorization")
+		w.Write([]byte(`{"_embedded":{"mailboxes":[]}}`))
+	})
+
+	sc := &config.SourceConfig{
+		Adapter:      "helpscout",
+		ClientID:     "env:HS_ID",
+		ClientSecret: "env:HS_SECRET",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"HS_ID": "id-1", "HS_SECRET": "secret-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*helpscout.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *helpscout.Client", hd)
+	}
+	p, ok := hd.(pinger)
+	if !ok {
+		t.Fatal("helpscout.Client does not implement Ping, so doctor has no probe")
+	}
+	if err := p.Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotID != "id-1" || gotSecret != "secret-1" {
+		t.Fatalf("token grant got (%q, %q), want the resolved pair", gotID, gotSecret)
+	}
+	if gotAuth != "Bearer minted-1" {
+		t.Fatalf("Authorization = %q, want the minted token", gotAuth)
+	}
+}
+
+func TestNewBuiltinHelpdeskHelpScoutMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter:      "helpscout",
+		ClientID:     "env:HS_ID",
+		ClientSecret: "env:HS_SECRET",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "clientId") || !strings.Contains(err.Error(), "env:HS_ID") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestNewBuiltinHelpdeskIntercom proves the resolved access token reaches
+// the wire as a bearer header, alongside the pinned API version.
+func TestNewBuiltinHelpdeskIntercom(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotVersion string
+	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotVersion = r.Header.Get("Intercom-Version")
+		mu.Unlock()
+		w.Write([]byte(`{"type":"admin","app":{"id_code":"abc"}}`))
+	})
+
+	sc := &config.SourceConfig{Adapter: "intercom", AccessToken: "env:INTERCOM_TOKEN"}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"INTERCOM_TOKEN": "ic-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*intercom.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *intercom.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotAuth != "Bearer ic-1" {
+		t.Fatalf("Authorization = %q, want Bearer ic-1", gotAuth)
+	}
+	if gotVersion == "" {
+		t.Fatal("Intercom-Version header was not sent")
+	}
+}
+
+func TestNewBuiltinHelpdeskIntercomMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{Adapter: "intercom", AccessToken: "env:INTERCOM_TOKEN"}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "accessToken") || !strings.Contains(err.Error(), "env:INTERCOM_TOKEN") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestNewBuiltinHelpdeskHubSpot proves the resolved private-app token
+// reaches the wire as a bearer header.
+func TestNewBuiltinHelpdeskHubSpot(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotPath string
+	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		mu.Unlock()
+		w.Write([]byte(`{"portalId":1234567}`))
+	})
+
+	sc := &config.SourceConfig{Adapter: "hubspot", AccessToken: "env:HUBSPOT_TOKEN"}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"HUBSPOT_TOKEN": "pat-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*hubspot.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *hubspot.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotAuth != "Bearer pat-1" {
+		t.Fatalf("Authorization = %q, want Bearer pat-1", gotAuth)
+	}
+	if gotPath != "/account-info/v3/details" {
+		t.Fatalf("Ping path = %q, want the account details endpoint", gotPath)
+	}
+}
+
+func TestNewBuiltinHelpdeskHubSpotMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{Adapter: "hubspot", AccessToken: "env:HUBSPOT_TOKEN"}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "accessToken") || !strings.Contains(err.Error(), "env:HUBSPOT_TOKEN") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestBuildDepsFixedHostHelpdesks covers sources.helpdesk wiring end to end
+// through BuildDeps for each of the three, the same path a real command
+// takes.
+func TestBuildDepsFixedHostHelpdesks(t *testing.T) {
+	t.Setenv("HS_ID", "id-1")
+	t.Setenv("HS_SECRET", "secret-1")
+	t.Setenv("INTERCOM_TOKEN", "ic-1")
+	t.Setenv("HUBSPOT_TOKEN", "pat-1")
+
+	for name, tc := range map[string]struct {
+		sc   *config.SourceConfig
+		want string
+	}{
+		"helpscout": {
+			sc:   &config.SourceConfig{Adapter: "helpscout", ClientID: "env:HS_ID", ClientSecret: "env:HS_SECRET"},
+			want: "*helpscout.Client",
+		},
+		"intercom": {
+			sc:   &config.SourceConfig{Adapter: "intercom", AccessToken: "env:INTERCOM_TOKEN"},
+			want: "*intercom.Client",
+		},
+		"hubspot": {
+			sc:   &config.SourceConfig{Adapter: "hubspot", AccessToken: "env:HUBSPOT_TOKEN"},
+			want: "*hubspot.Client",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+			cfg.Sources.Helpdesk = tc.sc
+			deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
+			defer cleanup()
+			if err != nil {
+				t.Fatalf("BuildDeps: %v", err)
+			}
+			if got := fmt.Sprintf("%T", deps.Helpdesk); got != tc.want {
+				t.Fatalf("helpdesk is %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+// TestBuiltinHelpdeskProbeFixedHostAdapters covers the doctor rows: each
+// names the kind of grant it authenticated with and never the secret.
+func TestBuiltinHelpdeskProbeFixedHostAdapters(t *testing.T) {
+	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/v2/oauth2/token" {
+			w.Write([]byte(`{"token_type":"bearer","access_token":"minted-1","expires_in":172800}`))
+			return
+		}
+		w.Write([]byte(`{"portalId":1234567}`))
+	})
+	t.Setenv("HS_ID", "id-1")
+	t.Setenv("HS_SECRET", "secret-1")
+	t.Setenv("INTERCOM_TOKEN", "ic-1")
+	t.Setenv("HUBSPOT_TOKEN", "pat-1")
+
+	for name, tc := range map[string]struct {
+		sc     *config.SourceConfig
+		detail string
+		secret string
+	}{
+		"helpscout": {
+			sc:     &config.SourceConfig{Adapter: "helpscout", ClientID: "env:HS_ID", ClientSecret: "env:HS_SECRET"},
+			detail: "reachable as the Help Scout app",
+			secret: "secret-1",
+		},
+		"intercom": {
+			sc:     &config.SourceConfig{Adapter: "intercom", AccessToken: "env:INTERCOM_TOKEN"},
+			detail: "reachable as the workspace access token",
+			secret: "ic-1",
+		},
+		"hubspot": {
+			sc:     &config.SourceConfig{Adapter: "hubspot", AccessToken: "env:HUBSPOT_TOKEN"},
+			detail: "reachable as the private app token",
+			secret: "pat-1",
+		},
+	} {
+		t.Run(name, func(t *testing.T) {
+			check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk ("+name+")", tc.sc)
+			if !check.OK {
+				t.Fatalf("check: %+v", check)
+			}
+			if check.Detail != tc.detail {
+				t.Fatalf("detail = %q, want %q", check.Detail, tc.detail)
+			}
+			if strings.Contains(check.Detail, tc.secret) {
+				t.Fatalf("doctor printed the secret: %q", check.Detail)
+			}
+		})
 	}
 }

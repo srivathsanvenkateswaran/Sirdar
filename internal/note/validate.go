@@ -23,6 +23,11 @@ const (
 	Triage     Kind = "triage"
 	RCA        Kind = "rca"
 	Resolution Kind = "resolution"
+	// Fix is not a note kind: a fix run renders nothing into the vault.
+	// It shares this type because a fix session's JSON answer is validated
+	// against a schema exactly as the three note kinds are, and the run
+	// loop that does it should not need a second code path to.
+	Fix Kind = "fix"
 )
 
 var printer = message.NewPrinter(language.English)
@@ -35,6 +40,10 @@ var (
 	rcaSchemaOnce sync.Once
 	rcaSchema     *jsonschema.Schema
 	rcaSchemaErr  error
+
+	fixSchemaOnce sync.Once
+	fixSchema     *jsonschema.Schema
+	fixSchemaErr  error
 )
 
 func compileTriageSchema() (*jsonschema.Schema, error) {
@@ -49,6 +58,13 @@ func compileRCASchema() (*jsonschema.Schema, error) {
 		rcaSchema, rcaSchemaErr = compileSchema("rca.json", prompt.RCASchema)
 	})
 	return rcaSchema, rcaSchemaErr
+}
+
+func compileFixSchema() (*jsonschema.Schema, error) {
+	fixSchemaOnce.Do(func() {
+		fixSchema, fixSchemaErr = compileSchema("fix.json", prompt.FixSchema)
+	})
+	return fixSchema, fixSchemaErr
 }
 
 // compileSchema compiles the draft-07 schema in raw, registered under name,
@@ -72,7 +88,8 @@ func compileSchema(name string, raw []byte) (*jsonschema.Schema, error) {
 // Validate checks doc against the JSON Schema for kind. Triage validates
 // against prompt.TriageSchema; RCA and Resolution both validate the
 // combined rca+resolution document against prompt.RCASchema, since an rca
-// run produces one JSON document with two top-level objects. The returned
+// run produces one JSON document with two top-level objects; Fix validates
+// a fix session's report against prompt.FixSchema. The returned
 // error, when non-nil, joins every leaf schema violation as
 // "<instance location>: <message>", one per line, prefixed "note does not
 // match schema:".
@@ -86,6 +103,8 @@ func Validate(kind Kind, doc []byte) error {
 		sch, err = compileTriageSchema()
 	case RCA, Resolution:
 		sch, err = compileRCASchema()
+	case Fix:
+		sch, err = compileFixSchema()
 	default:
 		return fmt.Errorf("note: unknown kind %q", kind)
 	}

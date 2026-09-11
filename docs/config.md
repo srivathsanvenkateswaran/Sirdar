@@ -15,7 +15,7 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
@@ -28,6 +28,9 @@ rather than being silently ignored.
 | `sources.helpdesk.subdomain` | string | none (required for `zendesk`) | Zendesk account identifier, e.g. `acme` for `acme.zendesk.com` |
 | `sources.helpdesk.oauthToken` | string | none (`zendesk` only; alternative to `email`+`apiToken`) | Credential reference to a Zendesk OAuth bearer token |
 | `sources.helpdesk.domain` | string | none (required for `freshdesk`) | Freshdesk account host, e.g. `acme.freshdesk.com` |
+| `sources.helpdesk.clientId` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client id |
+| `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
+| `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -60,6 +63,7 @@ rather than being silently ignored.
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
+| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
 | `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
@@ -71,6 +75,7 @@ rather than being silently ignored.
 | `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
+| `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
@@ -181,14 +186,22 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk` and `freshdesk` are compiled into Sirdar; only `zohodesk` needs a separate
-"Zoho Desk OAuth" section below because of its refresh-token grant. Config load checks what
-`zendesk` and `freshdesk` cannot work without:
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom` and `hubspot` are compiled into
+Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
+refresh-token grant. Config load checks what each of the others cannot work without:
 
 | Adapter | Required | Notes |
 |---|---|---|
 | `zendesk` | `subdomain`, and either `email` + `apiToken` or `oauthToken` | `baseUrl` optionally overrides `https://{subdomain}.zendesk.com` |
 | `freshdesk` | `domain`, `apiKey` | `domain` is the full account host, e.g. `acme.freshdesk.com` |
+| `helpscout` | `clientId`, `clientSecret` | Help Scout has no API-key mode; Sirdar mints its own access tokens from the pair |
+| `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
+| `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
+
+The last three talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
+`api.hubapi.com` — so none of them takes a `baseUrl`. An Intercom workspace on the EU or AU
+data-residency host is not supported by this adapter yet; calls to the US host are proxied by
+Intercom, which works but is not what Intercom recommends.
 
 ```yaml
 sources:
@@ -207,17 +220,45 @@ sources:
     apiKey: env:FRESHDESK_API_KEY
 ```
 
-`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — fetching
-the signed-in user for `zendesk`, the signed-in agent for `freshdesk` — and names who the
+```yaml
+sources:
+  helpdesk:
+    adapter: helpscout
+    clientId: keychain:helpscout-client-id
+    clientSecret: keychain:helpscout-client-secret
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: intercom
+    accessToken: env:INTERCOM_ACCESS_TOKEN
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: hubspot
+    accessToken: env:HUBSPOT_PRIVATE_APP_TOKEN
+```
+
+`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
+signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
+`helpscout`, `/me` for `intercom`, the account details for `hubspot` — and names who the
 connection authenticates as, never the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
 [OK] sources.helpdesk (freshdesk) — reachable as acme.freshdesk.com
+[OK] sources.helpdesk (helpscout) — reachable as the Help Scout app
+[OK] sources.helpdesk (intercom) — reachable as the workspace access token
+[OK] sources.helpdesk (hubspot) — reachable as the private app token
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant.
+as oauth`, since there is no account email to show for that grant. The last three name the kind
+of grant rather than an account, because none of their probes returns an account identifier worth
+printing — the row itself is the proof the credential was accepted.
 
 ## Credential references
 
@@ -407,6 +448,134 @@ that catches the obvious ways out.
 - Matching is case-sensitive.
 - The pattern is anchored to the whole command string, not a prefix or substring: `git log`
   without a trailing `*` matches only the exact command `git log`, with no arguments.
+
+## `permissions.fixBash`
+
+`sirdar fix` is the one session allowed to change the workspace, and it needs a different set
+of shell commands than a triage run does: it has to branch, build and test. Rather than widen
+`permissions.bash` — which would hand every read-only triage run the same reach — a fix session
+is matched against its own list.
+
+The syntax is exactly the one above: the same segment splitting, the same refusal of
+substitution and redirection, the same workspace-root check on anything that looks like a path.
+Only the list changes, and only for `sirdar fix`.
+
+The default is the git commands that read the repository, and the build and test commands a
+fix has to run before it can claim to work:
+
+```yaml
+permissions:
+  fixBash:
+    - "git status*"
+    - "git diff*"
+    - "git log*"
+    - "git show*"
+    - "git grep*"
+    - "git blame*"
+    - "dotnet build*"
+    - "dotnet test*"
+    - "npm test*"
+    - "go build*"
+    - "go test*"
+    - "make *"
+```
+
+The git entries are named one by one rather than covered by `git *`, and that is deliberate.
+Sirdar makes the branch, the commit and the push itself — after the JSON report comes back and
+after the deviation check — so nothing in the flow needs the agent to reach `git commit`,
+`git push`, `git reset` or `git config`. A blanket `git *` hands all of them to whatever the
+session reads in a ticket.
+
+Naming your own list replaces the default outright — it is a starting point, not a floor — so
+include whatever of it you still want:
+
+```yaml
+permissions:
+  fixBash:
+    - "git log*"
+    - "git diff*"
+    - "just *"
+    - "pnpm test*"
+```
+
+Some git flags are refused whatever pattern you write, and the `config` subcommand is refused
+outright, because each of them moves where git reads its configuration, writes its output, or
+runs code from. Two groups are denied differently, by where in the command they can legally
+appear:
+
+- `--output`, `--output-directory`, `-o`, `--upload-pack` and `--receive-pack` are denied
+  wherever they fall in the command, because git accepts them after the subcommand too:
+  `git diff --output=~/.zshrc` writes a file through a pattern that was only meant to read one,
+  and `git fetch --upload-pack=/tmp/evil` runs an arbitrary program in place of git's own
+  upload-pack.
+- `-c`, `-C`, `--git-dir`, `--work-tree`, `--exec-path` and `--config-env` are top-level git
+  options, valid only *before* the subcommand, and are denied only there: `git -c
+  core.hooksPath=/tmp/h status` installs a hook directory for every git command that follows and
+  is refused, while `git grep -c foo` (counts matches) and `git rev-parse --git-dir` (prints a
+  path) reuse the same short flag after the subcommand for an unrelated meaning and are allowed.
+
+A `GIT_*` environment variable reaches the same configuration as those flags — `GIT_DIR`,
+`GIT_WORK_TREE` and the rest — so an assignment naming one is refused wherever it appears ahead
+of a command, git or not: `GIT_DIR=/tmp/other/.git git log`, `env GIT_DIR=/tmp/other/.git git
+log`, and `GIT_DIR=/tmp/other/.git make test`, which redirects a git invocation the Makefile
+target runs internally, are all denied. An assignment that names an unrelated variable
+(`LANG=C git log`) or a bare `env` with none (`env git log`) is not refused by this rule; the
+command underneath is still judged by everything above.
+
+What the list does not do is decide whether the session may edit files: a fix session gets
+`Edit`, `Write` and `MultiEdit` regardless, and a triage session never does. Where those may
+write is a separate rule, and not a configurable one — every edit is resolved through symlinks
+and refused unless it lands inside the workspace root, and refused again for anything under a
+`.git/` directory at any depth, under the workspace's own `.sirdar/`, or under the directory
+this repository sets `core.hooksPath` to, which Sirdar reads once at the start of the session
+(a leading `~` or `~user` in the configured value is expanded to a home directory first, the
+same way git itself expands it, so `core.hooksPath = ~/x` reserves and snapshots the directory
+git actually runs hooks from rather than a literal `~x` entry inside the workspace). The
+comparison folds case, so `.GIT/hooks/pre-commit` is the same refusal as `.git/hooks/pre-commit`
+on the case-insensitive filesystem macOS and Windows ship. A fix changes source, not hooks and
+not Sirdar's records.
+
+The same reservation reaches a `permissions.fixBash` command's own arguments, not only `Edit` and
+`Write`: a flag's path value — joined with `=`, as in `--coverprofile=.git/hooks/pre-commit`, or
+the next token after a bare flag, as in `-o .githooks` — is refused when it names a reserved
+directory, exactly as a write through `Edit` would be. `go test -coverprofile=.git/hooks/pre-commit`
+matches a `go test*` pattern and is refused anyway, because the coverage profile it names is a
+hook the next commit runs, not a coverage profile. This check is narrower than the workspace-root
+check above it: it applies only to a flag's value, not to every plain argument, so `cd
+.sirdar/runs && ls -la` — reading Sirdar's own run records, not writing to them — still goes
+through.
+
+### What the allow-list does not confine
+
+`make *`, `go test*`, `npm test*` and `dotnet test*` run the workspace's own build system, and
+a build system runs whatever the repository tells it to: a Makefile target, a `go:generate`
+directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of that, and no
+allow-list can — approving `make test` is approving the Makefile on the branch the session is
+standing on.
+
+That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
+what it changed or its report is worthless, and the trust it asks for is the trust you already
+extend when you check out a branch and type `make test` in your own shell. Sirdar narrows what
+an ordinary mistake or an ordinary prompt injection reaches; it is not a sandbox around a build.
+The review gate for what the session actually did is the pull request, which is the same gate
+every other change in the repository goes through. If a workspace needs more than that, run
+`sirdar fix` in a container.
+
+## `fix.prIncludesComplaint`
+
+The pull request `sirdar fix` opens describes the symptom, the root cause, the change and the
+checks that were run. By default the symptom is the triage note's **title** — what broke —
+rather than the complaint, which is the customer's own words out of a support ticket:
+
+```yaml
+fix:
+  prIncludesComplaint: true
+```
+
+Turn it on for a private repository where the ticket text is already in front of the same
+people. Leave it off anywhere the pull request is public, or read by anyone who has no business
+with that customer's conversation. The triage note is always linked either way, through the
+tracker and helpdesk URLs in the body.
 
 ## MCP access
 

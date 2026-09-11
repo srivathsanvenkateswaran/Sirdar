@@ -49,6 +49,26 @@ type Options struct {
 	Model       string
 	Concurrency int
 	DryRun      bool
+
+	// BundleDir replaces the fetch: when it is set, prepare copies that
+	// directory into the run's bundle and never calls the tracker or the
+	// helpdesk. Everything downstream — the prompt, the session, the
+	// validation, the note — is identical, which is the point: the
+	// evaluation runner (internal/eval) replays a stored bundle through
+	// the same code path a live run takes, so what it scores is the run
+	// and not a simulation of one.
+	BundleDir string
+
+	// Eval marks the run as a scored replay rather than a real triage.
+	// Everything up to the note is unchanged; what changes is what the
+	// run leaves behind. The note stays in the run directory: it is not
+	// filed into the notes directory, where it would overwrite the note a
+	// human wrote and reads, and no register row is appended, because the
+	// register is the audit index of tickets actually worked. The run
+	// state carries the same flag, which is what keeps an eval's note out
+	// of the "newest triage note" a later rca or fix reads.
+	Eval bool
+
 	// NoNotify silences the run-completion notification for this
 	// invocation, for a batch being re-run that the channel has already
 	// heard about.
@@ -151,13 +171,16 @@ func (d Deps) childEnv() []string {
 
 // credentialEnvNames collects the variable names behind every "env:"
 // credential reference in the workspace configuration — the sources' and
-// the model endpoint's alike. An OAuth grant's
-// client secret and refresh token are longer-lived than the access token a
-// static token: ref holds, so they matter here more, not less: a refresh
-// token read out of the agent's environment mints access tokens until
-// somebody revokes it at the Zoho console. A built-in tracker's or
-// helpdesk's apiToken, pat, apiKey or oauthToken is stripped for the same
-// reason: the agent reads the tickets Sirdar hands it, never the source.
+// the model endpoint's alike. An OAuth grant's client secret and refresh
+// token matter here more, not less, than a plain "token:" ref's access
+// token: they are longer-lived, since a refresh token read out of the
+// agent's environment mints access tokens until somebody revokes it at the
+// Zoho console. A built-in tracker's or
+// helpdesk's apiToken, pat, apiKey, oauthToken, accessToken or Help Scout
+// clientId/clientSecret is stripped for the same reason: the agent reads
+// the tickets Sirdar hands it, never the source. Help Scout's pair is the
+// one worth singling out — it mints tokens on demand, so it outlives every
+// access token it has ever issued.
 func credentialEnvNames(cfg *config.Config) map[string]bool {
 	names := make(map[string]bool)
 	if cfg == nil {
@@ -168,7 +191,8 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 		if s == nil {
 			continue
 		}
-		refs = append(refs, s.Token, s.APIToken, s.PAT, s.APIKey, s.OAuthToken)
+		refs = append(refs, s.Token, s.APIToken, s.PAT, s.APIKey, s.OAuthToken,
+			s.ClientID, s.ClientSecret, s.AccessToken)
 		if s.Auth != nil {
 			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
 		}

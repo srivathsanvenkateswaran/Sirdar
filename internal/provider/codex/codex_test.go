@@ -622,3 +622,28 @@ func TestParseID(t *testing.T) {
 		}
 	}
 }
+
+// TestFixModeUsesWorkspaceWriteSandbox: Codex enforces read-only through
+// its own sandbox, so a fix thread has to be started in the one that lets
+// it write the files it is fixing — and only those.
+func TestFixModeUsesWorkspaceWriteSandbox(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	startLine := findSent(t, res, "thread/start")
+	if !strings.Contains(startLine, `"sandbox":"workspace-write"`) {
+		t.Errorf("fix thread/start did not ask for workspace-write: %s", startLine)
+	}
+	if strings.Contains(startLine, `"sandbox":"read-only"`) {
+		t.Errorf("fix thread/start still asked for read-only: %s", startLine)
+	}
+	if !strings.Contains(startLine, `"approvalPolicy":"never"`) {
+		t.Errorf("fix thread/start changed the approval policy: %s", startLine)
+	}
+}

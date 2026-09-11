@@ -1,0 +1,24 @@
+{
+  "id": 123,
+  "number": 4567,
+  "type": "email",
+  "status": "active",
+  "subject": "Checkout fails with a 500",
+  "mailboxId": 99,
+  "createdAt": "2026-09-01T10:00:00Z",
+  "userUpdatedAt": "2026-09-02T12:00:00Z",
+  "primaryCustomer": {"id": 555, "type": "customer", "first": "Ada", "last": "Lovelace", "email": "ada@example.com"},
+  "_embedded": {
+    "threads": [
+      {
+        "id": 300,
+        "type": "customer",
+        "state": "published",
+        "body": "<p>Page one message.</p>",
+        "createdAt": "2026-09-01T10:00:00Z",
+        "createdBy": {"id": 555, "type": "customer", "first": "Ada", "last": "Lovelace"}
+      }
+    ]
+  },
+  "_links": {"self": {"href": "https://api.helpscout.net/v2/conversations/123"}}
+}

@@ -536,6 +536,90 @@ func TestDigestTruncatesIssueByRuneNotByte(t *testing.T) {
 	}
 }
 
+func TestUpdateFrontmatterSetsAndAppends(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "note.md")
+	body := "---\nstatus: triaged\nrun: r1\n---\n\n# Title\n\nbody: not frontmatter\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := UpdateFrontmatter(path, []KV{
+		{Key: "status", Value: "fix-pushed"},
+		{Key: "pr", Value: `"https://github.com/acme/oxo/pull/42"`},
+		{Key: "commit", Value: "abc123"},
+	})
+	if err != nil {
+		t.Fatalf("UpdateFrontmatter: %v", err)
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := string(data)
+	for _, want := range []string{
+		"status: fix-pushed",
+		`pr: "https://github.com/acme/oxo/pull/42"`,
+		"commit: abc123",
+		"run: r1",
+		"# Title",
+		"body: not frontmatter",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "status: triaged") {
+		t.Error("the old status was left behind")
+	}
+	// The body is untouched: the key-looking line below the frontmatter
+	// must not have been rewritten.
+	if strings.Count(got, "commit: abc123") != 1 {
+		t.Error("the value was written more than once")
+	}
+}
+
+func TestUpdateFrontmatterRefusesANoteWithout(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plain.md")
+	if err := os.WriteFile(path, []byte("# Just a title\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := UpdateFrontmatter(path, []KV{{Key: "status", Value: "x"}}); err == nil {
+		t.Fatal("a note with no frontmatter was accepted")
+	}
+}
+
+func TestFrontmatterReads(t *testing.T) {
+	text := "---\nstatus: \"triaged\"\ntracker_url: https://t/OMNI-1\n---\n\nstatus: not this one\n"
+	if got := Frontmatter(text, "status"); got != "triaged" {
+		t.Errorf("status = %q", got)
+	}
+	if got := Frontmatter(text, "tracker_url"); got != "https://t/OMNI-1" {
+		t.Errorf("tracker_url = %q", got)
+	}
+	if got := Frontmatter(text, "absent"); got != "" {
+		t.Errorf("absent = %q", got)
+	}
+	if got := Frontmatter("no frontmatter\n", "status"); got != "" {
+		t.Errorf("status = %q", got)
+	}
+}
+
+func TestValidateFixReport(t *testing.T) {
+	ok := `{"summary":"Stream the export","filesChanged":["a.go"],"testsRun":[{"command":"go test ./...","result":"ok"}],"risks":"none","deviationFromNote":""}`
+	if err := Validate(Fix, []byte(ok)); err != nil {
+		t.Fatalf("a valid fix report was refused: %v", err)
+	}
+	if err := Validate(Fix, []byte(`{"summary":"x"}`)); err == nil {
+		t.Fatal("a fix report missing every other field was accepted")
+	}
+	if err := Validate(Fix, []byte(`{"summary":"x","filesChanged":[],"testsRun":[],"risks":"","deviationFromNote":"","extra":1}`)); err == nil {
+		t.Fatal("a fix report with an unknown field was accepted")
+	}
+}
+
 // --- Bilingual sections ---
 
 func TestRenderTriageKeepsTheOriginalComplaintVerbatim(t *testing.T) {

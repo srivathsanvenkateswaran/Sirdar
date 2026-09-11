@@ -151,9 +151,19 @@ func (s *session) handshake(ctx context.Context) error {
 		return fmt.Errorf("codex: initialized: %w", err)
 	}
 
+	// A triage thread runs in Codex's read-only sandbox; a fix thread has
+	// to write the files it is fixing, so it gets workspace-write, which
+	// confines it to the cwd the thread was started in. approvalPolicy
+	// stays "never" either way: Sirdar's own policy answers for the run,
+	// and a prompt waiting on a terminal nobody is watching is worse than
+	// a refusal.
+	sandbox := "read-only"
+	if s.spec.Mode.IsFix() {
+		sandbox = "workspace-write"
+	}
 	method := "thread/start"
 	params := map[string]any{
-		"sandbox":        "read-only",
+		"sandbox":        sandbox,
 		"approvalPolicy": "never",
 	}
 	if s.spec.Resume != "" {
