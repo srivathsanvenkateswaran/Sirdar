@@ -9,9 +9,8 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed except the openai provider: CLI (`init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`), Wails v2 desktop app under `desktop/`, built-in sources (Zoho Desk with OAuth refresh, Zendesk, Freshdesk, Jira, Linear, Azure DevOps, Rally, external stdio adapters), generic `helpdeskRef` regex, both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
-| `~/Documents/Personal/Sirdar-providers` | `providers` | `provider: openai`: Sirdar's own loop over OpenAI-compatible APIs (`internal/provider/openai`, `internal/agenttools`, `internal/mcpclient`). Whole-branch reviewed and fixed. Merge of `main` into it was being resolved at handoff (keep `main`'s `policy.go`; port agenttools names, `bash` routing, root confinement; move openai wiring into `internal/app`). Then merge to `main` and remove the worktree. |
-| `desktop`, `adapters` | branches on origin | Merged into `main` (a968576, 01172d3); worktrees removed. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed, including `provider: openai`: CLI (`init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`), Wails v2 desktop app under `desktop/`, built-in sources (Zoho Desk with OAuth refresh, Zendesk, Freshdesk, Jira, Linear, Azure DevOps, Rally, external stdio adapters), generic `helpdeskRef` regex, both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
+| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. Only the `main` worktree remains. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -45,9 +44,9 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 
 ## Next steps, in order
 
-1. Land `providers` on `main` (finish the merge resolution, module tests green, merge, remove
-   the worktree). Follow-up: `docs/research/08-httpx-extraction.md` (shared HTTP helpers for the
-   seven adapters; every adapter needed the same host-trust fix, so the helper is overdue).
+1. Extract the shared HTTP helpers per `docs/research/08-httpx-extraction.md` (host trust,
+   redirect policy, Retry-After, body caps, name sanitising, per-ticket warnings): every adapter
+   needed the same host-trust fix, so the helper is overdue.
 2. Dogfood run 2 completed two tickets cleanly (OMNI-3217, OMNI-3193; notes written within
    milliseconds of the final answer); the run-2 findings are fixed. Next: a workspace
    `.mcp.json` in OXO.APIs listing only the read servers the playbooks need (with
@@ -56,7 +55,7 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
    self-approves read-shaped Bash, so `permissions.bash` only sees the commands it is asked about.
 3. Fix the Janus adapter's slow get-by-key (lists 200 tickets per probe; `doctor` times out).
 4. Try `provider: openai` for real against Ollama (`qwen3-coder`) or OpenRouter on the golden
-   ticket; then the roadmap's Phase 0 spikes (Anthropic-compatible endpoints behind
+   ticket (it has never run against a live model; only the scripted fake server); then the roadmap's Phase 0 spikes (Anthropic-compatible endpoints behind
    `ANTHROPIC_BASE_URL`; Anthropic terms text) and Phase 2 (ACP client).
 5. More helpdesks: Help Scout, Intercom, HubSpot (`docs/research/adapters/helpdesks.md`).
 6. Release: goreleaser config exists; `version` is a var; CI on Go 1.26 with a frontend job;
