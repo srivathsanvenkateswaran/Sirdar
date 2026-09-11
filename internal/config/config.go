@@ -115,6 +115,22 @@ func AccountsURLFor(baseURL string) string {
 	return accountsURLs[strings.ToLower(u.Hostname())]
 }
 
+// ACPConfig configures `provider: acp`, where Sirdar drives any agent that
+// speaks the Agent Client Protocol. Command is the program to launch and
+// Args the rest of its command line — `gemini --experimental-acp`,
+// `goose acp`, `npx @zed-industries/claude-code-acp` — and Command is the
+// one required field. Env is added to the agent's environment rather than
+// replacing it, since an ACP agent authenticates however its own CLI does.
+//
+// Values in Env are literal, not credential references: they reach a child
+// process's environment, which is exactly what a credential ref exists to
+// avoid. Put a key in your shell and let the agent read it from there.
+type ACPConfig struct {
+	Command string            `yaml:"command"`
+	Args    []string          `yaml:"args,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
+}
+
 // OpenAIConfig configures `provider: openai`, where Sirdar runs the agent
 // loop itself against any OpenAI-compatible Chat Completions endpoint —
 // an aggregator, a vendor, or a server on the operator's own machine.
@@ -255,6 +271,7 @@ type Config struct {
 		} `yaml:"codex"`
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
+	ACP    *ACPConfig    `yaml:"acp,omitempty"`
 
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 }
@@ -374,11 +391,14 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai":
+	case "claude", "codex", "openai", "acp":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex or openai, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai or acp, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
+		return err
+	}
+	if err := validateACP(c); err != nil {
 		return err
 	}
 	switch c.Billing {
@@ -424,6 +444,23 @@ func validateLanguage(l *LanguageConfig) error {
 	}
 	if l.Customer != CustomerLanguageAuto && !languageCode.MatchString(l.Customer) {
 		return fmt.Errorf("config: language.customer: must be auto or a language code such as ar, got %q", l.Customer)
+	}
+	return nil
+}
+
+// validateACP checks the acp block. The agent's launch command is the only
+// thing the adapter cannot work out for itself, and it is required only
+// when the workspace actually selects the provider — an acp block left in
+// place while running on claude is not an error.
+func validateACP(c *Config) error {
+	if c.Provider == "acp" && c.ACP == nil {
+		return fmt.Errorf("config: acp: is required when provider is acp")
+	}
+	if c.ACP == nil {
+		return nil
+	}
+	if c.Provider == "acp" && strings.TrimSpace(c.ACP.Command) == "" {
+		return fmt.Errorf("config: acp.command: is required when provider is acp")
 	}
 	return nil
 }

@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, or `openai` (Sirdar's own loop) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -74,6 +74,9 @@ rather than being silently ignored.
 | `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
 | `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
 | `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
+| `acp.command` | string | none (required for `provider: acp`) | The ACP agent's program: `gemini`, `goose`, `opencode`, `npx` |
+| `acp.args` | list of string, optional | unset | The rest of the agent's command line, e.g. `["--experimental-acp"]` |
+| `acp.env` | map, optional | unset | Literal environment entries added to the agent's environment; these are values, not credential references |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -461,8 +464,8 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default), `provider: codex`, or `provider: openai` selects what drives runs;
-`--provider` on `triage` and `rca` overrides it per invocation.
+`provider: claude` (default), `provider: codex`, `provider: openai`, or `provider: acp` selects
+what drives runs; `--provider` on `triage` and `rca` overrides it per invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
@@ -551,3 +554,102 @@ no other path in a run passes a credential to a child process.
 Not in v1: streaming, image content parts, `response_format: json_schema`, and resuming a
 session in a later process (`sirdar resume` starts a fresh session instead, because the
 transcript lives in the Sirdar process that ran it).
+
+### `provider: acp`
+
+The Agent Client Protocol is one JSON-RPC dialect that about forty coding agents already speak,
+so one adapter reaches all of them: Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush,
+Junie, Augment, GitHub Copilot CLI, Cursor, Devin, and Claude Code and Codex through the ACP
+adapters. `acp.command` and `acp.args` are the agent's launch command;
+`docs/research/providers/acp-agents.md` lists the ones Sirdar knows about and what each is
+started with.
+
+```yaml
+provider: acp
+acp:
+  command: gemini
+  args: ["--experimental-acp"]
+  env: {}
+```
+
+Sirdar spawns that agent, initializes it, opens a session in the workspace root and hands it the
+stdio MCP servers from the workspace's `.mcp.json`, in ACP's own `mcpServers` shape. The agent
+authenticates however its own CLI does, so `acp.env` is added to its environment rather than
+replacing it, and it holds literal values: anything put there reaches a child process, which is
+what a `keychain:` reference exists to prevent. Leave credentials in your shell and let the
+agent read them from there.
+
+What a run gives up by going through ACP, and why:
+
+- **No cost signal.** ACP's `usage_update` carries the agent's context `used`/`size` and an
+  optional session cost, and most agents send neither, so `budget.maxUsd` usually never fires.
+- **Almost nothing for `budget.maxTurns` to count.** One ACP turn is a whole prompt turn: the
+  agent may make dozens of model requests and run dozens of tools inside a single
+  `session/prompt`, and the protocol reports one turn for all of it. An ACP run normally ends
+  at turn one, or two if the note had to be retried, so a turn budget of 20 and a turn budget
+  of 2 stop the same runaway agent — which is to say neither does. **`budget.maxMinutes` is the
+  bound that actually works here.** Set it as if it were the only one.
+- **No rate-limit signal.** ACP has no equivalent of Claude Code's `rate_limit_event` or Codex's
+  `account/rateLimits/updated`, so a spent window arrives as an error and the queue does not
+  pause for it.
+- **No schema-constrained output.** `session/prompt` has no schema field, so the note schema goes
+  into the prompt and the agent's own message is parsed as JSON at the end of the turn. A
+  ```` ```json ```` fence is unwrapped and a prose preamble tolerated — the last top-level JSON
+  object in the message is taken — but a message with no object in it at all earns the usual one
+  retry turn, sent as a second `session/prompt`.
+- **No reason on a denial.** When the agent asks permission, the client may only pick one of the
+  options the agent itself offered — there is no field for a message the model would see. Sirdar
+  picks the `reject_once` option and records the policy's reason in the event log, and the
+  read-only instruction is already in the prompt so the model is not left guessing.
+
+#### What the permission policy can and cannot reach
+
+An ACP agent is a whole CLI, not a tool runner Sirdar drives. It owns its own tools, its own
+configuration and, in most cases, its own globally configured MCP servers, and the protocol
+gives a client no way to see or switch any of that off. Two consequences are worth stating
+plainly, because they are weaker than what the same settings mean for `provider: claude`:
+
+- **`mcp.workspaceOnly` cannot be enforced.** Sirdar passes the workspace's `.mcp.json` servers
+  in `session/new`, and the agent adds them to whatever it already has. There is no ACP
+  equivalent of `--strict-mcp-config`, so if your Gemini CLI or Goose install has global MCP
+  servers configured, the session gets those too. Check the agent's own config if that matters.
+- **The workspace's `.mcp.json` `env` values cross the wire.** They are sent to the agent in
+  `session/new` so it can start those servers itself, which means any secret expanded into that
+  block ends up in the agent's process, not just Sirdar's.
+
+Permission checks are advisory in the same way. `session/request_permission` is sent at the
+agent's discretion — some agents ask before every write, some ask only outside their own
+sandbox, some never ask — so Sirdar's policy governs what it is asked about and nothing else.
+When it is asked, ACP names the *kind* of the call rather than the agent's own tool name, so
+`edit`/`delete`/`move` are judged as `Write` and `execute` as `Bash` against `permissions.bash`
+whatever the agent titled them; `read` is judged as `Read`, `search` as `Grep`, `fetch` as
+`WebFetch`; an MCP tool names itself in full and goes through `permissions.mcp` unchanged; and
+a call whose kind the protocol did not state is denied, which is the read-only posture applied
+to the unknown.
+
+When an `edit`, `delete` or `move` tool call completes having never produced a permission
+request, the run records an error event naming it. Nothing can be undone at that point — the
+write already happened, inside the agent's process — but it is the difference between finding
+out and not. An agent that raises that warning is one to run against a scratch checkout, or not
+at all.
+
+Sirdar declines the write-file and terminal client capabilities at `initialize`, so a
+well-behaved agent never asks Sirdar to write a file or open a terminal *on its behalf*; one
+that asks anyway gets a JSON-RPC error and the attempt shows up as a denied permission event.
+That says nothing about what the agent can do with its own tools. It does advertise
+`fs/read_text_file` and serves it, for files inside the workspace root only — resolved through
+symlinks, so a link inside the workspace pointing out of it is refused — and for at most 8 MiB
+per read.
+
+Traffic naming a session Sirdar did not open is dropped, and requests naming one are refused.
+Some agents spawn nested subagent sessions of their own; their messages are not this run's
+transcript, and their tool calls are not this run's to approve.
+
+Resume works where the agent advertises `loadSession`: the run's handle is the ACP `sessionId`,
+and a later run reopens it with `session/load`. An agent without that capability makes
+`sirdar resume` start a fresh session rather than continue the old one.
+
+`sirdar doctor` starts the configured agent, initializes it and reports what it said about
+itself — its name and version, the protocol version, and whether it supports `loadSession` and
+image prompts — then shuts it down again. That is the cheapest way to find out whether an agent
+you have not run before works here at all.

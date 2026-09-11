@@ -313,7 +313,29 @@ func TestValidateOpenAI(t *testing.T) {
 		{
 			"an unknown provider",
 			"workspace: demo\nprovider: gemini\n",
-			"claude, codex or openai",
+			"claude, codex, openai or acp",
+		},
+		{
+			"acp with no block",
+			"workspace: demo\nprovider: acp\n",
+			"acp: is required",
+		},
+		{
+			"acp with no command",
+			"workspace: demo\nprovider: acp\nacp:\n  args: [\"--experimental-acp\"]\n",
+			"acp.command",
+		},
+		{
+			"acp configured",
+			"workspace: demo\nprovider: acp\nacp:\n  command: gemini\n  args: [\"--experimental-acp\"]\n  env:\n    GEMINI_ACP: \"1\"\n",
+			"",
+		},
+		{
+			// An acp block left behind while the workspace runs on claude
+			// is not an error, the same as an unused openai block.
+			"unused acp block on another provider",
+			"workspace: demo\nprovider: claude\nacp:\n  command: goose\n",
+			"",
 		},
 	}
 	for _, c := range cases {
