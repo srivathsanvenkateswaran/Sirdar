@@ -76,3 +76,9 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
   (`docs/eval.md`).
+- Added `provider: qwen`, a native Qwen Code adapter: every non-read tool is excluded, and an
+  authenticated loopback PreToolUse hook fails closed, so the workspace stays read-only even
+  though the run is untrusted.
+- Added Codex workspace-MCP parity: a per-session `CODEX_HOME` carries only the workspace's own
+  `.mcp.json` servers under `mcp.workspaceOnly`, and MCP, shell, and file-change approvals all
+  route through Sirdar's permissions.

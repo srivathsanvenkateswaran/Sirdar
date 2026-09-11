@@ -9,10 +9,9 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Four providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`). Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
 | `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
-| `~/Documents/Personal/Sirdar-qwen` | `qwen` | `provider: qwen`, a native Qwen Code adapter with a loopback permission hook. In review, not merged. |
-| `~/Documents/Personal/Sirdar-codexmcp` | `codexmcp` | Codex workspace-MCP parity. In review, not merged. |
+| `~/Documents/Personal/Sirdar-qwen`, `~/Documents/Personal/Sirdar-codexmcp` | `qwen`, `codexmcp` | Merged into `main` (a411cfa, 38104a8); worktrees removed. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -38,9 +37,8 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
 - Adapters: stdlib HTTP, read-only, per-ticket warnings, credentialed downloads only to the
   configured host; `ListFilter.Limit` 0 means 100, cap 200.
 - Models beyond Claude/Codex: `docs/superpowers/plans/2026-09-10-provider-roadmap.md`. Phase 1
-  (`provider: openai`) and Phase 2 (`provider: acp`) are both landed on `main`. Phase 3
-  (Qwen Code) is in review on the `qwen` worktree, not merged. Codex custom providers are a
-  dead end (Responses API only).
+  (`provider: openai`), Phase 2 (`provider: acp`), and Phase 3 (`provider: qwen`) are all landed
+  on `main`. Codex custom providers are a dead end (Responses API only).
 - The read-only guarantee is enforced per provider: `--disallowedTools` + policy for Claude,
   `sandbox: read-only` for Codex, for `provider: openai` the tool set itself plus
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
@@ -108,29 +106,30 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
    against the golden set, and `sirdar fix` on an actual ticket. None of them has a live run yet.
 2. First live runs against a real model: `provider: openai` (Ollama `qwen3-coder` or
    OpenRouter), `provider: acp` (start with Gemini CLI per `docs/research/providers/acp-agents.md`),
-   and the `qwen` branch once it merges. Both openai and acp have only run against scripted fake
-   agents so far.
-3. Desktop provider dropdown: add `acp` and `qwen` (once merged) alongside `claude`/`codex`/`openai`.
-4. Fix the Janus adapter's slow get-by-key (lists 200 tickets per probe; `doctor` times out).
-5. Continue dogfood run 2's follow-ups: a workspace `.mcp.json` in OXO.APIs listing only the read
+   and `provider: qwen` against a real Qwen Code login. None of the three has run against
+   anything but scripted fake agents so far.
+3. Fix the Janus adapter's slow get-by-key (lists 200 tickets per probe; `doctor` times out).
+4. Continue dogfood run 2's follow-ups: a workspace `.mcp.json` in OXO.APIs listing only the read
    servers the playbooks need (with `mcp.workspaceOnly` the agent otherwise has no MCP tools),
    then two or three more tickets and a comparison against hand-written notes; fold gotchas into
    `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
    sees the commands it is asked about.
-6. A URL allow-list for `web_fetch`/`WebFetch`, shared across providers: `internal/provider/
+5. A URL allow-list for `web_fetch`/`WebFetch`, shared across providers: `internal/provider/
    policy.go`'s `AlwaysAllowed` approves both with no inspection of the destination, so a prompt
    injected into something a read tool already pulled in can direct a fetch to an attacker's own
    host (see the qwen section of `docs/config.md`).
 
 ## What is unverified
 
-No live run yet for `provider: openai`, `provider: acp`, `notify`, `webhooks`, or `sirdar fix`.
-Each has only been exercised against a scripted fake server or fixture, never a real model or a
-real destination. Help Scout's `threadsPageSize` (50) is inferred from the vendor's documented
-default for list endpoints, not observed against a real paginated account. Codex's fix-mode
-sandbox is a `workspace-write` config Sirdar sets but does not implement or verify; the snapshot
-guard (`internal/fix/guard.go`) is the actual backstop if that sandbox lets a write through,
-including onto `.git`.
+No live run yet for `provider: openai`, `provider: acp`, `provider: qwen`, `notify`, `webhooks`,
+or `sirdar fix`. Each has only been exercised against a scripted fake server or fixture, never a
+real model or a real destination. `provider: qwen`'s fail-closed loopback permission hook has
+never been run against a real Qwen login — only against the scripted fake CLI in tests. Help
+Scout's `threadsPageSize` (50) is inferred from the vendor's documented default for list
+endpoints, not observed against a real paginated account. Codex's fix-mode sandbox is a
+`workspace-write` config Sirdar sets but does not implement or verify; the snapshot guard
+(`internal/fix/guard.go`) is the actual backstop if that sandbox lets a write through, including
+onto `.git`.
 
 ## What is unverified
 
