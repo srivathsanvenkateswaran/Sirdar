@@ -1,0 +1,89 @@
+site_name: Sirdar
+site_description: An open-source harness for engineering-level support tickets.
+repo_url: https://github.com/srivathsanvenkateswaran/Sirdar
+repo_name: srivathsanvenkateswaran/Sirdar
+edit_uri: edit/main/docs/
+docs_dir: docs
+use_directory_urls: true
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - content.code.copy
+    - search.suggest
+
+extra_css:
+  - stylesheets/extra.css
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+validation:
+  nav:
+    omitted_files: info
+    not_found: info
+  links:
+    not_found: warn
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Concepts: concepts.md
+  - Configuration: config.md
+  - Sources: adapters.md
+  - Credentials: credentials.md
+  - Webhooks: webhooks.md
+  - Evaluation: eval.md
+  - Release: release.md
+  - Architecture: architecture.md
+  - Research:
+      - Overview: research/00-context.md
+      - Name collisions: research/01-name-collisions.md
+      - Landscape: research/02-landscape.md
+      - Licensing (BYO subscription): research/03-licensing-byo-subscription.md
+      - Harness internals: research/04-harness-internals.md
+      - Verdict and proposal: research/05-verdict-and-proposal.md
+      - Wire formats: research/06-wire-formats.md
+      - Dogfood findings: research/07-dogfood-findings.md
+      - httpx extraction: research/08-httpx-extraction.md
+      - Adapters:
+          - Azure DevOps: research/adapters/azure-devops.md
+          - Helpdesks: research/adapters/helpdesks.md
+          - Jira: research/adapters/jira.md
+          - Linear: research/adapters/linear.md
+          - Rally: research/adapters/rally.md
+      - Providers:
+          - ACP protocol: research/providers/acp-protocol.md
+          - Multi-model runtimes: research/providers/multi-model-runtimes.md
+          - Anthropic-compatible endpoints (spike): research/providers/spike-anthropic-compatible.md
+  - Specs and plans:
+      - Specs:
+          - openai provider design: superpowers/specs/2026-09-10-openai-provider-design.md
+          - Desktop design: superpowers/specs/2026-09-10-sirdar-desktop-design.md
+          - v0 triage core design: superpowers/specs/2026-09-10-sirdar-v0-triage-core-design.md
+      - Plans:
+          - Provider roadmap: superpowers/plans/2026-09-10-provider-roadmap.md
+          - v0 triage core: superpowers/plans/2026-09-10-sirdar-v0-triage-core.md
+          - Tracker adapters: superpowers/plans/2026-09-10-tracker-adapters.md

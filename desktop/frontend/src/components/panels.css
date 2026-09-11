@@ -378,3 +378,17 @@
   color: var(--muted, #6b7280);
   max-width: 60ch;
 }
+
+/* The reading-direction preference: one checkbox and the line that names it. */
+.settings-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.settings-toggle input {
+  margin: 0;
+  cursor: pointer;
+}

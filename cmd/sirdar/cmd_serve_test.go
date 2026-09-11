@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -114,7 +115,7 @@ func TestServeEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg := &app.Registry{Path: registryPath}
-	if err := ensureRegistered(reg, root); err != nil {
+	if _, err := ensureRegistered(reg, root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -334,5 +335,82 @@ func postJSON(t *testing.T, url, body string, want int, dst any) {
 		if err := json.Unmarshal(answer, dst); err != nil {
 			t.Fatalf("POST %s: %v\n%s", url, err, answer)
 		}
+	}
+}
+
+// appendWebhooks bolts a webhooks block onto a test workspace's config.
+func appendWebhooks(t *testing.T, root, block string) {
+	t.Helper()
+	path := filepath.Join(root, ".sirdar", "config.yaml")
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, append(body, []byte(block)...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestServeHooksOffByDefault(t *testing.T) {
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	var errb bytes.Buffer
+	opts, ok := serveHooks(root, app.WorkspaceID(root), false, &errb)
+	if !ok {
+		t.Fatalf("serveHooks failed: %s", errb.String())
+	}
+	if len(opts) != 0 {
+		t.Error("a workspace that configures no webhooks still got the hook routes")
+	}
+	if errb.Len() != 0 {
+		t.Errorf("stderr %q", errb.String())
+	}
+}
+
+// An operator who turns the hooks on is told the listener they are on
+// cannot be reached by a hosted tracker, and what to do about it.
+func TestServeHooksWarnsAboutReachability(t *testing.T) {
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	t.Setenv("SIRDAR_TEST_HOOK_SECRET", "s3cret")
+	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
+
+	var loopback bytes.Buffer
+	opts, ok := serveHooks(root, app.WorkspaceID(root), false, &loopback)
+	if !ok || len(opts) != 1 {
+		t.Fatalf("serveHooks: ok=%v opts=%d stderr %q", ok, len(opts), loopback.String())
+	}
+	if !strings.Contains(loopback.String(), "--allow-remote") {
+		t.Errorf("stderr %q does not say how to expose the endpoints", loopback.String())
+	}
+	if !strings.Contains(loopback.String(), "generic") {
+		t.Errorf("stderr %q does not name the enabled source", loopback.String())
+	}
+	// The hook URL is served under one workspace id, so the line has to
+	// print the id rather than a placeholder the operator has to look up.
+	if !strings.Contains(loopback.String(), app.WorkspaceID(root)) {
+		t.Errorf("stderr %q does not name the workspace the hooks are served for", loopback.String())
+	}
+
+	var remote bytes.Buffer
+	if _, ok := serveHooks(root, app.WorkspaceID(root), true, &remote); !ok {
+		t.Fatalf("serveHooks: %s", remote.String())
+	}
+	if !strings.Contains(remote.String(), "TLS") {
+		t.Errorf("stderr %q does not warn about TLS", remote.String())
+	}
+}
+
+// A secret that cannot be resolved stops the command: a hook endpoint that
+// is up but rejects every delivery is worse than one that never started.
+func TestServeHooksStopsOnAnUnresolvableSecret(t *testing.T) {
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	t.Setenv("SIRDAR_TEST_HOOK_SECRET", "")
+	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
+
+	var errb bytes.Buffer
+	if _, ok := serveHooks(root, app.WorkspaceID(root), false, &errb); ok {
+		t.Fatal("a missing secret still started the hooks")
+	}
+	if !strings.Contains(errb.String(), "SIRDAR_TEST_HOOK_SECRET") {
+		t.Errorf("stderr %q does not name the missing credential", errb.String())
 	}
 }

@@ -1,0 +1,11 @@
+{
+  "ticket_id": "77213",
+  "subject": "Payment stuck in pending",
+  "status": "open",
+  "priority": "high",
+  "assignee_email": "sri@acme.com",
+  "requester_email": "customer@example.com",
+  "tags": ["support", "payments"],
+  "updated_at": "2026-09-11T09:30:00Z",
+  "url": "https://acme.zendesk.com/agent/tickets/77213"
+}

@@ -37,6 +37,13 @@ type TriageInput struct {
 	// ThreadHeadTruncated says whether ThreadHead is only the head of a
 	// longer conversation, so the prompt's heading can say which it is.
 	ThreadHeadTruncated bool
+	// NotesLanguage is the language code the note itself is written in
+	// (config language.notes); empty means "en".
+	NotesLanguage string
+	// CustomerLanguage is the language code customer-facing text is
+	// written in (config language.customer), or "auto" for the language
+	// of the ticket's first customer message; empty means "auto".
+	CustomerLanguage string
 }
 
 // RCAInput is everything RCA needs to assemble an rca prompt: the same
@@ -52,6 +59,14 @@ type RCAInput struct {
 	PRURL                   string // may be empty
 }
 
+// DefaultNotesLanguage and CustomerLanguageAuto mirror the config
+// defaults, so a prompt assembled without them says the same thing a
+// default workspace's prompt says rather than saying nothing.
+const (
+	DefaultNotesLanguage = "en"
+	CustomerLanguageAuto = "auto"
+)
+
 const auditRuleLine = "Audit rule: fill only what the PR or the resolution text supports; leave anything else null."
 
 // triageFieldGuidance gives one sentence of guidance per top-level field of
@@ -59,7 +74,10 @@ const auditRuleLine = "Audit rule: fill only what the PR or the resolution text 
 var triageFieldGuidance = []string{
 	"ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer.",
 	"title is a one-line summary of the issue.",
-	"complaint is the customer's complaint translated faithfully, preserving tone and urgency.",
+	"complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.",
+	"complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.",
+	"customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date.",
+
 	"timeline lists each event with its time, role, and summary, including what L1 already told the customer.",
 	"reproSteps lists the steps that reproduce the issue.",
 	"rootCause states the hypothesis, a confidence level (high, medium, low, or unknown), the evidence for it, and any code references.",
@@ -75,6 +93,8 @@ var triageFieldGuidance = []string{
 var rcaFieldGuidance = []string{
 	"rca.title is a one-line title for the root cause analysis.",
 	"rca.summary is 3 to 5 sentences a manager can read alone.",
+	"rca.customerSummary is what happened and what was done, as {language, text} in the customer's language, for the support agent to relay; it states what is already true and promises nothing further.",
+
 	"rca.impact states customers affected, records affected, financial impact, first occurrence, detection, and time to detect.",
 	"rca.timeline lists each event with its time and the evidence for it.",
 	"rca.rootCause describes the cause, the offending code, the mechanism, and cites code references.",
@@ -107,6 +127,7 @@ var rcaFieldGuidance = []string{
 func Triage(in TriageInput) string {
 	sections := []string{
 		strings.TrimRight(preambleMD, "\n"),
+		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
@@ -115,6 +136,7 @@ func Triage(in TriageInput) string {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
 	sections = append(sections, outputSection(triageFieldGuidance, TriageSchema))
+
 	sections = append(sections, "Respond with the JSON object only.")
 	return strings.Join(sections, "\n\n") + "\n"
 }
@@ -123,6 +145,7 @@ func Triage(in TriageInput) string {
 func RCA(in RCAInput) string {
 	sections := []string{
 		strings.TrimRight(preambleMD, "\n"),
+		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
@@ -131,6 +154,7 @@ func RCA(in RCAInput) string {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
 	sections = append(sections, triageNoteSection(in.TriageNote))
+
 	sections = append(sections, resolutionSection(in.Resolution))
 	if pr := pullRequestSection(in.PRTitle, in.PRURL, in.PRBody, in.PRDiff); pr != "" {
 		sections = append(sections, pr)
@@ -141,7 +165,32 @@ func RCA(in RCAInput) string {
 	return strings.Join(sections, "\n\n") + "\n"
 }
 
+// languageSection states both languages a run writes in: the one the note
+// is written in, and the one anything the customer reads is written in.
+// The session has to be told both, because it is the same session that
+// translates the complaint into the first and drafts the reply in the
+// second.
+func languageSection(notes, customer string) string {
+	if notes == "" {
+		notes = DefaultNotesLanguage
+	}
+	if customer == "" {
+		customer = CustomerLanguageAuto
+	}
+	var b strings.Builder
+	b.WriteString("# Language\n\n")
+	b.WriteString("- Write the note in " + notes + " (language.notes: " + notes + "). Every field is in that language except the ones named below.\n")
+	if customer == CustomerLanguageAuto {
+		b.WriteString("- Write customer-facing text in the language of the ticket's first customer message (language.customer: auto), and set its `language` field to that language's code.\n")
+	} else {
+		b.WriteString("- Write customer-facing text in " + customer + " (language.customer: " + customer + "), whatever language the ticket is in, and set its `language` field to " + customer + ".\n")
+	}
+	b.WriteString("- Keep the customer's original wording as well as the translation, verbatim, in the field the schema gives it.")
+	return b.String()
+}
+
 func playbooksSection(playbooks []Playbook) string {
+
 	var b strings.Builder
 	b.WriteString("# Playbooks")
 	for _, p := range playbooks {

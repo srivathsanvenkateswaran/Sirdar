@@ -12,16 +12,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -41,7 +39,7 @@ const maxRedirects = 3
 
 // maxRetryAfter caps how long a 429's Retry-After is honoured before the
 // call gives up and reports source.RateLimited to the caller.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // List bounds. A caller that asks for no limit gets defaultListLimit, and
 // nobody gets more than maxListLimit: an unbounded sweep of a Rally
@@ -99,21 +97,19 @@ type Client struct {
 	cfg  Config
 	http *http.Client
 
-	// host and scheme are BaseURL's, normalised, and are the only place
-	// this client's API key is ever sent. Rally authenticates with a
-	// custom ZSESSIONID header, which Go does not strip on a cross-host
-	// redirect the way it strips Authorization, so the trust check has to
-	// be this client's own.
-	host   string
-	scheme string
+	// trust is BaseURL's host, and the only place this client's API key is
+	// ever sent. Rally authenticates with a custom ZSESSIONID header, which
+	// Go does not strip on a cross-host redirect the way it strips
+	// Authorization, so the trust check has to be this client's own.
+	trust *httpx.Trust
 
-	// mu guards the mutable per-client state below: the per-ticket
-	// warnings recorded by recent calls and the current user cached by
-	// Ping. One Client serves every ticket in a run, so the warnings are
-	// keyed by ticket rather than by "most recent call" — two tickets
-	// fetched at once would otherwise swap each other's missing evidence.
+	// warnings are keyed by ticket rather than by "most recent call": one
+	// Client serves every ticket in a run, and two tickets fetched at once
+	// would otherwise swap each other's missing evidence.
+	warnings httpx.Warnings
+
+	// mu guards the current user cached by Ping.
 	mu       sync.Mutex
-	warnings map[string][]string
 	userRef  string
 	userName string
 }
@@ -172,80 +168,15 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	c := &Client{
-		cfg:    cfg,
-		scheme: strings.ToLower(base.Scheme),
+	trust, err := httpx.NewTrust(cfg.BaseURL)
+	if err != nil {
+		return nil, fmt.Errorf("rally: invalid baseUrl %q: %w", cfg.BaseURL, err)
 	}
-	c.host = normalizeHost(c.scheme, base.Host)
 	// A shallow copy: the Transport (and its pooled connections) stays
 	// shared with the caller's client, only the redirect policy is ours.
 	// Every request this adapter makes carries the API key, so the policy
 	// goes on the client rather than on one download path.
-	rc := *hc
-	rc.CheckRedirect = c.checkRedirect
-	c.http = &rc
-	return c, nil
-}
-
-// normalizeHost renders a URL host comparable: lowercased, with the DNS
-// root's trailing dot removed and the scheme's default port dropped, so
-// "Rally1.RallyDev.com.:443" and "rally1.rallydev.com" are recognised as
-// one host.
-func normalizeHost(scheme, host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-	name, port, err := net.SplitHostPort(host)
-	if err != nil {
-		// No port at all, or a bare IPv6 literal.
-		return strings.TrimSuffix(host, ".")
-	}
-	name = strings.TrimSuffix(name, ".")
-	scheme = strings.ToLower(scheme)
-	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
-		return name
-	}
-	return net.JoinHostPort(name, port)
-}
-
-// trustedURL reports whether u may be fetched with this client's API key,
-// returning the host it named so a warning can say where the request would
-// have gone.
-//
-// WSAPI answers with `_ref` URLs and, on a misconfigured or hostile
-// subscription, with redirects; both are response content rather than
-// configuration. Since the key travels in ZSESSIONID — a custom header Go
-// keeps on a cross-host redirect, unlike Authorization — nothing but this
-// check stops it walking off the configured host.
-func (c *Client) trustedURL(u *url.URL) (string, bool) {
-	if u == nil || u.Host == "" {
-		return "(no host)", false
-	}
-	// "https://rally1.rallydev.com@attacker.example/x" parses with the
-	// real destination in Host and the decoy in User. The host comparison
-	// below already catches it; userinfo has no business on a WSAPI URL
-	// either way.
-	if u.User != nil {
-		return u.Host, false
-	}
-	scheme := strings.ToLower(u.Scheme)
-	if scheme != "https" && scheme != c.scheme {
-		return u.Host, false
-	}
-	if normalizeHost(scheme, u.Host) != c.host {
-		return u.Host, false
-	}
-	return u.Host, true
-}
-
-// checkRedirect refuses any hop that leaves the configured host, and stops
-// a chain that keeps hopping after maxRedirects.
-func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= maxRedirects {
-		return fmt.Errorf("rally: stopped after %d redirects", maxRedirects)
-	}
-	if host, ok := c.trustedURL(req.URL); !ok {
-		return fmt.Errorf("rally: refusing to follow a redirect to %s", host)
-	}
-	return nil
+	return &Client{cfg: cfg, trust: trust, http: httpx.Client(hc, trust, maxRedirects)}, nil
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the
@@ -255,51 +186,16 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 // running several tickets at once needs: it cannot be handed another
 // ticket's missing evidence.
 func (c *Client) WarningsFor(id string) []string {
-	id = strings.TrimSpace(id)
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	return c.warnings.Take(strings.TrimSpace(id))
 }
 
 // addWarnings files the problems one call skipped over under its ticket,
-// alongside whatever an earlier call for the same ticket recorded.
-//
-// It appends rather than replaces because one ticket's bundle is assembled
-// from several calls — internal/run's fetchBundle runs Get, then Threads,
-// then Attachments, and reads WarningsFor once at the end. Replacing meant a
-// clean Attachments erased the WSAPI query warning Threads had recorded, and
-// the agent read a discussion that was quietly short. Reading is what clears
-// the entry.
-//
-// An identical line is dropped: Threads and Attachments both query
-// collections scoped to the same artifact, so a subscription that warns the
-// same way on each says it once.
+// alongside whatever an earlier call for the same ticket recorded: one
+// ticket's bundle is Get, then Threads, then Attachments, with a single
+// WarningsFor at the end, and reading is what clears the entry (see
+// httpx.Warnings).
 func (c *Client) addWarnings(id string, warnings []string) {
-	id = strings.TrimSpace(id)
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
+	c.warnings.Add(strings.TrimSpace(id), warnings...)
 }
 
 // --- HTTP plumbing ---
@@ -322,8 +218,8 @@ func (c *Client) refURL(ref string) (string, error) {
 		return "", fmt.Errorf("parse ref %q: %w", ref, err)
 	}
 	if u.Host != "" {
-		if host, ok := c.trustedURL(u); !ok {
-			return "", fmt.Errorf("ref host not trusted: %s", host)
+		if fetch, _, _ := c.trust.Check(u); !fetch {
+			return "", fmt.Errorf("ref host not trusted: %s", httpx.NormalizeHost(u.Scheme, u.Host))
 		}
 	} else if u.User != nil {
 		return "", fmt.Errorf("ref %q carries userinfo", ref)
@@ -380,7 +276,7 @@ func (c *Client) getRaw(ctx context.Context, rawURL string, limit int64) ([]byte
 		if !ok {
 			return nil, statusError(rawURL, status, body)
 		}
-		if err := sleepCtx(ctx, wait); err != nil {
+		if err := httpx.SleepCtx(ctx, wait); err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: %v", logPath(rawURL), err)}
 		}
 		body, status, _, err = c.do(ctx, rawURL, limit)
@@ -405,29 +301,22 @@ func (c *Client) do(ctx context.Context, rawURL string, limit int64) ([]byte, in
 
 	resp, err := c.http.Do(req)
 	if err != nil {
+		// A refused redirect is reported by host alone: the *url.Error Go
+		// wraps it in carries the target's path and query, and this message
+		// reaches a per-ticket warning.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: refusing to follow a redirect to %s", logPath(rawURL), host)}
+		}
 		return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: %v", logPath(rawURL), err)}
 	}
 	defer resp.Body.Close()
 
-	body, readErr := readLimited(resp.Body, limit)
+	body, readErr := httpx.ReadLimited(resp.Body, limit)
 	if readErr != nil && resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return nil, 0, 0, &source.Error{Code: source.Internal, Message: fmt.Sprintf("rally: GET %s: read body: %v", logPath(rawURL), readErr)}
 	}
-	return body, resp.StatusCode, parseRetryAfter(resp.Header.Get("Retry-After")), nil
-}
-
-// readLimited reads at most limit bytes and fails when the reader had more
-// to give, rather than returning a body that would decode as a short but
-// well-formed result.
-func readLimited(r io.Reader, limit int64) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, limit+1))
-	if err != nil {
-		return body, err
-	}
-	if int64(len(body)) > limit {
-		return body[:limit], fmt.Errorf("response exceeds the %d byte limit", limit)
-	}
-	return body, nil
+	wait, _ := httpx.RetryAfter(resp.Header, maxRetryAfter)
+	return body, resp.StatusCode, wait, nil
 }
 
 // setHeaders applies the API key. Rally authenticates WSAPI requests with
@@ -435,39 +324,6 @@ func readLimited(r io.Reader, limit int64) ([]byte, error) {
 func (c *Client) setHeaders(req *http.Request) {
 	req.Header.Set("ZSESSIONID", c.cfg.APIKey)
 	req.Header.Set("Accept", "application/json")
-}
-
-// parseRetryAfter reads a Retry-After header in either of its two forms
-// (delta-seconds or an HTTP date), returning 0 when it is absent or
-// unparseable.
-func parseRetryAfter(v string) time.Duration {
-	v = strings.TrimSpace(v)
-	if v == "" {
-		return 0
-	}
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0
-		}
-		return time.Duration(secs) * time.Second
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		if d := time.Until(t); d > 0 {
-			return d
-		}
-	}
-	return 0
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
 }
 
 // logPath reduces a request URL to method-and-path form for error messages,

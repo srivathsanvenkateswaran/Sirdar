@@ -1,0 +1,14 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"qwen-code","version":"0.23.2"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-g"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sub-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"leaked\":true}"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sub-1","update":{"sessionUpdate":"tool_call","toolCallId":"sub-tc","title":"Subagent read","kind":"read"}}}
+{"$request":"session/request_permission","id":20,"params":{"sessionId":"sub-1","toolCall":{"toolCallId":"sub-tc","title":"Subagent read","kind":"read"},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"}]}}
+{"$request":"fs/read_text_file","id":21,"params":{"sessionId":"sub-1","path":"{{cwd}}/inside.txt"}}
+{"$request":"fs/read_text_file","id":22,"params":{"sessionId":"sess-g","path":"{{cwd}}/escape/secret.txt"}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-g","update":{"sessionUpdate":"tool_call","toolCallId":"tc-9","title":"Patch src/checkout.go","kind":"edit","rawInput":{"path":"src/checkout.go"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-g","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-9","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-g","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Guarded\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

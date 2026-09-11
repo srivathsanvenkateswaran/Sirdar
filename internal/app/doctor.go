@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
@@ -52,16 +54,21 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 	switch cfg.Provider {
 	case "codex":
 		binary = cfg.Providers.Codex.Path
-	case "openai":
+	case "openai", "acp":
+		// provider: acp has no path setting either: the agent's launch
+		// command is acp.command, which the provider already holds.
 		binary = ""
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)
 	}
 	raw := doctorChecks(ctx, p, binary, cfg)
-	out := make([]Check, 0, len(raw))
+	out := make([]Check, 0, len(raw)+1)
 	for _, c := range raw {
 		out = append(out, checkOf(c))
+	}
+	if cfg.Provider == "claude" {
+		out = append(out, claudeEnvironmentCheck(cfg))
 	}
 	return out
 }
@@ -84,6 +91,61 @@ func doctorChecks(ctx context.Context, p provider.Provider, binary string, cfg *
 		})
 	}
 	return p.Doctor(ctx, binary)
+}
+
+// claudeGatewayEnvVars mirrors the list internal/provider/claude's childEnv
+// strips from the agent's environment under subscription billing. Doctor
+// checks the operator's own process environment for the same names, since
+// a run that sets no spec.Env inherits os.Environ() verbatim.
+var claudeGatewayEnvVars = []string{
+	"ANTHROPIC_BASE_URL",
+	"ANTHROPIC_AUTH_TOKEN",
+	"ANTHROPIC_CUSTOM_HEADERS",
+	"CLAUDE_CODE_USE_BEDROCK",
+	"CLAUDE_CODE_USE_VERTEX",
+	"CLAUDE_CODE_USE_FOUNDRY",
+}
+
+// claudeEnvironmentCheck flags the credential-leak configuration in
+// docs/research/providers/spike-anthropic-compatible.md: subscription
+// billing with a gateway variable set in the process environment sends the
+// operator's claude.ai OAuth material to whatever host it names. Under api
+// billing the same variables are the supported way to reach an
+// Anthropic-compatible endpoint, so the check only notes that
+// budget.maxUsd cannot be trusted behind a custom base URL.
+func claudeEnvironmentCheck(cfg *config.Config) Check {
+	check := Check{Name: "claude environment"}
+	if cfg.Billing == "api" {
+		check.OK = true
+		if base := os.Getenv("ANTHROPIC_BASE_URL"); base != "" {
+			check.Detail = "custom base URL: " + hostOnly(base) + "; budget.maxUsd cannot be trusted"
+		}
+		return check
+	}
+
+	var set []string
+	for _, name := range claudeGatewayEnvVars {
+		if os.Getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) == 0 {
+		check.OK = true
+		return check
+	}
+	check.Detail = strings.Join(set, ", ") + " set with billing: subscription; Sirdar will strip these from the agent's environment"
+	return check
+}
+
+// hostOnly returns just the host portion of a URL, so a doctor report never
+// repeats a full base URL that might carry embedded credentials or a path
+// meant to stay private.
+func hostOnly(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	return u.Host
 }
 
 // sourceChecks reaches each configured source the cheapest way that proves
@@ -147,7 +209,7 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -179,11 +241,12 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 }
 
 // builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
-// freshdesk) with the credentials the config names and calls its Ping: one
-// authenticated round trip proving the base URL/domain, the credential and
-// the network all work. The detail names who the connection authenticates
-// as — an email for Zendesk basic auth, "oauth" for a bearer token, the
-// account domain for Freshdesk — never the secret itself.
+// freshdesk, helpscout, intercom, hubspot) with the credentials the config
+// names and calls its Ping: one authenticated round trip proving the base
+// URL/domain, the credential and the network all work. The detail names
+// who the connection authenticates as — an email for Zendesk basic auth,
+// "oauth" for a bearer token, the account domain for Freshdesk, the kind
+// of grant for the three fixed-host vendors — never the secret itself.
 func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
 	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
@@ -210,6 +273,15 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		return "oauth"
 	case "freshdesk":
 		return sc.Domain
+	case "helpscout":
+		// Help Scout's client-credentials app has no account identifier to
+		// show: the reachable row itself is the proof the pair minted a
+		// token and the token was accepted.
+		return "the Help Scout app"
+	case "intercom":
+		return "the workspace access token"
+	case "hubspot":
+		return "the private app token"
 	default:
 		return "configured"
 	}

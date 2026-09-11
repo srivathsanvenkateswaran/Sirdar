@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai
+provider: claude            # claude | codex | openai | acp
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -23,6 +23,15 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   temperature: 0
 #   extraHeaders:
 #     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+# provider: acp drives any agent that speaks the Agent Client Protocol —
+# Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
+# more — over one adapter. There is no cost signal, and a whole prompt turn
+# counts as one turn, so budget.maxMinutes is what bounds an acp run.
+# Uncomment the block and set provider: acp to use it.
+# acp:
+#   command: gemini                         # or goose, opencode, qwen, npx
+#   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]
+#   env: {}                                 # added to the agent's environment
 sources:
   tracker:
     adapter: exec
@@ -85,8 +94,8 @@ sources:
     # token: keychain:<service>
     #
     # Built-in helpdesks, as alternatives to zohodesk. Pick one and delete
-    # the rest; apiToken, oauthToken and apiKey are credential refs, never
-    # literal secrets.
+    # the rest; apiToken, oauthToken, apiKey, clientId, clientSecret and
+    # accessToken are credential refs, never literal secrets.
     #
     # adapter: zendesk
     # subdomain: acme                         # acme.zendesk.com
@@ -98,6 +107,16 @@ sources:
     # adapter: freshdesk
     # domain: acme.freshdesk.com
     # apiKey: keychain:freshdesk-api-key
+    #
+    # adapter: helpscout
+    # clientId: keychain:helpscout-client-id          # OAuth2 client credentials;
+    # clientSecret: keychain:helpscout-client-secret  # Sirdar mints its own tokens
+    #
+    # adapter: intercom
+    # accessToken: keychain:intercom-access-token     # workspace token from Developer Hub
+    #
+    # adapter: hubspot
+    # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides
@@ -105,6 +124,18 @@ notes:
     triage: "{key} {slug}.md"
     rca: "{key} RCA {slug}.md"
     resolution: "{key} RES {slug}.md"
+language:
+  # The engineer's note is written in notes:. Anything the customer will
+  # read — the reply draft on a triage note, the customer summary on an
+  # RCA — is written in customer:, and "auto" means the language of the
+  # ticket's first customer message. The verbatim original complaint is
+  # kept either way.
+  notes: en
+  customer: auto
+  # Wrap a right-to-left paragraph in <div dir="rtl"> so Obsidian lays it
+  # out the way the customer wrote it. Applies to the built-in templates
+  # only; with notes.templates set, your templates own their markup.
+  rtlMarkup: true
 budget:
   # A turn is one model round-trip: one assistant message that calls a tool
   # or gives the final answer. It is the same unit the Claude CLI reports as
@@ -157,4 +188,63 @@ mcp:
   # of the three you are in.
   workspaceOnly: true
 playbooks: .sirdar/playbooks
+# Post a short digest to a chat channel or a webhook when a run finishes.
+# Metadata and note paths only: no note text ever leaves the machine, and
+# the ticket title is sent only with includeTitle: true, because a support
+# subject line routinely names the customer. A failed post is a warning on
+# the run, never a failed run. SIRDAR_NO_NOTIFY=1 silences one invocation.
+# notify:
+#   on: [completed, failed, over_budget, blocked]   # default: all four
+#   includeTitle: false
+#   slack:
+#     webhookUrl: keychain:sirdar-slack-webhook     # a credential ref: the URL is the credential
+#   teams:
+#     webhookUrl: keychain:sirdar-teams-webhook     # Workflows (Power Automate) or connector URL
+#   generic:
+#     - url: https://hooks.example.com/sirdar       # https, or http on loopback
+#       headers:
+#         Authorization: env:SIRDAR_HOOK_TOKEN      # env:/keychain: values are resolved
+#       secret: env:SIRDAR_HOOK_SECRET              # signs the body as X-Sirdar-Signature
+
+# Inbound triggers: a tracker or helpdesk POSTs to "sirdar serve" when a
+# ticket lands on you, and Sirdar triages it without being asked. Off until
+# enabled, and the endpoints exist only while "sirdar serve" is running.
+#
+# The URL one source posts to is
+#   POST http://<host>:<port>/hooks/<workspace-id>/<source>
+# and "sirdar serve" prints the workspace id at startup.
+#
+# "serve" binds loopback, which a hosted tracker cannot reach: exposing the
+# endpoints means "serve --allow-remote" behind a TLS reverse proxy, or a
+# tunnel. Five of these sources authenticate with a shared secret in a plain
+# header, which anyone watching an unencrypted connection can read and
+# replay. docs/webhooks.md has the per-source setup steps.
+#
+# webhooks:
+#   enabled: true
+#   cooldown: 10m            # a key triaged this recently is skipped; 0s disables
+#   match:
+#     assignee: me           # "me" is the account email on sources.tracker/helpdesk
+#     statuses: [Open, "In Progress"]   # optional; matched against whatever the payload carries
+#     labels: [support]                 # optional; same
+#   sources:                 # every secret is a credential ref, never the secret itself
+#     jira:
+#       secret: keychain:jira-hook-secret        # X-Sirdar-Secret, set on the Automation rule
+#     linear:
+#       secret: keychain:linear-hook-secret      # Linear's signing secret (Linear-Signature)
+#     azdo:
+#       username: sirdar                         # basic auth on the service hook subscription
+#       password: keychain:azdo-hook-password
+#     rally:
+#       secret: keychain:rally-hook-secret       # X-Sirdar-Secret
+#     zendesk:
+#       secret: keychain:zendesk-hook-secret     # the webhook signing secret
+#     freshdesk:
+#       secret: keychain:freshdesk-hook-secret   # X-Sirdar-Secret
+#     intercom:
+#       secret: keychain:intercom-client-secret  # the app client secret (X-Hub-Signature)
+#     hubspot:
+#       secret: keychain:hubspot-client-secret   # the private app client secret (v3 signature)
+#     generic:
+#       secret: keychain:sirdar-hook-secret      # X-Sirdar-Secret; body {"key":"...","assignee":"..."}
 `

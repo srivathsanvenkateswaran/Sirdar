@@ -1,0 +1,10 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"goose","version":"1.2.3"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-2"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-2","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Sure — the checkout service returns 500 when the cart is empty."}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}
+{"$expect":"session/prompt","as":"p2"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-2","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"```json\n{\"title\":\"Second time\",\"ok\":true}\n```"}}}}
+{"$reply_to":"p2","result":{"stopReason":"end_turn"}}

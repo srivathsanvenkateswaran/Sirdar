@@ -1,0 +1,2 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":true,"audio":false,"embeddedContext":true},"mcpCapabilities":{"http":false,"sse":false}},"agentInfo":{"name":"gemini-cli","version":"0.59.0"},"authMethods":[]}}

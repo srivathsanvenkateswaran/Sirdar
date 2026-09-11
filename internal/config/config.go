@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -20,7 +21,7 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
@@ -56,6 +57,17 @@ type SourceConfig struct {
 	// Freshdesk.
 	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
 
+	// Help Scout. Its Mailbox API has no API-key mode: every call carries
+	// an OAuth2 token the adapter mints for itself from this pair, so both
+	// are credential references and there is nothing else to configure.
+	ClientID     string `yaml:"clientId,omitempty"`     // credential ref
+	ClientSecret string `yaml:"clientSecret,omitempty"` // credential ref
+
+	// Intercom (workspace access token) and HubSpot Service Hub
+	// (private-app access token). Both are a single bearer credential
+	// against a single fixed API host, so neither needs a base URL.
+	AccessToken string `yaml:"accessToken,omitempty"` // credential ref
+
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
 	// model carries none.
@@ -84,7 +96,8 @@ type HelpdeskRefConfig struct {
 // carry an unattended run, and auth: is the shape that can.
 //
 // ClientID, ClientSecret and RefreshToken are credential references
-// ("env:NAME" or "keychain:SERVICE"), never literal secrets.
+// ("env:NAME", "keychain:SERVICE", "file:PATH" or "cmd:COMMAND"), never
+// literal secrets.
 type OAuthConfig struct {
 	ClientID     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
@@ -114,15 +127,31 @@ func AccountsURLFor(baseURL string) string {
 	return accountsURLs[strings.ToLower(u.Hostname())]
 }
 
+// ACPConfig configures `provider: acp`, where Sirdar drives any agent that
+// speaks the Agent Client Protocol. Command is the program to launch and
+// Args the rest of its command line — `gemini --experimental-acp`,
+// `goose acp`, `npx @zed-industries/claude-code-acp` — and Command is the
+// one required field. Env is added to the agent's environment rather than
+// replacing it, since an ACP agent authenticates however its own CLI does.
+//
+// Values in Env are literal, not credential references: they reach a child
+// process's environment, which is exactly what a credential ref exists to
+// avoid. Put a key in your shell and let the agent read it from there.
+type ACPConfig struct {
+	Command string            `yaml:"command"`
+	Args    []string          `yaml:"args,omitempty"`
+	Env     map[string]string `yaml:"env,omitempty"`
+}
+
 // OpenAIConfig configures `provider: openai`, where Sirdar runs the agent
 // loop itself against any OpenAI-compatible Chat Completions endpoint —
 // an aggregator, a vendor, or a server on the operator's own machine.
 // BaseURL and Model are required; everything else has a default or is
 // optional.
 //
-// APIKey is a credential reference ("env:NAME" or "keychain:SERVICE"),
-// never the key itself, and it is optional: a local llama.cpp or Ollama
-// server needs none.
+// APIKey is a credential reference ("env:NAME", "keychain:SERVICE",
+// "file:PATH" or "cmd:COMMAND"), never the key itself, and it is optional:
+// a local llama.cpp or Ollama server needs none.
 type OpenAIConfig struct {
 	BaseURL          string            `yaml:"baseUrl"`
 	APIKey           string            `yaml:"apiKey,omitempty"`
@@ -157,7 +186,82 @@ const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 // it, so it is named in a warning instead.
 const DefaultAttachmentMaxBytes = 10 << 20
 
+// NotifyConfig posts a short digest of every finished run to a chat
+// channel or a webhook receiver. Every destination is optional and any
+// number may be configured at once; a workspace with no notify block posts
+// nothing.
+//
+// On lists the terminal states worth hearing about; empty means all four.
+// IncludeTitle is off because a support ticket's subject routinely names
+// the customer who filed it, and a chat channel is a wider audience than
+// the notes directory. The note's body is never sent, whatever it is set to.
+//
+// Slack.WebhookURL and Teams.WebhookURL are credential references
+// ("env:NAME" or "keychain:SERVICE"), never the URL itself: an incoming
+// webhook URL carries its own authorisation in its path, so it is a secret.
+// A generic hook's url is a plain URL — it identifies a receiver that
+// authenticates with the headers instead — and its headers' values and
+// secret are credential references when they carry one.
+type NotifyConfig struct {
+	On           []string       `yaml:"on,omitempty"`
+	IncludeTitle bool           `yaml:"includeTitle,omitempty"`
+	Slack        *WebhookConfig `yaml:"slack,omitempty"`
+	Teams        *WebhookConfig `yaml:"teams,omitempty"`
+	Generic      []GenericHook  `yaml:"generic,omitempty"`
+}
+
+// WebhookConfig is one chat destination: the credential reference holding
+// its incoming-webhook URL.
+type WebhookConfig struct {
+	WebhookURL string `yaml:"webhookUrl"`
+}
+
+// GenericHook is one receiver that takes the run event as JSON.
+type GenericHook struct {
+	URL     string            `yaml:"url"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+	Secret  string            `yaml:"secret,omitempty"`
+}
+
+// NotifyStates are the terminal run states a notify.on list may name.
+var NotifyStates = map[string]bool{"completed": true, "failed": true, "over_budget": true, "blocked": true}
+
+// LanguageConfig names the two languages a run writes in.
+//
+// Notes is the language of the engineer's note — the whole body of it,
+// including the translated complaint. Customer is the language of anything
+// the customer will read: the reply draft on a triage note, the customer
+// summary on an RCA. "auto" means the language of the ticket's first
+// customer message, which is what a helpdesk that serves one country
+// mostly wants; a fixed code ("ar", "en", "fr") pins it instead.
+//
+// RTLMarkup wraps a right-to-left paragraph the default templates emit in
+// a <div dir="rtl"> block. Obsidian renders that HTML, so an Arabic
+// complaint reads the way the customer wrote it instead of being laid out
+// left to right. It applies only to the embedded templates: a workspace
+// with its own notes.templates owns its markup, and Sirdar does not add
+// any to it.
+type LanguageConfig struct {
+	Notes     string `yaml:"notes"`
+	Customer  string `yaml:"customer"`
+	RTLMarkup *bool  `yaml:"rtlMarkup"`
+}
+
+// DefaultNotesLanguage is the language an engineer's note is written in
+// when the workspace names none.
+const DefaultNotesLanguage = "en"
+
+// CustomerLanguageAuto is the customer: value meaning "whatever language
+// the ticket's first customer message is in".
+const CustomerLanguageAuto = "auto"
+
+// languageCode matches a BCP 47-shaped tag loose enough for the codes a
+// helpdesk deals in ("ar", "en", "ar-SA", "zh-Hant") and strict enough to
+// reject a sentence typed into the field.
+var languageCode = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
+
 // Config is a fully loaded, defaulted, and validated workspace configuration.
+
 type Config struct {
 	Workspace string   `yaml:"workspace"`
 	Provider  Provider `yaml:"provider"`
@@ -181,7 +285,13 @@ type Config struct {
 		MaxMinutes int     `yaml:"maxMinutes"`
 		MaxUSD     float64 `yaml:"maxUsd"`
 	} `yaml:"budget"`
-	Concurrency int `yaml:"concurrency"`
+	// Language says which language the engineer's note is written in and
+	// which language anything shown to a customer is written in. They are
+	// rarely the same: the workspace this was built for reads Arabic
+	// tickets, keeps its notes in English, and replies to the customer in
+	// Arabic again.
+	Language    LanguageConfig `yaml:"language"`
+	Concurrency int            `yaml:"concurrency"`
 	Permissions struct {
 		Bash []string `yaml:"bash"`
 		// MCP is a list of glob patterns matched against a tool's full
@@ -213,6 +323,13 @@ type Config struct {
 		} `yaml:"codex"`
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
+	ACP    *ACPConfig    `yaml:"acp,omitempty"`
+
+	// Webhooks configures the inbound trigger endpoints `sirdar serve`
+	// exposes. They are off unless enabled, and exposing them off the
+	// loopback interface needs `serve --allow-remote` and a TLS proxy.
+	Webhooks WebhooksConfig `yaml:"webhooks"`
+	Notify   *NotifyConfig  `yaml:"notify,omitempty"`
 
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 }
@@ -279,6 +396,17 @@ func applyDefaults(c *Config) {
 	if c.Playbooks == "" {
 		c.Playbooks = ".sirdar/playbooks"
 	}
+	if c.Language.Notes == "" {
+		c.Language.Notes = DefaultNotesLanguage
+	}
+	if c.Language.Customer == "" {
+		c.Language.Customer = CustomerLanguageAuto
+	}
+	if c.Language.RTLMarkup == nil {
+		yes := true
+		c.Language.RTLMarkup = &yes
+	}
+
 	if c.OpenAI != nil && c.OpenAI.MaxContextTokens == 0 {
 		c.OpenAI.MaxContextTokens = DefaultMaxContextTokens
 	}
@@ -321,11 +449,14 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai":
+	case "claude", "codex", "openai", "acp":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex or openai, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai or acp, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
+		return err
+	}
+	if err := validateACP(c); err != nil {
 		return err
 	}
 	switch c.Billing {
@@ -336,6 +467,10 @@ func (c *Config) Validate() error {
 	if c.Concurrency < 1 {
 		return fmt.Errorf("config: concurrency: must be >= 1, got %d", c.Concurrency)
 	}
+	if err := validateLanguage(&c.Language); err != nil {
+		return err
+	}
+
 	if c.Budget.MaxTurns <= 0 {
 		return fmt.Errorf("config: budget.maxTurns: must be > 0, got %d", c.Budget.MaxTurns)
 	}
@@ -354,10 +489,145 @@ func (c *Config) Validate() error {
 	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk, false); err != nil {
 		return err
 	}
+	if err := validateWebhooks(&c.Webhooks); err != nil {
+		return err
+	}
+	return validateNotify(c.Notify)
+}
+
+// validateNotify checks the notify block: the states named are states a run
+// can end in, the chat webhooks name a credential rather than carry one,
+// and every URL is one Sirdar will post a run's metadata to.
+func validateNotify(n *NotifyConfig) error {
+	if n == nil {
+		return nil
+	}
+	for _, state := range n.On {
+		if !NotifyStates[state] {
+			return fmt.Errorf("config: notify.on: must be completed, failed, over_budget or blocked, got %q", state)
+		}
+	}
+	for _, f := range []struct {
+		key string
+		w   *WebhookConfig
+	}{{"notify.slack", n.Slack}, {"notify.teams", n.Teams}} {
+		if f.w == nil {
+			continue
+		}
+		if f.w.WebhookURL == "" {
+			return fmt.Errorf("config: %s.webhookUrl: is required", f.key)
+		}
+		if err := credentialRef(f.key+".webhookUrl", f.w.WebhookURL); err != nil {
+			return err
+		}
+	}
+	for i, g := range n.Generic {
+		key := fmt.Sprintf("notify.generic[%d]", i)
+		if err := ValidateWebhookURL(key+".url", g.URL); err != nil {
+			return err
+		}
+		for name, value := range g.Headers {
+			if strings.TrimSpace(name) == "" {
+				return fmt.Errorf("config: %s.headers: a header name is empty", key)
+			}
+			if value == "" {
+				return fmt.Errorf("config: %s.headers.%s: is empty", key, name)
+			}
+			if credentialShapedHeader(name) && !IsCredentialRef(value) {
+				return fmt.Errorf("config: %s.headers.%s: looks like a credential and must start with env: or keychain:", key, name)
+			}
+		}
+		if g.Secret != "" {
+			if err := credentialRef(key+".secret", g.Secret); err != nil {
+				return err
+			}
+		}
+	}
 	return nil
 }
 
+// validateLanguage checks the language block. notes: has to be a language
+// code — there is no "auto" for it, since the engineer's note is written
+// for one team and that team reads one language. customer: is a code or
+// "auto".
+func validateLanguage(l *LanguageConfig) error {
+	if !languageCode.MatchString(l.Notes) {
+		return fmt.Errorf("config: language.notes: must be a language code such as en or ar, got %q", l.Notes)
+	}
+	if l.Customer != CustomerLanguageAuto && !languageCode.MatchString(l.Customer) {
+		return fmt.Errorf("config: language.customer: must be auto or a language code such as ar, got %q", l.Customer)
+	}
+	return nil
+}
+
+// validateACP checks the acp block. The agent's launch command is the only
+// thing the adapter cannot work out for itself, and it is required only
+// when the workspace actually selects the provider — an acp block left in
+// place while running on claude is not an error.
+func validateACP(c *Config) error {
+	if c.Provider == "acp" && c.ACP == nil {
+		return fmt.Errorf("config: acp: is required when provider is acp")
+	}
+	if c.ACP == nil {
+		return nil
+	}
+	if c.Provider == "acp" && strings.TrimSpace(c.ACP.Command) == "" {
+		return fmt.Errorf("config: acp.command: is required when provider is acp")
+	}
+	return nil
+}
+
+// ValidateWebhookURL accepts an absolute https URL, or an http one on the
+// loopback interface for a receiver running on this machine. Plain http to
+// anywhere else would put the run's metadata, and any token the headers
+// carry, on the wire in the clear.
+func ValidateWebhookURL(key, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("config: %s: must be an absolute http or https URL, got %q", key, raw)
+	}
+	if u.User != nil {
+		// The value may itself be a credential straight out of a
+		// resolved reference, so the error names the problem without
+		// echoing anything the URL carried.
+		return fmt.Errorf("config: %s: must not carry userinfo (a username or password in the URL)", key)
+	}
+	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
+		return fmt.Errorf("config: %s: must be https unless the host is loopback, got %q", key, raw)
+	}
+	return nil
+}
+
+// credentialShapedHeader reports whether name is the kind of header that
+// carries a credential: Authorization, or anything ending in -Token, -Key
+// or -Secret (case-insensitive). config.go requires those to be an env:/
+// keychain: reference, the same way it already requires one for
+// notify.slack.webhookUrl and notify.generic[].secret.
+func credentialShapedHeader(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "authorization" {
+		return true
+	}
+	for _, suffix := range []string{"-token", "-key", "-secret"} {
+		if strings.HasSuffix(n, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLoopback reports whether host names this machine, by name or by
+// address.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
 // validateOpenAI checks the openai block. baseUrl and model are required
+
 // only when the workspace actually selects the provider — an openai block
 // left in place while running on claude is not an error — but the fields
 // that are set are checked either way, so a bad value is caught at load
@@ -414,7 +684,14 @@ var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": 
 // conversations and have no issue list to sweep, so naming one under
 // sources.tracker leaves a workspace that loads and then fails on its first
 // run — worth catching at load time instead.
-var helpdeskOnlyAdapters = map[string]bool{"zendesk": true, "freshdesk": true, "zohodesk": true}
+var helpdeskOnlyAdapters = map[string]bool{
+	"zendesk":   true,
+	"freshdesk": true,
+	"zohodesk":  true,
+	"helpscout": true,
+	"intercom":  true,
+	"hubspot":   true,
+}
 
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	if s == nil {
@@ -478,6 +755,21 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		if s.APIKey == "" {
 			return fmt.Errorf("config: %s.apiKey: is required for adapter freshdesk", prefix)
 		}
+	case "helpscout":
+		if s.ClientID == "" {
+			return fmt.Errorf("config: %s.clientId: is required for adapter helpscout", prefix)
+		}
+		if s.ClientSecret == "" {
+			return fmt.Errorf("config: %s.clientSecret: is required for adapter helpscout", prefix)
+		}
+	case "intercom":
+		if s.AccessToken == "" {
+			return fmt.Errorf("config: %s.accessToken: is required for adapter intercom", prefix)
+		}
+	case "hubspot":
+		if s.AccessToken == "" {
+			return fmt.Errorf("config: %s.accessToken: is required for adapter hubspot", prefix)
+		}
 	case "jira":
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
@@ -523,6 +815,9 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		{"pat", s.PAT},
 		{"apiKey", s.APIKey},
 		{"oauthToken", s.OAuthToken},
+		{"clientId", s.ClientID},
+		{"clientSecret", s.ClientSecret},
+		{"accessToken", s.AccessToken},
 	} {
 		if f.ref == "" {
 			continue
@@ -590,11 +885,15 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 }
 
 // credentialRef rejects a value that carries a secret instead of naming one.
+// The set of schemes lives in creds.go, with the resolver that reads them.
+// The error names the key and the accepted prefixes only, never the value: a
+// misconfigured field is as likely to hold the secret itself as a typo, and
+// that must never end up in a log line or a warning.
 func credentialRef(key, ref string) error {
-	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
+	if IsCredentialRef(ref) {
 		return nil
 	}
-	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
+	return fmt.Errorf("config: %s: must start with %s", key, credSchemeList)
 }
 
 // WorkspaceOnlyMCP reports whether an agent session should see only the
@@ -604,7 +903,34 @@ func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
 }
 
+// RTLMarkup reports whether the embedded note templates should wrap a
+// right-to-left paragraph in a <div dir="rtl"> block. It is the default,
+// and a Config built by hand (in a test, say) reads as the default rather
+// than as "off".
+func (c *Config) RTLMarkup() bool {
+	return c.Language.RTLMarkup == nil || *c.Language.RTLMarkup
+}
+
+// NotesLanguage is the language the engineer's note is written in, or the
+// default when the workspace named none.
+func (c *Config) NotesLanguage() string {
+	if c.Language.Notes == "" {
+		return DefaultNotesLanguage
+	}
+	return c.Language.Notes
+}
+
+// CustomerLanguage is the language customer-facing text is written in, or
+// "auto" when the workspace named none.
+func (c *Config) CustomerLanguage() string {
+	if c.Language.Customer == "" {
+		return CustomerLanguageAuto
+	}
+	return c.Language.Customer
+}
+
 // AttachmentMaxBytes is the configured attachment size cap, or the default
+
 // when the workspace did not set one.
 func (c *Config) AttachmentMaxBytes() int64 {
 	if c.Attachments.MaxBytes <= 0 {

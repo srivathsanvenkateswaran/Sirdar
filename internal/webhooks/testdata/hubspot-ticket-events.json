@@ -1,0 +1,28 @@
+[
+  {
+    "eventId": 100,
+    "subscriptionId": 12345,
+    "portalId": 62515,
+    "appId": 54321,
+    "occurredAt": 1789119000000,
+    "subscriptionType": "ticket.propertyChange",
+    "attemptNumber": 0,
+    "objectId": 8891234567,
+    "propertyName": "hubspot_owner_id",
+    "propertyValue": "77341122",
+    "changeSource": "CRM"
+  },
+  {
+    "eventId": 101,
+    "subscriptionId": 12346,
+    "portalId": 62515,
+    "appId": 54321,
+    "occurredAt": 1789119001000,
+    "subscriptionType": "contact.propertyChange",
+    "attemptNumber": 0,
+    "objectId": 55501,
+    "propertyName": "lifecyclestage",
+    "propertyValue": "customer",
+    "changeSource": "CRM"
+  }
+]
