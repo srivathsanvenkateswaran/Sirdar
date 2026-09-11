@@ -106,6 +106,12 @@ func withinWindow(now, t time.Time, window time.Duration) bool {
 }
 
 // parseEpochMillis reads the millisecond timestamp HubSpot sends.
+//
+// Milliseconds only, which is the unit HubSpot documents. A stamp in
+// seconds parses as a moment in 1970 and so falls outside the replay
+// window: a sender that changed units is refused rather than accepted on a
+// timestamp nobody really checked. That is the failure to look for if every
+// delivery from one source starts answering 401.
 func parseEpochMillis(s string) time.Time {
 	ms, err := strconv.ParseInt(strings.TrimSpace(s), 10, 64)
 	if err != nil {

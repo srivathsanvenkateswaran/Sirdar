@@ -30,6 +30,13 @@ type Auth struct {
 	// Username and Password are the basic-auth pair an Azure DevOps
 	// service hook is configured with.
 	Username, Password string
+	// ProxyScheme and ProxyHost are the public scheme and host a reverse
+	// proxy receives the delivery on, for the one source that signs the
+	// URL it called. They come from the operator's configuration: they say
+	// what the proxy in front of this process is, which is not something a
+	// caller may assert. Empty means there is no proxy, and the request's
+	// own scheme and host are used.
+	ProxyScheme, ProxyHost string
 	// Now is the clock the replay windows read; nil means time.Now.
 	Now func() time.Time
 }
@@ -42,6 +49,15 @@ var basicAuthSources = map[string]bool{SourceAzDO: true}
 // UsesBasicAuth reports whether a source is configured with a username and
 // password instead of a secret.
 func UsesBasicAuth(name string) bool { return basicAuthSources[name] }
+
+// signedURISources are the sources whose signature covers the URL they
+// called, and so the only ones a proxy block means anything to.
+var signedURISources = map[string]bool{SourceHubSpot: true}
+
+// SignsURI reports whether a source signs the URL it posted to, which is
+// what makes webhooks.sources.<name>.proxy worth setting. Config
+// validation asks this rather than repeating the list.
+func SignsURI(name string) bool { return signedURISources[name] }
 
 // Known reports whether name is a source this package can verify.
 func Known(name string) bool {
@@ -83,7 +99,7 @@ func Build(name string, a Auth) (Verifier, error) {
 	case SourceIntercom:
 		return Intercom{Secret: a.Secret}, nil
 	case SourceHubSpot:
-		return HubSpot{Secret: a.Secret, clock: c}, nil
+		return HubSpot{Secret: a.Secret, ProxyScheme: a.ProxyScheme, ProxyHost: a.ProxyHost, clock: c}, nil
 	case SourceGeneric:
 		return Generic{Secret: a.Secret}, nil
 	}

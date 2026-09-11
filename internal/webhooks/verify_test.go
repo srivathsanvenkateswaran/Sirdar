@@ -246,14 +246,56 @@ func TestHubSpotRejectsUnparsableTimestamp(t *testing.T) {
 // behind something that rewrites neither Host nor X-Forwarded-Host.
 func TestHubSpotProxyOverride(t *testing.T) {
 	body := []byte(`[]`)
-	ts := strconv.FormatInt(at2026.UnixMilli(), 10)
-	signed := "POST" + "https://hooks.acme.com/hooks/ws1/hubspot" + string(body) + ts
-	r := httptest.NewRequest("POST", "http://127.0.0.1:7777/hooks/ws1/hubspot", strings.NewReader(string(body)))
-	r.Header.Set(HubSpotTimestampHeader, ts)
-	r.Header.Set(HubSpotSignatureHeader, Base64HMACSHA256("hs", []byte(signed)))
+	r := hubspotSignedFor("hs", "https://hooks.acme.com/hooks/ws1/hubspot",
+		"http://127.0.0.1:7777/hooks/ws1/hubspot", body)
 
 	v := HubSpot{Secret: "hs", ProxyScheme: "https", ProxyHost: "hooks.acme.com", clock: fixedClock()}
 	assertVerified(t, v, r, body)
+}
+
+// X-Forwarded-* is the sender's own claim about the URL it called, and
+// that URL is half of the signed message. With no proxy configured they
+// are ignored: believing them would let a sender sign whatever URL it
+// liked and post the result anywhere.
+func TestHubSpotIgnoresForwardedHeadersWithoutAProxy(t *testing.T) {
+	body := []byte(`[]`)
+	const arrivedAt = "http://127.0.0.1:7777/hooks/ws1/hubspot"
+	v := HubSpot{Secret: "hs", clock: fixedClock()}
+
+	claimed := hubspotSignedFor("hs", "https://hooks.acme.com/hooks/ws1/hubspot", arrivedAt, body)
+	claimed.Header.Set("X-Forwarded-Proto", "https")
+	claimed.Header.Set("X-Forwarded-Host", "hooks.acme.com")
+	assertRejected(t, v, claimed, body)
+
+	// The same delivery signed over the URL the request really arrived on
+	// is what that rejection has to be distinguished from.
+	assertVerified(t, v, hubspotSignedFor("hs", arrivedAt, arrivedAt, body), body)
+}
+
+// A proxy in the configuration is what makes its headers worth reading, so
+// the operator may write out only the half the proxy does not send. Here
+// the host is configured and the scheme comes from X-Forwarded-Proto.
+func TestHubSpotProxyReadsForwardedSchemeForTheHalfNotConfigured(t *testing.T) {
+	body := []byte(`[]`)
+	r := hubspotSignedFor("hs", "https://hooks.acme.com/hooks/ws1/hubspot",
+		"http://127.0.0.1:7777/hooks/ws1/hubspot", body)
+	// Two proxies in the chain append rather than replace, so only the
+	// first entry is the sender's scheme.
+	r.Header.Set("X-Forwarded-Proto", "https, http")
+
+	v := HubSpot{Secret: "hs", ProxyHost: "hooks.acme.com", clock: fixedClock()}
+	assertVerified(t, v, r, body)
+}
+
+// hubspotSignedFor builds a delivery that arrives at arrivedAt carrying a
+// signature computed over signedURL, which is how a proxy that rewrites
+// the URL is reproduced in a test.
+func hubspotSignedFor(secret, signedURL, arrivedAt string, body []byte) *http.Request {
+	ts := strconv.FormatInt(at2026.UnixMilli(), 10)
+	r := httptest.NewRequest("POST", arrivedAt, strings.NewReader(string(body)))
+	r.Header.Set(HubSpotTimestampHeader, ts)
+	r.Header.Set(HubSpotSignatureHeader, Base64HMACSHA256(secret, []byte("POST"+signedURL+string(body)+ts)))
+	return r
 }
 
 // A signature that is valid base64 of the wrong length must not be

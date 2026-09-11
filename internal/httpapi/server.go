@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"log"
 	"net/http"
 	"path"
 	"strconv"
@@ -31,17 +32,30 @@ type server struct {
 	ui    fs.FS
 	mux   *http.ServeMux
 	hooks *webhooks.Receiver
+	// hooksWS is the workspace id the hook receiver was built for. A
+	// delivery naming any other workspace in its path is a 404, whatever
+	// secret it carries.
+	hooksWS string
 
 	// keepalive is how often an idle event stream writes its comment line.
 	// A field rather than a constant so the tests need not wait 15 s.
 	keepalive time.Duration
+
+	// logf takes what the caller must not be told. A webhook sender is not
+	// the operator, so the reason a delivery failed is written here and
+	// only a generic message goes back over the wire.
+	logf func(format string, v ...any)
 }
 
 func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	if ui == nil {
 		ui = emptyFS{}
 	}
-	s := &server{svc: svc, ui: ui, mux: http.NewServeMux(), keepalive: 15 * time.Second}
+	s := &server{
+		svc: svc, ui: ui, mux: http.NewServeMux(),
+		keepalive: 15 * time.Second,
+		logf:      log.Printf,
+	}
 	for _, opt := range opts {
 		opt(s)
 	}

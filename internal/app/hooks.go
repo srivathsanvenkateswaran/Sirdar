@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
@@ -16,12 +17,19 @@ import (
 // delivery that did nothing, because a tracker that is told its delivery
 // failed will send it again.
 //
-// Two things make a key busy. A run of it that is preparing or running is
-// the obvious one: a second agent session on the same ticket would write
-// over the first one's note. The other is the cooldown, and it is the one
-// that matters in practice — a tracker fires on every field change, so an
-// operator triaging a ticket by hand generates a delivery every few
-// seconds, each of which would otherwise be a fresh run.
+// Three things make a key busy. A run of it that is preparing or running
+// is the obvious one: a second agent session on the same ticket would
+// write over the first one's note. The cooldown is the one that matters in
+// practice — a tracker fires on every field change, so an operator
+// triaging a ticket by hand generates a delivery every few seconds, each of
+// which would otherwise be a fresh run.
+//
+// The third is a start already under way in this process. Both of the
+// others are read off the run directory, and the first status a run writes
+// there is written by the job goroutine after this returns: two deliveries
+// for one key arriving together would both see an idle key and both start.
+// So the key is claimed here, before the directory is read, and released
+// when the job ends however it ends.
 func (s *Service) TriageIfIdle(ctx context.Context, wsID, key string, o TriageOptions) (JobID, string, error) {
 	if err := checkID(ErrNoSuchRun, "key", key); err != nil {
 		return "", "", err
@@ -30,6 +38,16 @@ func (s *Service) TriageIfIdle(ctx context.Context, wsID, key string, o TriageOp
 	if err != nil {
 		return "", "", err
 	}
+	if !s.claimKey(ws.ID, key) {
+		return "", fmt.Sprintf("a delivery naming %s is already starting a run", key), nil
+	}
+	started := false
+	defer func() {
+		if !started {
+			s.releaseKey(ws.ID, key)
+		}
+	}()
+
 	states, err := store.List(ws.Root, key)
 	if err != nil {
 		return "", "", err
@@ -37,8 +55,38 @@ func (s *Service) TriageIfIdle(ctx context.Context, wsID, key string, o TriageOp
 	if reason := busyReason(states, cfg.WebhookCooldown(), s.now()); reason != "" {
 		return "", reason, nil
 	}
-	id, err := s.StartTriage(ctx, wsID, []string{key}, o)
-	return id, "", err
+	id, err := s.startTriage(ctx, wsID, []string{key}, o, func() { s.releaseKey(ws.ID, key) })
+	if err != nil {
+		return "", "", err
+	}
+	started = true
+	return id, "", nil
+}
+
+// hookClaim is the key an in-flight start is held under. The NUL keeps two
+// workspaces whose ids and keys concatenate to the same string apart.
+func hookClaim(wsID, key string) string { return wsID + "\x00" + key }
+
+// claimKey takes the in-flight claim on one workspace's key, reporting
+// whether it was free.
+func (s *Service) claimKey(wsID, key string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	claim := hookClaim(wsID, key)
+	if _, taken := s.starting[claim]; taken {
+		return false
+	}
+	s.starting[claim] = struct{}{}
+	return true
+}
+
+// releaseKey gives the claim back. It runs when the job finishes, whether
+// it succeeded or failed: a key held by a claim nobody releases could never
+// be triaged again without restarting the process.
+func (s *Service) releaseKey(wsID, key string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	delete(s.starting, hookClaim(wsID, key))
 }
 
 // busyReason says why key should be left alone, or returns "".
@@ -91,6 +139,10 @@ func BuildReceiver(cfg *config.Config) (*webhooks.Receiver, error) {
 	sources := make(map[string]webhooks.Verifier, len(cfg.Webhooks.Sources))
 	for name, sc := range cfg.Webhooks.Sources {
 		auth := webhooks.Auth{Username: sc.Username}
+		if sc.Proxy != nil {
+			auth.ProxyScheme = strings.TrimSpace(sc.Proxy.Scheme)
+			auth.ProxyHost = strings.TrimSpace(sc.Proxy.Host)
+		}
 		if sc.Secret != "" {
 			secret, err := creds.Resolve(sc.Secret)
 			if err != nil {

@@ -115,7 +115,7 @@ func TestServeEndToEnd(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg := &app.Registry{Path: registryPath}
-	if err := ensureRegistered(reg, root); err != nil {
+	if _, err := ensureRegistered(reg, root); err != nil {
 		t.Fatal(err)
 	}
 
@@ -354,7 +354,7 @@ func appendWebhooks(t *testing.T, root, block string) {
 func TestServeHooksOffByDefault(t *testing.T) {
 	root, _ := newWorkspace(t, "fakeclaude.sh")
 	var errb bytes.Buffer
-	opts, ok := serveHooks(root, false, &errb)
+	opts, ok := serveHooks(root, app.WorkspaceID(root), false, &errb)
 	if !ok {
 		t.Fatalf("serveHooks failed: %s", errb.String())
 	}
@@ -374,7 +374,7 @@ func TestServeHooksWarnsAboutReachability(t *testing.T) {
 	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
 
 	var loopback bytes.Buffer
-	opts, ok := serveHooks(root, false, &loopback)
+	opts, ok := serveHooks(root, app.WorkspaceID(root), false, &loopback)
 	if !ok || len(opts) != 1 {
 		t.Fatalf("serveHooks: ok=%v opts=%d stderr %q", ok, len(opts), loopback.String())
 	}
@@ -384,9 +384,14 @@ func TestServeHooksWarnsAboutReachability(t *testing.T) {
 	if !strings.Contains(loopback.String(), "generic") {
 		t.Errorf("stderr %q does not name the enabled source", loopback.String())
 	}
+	// The hook URL is served under one workspace id, so the line has to
+	// print the id rather than a placeholder the operator has to look up.
+	if !strings.Contains(loopback.String(), app.WorkspaceID(root)) {
+		t.Errorf("stderr %q does not name the workspace the hooks are served for", loopback.String())
+	}
 
 	var remote bytes.Buffer
-	if _, ok := serveHooks(root, true, &remote); !ok {
+	if _, ok := serveHooks(root, app.WorkspaceID(root), true, &remote); !ok {
 		t.Fatalf("serveHooks: %s", remote.String())
 	}
 	if !strings.Contains(remote.String(), "TLS") {
@@ -402,7 +407,7 @@ func TestServeHooksStopsOnAnUnresolvableSecret(t *testing.T) {
 	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
 
 	var errb bytes.Buffer
-	if _, ok := serveHooks(root, false, &errb); ok {
+	if _, ok := serveHooks(root, app.WorkspaceID(root), false, &errb); ok {
 		t.Fatal("a missing secret still started the hooks")
 	}
 	if !strings.Contains(errb.String(), "SIRDAR_TEST_HOOK_SECRET") {

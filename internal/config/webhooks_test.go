@@ -155,6 +155,70 @@ func TestWebhooksValidatedEvenWhenDisabled(t *testing.T) {
 	}
 }
 
+// --- proxy ------------------------------------------------------------
+
+// The URL is half of what a HubSpot signature proves, and behind a reverse
+// proxy the URL this process sees is not the one HubSpot called. The
+// operator states the public address; it is not taken off the delivery.
+func TestWebhookProxyLoads(t *testing.T) {
+	body := minimal + `
+webhooks:
+  enabled: true
+  sources:
+    hubspot:
+      secret: env:HS_SECRET
+      proxy:
+        scheme: https
+        host: hooks.acme.com
+`
+	c, err := Load(writeCfg(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := c.Webhooks.Sources["hubspot"].Proxy
+	if p == nil || p.Scheme != "https" || p.Host != "hooks.acme.com" {
+		t.Fatalf("proxy %+v", p)
+	}
+}
+
+func TestWebhookProxyIsChecked(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		block string
+	}{
+		{"a source that does not sign the URL it calls", `
+    jira:
+      secret: env:JIRA_HOOK_SECRET
+      proxy:
+        host: hooks.acme.com
+`},
+		{"a scheme that is not http or https", `
+    hubspot:
+      secret: env:HS_SECRET
+      proxy:
+        scheme: ftp
+        host: hooks.acme.com
+`},
+		{"a host written as a URL", `
+    hubspot:
+      secret: env:HS_SECRET
+      proxy:
+        host: https://hooks.acme.com/hooks
+`},
+		{"an empty proxy block", `
+    hubspot:
+      secret: env:HS_SECRET
+      proxy: {}
+`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := Load(writeCfg(t, minimal+"\nwebhooks:\n  enabled: true\n  sources:"+tc.block)); err == nil {
+				t.Fatal("loaded without complaint")
+			}
+		})
+	}
+}
+
 // "me" is the account the workspace's own credentials belong to, which is
 // the only identity Sirdar can work out for itself.
 func TestMatchAssigneeResolvesMe(t *testing.T) {

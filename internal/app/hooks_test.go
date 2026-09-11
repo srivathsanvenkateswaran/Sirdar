@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -174,11 +175,103 @@ func at(minutes int) time.Time {
 	return time.Date(2026, 9, 11, 9, minutes, 0, 0, time.UTC)
 }
 
+// Two deliveries for one key that arrive together must start one run. The
+// running check and the cooldown are both read off the run directory, and
+// the first status a run writes there is written by the job goroutine
+// after TriageIfIdle has returned — so without a claim taken before the
+// directory is read, every caller in a burst sees an idle key and starts
+// its own agent session on the same ticket.
+func TestTriageIfIdleStartsOneRunForConcurrentDeliveries(t *testing.T) {
+	root := withCooldown(t, "10m")
+	// A session that produces nothing and ends only when the service is
+	// stopped, so the first run is still in flight while the rest call.
+	p := &stubProvider{script: block(make(chan struct{}, 1))}
+	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
+
+	const callers = 8
+	ids := make([]JobID, callers)
+	reasons := make([]string, callers)
+	errs := make([]error, callers)
+
+	var wg sync.WaitGroup
+	release := make(chan struct{})
+	for i := 0; i < callers; i++ {
+		wg.Add(1)
+		go func(i int) {
+			defer wg.Done()
+			<-release
+			ids[i], reasons[i], errs[i] = svc.TriageIfIdle(
+				context.Background(), WorkspaceID(root), "OMNI-1", TriageOptions{})
+		}(i)
+	}
+	close(release)
+	wg.Wait()
+
+	runs := 0
+	for i := 0; i < callers; i++ {
+		if errs[i] != nil {
+			t.Fatalf("caller %d: %v", i, errs[i])
+		}
+		switch {
+		case ids[i] != "":
+			runs++
+			if reasons[i] != "" {
+				t.Errorf("caller %d started %s and gave a reason too: %s", i, ids[i], reasons[i])
+			}
+		case reasons[i] == "":
+			t.Errorf("caller %d started nothing and said why not", i)
+		}
+	}
+	if runs != 1 {
+		t.Fatalf("%d of %d concurrent deliveries started a run, want 1", runs, callers)
+	}
+}
+
+// The claim covers the start, not the key forever: once the job has ended
+// the key is free again, or a workspace would answer one delivery per key
+// per process. The cooldown is zero here, so a claim left behind is the
+// only thing that could hold the second delivery back.
+func TestTriageIfIdleReleasesTheKeyWhenTheJobEnds(t *testing.T) {
+	root := withCooldown(t, "0s")
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	svc := newService(t, root, stubBuilder(p, stubTracker{}, stubHelpdesk{}))
+	events, unsubscribe := svc.Subscribe()
+	defer unsubscribe()
+
+	_, reason, err := svc.TriageIfIdle(context.Background(), WorkspaceID(root), "OMNI-1", TriageOptions{})
+	if err != nil || reason != "" {
+		t.Fatalf("first delivery: reason %q err %v", reason, err)
+	}
+	waitFor(t, events, "job.finished", func(e Event) bool { return e.Kind == KindJobFinished })
+
+	id, reason, err := svc.TriageIfIdle(context.Background(), WorkspaceID(root), "OMNI-1", TriageOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if id == "" {
+		t.Fatalf("the key was still held after its job finished: %s", reason)
+	}
+	waitFor(t, events, "job.finished", func(e Event) bool { return e.Kind == KindJobFinished })
+}
+
 func TestTriageIfIdleRejectsAnUnsafeKey(t *testing.T) {
 	root := withCooldown(t, "10m")
 	svc := newService(t, root, stubBuilder(&stubProvider{}, stubTracker{}, stubHelpdesk{}))
 	if _, _, err := svc.TriageIfIdle(context.Background(), WorkspaceID(root), "../../etc", TriageOptions{}); err == nil {
 		t.Fatal("a key with a path separator was accepted")
+	}
+}
+
+// " OMNI-1" and "OMNI-1" are two keys to the run store: a padded one would
+// get its own run directory and miss both the running check and the
+// cooldown. The receiver trims what it reads out of a payload; a key that
+// reaches here still padded is a caller's mistake and is refused.
+func TestTriageIfIdleRejectsAPaddedKey(t *testing.T) {
+	root := withCooldown(t, "10m")
+	writeRunState(t, root, "OMNI-1", store.KindTriage, store.StatusRunning, time.Now())
+	svc := newService(t, root, stubBuilder(&stubProvider{}, stubTracker{}, stubHelpdesk{}))
+	if _, _, err := svc.TriageIfIdle(context.Background(), WorkspaceID(root), " OMNI-1", TriageOptions{}); err == nil {
+		t.Fatal("a key padded with a space was accepted, so it would have run beside the running one")
 	}
 }
 

@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -18,7 +20,7 @@ func hookServer(f *fake) http.Handler {
 	rc := webhooks.New(map[string]webhooks.Verifier{
 		webhooks.SourceGeneric: webhooks.Generic{Secret: hookSecret},
 	}, webhooks.Match{Assignee: "sri@acme.com"})
-	return New(f, emptyFS{}, WithHooks(rc))
+	return New(f, emptyFS{}, WithHooks(knownWS, rc))
 }
 
 // deliver posts one webhook body, with the shared secret unless secret is
@@ -146,9 +148,44 @@ func TestHookRejectsGet(t *testing.T) {
 	assertError(t, w, http.StatusNotFound, "not_found")
 }
 
-func TestHookUnknownWorkspaceIs404(t *testing.T) {
-	w := deliver(hookServer(newFake()), "/hooks/nope/generic", hookSecret, assignedBody)
+// The receiver holds one workspace's secrets, and the id in the path is
+// checked against the workspace it was built for. Without that check, the
+// holder of this workspace's secret could name any other workspace the
+// operator has registered and start runs in it — reading that workspace's
+// tickets with that workspace's credentials.
+func TestHookRefusesAnotherWorkspace(t *testing.T) {
+	f := newFake()
+	// A second registered workspace: its id is one the service knows, so
+	// the 404 can only come from the receiver's own check.
+	f.workspaces = append(f.workspaces, Workspace{ID: "ws2", Name: "other", Root: "/repos/other"})
+	h := hookServer(f)
+
+	w := deliver(h, "/hooks/ws2/generic", hookSecret, assignedBody)
 	assertError(t, w, http.StatusNotFound, "not_found")
+	if len(f.gotIdle) != 0 {
+		t.Errorf("a delivery naming another workspace reached the service: %v", f.gotIdle)
+	}
+	if len(f.hooks()) != 0 {
+		t.Errorf("hook events %+v, want none", f.hooks())
+	}
+
+	// The same delivery to the workspace the receiver was built for is
+	// what that 404 has to be distinguished from.
+	if got := deliver(h, "/hooks/ws1/generic", hookSecret, assignedBody); got.Code != http.StatusAccepted {
+		t.Fatalf("the served workspace answered %d", got.Code)
+	}
+}
+
+// A workspace id nobody knows is the same 404, and it is refused before
+// the body is verified: the endpoint tells an unauthenticated caller
+// nothing about which workspace it serves.
+func TestHookUnknownWorkspaceIs404(t *testing.T) {
+	f := newFake()
+	w := deliver(hookServer(f), "/hooks/nope/generic", hookSecret, assignedBody)
+	assertError(t, w, http.StatusNotFound, "not_found")
+	if len(f.gotIdle) != 0 {
+		t.Errorf("a delivery naming an unknown workspace reached the service: %v", f.gotIdle)
+	}
 }
 
 func TestHookRejectsOversizedBody(t *testing.T) {
@@ -165,6 +202,34 @@ func TestHookRejectsOversizedBodyBeforeVerifying(t *testing.T) {
 	assertError(t, w, http.StatusRequestEntityTooLarge, "too_large")
 }
 
+// A run that could not be started is a 500 with nothing in it: a Service
+// error names what it was working on — the workspace root, an adapter's
+// command line — and the sender of a webhook is not the operator. The
+// detail goes to the server's log instead.
+func TestHookHidesTheStartFailureFromTheSender(t *testing.T) {
+	f := newFake()
+	f.idleErr = errors.New("open /repos/oxo-apis/.sirdar/config.yaml: permission denied")
+
+	rc := webhooks.New(map[string]webhooks.Verifier{
+		webhooks.SourceGeneric: webhooks.Generic{Secret: hookSecret},
+	}, webhooks.Match{})
+	h := newServer(f, emptyFS{}, WithHooks(knownWS, rc))
+	var logged strings.Builder
+	h.logf = func(format string, v ...any) { fmt.Fprintf(&logged, format, v...) }
+
+	w := deliver(h, "/hooks/ws1/generic", hookSecret, assignedBody)
+	assertError(t, w, http.StatusInternalServerError, "internal")
+	if strings.Contains(w.Body.String(), "/repos/oxo-apis") {
+		t.Errorf("the response carried the workspace path: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "permission denied") {
+		t.Errorf("the response carried the underlying error: %s", w.Body.String())
+	}
+	if !strings.Contains(logged.String(), "permission denied") {
+		t.Errorf("the detail was not logged: %q", logged.String())
+	}
+}
+
 func TestHookRejectsUnreadableBody(t *testing.T) {
 	w := deliver(hookServer(newFake()), "/hooks/ws1/generic", hookSecret, `{"key":`)
 	assertError(t, w, http.StatusBadRequest, "bad_request")
@@ -177,7 +242,7 @@ func TestHookAcceptsDeliveryWithNoTrigger(t *testing.T) {
 	rc := webhooks.New(map[string]webhooks.Verifier{
 		webhooks.SourceIntercom: webhooks.Intercom{Secret: hookSecret},
 	}, webhooks.Match{})
-	h := New(f, emptyFS{}, WithHooks(rc))
+	h := New(f, emptyFS{}, WithHooks(knownWS, rc))
 
 	body := `{"topic":"conversation.user.replied","data":{"item":{"id":"7712"}}}`
 	r := httptest.NewRequest("POST", "/hooks/ws1/intercom", strings.NewReader(body))
@@ -207,15 +272,17 @@ func TestHookStartsOneJobPerTicket(t *testing.T) {
 	}, webhooks.Match{})
 
 	body := `[{"subscriptionType":"ticket.creation","objectId":991},{"subscriptionType":"ticket.creation","objectId":992}]`
+	// No proxy is configured, so the signed URI is the one the request
+	// arrived on — https://hooks.acme.com — and no X-Forwarded-* header
+	// takes part in it.
 	r := httptest.NewRequest("POST", "https://hooks.acme.com/hooks/ws1/hubspot", strings.NewReader(body))
-	r.Header.Set("X-Forwarded-Proto", "https")
 	ts := hubspotNow()
 	r.Header.Set(webhooks.HubSpotTimestampHeader, ts)
 	signed := "POST" + "https://hooks.acme.com/hooks/ws1/hubspot" + body + ts
 	r.Header.Set(webhooks.HubSpotSignatureHeader, webhooks.Base64HMACSHA256(hookSecret, []byte(signed)))
 
 	w := httptest.NewRecorder()
-	New(f, emptyFS{}, WithHooks(rc)).ServeHTTP(w, r)
+	New(f, emptyFS{}, WithHooks(knownWS, rc)).ServeHTTP(w, r)
 
 	var got struct {
 		JobID  string   `json:"jobId"`

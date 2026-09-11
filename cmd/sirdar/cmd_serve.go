@@ -63,12 +63,13 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 	reg := &app.Registry{Path: registryPath}
-	if err := ensureRegistered(reg, root); err != nil {
+	wsID, err := ensureRegistered(reg, root)
+	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1
 	}
 
-	hooks, ok := serveHooks(root, *allowRemote, stderr)
+	hooks, ok := serveHooks(root, wsID, *allowRemote, stderr)
 	if !ok {
 		return 1
 	}
@@ -88,9 +89,14 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 // webhooks.enabled false gets no options and no output: the routes are
 // registered either way and answer 404 without a receiver.
 //
+// The receiver holds one workspace's secrets, so it is served under one
+// workspace id — wsID, the workspace this command was started in. A
+// delivery that names another registered workspace in its path gets a 404
+// rather than a run in a workspace whose secret it does not hold.
+//
 // A secret that cannot be resolved stops the command rather than starting
 // a server whose endpoints reject every delivery.
-func serveHooks(root string, allowRemote bool, stderr io.Writer) ([]httpapi.Option, bool) {
+func serveHooks(root, wsID string, allowRemote bool, stderr io.Writer) ([]httpapi.Option, bool) {
 	cfg, err := config.Load(root)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
@@ -106,8 +112,8 @@ func serveHooks(root string, allowRemote bool, stderr io.Writer) ([]httpapi.Opti
 	}
 	sources := rc.Sources()
 	sort.Strings(sources)
-	fmt.Fprintf(stderr, "sirdar serve: webhook triggers enabled for %s at POST /hooks/<workspace-id>/<source>\n",
-		strings.Join(sources, ", "))
+	fmt.Fprintf(stderr, "sirdar serve: webhook triggers enabled for %s at POST /hooks/%s/<source>\n",
+		strings.Join(sources, ", "), wsID)
 	if allowRemote {
 		fmt.Fprint(stderr, "sirdar serve: warning: put a TLS reverse proxy in front of this listener."+
 			" Several of these sources authenticate with a shared secret in a plain header, which anyone"+
@@ -116,7 +122,7 @@ func serveHooks(root string, allowRemote bool, stderr io.Writer) ([]httpapi.Opti
 		fmt.Fprint(stderr, "sirdar serve: note: the listener is on loopback, so a hosted tracker cannot reach it."+
 			" Expose it with --allow-remote behind a TLS reverse proxy, or forward the port through a tunnel\n")
 	}
-	return []httpapi.Option{httpapi.WithHooks(rc)}, true
+	return []httpapi.Option{httpapi.WithHooks(wsID, rc)}, true
 }
 
 // serveRoot resolves which workspace to register: the one named by
@@ -149,20 +155,24 @@ func serveRoot(flagValue string, stderr io.Writer) (string, bool) {
 }
 
 // ensureRegistered adds root to the workspace registry if it is not there
-// already, so the UI opens on something rather than an empty board.
-func ensureRegistered(reg *app.Registry, root string) error {
+// already, so the UI opens on something rather than an empty board. It
+// returns the workspace's id, which is the one the hook routes serve.
+func ensureRegistered(reg *app.Registry, root string) (string, error) {
 	list, err := reg.List()
 	if err != nil {
-		return err
+		return "", err
 	}
 	want := filepath.Clean(root)
 	for _, ws := range list {
 		if ws.Root == want {
-			return nil
+			return ws.ID, nil
 		}
 	}
-	_, err = reg.Add(want)
-	return err
+	ws, err := reg.Add(want)
+	if err != nil {
+		return "", err
+	}
+	return ws.ID, nil
 }
 
 // serveHTTP runs h until ctx is cancelled, then gives the requests in

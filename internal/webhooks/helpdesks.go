@@ -172,9 +172,16 @@ func (i Intercom) Extract(body []byte) ([]Trigger, error) {
 // concatenated in that order, under the app's client secret.
 //
 // The URI is the one HubSpot called, which behind a reverse proxy is not
-// the one this process sees. ProxyScheme and ProxyHost, when set, are what
-// the signature is computed against; otherwise the request's own
-// X-Forwarded-* headers are used, then the connection itself.
+// the one this process sees. ProxyScheme and ProxyHost are the operator's
+// statement of what that proxy is, from webhooks.sources.hubspot.proxy,
+// and they are what the signature is computed against.
+//
+// With neither set the request's own scheme and host are used and the
+// X-Forwarded-* headers are ignored. They are the caller's own claim about
+// the URL it called, and the URL is half of what the signature proves: a
+// receiver that believed them would let a sender choose the message it
+// signs. They are read only to fill in the half of a configured proxy the
+// operator left out.
 type HubSpot struct {
 	Secret      string
 	ProxyScheme string
@@ -205,9 +212,16 @@ func (h HubSpot) Verify(r *http.Request, body []byte) error {
 
 // uri rebuilds the absolute URL HubSpot signed.
 func (h HubSpot) uri(r *http.Request) string {
-	scheme := h.ProxyScheme
-	if scheme == "" {
-		scheme = r.Header.Get("X-Forwarded-Proto")
+	scheme, host := h.ProxyScheme, h.ProxyHost
+	if h.behindProxy() {
+		// Configured, so there is a proxy in front and its headers are
+		// worth reading for whichever half the operator did not write out.
+		if scheme == "" {
+			scheme = firstForwarded(r.Header.Get("X-Forwarded-Proto"))
+		}
+		if host == "" {
+			host = firstForwarded(r.Header.Get("X-Forwarded-Host"))
+		}
 	}
 	if scheme == "" {
 		scheme = "http"
@@ -215,14 +229,23 @@ func (h HubSpot) uri(r *http.Request) string {
 			scheme = "https"
 		}
 	}
-	host := h.ProxyHost
-	if host == "" {
-		host = r.Header.Get("X-Forwarded-Host")
-	}
 	if host == "" {
 		host = r.Host
 	}
 	return scheme + "://" + host + r.URL.RequestURI()
+}
+
+// behindProxy reports whether the workspace configured a proxy for this
+// source, which is what makes the X-Forwarded-* headers worth reading.
+func (h HubSpot) behindProxy() bool { return h.ProxyScheme != "" || h.ProxyHost != "" }
+
+// firstForwarded takes the first entry of an X-Forwarded-* header, which a
+// second proxy in the chain appends to rather than replaces.
+func firstForwarded(v string) string {
+	if i := strings.IndexByte(v, ','); i >= 0 {
+		v = v[:i]
+	}
+	return strings.TrimSpace(v)
 }
 
 // hubspotEvents are the subscription types worth a run.

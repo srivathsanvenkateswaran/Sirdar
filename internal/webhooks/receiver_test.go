@@ -63,13 +63,39 @@ func TestReceiverDropsUnsafeKeys(t *testing.T) {
 	}
 }
 
+// A template that rendered a padded field sends " OMNI-2510", which is a
+// different string from "OMNI-2510" to the run store: it would get its own
+// run directory and miss both the running check and the cooldown. The key
+// is trimmed where it is read, so the rest of the program never sees the
+// padded form.
+func TestReceiverTrimsKeys(t *testing.T) {
+	rc := testReceiver(Match{})
+	body := []byte(`{"key":"  OMNI-2510\t"}`)
+	got, err := rc.Accept(post(body, map[string]string{SecretHeader: "s3cret"}), SourceGeneric)
+	if err != nil {
+		t.Fatalf("accept: %v", err)
+	}
+	if len(got) != 1 || got[0].Key != "OMNI-2510" {
+		t.Fatalf("got %+v, want the key trimmed", got)
+	}
+}
+
+// Whitespace on its own is not a ticket key.
+func TestReceiverDropsAWhitespaceKey(t *testing.T) {
+	rc := testReceiver(Match{})
+	got, err := rc.Accept(post([]byte(`{"key":"   "}`), map[string]string{SecretHeader: "s3cret"}), SourceGeneric)
+	if err == nil && len(got) != 0 {
+		t.Fatalf("got %+v, want no trigger", got)
+	}
+}
+
 func TestValidKey(t *testing.T) {
 	for _, k := range []string{"OMNI-2510", "42", "ENG-431", "8891234567"} {
 		if !ValidKey(k) {
 			t.Errorf("ValidKey(%q) = false", k)
 		}
 	}
-	for _, k := range []string{"", ".", "..", "a/b", `a\b`, "a*b", "a?b", "a[b", "a\nb"} {
+	for _, k := range []string{"", ".", "..", "a/b", `a\b`, "a*b", "a?b", "a[b", "a\nb", " OMNI-1", "OMNI-1 ", " "} {
 		if ValidKey(k) {
 			t.Errorf("ValidKey(%q) = true", k)
 		}

@@ -150,6 +150,13 @@ func (rc *Receiver) Accept(r *http.Request, source string) ([]Trigger, error) {
 	out := triggers[:0]
 	for _, t := range triggers {
 		t.Source = source
+		// A template that rendered a padded field leaves the key with
+		// spaces around it, and " OMNI-1" is a different string from
+		// "OMNI-1" everywhere downstream: it would miss the running check
+		// and the cooldown, and open a second run directory for one
+		// ticket. The trim happens before the check, so what is validated
+		// is what the rest of the program will use.
+		t.Key = strings.TrimSpace(t.Key)
 		// A key that is not one plain path element would be joined into
 		// the run tree, so it is dropped here rather than sanitised: a
 		// delivery naming such a key is not naming a ticket.
@@ -166,18 +173,24 @@ func (rc *Receiver) Accept(r *http.Request, source string) ([]Trigger, error) {
 func (rc *Receiver) Allows(t Trigger) (bool, string) { return rc.match.Allows(t) }
 
 // ReadBody reads at most MaxBodyBytes from the request.
+//
+// http.MaxBytesReader rather than io.LimitReader: a LimitReader hands back
+// a truncated body and no error, so the cap has to be re-checked by hand
+// and a body one byte over it is read as a malformed one. MaxBytesReader
+// stops at the cap and says so, as *http.MaxBytesError. Its ResponseWriter
+// is nil because a receiver has no writer here — the writer only tells the
+// server not to keep the connection alive.
 func ReadBody(r *http.Request) ([]byte, error) {
 	if r.ContentLength > MaxBodyBytes {
 		return nil, ErrTooLarge
 	}
-	// One byte past the cap, so a body exactly at the cap still reads and
-	// anything over it is caught without reading the rest.
-	body, err := io.ReadAll(io.LimitReader(r.Body, MaxBodyBytes+1))
+	body, err := io.ReadAll(http.MaxBytesReader(nil, r.Body, MaxBodyBytes))
 	if err != nil {
+		var tooLarge *http.MaxBytesError
+		if errors.As(err, &tooLarge) {
+			return nil, ErrTooLarge
+		}
 		return nil, fmt.Errorf("webhooks: read body: %w", err)
-	}
-	if len(body) > MaxBodyBytes {
-		return nil, ErrTooLarge
 	}
 	return body, nil
 }
@@ -188,10 +201,14 @@ func ReadBody(r *http.Request) ([]byte, error) {
 const keyRejects = `/\*?[`
 
 // ValidKey reports whether a key read out of a payload is safe to hand to
-// the run store.
+// the run store. A key padded with whitespace is refused rather than
+// trimmed here: the trimming belongs where the key is read, so that the
+// string this says yes to is the one the run store is given.
 func ValidKey(key string) bool {
 	switch {
 	case key == "", key == ".", key == "..":
+		return false
+	case key != strings.TrimSpace(key):
 		return false
 	case strings.ContainsAny(key, keyRejects):
 		return false

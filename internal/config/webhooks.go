@@ -40,6 +40,26 @@ type WebhookSource struct {
 	Secret   string `yaml:"secret,omitempty"`
 	Username string `yaml:"username,omitempty"`
 	Password string `yaml:"password,omitempty"`
+	// Proxy is the public address a reverse proxy receives this source's
+	// deliveries on. Only hubspot needs it — it signs the URL it called —
+	// and setting it on another source is an error rather than a line that
+	// does nothing.
+	Proxy *WebhookProxy `yaml:"proxy,omitempty"`
+}
+
+// WebhookProxy is the scheme and host the sender used, for a source that
+// signs the URL it posted to. Behind a reverse proxy that is not the
+// address this process sees, and the difference makes every delivery fail
+// verification.
+//
+// It is configuration rather than something read off the request because
+// the URL is half of what the signature proves: a receiver that took the
+// caller's X-Forwarded-* headers for it would let the sender pick the
+// message it has to sign. Either field may be left out when the proxy
+// already sets the matching X-Forwarded-* header.
+type WebhookProxy struct {
+	Scheme string `yaml:"scheme,omitempty"`
+	Host   string `yaml:"host,omitempty"`
 }
 
 // WebhookMatch is the filter a verified delivery has to pass.
@@ -128,6 +148,9 @@ func validateWebhookSource(name string, s *WebhookSource) error {
 	if s == nil {
 		return fmt.Errorf("config: %s: is empty", prefix)
 	}
+	if err := validateWebhookProxy(prefix, name, s.Proxy); err != nil {
+		return err
+	}
 	if webhooks.UsesBasicAuth(name) {
 		if s.Secret != "" {
 			return fmt.Errorf("config: %s.secret: %s authenticates with username and password, not a secret", prefix, name)
@@ -147,4 +170,28 @@ func validateWebhookSource(name string, s *WebhookSource) error {
 		return fmt.Errorf("config: %s.secret: is required for %s", prefix, name)
 	}
 	return credentialRef(prefix+".secret", s.Secret)
+}
+
+// validateWebhookProxy checks the proxy block: it belongs only to a source
+// that signs the URL it called, its scheme is http or https, and its host
+// is a host, not a URL.
+func validateWebhookProxy(prefix, name string, p *WebhookProxy) error {
+	if p == nil {
+		return nil
+	}
+	if !webhooks.SignsURI(name) {
+		return fmt.Errorf("config: %s.proxy: %s does not sign the URL it calls, so a proxy address changes nothing; remove it", prefix, name)
+	}
+	scheme := strings.TrimSpace(p.Scheme)
+	host := strings.TrimSpace(p.Host)
+	if scheme == "" && host == "" {
+		return fmt.Errorf("config: %s.proxy: set scheme, host, or both", prefix)
+	}
+	if scheme != "" && scheme != "http" && scheme != "https" {
+		return fmt.Errorf("config: %s.proxy.scheme: must be http or https, got %q", prefix, p.Scheme)
+	}
+	if strings.ContainsAny(host, "/ ") {
+		return fmt.Errorf("config: %s.proxy.host: must be a host — hooks.example.com or hooks.example.com:8443 — not a URL, got %q", prefix, p.Host)
+	}
+	return nil
 }

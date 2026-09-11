@@ -25,8 +25,10 @@ Two ways to let a tracker in, both of which need a decision from you:
 Either way, **use TLS**. Five of the nine sources authenticate with a shared secret in a plain
 header; on an unencrypted connection anyone on the path can read it and replay the delivery.
 
-Sirdar refuses to register the hook routes at all unless `webhooks.enabled: true`. With them off,
-every path under `/hooks/` is a 404.
+The `/hooks/` routes are registered either way, and without `webhooks.enabled: true` every one of
+them answers 404. They are registered so that a disabled hook gets that 404 rather than falling
+through to the single-page app and answering 200 with a page of HTML; a tracker cannot tell a
+workspace with the hooks off from one that was never configured.
 
 ## Configuration
 
@@ -46,12 +48,30 @@ webhooks:
     azdo:
       username: sirdar
       password: keychain:azdo-hook-password
+    hubspot:
+      secret: keychain:hubspot-client-secret
+      proxy:                 # only hubspot: it signs the URL it called
+        scheme: https
+        host: hooks.acme.com
 ```
 
 `secret` and `password` are credential references — `env:NAME` or `keychain:SERVICE` — never the
 secret itself, like every other credential in the file. They are resolved once at startup: a
 reference that cannot be resolved stops `sirdar serve` rather than leaving an endpoint up that
 rejects everything.
+
+### `proxy`
+
+`proxy.scheme` and `proxy.host` are the public address a reverse proxy receives deliveries on.
+They matter to `hubspot` alone — it is the one source whose signature covers the URL it posted to,
+and behind a proxy that is not the URL this process sees. Setting `proxy` on any other source is a
+configuration error rather than a line that quietly does nothing.
+
+With no `proxy` block, the request's own scheme and host are used and `X-Forwarded-Proto` /
+`X-Forwarded-Host` are **ignored**: they are the caller's claim about the URL it called, and that
+URL is half of what the signature proves — a receiver that believed them would let a sender choose
+the message it has to sign. Configure `proxy` and those headers are read again, but only for the
+half you left out (`host` alone, with the proxy setting `X-Forwarded-Proto`, is a sound setup).
 
 ### `match`
 
@@ -84,6 +104,11 @@ A key that was triaged inside the cooldown is skipped, as is one with a run alre
 one would be a fresh agent session. A *failed* triage holds the key too: a workspace whose adapter
 is down should not answer every delivery with another run.
 
+Both of those are read off the run directory, and a run's first status is written there a moment
+after the delivery has been answered. So a key is also held from the moment a delivery starts a
+triage of it until that job ends: two deliveries for one ticket arriving together start one run,
+not two, and the second is reported as skipped.
+
 ## The URL
 
 ```
@@ -91,9 +116,13 @@ POST http://<host>:<port>/hooks/<workspace-id>/<source>
 ```
 
 `<source>` is the key under `webhooks.sources`: `jira`, `linear`, `azdo`, `rally`, `zendesk`,
-`freshdesk`, `intercom`, `hubspot`, `generic`. `<workspace-id>` is printed by
-`GET /api/workspaces` — or read it off the UI. The receiver is built from the workspace
-`sirdar serve` was started in, so that is the id to use.
+`freshdesk`, `intercom`, `hubspot`, `generic`. `<workspace-id>` is the workspace `sirdar serve`
+was started in, whose id the startup line prints; `GET /api/workspaces` and the UI show it too.
+
+That is the only workspace id these endpoints accept. A delivery naming another registered
+workspace gets a 404, whatever secret it carries: the receiver holds one workspace's secrets, and
+a secret for one workspace must not start runs in another. Serving a second workspace means a
+second `sirdar serve` on its own port.
 
 ### What comes back
 
@@ -103,7 +132,8 @@ POST http://<host>:<port>/hooks/<workspace-id>/<source>
 | 202 | `{"skipped":"OMNI-2510: was triaged 2m ago and the cooldown is 10m"}` | Verified, and deliberately did nothing — already running, on cooldown, or filtered out. |
 | 400 | `{"error":{"code":"bad_request",…}}` | Verified, but the body is not JSON or names no ticket. |
 | 401 | `{"error":{"code":"unauthorized",…}}` | The signature or secret did not check out. |
-| 404 | `{"error":{"code":"not_found",…}}` | No such source — which is also the answer for a source that exists but is not enabled, and for a workspace id nobody knows. |
+| 404 | `{"error":{"code":"not_found",…}}` | No such endpoint. One message for all of: no such source, a source that exists but is not enabled, a workspace id nobody knows, and a workspace other than the one being served. |
+| 500 | `{"error":{"code":"internal",…}}` | Verified, but the run could not be started. The reason is in the server's log, not in this body: a webhook sender is not the operator. |
 | 413 | `{"error":{"code":"too_large",…}}` | Over 1 MiB. The body is size-checked before it is verified. |
 
 A skip is a 2xx on purpose: a tracker told its delivery failed will send it again.
@@ -257,12 +287,21 @@ The v3 signature is base64(HMAC-SHA256(`method + uri + body + timestamp`)) in
 minute window.
 
 **The URI is part of the signed message**, and it is the URL HubSpot called — not the one this
-process sees behind a proxy. Your proxy must preserve the `Host` header and set
-`X-Forwarded-Proto: https`; without those, Sirdar reconstructs a different URI and every delivery
-fails verification.
+process sees behind a proxy. Behind one, set `webhooks.sources.hubspot.proxy` to the address
+HubSpot posts to; without it Sirdar signs over the address the request arrived on and every
+delivery fails verification. The `X-Forwarded-*` headers alone will not do it: Sirdar ignores them
+until a `proxy` block says there is a proxy, because they are the caller's own claim about the URL
+it called. See [`proxy`](#proxy).
 
 HubSpot posts a batch: one JSON array of up to a hundred events, of every type you subscribed to.
 Sirdar takes the ticket events, deduplicates by `objectId`, and starts one job per ticket.
+
+**`match.assignee` and HubSpot do not combine.** An assignee reaches Sirdar only on a
+`ticket.propertyChange` for `hubspot_owner_id` — HubSpot sends one changed property per event, and
+a `ticket.creation` carries none. So with `match.assignee` set, every `ticket.creation` is
+filtered out and only owner changes start a run. That is usually what you want from a hook
+("assigned to me"), but if you also want new tickets triaged, leave `match.assignee` unset for
+this source's workspace and filter in the subscription instead.
 
 ### Generic (`generic`)
 
@@ -293,8 +332,14 @@ the match filter.
 | `generic` | `X-Sirdar-Secret` | shared secret |
 
 Bodies are capped at 1 MiB and the cap is enforced before verification. Every comparison is
-constant-time. A key that is not one plain path element — anything with a separator, a `..`, or a
-glob character — is dropped rather than sanitised.
+constant-time. A key is trimmed of surrounding whitespace as it is read — a template that rendered
+a padded field would otherwise name a second, separate ticket — and a key that is then not one
+plain path element, anything with a separator, a `..`, or a glob character, is dropped rather than
+sanitised.
+
+The signature windows read the sender's own timestamp, and HubSpot's is in **milliseconds**. A
+stamp in seconds parses as a moment in 1970 and falls outside the window, so it fails closed: that
+is what to check if one source starts answering 401 for every delivery.
 
 ## When a delivery does nothing
 
@@ -304,8 +349,9 @@ Watch the event stream while you test:
 curl -N http://127.0.0.1:7777/api/events | grep hook.received
 ```
 
-- `rejected` — the signature failed, or the body would not parse. Check the secret is the same on
-  both ends, and for HubSpot check the proxy headers.
+- `rejected` — the signature failed, the body would not parse, or the run could not be started.
+  Check the secret is the same on both ends, and for HubSpot check `proxy`. A start that failed
+  says why in the server's own log; the sender is told only that it failed.
 - `ignored` — verified, but the payload was not an event Sirdar acts on. A Linear update that
   changed only the title, an Intercom topic other than `conversation.admin.assigned`, a HubSpot
   batch with no ticket events.

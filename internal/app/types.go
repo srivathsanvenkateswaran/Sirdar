@@ -190,8 +190,9 @@ type Event struct {
 	Text        string       `json:"text,omitempty"`
 	// Source, Key and Outcome carry a hook.received event: the webhook
 	// source name, the ticket key the delivery named (empty when it named
-	// none), and what the receiver did with it — "started", "skipped",
-	// "filtered", "unauthorized", "unknown source", "rejected".
+	// none), and what the receiver did with it: "started", "skipped",
+	// "filtered", "ignored" or "rejected", which is the whole set the hook
+	// route emits.
 	Source  string `json:"source,omitempty"`
 	Key     string `json:"key,omitempty"`
 	Outcome string `json:"outcome,omitempty"`
@@ -306,6 +307,12 @@ func validateID(s string) error {
 		return fmt.Errorf("%w: empty", ErrInvalidArgument)
 	case s == "." || s == "..":
 		return fmt.Errorf("%w: %q is a directory reference", ErrInvalidArgument, s)
+	case s != strings.TrimSpace(s):
+		// " OMNI-1" and "OMNI-1" are two keys as far as the run store is
+		// concerned, so a padded one would have its own run directory and
+		// miss both the running check and the cooldown. Refused rather
+		// than trimmed: the caller should send the key it means.
+		return fmt.Errorf("%w: %q is padded with whitespace", ErrInvalidArgument, s)
 	case strings.ContainsAny(s, idRejects):
 		return fmt.Errorf("%w: %q contains a path separator or a glob character", ErrInvalidArgument, s)
 	}
