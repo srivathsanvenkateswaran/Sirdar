@@ -34,6 +34,31 @@ func TestPolicy(t *testing.T) {
 	}
 }
 
+// TestAlwaysDeniedWinsOverFetchTools pins the check order in Decide:
+// AlwaysDenied is judged before FetchTools, so a name that is never
+// permitted cannot be turned into an allow by whatever FetchTools' URL
+// logic would have made of it — a triage run refuses Edit whether or not
+// its arguments happen to also look like a fetch call. A fix run still
+// gets Edit through its own editing-tool path, since Edit is both
+// AlwaysDenied (for triage) and fixAllowed (for fix).
+func TestAlwaysDeniedWinsOverFetchTools(t *testing.T) {
+	triage := &PermissionPolicy{}
+	for _, tool := range []string{"Edit", "Write", "MultiEdit", "NotebookEdit"} {
+		d := triage.Decide(tool, json.RawMessage(`{"url":"https://attacker.example/"}`))
+		if d.Allow {
+			t.Errorf("triage policy allowed %s: %s", tool, d.Message)
+		}
+		if !strings.Contains(d.Message, "read-only") {
+			t.Errorf("%s denial %q does not say the run is read-only", tool, d.Message)
+		}
+	}
+
+	fix := FixPolicy(t.TempDir(), nil, nil, nil)
+	if d := fix.Decide("Edit", json.RawMessage(`{"file_path":"x"}`)); !d.Allow {
+		t.Errorf("fix policy denied Edit inside the workspace: %s", d.Message)
+	}
+}
+
 func TestMatchGlob(t *testing.T) {
 	if !MatchGlob("git show*", "git show HEAD:path/file.cs") {
 		t.Fatal("slash in run")

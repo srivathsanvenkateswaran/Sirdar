@@ -751,7 +751,13 @@ whatever point the provider offers to be asked.
   whatever the user settings say. Once the workspace names hosts, the flag comes off so the
   policy can judge each call, and a user-level `WebFetch(domain:…)` rule then bypasses Sirdar
   for that domain. There is no flag that switches those rules off; keep such a rule out of
-  your user settings.
+  your user settings. `WebFetch`'s own `prompt` argument is scanned for URLs the same way a
+  Qwen or gemini-style `web_fetch`'s is (see Web fetch above): a URL quoted anywhere in the
+  prompt, even one the model only meant as instructions to itself and never intended to fetch,
+  is judged against `permissions.fetch` and denies the whole call if it is not allowed. That
+  fails closed rather than open — an unrelated URL sitting in the prompt text blocks a fetch it
+  was never the destination of — which is the trade Sirdar makes on the side of not missing a
+  URL a prompt injection did mean to route through.
 - **openai** — the loop runs the tools itself, so it applies the policy before each call. Its
   `web_fetch` checks `permissions.fetch` a second time inside the tool, and again on every
   redirect hop.

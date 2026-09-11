@@ -10,7 +10,10 @@ import (
 // destinations a workspace's list reaches, and which are refused however
 // the URL is dressed up.
 func TestDecideFetchURL(t *testing.T) {
-	allow := []string{"docs.example.com", "*.golang.org", "http://localhost:3000", "http://127.0.0.1"}
+	allow := []string{
+		"docs.example.com", "*.golang.org", "http://localhost:3000", "http://127.0.0.1",
+		"http://[::1]:4000",
+	}
 
 	cases := []struct {
 		name  string
@@ -88,6 +91,26 @@ func TestDecideFetchURL(t *testing.T) {
 		},
 		{name: "a trailing dot on an allowed host still matches", url: "https://docs.example.com./x", allow: allow, want: true},
 		{name: "the host match folds case", url: "https://DOCS.Example.COM/x", allow: allow, want: true},
+		{
+			name: "an IPv6 loopback entry matches the bracketed form on its port", url: "http://[::1]:4000/health",
+			allow: allow, want: true,
+		},
+		{
+			name: "an IPv6 loopback on a port the list does not name", url: "http://[::1]:9999/",
+			allow: allow, want: false, reason: "points at this machine",
+		},
+		{
+			name: "a decimal IP literal is refused like any other IP", url: "http://2130706433/admin",
+			allow: allow, want: false, reason: "IP literal",
+		},
+		{
+			name: "a hex IP literal is refused like any other IP", url: "http://0x7f000001/admin",
+			allow: allow, want: false, reason: "IP literal",
+		},
+		{
+			name: "a two-part dotted IP literal is refused like any other IP", url: "http://127.1/admin",
+			allow: allow, want: false, reason: "IP literal",
+		},
 	}
 
 	for _, c := range cases {
@@ -104,6 +127,66 @@ func TestDecideFetchURL(t *testing.T) {
 			}
 			if c.reason != "" && !strings.Contains(d.Message, c.reason) {
 				t.Errorf("denial %q does not carry %q", d.Message, c.reason)
+			}
+		})
+	}
+}
+
+// TestDeniedURLNeverLeaksItsQuery: a denial message goes back to the model
+// and into events.jsonl, so it must never carry a query string or fragment
+// off the raw URL — that is exactly where a token or a session id travels.
+// Every branch that used to interpolate the raw URL is exercised here with
+// one carrying a token, whatever else about the URL got it denied.
+func TestDeniedURLNeverLeaksItsQuery(t *testing.T) {
+	const secret = "token=super-secret-value"
+	allow := []string{"docs.example.com", "http://localhost:3000"}
+
+	urls := []string{
+		"http://docs.example.com/guide?" + secret,               // http to an allowed host
+		"https://docs.example.com@attacker.example/x?" + secret, // userinfo
+		"https://93.184.216.34/x?" + secret,                     // IP literal
+		"http://localhost:9999/x?" + secret,                     // loopback, wrong port
+		"file:///etc/passwd?" + secret,                          // bad scheme
+		"https://attacker.example/collect?" + secret,            // not in the allow-list
+	}
+	for _, u := range urls {
+		t.Run(u, func(t *testing.T) {
+			d := DecideFetchURL(allow, u)
+			if d.Allow {
+				t.Fatalf("DecideFetchURL(%q) was allowed; the case is meant to be denied", u)
+			}
+			if strings.Contains(d.Message, secret) {
+				t.Errorf("denial for %q leaked the query string into the message: %q", u, d.Message)
+			}
+		})
+	}
+}
+
+// TestDecideFetchRefusesMalformedArguments: an arguments payload that does
+// not unmarshal cleanly is refused outright rather than judged on whatever
+// json.Unmarshal managed to decode before failing — an UnmarshalTypeError
+// leaves the fields it reached at their zero value and keeps decoding the
+// rest, so a urls field sent as an object could otherwise be silently
+// treated as "no urls named" instead of "the call could not be read".
+func TestDecideFetchRefusesMalformedArguments(t *testing.T) {
+	p := &PermissionPolicy{FetchAllow: []string{"docs.example.com"}}
+
+	cases := []struct {
+		name  string
+		input string
+	}{
+		{name: "urls sent as an object", input: `{"urls":{"a":"https://docs.example.com/x"}}`},
+		{name: "url sent as a number", input: `{"url":12345}`},
+		{name: "not an object at all", input: `["https://docs.example.com/x"]`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			d := p.Decide("WebFetch", json.RawMessage(c.input))
+			if d.Allow {
+				t.Fatalf("Decide(WebFetch, %s) was allowed; malformed arguments should be refused", c.input)
+			}
+			if d.Message == "" {
+				t.Error("a refused fetch carries no message")
 			}
 		})
 	}
@@ -218,6 +301,11 @@ func TestValidateFetchEntry(t *testing.T) {
 		"-example.com":           "not a hostname",
 		"http://localhost:http":  "port that is not a number",
 		"http://127.0.0.1/admin": "path",
+		"*.com":                  "top-level domain",
+		"*.io":                   "top-level domain",
+		"127.1":                  "IP literal",
+		"2130706433":             "IP literal",
+		"0x7f000001":             "IP literal",
 	}
 	for entry, want := range bad {
 		reason := ValidateFetchEntry(entry)

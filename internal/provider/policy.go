@@ -204,6 +204,15 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	if strings.HasPrefix(tool, mcpPrefix) {
 		return p.decideMCP(tool)
 	}
+	// Before FetchTools, for a triage run: AlwaysDenied is a tool that is
+	// never permitted, and that has to hold whatever else its name also
+	// matches, rather than depend on FetchTools and AlwaysDenied staying
+	// disjoint forever. A fix run is not judged here — Edit, Write and
+	// MultiEdit are AlwaysDenied for a triage run and fixAllowed for a fix
+	// one, and the IsFix block below is what tells those two apart.
+	if AlwaysDenied[tool] && !p.IsFix() {
+		return Decision{Allow: false, Message: "Sirdar policy: triage runs are read-only"}
+	}
 	// Before AlwaysAllowed, because a fetch is the one read whose
 	// destination the caller chooses: the tool name approves nothing on
 	// its own, only the URL in its arguments does.
@@ -222,7 +231,7 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 				" is not one of the editing tools a fix may use"}
 		}
 	}
-	if AlwaysDenied[tool] || fixAllowed[tool] {
+	if fixAllowed[tool] {
 		return Decision{Allow: false, Message: "Sirdar policy: triage runs are read-only"}
 	}
 	// "Bash" is Claude Code's and Codex's name for the shell tool; "bash"

@@ -58,7 +58,15 @@ var loopbackHosts = map[string]bool{
 // is.
 func (p *PermissionPolicy) decideFetch(tool string, input json.RawMessage) Decision {
 	var args fetchArgs
-	_ = json.Unmarshal(input, &args)
+	if err := json.Unmarshal(input, &args); err != nil {
+		// A malformed call is refused rather than partially trusted: Go's
+		// json.Unmarshal keeps decoding after an UnmarshalTypeError (a
+		// urls field sent as an object, say) and duplicate keys silently
+		// take the last value, either of which could leave args holding
+		// something other than what the caller actually sent.
+		return Decision{Allow: false, Message: "Sirdar policy: " + tool +
+			" arguments do not parse, so where it would fetch from cannot be checked"}
+	}
 
 	targets := args.URLs
 	if strings.TrimSpace(args.URL) != "" {
@@ -120,27 +128,30 @@ func DecideFetchURL(allow []string, rawURL string) Decision {
 	}
 	u, err := url.Parse(raw)
 	if err != nil {
-		return fetchDenial("the URL " + quote(raw) + " does not parse")
+		// No quoted raw text here: it failed to parse, so there is no
+		// scheme or host to show in its place, and the raw string may
+		// still carry a query fragment worth not echoing.
+		return fetchDenial("a fetch URL does not parse")
 	}
 	scheme := strings.ToLower(u.Scheme)
+	display := fetchDisplay(u)
 	if scheme == "" {
-		return fetchDenial("the URL " + quote(raw) + " is not absolute; a fetch needs a scheme and a host")
+		return fetchDenial(withDisplay(display, "is not absolute; a fetch needs a scheme and a host"))
 	}
 	if scheme != "http" && scheme != "https" {
-		return fetchDenial("the URL " + quote(raw) + " uses scheme " + quote(scheme) +
-			"; a fetch may use only http and https")
+		return fetchDenial(withDisplay(display, "uses scheme "+quote(scheme)+"; a fetch may use only http and https"))
 	}
 	if u.Host == "" {
-		return fetchDenial("the URL " + quote(raw) + " is not absolute; a fetch needs a scheme and a host")
+		return fetchDenial(withDisplay(display, "is not absolute; a fetch needs a scheme and a host"))
 	}
 	if u.User != nil {
-		return fetchDenial("the URL " + quote(raw) +
-			" carries userinfo before the host, which makes a request to one host read as a request to another")
+		return fetchDenial(withDisplay(display,
+			"carries userinfo before the host, which makes a request to one host read as a request to another"))
 	}
 
 	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
 	if host == "" {
-		return fetchDenial("the URL " + quote(raw) + " names no host")
+		return fetchDenial(withDisplay(display, "names no host"))
 	}
 	hostPort := host
 	if port := u.Port(); port != "" {
@@ -148,6 +159,17 @@ func DecideFetchURL(allow []string, rawURL string) Decision {
 	}
 
 	ip := net.ParseIP(host)
+	if ip == nil && looksLikeIPLiteral(host) {
+		// "127.1", "2130706433", "0x7f000001": net.ParseIP does not
+		// recognise these, but a resolver or an HTTP client still might,
+		// so treating them as an ordinary hostname would let one skip
+		// both the allow-list (host globs are written against names) and
+		// BlockedIP. permissions.fetch names hosts; an address in any
+		// spelling skips the name it allows.
+		return fetchDenial(withDisplay(display, "names "+quote(host)+
+			", which is an IP literal written in a non-canonical form; permissions.fetch names hosts, "+
+			"and an address skips the name it allows"))
+	}
 	loopback := loopbackHosts[host] || strings.HasSuffix(host, ".localhost") ||
 		(ip != nil && ip.IsLoopback())
 
@@ -158,7 +180,7 @@ func DecideFetchURL(allow []string, rawURL string) Decision {
 		return Decision{Allow: true}
 	}
 	if loopback {
-		return fetchDenial("the URL " + quote(raw) + " points at this machine; permissions.fetch allows a " +
+		return fetchDenial("the URL " + quote(display) + " points at this machine; permissions.fetch allows a " +
 			"loopback destination only when it names it, as http://" + hostPort)
 	}
 	if ip != nil {
@@ -166,11 +188,11 @@ func DecideFetchURL(allow []string, rawURL string) Decision {
 			return fetchDenial("the address " + quote(host) +
 				" is private, link-local or otherwise not routed on the public internet, and is never fetchable")
 		}
-		return fetchDenial("the URL " + quote(raw) + " names the IP literal " + quote(host) +
+		return fetchDenial("the URL " + quote(display) + " names the IP literal " + quote(host) +
 			"; permissions.fetch names hosts, and an address skips the name it allows")
 	}
 	if scheme != "https" {
-		return fetchDenial("the URL " + quote(raw) +
+		return fetchDenial("the URL " + quote(display) +
 			" is http; a fetch must use https unless permissions.fetch names a loopback host as http://host")
 	}
 	if len(allow) == 0 {
@@ -187,6 +209,58 @@ func DecideFetchURL(allow []string, rawURL string) Decision {
 
 func fetchDenial(reason string) Decision {
 	return Decision{Allow: false, Message: "Sirdar policy: " + reason}
+}
+
+// fetchDisplay is what a denial reason may show back to the model, and what
+// lands in events.jsonl, in place of the raw URL: scheme and host, never a
+// query or fragment. A query string is exactly where a token or a session
+// id travels, and both the message that goes back to the model and the run
+// record on disk are places that should not be echoing it.
+func fetchDisplay(u *url.URL) string {
+	switch {
+	case u == nil:
+		return ""
+	case u.Scheme != "" && u.Host != "":
+		return u.Scheme + "://" + u.Host
+	case u.Host != "":
+		return u.Host
+	default:
+		return u.Scheme
+	}
+}
+
+// withDisplay builds a denial reason around a scheme+host display, or a
+// display-free generic reason when there is neither a scheme nor a host to
+// show (a relative URL, say).
+func withDisplay(display, reason string) string {
+	if display == "" {
+		return "a fetch URL " + reason
+	}
+	return "the URL " + quote(display) + " " + reason
+}
+
+// looksLikeIPLiteral reports whether host, which net.ParseIP did not
+// recognise, is still an IP address written in a form some resolvers and
+// HTTP clients accept anyway: a bare decimal number (2130706433), a hex
+// literal (0x7f000001), or a dotted form whose rightmost label is one of
+// those (127.1, 127.0.0x1). No real hostname's last label is ever all
+// digits or hex-prefixed — ICANN does not allow an all-numeric TLD — so
+// this never misjudges an ordinary name.
+func looksLikeIPLiteral(host string) bool {
+	labels := strings.Split(host, ".")
+	last := labels[len(labels)-1]
+	if last == "" {
+		return false
+	}
+	if strings.HasPrefix(last, "0x") || strings.HasPrefix(last, "0X") {
+		return true
+	}
+	for _, r := range last {
+		if r < '0' || r > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // matchFetchHost applies one permissions.fetch entry to a host. An entry
@@ -224,13 +298,29 @@ func matchesLoopback(allow []string, host, hostPort string) bool {
 
 // loopbackEntry reports the host[:port] of a permissions.fetch entry
 // written in the http://host[:port] form, and whether the entry is in that
-// form at all.
+// form at all. The host side is normalised the same way DecideFetchURL's
+// own host is — brackets stripped off an IPv6 literal, then put back by
+// net.JoinHostPort only when a port is present — so "http://[::1]" and
+// "http://[::1]:8080" compare equal to a request's host and hostPort
+// however either was written. Without this, "http://[::1]" never matched a
+// call to it: u.Hostname() strips the brackets net/url requires around an
+// IPv6 host, but this function, read directly off the config string, used
+// to keep them.
 func loopbackEntry(entry string) (string, bool) {
 	rest, ok := strings.CutPrefix(strings.ToLower(strings.TrimSpace(entry)), "http://")
 	if !ok || rest == "" {
 		return "", false
 	}
-	return strings.TrimSuffix(rest, "/"), true
+	rest = strings.TrimSuffix(rest, "/")
+	host, port := rest, ""
+	if h, p, err := net.SplitHostPort(rest); err == nil {
+		host, port = h, p
+	}
+	host = strings.Trim(host, "[]")
+	if port != "" {
+		return net.JoinHostPort(host, port), true
+	}
+	return host, true
 }
 
 // BlockedIP reports whether an address falls in one of the ranges a fetch
@@ -326,11 +416,20 @@ func ValidateFetchEntry(entry string) string {
 	if strings.Contains(lower, ":") {
 		return "names a port; a host entry matches the host on any port"
 	}
-	labels := strings.Split(strings.TrimSuffix(lower, "."), ".")
+	trimmed := strings.TrimSuffix(lower, ".")
+	if looksLikeIPLiteral(trimmed) {
+		return "is an IP literal, not a hostname; permissions.fetch names hosts, and an address skips the name it allows"
+	}
+	labels := strings.Split(trimmed, ".")
 	for i, label := range labels {
 		if i == 0 && label == "*" {
-			if len(labels) < 2 {
-				return "is a bare wildcard, which allows every host"
+			// "*.com" or "*.io" would let a session fetch any host under
+			// a whole top-level domain; a wildcard needs a real domain
+			// under it, so at least two labels have to follow the "*.".
+			if len(labels) < 3 {
+				return "is a wildcard directly on a top-level domain (" + quote(raw) +
+					"), which allows every host under it; an entry needs at least two labels after " +
+					"\"*.\", such as \"*.example.com\""
 			}
 			continue
 		}
