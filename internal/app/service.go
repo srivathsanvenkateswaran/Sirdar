@@ -66,6 +66,10 @@ type Service struct {
 	nextSub int
 	jobs    map[JobID]context.CancelFunc
 	nextJob int
+	// starting holds the workspace-and-key pairs a webhook delivery has a
+	// triage in flight for, from before the run directory is read until the
+	// job ends. See TriageIfIdle.
+	starting map[string]struct{}
 
 	// running counts the job goroutines Stop waits for.
 	running sync.WaitGroup
@@ -81,12 +85,13 @@ func New(reg *Registry, build DepsBuilder, opts Options) *Service {
 		opts.Buffer = DefaultBuffer
 	}
 	s := &Service{
-		reg:   reg,
-		build: build,
-		opts:  opts,
-		quota: newQuotaTracker(),
-		subs:  map[int]chan Event{},
-		jobs:  map[JobID]context.CancelFunc{},
+		reg:      reg,
+		build:    build,
+		opts:     opts,
+		quota:    newQuotaTracker(),
+		subs:     map[int]chan Event{},
+		jobs:     map[JobID]context.CancelFunc{},
+		starting: map[string]struct{}{},
 	}
 	s.quota.nowFunc = opts.Now
 	s.watcher = NewWatcher(reg, opts.Interval, s.observe)
@@ -518,6 +523,13 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 // StartTriage triages every key in the background and returns the job id
 // that can cancel it. The runs themselves surface through the watcher.
 func (s *Service) StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error) {
+	return s.startTriage(ctx, wsID, keys, o, nil)
+}
+
+// startTriage is StartTriage with a hook the webhook path uses: done runs
+// when the job ends, however it ends, and releases the in-flight claim
+// TriageIfIdle took on the key.
+func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o TriageOptions, done func()) (JobID, error) {
 	if len(keys) == 0 {
 		return "", fmt.Errorf("%w: no keys to triage", ErrInvalidArgument)
 	}
@@ -526,7 +538,7 @@ func (s *Service) StartTriage(ctx context.Context, wsID string, keys []string, o
 			return "", err
 		}
 	}
-	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
+	return s.startJob(ctx, wsID, o.Provider, o.Model, done, func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		r := &runner.Runner{Deps: deps}
 		outs, err := r.Triage(jctx, keys, runner.Options{
 			Model:       o.Model,
@@ -596,6 +608,19 @@ func (s *Service) start(
 	work func(context.Context, runner.Deps) []JobOutcome,
 	onBuildError func(error) []JobOutcome,
 ) (JobID, error) {
+	return s.startJob(ctx, wsID, providerName, model, nil, work, onBuildError)
+}
+
+// startJob is start with done: a callback the job goroutine runs last,
+// whatever the job did. It is how the webhook path holds a key from before
+// the run directory is read until the run that read it has finished.
+func (s *Service) startJob(
+	ctx context.Context,
+	wsID, providerName, model string,
+	done func(),
+	work func(context.Context, runner.Deps) []JobOutcome,
+	onBuildError func(error) []JobOutcome,
+) (JobID, error) {
 	ws, cfg, err := s.load(wsID)
 	if err != nil {
 		return "", err
@@ -608,6 +633,9 @@ func (s *Service) start(
 	go func() {
 		defer s.running.Done()
 		defer cancel()
+		if done != nil {
+			defer done()
+		}
 
 		var outcomes []JobOutcome
 		deps, cleanup, err := s.build(cfg, providerName, model, Synced(s.stderr()))
