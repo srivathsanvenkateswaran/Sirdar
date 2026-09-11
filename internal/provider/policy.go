@@ -258,7 +258,7 @@ func (p *PermissionPolicy) decideWrite(tool string, input json.RawMessage) Decis
 // decideBash allows a command only when MatchCommand does, and reports
 // MatchCommand's reason when it does not.
 func (p *PermissionPolicy) decideBash(command string) Decision {
-	if ok, reason := MatchCommand(p.Root, p.BashAllow, command); !ok {
+	if ok, reason := MatchCommand(p.Root, p.BashAllow, command, p.ExtraReserved...); !ok {
 		return Decision{Allow: false, Message: "Sirdar policy: " + reason}
 	}
 	return Decision{Allow: true}
@@ -288,7 +288,15 @@ func (p *PermissionPolicy) decideBash(command string) Decision {
 // know which arguments a given program treats as paths, and cannot see a
 // path a program derives at runtime. Anything that has to be confined for
 // real needs a container, not an allow-list.
-func MatchCommand(root string, allow []string, command string) (bool, string) {
+//
+// extraReserved names directories this run reserves on top of .git and
+// .sirdar — the repository's core.hooksPath, when it sets one — the same
+// list a fix policy's write check applies (see ReservedWrite). A path
+// argument that lands inside one of them is refused exactly as a write
+// through Edit or Write would be: `go test -coverprofile=.git/hooks/x`
+// argues by allow-listed pattern, but .git/hooks/x is code the next commit
+// runs, not a coverage profile.
+func MatchCommand(root string, allow []string, command string, extraReserved ...string) (bool, string) {
 	segments := SplitCommand(strings.TrimSpace(command))
 	if len(segments) == 0 {
 		return false, "empty command"
@@ -314,7 +322,7 @@ func MatchCommand(root string, allow []string, command string) (bool, string) {
 				strings.Join(allow, ", ") +
 				"); every segment of a pipeline or compound command has to match"
 		}
-		if escape := escapesRoot(root, segment); escape != "" {
+		if escape := escapesRoot(root, extraReserved, segment); escape != "" {
 			return false, escape
 		}
 	}
@@ -322,10 +330,27 @@ func MatchCommand(root string, allow []string, command string) (bool, string) {
 }
 
 // escapesRoot reports the first argument of a segment that names a path
-// outside root, as the reason to show the operator, or "" when none does.
-// See MatchCommand on how far this reaches: it reads the command as text.
-func escapesRoot(root, segment string) string {
+// outside root, or a flag's value that names a path reserved against
+// writes (see ReservedWrite), as the reason to show the operator, or ""
+// when neither applies. See MatchCommand on how far this reaches: it reads
+// the command as text.
+//
+// The root-escape checks (climbing out with "../", an absolute path
+// outside root, a "~") apply to every token, as they always have: any of
+// them can be the workspace-relative argument an ordinary command reads or
+// writes. The reserved-directory check is narrower, and deliberately so —
+// it applies only to a token that is plausibly the value of a flag (joined
+// with "=", as in `--coverprofile=.git/hooks/pre-commit`, or the token
+// right after a bare flag, as in `-o .githooks`), not to every in-root
+// argument. `cd .sirdar/runs && ls -la` is a triage session reading its
+// own run records, not a write, and treating its plain positional argument
+// the same as a build's output flag would refuse that alongside the
+// output-flag cases this rule exists for.
+func escapesRoot(root string, extraReserved []string, segment string) string {
+	previousBareFlag := false
 	for _, arg := range argTokens(segment) {
+		isFlagValue := previousBareFlag
+		previousBareFlag = false
 		if arg == "" {
 			continue
 		}
@@ -334,14 +359,20 @@ func escapesRoot(root, segment string) string {
 			// from a check that skipped every token starting with "-":
 			// `git diff --output=/Users/you/.zshrc` matched a `git diff*`
 			// pattern and wrote outside the workspace. The value half is
-			// judged like any other argument. A flag whose value is a
-			// separate token needs nothing special — that token is an
-			// argument in its own right and was always checked.
+			// judged like any other argument.
 			_, value, ok := strings.Cut(arg, "=")
 			if !ok || value == "" {
+				// A bare flag with no "=" in this token: whatever value it
+				// takes, if any, is the next token. Mark it so the
+				// reserved-directory check below can tell "-o .githooks"
+				// apart from an ordinary positional argument like `cd
+				// .sirdar/runs`, without also needing to know the flag's
+				// name or whether it takes a value at all.
+				previousBareFlag = true
 				continue
 			}
 			arg = value
+			isFlagValue = true
 		}
 		switch {
 		case strings.HasPrefix(arg, "~"):
@@ -349,53 +380,143 @@ func escapesRoot(root, segment string) string {
 			// workspace is not inside; the policy only ever sees the "~".
 			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
 		case filepath.IsAbs(arg):
-			if root != "" && !withinRoot(root, arg) {
+			if root == "" {
+				continue
+			}
+			if !withinRoot(root, arg) {
 				return "the path " + quote(arg) + " is outside the workspace root " + quote(root)
+			}
+			if isFlagValue {
+				if reserved := reservedArgument(root, extraReserved, arg); reserved != "" {
+					return "the path " + quote(arg) + " is inside " + reserved + "/, which a fix never writes to"
+				}
 			}
 		default:
 			if clean := filepath.Clean(arg); clean == ".." || strings.HasPrefix(clean, "../") {
 				return "the path " + quote(arg) + " climbs out of the workspace root, which is as far as a shell command reaches"
+			}
+			if root == "" {
+				continue
+			}
+			if isFlagValue {
+				if reserved := reservedArgument(root, extraReserved, arg); reserved != "" {
+					return "the path " + quote(arg) + " is inside " + reserved + "/, which a fix never writes to"
+				}
 			}
 		}
 	}
 	return ""
 }
 
-// gitDeniedFlags are the git options no allow-list pattern can approve,
-// because each one moves where git reads its configuration, writes its
-// output, or runs code from — outside the workspace, or back into it
-// through a door the path checks do not watch. `git -c
-// core.hooksPath=/tmp/h status` installs a hook directory for every git
-// command that follows, and `git diff --output=~/.zshrc` writes a file the
-// allow-list thought it was only reading.
+// reservedArgument reports the reserved directory a path argument lies
+// inside, the same way a write through Edit or Write would be judged: arg
+// is resolved to an absolute path (joined onto root first when it is
+// relative) and through symlinks — via EvalNearest, walking up to the
+// nearest existing ancestor for a target that does not exist yet — before
+// ReservedWrite compares it against root and extraReserved.
+//
+// The resolution matters on its own: ReservedWrite resolves root's own
+// symlinks internally (absEval), and on a filesystem where the workspace
+// sits under a symlinked ancestor — /var is a symlink to /private/var on
+// the macOS this ran on during development — an unresolved path built by
+// joining onto the raw root never matches that resolved root, and every
+// comparison silently reports "not reserved".
+func reservedArgument(root string, extraReserved []string, arg string) string {
+	candidate := arg
+	if !filepath.IsAbs(candidate) {
+		candidate = filepath.Join(root, candidate)
+	}
+	real, err := EvalNearest(candidate)
+	if err != nil {
+		real = filepath.Clean(candidate)
+	}
+	return ReservedWrite(root, real, extraReserved)
+}
+
+// gitDeniedFlagsAnywhere are the git options no allow-list pattern can
+// approve, wherever they fall in the invocation, because each moves where
+// git writes its output or which program it runs in git's place for the
+// subcommand it rides on: `git diff --output=~/.zshrc` writes a file the
+// allow-list thought it was only reading, and `git fetch
+// --upload-pack=/tmp/evil` or `git push --receive-pack=/tmp/evil` run an
+// arbitrary program instead of git's own upload-pack/receive-pack. Unlike
+// gitDeniedFlagsBeforeSubcommand, git accepts these after the subcommand
+// too, so a position-scoped check would miss them there.
 //
 // The denial is by flag name, over every git invocation, whatever pattern
-// matched it: a workspace that allow-lists `git status*` is saying it wants
-// to read the repository, not that it has audited the flags git accepts.
-// The cost is a handful of read-only uses that share a letter — `git grep
-// -c` counts matches — which is the right side of that trade.
-var gitDeniedFlags = map[string]bool{
+// matched it: a workspace that allow-lists `git diff*` is saying it wants
+// to read the repository, not that it has audited every flag git accepts.
+var gitDeniedFlagsAnywhere = map[string]bool{
 	"--output":           true,
 	"--output-directory": true,
 	"-o":                 true,
-	"--git-dir":          true,
-	"--work-tree":        true,
-	"-C":                 true,
-	"-c":                 true,
-	"--exec-path":        true,
+	"--upload-pack":      true,
+	"--receive-pack":     true,
+}
+
+// gitDeniedFlagsBeforeSubcommand are top-level git options, valid only
+// before the subcommand name, that move where every git command which
+// follows reads its configuration or runs code from: -c sets a config
+// value, -C/--git-dir/--work-tree point git at a different repository,
+// --exec-path changes which git-* binaries run, and --config-env reads a
+// config value out of an environment variable the caller names. Denying
+// them only in that position — sawSubcommand tracks it below — is what
+// lets `git grep -c foo` (counts matches) and `git rev-parse --git-dir`
+// (prints a path) through: both reuse "-c"/"--git-dir" as an ordinary
+// subcommand flag with an unrelated meaning, valid only after the
+// subcommand, which a denial that fired anywhere could not tell apart from
+// git's own top-level flag of the same name.
+var gitDeniedFlagsBeforeSubcommand = map[string]bool{
+	"-c":           true,
+	"-C":           true,
+	"--git-dir":    true,
+	"--work-tree":  true,
+	"--exec-path":  true,
+	"--config-env": true,
 }
 
 // gitDenial reports why a git command segment is refused outright, or ""
 // when nothing in it is. Besides the flags, `git config` is refused: it
 // writes the very settings — core.hooksPath among them — that decide what
 // the next git command does.
+//
+// Before looking for the git word, gitDenial skips a leading `env` token
+// and any number of leading NAME=value assignments — the two shapes a
+// shell accepts in front of a program name — so `GIT_DIR=/tmp/x git log`
+// and `env GIT_DIR=/tmp/x git log` are recognised as git invocations and
+// judged by the same flag rules as `git --git-dir=/tmp/x log`, rather than
+// slipping through because the first token was not literally "git". Any
+// assignment that names a GIT_* variable is refused outright, whatever
+// runs after it: GIT_DIR, GIT_WORK_TREE and GIT_CONFIG (among others) move
+// the same configuration a denied -c/--git-dir flag would, and they do it
+// for a git command a build tool invokes internally just as much as for
+// one typed directly on the command line.
 func gitDenial(segment string) string {
 	args := argTokens(segment)
-	if len(args) == 0 || !isGit(args[0]) {
+	if len(args) == 0 {
+		return ""
+	}
+	i := 0
+	if args[0] == "env" || strings.HasSuffix(args[0], "/env") {
+		i = 1
+	}
+	for i < len(args) {
+		name, value, ok := envAssignment(args[i])
+		if !ok {
+			break
+		}
+		if strings.HasPrefix(name, "GIT_") {
+			return quote(segment) + " sets " + quote(name+"="+value) +
+				" before the command runs, which reaches the same git configuration a denied " +
+				"-c/--git-dir flag would; no allow-list pattern approves it"
+		}
+		i++
+	}
+	if i >= len(args) || !isGit(args[i]) {
 		return ""
 	}
 	sawSubcommand := false
-	for _, arg := range args[1:] {
+	for _, arg := range args[i+1:] {
 		if !strings.HasPrefix(arg, "-") {
 			if !sawSubcommand {
 				sawSubcommand = true
@@ -410,13 +531,38 @@ func gitDenial(segment string) string {
 		if name, _, ok := strings.Cut(arg, "="); ok {
 			flag = name
 		}
-		if gitDeniedFlags[flag] {
+		if gitDeniedFlagsAnywhere[flag] {
 			return quote(segment) + " passes git " + quote(flag) +
 				", which moves where git reads its configuration, writes its output, " +
 				"or runs code from; no allow-list pattern approves it"
 		}
+		if !sawSubcommand && gitDeniedFlagsBeforeSubcommand[flag] {
+			return quote(segment) + " passes git " + quote(flag) +
+				" before the subcommand, which moves where git reads its configuration or runs " +
+				"code from for everything that follows; no allow-list pattern approves it"
+		}
 	}
 	return ""
+}
+
+// envAssignment reports whether tok has the NAME=value shape a shell
+// accepts in front of a program name — an identifier (letters, digits and
+// underscore, not starting with a digit) followed by "=" — and, when it
+// does, the name and value either side of the "=".
+func envAssignment(tok string) (name, value string, ok bool) {
+	name, value, ok = strings.Cut(tok, "=")
+	if !ok || name == "" {
+		return "", "", false
+	}
+	for i, r := range name {
+		switch {
+		case r == '_' || (r >= 'A' && r <= 'Z') || (r >= 'a' && r <= 'z'):
+		case i > 0 && r >= '0' && r <= '9':
+		default:
+			return "", "", false
+		}
+	}
+	return name, value, true
 }
 
 // isGit reports whether a command word invokes git, by the name or by a

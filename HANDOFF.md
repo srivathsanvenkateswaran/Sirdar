@@ -62,9 +62,17 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   repository's `core.hooksPath` when it sets one (read once per run by `provider.HooksPath`,
   carried on `PermissionPolicy.ExtraReserved` and `agenttools.Options.ExtraReserved`). Every
   segment comparison folds case: macOS is the dogfood machine and `.GIT/hooks/pre-commit` is
-  the same file as `.git/hooks/pre-commit` there. `provider.MatchCommand` additionally refuses
-  git's `--output`, `--output-directory`, `-o`, `--git-dir`, `--work-tree`, `-C`, `-c` and
-  `--exec-path`, and `git config`, on every git invocation whatever pattern matched it.
+  the same file as `.git/hooks/pre-commit` there; `provider.HooksPath` also expands a leading
+  `~`/`~user` in `core.hooksPath` the way git itself does, rather than joining it onto root as a
+  literal `~x` entry. `provider.MatchCommand` additionally refuses `git config`, git's
+  `--output`/`--output-directory`/`-o`/`--upload-pack`/`--receive-pack` wherever they fall in the
+  command, its `-c`/`-C`/`--git-dir`/`--work-tree`/`--exec-path`/`--config-env` when they fall
+  before the subcommand (git accepts them nowhere else; `git grep -c` and `git rev-parse
+  --git-dir` reuse the same short flags after the subcommand for an unrelated meaning and are
+  allowed), and a `GIT_*` environment assignment ahead of any command, git or not (`GIT_DIR=x git
+  log`, `env GIT_DIR=x git log`, `GIT_DIR=x make test`). A `permissions.fixBash` command's own
+  flag-value path arguments go through `provider.ReservedWrite` too, not only `Edit`/`Write`:
+  `go test -coverprofile=.git/hooks/pre-commit` is refused although it matches `go test*`.
   Sirdar's own commit and push both pass `--no-verify`. The human gate is the triage note's `status`, and a
   non-empty `deviationFromNote` in the agent's report stops the push until
   `--accept-deviation`, which on a rerun pushes the commit that was reviewed rather than

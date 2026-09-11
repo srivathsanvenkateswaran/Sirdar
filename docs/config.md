@@ -382,23 +382,52 @@ permissions:
     - "pnpm test*"
 ```
 
-Some git flags are refused whatever pattern you write. `--output`, `--output-directory`, `-o`,
-`--git-dir`, `--work-tree`, `-C`, `-c` and `--exec-path`, and the `config` subcommand, are
-denied on every git invocation, because each of them moves where git reads its configuration,
-writes its output, or runs code from: `git -c core.hooksPath=/tmp/h status` installs a hook
-directory for every git command that follows, and `git diff --output=~/.zshrc` writes a file
-through a pattern that was only meant to read one. The cost is a handful of read-only uses
-that share a letter — `git grep -c` counts matches and is refused with them.
+Some git flags are refused whatever pattern you write, and the `config` subcommand is refused
+outright, because each of them moves where git reads its configuration, writes its output, or
+runs code from. Two groups are denied differently, by where in the command they can legally
+appear:
+
+- `--output`, `--output-directory`, `-o`, `--upload-pack` and `--receive-pack` are denied
+  wherever they fall in the command, because git accepts them after the subcommand too:
+  `git diff --output=~/.zshrc` writes a file through a pattern that was only meant to read one,
+  and `git fetch --upload-pack=/tmp/evil` runs an arbitrary program in place of git's own
+  upload-pack.
+- `-c`, `-C`, `--git-dir`, `--work-tree`, `--exec-path` and `--config-env` are top-level git
+  options, valid only *before* the subcommand, and are denied only there: `git -c
+  core.hooksPath=/tmp/h status` installs a hook directory for every git command that follows and
+  is refused, while `git grep -c foo` (counts matches) and `git rev-parse --git-dir` (prints a
+  path) reuse the same short flag after the subcommand for an unrelated meaning and are allowed.
+
+A `GIT_*` environment variable reaches the same configuration as those flags — `GIT_DIR`,
+`GIT_WORK_TREE` and the rest — so an assignment naming one is refused wherever it appears ahead
+of a command, git or not: `GIT_DIR=/tmp/other/.git git log`, `env GIT_DIR=/tmp/other/.git git
+log`, and `GIT_DIR=/tmp/other/.git make test`, which redirects a git invocation the Makefile
+target runs internally, are all denied. An assignment that names an unrelated variable
+(`LANG=C git log`) or a bare `env` with none (`env git log`) is not refused by this rule; the
+command underneath is still judged by everything above.
 
 What the list does not do is decide whether the session may edit files: a fix session gets
 `Edit`, `Write` and `MultiEdit` regardless, and a triage session never does. Where those may
 write is a separate rule, and not a configurable one — every edit is resolved through symlinks
 and refused unless it lands inside the workspace root, and refused again for anything under a
 `.git/` directory at any depth, under the workspace's own `.sirdar/`, or under the directory
-this repository sets `core.hooksPath` to, which Sirdar reads once at the start of the session.
-The comparison folds case, so `.GIT/hooks/pre-commit` is the same refusal as
-`.git/hooks/pre-commit` on the case-insensitive filesystem macOS and Windows ship. A fix
-changes source, not hooks and not Sirdar's records.
+this repository sets `core.hooksPath` to, which Sirdar reads once at the start of the session
+(a leading `~` or `~user` in the configured value is expanded to a home directory first, the
+same way git itself expands it, so `core.hooksPath = ~/x` reserves and snapshots the directory
+git actually runs hooks from rather than a literal `~x` entry inside the workspace). The
+comparison folds case, so `.GIT/hooks/pre-commit` is the same refusal as `.git/hooks/pre-commit`
+on the case-insensitive filesystem macOS and Windows ship. A fix changes source, not hooks and
+not Sirdar's records.
+
+The same reservation reaches a `permissions.fixBash` command's own arguments, not only `Edit` and
+`Write`: a flag's path value — joined with `=`, as in `--coverprofile=.git/hooks/pre-commit`, or
+the next token after a bare flag, as in `-o .githooks` — is refused when it names a reserved
+directory, exactly as a write through `Edit` would be. `go test -coverprofile=.git/hooks/pre-commit`
+matches a `go test*` pattern and is refused anyway, because the coverage profile it names is a
+hook the next commit runs, not a coverage profile. This check is narrower than the workspace-root
+check above it: it applies only to a flag's value, not to every plain argument, so `cd
+.sirdar/runs && ls -la` — reading Sirdar's own run records, not writing to them — still goes
+through.
 
 ### What the allow-list does not confine
 

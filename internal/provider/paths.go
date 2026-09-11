@@ -3,7 +3,9 @@ package provider
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 )
@@ -211,6 +213,15 @@ func absEval(p string) string {
 // The read is one `git config --get core.hooksPath` in root. It is
 // deliberately not `git config --local`: a value inherited from the global
 // or system configuration still decides where hooks come from.
+//
+// git tilde-expands a path-type config value itself, so `core.hooksPath =
+// ~/x` and `core.hooksPath = ~alice/x` are directories under a home
+// directory, not a "~x" entry inside the workspace. HooksPath expands the
+// same "~" and "~user" forms before deciding whether the value is relative
+// or absolute; without that a leading "~" fails the IsAbs check, gets
+// joined onto root, and the reservation and the hooks snapshot end up
+// watching a path nothing ever writes to while the real hooks directory —
+// the one git actually runs on the next commit or push — goes unwatched.
 func HooksPath(ctx context.Context, root string) string {
 	if strings.TrimSpace(root) == "" {
 		return ""
@@ -225,10 +236,45 @@ func HooksPath(ctx context.Context, root string) string {
 	if value == "" {
 		return ""
 	}
-	if !filepath.IsAbs(value) {
+	if expanded, ok := expandHome(value); ok {
+		value = expanded
+	} else if !filepath.IsAbs(value) {
 		value = filepath.Join(root, value)
 	}
 	return filepath.Clean(value)
+}
+
+// expandHome expands a leading "~" (the caller's own home directory) or
+// "~user" (that user's home directory) into the absolute path it names, the
+// same two forms git itself expands in a path-type config value. It
+// reports false, unchanged, for a value that does not start with "~" or
+// whose named user cannot be looked up — the caller falls back to treating
+// the value as an ordinary relative or absolute path in that case, which is
+// what the value meant before this function existed.
+func expandHome(value string) (string, bool) {
+	if !strings.HasPrefix(value, "~") {
+		return value, false
+	}
+	rest := value[1:]
+	name, tail, hasTail := strings.Cut(rest, "/")
+	var home string
+	if name == "" {
+		h, err := os.UserHomeDir()
+		if err != nil {
+			return value, false
+		}
+		home = h
+	} else {
+		u, err := user.Lookup(name)
+		if err != nil {
+			return value, false
+		}
+		home = u.HomeDir
+	}
+	if !hasTail || tail == "" {
+		return home, true
+	}
+	return filepath.Join(home, tail), true
 }
 
 // HooksDir is the directory git would run this repository's hooks from:

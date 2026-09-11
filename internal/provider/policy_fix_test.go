@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -362,6 +363,126 @@ func TestFlagValuesAreCheckedAgainstTheRoot(t *testing.T) {
 	}
 }
 
+// TestEscapesRootConsultsReservedWrite: escapesRoot used to check only
+// whether a path argument landed inside the workspace root, not whether it
+// landed inside a reserved directory within it, so `go test
+// -coverprofile=.git/hooks/pre-commit` matched a `go test*` pattern and
+// wrote a hook the next commit runs, and a build's `-o` output directory
+// could land inside the run's own reserved core.hooksPath.
+func TestEscapesRootConsultsReservedWrite(t *testing.T) {
+	root := t.TempDir()
+	allow := []string{"go test*", "dotnet build*"}
+
+	if ok, reason := MatchCommand(root, allow, "go test -coverprofile=.git/hooks/pre-commit ./..."); ok {
+		t.Error("MatchCommand allowed a coverage profile written into .git/hooks")
+	} else if !strings.Contains(reason, ".git/") {
+		t.Errorf("the refusal does not name the reserved directory: %s", reason)
+	}
+
+	// The same rule reaches an absolute path argument, not only a relative
+	// one.
+	abs := filepath.Join(root, ".git", "hooks", "pre-commit")
+	if ok, _ := MatchCommand(root, allow, "go test -coverprofile="+abs+" ./..."); ok {
+		t.Error("MatchCommand allowed an absolute coverage-profile path inside .git/hooks")
+	}
+
+	// A directory this run reserved on top of .git and .sirdar — the
+	// repository's own core.hooksPath — is refused the same way once it is
+	// passed as MatchCommand's extra-reserved list.
+	if ok, reason := MatchCommand(root, allow, "dotnet build -o .githooks", ".githooks"); ok {
+		t.Error("MatchCommand allowed a build output directory inside the reserved hooks path")
+	} else if !strings.Contains(reason, ".githooks") {
+		t.Errorf("the refusal does not name the reserved directory: %s", reason)
+	}
+
+	// Without that reservation the same directory is an ordinary build
+	// output: the reservation is per run, not a standing rule.
+	if ok, reason := MatchCommand(root, allow, "dotnet build -o .githooks"); !ok {
+		t.Errorf("MatchCommand refused an ordinary output directory once nothing reserved it: %s", reason)
+	}
+
+	// An ordinary path elsewhere in the workspace is unaffected.
+	if ok, reason := MatchCommand(root, allow, "go test -coverprofile=cover.out ./..."); !ok {
+		t.Errorf("MatchCommand refused an ordinary coverage-profile path: %s", reason)
+	}
+}
+
+// TestGitDenialAddsConfigEnvUploadPackAndReceivePack covers the three
+// flags round 3 adds to the denied set: --config-env reads a config value
+// out of a caller-named environment variable, and --upload-pack /
+// --receive-pack run an arbitrary program in place of git's own, on
+// `fetch`/`clone` and `push` respectively.
+func TestGitDenialAddsConfigEnvUploadPackAndReceivePack(t *testing.T) {
+	for _, cmd := range []string{
+		"git --config-env=user.name=SOME_ENV status",
+		"git fetch --upload-pack=/tmp/evil",
+		"git push --receive-pack=/tmp/evil",
+		"git clone --upload-pack=/tmp/evil https://example.com/x.git",
+	} {
+		if denial := gitDenial(cmd); denial == "" {
+			t.Errorf("gitDenial(%q) = \"\", want a refusal", cmd)
+		}
+	}
+}
+
+// TestGitDenialCatchesEnvAssignmentsBeforeGit: GIT_DIR, GIT_WORK_TREE and
+// the rest of git's own environment variables move the same configuration
+// a denied -c/--git-dir flag would, whether they arrive as a bare
+// `NAME=value` prefix, through an explicit `env`, or ahead of a command
+// that is not literally "git" (a Makefile target invokes git internally
+// too).
+func TestGitDenialCatchesEnvAssignmentsBeforeGit(t *testing.T) {
+	denied := []string{
+		"GIT_DIR=/tmp/other/.git git log",
+		"env GIT_DIR=/tmp/other/.git git log",
+		"env GIT_WORK_TREE=/tmp/other git status",
+		"GIT_CONFIG=/tmp/x git log",
+		"GIT_DIR=/tmp/other/.git make test",
+	}
+	for _, cmd := range denied {
+		denial := gitDenial(cmd)
+		if denial == "" {
+			t.Errorf("gitDenial(%q) = \"\", want a refusal", cmd)
+			continue
+		}
+		if !strings.Contains(denial, "GIT_") {
+			t.Errorf("gitDenial(%q) = %q, does not name the environment variable", cmd, denial)
+		}
+	}
+
+	// An assignment that does not name a GIT_* variable, and a bare `env`
+	// with no assignment at all, are not refused by this rule; the command
+	// underneath is still judged normally by everything else in gitDenial.
+	for _, cmd := range []string{"LANG=C git log", "env git log", "FOO=bar make test"} {
+		if denial := gitDenial(cmd); denial != "" {
+			t.Errorf("gitDenial(%q) = %q, want no refusal", cmd, denial)
+		}
+	}
+}
+
+// TestGitFlagsArePositionScoped is round 3's item (d): -c, -C, --git-dir,
+// --work-tree, --exec-path and --config-env are valid only before the git
+// subcommand, so denying them only there recovers the read-only uses that
+// reuse the same short flag after the subcommand for an unrelated meaning
+// — `git grep -c` counts matches, `git rev-parse --git-dir` prints a path
+// — while -o/--output* stay denied wherever they fall, because git accepts
+// those after the subcommand too.
+func TestGitFlagsArePositionScoped(t *testing.T) {
+	root := t.TempDir()
+	allow := []string{"git *"}
+
+	for _, cmd := range []string{"git grep -c foo", "git rev-parse --git-dir"} {
+		if ok, reason := MatchCommand(root, allow, cmd); !ok {
+			t.Errorf("MatchCommand refused %q: %s", cmd, reason)
+		}
+	}
+	for _, cmd := range []string{"git -c core.hooksPath=x status", "git diff --output=x"} {
+		if ok, _ := MatchCommand(root, allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		}
+	}
+}
+
 // TestHooksPathReadsTheRepositoryConfiguration is the per-run half of the
 // reservation: where the directory comes from.
 func TestHooksPathReadsTheRepositoryConfiguration(t *testing.T) {
@@ -394,6 +515,60 @@ func TestHooksPathReadsTheRepositoryConfiguration(t *testing.T) {
 	// rather than failing the run.
 	if p := HooksPath(t.Context(), t.TempDir()); p != "" {
 		t.Errorf("HooksPath outside a repository = %q, want \"\"", p)
+	}
+}
+
+// TestHooksPathExpandsTilde: git tilde-expands a path-type config value
+// itself, so `core.hooksPath = ~/x` names a directory under the caller's
+// home, not a literal "~x" entry inside the workspace. Before round 3,
+// HooksPath's IsAbs check saw "~/x", judged it relative, and joined it onto
+// root — the reservation and the hooks snapshot then watched a path that
+// does not exist while the real hooks directory went unwatched.
+func TestHooksPathExpandsTilde(t *testing.T) {
+	root := t.TempDir()
+	gitInit(t, root)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	gitRun(t, root, "config", "core.hooksPath", "~/x")
+	want := filepath.Join(home, "x")
+	if got := HooksPath(t.Context(), root); got != want {
+		t.Errorf(`HooksPath with core.hooksPath="~/x" = %q, want %q`, got, want)
+	}
+	if got := HooksDir(t.Context(), root); got != want {
+		t.Errorf(`HooksDir with core.hooksPath="~/x" = %q, want %q`, got, want)
+	}
+
+	// A bare "~" names the home directory itself.
+	gitRun(t, root, "config", "core.hooksPath", "~")
+	if got := HooksPath(t.Context(), root); got != home {
+		t.Errorf(`HooksPath with core.hooksPath="~" = %q, want %q`, got, home)
+	}
+}
+
+// TestExpandHomeHandlesTildeUser covers the "~user" form ("core.hooksPath
+// = ~alice/x"), which is not the caller's own home and so is not reached
+// by setting $HOME.
+func TestExpandHomeHandlesTildeUser(t *testing.T) {
+	cur, err := user.Current()
+	if err != nil {
+		t.Skipf("cannot look up the current user: %v", err)
+	}
+	value := "~" + cur.Username + "/sub"
+	got, ok := expandHome(value)
+	if !ok {
+		t.Fatalf("expandHome(%q) did not expand", value)
+	}
+	if want := filepath.Join(cur.HomeDir, "sub"); got != want {
+		t.Errorf("expandHome(%q) = %q, want %q", value, got, want)
+	}
+
+	if _, ok := expandHome("relative/path"); ok {
+		t.Error("expandHome expanded a value with no leading ~")
+	}
+	if got, ok := expandHome("~sirdar-nonexistent-user-12345"); ok {
+		t.Errorf("expandHome expanded an unknown user to %q", got)
 	}
 }
 
