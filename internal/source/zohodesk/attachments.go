@@ -273,8 +273,9 @@ func (c *Client) downloadAttachment(ctx context.Context, rawURL, destPath string
 	}
 
 	// sendWith, not httpx.Download: a 401 from the Desk endpoint buys one
-	// fresh token and a replay, which needs the response in hand.
-	resp, err := c.sendWith(ctx, req, httpx.Client(c.http(), c.trust(), maxRedirects))
+	// fresh token and a replay, which needs the response in hand. c.http()
+	// already carries the trust-checked redirect policy.
+	resp, err := c.sendWith(ctx, req, c.http())
 	if err != nil {
 		// Only the host: Go's *url.Error carries the refused target's path
 		// and query, and this error becomes a per-ticket warning.
