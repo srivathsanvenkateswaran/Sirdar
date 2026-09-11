@@ -163,11 +163,24 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		sendCh:   make(chan string, 1),
 		dead:     make(chan struct{}),
 		done:     make(chan struct{}),
-		messages: []Message{{Role: "system", Content: System()}},
+		messages: []Message{{Role: "system", Content: SystemFor(spec.Mode)}},
 	}
 	s.messages = append(s.messages, Message{Role: "user", Content: UserMessage(spec.Prompt, spec.Images)})
 
-	for _, local := range agenttools.ReadOnlySet(agenttools.Options{Root: spec.Cwd, BashAllow: policy.BashAllow}) {
+	toolOpts := agenttools.Options{
+		Root:          spec.Cwd,
+		BashAllow:     policy.BashAllow,
+		ExtraReserved: policy.ExtraReserved,
+	}
+	locals := agenttools.ReadOnlySet(toolOpts)
+	// A fix session is the only one that may change the workspace, so the
+	// two writing tools exist only for it. A triage session is not offered
+	// them at all, which is a stronger statement than offering them and
+	// refusing every call.
+	if spec.Mode.IsFix() {
+		locals = append(locals, agenttools.WriteSet(toolOpts)...)
+	}
+	for _, local := range locals {
 		ts := local.Spec()
 		s.add(&tool{name: ts.Name, description: ts.Description, parameters: ts.Parameters, local: local})
 	}

@@ -10,7 +10,8 @@ via the includeIf rule; never set `user.email` by hand):
 | Worktree | Branch | State |
 |---|---|---|
 | `~/Documents/Personal/Sirdar` | `main` | Everything landed, including `provider: openai`: CLI (`init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`), Wails v2 desktop app under `desktop/`, built-in sources (Zoho Desk with OAuth refresh, Zendesk, Freshdesk, Jira, Linear, Azure DevOps, Rally, external stdio adapters), generic `helpdeskRef` regex, both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
-| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. Only the `main` worktree remains. |
+| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
+| `~/Documents/Personal/Sirdar-evalfix` | `evalfix` | `sirdar eval` + `sirdar golden add` (replay a golden bundle through a real triage run and score it, `internal/eval`, `docs/eval.md`) and `sirdar fix` (the human-gated fix flow, `internal/fix`). Not merged. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -41,6 +42,41 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   `sandbox: read-only` for Codex, and for `provider: openai` the tool set itself plus
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
   and `2>/dev/null`) and the MCP write-verb heuristic behind `permissions.mcp`.
+- On `evalfix`, the confinement is stated per provider, because the layers are not the same for
+  all three: Claude and `openai` get policy + in-tool path check + the snapshot guard; Codex
+  gets its own `workspace-write` sandbox + the snapshot guard (`decideWrite` is never consulted
+  — Codex approves its own tool calls with `approvalPolicy: never`); ACP gets whatever the
+  agent implements + the snapshot guard. The guard (`internal/fix/guard.go`) sha256s `.sirdar/`
+  (bar `runs/`, `register.jsonl`, `eval/`) and `provider.HooksDir` before the session and again
+  the moment it ends, before any git command; a difference fails the run, restores nothing, and
+  commits and pushes nothing.
+- On `evalfix`, `sirdar fix` is the one session that writes, and it flips all three layers at
+  once through `SessionSpec.Mode`: `--disallowedTools` drops to `NotebookEdit` alone, Codex's
+  `workspace-write` sandbox, and `agenttools.WriteSet` in the openai loop. `provider.FixPolicy`
+  still refuses everything but `Edit`/`Write`/`MultiEdit`, and matches shell commands against
+  `permissions.fixBash` rather than `permissions.bash` (whose default git entries are the
+  read-only ones: Sirdar commits and pushes, never the agent). Where a write may land is
+  checked on every call, in the policy and again inside `agenttools`, through one shared
+  helper — `provider.ResolveWithin` confines it to the root through symlinks and
+  `provider.ReservedWrite` refuses `.git/` at any depth, the workspace `.sirdar/`, and the
+  repository's `core.hooksPath` when it sets one (read once per run by `provider.HooksPath`,
+  carried on `PermissionPolicy.ExtraReserved` and `agenttools.Options.ExtraReserved`). Every
+  segment comparison folds case: macOS is the dogfood machine and `.GIT/hooks/pre-commit` is
+  the same file as `.git/hooks/pre-commit` there; `provider.HooksPath` also expands a leading
+  `~`/`~user` in `core.hooksPath` the way git itself does, rather than joining it onto root as a
+  literal `~x` entry. `provider.MatchCommand` additionally refuses `git config`, git's
+  `--output`/`--output-directory`/`-o`/`--upload-pack`/`--receive-pack` wherever they fall in the
+  command, its `-c`/`-C`/`--git-dir`/`--work-tree`/`--exec-path`/`--config-env` when they fall
+  before the subcommand (git accepts them nowhere else; `git grep -c` and `git rev-parse
+  --git-dir` reuse the same short flags after the subcommand for an unrelated meaning and are
+  allowed), and a `GIT_*` environment assignment ahead of any command, git or not (`GIT_DIR=x git
+  log`, `env GIT_DIR=x git log`, `GIT_DIR=x make test`). A `permissions.fixBash` command's own
+  flag-value path arguments go through `provider.ReservedWrite` too, not only `Edit`/`Write`:
+  `go test -coverprofile=.git/hooks/pre-commit` is refused although it matches `go test*`.
+  Sirdar's own commit and push both pass `--no-verify`. The human gate is the triage note's `status`, and a
+  non-empty `deviationFromNote` in the agent's report stops the push until
+  `--accept-deviation`, which on a rerun pushes the commit that was reviewed rather than
+  starting a second session.
 
 ## Next steps, in order
 
@@ -63,8 +99,8 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 
 ## Known gaps (deliberate)
 
-No fix flow (the tool records a human's fix, it never makes one). No writes to any helpdesk or
-tracker. No auth on `sirdar serve` (loopback only unless `--allow-remote`). Register markdown
+No writes to any helpdesk or tracker (`sirdar fix`, on `evalfix`, writes to git and GitHub and
+to nothing else). No auth on `sirdar serve` (loopback only unless `--allow-remote`). Register markdown
 export lacks title/company columns (`RegisterRow` has none). `provider: openai` has no resume
 handle (a blocked run must be re-run). Two concurrent runs of the same key can mis-pair the UI's
 Cancel button within a 2 s window.

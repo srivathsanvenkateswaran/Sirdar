@@ -20,6 +20,7 @@ type Kind string
 const (
 	KindTriage Kind = "triage"
 	KindRCA    Kind = "rca"
+	KindFix    Kind = "fix"
 )
 
 // Status identifies where a run is in its lifecycle.
@@ -60,6 +61,23 @@ type State struct {
 	Notes      []string // paths written
 	StderrTail []string
 	Warnings   []string
+
+	// Eval marks a run started by `sirdar eval`. An eval replays a stored
+	// bundle to score the agent, so its note is a measurement and not a
+	// record of a ticket: it stays in the run directory, is never filed
+	// into the notes directory, never reaches the register, and is never
+	// what `sirdar rca` or `sirdar fix` reads as "the newest triage note".
+	Eval bool `json:",omitempty"`
+
+	// Fix records where a fix run's work went: the branch it was made on,
+	// the branch it targets, and the commit it produced. The commit is
+	// what a `--accept-deviation` rerun looks for — it pushes the commit a
+	// human read rather than starting a second agent session over it.
+	Fix struct {
+		Branch string `json:",omitempty"`
+		Base   string `json:",omitempty"`
+		Commit string `json:",omitempty"`
+	} `json:",omitempty"`
 }
 
 // NewRunID returns a sortable, unique run id of the form
@@ -205,13 +223,18 @@ func List(root, key string) ([]State, error) {
 // LatestNote returns the path to note.md of the newest run for key whose
 // Kind is kind and whose Status is "completed" and whose note.md exists on
 // disk. It errors if no such run is found.
+//
+// Eval runs are skipped. An eval replays a golden bundle to score the
+// agent, and its note describes a ticket as it stood when the bundle was
+// captured; treating it as the key's newest triage note would put an
+// `sirdar rca` or an `sirdar fix` to work on a measurement.
 func LatestNote(root, key string, kind Kind) (string, error) {
 	states, err := List(root, key)
 	if err != nil {
 		return "", err
 	}
 	for _, s := range states {
-		if s.Kind != kind || s.Status != StatusCompleted {
+		if s.Kind != kind || s.Status != StatusCompleted || s.Eval {
 			continue
 		}
 		notePath := filepath.Join(runsDir(root), s.Key, s.RunID, "note.md")

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 func writeCfg(t *testing.T, body string) string {
@@ -870,6 +872,67 @@ permissions:
 	}
 	if len(cfg.Permissions.MCP) != 1 {
 		t.Errorf("permissions.mcp %v", cfg.Permissions.MCP)
+	}
+}
+
+func TestFixBashDefaultsAndOverride(t *testing.T) {
+	cfg, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.FixBash) != len(DefaultFixBash) {
+		t.Fatalf("fixBash = %v, want the default list", cfg.Permissions.FixBash)
+	}
+	for _, want := range []string{"git status*", "git diff*", "git log*", "git show*", "git grep*", "git blame*",
+		"dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
+		var found bool
+		for _, got := range cfg.Permissions.FixBash {
+			if got == want {
+				found = true
+			}
+		}
+		if !found {
+			t.Errorf("the default fixBash list is missing %q: %v", want, cfg.Permissions.FixBash)
+		}
+	}
+
+	// The git entries are the read-only ones. Sirdar makes the branch, the
+	// commit and the push itself, so a default that hands the agent
+	// `git commit`, `git push` or `git config` gives away reach the flow
+	// never needed.
+	for _, pattern := range cfg.Permissions.FixBash {
+		if pattern == "git *" {
+			t.Errorf("the default fixBash list still carries a blanket %q", pattern)
+		}
+	}
+	for _, banned := range []string{"git commit -m x", "git push origin main", "git config user.email x@y",
+		"git reset --hard HEAD~1", "git checkout -B other"} {
+		if ok, _ := provider.MatchCommand("", cfg.Permissions.FixBash, banned); ok {
+			t.Errorf("the default fixBash list allows %q", banned)
+		}
+	}
+	for _, wanted := range []string{"git status --porcelain", "git diff HEAD", "git log --oneline -20",
+		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./..."} {
+		if ok, reason := provider.MatchCommand("", cfg.Permissions.FixBash, wanted); !ok {
+			t.Errorf("the default fixBash list refuses %q: %s", wanted, reason)
+		}
+	}
+
+	// A workspace that names its own list gets exactly that list: the
+	// default is a starting point, not a floor.
+	cfg, err = Load(writeCfg(t, minimal+`permissions:
+  fixBash:
+    - "just *"
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.FixBash) != 1 || cfg.Permissions.FixBash[0] != "just *" {
+		t.Fatalf("fixBash = %v", cfg.Permissions.FixBash)
+	}
+	// The read-only list stays its own thing.
+	if len(cfg.Permissions.Bash) != 0 {
+		t.Errorf("permissions.bash was filled in from fixBash: %v", cfg.Permissions.Bash)
 	}
 }
 
