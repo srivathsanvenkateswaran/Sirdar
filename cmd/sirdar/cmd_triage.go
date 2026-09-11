@@ -12,7 +12,7 @@ func init() { commands["triage"] = cmdTriage }
 
 func cmdTriage(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("triage", stderr,
-		"usage: sirdar triage KEY [KEY...] [--provider claude|codex|openai] [--model NAME] [--concurrency N] [--dry-run] [--no-notify]")
+		"usage: sirdar triage KEY [KEY...] [--provider claude|codex|openai|acp|qwen] [--model NAME] [--concurrency N] [--dry-run] [--no-notify]")
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
 	concurrency := fs.Int("concurrency", 0, "parallel runs across keys (default from config)")

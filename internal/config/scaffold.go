@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai | acp
+provider: claude            # claude | codex | openai | acp | qwen
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -23,6 +23,15 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   temperature: 0
 #   extraHeaders:
 #     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
+# provider: qwen drives the Qwen Code CLI, which speaks the same stream-json
+# family as Claude Code and reaches any OpenAI-compatible endpoint. With the
+# block left out entirely the session uses the login the qwen CLI already
+# has; baseUrl, model and apiKey are named together to point it elsewhere.
+# qwen:
+#   path: qwen                                # optional: where the CLI lives
+#   baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+#   model: qwen3-coder-plus
+#   apiKey: keychain:dashscope-api-key        # a local server still needs one named
 # provider: acp drives any agent that speaks the Agent Client Protocol —
 # Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
 # more — over one adapter. There is no cost signal, and a whole prompt turn

@@ -171,6 +171,28 @@ type PriceConfig struct {
 	OutputPerMTok float64 `yaml:"outputPerMTok"`
 }
 
+// QwenConfig configures `provider: qwen`, where a Qwen Code CLI drives the
+// session. Every field is optional: with none of them set the session runs
+// against whatever login the operator's own `qwen` binary already has, the
+// way `provider: claude` runs against their Claude Code login.
+//
+// BaseURL, Model and APIKey are named together to point the CLI at an
+// OpenAI-compatible endpoint — an aggregator, a vendor, or a server on
+// this machine. They are passed to the child process as the environment
+// variables Qwen Code reads (OPENAI_BASE_URL, OPENAI_MODEL,
+// OPENAI_API_KEY) and are stripped from the child's inherited environment
+// first, so a session's endpoint is what the workspace configured and not
+// what happens to be exported in the shell.
+//
+// APIKey is a credential reference ("env:NAME" or "keychain:SERVICE"),
+// never the key itself.
+type QwenConfig struct {
+	Path    string `yaml:"path,omitempty"`
+	Model   string `yaml:"model,omitempty"`
+	BaseURL string `yaml:"baseUrl,omitempty"`
+	APIKey  string `yaml:"apiKey,omitempty"`
+}
+
 // DefaultMaxContextTokens is the context window assumed for an
 // openai-compatible endpoint that does not name one. The loop starts
 // dropping old tool results as the prompt approaches it.
@@ -366,6 +388,7 @@ type Config struct {
 		} `yaml:"codex"`
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
+	Qwen   *QwenConfig   `yaml:"qwen,omitempty"`
 	ACP    *ACPConfig    `yaml:"acp,omitempty"`
 
 	// Webhooks configures the inbound trigger endpoints `sirdar serve`
@@ -495,11 +518,14 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai", "acp":
+	case "claude", "codex", "openai", "acp", "qwen":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex, openai or acp, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai, acp or qwen, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
+		return err
+	}
+	if err := validateQwen(c); err != nil {
 		return err
 	}
 	if err := validateACP(c); err != nil {
@@ -715,6 +741,45 @@ func validateOpenAI(c *Config) error {
 		if o.Price.OutputPerMTok < 0 {
 			return fmt.Errorf("config: openai.price.outputPerMTok: must be >= 0, got %v", o.Price.OutputPerMTok)
 		}
+	}
+	return nil
+}
+
+// validateQwen checks the qwen block. Every field is optional — a
+// workspace that names none runs the CLI against the operator's own login
+// — but baseUrl, model and apiKey describe one endpoint together, so
+// naming some of them and not the others is a mistake worth catching at
+// load time rather than mid-run, when the CLI would quietly fall back to
+// that login instead.
+func validateQwen(c *Config) error {
+	q := c.Qwen
+	if q == nil {
+		return nil
+	}
+	if q.BaseURL != "" {
+		u, err := url.Parse(q.BaseURL)
+		if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+			return fmt.Errorf("config: qwen.baseUrl: must be an absolute http or https URL, got %q", q.BaseURL)
+		}
+	}
+	if q.APIKey != "" {
+		if err := credentialRef("qwen.apiKey", q.APIKey); err != nil {
+			return err
+		}
+	}
+	if q.BaseURL == "" && q.APIKey == "" {
+		return nil
+	}
+	if q.BaseURL == "" {
+		return fmt.Errorf("config: qwen.baseUrl: is required alongside qwen.apiKey")
+	}
+	if q.APIKey == "" {
+		return fmt.Errorf("config: qwen.apiKey: is required alongside qwen.baseUrl; " +
+			"a local server that checks no key still needs one named, because Qwen Code " +
+			"selects its OpenAI-compatible backend only when key, base URL and model are all set")
+	}
+	if q.Model == "" {
+		return fmt.Errorf("config: qwen.model: is required when qwen.baseUrl is set")
 	}
 	return nil
 }

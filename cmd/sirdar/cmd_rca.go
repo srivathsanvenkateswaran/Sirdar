@@ -13,7 +13,7 @@ func init() { commands["rca"] = cmdRCA }
 
 func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("rca", stderr,
-		"usage: sirdar rca KEY [--pr URL] [--resolution TEXT|@FILE] [--provider claude|codex|openai] [--model NAME] [--no-notify]")
+		"usage: sirdar rca KEY [--pr URL] [--resolution TEXT|@FILE] [--provider claude|codex|openai|acp|qwen] [--model NAME] [--no-notify]")
 	prURL := fs.String("pr", "", "merged pull request; its diff is read with gh when available")
 	resolution := fs.String("resolution", "", "what was done, as text or @path to a file")
 	providerName := fs.String("provider", "", "override the configured provider")

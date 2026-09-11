@@ -11,8 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 )
 
 // callTimeout bounds a short request/response exchange — initialize,
@@ -319,8 +320,12 @@ func hasID(id json.RawMessage) bool {
 // a second process — `npx @agentclientprotocol/claude-agent-acp` is node
 // spawning node — and killing only the wrapper leaves the real agent
 // holding the workspace and the API session open.
+//
+// The platform halves live in internal/procgroup, which is also what keeps
+// this file building for GOOS=windows, where there is no addressable
+// process group and syscall.Kill does not exist.
 func setpgid(cmd *exec.Cmd) {
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	procgroup.Setup(cmd)
 }
 
 // killGroup SIGKILLs the whole process group the agent was started in (see
@@ -330,10 +335,5 @@ func killGroup(cmd *exec.Cmd) {
 	if cmd == nil || cmd.Process == nil {
 		return
 	}
-	if pid := cmd.Process.Pid; pid > 0 {
-		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
-			return
-		}
-	}
-	_ = cmd.Process.Kill()
+	_ = procgroup.Kill(cmd)
 }

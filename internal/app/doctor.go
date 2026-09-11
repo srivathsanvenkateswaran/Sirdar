@@ -58,6 +58,11 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 		// provider: acp has no path setting either: the agent's launch
 		// command is acp.command, which the provider already holds.
 		binary = ""
+	case "qwen":
+		binary = ""
+		if cfg.Qwen != nil {
+			binary = cfg.Qwen.Path
+		}
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)

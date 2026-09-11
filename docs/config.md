@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -87,6 +87,10 @@ rather than being silently ignored.
 | `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
 | `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
 | `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
+| `qwen.path` | string, optional | `""` (look up `qwen` on `PATH`) | Path to the Qwen Code binary |
+| `qwen.baseUrl` | string, optional | unset | OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login |
+| `qwen.model` | string, optional | unset | Model the endpoint serves; required alongside `qwen.baseUrl`. `--model` and `model` override it |
+| `qwen.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; required alongside `qwen.baseUrl` |
 | `webhooks.enabled` | bool | `false` | Whether `sirdar serve` registers the inbound trigger endpoints at all; with it off every path under `/hooks/` is a 404 |
 | `webhooks.sources.<name>` | object | unset | One per enabled source: `jira`, `linear`, `azdo`, `rally`, `zendesk`, `freshdesk`, `intercom`, `hubspot`, `generic`. An unknown name fails config load |
 | `webhooks.sources.<name>.secret` | string | none (required, except `azdo`) | Credential ref for the signing secret or shared secret |
@@ -806,13 +810,17 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default), `provider: codex`, `provider: openai`, or `provider: acp` selects
-what drives runs; `--provider` on `triage` and `rca` overrides it per invocation.
+`provider: claude` (default), `provider: codex`, `provider: openai`, `provider: acp`, or
+`provider: qwen` selects what drives runs; `--provider` on `triage` and `rca` overrides it per
+invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
 - `providers.codex.path`: path to the `codex` binary. Empty (the default) looks it up on
   `PATH`.
+- `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in
+  the `qwen:` block rather than under `providers:` because the rest of that block — the
+  endpoint — belongs with it.
 - `billing: subscription` (default) removes `ANTHROPIC_API_KEY` from the agent's child
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
@@ -831,6 +839,202 @@ what drives runs; `--provider` on `triage` and `rca` overrides it per invocation
   custom `ANTHROPIC_BASE_URL`, so `budget.maxUsd` cannot be trusted there; `doctor` reports the
   host (never the full URL) as a reminder. See
   `docs/research/providers/spike-anthropic-compatible.md` for the full investigation.
+
+### `provider: qwen`
+
+[Qwen Code](https://github.com/QwenLM/qwen-code) is a Gemini CLI fork whose headless mode is
+modelled on Claude Code's, and despite the name it is not Qwen-only: it talks to any
+OpenAI-compatible endpoint. It is the one third-party runtime that meets the whole of Sirdar's
+contract natively — streaming events, schema-constrained output, resume, MCP, and a per-call
+permission decision the host makes.
+
+Install it with `npm i -g @qwen-code/qwen-code`. With no `qwen:` block the session runs against
+whatever login the CLI already has:
+
+```yaml
+provider: qwen
+```
+
+Name an endpoint to point it somewhere else. The three fields go together — Qwen Code selects
+its OpenAI-compatible backend only when a key, a base URL and a model are all present — so a
+local server that checks no key still needs one named:
+
+```yaml
+provider: qwen
+qwen:
+  path: qwen                                # optional
+  baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+  model: qwen3-coder-plus
+  apiKey: keychain:dashscope-api-key
+```
+
+`qwen.apiKey` is resolved once, at startup, and held in memory. It reaches the child process as
+`OPENAI_API_KEY` and nowhere else: it is never written to a run directory and never printed by
+`sirdar doctor`. Everything Qwen Code reads to choose a backend, a credential, a settings
+location or a system prompt — `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`,
+`QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`, `QWEN_CODE_MODEL`, `QWEN_OAUTH`,
+`QWEN_DEFAULT_AUTH_TYPE`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `QWEN_HOME`, `QWEN_DIR`,
+`QWEN_CODE_SYSTEM_SETTINGS_PATH`, `QWEN_CODE_SYSTEM_DEFAULTS_PATH`,
+`QWEN_CODE_TRUSTED_FOLDERS_PATH`, `QWEN_CODE_MCP_APPROVALS_PATH`, `QWEN_SYSTEM_MD`,
+`QWEN_WRITE_SYSTEM_MD`, `QWEN_SYSTEM_IDENTITY_MD`, `QWEN_TLS_INSECURE`, `QWEN_CODE_SAFE_MODE` and
+`QWEN_CODE_SIMPLE` (the last two force `disableAllHooks`, same as the settings-layer field below)
+— is stripped from the environment the child inherits before the configured values go back in.
+A session's endpoint
+and settings are what the workspace configured, not what happens to be exported in the shell
+that launched Sirdar. Two of those go back in pointing at files Sirdar wrote for the session
+and deletes after it: `QWEN_CODE_SYSTEM_SETTINGS_PATH`, which carries the permission hook, and
+`QWEN_CODE_TRUSTED_FOLDERS_PATH`, which carries the folder-trust verdict.
+
+**Permissions.** Qwen Code emits no permission request on its stdout in headless mode. Instead
+Sirdar starts a loopback HTTP listener for the session and registers it as a `PreToolUse` hook,
+through a private settings file named by `QWEN_CODE_SYSTEM_SETTINGS_PATH`. Every tool call the
+CLI is about to make is posted to that listener, judged by the same `permissions.bash` /
+`permissions.mcp` rules every other provider uses, and answered with an allow or a deny whose
+reason the model sees as the tool result.
+
+`QWEN_CODE_SYSTEM_SETTINGS_PATH` replaces the **system** settings layer and nothing more:
+your `~/.qwen/settings.json` and the repository's `.qwen/settings.json` are still loaded and
+merged on top of it. It is where Sirdar registers its hook, not an isolation boundary. The
+guarantees that have to hold whatever those layers say are on the command line, in the
+folder-trust posture, and in two fields the system layer wins a merge conflict over: the
+session's settings pin `disableAllHooks: false` and `security.allowedHttpHookUrls` to exactly
+this session's hook URL, so a workspace or user layer that sets `disableAllHooks` (directly, or
+through `QWEN_CODE_SAFE_MODE`/`QWEN_CODE_SIMPLE` above) or names some other allowed hook URL
+cannot silence or redirect the mediator. Everything below was measured against 0.23.3 and is
+written up in `docs/research/09-qwen-wire-formats.md`:
+
+- **Only read tools are registered.** Every session passes `--exclude-tools` for every core
+  tool of 0.23.3 except the ones a triage session reads with: `read_file`, `read_many_files`,
+  `read_mcp_resource`, `grep_search`, `search_file_content`, `glob`, `list_directory`,
+  `web_fetch`, `web_search`, `todo_write` and `structured_output` — plus the shell, which is
+  conditional (next bullet). The excluded list is therefore `agent`, `artifact`,
+  `ask_user_question`, `create_sub_session`, `cron_create`, `cron_delete`, `cron_list`,
+  `display_image`, `edit`, `enter_plan_mode`, `enter_worktree`, `exit_plan_mode`,
+  `exit_worktree`, `get_goal`, `image_gen`, `list_agents`, `loop_wakeup`, `lsp`, `monitor`,
+  `notebook_edit`, `propose_goal`, `record_artifact`, `record_source`, `replace`,
+  `report_findings`, `request_shutdown`, `save_memory`, `send_message`, `skill`, `task`,
+  `task_create`, `task_list`, `task_stop`, `task_update`, `team_create`, `team_delete`,
+  `team_plan_approval`, `tool_search`, `update_goal`, `workflow`, `write_file` and
+  `zoom_image`. Qwen Code appends that flag to the merged deny list without consulting any
+  settings layer, and a deny beats an allow, so those tools are never registered and the model
+  is never offered them. Against the real binary, a workspace whose `.qwen/settings.json`
+  allowed `run_shell_command`, `write_file`, `edit`, `monitor`, `agent` and `skill` was offered
+  exactly `glob`, `grep_search`, `read_file`, `read_mcp_resource`, `structured_output` and
+  `web_fetch`.
+- **`agent`, `skill` and the task family are excluded for a second reason.** They are how a
+  repository reaches the permission decision itself. A subagent declared in `.qwen/agents/*.md`
+  and a project skill both carry a `hooks:` block; Qwen Code registers those under hook source
+  `session`, which runs *after* every settings-layer hook, and its `PreToolUse` merge copies
+  each hook's `hookSpecificOutput` over the last one — so the final `permissionDecision` wins
+  and a repo-supplied hook that runs after Sirdar's turns a deny into an allow. Taking away the
+  tools that register one closes that path. They are also no longer mapped onto Claude's `Task`
+  in the policy, so if a later Qwen registers them anyway they are judged under their own names
+  and refused.
+- **The workspace runs untrusted.** The session's settings turn
+  `security.folderTrust.enabled` on (it defaults to **false**, which means every folder is
+  trusted) and `QWEN_CODE_TRUSTED_FOLDERS_PATH` points at a 0600 file of Sirdar's own naming
+  the workspace `DO_NOT_TRUST`. The trust verdict is computed from the system and user layers
+  merged with that file — never from the workspace layer — so a repository cannot vote itself
+  trusted, and an entry the operator once added to `~/.qwen/trustedFolders.json` interactively
+  does not carry into a Sirdar run. With the folder untrusted, Qwen Code substitutes an empty
+  object for the whole workspace settings layer, and skips project agents, project skills'
+  `allowedTools` and hooks, project `QWEN.md` context, LSP servers and auto-skill loading.
+  Measured: the same workspace allow-list above put `run_shell_command` and `monitor` in front
+  of the model when the folder was trusted, and neither when it was not.
+- **MCP is the exception that keeps trust.** An untrusted folder makes Qwen Code skip MCP
+  discovery outright, so a session configured to load MCP servers would quietly get none of
+  them. A workspace that named servers — `mcp.workspaceOnly` with a `.mcp.json` present, or
+  `mcp.workspaceOnly: false` — therefore runs trusted, and its `.qwen/settings.json` layer is
+  live again; the exclusions above still hold, and a hook that layer registers runs *before*
+  Sirdar's, so it cannot overwrite a decision. The default (`mcp.workspaceOnly` with no
+  `.mcp.json`, which loads no servers) runs untrusted. A trusted workspace that actually carries
+  its own `.qwen/settings.json` or `.qwen/agents/` gets a `system` event naming the path rather
+  than a refusal — MCP is exactly the case that has to keep trust to work, so refusing here
+  would take away the one thing trust was kept for.
+- **A user-level `hooks` block, or `disableAllHooks`, refuses the session.** Qwen Code hands
+  its Config the user scope's own hooks when `~/.qwen/settings.json` has any, and Sirdar's
+  system-layer hook then falls through to the project slot, which an untrusted folder empties —
+  the session would run with no mediator at all. Measured against the real binary: with such a
+  file, no `PreToolUse` post arrived and the tool call ran unjudged. So Sirdar refuses to start a
+  qwen session while that file registers hooks or sets `disableAllHooks: true` (belt and braces
+  alongside the system-layer pin above), and says which file and why. The same check refuses
+  outright, naming `HOME`, when neither `HOME` nor `USERPROFILE` is set in the session's
+  environment: Node's own home lookup does not depend on either being set, so a session that had
+  them stripped could still have the child read a real `~/.qwen/settings.json` this check never
+  saw, and silently treating that as "no user hooks" would be the wrong direction to fail in.
+- **The hook is authenticated, probed and watched.** Qwen Code fails open — a connection
+  failure, a timeout and a non-2xx are all non-blocking hook failures, and the tool runs. So the
+  hook URL carries a 32-byte random per-session token compared in constant time, and a request
+  without it, without `POST`, without `application/json`, or carrying an `Origin` header (which
+  the CLI's own server-side fetch never sends) is refused with no event recorded and no decision
+  returned. The decision is written and flushed to the child before the permission event is
+  published, so a slow event consumer cannot push a deny past the CLI's 15 s hook timeout and
+  turn it into an allow. Starting a session probes the listener and fails if it cannot be
+  reached; a listener that stops serving mid-run kills the process group and ends the run.
+- **A tool that runs without a decision ends the session.** Every tool result is matched
+  against the decisions the hook made. The first result for a call the hook never judged kills
+  the process group, writes an `error` event reading `tool ran without a Sirdar decision;
+  session aborted`, and fails the run — the CLI's own hook-failure path is fail-open, so a
+  session that has lost its mediator would otherwise carry on with every later call running the
+  same way.
+- **What is left to the hook.** The read tools above are judged by the same `permissions.bash`
+  / `permissions.mcp` rules every other provider uses; `read_mcp_resource` and every
+  `mcp__server__tool` go through `permissions.mcp`. Any name the policy has not been taught —
+  an MCP tool no pattern matches, or a tool a later Qwen adds and this list does not know — is
+  refused with `Sirdar policy: not permitted`.
+- **`web_fetch` is approved with no inspection of the destination.** It sits in
+  `AlwaysAllowed` next to `read_file`, the same way `WebFetch` does for the Claude adapter, and
+  neither adapter's policy looks at the URL before approving the call. A prompt injected into
+  something a read tool already pulled in — a file comment, a commit message, a ticket body —
+  can ask the model to fetch an address of the attacker's choosing, carrying whatever that read
+  already put in context along with it. Known and documented rather than fixed here: a URL
+  allow-list for `web_fetch`/`WebFetch` shared across providers is a follow-up (see
+  `HANDOFF.md`).
+
+**The shell.** It is excluded the same way unless the workspace named `permissions.bash`
+patterns. When it did, `--allowed-tools run_shell_command` puts it back and the hook is its
+only gate — a Qwen rule written against `run_shell_command` allows every command whatever
+specifier it carries, so per-command rules cannot be expressed at the CLI level at all.
+`monitor` stays excluded either way: it takes a command string of its own and would be a
+second, unjudged shell.
+
+**Budgets.** `budget.maxTurns` becomes `--max-session-turns` (plus one, because the terminal
+`structured_output` call spends a turn of its own) and, scaled by four, `--max-tool-calls`;
+`budget.maxMinutes` becomes `--max-wall-time`. A session that named no turn budget still gets
+`--max-tool-calls 200`. `budget.maxUsd` never triggers: the CLI reports no cost on the wire, so
+cost is always `0` and the turn, tool-call and wall-clock budgets are what bound a run.
+
+Qwen Code's `-s/--sandbox` is not passed. It wants a container image or a macOS Seatbelt profile
+the operator has set up, a session that cannot start its sandbox fails outright, and it is
+orthogonal to the guarantees above — so it is left to an operator who wants it to configure on
+the binary rather than forced on every run.
+
+**MCP.** Loading MCP servers costs the untrusted-folder posture described above, because Qwen
+Code skips MCP discovery in an untrusted folder. `mcp.workspaceOnly` is expressed as
+`--mcp-config <.mcp.json>` plus one
+`--allowed-mcp-server-names` flag per server that file declares; a workspace with no `.mcp.json`
+gets a sentinel name no server matches, which loads none. Qwen Code has no
+`--strict-mcp-config`: `--mcp-config` merges with your own servers, and the allow-list by name
+is the only thing that narrows the set. That narrowing is **by name only**. If one of your own
+configured servers shares a name with a server the workspace's `.mcp.json` declares, it passes
+the allow-list, and which of the two definitions the merge keeps is not something Sirdar
+controls. Keep workspace server names distinctive, or keep the operator-level ones out of a
+config a session can see.
+
+**The schema retry costs a process.** Qwen Code refuses `--input-format stream-json` alongside
+`--json-schema`, so a session takes exactly one message. When a note fails Sirdar's validation
+the runner resumes the session id in a fresh process (`--resume`) and puts the correction there,
+which is the path it already had for Codex.
+
+`sirdar doctor` reports two rows:
+
+```
+[OK] qwen --version — 0.23.3
+[OK] qwen endpoint — https://dashscope-intl.aliyuncs.com/compatible-mode/v1 (qwen3-coder-plus)
+```
+
+Not exercised against a live model: the wire capture was driven by a stub OpenAI-compatible
+server, so the shapes are the CLI's own but no vendor model has run through this adapter yet.
 
 ### `provider: openai`
 

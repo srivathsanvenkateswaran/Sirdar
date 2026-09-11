@@ -117,6 +117,10 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
    then two or three more tickets and a comparison against hand-written notes; fold gotchas into
    `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
    sees the commands it is asked about.
+6. A URL allow-list for `web_fetch`/`WebFetch`, shared across providers: `internal/provider/
+   policy.go`'s `AlwaysAllowed` approves both with no inspection of the destination, so a prompt
+   injected into something a read tool already pulled in can direct a fetch to an attacker's own
+   host (see the qwen section of `docs/config.md`).
 
 ## What is unverified
 
