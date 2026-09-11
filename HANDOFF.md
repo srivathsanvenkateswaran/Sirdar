@@ -132,6 +132,16 @@ sandbox is a `workspace-write` config Sirdar sets but does not implement or veri
 guard (`internal/fix/guard.go`) is the actual backstop if that sandbox lets a write through,
 including onto `.git`.
 
+## What is unverified
+
+- **`item/fileChange/requestApproval` firing under Codex's `sandbox: workspace-write` +
+  `approvalPolicy: untrusted`.** `docs/research/06-wire-formats.md` confirms the
+  command-approval and MCP-elicitation paths against a live `codex app-server` turn; the
+  file-change path was built the same way, off the app-server's declared `ServerRequest`
+  schema, but has not itself been watched fire — no turn that actually has Codex write a file
+  has been run against it. One dogfood fix turn where the agent writes through a hook would
+  confirm it; none has been run, to keep this round free of paid Codex turns.
+
 ## Known gaps (deliberate)
 
 No writes to any helpdesk or tracker (`sirdar fix` writes to git and GitHub and

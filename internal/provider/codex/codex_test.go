@@ -16,12 +16,17 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
-// TestMain doubles as the fake Codex app-server: when SIRDAR_FAKE_CODEX names
-// a script, the test binary replays that script over stdio instead of running
-// tests. The provider spawns `<binary> app-server`, so the fake ignores argv.
+// TestMain doubles as two fakes: with SIRDAR_FAKE_CODEX naming a script the
+// test binary replays it over stdio as the Codex app-server, and with
+// SIRDAR_FAKE_MCP naming a server it answers the MCP handshake as a stdio
+// MCP server, which is what the live smoke test points Codex at. The
+// provider spawns `<binary> app-server`, so both fakes ignore argv.
 func TestMain(m *testing.M) {
 	if script := os.Getenv("SIRDAR_FAKE_CODEX"); script != "" {
 		os.Exit(fakeServer(script))
+	}
+	if name := os.Getenv("SIRDAR_FAKE_MCP"); name != "" {
+		os.Exit(fakeMCPServer(name))
 	}
 	os.Exit(m.Run())
 }
@@ -54,6 +59,19 @@ func fakeServer(scriptPath string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake codex:", err)
 		return 2
+	}
+
+	// The child's environment is only observable through stderr, which the
+	// session keeps as its tail, so the home it was started against is
+	// reported the same way stdin is echoed.
+	home := os.Getenv("CODEX_HOME")
+	fmt.Fprintf(os.Stderr, "ENV: CODEX_HOME=%s\n", home)
+
+	// Codex rewrites auth.json in its own home when it refreshes the
+	// ChatGPT token. SIRDAR_FAKE_REFRESH_AUTH makes the fake do the same,
+	// which is what the write-back on Wait has to notice.
+	if body := os.Getenv("SIRDAR_FAKE_REFRESH_AUTH"); body != "" && home != "" {
+		_ = os.WriteFile(filepath.Join(home, "auth.json"), []byte(body), 0o600)
 	}
 
 	in := make(chan inbound, 64)
@@ -383,7 +401,7 @@ func TestThreadStartParams(t *testing.T) {
 	}
 
 	startLine := findSent(t, res, "thread/start")
-	for _, want := range []string{`"sandbox":"read-only"`, `"approvalPolicy":"never"`, `"model":"gpt-5-codex"`} {
+	for _, want := range []string{`"sandbox":"read-only"`, `"approvalPolicy":"untrusted"`, `"model":"gpt-5-codex"`} {
 		if !strings.Contains(startLine, want) {
 			t.Errorf("thread/start params missing %s: %s", want, startLine)
 		}
@@ -498,7 +516,7 @@ func TestResumeThread(t *testing.T) {
 		}
 	}
 	resumeLine := findSent(t, res, "thread/resume")
-	for _, want := range []string{`"threadId":"th-77"`, `"sandbox":"read-only"`, `"approvalPolicy":"never"`} {
+	for _, want := range []string{`"threadId":"th-77"`, `"sandbox":"read-only"`, `"approvalPolicy":"untrusted"`} {
 		if !strings.Contains(resumeLine, want) {
 			t.Errorf("thread/resume params missing %s: %s", want, resumeLine)
 		}
@@ -623,9 +641,375 @@ func TestParseID(t *testing.T) {
 	}
 }
 
+// replyTo returns the result Sirdar sent in answer to the server request
+// with the given id, as the fake echoed it back on stderr.
+func replyTo(t *testing.T, res provider.Result, id int) string {
+	t.Helper()
+	want := fmt.Sprintf("%d", id)
+	for _, line := range sent(t, res) {
+		var msg inbound
+		if err := json.Unmarshal([]byte(line), &msg); err != nil {
+			continue
+		}
+		if msg.Method == "" && strings.TrimSpace(string(msg.ID)) == want {
+			return string(msg.Result)
+		}
+	}
+	t.Fatalf("no reply to request %d; sent=%v", id, sent(t, res))
+	return ""
+}
+
+// permissionFor returns the EvPermission event for a tool, and whether
+// there was one.
+func permissionFor(evs []provider.Event, tool string) (provider.Event, bool) {
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Tool == tool {
+			return ev, true
+		}
+	}
+	return provider.Event{}, false
+}
+
+// TestApprovalsGoThroughThePolicy is the read-only guarantee on the Codex
+// path. Under approvalPolicy "untrusted" Codex asks before it acts, and
+// every answer here comes from the workspace's own permissions — the same
+// PermissionPolicy a Claude session is judged by.
+//
+// The MCP half is the one that matters: a workspace's .mcp.json can name
+// any server it likes, and until this landed a tool from one either could
+// not run at all (approvalPolicy "never" refuses MCP calls outright) or,
+// had the policy been loosened without this, would have run ungated.
+func TestApprovalsGoThroughThePolicy(t *testing.T) {
+	sess := startSession(t, "script-approvals.jsonl", func(spec *provider.SessionSpec) {
+		spec.Policy = &provider.PermissionPolicy{
+			BashAllow: []string{"rg *"},
+			MCPAllow:  []string{"mcp__notes__notes_lookup", "mcp__grafana__query_*"},
+			Root:      spec.Cwd,
+		}
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		id   int
+		want string
+	}{
+		{"an allow-listed command runs", 101, `{"decision":"accept"}`},
+		{"a command outside the allow-list does not", 102, `{"decision":"decline"}`},
+		{"an allow-listed MCP tool runs", 103, `{"action":"accept","content":{}}`},
+		{"an MCP tool outside permissions.mcp does not", 104, `{"action":"decline"}`},
+		{"an approval with no preceding item is still decided", 105, `{"action":"accept","content":{}}`},
+		{"a real elicitation is declined: nobody is watching", 106, `{"action":"decline"}`},
+		{"a file change is refused whatever the policy says", 107, `{"decision":"decline"}`},
+		// Not {"decision":...}: this request is answered with the profile
+		// it is being granted, and an empty one grants nothing.
+		{"widening the sandbox grants nothing", 108, `{"permissions":{},"scope":"turn"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replyTo(t, res, tc.id); got != tc.want {
+				t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+			}
+		})
+	}
+
+	// Every decision is on the record, under the tool's namespaced name,
+	// so an operator reading the events log can see what was asked for.
+	for tool, want := range map[string]string{
+		"mcp__notes__notes_lookup":       "allow",
+		"mcp__notes__delete_everything":  "deny",
+		"mcp__grafana__query_prometheus": "allow",
+		"fileChange":                     "deny",
+		"permissions":                    "deny",
+	} {
+		ev, ok := permissionFor(evs, tool)
+		if !ok {
+			t.Errorf("no permission event for %s", tool)
+			continue
+		}
+		if ev.Decision != want {
+			t.Errorf("permission event for %s = %q, want %q", tool, ev.Decision, want)
+		}
+	}
+
+	// The denial the agent is shown names the rule it fell foul of, not
+	// just "no": a refusal it cannot act on costs the run a turn.
+	if ev, ok := permissionFor(evs, "mcp__notes__delete_everything"); ok {
+		if !strings.Contains(ev.Text, "permissions.mcp") {
+			t.Errorf("the MCP denial does not name the setting: %q", ev.Text)
+		}
+	}
+	var commandDenied bool
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Tool == "commandExecution" && ev.Decision == "deny" {
+			commandDenied = true
+			if !strings.Contains(ev.Text, "allow-list") {
+				t.Errorf("the command denial does not name the allow-list: %q", ev.Text)
+			}
+		}
+	}
+	if !commandDenied {
+		t.Error("the command outside the allow-list was not reported as denied")
+	}
+}
+
+// TestUnknownApprovalMethodIsRefused pins the round-2 hardening on the
+// default arm of onRequest: an approval-shaped server request this package
+// does not recognise must be refused and put on the record as an error, not
+// answered with {} — a shape that could read as an accept to a future
+// app-server version nobody has tested against.
+func TestUnknownApprovalMethodIsRefused(t *testing.T) {
+	sess := startSession(t, "script-unknown-approval.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if got := replyTo(t, res, 201); got != `{"action":"decline"}` {
+		t.Errorf("reply to the unrecognised approval = %s, want a decline", got)
+	}
+
+	var found bool
+	for _, ev := range only(t, evs, provider.EvError) {
+		if strings.Contains(ev.Text, "item/foo/requestApproval") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no EvError named the unrecognised approval method; events=%+v", evs)
+	}
+}
+
+// TestMCPApprovalOrderingAndFailSafes is the round-2 hardening on MCP
+// tool-call resolution: same-server concurrency is judged from a per-server
+// FIFO rather than one name a second call can overwrite before the first is
+// approved, a message that quotes a different tool than the FIFO expects is
+// refused outright rather than trusted either way, and an approval with
+// neither a preceding item nor a quoted name is refused rather than decided
+// under an empty tool name — which the old code would have waved through,
+// since an empty name carries no write verb for the heuristic to catch.
+func TestMCPApprovalOrderingAndFailSafes(t *testing.T) {
+	sess := startSession(t, "script-mcp-fifo.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	// Two calls to "notes" start before either is approved, and neither
+	// approval message quotes a name, so the reply can only be right if
+	// the FIFO kept them in order: the oldest queued call — a read,
+	// allowed by the unconfigured default — is decided first, the second
+	// — a write — after it.
+	if got := replyTo(t, res, 301); got != `{"action":"accept","content":{}}` {
+		t.Errorf("reply to 301 (oldest queued call) = %s, want accept", got)
+	}
+	if got := replyTo(t, res, 302); got != `{"action":"decline"}` {
+		t.Errorf("reply to 302 (second queued call) = %s, want decline", got)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__lookup_alpha"); !ok || ev.Decision != "allow" {
+		t.Errorf("permission for lookup_alpha = %+v, ok=%v, want allow", ev, ok)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__delete_beta"); !ok || ev.Decision != "deny" {
+		t.Errorf("permission for delete_beta = %+v, ok=%v, want deny", ev, ok)
+	}
+
+	// A call starts under one name; its elicitation's own message quotes
+	// a different one. Both are refused rather than have one guessed.
+	if got := replyTo(t, res, 303); got != `{"action":"decline"}` {
+		t.Errorf("reply to 303 (name mismatch) = %s, want decline", got)
+	}
+	if ev, ok := permissionFor(evs, "mcp__notes__delta_lookup"); !ok || ev.Decision != "deny" || !strings.Contains(ev.Text, "mismatch") {
+		t.Errorf("mismatch permission event = %+v, ok=%v, want a deny naming the mismatch", ev, ok)
+	}
+
+	// No preceding item, no quoted name: there is nothing to decide
+	// under, and an empty tool name must not fail open.
+	if got := replyTo(t, res, 304); got != `{"action":"decline"}` {
+		t.Errorf("reply to 304 (unresolved name) = %s, want decline", got)
+	}
+	var unknownDenied bool
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Decision == "deny" && strings.Contains(ev.Text, "tool name unknown") {
+			unknownDenied = true
+		}
+	}
+	if !unknownDenied {
+		t.Error("no permission event denied the unresolved tool name")
+	}
+}
+
+// TestUnconfiguredPolicyStillDecides pins the default reading: a session
+// started with no policy at all refuses shell commands and write-shaped
+// MCP tools rather than waving them through.
+func TestUnconfiguredPolicyStillDecides(t *testing.T) {
+	sess := startSession(t, "script-approvals.jsonl", nil)
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	for _, tc := range []struct {
+		id   int
+		want string
+	}{
+		{101, `{"decision":"decline"}`},
+		{102, `{"decision":"decline"}`},
+		// No permissions.mcp, so the write-verb heuristic decides: a
+		// lookup is a read, delete_everything is not.
+		{103, `{"action":"accept","content":{}}`},
+		{104, `{"action":"decline"}`},
+	} {
+		if got := replyTo(t, res, tc.id); got != tc.want {
+			t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+		}
+	}
+}
+
+// TestFixModeFileChangesGoThroughThePolicy is the other half of fix mode on
+// the Codex path: workspace-write lets Codex write inside the workspace, and
+// this is what decides which file inside it. The approval names only the
+// item, so the paths come from the fileChange item that preceded it, and
+// each one goes through the fix policy — the same rules a Claude fix's Edit
+// calls are judged by.
+func TestFixModeFileChangesGoThroughThePolicy(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+		spec.Policy = provider.FixPolicy(spec.Cwd, nil, nil, nil)
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		id   int
+		want string
+	}{
+		{"a patch to the workspace's own source is applied", 401, `{"decision":"accept"}`},
+		{"a patch that also writes a git hook is not", 402, `{"decision":"decline"}`},
+		{"an approval whose paths are unknown is not", 403, `{"decision":"decline"}`},
+		{"a standing grant for a whole root is not", 404, `{"decision":"decline"}`},
+		{"a patch that renames into a git hook is not", 405, `{"decision":"decline"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replyTo(t, res, tc.id); got != tc.want {
+				t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+			}
+		})
+	}
+
+	var allowed, denials []provider.Event
+	for _, ev := range evs {
+		if ev.Kind != provider.EvPermission || ev.Tool != "fileChange" {
+			continue
+		}
+		if ev.Decision == "allow" {
+			allowed = append(allowed, ev)
+		} else {
+			denials = append(denials, ev)
+		}
+	}
+	if len(allowed) != 1 || !strings.Contains(allowed[0].Text, "internal/svc/handler.go") {
+		t.Errorf("file-change allows = %+v, want one naming the file it wrote", allowed)
+	}
+	if len(denials) != 4 {
+		t.Fatalf("file-change denials = %d, want 4: %+v", len(denials), denials)
+	}
+	// The reason the agent is shown is the policy's own, so it can tell a
+	// reserved path from a patch nobody could check.
+	if !strings.Contains(denials[0].Text, ".git/hooks/x") {
+		t.Errorf("the hook denial does not name the reserved path: %q", denials[0].Text)
+	}
+	if !strings.Contains(denials[1].Text, ".git/hooks/pre-commit") {
+		t.Errorf("the move denial does not name the reserved destination: %q", denials[1].Text)
+	}
+	if !strings.Contains(denials[2].Text, "named no path") {
+		t.Errorf("the unknown-paths denial does not say why: %q", denials[2].Text)
+	}
+	if !strings.Contains(denials[3].Text, "root") {
+		t.Errorf("the grantRoot denial does not say why: %q", denials[3].Text)
+	}
+}
+
+// TestFixModeFileChangePoisonedAfterApproval covers a patch Codex revises
+// after Sirdar has already accepted it: the earlier accept was judged
+// against a set of destinations that no longer holds, so it is worthless,
+// and the item is declined from then on with the operator told why.
+func TestFixModeFileChangePoisonedAfterApproval(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange-patchupdate.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+		spec.Policy = provider.FixPolicy(spec.Cwd, nil, nil, nil)
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if got := replyTo(t, res, 501); got != `{"decision":"accept"}` {
+		t.Errorf("reply to 501 = %s, want accept", got)
+	}
+	if got := replyTo(t, res, 502); got != `{"decision":"decline"}` {
+		t.Errorf("reply to 502 = %s, want decline", got)
+	}
+
+	var sawError bool
+	for _, ev := range evs {
+		if ev.Kind == provider.EvError && strings.Contains(ev.Text, "fc_poison") {
+			sawError = true
+		}
+	}
+	if !sawError {
+		t.Errorf("no EvError naming the item whose patch changed after approval; events=%+v", evs)
+	}
+
+	var denials []provider.Event
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Tool == "fileChange" && ev.Decision == "deny" {
+			denials = append(denials, ev)
+		}
+	}
+	if len(denials) != 1 {
+		t.Fatalf("file-change denials = %d, want 1: %+v", len(denials), denials)
+	}
+	if !strings.Contains(denials[0].Text, "already approved") {
+		t.Errorf("the poisoned-item denial does not say why: %q", denials[0].Text)
+	}
+}
+
+// TestTriageFileChangesStayRefused: outside a fix run nothing makes the
+// session a writer, so a file change is refused before its paths are even
+// looked for.
+func TestTriageFileChangesStayRefused(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	for _, id := range []int{401, 402, 403, 404, 405} {
+		if got := replyTo(t, res, id); got != `{"decision":"decline"}` {
+			t.Errorf("reply to %d = %s, want a decline", id, got)
+		}
+	}
+	ev, ok := permissionFor(evs, "fileChange")
+	if !ok || ev.Decision != "deny" || !strings.Contains(ev.Text, "read-only") {
+		t.Errorf("triage file-change permission = %+v, ok=%v, want a read-only deny", ev, ok)
+	}
+}
+
 // TestFixModeUsesWorkspaceWriteSandbox: Codex enforces read-only through
 // its own sandbox, so a fix thread has to be started in the one that lets
-// it write the files it is fixing — and only those.
+// it write the files it is fixing — and only those. The approval policy is
+// unchanged by the mode: "untrusted" is what puts each file change, command
+// and MCP call to Sirdar in either kind of run.
 func TestFixModeUsesWorkspaceWriteSandbox(t *testing.T) {
 	sess := startSession(t, "script-basic.jsonl", func(spec *provider.SessionSpec) {
 		spec.Mode = provider.ModeFix
@@ -643,7 +1027,7 @@ func TestFixModeUsesWorkspaceWriteSandbox(t *testing.T) {
 	if strings.Contains(startLine, `"sandbox":"read-only"`) {
 		t.Errorf("fix thread/start still asked for read-only: %s", startLine)
 	}
-	if !strings.Contains(startLine, `"approvalPolicy":"never"`) {
+	if !strings.Contains(startLine, `"approvalPolicy":"untrusted"`) {
 		t.Errorf("fix thread/start changed the approval policy: %s", startLine)
 	}
 }

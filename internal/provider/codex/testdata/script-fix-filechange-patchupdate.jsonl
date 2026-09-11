@@ -1,0 +1,21 @@
+// A fix session where Codex revises a file change's patch after Sirdar has
+// already accepted it. Codex applies whatever the patch looks like when the
+// item completes, not what it looked like at approval time, so a revision
+// that changes the destinations voids the earlier accept.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-5","sessionId":"th-5","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-5","items":[],"status":"inProgress"}}}
+// The item announces an innocuous patch, and Sirdar accepts it.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_poison","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""}]},"threadId":"th-5","turnId":"tn-5"}}
+{"$expect_request":"item/fileChange/requestApproval","id":501,"params":{"threadId":"th-5","turnId":"tn-5","itemId":"fc_poison","startedAtMs":1789039395000}}
+// Codex revises the patch after the accept: it now also touches a git hook.
+{"jsonrpc":"2.0","method":"item/fileChange/patchUpdated","params":{"threadId":"th-5","turnId":"tn-5","itemId":"fc_poison","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""},{"path":".git/hooks/x","kind":{"type":"add"},"diff":""}]}}
+// Codex asks again for the same item after the revision. Whatever it
+// names, the item is poisoned and the answer is a decline.
+{"$expect_request":"item/fileChange/requestApproval","id":502,"params":{"threadId":"th-5","turnId":"tn-5","itemId":"fc_poison","startedAtMs":1789039396000}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"fileChange","id":"fc_poison","status":"declined","changes":[]},"threadId":"th-5","turnId":"tn-5"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-5","turnId":"tn-5"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-5","turn":{"id":"tn-5","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

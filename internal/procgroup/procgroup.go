@@ -16,3 +16,8 @@ func Setup(cmd *exec.Cmd) { setup(cmd) }
 // reached (already gone, or the platform has no addressable process
 // groups — see procgroup_windows.go).
 func Kill(cmd *exec.Cmd) error { return kill(cmd) }
+
+// Alive reports whether pid names a running process, independent of
+// whether it was started by this program. See procgroup_unix.go and
+// procgroup_windows.go for the platform-specific caveats.
+func Alive(pid int) bool { return alive(pid) }

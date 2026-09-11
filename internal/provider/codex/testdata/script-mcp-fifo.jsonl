@@ -1,0 +1,26 @@
+// Round-2 hardening: same-server concurrency, a name that disagrees with
+// the message's own claim, and an approval with nothing to decide under.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-5","sessionId":"th-5","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-5","items":[],"status":"inProgress"}}}
+// Two calls to the same server start before either is approved. Neither
+// approval message quotes a name, so resolution has to come from FIFO
+// order alone: the oldest queued call first.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"notes","tool":"lookup_alpha","arguments":{},"status":"inProgress"},"threadId":"th-5","turnId":"tn-5"}}
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_2","server":"notes","tool":"delete_beta","arguments":{},"status":"inProgress"},"threadId":"th-5","turnId":"tn-5"}}
+{"$expect_request":"mcpServer/elicitation/request","id":301,"params":{"threadId":"th-5","turnId":"tn-5","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_params":{}},"message":"Allow the notes MCP server to run its next queued tool?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"notes","tool":"lookup_alpha","status":"completed"},"threadId":"th-5","turnId":"tn-5"}}
+{"$expect_request":"mcpServer/elicitation/request","id":302,"params":{"threadId":"th-5","turnId":"tn-5","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_params":{}},"message":"Allow the notes MCP server to run its next queued tool?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_2","server":"notes","tool":"delete_beta","status":"failed","error":{"message":"user rejected MCP tool call"}},"threadId":"th-5","turnId":"tn-5"}}
+// A call starts under one name; the elicitation's own message quotes a
+// different one. The two disagree, so neither is trusted.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_3","server":"notes","tool":"gamma_lookup","arguments":{},"status":"inProgress"},"threadId":"th-5","turnId":"tn-5"}}
+{"$expect_request":"mcpServer/elicitation/request","id":303,"params":{"threadId":"th-5","turnId":"tn-5","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_params":{}},"message":"Allow the notes MCP server to run tool \"delta_lookup\"?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_3","server":"notes","tool":"gamma_lookup","status":"failed","error":{"message":"user rejected MCP tool call"}},"threadId":"th-5","turnId":"tn-5"}}
+// No preceding item and no quoted name: nothing names the tool at all.
+{"$expect_request":"mcpServer/elicitation/request","id":304,"params":{"threadId":"th-5","turnId":"tn-5","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_params":{}},"message":"Allow the notes MCP server to run its next queued tool?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-5","turnId":"tn-5"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-5","turn":{"id":"tn-5","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

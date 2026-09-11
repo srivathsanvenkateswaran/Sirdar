@@ -67,7 +67,7 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)
 	}
-	raw := p.Doctor(ctx, binary)
+	raw := doctorChecks(ctx, p, binary, cfg)
 	out := make([]Check, 0, len(raw)+1)
 	for _, c := range raw {
 		out = append(out, checkOf(c))
@@ -76,6 +76,26 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 		out = append(out, claudeEnvironmentCheck(cfg))
 	}
 	return out
+}
+
+// doctorChecks runs a provider's diagnostics, handing it the workspace
+// when it is the kind of provider that depends on one.
+//
+// Codex is: which MCP servers a session will see depends on the
+// workspace's .mcp.json and its mcp.workspaceOnly setting, neither of
+// which reaches Doctor(ctx, binary). Left to infer them it used the
+// process working directory and an environment variable, which is right
+// for `sirdar doctor` run inside a workspace and wrong for the desktop
+// app and `sirdar serve`, whose working directory is wherever they were
+// launched from — the row read "none" in both.
+func doctorChecks(ctx context.Context, p provider.Provider, binary string, cfg *config.Config) []provider.Check {
+	if cd, ok := p.(provider.ConfigDoctor); ok {
+		return cd.DoctorWithConfig(ctx, binary, provider.DoctorConfig{
+			Root:             cfg.Root,
+			MCPWorkspaceOnly: cfg.WorkspaceOnlyMCP(),
+		})
+	}
+	return p.Doctor(ctx, binary)
 }
 
 // claudeGatewayEnvVars mirrors the list internal/provider/claude's childEnv

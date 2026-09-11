@@ -1,0 +1,11 @@
+// A server-to-client request shaped like an approval, under a method this
+// package has never seen. It must be refused, never answered with {}.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-4","sessionId":"th-4","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-4","items":[],"status":"inProgress"}}}
+{"$expect_request":"item/foo/requestApproval","id":201,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"foo_1"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-4","turnId":"tn-4"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-4","turn":{"id":"tn-4","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

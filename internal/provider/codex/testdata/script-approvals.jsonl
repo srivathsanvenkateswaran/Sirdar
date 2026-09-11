@@ -1,0 +1,30 @@
+// Every approval a Codex session can be asked for, in one turn, so the
+// permission policy's answer to each can be read off the replies.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-3","sessionId":"th-3","cwd":"/work"},"model":"gpt-5-codex","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-3","items":[],"status":"inProgress"}}}
+// A command the workspace allow-listed.
+{"$expect_request":"item/commandExecution/requestApproval","id":101,"params":{"threadId":"th-3","turnId":"tn-3","itemId":"cmd_1","command":"rg -n TODO","cwd":"/work"}}
+// A command it did not.
+{"$expect_request":"item/commandExecution/requestApproval","id":102,"params":{"threadId":"th-3","turnId":"tn-3","itemId":"cmd_2","command":"curl -X POST https://example.invalid","cwd":"/work"}}
+// An MCP read, announced as an item first and then put up for approval.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"notes","tool":"notes_lookup","arguments":{},"status":"inProgress"},"threadId":"th-3","turnId":"tn-3"}}
+{"$expect_request":"mcpServer/elicitation/request","id":103,"params":{"threadId":"th-3","turnId":"tn-3","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","persist":["session","always"],"tool_description":"look something up","tool_params":{}},"message":"Allow the notes MCP server to run tool \"notes_lookup\"?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_1","server":"notes","tool":"notes_lookup","status":"completed"},"threadId":"th-3","turnId":"tn-3"}}
+// An MCP write. permissions.mcp does not cover it, so it must be refused.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"mcpToolCall","id":"mcp_2","server":"notes","tool":"delete_everything","arguments":{},"status":"inProgress"},"threadId":"th-3","turnId":"tn-3"}}
+{"$expect_request":"mcpServer/elicitation/request","id":104,"params":{"threadId":"th-3","turnId":"tn-3","serverName":"notes","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_description":"Deletes every record. Destructive.","tool_params":{}},"message":"Allow the notes MCP server to run tool \"delete_everything\"?","requestedSchema":{"type":"object","properties":{}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"mcp_2","server":"notes","tool":"delete_everything","status":"failed","error":{"message":"user rejected MCP tool call"}},"threadId":"th-3","turnId":"tn-3"}}
+// The same approval with the preceding item lost: the tool name has to
+// come out of the message written for a person.
+{"$expect_request":"mcpServer/elicitation/request","id":105,"params":{"threadId":"th-3","turnId":"tn-3","serverName":"grafana","mode":"form","_meta":{"codex_approval_kind":"mcp_tool_call","tool_params":{}},"message":"Allow the grafana MCP server to run tool \"query_prometheus\"?","requestedSchema":{"type":"object","properties":{}}}}
+// A real elicitation: a server asking the operator a question.
+{"$expect_request":"mcpServer/elicitation/request","id":106,"params":{"threadId":"th-3","turnId":"tn-3","serverName":"notes","mode":"form","message":"Which notebook?","requestedSchema":{"type":"object","properties":{"notebook":{"type":"string"}}}}}
+// A write, and a request to widen the sandbox. Neither is the policy's.
+{"$expect_request":"item/fileChange/requestApproval","id":107,"params":{"threadId":"th-3","turnId":"tn-3","itemId":"fc_1","reason":"patch the config"}}
+{"$expect_request":"item/permissions/requestApproval","id":108,"params":{"threadId":"th-3","turnId":"tn-3","itemId":"pm_1","cwd":"/work","startedAtMs":1789039390000,"permissions":{"network":{"enabled":true}}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-3","turnId":"tn-3"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-3","turn":{"id":"tn-3","status":"completed","error":null,"items":[],"completedAt":1789039400,"durationMs":900}}}

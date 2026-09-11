@@ -235,7 +235,12 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MCPAllow:  cfg.Permissions.MCP,
 			Root:      cfg.Root,
 		},
-		Mode:      provider.ModeTriage,
+		Mode: provider.ModeTriage,
+		// mcp.workspaceOnly travels as these two fields for every
+		// provider that spawns a CLI: Claude Code turns them into
+		// --strict-mcp-config --mcp-config, and Codex into a generated
+		// CODEX_HOME whose config.toml declares the workspace's servers
+		// and nothing else.
 		MCPConfig: cfg.MCPConfigPath(),
 		MCPStrict: cfg.WorkspaceOnlyMCP(),
 		Budget: provider.Budget{

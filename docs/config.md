@@ -62,10 +62,10 @@ rather than being silently ignored.
 | `budget.maxMinutes` | int | `25` | Wall-clock minutes before a run is cancelled and marked `over_budget` |
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
-| `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
+| `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
 | `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
-| `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
-| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
+| `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
+| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
 | `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
 | `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
 | `notify.includeTitle` | bool | `false` | Send the ticket title; off because a support subject line routinely names the customer |
@@ -582,12 +582,68 @@ tracker and helpdesk URLs in the body.
 Two settings, and they do different jobs. `mcp.workspaceOnly` decides which servers the
 session can see at all; `permissions.mcp` decides which of their tools it may call.
 
+The setting applies to `provider: claude` and `provider: codex`. Each CLI takes a different
+route to the same place.
+
 With `mcp.workspaceOnly: true` (the default) and a `.mcp.json` in the workspace root, Sirdar
 starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mcp.json`, so
 the session loads those servers and no others.
 
+Codex has no such flag. Its MCP servers come from `[mcp_servers.<name>]` tables in the
+`config.toml` inside `CODEX_HOME`, and neither override mechanism can subtract one:
+`codex app-server -c mcp_servers=...` and `thread/start`'s `config` object both merge into the
+configured table rather than replacing it (verified against codex-cli 0.154.0; the responses
+are in `docs/research/06-wire-formats.md`). So Sirdar generates a `CODEX_HOME` per session
+instead:
+
+- `config.toml` is the operator's own file with every `mcp_servers` declaration stripped out,
+  followed by one `[mcp_servers.<name>]` table per stdio server in the workspace's
+  `.mcp.json`. Model, reasoning effort, project trust and everything else they set carries
+  over verbatim, so a workspace-only run differs in its MCP servers and nothing else.
+- `${VAR}` and `$VAR` in a server's `args` and `env` are expanded as the file is written,
+  from **the environment the session runs with** — which is Sirdar's minus every variable a
+  configured source names as a credential. A `.mcp.json` naming one of those gets an empty
+  string and a warning naming the variable (never its value), the same as `provider: openai`
+  and `provider: claude`. That distinction is the difference between a helpdesk token staying
+  in memory and a helpdesk token written to a file on disk.
+- `auth.json` is **copied** in, so the session bills against the operator's login and a token
+  refresh inside a triage run cannot damage the file their own `codex` sessions read. If
+  Codex does refresh it mid-session, the new content is written back to the real file when
+  the session ends — atomically, mode 0600 — but only when that file is still byte for byte
+  what was copied. If their own `codex` moved it on meanwhile, the refresh is discarded
+  rather than overwriting theirs, and the run's `stderrTail` says which of the two happened.
+- every other entry of their real `CODEX_HOME` — `sessions`, `history.jsonl`, the state
+  databases, `skills`, `plugins`, caches — is symlinked, so a thread started here is still on
+  disk for the resume a schema retry needs.
+- the directory is 0700 and the files in it 0600, and it is removed once the session's
+  process has exited. Set `SIRDAR_KEEP_CODEX_HOME=1` to keep it and read the generated
+  `config.toml`. A hard kill (SIGKILL, a power cut) leaves one behind; the next session
+  sweeps `sirdar-codex-home-*` directories in `TMPDIR` that nothing has touched for 24 hours
+  and whose lock file names no live process — a session that is still running keeps its home
+  regardless of age.
+
+**"Sirdar never modifies your `~/.codex`" means `config.toml` and `auth.json`.** Those two are
+copied, and `config.toml` is never written back at all; `auth.json` only under the conditions
+above. Everything else in that directory is *symlinked*, so a session writes through to the
+real files: the thread goes into your `sessions/`, the prompt into `history.jsonl`, and Codex's
+own state, log and queue databases are updated in place. That is deliberate — it is what makes
+a workspace-only run differ from an ordinary one in its MCP servers and nothing else — but it
+is a write, and worth knowing before pointing a run at a home you care about.
+
+The MCP servers Codex starts get `PATH`, `HOME`, `LANG`, `LOGNAME`, `SHELL`, `TERM`, `TMPDIR`
+and `USER`, plus whatever the server's own `env` declares — Codex's own filter, verified
+against 0.154.0, and nothing of Sirdar's environment beyond it. `provider: openai` starts the
+same servers with `PATH`, `HOME` and `LANG` plus their declared `env`. A server that needs one
+of the other five therefore works under Codex and not under the openai loop; name it in the
+server's `env` in `.mcp.json` and both will have it.
+
+One server is in every Codex thread whatever the configuration says: `codex_apps`, the CLI's
+own plugin runtime. It is part of Codex, like its shell tool, rather than something the
+operator configured, and `permissions.mcp` judges its tools by name like any other.
+
 With `mcp.workspaceOnly: true` and no such file, Sirdar passes
-`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` — strict against an empty config — so
+`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` to Claude — strict against an empty
+config — and generates a Codex home whose `config.toml` declares no servers, so
 the session has **no MCP tools at all**. That is the safe reading of the setting, and it is a
 change from earlier versions, which passed neither flag and let the session inherit every
 user-level server the operator had (one dogfood run saw 102 tools from six of them, including
@@ -596,8 +652,9 @@ agent to query Grafana or a database will now get nothing back until those serve
 into `<workspace>/.mcp.json`; `sirdar doctor`'s `mcp` row says which of the three states the
 workspace is in.
 
-With `mcp.workspaceOnly: false`, neither flag is passed and the session inherits the
-operator's own MCP servers. `permissions.mcp` still decides which of their tools it may call.
+With `mcp.workspaceOnly: false`, neither flag is passed and no Codex home is generated: the
+session inherits the operator's own MCP servers, from `~/.claude.json` or `~/.codex/config.toml`
+as the case may be. `permissions.mcp` still decides which of their tools it may call.
 
 `provider: openai` is not affected by the setting, because it never had the wider reach to
 give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is the only file
@@ -624,6 +681,49 @@ The server part of the name is never what is tested, so
 Once the list is non-empty it is the whole rule: a tool that matches no pattern is denied,
 heuristic or not. That is the setting to use for a run you want to be read-only by
 construction rather than by naming convention.
+
+### How the permissions reach each provider
+
+`permissions.bash` and `permissions.mcp` are one policy, applied at whatever point the
+provider offers to be asked.
+
+- **claude** — the CLI is started with `--permission-prompt-tool stdio`, so every tool call it
+  is not already allowed to make arrives as a `can_use_tool` request and is answered from the
+  policy.
+- **openai** — the loop runs the tools itself, so it applies the policy before each call.
+- **codex** — a triage session runs with `sandbox: read-only`, a fix session with
+  `sandbox: workspace-write`, and both with `approvalPolicy: untrusted`, so Codex asks before
+  running a shell command, calling an MCP tool or writing a file, and the policy answers.
+  `commandExecution` approvals go to `permissions.bash` (`permissions.fixBash` in a fix),
+  MCP tool-call approvals to `permissions.mcp`. A file change is refused outright in a triage
+  run; in a fix run it is judged path by path, by the same rules a Claude fix's `Edit` calls
+  go through — inside the workspace root, and not under `.git/`, `.sirdar/` or the hooks
+  directory. The paths come from the `fileChange` item that precedes the approval (including
+  any destination a rename writes to via the change's `kind.move_path`), since the approval
+  itself carries only the item's id; an approval whose paths are unknown, and a
+  request to hold a write permission open for a whole root rather than for this one patch,
+  are both declined. A request to widen the sandbox is refused whatever the settings say.
+  Every answer, allowed or refused, is an `EvPermission` line in the run's events with the
+  reason the agent was given.
+
+  This is new, and it changes two things about a Codex run. Shell commands used to run
+  unjudged inside the sandbox — a narrow `permissions.bash` will now refuse some of what a
+  Codex session used to do, and the run's events name each one. And MCP tools used not to work
+  at all: under the previous `approvalPolicy: never` every call from the model came back
+  `MCP tool call requires approval, but approval policy is never`, so a workspace could
+  declare servers in `.mcp.json`, see them listed by `sirdar doctor`, and still get nothing
+  from them. Both transcripts are in `docs/research/06-wire-formats.md`.
+
+  One limit worth knowing: the policy only sees what Codex asks about. A tool Codex decides
+  needs no approval runs without `permissions.mcp` being consulted.
+
+  **`item/fileChange/requestApproval` firing under `workspace-write` + `untrusted` is
+  schema-derived, not yet observed live.** The command-approval and MCP-elicitation paths
+  above were each confirmed against a running `codex app-server` (see
+  `docs/research/06-wire-formats.md`); the file-change path was built by reading the
+  app-server's declared `ServerRequest` shape, on the same reasoning that put it there, and
+  has not itself been watched fire on an actual turn. One dogfood fix turn that has the agent
+  write through a hook — a live run, deliberately spending Codex quota — would confirm it.
 
 ## Attachment filtering
 
