@@ -1,0 +1,41 @@
+{
+  "timestamp": 1789118100000,
+  "webhookEvent": "jira:issue_updated",
+  "issue_event_type_name": "issue_assigned",
+  "user": {
+    "accountId": "5b10a2844c20165700ede21g",
+    "displayName": "Ops Bot"
+  },
+  "issue": {
+    "id": "10521",
+    "self": "https://acme.atlassian.net/rest/api/2/issue/10521",
+    "key": "OMNI-2510",
+    "fields": {
+      "summary": "Payment stuck in pending",
+      "status": {
+        "name": "Open",
+        "statusCategory": { "key": "new", "name": "To Do" }
+      },
+      "priority": { "name": "High" },
+      "labels": ["support", "payments"],
+      "assignee": {
+        "accountId": "712020:8c0f9a41-3d55-4a1e-9a2b-6a0c7e1d4f33",
+        "emailAddress": "sri@acme.com",
+        "displayName": "Sri V"
+      }
+    }
+  },
+  "changelog": {
+    "id": "10101",
+    "items": [
+      {
+        "field": "assignee",
+        "fieldtype": "jira",
+        "from": null,
+        "fromString": null,
+        "to": "712020:8c0f9a41-3d55-4a1e-9a2b-6a0c7e1d4f33",
+        "toString": "Sri V"
+      }
+    ]
+  }
+}

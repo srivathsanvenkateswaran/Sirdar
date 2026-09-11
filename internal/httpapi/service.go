@@ -22,6 +22,8 @@ type Service interface {
 	Note(wsID, runID string, kind string) (string, error)
 	Prompt(wsID, runID string) (string, error)
 	StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error)
+	TriageIfIdle(ctx context.Context, wsID, key string, o TriageOptions) (JobID, string, error)
+	HookReceived(source, key, outcome string)
 	StartRCA(ctx context.Context, wsID, key string, o RCAOptions) (JobID, error)
 	Resume(ctx context.Context, wsID, runID, answer string) (JobID, error)
 	Cancel(jobID JobID) error

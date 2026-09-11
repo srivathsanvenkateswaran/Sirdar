@@ -16,28 +16,35 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/webhooks"
 )
 
 // New returns the handler for the whole surface: the JSON API, the event
 // stream, and the UI in ui. A nil ui serves the "not built" page, which is
-// what an unbuilt frontend leaves behind.
-func New(svc Service, ui fs.FS) http.Handler { return newServer(svc, ui) }
+// what an unbuilt frontend leaves behind. WithHooks adds the inbound
+// webhook endpoints; without it they answer 404.
+func New(svc Service, ui fs.FS, opts ...Option) http.Handler { return newServer(svc, ui, opts...) }
 
 type server struct {
-	svc Service
-	ui  fs.FS
-	mux *http.ServeMux
+	svc   Service
+	ui    fs.FS
+	mux   *http.ServeMux
+	hooks *webhooks.Receiver
 
 	// keepalive is how often an idle event stream writes its comment line.
 	// A field rather than a constant so the tests need not wait 15 s.
 	keepalive time.Duration
 }
 
-func newServer(svc Service, ui fs.FS) *server {
+func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	if ui == nil {
 		ui = emptyFS{}
 	}
 	s := &server{svc: svc, ui: ui, mux: http.NewServeMux(), keepalive: 15 * time.Second}
+	for _, opt := range opts {
+		opt(s)
+	}
 
 	s.mux.HandleFunc("GET /api/workspaces", s.listWorkspaces)
 	s.mux.HandleFunc("POST /api/workspaces", s.addWorkspace)
@@ -62,6 +69,12 @@ func newServer(svc Service, ui fs.FS) *server {
 	s.mux.HandleFunc("/api/", func(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusNotFound, "not_found", "no such endpoint: "+r.Method+" "+r.URL.Path)
 	})
+	// The hook routes are registered whether or not a receiver was given:
+	// the handler answers 404 without one, which keeps a disabled hook
+	// from falling through to the single-page app and getting a 200.
+	s.mux.HandleFunc("POST /hooks/{workspaceId}/{source}", s.hook)
+	s.mux.HandleFunc("/hooks/", s.hookDisabled)
+
 	s.mux.HandleFunc("/", s.static)
 	return s
 }

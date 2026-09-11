@@ -11,7 +11,9 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -66,6 +68,11 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
+	hooks, ok := serveHooks(root, *allowRemote, stderr)
+	if !ok {
+		return 1
+	}
+
 	ctx, stop := interruptible()
 	defer stop()
 
@@ -73,7 +80,43 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	svc.Start(ctx)
 	defer svc.Stop()
 
-	return serveHTTP(ctx, httpapi.New(svc, ui.FS()), *addr, *openBrowser, stdout, stderr)
+	return serveHTTP(ctx, httpapi.New(svc, ui.FS(), hooks...), *addr, *openBrowser, stdout, stderr)
+}
+
+// serveHooks builds the workspace's webhook receiver, if it configured
+// one, and says on stderr what was turned on. A workspace with
+// webhooks.enabled false gets no options and no output: the routes are
+// registered either way and answer 404 without a receiver.
+//
+// A secret that cannot be resolved stops the command rather than starting
+// a server whose endpoints reject every delivery.
+func serveHooks(root string, allowRemote bool, stderr io.Writer) ([]httpapi.Option, bool) {
+	cfg, err := config.Load(root)
+	if err != nil {
+		fmt.Fprintf(stderr, "sirdar: %v\n", err)
+		return nil, false
+	}
+	rc, err := app.BuildReceiver(cfg)
+	if err != nil {
+		fmt.Fprintf(stderr, "sirdar serve: %v\n", err)
+		return nil, false
+	}
+	if rc == nil {
+		return nil, true
+	}
+	sources := rc.Sources()
+	sort.Strings(sources)
+	fmt.Fprintf(stderr, "sirdar serve: webhook triggers enabled for %s at POST /hooks/<workspace-id>/<source>\n",
+		strings.Join(sources, ", "))
+	if allowRemote {
+		fmt.Fprint(stderr, "sirdar serve: warning: put a TLS reverse proxy in front of this listener."+
+			" Several of these sources authenticate with a shared secret in a plain header, which anyone"+
+			" watching an unencrypted connection can read and replay\n")
+	} else {
+		fmt.Fprint(stderr, "sirdar serve: note: the listener is on loopback, so a hosted tracker cannot reach it."+
+			" Expose it with --allow-remote behind a TLS reverse proxy, or forward the port through a tunnel\n")
+	}
+	return []httpapi.Option{httpapi.WithHooks(rc)}, true
 }
 
 // serveRoot resolves which workspace to register: the one named by

@@ -70,6 +70,15 @@ rather than being silently ignored.
 | `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
 | `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
 | `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
+| `webhooks.enabled` | bool | `false` | Whether `sirdar serve` registers the inbound trigger endpoints at all; with it off every path under `/hooks/` is a 404 |
+| `webhooks.sources.<name>` | object | unset | One per enabled source: `jira`, `linear`, `azdo`, `rally`, `zendesk`, `freshdesk`, `intercom`, `hubspot`, `generic`. An unknown name fails config load |
+| `webhooks.sources.<name>.secret` | string | none (required, except `azdo`) | Credential ref for the signing secret or shared secret |
+| `webhooks.sources.azdo.username` | string | none (required) | Basic-auth username configured on the Azure DevOps service hook; written literally, it is not a secret |
+| `webhooks.sources.azdo.password` | string | none (required) | Credential ref for the matching password |
+| `webhooks.match.assignee` | string, optional | unset | `me` (the account email on `sources.tracker`, else `sources.helpdesk`) or an address or account id. A delivery naming a different assignee, or none at all, is skipped |
+| `webhooks.match.statuses` | list, optional | unset | Accepted statuses, matched case-insensitively against whatever the payload carries; a payload naming no status passes |
+| `webhooks.match.labels` | list, optional | unset | Accepted labels, same semantics |
+| `webhooks.cooldown` | duration, optional | `10m` | A key triaged this recently is skipped; `0s` disables the cooldown |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -85,6 +94,15 @@ path. `provider`, `billing`, and `concurrency` are validated at load time: an un
 naming the offending key. Budget values must all be greater than zero. A configured source's
 adapter-specific fields are required only for that adapter; `sources.tracker` and
 `sources.helpdesk` are each optional, but a source config with no `adapter` set is an error.
+
+## Inbound webhook triggers
+
+The `webhooks` block configures the endpoints `sirdar serve` exposes at
+`POST /hooks/<workspace-id>/<source>`, so a tracker or helpdesk can start a triage when a ticket
+is assigned. Everything in it is validated at load time whether or not it is enabled, so a
+mistyped source name or a secret written out literally fails the first time the workspace loads
+rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
+signing schemes, and the `--allow-remote` warning.
 
 ## Built-in trackers
 

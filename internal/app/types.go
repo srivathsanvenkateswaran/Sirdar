@@ -25,6 +25,9 @@ const (
 	KindQuotaUpdate = "quota.updated"
 	KindJobFinished = "job.finished"
 	KindLog         = "log"
+	// KindHookReceived reports one inbound webhook delivery: which source
+	// sent it, which ticket it named, and what came of it.
+	KindHookReceived = "hook.received"
 )
 
 // Usage is a run's provider consumption.
@@ -185,6 +188,13 @@ type Event struct {
 	JobID       JobID        `json:"jobId,omitempty"`
 	Outcomes    []JobOutcome `json:"outcomes,omitempty"`
 	Text        string       `json:"text,omitempty"`
+	// Source, Key and Outcome carry a hook.received event: the webhook
+	// source name, the ticket key the delivery named (empty when it named
+	// none), and what the receiver did with it — "started", "skipped",
+	// "filtered", "unauthorized", "unknown source", "rejected".
+	Source  string `json:"source,omitempty"`
+	Key     string `json:"key,omitempty"`
+	Outcome string `json:"outcome,omitempty"`
 }
 
 // runDir is where the core keeps one run: <root>/.sirdar/runs/<key>/<id>.

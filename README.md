@@ -149,10 +149,25 @@ executable speaking a small line-delimited JSON protocol over stdin/stdout, name
 a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
+## Inbound triggers
+
+`sirdar serve` can take a webhook from your tracker or helpdesk and start the triage itself, so a
+ticket assigned to you is already triaged by the time you open it. Nine sources are verified —
+Jira (via an Automation rule), Linear, Azure DevOps service hooks, Rally, Zendesk, Freshdesk,
+Intercom, HubSpot, and a generic endpoint you can curl — each with its own signature or shared
+secret, a five-minute replay window where the vendor signs a timestamp, a `match` filter so only
+what is assigned to you starts a run, and a cooldown so an afternoon of editing one ticket does
+not start twelve.
+
+They are off until `webhooks.enabled: true`, and `serve` binds loopback, so exposing them is a
+decision: `--allow-remote` behind a TLS reverse proxy, or a tunnel. `docs/webhooks.md` has the
+per-source setup steps, the URL shape, and the warnings.
+
 ## Configuration
 
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
 including credential references, the `permissions.bash` glob syntax, and template overrides.
+`docs/webhooks.md` covers the `webhooks` block.
 
 ## Development
 

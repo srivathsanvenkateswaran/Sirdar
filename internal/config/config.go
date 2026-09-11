@@ -214,6 +214,11 @@ type Config struct {
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 
+	// Webhooks configures the inbound trigger endpoints `sirdar serve`
+	// exposes. They are off unless enabled, and exposing them off the
+	// loopback interface needs `serve --allow-remote` and a TLS proxy.
+	Webhooks WebhooksConfig `yaml:"webhooks"`
+
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 }
 
@@ -354,7 +359,7 @@ func (c *Config) Validate() error {
 	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk, false); err != nil {
 		return err
 	}
-	return nil
+	return validateWebhooks(&c.Webhooks)
 }
 
 // validateOpenAI checks the openai block. baseUrl and model are required

@@ -1,0 +1,17 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "createdAt": "2026-09-11T09:16:00.000Z",
+  "data": {
+    "id": "b1f0d3c2-7a44-4a0e-9b21-2f5c8d9e1a77",
+    "identifier": "ENG-431",
+    "title": "Payment stuck in pending (edited)",
+    "assigneeId": "3f2e1d0c-9999-4444-aaaa-bbbbccccdddd"
+  },
+  "updatedFrom": {
+    "updatedAt": "2026-09-11T09:15:00.000Z",
+    "title": "Payment stuck in pending"
+  },
+  "webhookTimestamp": 1789118160000,
+  "webhookId": "9d3a2b1c-5555-4444-8888-111122223333"
+}
