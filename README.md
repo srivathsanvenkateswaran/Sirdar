@@ -176,10 +176,22 @@ executable speaking a small line-delimited JSON protocol over stdin/stdout, name
 a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
+## Languages
+
+Arabic is the default customer language in the workspace this was built for; Sirdar keeps the
+original text, writes the engineer's note in English, and drafts customer-facing text in the
+customer's language. A triage note carries the complaint translated and again verbatim, plus a
+short reply draft the engineer can send; an RCA carries a customer summary for the support
+agent to relay. Neither draft may promise a fix, a cause or a date, and Sirdar sends nothing
+itself. Set `language.notes` and `language.customer` in `.sirdar/config.yaml` for a workspace
+that reads a different pair.
+
 ## Configuration
 
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
-including credential references, the `permissions.bash` glob syntax, and template overrides.
+including credential references, the `permissions.bash` glob syntax, the `language` block, and
+template overrides.
+
 
 ## Development
 

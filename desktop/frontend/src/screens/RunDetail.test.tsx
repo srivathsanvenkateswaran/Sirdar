@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail as RunDetailData, RunEvent, Transport } from '../api/types'
 import { resetRunJobs, setRunJob } from '../lib/jobs'
+import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
 import RunDetail from './RunDetail'
 
 const RUN: RunDetailData = {
@@ -99,8 +100,16 @@ function renderRun(fake: Fake, onBack = vi.fn(), onStartRCA = vi.fn()) {
 describe('RunDetail', () => {
   // The run-to-job pairing is module state the shell fills in; reset it so one
   // test's resume does not enable another's Cancel button.
-  beforeEach(() => resetRunJobs())
-  afterEach(() => vi.useRealTimers())
+  beforeEach(() => {
+    resetRunJobs()
+    localStorage.clear()
+    resetPreferRTL()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+    localStorage.clear()
+    resetPreferRTL()
+  })
 
   it('backfills the event log and shows the run header', async () => {
     const fake = fakeTransport({
@@ -293,6 +302,23 @@ describe('RunDetail', () => {
   })
 
   // A screen that closes while "Copied" is still showing must not leave the
+  /*
+   * The event log is tool names, file paths and JSON. Laying that out right to
+   * left puts leading slashes and brackets at the wrong end, so the stream is
+   * pinned LTR even for an engineer who reads notes right to left.
+   */
+  it('keeps the event stream left to right whatever the note preference is', async () => {
+    setPreferRTL(true)
+    const fake = fakeTransport({
+      events: vi.fn(async () => ({ events: [toolEvent('rg -n "\u0627\u0644\u062a\u0635\u062f\u064a\u0631" internal/export')], next: 1 })),
+    } as Partial<Transport>)
+    renderRun(fake)
+    await screen.findByText('OMNI-2510')
+
+    const stream = await screen.findByTestId('event-stream')
+    expect(stream.closest('.stream')).toHaveAttribute('dir', 'ltr')
+  })
+
   // timer that resets the label running behind it.
   it('clears the copy timeout when it unmounts', async () => {
     const writeText = vi.fn(async () => {})
