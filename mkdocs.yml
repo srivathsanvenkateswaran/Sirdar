@@ -55,6 +55,7 @@ nav:
   - Sources: adapters.md
   - Credentials: credentials.md
   - Webhooks: webhooks.md
+  - Notifications: notifications.md
   - Evaluation: eval.md
   - Release: release.md
   - Architecture: architecture.md
@@ -68,6 +69,7 @@ nav:
       - Wire formats: research/06-wire-formats.md
       - Dogfood findings: research/07-dogfood-findings.md
       - httpx extraction: research/08-httpx-extraction.md
+      - Qwen Code wire formats: research/09-qwen-wire-formats.md
       - Adapters:
           - Azure DevOps: research/adapters/azure-devops.md
           - Helpdesks: research/adapters/helpdesks.md
@@ -76,6 +78,7 @@ nav:
           - Rally: research/adapters/rally.md
       - Providers:
           - ACP protocol: research/providers/acp-protocol.md
+          - ACP agents: research/providers/acp-agents.md
           - Multi-model runtimes: research/providers/multi-model-runtimes.md
           - Anthropic-compatible endpoints (spike): research/providers/spike-anthropic-compatible.md
   - Specs and plans:
