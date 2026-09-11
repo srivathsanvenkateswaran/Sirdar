@@ -1,0 +1,7 @@
+{
+  "key": "OMNI-2510",
+  "event": "assigned",
+  "assignee": "sri@acme.com",
+  "status": "Open",
+  "labels": ["support"]
+}

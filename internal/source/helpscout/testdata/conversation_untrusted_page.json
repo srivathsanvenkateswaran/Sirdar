@@ -1,0 +1,19 @@
+{
+  "id": 123,
+  "subject": "Checkout fails with a 500",
+  "status": "active",
+  "createdAt": "2026-09-01T10:00:00Z",
+  "_embedded": {
+    "threads": [
+      {
+        "id": 300,
+        "type": "customer",
+        "state": "published",
+        "body": "<p>Only page.</p>",
+        "createdAt": "2026-09-01T10:00:00Z",
+        "createdBy": {"id": 555, "type": "customer", "first": "Ada", "last": "Lovelace"}
+      }
+    ]
+  },
+  "_links": {"self": {"href": "https://api.helpscout.net/v2/conversations/123"}}
+}

@@ -1,0 +1,10 @@
+{
+  "type": "contact",
+  "id": "c-1",
+  "name": "Ada Lovelace",
+  "email": "ada@example.com",
+  "companies": {
+    "type": "list",
+    "data": [{"id": "co-1", "type": "company", "name": "Acme Inc"}]
+  }
+}

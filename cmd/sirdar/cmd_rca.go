@@ -13,11 +13,12 @@ func init() { commands["rca"] = cmdRCA }
 
 func cmdRCA(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("rca", stderr,
-		"usage: sirdar rca KEY [--pr URL] [--resolution TEXT|@FILE] [--provider claude|codex|openai] [--model NAME]")
+		"usage: sirdar rca KEY [--pr URL] [--resolution TEXT|@FILE] [--provider claude|codex|openai] [--model NAME] [--no-notify]")
 	prURL := fs.String("pr", "", "merged pull request; its diff is read with gh when available")
 	resolution := fs.String("resolution", "", "what was done, as text or @path to a file")
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
+	noNotify := fs.Bool("no-notify", false, "do not post the configured run-completion notifications")
 	positional, ok := parseFlags(fs, args, 1, 1, stderr)
 	if !ok {
 		return exitUsage
@@ -46,7 +47,7 @@ func cmdRCA(args []string, stdout, stderr io.Writer) int {
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.RCA(ctx, key, runner.RCAOptions{
-		Options:    runner.Options{Model: *model},
+		Options:    runner.Options{Model: *model, NoNotify: *noNotify},
 		PRURL:      *prURL,
 		Resolution: text,
 	})

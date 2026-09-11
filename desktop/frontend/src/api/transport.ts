@@ -25,6 +25,7 @@ const EVENT_KINDS: AppEvent['kind'][] = [
   'run.event',
   'quota.updated',
   'job.finished',
+  'hook.received',
   'log',
 ]
 

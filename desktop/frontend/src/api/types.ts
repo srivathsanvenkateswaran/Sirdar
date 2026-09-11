@@ -9,11 +9,14 @@ export interface Ticket { key: string; title: string; priority: string; status: 
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string }
 export interface Check { name: string; ok: boolean; detail: string }
+// What an inbound webhook delivery did. 'key' is absent when the delivery named no ticket.
+export type HookOutcome = 'started'|'skipped'|'filtered'|'ignored'|'rejected';
 export type AppEvent =
   | { kind: 'run.updated'; workspaceId: string; run: RunSummary }
   | { kind: 'run.event'; workspaceId: string; runId: string; index: number; event: RunEvent }
   | { kind: 'quota.updated'; quota: Quota }
   | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
+  | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
   | { kind: 'log'; text: string };
 export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;

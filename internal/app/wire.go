@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/acp"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
@@ -20,6 +21,9 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/jira"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
@@ -60,6 +64,15 @@ func BuildDeps(cfg *config.Config, providerName, model string, stderr io.Writer)
 		Stdin:    os.Stdin,
 		Env:      os.Environ(),
 	}
+
+	// A notify block that cannot be resolved — an env: ref for a webhook
+	// nobody exported — costs the workspace its notifications, not its
+	// runs. It is said once, here, rather than once per finished run.
+	notifier, err := notify.FromConfig(cfg, creds)
+	if err != nil {
+		fmt.Fprintf(stderr, "sirdar: notifications are off: %v\n", err)
+	}
+	deps.Notifier = notifier
 
 	if sc := cfg.Sources.Tracker; sc != nil {
 		tracker, err := adapters.tracker(cfg, sc, creds)
@@ -355,7 +368,7 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
-	case "zendesk", "freshdesk":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
 		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
@@ -363,9 +376,13 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 }
 
 // newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
-// a plain credential ref — zendesk and freshdesk — resolving it on the way
-// in. zohodesk is built separately (ZohoTokenSource) because of its
-// refresh-token grant option.
+// plain credential refs — zendesk, freshdesk, helpscout, intercom and
+// hubspot — resolving them on the way in. zohodesk is built separately
+// (ZohoTokenSource) because of its refresh-token grant option.
+//
+// helpscout is the one that keeps refreshing after this point: it is
+// handed a client id and secret rather than a token, and mints its own
+// access tokens for as long as the client lives.
 //
 // Resolved secrets stay in the returned client: they are never written to a
 // run directory and never reach the agent's environment.
@@ -402,6 +419,46 @@ func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.
 			Domain: sc.Domain,
 			APIKey: apiKey,
 		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "helpscout":
+		clientID, err := resolveRef(creds, "clientId", sc.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		clientSecret, err := resolveRef(creds, "clientSecret", sc.ClientSecret)
+		if err != nil {
+			return nil, err
+		}
+		c, err := helpscout.New(helpscout.Config{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "intercom":
+		accessToken, err := resolveRef(creds, "accessToken", sc.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		c, err := intercom.New(intercom.Config{AccessToken: accessToken}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "hubspot":
+		accessToken, err := resolveRef(creds, "accessToken", sc.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		c, err := hubspot.New(hubspot.Config{AccessToken: accessToken}, hc)
 		if err != nil {
 			return nil, err
 		}

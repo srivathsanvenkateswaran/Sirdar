@@ -1,0 +1,26 @@
+{
+  "message": {
+    "action": "Updated",
+    "transaction": {
+      "id": "b0a1c2d3-3333-4444-8888-5f6e7d8c9b01",
+      "timestamp": "2026-09-11T09:25:00.000Z",
+      "user": { "_refObjectName": "Ops Bot", "_ref": "/user/1111" }
+    },
+    "state": {
+      "_ref": "https://rally1.rallydev.com/slm/webservice/v2.0/defect/12345",
+      "_refObjectName": "Payment stuck in pending",
+      "ObjectID": 12345,
+      "FormattedID": "DE1234",
+      "Name": "Payment stuck in pending",
+      "ScheduleState": "Defined",
+      "Owner": { "_ref": "/user/2222", "_refObjectName": "Sri V", "EmailAddress": "sri@acme.com" },
+      "Tags": [{ "Name": "support" }]
+    },
+    "changes": {
+      "Owner": {
+        "old": null,
+        "new": { "_ref": "/user/2222", "_refObjectName": "Sri V", "EmailAddress": "sri@acme.com" }
+      }
+    }
+  }
+}

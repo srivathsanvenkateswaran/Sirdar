@@ -1,0 +1,14 @@
+{
+  "id": "7003",
+  "properties": {
+    "subject": "Internal cleanup task",
+    "content": "<p>Archive the stale test accounts.</p>",
+    "hs_pipeline_stage": "1",
+    "hs_ticket_priority": "LOW",
+    "createdate": "2026-09-04T09:00:00Z",
+    "hs_lastmodifieddate": "2026-09-04T09:00:00Z"
+  },
+  "createdAt": "2026-09-04T09:00:00Z",
+  "updatedAt": "2026-09-04T09:00:00Z",
+  "associations": {}
+}

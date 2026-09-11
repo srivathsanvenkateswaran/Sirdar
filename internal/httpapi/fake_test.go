@@ -52,6 +52,14 @@ type fake struct {
 	gotAnswer    string
 	gotCancelled JobID
 
+	// Webhook plumbing: the reason TriageIfIdle gives for starting
+	// nothing, the error it fails with, and what the hook route asked it
+	// and reported.
+	idleReason string
+	idleErr    error
+	gotIdle    []string
+	gotHooks   []hookCall
+
 	// Subscribe plumbing for the SSE tests.
 	ch          chan Event
 	unsubscribe chan struct{}
@@ -221,6 +229,37 @@ func (f *fake) StartTriage(_ context.Context, wsID string, keys []string, o Tria
 	f.gotKeys, f.gotTriage = keys, o
 	f.mu.Unlock()
 	return knownJob, nil
+}
+
+// hookCall is one hook.received event the route published.
+type hookCall struct{ Source, Key, Outcome string }
+
+func (f *fake) TriageIfIdle(_ context.Context, wsID, key string, _ TriageOptions) (JobID, string, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return "", "", err
+	}
+	f.mu.Lock()
+	f.gotIdle = append(f.gotIdle, key)
+	f.mu.Unlock()
+	if f.idleErr != nil {
+		return "", "", f.idleErr
+	}
+	if f.idleReason != "" {
+		return "", f.idleReason, nil
+	}
+	return knownJob, "", nil
+}
+
+func (f *fake) HookReceived(source, key, outcome string) {
+	f.mu.Lock()
+	f.gotHooks = append(f.gotHooks, hookCall{source, key, outcome})
+	f.mu.Unlock()
+}
+
+func (f *fake) hooks() []hookCall {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]hookCall(nil), f.gotHooks...)
 }
 
 func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobID, error) {

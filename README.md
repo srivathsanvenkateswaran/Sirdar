@@ -266,12 +266,26 @@ Sirdar talks to trackers and helpdesks through adapters. Several ship built into
 | Kind | Supported |
 |---|---|
 | Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally |
-| Helpdesks | Zoho Desk, Zendesk, Freshdesk (more planned, see `docs/research/adapters/helpdesks.md`) |
+| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub (more planned, see `docs/research/adapters/helpdesks.md`) |
 
 Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
 executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so
 a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
+
+## Inbound triggers
+
+`sirdar serve` can take a webhook from your tracker or helpdesk and start the triage itself, so a
+ticket assigned to you is already triaged by the time you open it. Nine sources are verified —
+Jira (via an Automation rule), Linear, Azure DevOps service hooks, Rally, Zendesk, Freshdesk,
+Intercom, HubSpot, and a generic endpoint you can curl — each with its own signature or shared
+secret, a five-minute replay window where the vendor signs a timestamp, a `match` filter so only
+what is assigned to you starts a run, and a cooldown so an afternoon of editing one ticket does
+not start twelve.
+
+They are off until `webhooks.enabled: true`, and `serve` binds loopback, so exposing them is a
+decision: `--allow-remote` behind a TLS reverse proxy, or a tunnel. `docs/webhooks.md` has the
+per-source setup steps, the URL shape, and the warnings.
 
 ## Languages
 
@@ -288,7 +302,11 @@ that reads a different pair.
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
 including credential references, the `permissions.bash` and `permissions.fixBash` glob syntax,
 the `language` block, and template overrides. `docs/eval.md` covers the golden set and how
-`sirdar eval` scores it.
+`sirdar eval` scores it; `docs/webhooks.md` covers the `webhooks` block.
+
+A `notify:` block posts a one-message digest of every finished run — key, state, confidence,
+cost and the note's path, never the note's text — to Slack, Microsoft Teams or your own webhook;
+see `docs/notifications.md`.
 
 ## Development
 

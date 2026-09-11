@@ -15,7 +15,7 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
@@ -28,6 +28,9 @@ rather than being silently ignored.
 | `sources.helpdesk.subdomain` | string | none (required for `zendesk`) | Zendesk account identifier, e.g. `acme` for `acme.zendesk.com` |
 | `sources.helpdesk.oauthToken` | string | none (`zendesk` only; alternative to `email`+`apiToken`) | Credential reference to a Zendesk OAuth bearer token |
 | `sources.helpdesk.domain` | string | none (required for `freshdesk`) | Freshdesk account host, e.g. `acme.freshdesk.com` |
+| `sources.helpdesk.clientId` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client id |
+| `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
+| `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -63,6 +66,14 @@ rather than being silently ignored.
 | `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
+| `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
+| `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
+| `notify.includeTitle` | bool | `false` | Send the ticket title; off because a support subject line routinely names the customer |
+| `notify.slack.webhookUrl` | string | none (required with `slack`) | Credential reference to a Slack incoming-webhook URL — the URL is the credential |
+| `notify.teams.webhookUrl` | string | none (required with `teams`) | Credential reference to a Teams Workflows or connector URL |
+| `notify.generic[].url` | string | none (required) | Receiver for the event as JSON; `https`, or `http` on loopback |
+| `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
+| `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
@@ -76,6 +87,15 @@ rather than being silently ignored.
 | `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
 | `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
 | `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
+| `webhooks.enabled` | bool | `false` | Whether `sirdar serve` registers the inbound trigger endpoints at all; with it off every path under `/hooks/` is a 404 |
+| `webhooks.sources.<name>` | object | unset | One per enabled source: `jira`, `linear`, `azdo`, `rally`, `zendesk`, `freshdesk`, `intercom`, `hubspot`, `generic`. An unknown name fails config load |
+| `webhooks.sources.<name>.secret` | string | none (required, except `azdo`) | Credential ref for the signing secret or shared secret |
+| `webhooks.sources.azdo.username` | string | none (required) | Basic-auth username configured on the Azure DevOps service hook; written literally, it is not a secret |
+| `webhooks.sources.azdo.password` | string | none (required) | Credential ref for the matching password |
+| `webhooks.match.assignee` | string, optional | unset | `me` (the account email on `sources.tracker`, else `sources.helpdesk`) or an address or account id. A delivery naming a different assignee, or none at all, is skipped |
+| `webhooks.match.statuses` | list, optional | unset | Accepted statuses, matched case-insensitively against whatever the payload carries; a payload naming no status passes |
+| `webhooks.match.labels` | list, optional | unset | Accepted labels, same semantics |
+| `webhooks.cooldown` | duration, optional | `10m` | A key triaged this recently is skipped; `0s` disables the cooldown |
 | `acp.command` | string | none (required for `provider: acp`) | The ACP agent's program: `gemini`, `goose`, `opencode`, `npx` |
 | `acp.args` | list of string, optional | unset | The rest of the agent's command line, e.g. `["--experimental-acp"]` |
 | `acp.env` | map, optional | unset | Literal environment entries added to the agent's environment; these are values, not credential references |
@@ -94,6 +114,15 @@ path. `provider`, `billing`, and `concurrency` are validated at load time: an un
 naming the offending key. Budget values must all be greater than zero. A configured source's
 adapter-specific fields are required only for that adapter; `sources.tracker` and
 `sources.helpdesk` are each optional, but a source config with no `adapter` set is an error.
+
+## Inbound webhook triggers
+
+The `webhooks` block configures the endpoints `sirdar serve` exposes at
+`POST /hooks/<workspace-id>/<source>`, so a tracker or helpdesk can start a triage when a ticket
+is assigned. Everything in it is validated at load time whether or not it is enabled, so a
+mistyped source name or a secret written out literally fails the first time the workspace loads
+rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
+signing schemes, and the `--allow-remote` warning.
 
 ## Built-in trackers
 
@@ -153,14 +182,22 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk` and `freshdesk` are compiled into Sirdar; only `zohodesk` needs a separate
-"Zoho Desk OAuth" section below because of its refresh-token grant. Config load checks what
-`zendesk` and `freshdesk` cannot work without:
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom` and `hubspot` are compiled into
+Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
+refresh-token grant. Config load checks what each of the others cannot work without:
 
 | Adapter | Required | Notes |
 |---|---|---|
 | `zendesk` | `subdomain`, and either `email` + `apiToken` or `oauthToken` | `baseUrl` optionally overrides `https://{subdomain}.zendesk.com` |
 | `freshdesk` | `domain`, `apiKey` | `domain` is the full account host, e.g. `acme.freshdesk.com` |
+| `helpscout` | `clientId`, `clientSecret` | Help Scout has no API-key mode; Sirdar mints its own access tokens from the pair |
+| `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
+| `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
+
+The last three talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
+`api.hubapi.com` — so none of them takes a `baseUrl`. An Intercom workspace on the EU or AU
+data-residency host is not supported by this adapter yet; calls to the US host are proxied by
+Intercom, which works but is not what Intercom recommends.
 
 ```yaml
 sources:
@@ -179,17 +216,45 @@ sources:
     apiKey: env:FRESHDESK_API_KEY
 ```
 
-`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — fetching
-the signed-in user for `zendesk`, the signed-in agent for `freshdesk` — and names who the
+```yaml
+sources:
+  helpdesk:
+    adapter: helpscout
+    clientId: keychain:helpscout-client-id
+    clientSecret: keychain:helpscout-client-secret
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: intercom
+    accessToken: env:INTERCOM_ACCESS_TOKEN
+```
+
+```yaml
+sources:
+  helpdesk:
+    adapter: hubspot
+    accessToken: env:HUBSPOT_PRIVATE_APP_TOKEN
+```
+
+`sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
+signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
+`helpscout`, `/me` for `intercom`, the account details for `hubspot` — and names who the
 connection authenticates as, never the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
 [OK] sources.helpdesk (freshdesk) — reachable as acme.freshdesk.com
+[OK] sources.helpdesk (helpscout) — reachable as the Help Scout app
+[OK] sources.helpdesk (intercom) — reachable as the workspace access token
+[OK] sources.helpdesk (hubspot) — reachable as the private app token
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant.
+as oauth`, since there is no account email to show for that grant. The last three name the kind
+of grant rather than an account, because none of their probes returns an account identifier worth
+printing — the row itself is the proof the credential was accepted.
 
 ## Credential references
 
@@ -214,7 +279,8 @@ Resolved values are held in memory only: never written to a run directory, and n
 the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
 built-in adapters' `apiToken`, `pat`, `apiKey` and `oauthToken`, and all three parts of an `auth`
 grant — is stripped from the environment the agent process inherits, so a session that can run
-shell commands cannot read them back out. `email` is the one adapter credential field that is not
+shell commands cannot read them back out. The `notify:` block's webhook URLs, header values and
+signing secret are stripped the same way, for the same reason. `email` is the one adapter credential field that is not
 a reference: it is an account name, not a secret, and it is left in place.
 
 ## Zoho Desk OAuth
@@ -259,6 +325,52 @@ spends an agent session on it:
 
 A refused grant reports the reason the accounts server gave — `invalid_client`, `invalid_code`
 — and never any part of the credentials.
+
+## Notifications
+
+A `notify:` block posts a short digest of every finished run to a Slack channel, a Microsoft
+Teams channel, or any HTTP receiver. Every destination is optional and they can be combined;
+with no block, nothing is posted.
+
+```yaml
+notify:
+  on: [completed, failed, over_budget, blocked]   # default: all four
+  includeTitle: false
+  slack:
+    webhookUrl: keychain:sirdar-slack-webhook
+  teams:
+    webhookUrl: env:TEAMS_WEBHOOK
+  generic:
+    - url: https://hooks.example.com/sirdar
+      headers:
+        Authorization: env:SIRDAR_HOOK_TOKEN
+      secret: env:SIRDAR_HOOK_SECRET
+```
+
+The message carries the run's metadata — key, state, confidence, classification, service, run
+id, turns, cost, duration, the reason a run ended badly, and the paths and links a human follows
+— and no part of a note's body. The ticket title is sent only with `includeTitle: true`, because
+a support ticket's subject line routinely names the customer who filed it and a chat channel is
+a wider audience than the notes directory.
+
+A chat `webhookUrl` is a credential reference, never the URL itself: an incoming-webhook URL
+carries its own authorisation in its path. A generic hook's `url` is a plain URL, because the
+receiver authenticates through the headers instead; those header values, and `secret`, are
+references when they carry a credential. Every `env:` name the block uses is stripped from the
+agent session's environment along with the adapters' credentials.
+
+A post that fails is a warning on the run and never a failed run: the note is already on disk
+when it goes out, and the run does not return until every destination's post has settled. Each
+destination gets a hard 15-second ceiling — the request, and one retry on `429` or `5xx`
+honouring a `Retry-After` of up to 30 seconds, all inside that budget — and interrupting the run
+does not cut a post short, since the channel is still owed a message about a run whose note
+already exists. The failure lands in `state.json`'s `warnings` and on the progress stream, with
+the webhook URL reduced to its host and no part of the receiver's response, so the line is safe
+to paste. `SIRDAR_NO_NOTIFY=1`, `sirdar triage --no-notify` and `sirdar rca --no-notify` silence
+one invocation.
+
+Setting up each destination — the Slack app, the Teams workflow, and a receiver that verifies
+the HMAC signature — is in `docs/notifications.md`.
 
 ## Budgets
 

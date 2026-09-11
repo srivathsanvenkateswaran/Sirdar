@@ -189,7 +189,7 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -221,11 +221,12 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 }
 
 // builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
-// freshdesk) with the credentials the config names and calls its Ping: one
-// authenticated round trip proving the base URL/domain, the credential and
-// the network all work. The detail names who the connection authenticates
-// as — an email for Zendesk basic auth, "oauth" for a bearer token, the
-// account domain for Freshdesk — never the secret itself.
+// freshdesk, helpscout, intercom, hubspot) with the credentials the config
+// names and calls its Ping: one authenticated round trip proving the base
+// URL/domain, the credential and the network all work. The detail names
+// who the connection authenticates as — an email for Zendesk basic auth,
+// "oauth" for a bearer token, the account domain for Freshdesk, the kind
+// of grant for the three fixed-host vendors — never the secret itself.
 func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
 	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
@@ -252,6 +253,15 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		return "oauth"
 	case "freshdesk":
 		return sc.Domain
+	case "helpscout":
+		// Help Scout's client-credentials app has no account identifier to
+		// show: the reachable row itself is the proof the pair minted a
+		// token and the token was accepted.
+		return "the Help Scout app"
+	case "intercom":
+		return "the workspace access token"
+	case "hubspot":
+		return "the private app token"
 	default:
 		return "configured"
 	}

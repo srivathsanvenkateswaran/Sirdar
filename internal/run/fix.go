@@ -43,10 +43,10 @@ func (r *Runner) Fix(ctx context.Context, key string, o FixOptions) (Outcome, er
 	}
 	p, err := r.prepareFix(key, o)
 	if err != nil {
-		return r.prepareFailed(p, key, store.KindFix, err), err
+		return r.prepareFailed(ctx, p, key, store.KindFix, err), err
 	}
 	if o.DryRun {
-		return r.finish(p, store.StatusCompleted, "dry-run", note.DigestRow{}), nil
+		return r.finish(ctx, p, store.StatusCompleted, "dry-run", note.DigestRow{}), nil
 	}
 	return r.execute(ctx, p, "", newPool(r.onPause)), nil
 }

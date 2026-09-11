@@ -1,0 +1,86 @@
+{
+  "id": 123,
+  "number": 4567,
+  "type": "email",
+  "folderId": 12,
+  "status": "active",
+  "state": "published",
+  "subject": "Checkout fails with a 500",
+  "mailboxId": 99,
+  "createdAt": "2026-09-01T10:00:00Z",
+  "userUpdatedAt": "2026-09-02T12:00:00Z",
+  "tags": [{"id": 1, "tag": "billing"}, {"id": 2, "tag": "urgent"}],
+  "primaryCustomer": {
+    "id": 555,
+    "type": "customer",
+    "first": "Ada",
+    "last": "Lovelace",
+    "email": "ada@example.com"
+  },
+  "assignee": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper", "email": "grace@acme.com"},
+  "_embedded": {
+    "threads": [
+      {
+        "id": 304,
+        "type": "lineitem",
+        "state": "published",
+        "status": "closed",
+        "body": "",
+        "createdAt": "2026-09-02T12:00:00Z",
+        "createdBy": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper"}
+      },
+      {
+        "id": 303,
+        "type": "note",
+        "state": "published",
+        "body": "<p>Refunded the duplicate charge already.</p>",
+        "createdAt": "2026-09-01T12:00:00Z",
+        "createdBy": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper"}
+      },
+      {
+        "id": 302,
+        "type": "reply",
+        "state": "draft",
+        "body": "<p>Unsent draft that must not appear.</p>",
+        "createdAt": "2026-09-01T11:30:00Z",
+        "createdBy": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper"}
+      },
+      {
+        "id": 301,
+        "type": "message",
+        "state": "published",
+        "body": "<p>Thanks for the report &mdash; looking now.</p>",
+        "createdAt": "2026-09-01T11:00:00Z",
+        "createdBy": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper", "email": "grace@acme.com"}
+      },
+      {
+        "id": 300,
+        "type": "customer",
+        "state": "published",
+        "body": "<p>Every checkout returns a <b>500</b>.</p>",
+        "createdAt": "2026-09-01T10:00:00Z",
+        "createdBy": {"id": 555, "type": "customer", "first": "Ada", "last": "Lovelace", "email": "ada@example.com"},
+        "customer": {"id": 555, "type": "customer", "first": "Ada", "last": "Lovelace"},
+        "_embedded": {
+          "attachments": [
+            {
+              "id": 900,
+              "filename": "../../evil report.png",
+              "mimeType": "image/png",
+              "size": 11,
+              "_links": {"data": {"href": "https://api.helpscout.net/v2/conversations/123/threads/300/attachments/900/data"}}
+            },
+            {
+              "id": 901,
+              "filename": "offsite.png",
+              "mimeType": "image/png",
+              "size": 11,
+              "_links": {"data": {"href": "https://files.evil.example/steal"}}
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "_links": {"self": {"href": "https://api.helpscout.net/v2/conversations/123"}}
+}

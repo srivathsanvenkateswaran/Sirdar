@@ -1,0 +1,40 @@
+{
+  "id": "cb1b47e4-6f1c-4f1a-9a5f-2b7d0e3c9a41",
+  "eventType": "workitem.updated",
+  "publisherId": "tfs",
+  "scope": "all",
+  "message": { "text": "Bug #42 (Payment stuck in pending) updated by Ops Bot." },
+  "detailedMessage": { "text": "Bug #42 (Payment stuck in pending) updated by Ops Bot.\r\n- Assigned To: Sri V" },
+  "resource": {
+    "id": 210,
+    "workItemId": 42,
+    "rev": 3,
+    "revisedBy": { "displayName": "Ops Bot", "uniqueName": "ops@acme.com" },
+    "revisedDate": "2026-09-11T09:20:00.000Z",
+    "fields": {
+      "System.Rev": { "oldValue": "2", "newValue": "3" },
+      "System.State": { "oldValue": "New", "newValue": "Active" },
+      "System.AssignedTo": { "oldValue": "", "newValue": "Sri V <sri@acme.com>" }
+    },
+    "revision": {
+      "id": 42,
+      "rev": 3,
+      "fields": {
+        "System.Id": 42,
+        "System.WorkItemType": "Bug",
+        "System.State": "Active",
+        "System.Title": "Payment stuck in pending",
+        "System.AssignedTo": "Sri V <sri@acme.com>",
+        "System.Tags": "support; payments"
+      },
+      "url": "https://dev.azure.com/acme/_apis/wit/workItems/42/revisions/3"
+    },
+    "url": "https://dev.azure.com/acme/_apis/wit/updates/210"
+  },
+  "resourceVersion": "1.0",
+  "resourceContainers": {
+    "collection": { "id": "c12a4f60-1111-4444-8888-9f3b2c1d0e55" },
+    "project": { "id": "7f0b1c2d-2222-4444-8888-6a5b4c3d2e11" }
+  },
+  "createdDate": "2026-09-11T09:20:01.000Z"
+}

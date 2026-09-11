@@ -91,18 +91,18 @@ func (l *liveSession) cancel() {
 // the session ended with into a terminal state.
 func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *pool) Outcome {
 	if r.Provider == nil {
-		return r.finish(p, store.StatusFailed, "no provider configured", note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, "no provider configured", note.DigestRow{})
 	}
 
 	// A rate limit reported by another run pauses this one until it lifts.
 	// An interrupt during that wait means no session should start at all.
 	if !pl.waitUntilResumed(ctx) {
-		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
+		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
 	}
 
 	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
 	if err != nil {
-		return r.finish(p, store.StatusFailed, fmt.Sprintf("provider: %v", err), note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, fmt.Sprintf("provider: %v", err), note.DigestRow{})
 	}
 
 	p.state.Status = store.StatusRunning
@@ -116,7 +116,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		sess.Cancel()
 		res, _ := sess.Wait() // reap the child before giving up on the run
 		p.state.StderrTail = res.StderrTail
-		return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, err.Error(), note.DigestRow{})
 	}
 	defer log.Close()
 
@@ -173,7 +173,7 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// a warning on a completed run, not a verdict that throws the
 		// answer away.
 		if ex.completeErr != nil {
-			return r.finish(p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
+			return r.finish(ctx, p, store.StatusFailed, ex.completeErr.Error(), note.DigestRow{})
 		}
 		if res.ExitErr != nil {
 			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("provider exited: %v", res.ExitErr))
@@ -194,30 +194,30 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.overBudget != "" {
 			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the note was written")
 		}
-		return r.finish(p, store.StatusCompleted, "", ex.row)
+		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
 	case timedOut.Load():
-		return r.finish(p, store.StatusOverBudget,
+		return r.finish(ctx, p, store.StatusOverBudget,
 			fmt.Sprintf("wall-clock budget of %d minutes exceeded", r.Config.Budget.MaxMinutes), note.DigestRow{})
 	case ex.overBudget != "":
-		return r.finish(p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
+		return r.finish(ctx, p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
 	case ex.interrupted:
-		return r.finish(p, store.StatusBlocked, "interrupted", note.DigestRow{})
+		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
 	case ex.failure != "":
-		return r.finish(p, store.StatusFailed, ex.failure, note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, ex.failure, note.DigestRow{})
 	case ex.question != "":
-		return r.finish(p, store.StatusBlocked, "agent asked: "+ex.question, note.DigestRow{})
+		return r.finish(ctx, p, store.StatusBlocked, "agent asked: "+ex.question, note.DigestRow{})
 	case ex.rateLimited:
 		reason := "rate limited"
 		if !ex.resetsAt.IsZero() {
 			reason += ", resets at " + ex.resetsAt.Format(time.RFC3339)
 		}
-		return r.finish(p, store.StatusBlocked, reason, note.DigestRow{})
+		return r.finish(ctx, p, store.StatusBlocked, reason, note.DigestRow{})
 	default:
 		reason := "the session ended without a JSON note"
 		if res.ExitErr != nil {
 			reason = fmt.Sprintf("provider exited: %v", res.ExitErr)
 		}
-		return r.finish(p, store.StatusFailed, reason, note.DigestRow{})
+		return r.finish(ctx, p, store.StatusFailed, reason, note.DigestRow{})
 	}
 }
 
@@ -984,6 +984,12 @@ func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
 	row.Model = p.state.Model
 	row.Turns = p.state.Usage.Turns
 	row.CostUSD = p.state.Usage.CostUSD
+	if p.service == "" {
+		p.service = row.Service
+	}
+	if p.notePath == "" {
+		p.notePath = row.NotePath
+	}
 	if err := store.AppendRegister(r.Config.Root, row); err != nil {
 		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("register: %v", err))
 	}
