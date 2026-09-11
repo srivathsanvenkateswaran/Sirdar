@@ -8,16 +8,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
-	"slices"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -57,15 +55,13 @@ type Client struct {
 	TeamKey  string
 	HTTP     *http.Client
 
-	// mu guards warnings. One Client serves every ticket in a run, so two
-	// of them can be inside Attachments at the same time.
-	mu sync.Mutex
 	// warnings holds the non-fatal problems a call recorded — an
 	// attachment that would not download, a field this workspace does not
 	// expose — keyed by the ticket id the call was made for, so one
-	// ticket's missing evidence is never reported against another's. An
-	// entry is removed when it is read.
-	warnings map[string][]string
+	// ticket's missing evidence is never reported against another's. One
+	// Client serves every ticket in a run, so two of them can be inside
+	// Attachments at the same time. An entry is removed when it is read.
+	warnings httpx.Warnings
 }
 
 // New returns a Client for cfg. hc may be nil, in which case a client with a
@@ -103,29 +99,7 @@ var (
 // WarningsFor once at the end, so a warning one of those calls records has
 // to survive the next two.
 func (c *Client) addWarnings(id string, warnings ...string) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	for _, w := range warnings {
-		if slices.Contains(c.warnings[id], w) {
-			continue
-		}
-		c.warnings[id] = append(c.warnings[id], w)
-	}
-}
-
-// takeWarnings returns and removes the warnings recorded for ticket id.
-func (c *Client) takeWarnings(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	c.warnings.Add(id, warnings...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes the problems
@@ -133,7 +107,7 @@ func (c *Client) takeWarnings(id string) []string {
 // run state instead of silently serving a short list of attachments. It is
 // keyed by id, which is what a caller running several tickets at once needs:
 // it cannot be handed another ticket's missing evidence.
-func (c *Client) WarningsFor(id string) []string { return c.takeWarnings(id) }
+func (c *Client) WarningsFor(id string) []string { return c.warnings.Take(id) }
 
 // Ping checks the credential by asking Linear who it belongs to. It backs the
 // doctor command, so it makes the cheapest authenticated call there is.
@@ -200,11 +174,8 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		return nil, err
 	}
 
-	limit := effectiveLimit(f.Limit)
-	pageSize := defaultPageSize
-	if limit < pageSize {
-		pageSize = limit
-	}
+	limit, _ := httpx.Limit(f.Limit, defaultLimit, maxLimit)
+	pageSize := httpx.PageSize(limit, defaultPageSize)
 
 	var out []ticket.TrackerTicket
 	degraded := false
@@ -256,18 +227,6 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		}
 		after = resp.Issues.PageInfo.EndCursor
 	}
-}
-
-// effectiveLimit applies the adapter contract's bounds to a caller's Limit:
-// an unset limit takes defaultLimit, and no limit exceeds maxLimit.
-func effectiveLimit(n int) int {
-	if n <= 0 {
-		return defaultLimit
-	}
-	if n > maxLimit {
-		return maxLimit
-	}
-	return n
 }
 
 // noCustomerNeedsWarning is recorded when a workspace does not expose the
@@ -476,7 +435,7 @@ func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket
 	var out []ticket.Attachment
 	var failures []string
 	for i, r := range refs {
-		name := sanitizeName(r.Name)
+		name := httpx.SanitizeName(r.Name)
 		filename := indexedName(i+1, name)
 
 		mime, derr := c.download(ctx, r.URL, filepath.Join(dir, filename))
@@ -505,29 +464,10 @@ func (h helpdeskView) Attachments(ctx context.Context, id, dir string) ([]ticket
 // host is followed before the download is abandoned.
 const maxRedirects = 3
 
-// downloadClient returns a copy of the HTTP client whose redirect policy
-// applies the same trust check the starting URL got. A Location header
-// arrives inside a server response, so it is input: a redirect off
-// uploads.linear.app would otherwise be followed and whatever the other
-// host served written to disk under the attachment's name. Go strips the
-// Authorization header on a cross-host hop, but stripping the credential is
-// not the same as refusing the request.
-//
-// A shallow copy is enough: the Transport is safe to share, and
-// CheckRedirect is being replaced outright.
-func (c *Client) downloadClient() *http.Client {
-	dl := *c.HTTP
-	dl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if len(via) >= maxRedirects {
-			return fmt.Errorf("stopped after %d redirects", maxRedirects)
-		}
-		if !isUploadURL(req.URL.String()) {
-			return fmt.Errorf("refusing to follow a redirect to %s", req.URL.Hostname())
-		}
-		return nil
-	}
-	return &dl
-}
+// maxAttachmentBytes caps one download. Past it the file is refused rather
+// than written: an attachment nobody can vouch for should not be able to
+// fill the disk the run is using.
+const maxAttachmentBytes = 64 << 20
 
 // download fetches a Linear upload with the same Authorization header the
 // GraphQL API uses — Linear's file storage is private and accepts the API key
@@ -545,24 +485,25 @@ func (c *Client) download(ctx context.Context, rawURL, destPath string) (string,
 	}
 	req.Header.Set("Authorization", c.APIKey)
 
-	resp, err := c.downloadClient().Do(req)
+	// The redirect policy applies the same trust check the starting URL
+	// got. A Location header arrives inside a server response, so it is
+	// input: a redirect off uploads.linear.app would otherwise be followed
+	// and whatever the other host served written to disk under the
+	// attachment's name. Go strips the Authorization header on a cross-host
+	// hop, but stripping the credential is not the same as refusing the
+	// request.
+	ct, err := httpx.Download(ctx, httpx.Client(c.HTTP, uploadTrust, maxRedirects), req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	// Only the host: Go's *url.Error carries the refused target's path and
+	// query, and this error becomes a per-ticket warning.
+	if host, ok := httpx.RedirectHost(err); ok {
+		return "", fmt.Errorf("refusing to follow a redirect to %s", host)
+	}
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		return "", fmt.Errorf("status %d", se.Status)
+	}
 	if err != nil {
 		return "", err
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("status %d", resp.StatusCode)
-	}
-
-	f, err := os.Create(destPath)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-
-	if _, err := io.Copy(f, resp.Body); err != nil {
-		return "", err
-	}
-	return resp.Header.Get("Content-Type"), nil
+	return ct, nil
 }

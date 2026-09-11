@@ -17,10 +17,10 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -40,11 +40,16 @@ const (
 
 	// maxRetryAfter caps how long a 429's Retry-After is honoured before the
 	// call gives up and reports source.RateLimited to the caller.
-	maxRetryAfter = 30 * time.Second
+	maxRetryAfter = httpx.MaxRetryAfter
 
 	// httpTimeout is the per-request timeout used when the caller does not
 	// supply its own *http.Client.
 	httpTimeout = 30 * time.Second
+
+	// maxJSONBody bounds an ordinary API response (a work item, a page of
+	// comments, a batch). The read fails rather than truncating, so a short
+	// but well-formed document is never decoded as if it were complete.
+	maxJSONBody = 8 << 20
 )
 
 // Config is the resolved configuration for one Azure DevOps organisation and
@@ -73,6 +78,10 @@ type Client struct {
 	cfg  Config
 	base string // OrgURL, trailing slash trimmed
 	hc   *http.Client
+	// trust decides which hosts an attachment may be fetched from with the
+	// PAT: the organisation's own host, plus — for Azure DevOps Services —
+	// the well-known hosts serving the same organisation.
+	trust *httpx.Trust
 
 	// batchSize is how many ids go into one workitemsbatch call. It is
 	// batchLimit in production and lowered by tests to exercise chunking.
@@ -81,8 +90,7 @@ type Client struct {
 	// warnings holds the non-fatal problems recorded per ticket id, so a
 	// caller running several tickets at once is never handed another
 	// ticket's missing evidence.
-	mu       sync.Mutex
-	warnings map[string][]string
+	warnings httpx.Warnings
 }
 
 // New validates cfg and returns a Client. A nil hc gets a default client
@@ -109,7 +117,28 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: httpTimeout}
 	}
-	return &Client{cfg: cfg, base: cfg.OrgURL, hc: hc, batchSize: batchLimit}, nil
+	trust, err := httpx.NewTrust(cfg.OrgURL, servicesRules(u)...)
+	if err != nil {
+		return nil, fmt.Errorf("azure devops: orgUrl %q is not an absolute URL", cfg.OrgURL)
+	}
+	return &Client{cfg: cfg, base: cfg.OrgURL, hc: hc, trust: trust, batchSize: batchLimit}, nil
+}
+
+// servicesRules are the extra hosts that serve attachments for an Azure
+// DevOps Services organisation: dev.azure.com and the legacy
+// {org}.visualstudio.com, whichever of the two the base URL is not. Both
+// belong to the organisation, so both may see the PAT. An Azure DevOps
+// Server collection gets none: its own host is the only one that can serve
+// its attachments.
+func servicesRules(base *url.URL) []httpx.HostRule {
+	org := orgName(base)
+	if org == "" {
+		return nil
+	}
+	return []httpx.HostRule{
+		{Suffix: "dev.azure.com", SendCredential: true},
+		{Suffix: org + ".visualstudio.com", SendCredential: true},
+	}
 }
 
 var (
@@ -143,50 +172,15 @@ func (c *Client) WarningsFor(id string) []string {
 	if err != nil {
 		key = id
 	}
-	return c.takeWarnings(key)
+	return c.warnings.Take(key)
 }
 
 // addWarnings records the failures one call skipped over, alongside
-// whatever an earlier call for the same work item recorded.
-//
-// Attachments is the only caller today, but it appends rather than replaces
-// so that it stays that way by design and not by luck: one work item's
+// whatever an earlier call for the same work item recorded: one work item's
 // bundle is Get, then Threads, then Attachments, with a single WarningsFor
-// at the end, so the first call to warn about something must not have it
-// erased by the two that follow. Reading is what clears the entry. An
-// identical line is dropped rather than repeated.
+// at the end, and reading is what clears the entry (see httpx.Warnings).
 func (c *Client) addWarnings(id string, warnings []string) {
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
-}
-
-// takeWarnings returns and removes the warnings recorded for work item id.
-func (c *Client) takeWarnings(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	c.warnings.Add(id, warnings...)
 }
 
 // Ping checks that the org URL, project and PAT together reach a project the
@@ -258,12 +252,12 @@ func (c *Client) do(ctx context.Context, method, rawURL string, body []byte) ([]
 		if err != nil {
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("azure devops: %s %s: %v", method, displayPath(rawURL), err)}
 		}
-		b, readErr := io.ReadAll(resp.Body)
+		b, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if d, ok := retryAfter(resp.Header); ok {
-				if err := sleep(ctx, d); err != nil {
+			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("azure devops: %s %s: %v", method, displayPath(rawURL), err)}
 				}
 				continue
@@ -363,46 +357,6 @@ func isSignInPage(status int, contentType string, body []byte) bool {
 	}
 	trimmed := bytes.TrimSpace(body)
 	return len(trimmed) > 0 && trimmed[0] == '<'
-}
-
-// retryAfter reads a Retry-After header (delta-seconds or HTTP-date) and
-// reports whether waiting for it is worth doing: a wait longer than
-// maxRetryAfter is refused, so the caller sees source.RateLimited promptly
-// instead of blocking.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		return 0, false
-	}
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0, false
-		}
-		d := time.Duration(secs) * time.Second
-		return d, d <= maxRetryAfter
-	}
-	if t, err := http.ParseTime(v); err == nil {
-		d := time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-		return d, d <= maxRetryAfter
-	}
-	return 0, false
-}
-
-func sleep(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
 }
 
 // --- Tracker ---

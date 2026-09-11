@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -161,14 +162,7 @@ func (c *Client) queryURL(t artifactType, o queryOpts) string {
 		start = 1
 	}
 	q.Set("start", strconv.Itoa(start))
-	size := o.PageSize
-	if size < 1 {
-		size = maxPageSize
-	}
-	if size > maxPageSize {
-		size = maxPageSize
-	}
-	q.Set("pagesize", strconv.Itoa(size))
+	q.Set("pagesize", strconv.Itoa(httpx.PageSize(o.PageSize, maxPageSize)))
 	return c.endpoint(t.Path) + "?" + q.Encode()
 }
 
@@ -406,13 +400,7 @@ func (c *Client) List(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 		userName = u.UserName
 	}
 
-	limit := f.Limit
-	if limit <= 0 {
-		limit = defaultListLimit
-	}
-	if limit > maxListLimit {
-		limit = maxListLimit
-	}
+	limit, _ := httpx.Limit(f.Limit, defaultListLimit, maxListLimit)
 
 	var w warnBuf
 	var out []ticket.TrackerTicket
@@ -443,10 +431,7 @@ func (c *Client) listType(ctx context.Context, t artifactType, f source.ListFilt
 	if err != nil {
 		return nil, err
 	}
-	pageSize := maxPageSize
-	if limit > 0 && limit < pageSize {
-		pageSize = limit
-	}
+	pageSize := httpx.PageSize(limit, maxPageSize)
 
 	var out []ticket.TrackerTicket
 	start := 1

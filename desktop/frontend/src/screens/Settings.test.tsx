@@ -3,12 +3,18 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Check, Transport, Workspace } from '../api/types'
+import { prefersRTL, resetPreferRTL, setPreferRTL } from '../lib/rtl'
 import Settings, { CONFIG_DOCS_URL } from './Settings'
+
+const RTL_LABEL = 'Prefer right-to-left layout for Arabic content'
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  localStorage.clear()
+  resetPreferRTL()
 })
+
 
 function fakeTransport(overrides: Partial<Transport> = {}): Transport {
   const notImplemented = () => Promise.reject(new Error('not used by Settings'))
@@ -151,5 +157,32 @@ describe('Settings', () => {
     expect(vi.getTimerCount()).toBeGreaterThan(0)
     unmount()
     expect(vi.getTimerCount()).toBe(0)
+  })
+})
+
+describe('the reading-direction toggle', () => {
+  it('starts off and turns the preference on when pressed', () => {
+    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+
+    const toggle = screen.getByLabelText(RTL_LABEL)
+    expect(toggle).not.toBeChecked()
+
+    fireEvent.click(toggle)
+    expect(toggle).toBeChecked()
+    expect(prefersRTL()).toBe(true)
+  })
+
+  it('comes back checked for an engineer who set it last time', () => {
+    setPreferRTL(true)
+    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+    expect(screen.getByLabelText(RTL_LABEL)).toBeChecked()
+  })
+
+  it('turns the preference off again', () => {
+    setPreferRTL(true)
+    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+
+    fireEvent.click(screen.getByLabelText(RTL_LABEL))
+    expect(prefersRTL()).toBe(false)
   })
 })

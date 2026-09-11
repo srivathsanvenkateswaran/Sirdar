@@ -85,7 +85,7 @@ func TestWebhooksValidation(t *testing.T) {
 		{
 			"a secret that carries the secret",
 			"\nwebhooks:\n  enabled: true\n  sources:\n    jira:\n      secret: hunter2\n",
-			"must start with env: or keychain:",
+			"must start with env:",
 		},
 		{
 			"a source with no secret",

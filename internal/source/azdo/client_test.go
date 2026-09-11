@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -469,8 +470,8 @@ func TestEffectiveLimit(t *testing.T) {
 		{500, maxListLimit},
 	}
 	for _, tc := range cases {
-		if got := effectiveLimit(tc.in); got != tc.want {
-			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		if got, _ := httpx.Limit(tc.in, defaultListLimit, maxListLimit); got != tc.want {
+			t.Errorf("Limit(%d) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
 	if defaultListLimit != 100 || maxListLimit != 200 {
@@ -548,6 +549,68 @@ func TestAttachmentsPartialFailureWarns(t *testing.T) {
 	}
 	if again := c.WarningsFor("4242"); len(again) != 0 {
 		t.Errorf("warnings were not consumed: %v", again)
+	}
+}
+
+// TestGetRefusesAnOversizedBody: a JSON response is read under a ceiling
+// that fails rather than truncating, so a body that would otherwise be
+// decoded as a short but well-formed work item is an error instead.
+func TestGetRefusesAnOversizedBody(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	fs.mu.Lock()
+	fs.rewrite = func(string) string {
+		return `{"id":4242,"fields":{"System.Title":"` + strings.Repeat("x", maxJSONBody) + `"}}`
+	}
+	fs.mu.Unlock()
+
+	_, err := c.Get(context.Background(), "4242")
+	if err == nil {
+		t.Fatal("Get accepted an oversized body, want an error")
+	}
+	var serr *source.Error
+	if !errors.As(err, &serr) || serr.Code != source.Internal {
+		t.Fatalf("err = %v, want a source.Internal error", err)
+	}
+	if !strings.Contains(serr.Message, "read body") {
+		t.Errorf("error = %v, want it to name the body read", err)
+	}
+}
+
+// TestAttachmentsRefusesA203SignInPage: Azure DevOps answers an unusable PAT
+// with 203 Non-Authoritative Information rather than a 401, and a 203 is a
+// success as far as the transfer is concerned. The content-type check catches
+// the usual HTML sign-in document; this is the same page served as something
+// else, which must still be skipped rather than written to disk under the
+// attachment's name.
+func TestAttachmentsRefusesA203SignInPage(t *testing.T) {
+	fs, c := newFixtureServer(t)
+	fs.mu.Lock()
+	// The fixture writes a short non-HTML body with this status.
+	fs.attachmentStatus["bbbbbbbb-2222-3333-4444-555555555555"] = http.StatusNonAuthoritativeInfo
+	fs.mu.Unlock()
+
+	dir := filepath.Join(t.TempDir(), "attachments")
+	atts, err := c.Helpdesk().Attachments(context.Background(), "4242", dir)
+	if err != nil {
+		t.Fatalf("one refused download must not fail the call: %v", err)
+	}
+	if len(atts) != 1 || atts[0].ID != "aaaaaaaa-1111-2222-3333-444444444444" {
+		t.Fatalf("atts = %+v, want only the real attachment", atts)
+	}
+	entries, rerr := os.ReadDir(dir)
+	if rerr != nil {
+		t.Fatalf("read dir: %v", rerr)
+	}
+	if len(entries) != 1 {
+		names := make([]string, len(entries))
+		for i, e := range entries {
+			names[i] = e.Name()
+		}
+		t.Errorf("wrote %v, want only the one real attachment", names)
+	}
+	w := c.WarningsFor("4242")
+	if len(w) != 1 || !strings.Contains(w[0], "sign-in page") {
+		t.Errorf("warnings = %v, want one naming the sign-in page", w)
 	}
 }
 

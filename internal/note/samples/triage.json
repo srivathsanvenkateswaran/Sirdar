@@ -12,6 +12,7 @@
   },
   "title": "Sample issue for template checks",
   "complaint": "Customer reports the export fails for orders over 500 lines.",
+  "complaintOriginal": "التصدير لا يعمل عندما يحتوي الطلب على أكثر من ٥٠٠ بند. الملف ينزل فارغًا.",
   "timeline": [
     { "at": "2026-09-01T10:00:00Z", "role": "customer", "summary": "Reported the export failing." },
     { "at": "2026-09-01T10:15:00Z", "role": "L1", "summary": "Confirmed the failure and escalated." }
@@ -39,5 +40,9 @@
   },
   "openQuestions": [
     "Is 500 lines the exact threshold, or does it vary by column count?"
-  ]
+  ],
+  "customerReplyDraft": {
+    "language": "ar",
+    "text": "شكرًا لتواصلكم. تم تحويل البلاغ إلى الفريق الهندسي ونحن ننظر في المشكلة الآن. سنوافيكم بأي مستجد فور توفره."
+  }
 }

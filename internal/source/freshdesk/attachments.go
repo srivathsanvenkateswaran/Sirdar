@@ -10,10 +10,10 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -86,52 +86,6 @@ func refIDs(refs []attachmentRef) []string {
 	return ids
 }
 
-// sanitizeName turns an attachment name (or id) taken from the API response
-// into a safe filename component: it strips any directory portion (so a
-// name like "../../evil.txt" cannot write outside the destination dir),
-// drops path separators and control characters, falls back to "attachment"
-// for an empty/"."/".." result, and caps the result at 120 bytes while
-// preserving the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := strings.TrimSpace(b.String())
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
-}
-
 // Attachments downloads every attachment referenced by a ticket's
 // description and its conversation thread — direct attachments[] entries
 // plus inline images in HTML bodies — into dir, named "<1-based
@@ -181,9 +135,15 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			warnings = append(warnings, fmt.Sprintf("freshdesk: attachment %s: invalid url", r.ID))
 			continue
 		}
-		host, trusted, sendAuth := c.urlTrust(u)
+		// An attachment_url arrives inside an API response body, so a
+		// hostile or compromised instance can put "http://" in front of a
+		// perfectly legitimate Freshworks host and watch the file — and, on
+		// the configured domain, the API key — cross the network in the
+		// clear. Only the configured domain sees the key; the CDN hosts are
+		// fetched from unauthenticated.
+		trusted, sendAuth, _ := c.trust.Check(u)
 		if !trusted {
-			warnings = append(warnings, fmt.Sprintf("freshdesk: attachment host not trusted: %s", host))
+			warnings = append(warnings, fmt.Sprintf("freshdesk: attachment host not trusted: %s", httpx.NormalizeHost(u.Scheme, u.Host)))
 			continue
 		}
 
@@ -191,7 +151,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		if name == "" {
 			name = r.ID
 		}
-		name = sanitizeName(name)
+		name = httpx.SanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", idx, name)
 
 		if derr := c.downloadTo(ctx, r.URL, sendAuth, filepath.Join(dir, filename)); derr != nil {

@@ -502,6 +502,31 @@
   line-height: 1.62;
 }
 
+/*
+ * `dir` on the container resolves each block on its own, which is all a mixed
+ * note needs. These rules cover what it cannot do: with the whole pane laid
+ * out right to left, list markers and the blockquote rule have to move to the
+ * right margin too, and Arabic wants more leading than Latin at the same size.
+ */
+.md[dir='rtl'] {
+  line-height: 1.85;
+}
+
+.md[dir='rtl'] ul,
+.md[dir='rtl'] ol {
+  padding-right: 1.2em;
+  padding-left: 0;
+}
+
+.md[dir='rtl'] blockquote {
+  border-right: 2px solid var(--run-line);
+  border-left: 0;
+  padding-right: 12px;
+  padding-left: 0;
+}
+
+
+
 .md h1,
 .md h2,
 .md h3 {
