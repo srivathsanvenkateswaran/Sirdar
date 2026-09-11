@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -14,6 +13,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/acp"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/openai"
@@ -107,9 +107,28 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 		return codex.New(), nil
 	case "openai":
 		return openAIProvider(cfg, creds)
+	case "acp":
+		return acpProvider(cfg)
 	default:
-		return nil, fmt.Errorf("unknown provider %q: use claude, codex or openai", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider %q: use claude, codex, openai or acp", cfg.Provider)
 	}
+}
+
+// acpProvider builds the client for whichever Agent Client Protocol agent
+// the workspace names. Sirdar spawns that agent's own CLI and it
+// authenticates however it already does — a login file, a keychain, a key
+// in the operator's shell — so nothing is resolved here: acp.env is passed
+// through as written, which is why config validation takes it as literal
+// values rather than credential references.
+func acpProvider(cfg *config.Config) (provider.Provider, error) {
+	a := cfg.ACP
+	if a == nil {
+		return nil, fmt.Errorf("provider acp: the acp block is missing from config")
+	}
+	if strings.TrimSpace(a.Command) == "" {
+		return nil, fmt.Errorf("provider acp: acp.command is not set")
+	}
+	return acp.New(acp.Config{Command: a.Command, Args: a.Args, Env: a.Env}), nil
 }
 
 // openAIProvider builds the provider that runs Sirdar's own loop against
@@ -466,14 +485,13 @@ func ExpandCommand(cfg *config.Config, command string) string {
 	return program + " " + args
 }
 
-// KeychainFor returns the platform's keychain reader, or nil where there is
-// none: on those platforms a "keychain:" credential ref is an error and
-// only "env:" refs work, as the spec says.
-func KeychainFor() config.KeychainReader {
-	if runtime.GOOS == "darwin" {
-		return config.MacKeychain{}
-	}
-	return nil
+// KeychainFor returns the credential store this platform ships with: the
+// macOS login keychain, the freedesktop Secret Service on Linux and the
+// BSDs, the Windows Credential Manager. It is nil only on a platform that
+// has none Sirdar can read, where a "keychain:" ref is an error and the
+// env:, file: and cmd: schemes are what remain.
+func KeychainFor() config.SecretStore {
+	return config.PlatformSecretStore()
 }
 
 // syncWriter serialises writes to one writer.

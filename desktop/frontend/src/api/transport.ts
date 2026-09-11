@@ -25,6 +25,7 @@ const EVENT_KINDS: AppEvent['kind'][] = [
   'run.event',
   'quota.updated',
   'job.finished',
+  'hook.received',
   'log',
 ]
 
@@ -187,6 +188,7 @@ interface BridgeBindings {
   StartRCA(ws: string, key: string, o: { prUrl: string; resolution: string }): Promise<string>
   Resume(ws: string, runId: string, answer: string): Promise<string>
   Cancel(jobId: string): Promise<void>
+  Version(): Promise<string>
 }
 
 /** The subset of the Wails runtime the transport uses. */
@@ -251,6 +253,7 @@ export function createWailsTransport(): Transport {
     register: async (ws) => list(await bridge().Register(ws)),
     doctor: async (ws) => list(await bridge().Doctor(ws)),
     quota: async () => list(await bridge().Quota()),
+    version: () => bridge().Version(),
     subscribe: (handler) => {
       const rt = (window as any).runtime as WailsRuntime | undefined
       if (!rt) return () => {}

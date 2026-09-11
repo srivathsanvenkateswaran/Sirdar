@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -295,6 +296,30 @@ func TestGetMapsIssue(t *testing.T) {
 	}
 	if w := c.WarningsFor("ENG-123"); len(w) != 0 {
 		t.Errorf("WarningsFor(ENG-123) = %v, want none", w)
+	}
+}
+
+// TestGetRefusesAnOversizedBody: a GraphQL response is read under a ceiling
+// that fails rather than truncating, so a body that would otherwise be
+// decoded as a short but well-formed issue is an error instead.
+func TestGetRefusesAnOversizedBody(t *testing.T) {
+	f := newFakeLinear(t, func(w http.ResponseWriter, req gqlRequest) bool {
+		_, _ = w.Write([]byte(`{"data":{"issue":{"identifier":"ENG-1","title":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", maxJSONBody)))
+		_, _ = w.Write([]byte(`"}}}`))
+		return true
+	})
+	c := newTestClient(t, f, "")
+
+	_, err := c.Get(context.Background(), "ENG-1")
+	if err == nil {
+		t.Fatal("Get accepted an oversized body, want an error")
+	}
+	if got := sourceCode(t, err); got != source.Internal {
+		t.Errorf("code = %q, want %q", got, source.Internal)
+	}
+	if !strings.Contains(err.Error(), "read body") {
+		t.Errorf("error = %v, want it to name the body read", err)
 	}
 }
 
@@ -641,8 +666,8 @@ func TestEffectiveLimit(t *testing.T) {
 		{100000, maxLimit},
 	}
 	for _, tc := range cases {
-		if got := effectiveLimit(tc.in); got != tc.want {
-			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		if got, _ := httpx.Limit(tc.in, defaultLimit, maxLimit); got != tc.want {
+			t.Errorf("Limit(%d) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
 	if defaultLimit != 100 || maxLimit != 200 {
@@ -707,19 +732,22 @@ func TestAttachmentsDownloadsLinearUploads(t *testing.T) {
 // legitimate-looking name.
 func TestIsUploadURLRequiresHTTPSAndRejectsUserinfo(t *testing.T) {
 	cases := map[string]bool{
-		"https://uploads.linear.app/a/b/shot.png":          true,
-		"https://UPLOADS.LINEAR.APP/a/b/shot.png":          true,
-		"http://uploads.linear.app/a/b/shot.png":           false,
-		"https://uploads.linear.app@attacker.example/x":    false,
-		"https://user:pass@uploads.linear.app/a/b/x.png":   false,
-		"https://attacker.example/a/b/shot.png":            false,
-		"https://uploads.linear.app.attacker.example/x":    false,
-		"ftp://uploads.linear.app/a/b/shot.png":            false,
-		"//uploads.linear.app/a/b/shot.png":                false,
-		"https://linear.app/acme/issue/ENG-123":            false,
-		"https://acme.zendesk.com/agent/tickets/4242":      false,
-		"https://uploads.linear.app:443/a/b/shot.png":      true,
-		"https://uploads.linear.app:8443/a/b/shot.png":     true,
+		"https://uploads.linear.app/a/b/shot.png":        true,
+		"https://UPLOADS.LINEAR.APP/a/b/shot.png":        true,
+		"http://uploads.linear.app/a/b/shot.png":         false,
+		"https://uploads.linear.app@attacker.example/x":  false,
+		"https://user:pass@uploads.linear.app/a/b/x.png": false,
+		"https://attacker.example/a/b/shot.png":          false,
+		"https://uploads.linear.app.attacker.example/x":  false,
+		"ftp://uploads.linear.app/a/b/shot.png":          false,
+		"//uploads.linear.app/a/b/shot.png":              false,
+		"https://linear.app/acme/issue/ENG-123":          false,
+		"https://acme.zendesk.com/agent/tickets/4242":    false,
+		"https://uploads.linear.app:443/a/b/shot.png":    true,
+		// The shared trust compares the port too (a default port for the
+		// scheme is normalised away first), so the upload host on some
+		// other port is not the upload host. Linear serves it on 443.
+		"https://uploads.linear.app:8443/a/b/shot.png":     false,
 		"https://uploads.linear.appattacker.example/x.png": false,
 	}
 	for raw, want := range cases {
@@ -1168,8 +1196,8 @@ func TestSanitizeName(t *testing.T) {
 		{strings.Repeat("x", 200) + ".png", strings.Repeat("x", 116) + ".png"},
 	}
 	for _, tc := range cases {
-		if got := sanitizeName(tc.in); got != tc.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := httpx.SanitizeName(tc.in); got != tc.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

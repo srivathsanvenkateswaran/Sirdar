@@ -1,0 +1,77 @@
+name: Bug report
+description: Something in Sirdar is broken or behaving unexpectedly.
+labels: ["bug"]
+body:
+  - type: input
+    id: version
+    attributes:
+      label: Sirdar version
+      description: Output of `sirdar version`.
+      placeholder: v0.x.y or a commit hash if built from source
+    validations:
+      required: true
+
+  - type: dropdown
+    id: provider
+    attributes:
+      label: Provider
+      options:
+        - claude
+        - codex
+        - openai
+        - not sure
+    validations:
+      required: true
+
+  - type: input
+    id: adapter
+    attributes:
+      label: Source adapter
+      description: Which tracker and/or helpdesk adapter was configured (jira, linear, azdo, rally, zohodesk, zendesk, freshdesk, an external adapter, ...).
+      placeholder: "e.g. tracker: jira, helpdesk: zohodesk"
+    validations:
+      required: true
+
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: e.g. macOS 15.1, Ubuntu 24.04, Windows 11
+    validations:
+      required: true
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you ran and what went wrong. Include the exact command if you can.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations:
+      required: true
+
+  - type: textarea
+    id: state-json
+    attributes:
+      label: Relevant excerpt of state.json / events.jsonl
+      description: |
+        Found under `.sirdar/runs/<KEY>/<run-id>/`. Paste only the lines that show the
+        problem, not the whole file.
+
+        Before pasting: strip anything from the ticket (subject, description, comment text,
+        customer names) and any credential-looking string. If you're not sure a line is safe
+        to share, leave it out and describe it instead.
+      render: json
+
+  - type: checkboxes
+    id: confirm-redacted
+    attributes:
+      label: Confirmation
+      options:
+        - label: I've checked the pasted excerpts for ticket content and credentials and removed them.
+          required: true

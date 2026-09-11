@@ -2,8 +2,8 @@ name: desktop
 
 on:
   push:
-    branches: [desktop]
-    tags: ['v*']
+    branches: [desktop, main]
+    paths: ['desktop/**', 'internal/app/**', 'internal/httpapi/**']
 
 permissions:
   contents: read

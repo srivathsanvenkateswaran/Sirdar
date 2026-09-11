@@ -1,0 +1,28 @@
+{
+  "action": "update",
+  "type": "Issue",
+  "createdAt": "2026-09-11T09:15:00.000Z",
+  "data": {
+    "id": "b1f0d3c2-7a44-4a0e-9b21-2f5c8d9e1a77",
+    "identifier": "ENG-431",
+    "title": "Payment stuck in pending",
+    "number": 431,
+    "url": "https://linear.app/acme/issue/ENG-431",
+    "state": { "id": "9b7f1c0a-1111-4444-8888-0a1b2c3d4e5f", "name": "Todo", "type": "unstarted" },
+    "assigneeId": "3f2e1d0c-9999-4444-aaaa-bbbbccccdddd",
+    "assignee": {
+      "id": "3f2e1d0c-9999-4444-aaaa-bbbbccccdddd",
+      "name": "Sri V",
+      "email": "sri@acme.com"
+    },
+    "labelIds": ["7c6b5a49-2222-4444-9999-0f1e2d3c4b5a"],
+    "labels": [{ "id": "7c6b5a49-2222-4444-9999-0f1e2d3c4b5a", "name": "support" }]
+  },
+  "updatedFrom": {
+    "updatedAt": "2026-09-11T09:14:12.000Z",
+    "assigneeId": null
+  },
+  "url": "https://linear.app/acme/issue/ENG-431",
+  "webhookTimestamp": 1789118100000,
+  "webhookId": "9d3a2b1c-5555-4444-8888-111122223333"
+}

@@ -11,9 +11,9 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
@@ -81,8 +81,8 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 	// keep the output pipe open, and killing only the shell would leave
 	// them running and Wait blocked on that pipe. WaitDelay is the backstop
 	// for a grandchild that survives the group kill.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	cmd.Cancel = func() error { return killGroup(cmd) }
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = killGrace
 	var buf lockedBuffer
 	cmd.Stdout = &buf
@@ -109,20 +109,6 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 // killGrace is how long a timed-out command's process group has to die
 // before exec gives up waiting on the pipes it holds.
 const killGrace = 2 * time.Second
-
-// killGroup SIGKILLs the whole process group the command was started in,
-// falling back to the immediate child when the group is already gone.
-func killGroup(cmd *exec.Cmd) error {
-	if cmd.Process == nil {
-		return nil
-	}
-	if pid := cmd.Process.Pid; pid > 0 {
-		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
-			return nil
-		}
-	}
-	return cmd.Process.Kill()
-}
 
 // lockedBuffer collects a command's combined output. A command killed at
 // the timeout can leave a child writing into it after Wait has returned, so

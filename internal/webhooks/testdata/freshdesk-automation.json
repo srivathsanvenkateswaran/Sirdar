@@ -1,0 +1,12 @@
+{
+  "event": "ticket_assigned",
+  "ticket": {
+    "id": 30142,
+    "subject": "Payment stuck in pending",
+    "status": "Open",
+    "priority": "High",
+    "assignee_email": "sri@acme.com",
+    "tags": ["support"],
+    "url": "https://acme.freshdesk.com/a/tickets/30142"
+  }
+}
