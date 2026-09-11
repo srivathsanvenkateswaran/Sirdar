@@ -255,7 +255,7 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 // that endpoint's own `_links.next` and `page.totalPages` until the feed
 // ends or maxThreadPages total pages (the embedded one included) have been
 // read. A "next" link arrives inside a response body, so it is checked
-// against urlTrust before it is followed — an untrusted one stops
+// against trust.Check before it is followed — an untrusted one stops
 // pagination with a warning rather than being fetched.
 func (c *Client) listThreads(ctx context.Context, id string, conv hsConversation) ([]hsThread, []string, error) {
 	all := append([]hsThread(nil), conv.Embedded.Threads...)
@@ -275,9 +275,9 @@ func (c *Client) listThreads(ctx context.Context, id string, conv hsConversation
 			warnings = append(warnings, "helpscout: thread page link is not a valid url")
 			break
 		}
-		host, trusted, _ := c.urlTrust(u)
-		if !trusted {
-			warnings = append(warnings, fmt.Sprintf("helpscout: thread page host not trusted: %s", host))
+		fetch, _, _ := c.trust.Check(u)
+		if !fetch {
+			warnings = append(warnings, fmt.Sprintf("helpscout: thread page host not trusted: %s", u.Hostname()))
 			break
 		}
 		if pagesSeen >= maxThreadPages {

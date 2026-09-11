@@ -20,19 +20,16 @@ package hubspot
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"os"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 // apiHost is HubSpot's single global API host, and the only host this
@@ -44,7 +41,7 @@ const defaultBaseURL = "https://" + apiHost
 // maxRetryAfter bounds how long a 429's Retry-After is honoured before the
 // call gives up and reports source.RateLimited rather than blocking a
 // triage run behind a long quota reset.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // maxJSONBody bounds an ordinary API JSON response (a ticket, a page of
 // thread messages, a contact).
@@ -87,15 +84,19 @@ type Config struct {
 type Client struct {
 	cfg     Config
 	baseURL string // no trailing slash
-	host    string // the one host the credential is sent to
-	hc      *http.Client
+	// trust is api.hubapi.com (which gets the credential) plus
+	// *.hubspot.com. It does not express the numbered
+	// hubspotusercontent-N.net family; urlTrust adds that on top.
+	trust *httpx.Trust
+	hc    *http.Client
+
+	// warnings holds the non-fatal problems each call recorded, keyed by
+	// the ticket id it was called with.
+	warnings httpx.Warnings
 
 	// mu guards the caches below. One Client serves every ticket in a run,
 	// so two tickets can be inside a call at once.
 	mu sync.Mutex
-	// warnings holds the non-fatal problems each call recorded, keyed by
-	// the ticket id it was called with.
-	warnings map[string][]string
 	// contacts and companies cache resolved display names by object id.
 	contacts  map[string]crmContact
 	companies map[string]string
@@ -120,7 +121,11 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	c := &Client{cfg: cfg, baseURL: defaultBaseURL, host: apiHost}
+	trust, terr := httpx.NewTrust(defaultBaseURL, httpx.HostRule{Suffix: ".hubspot.com"})
+	if terr != nil {
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: %v", terr)}
+	}
+	c := &Client{cfg: cfg, baseURL: defaultBaseURL, trust: trust}
 	// A shallow copy: the Transport is shared with the caller's client,
 	// only the redirect policy is ours. Every request this adapter makes
 	// goes through it, so a response that tries to redirect one off the
@@ -132,19 +137,21 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 }
 
 // checkRedirect refuses to follow a redirect off the hosts this client
-// trusts. A Location header comes back inside a server response, which
-// makes it input, not configuration, and a signed file URL that has
-// expired into a generic error page is the ordinary way one points
-// somewhere else. Go already strips the Authorization header on a
-// cross-host hop, but that still lets the request happen and the response
-// get written to disk as if it were the real attachment.
+// trusts, exactly the decision urlTrust makes for any other URL taken out
+// of a response body. It returns a *httpx.RedirectRefused carrying the
+// refused host alone: Go wraps a CheckRedirect error in a *url.Error that
+// includes the full redirect target, and a signed file URL that has expired
+// into a generic error page is the ordinary way one points somewhere else,
+// sometimes with a token in its query. Go already strips the Authorization
+// header on a cross-host hop, but that still lets the request happen and
+// the response get written to disk as if it were the real attachment.
 func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 	if len(via) >= maxRedirects {
 		return fmt.Errorf("hubspot: stopped after %d redirects", maxRedirects)
 	}
 	host, trusted, _ := c.urlTrust(req.URL)
 	if !trusted {
-		return fmt.Errorf("hubspot: redirect to untrusted host %s", host)
+		return &httpx.RedirectRefused{Host: host, Reason: httpx.ReasonNotTrusted}
 	}
 	return nil
 }
@@ -154,61 +161,34 @@ func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
 // there. Only api.hubapi.com gets the credential; HubSpot's file-serving
 // hosts are trusted to download from because their URLs are signed.
 //
-// The transport and the userinfo matter as much as the host: a signed URL
-// arrives inside a response body, so a hostile or compromised account can
-// put "http://" in front of a legitimate host and watch the file cross the
-// network in the clear, or write "https://api.hubapi.com@attacker.example/x",
-// which parses with the real destination in Host and the decoy in User.
+// It is httpx.Trust plus the one predicate a Trust's suffix rules cannot
+// express: the content CDN's numbered hubspotusercontent-N.net family,
+// whose middle part is not fixed.
 func (c *Client) urlTrust(u *url.URL) (host string, trusted, sendAuth bool) {
-	if u == nil || u.Host == "" {
+	if u == nil || u.Hostname() == "" {
 		return "(no host)", false, false
 	}
-	host = hostKey(u.Scheme, u.Host)
-	if u.User != nil {
-		return host, false, false
+	host = httpx.NormalizeHost(u.Scheme, u.Host)
+	fetch, sendCred, reason := c.trust.Check(u)
+	if fetch {
+		return host, true, sendCred
 	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return host, false, false
-	}
-	if host == c.host {
-		return host, true, true
-	}
-	if fetchOnlyHost(host) {
+	if reason == httpx.ReasonNotTrusted && fetchOnlyUploadHost(host) {
 		return host, true, false
 	}
 	return host, false, false
 }
 
-// fetchOnlyHost reports whether host is one of HubSpot's file-serving
-// hosts. The content CDN is a numbered family whose middle part is not
-// fixed (cdn2.hubspotusercontent-na1.net, …), matched by requiring the
+// fetchOnlyUploadHost reports whether host is HubSpot's numbered content
+// CDN (cdn2.hubspotusercontent-na1.net, …), matched by requiring the
 // registrable label itself to begin with "hubspotusercontent", so
 // "hubspotusercontent-na1.net.evil.example" does not match.
-func fetchOnlyHost(host string) bool {
-	if host == "hubspot.com" || strings.HasSuffix(host, ".hubspot.com") {
-		return true
-	}
+func fetchOnlyUploadHost(host string) bool {
 	labels := strings.Split(host, ".")
 	if len(labels) < 2 || labels[len(labels)-1] != "net" {
 		return false
 	}
 	return strings.HasPrefix(labels[len(labels)-2], "hubspotusercontent")
-}
-
-// hostKey renders a scheme+host pair comparable: lowercased, with the DNS
-// root's trailing dot removed and the scheme's default port dropped.
-func hostKey(scheme, host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-	name, port, err := net.SplitHostPort(host)
-	if err != nil {
-		return strings.TrimSuffix(host, ".")
-	}
-	name = strings.TrimSuffix(name, ".")
-	scheme = strings.ToLower(scheme)
-	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
-		return name
-	}
-	return net.JoinHostPort(name, port)
 }
 
 // --- HTTP ---
@@ -260,14 +240,17 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 
 		resp, err := c.hc.Do(req)
 		if err != nil {
+			if host, ok := httpx.RedirectHost(err); ok {
+				return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: redirect to untrusted host %s", logPath(rawURL), host)}
+			}
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: %v", logPath(rawURL), err)}
 		}
-		body, readErr := readLimited(resp.Body, limit)
+		body, readErr := httpx.ReadLimited(resp.Body, limit)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if d, ok := retryAfter(resp.Header); ok {
-				if err := sleepCtx(ctx, d); err != nil {
+			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: %v", logPath(rawURL), err)}
 				}
 				continue
@@ -297,94 +280,21 @@ func (c *Client) downloadTo(ctx context.Context, rawURL string, withAuth bool, d
 	}
 	req.Header.Set("Accept", "*/*")
 
-	resp, err := c.hc.Do(req)
+	_, err = httpx.Download(ctx, c.hc, req, destPath, httpx.DownloadOptions{Max: maxAttachmentBytes})
+	if host, ok := httpx.RedirectHost(err); ok {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: redirect to untrusted host %s", logPath(rawURL), host)}
+	}
+	var se *httpx.StatusError
+	if errors.As(err, &se) {
+		return statusError(rawURL, se.Status, se.Body)
+	}
+	if errors.Is(err, httpx.ErrTooLarge) {
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
+	}
 	if err != nil {
 		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: %v", logPath(rawURL), err)}
 	}
-	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxJSONBody))
-		resp.Body.Close()
-	}()
-
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := readLimited(resp.Body, maxJSONBody)
-		return statusError(rawURL, resp.StatusCode, body)
-	}
-
-	f, err := os.Create(destPath)
-	if err != nil {
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: create %s: %v", filepath.Base(destPath), err)}
-	}
-	n, copyErr := io.Copy(f, io.LimitReader(resp.Body, maxAttachmentBytes+1))
-	closeErr := f.Close()
-	switch {
-	case copyErr != nil:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: read body: %v", logPath(rawURL), copyErr)}
-	case closeErr != nil:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: write %s: %v", filepath.Base(destPath), closeErr)}
-	case n > maxAttachmentBytes:
-		err = &source.Error{Code: source.Internal, Message: fmt.Sprintf("hubspot: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
-	default:
-		return nil
-	}
-	_ = os.Remove(destPath)
-	return err
-}
-
-// readLimited reads at most limit bytes and fails when the reader had more
-// to give, rather than returning a body that would decode as a short but
-// well-formed result.
-func readLimited(r io.Reader, limit int64) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, limit+1))
-	if err != nil {
-		return body, err
-	}
-	if int64(len(body)) > limit {
-		return body[:limit], fmt.Errorf("response exceeds the %d byte limit", limit)
-	}
-	return body, nil
-}
-
-// retryAfter reads a Retry-After header in either of its documented forms
-// (delta-seconds or an HTTP date) and reports whether the wait is short
-// enough to sit through.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		return 0, false
-	}
-	var d time.Duration
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0, false
-		}
-		d = time.Duration(secs) * time.Second
-	} else if t, err := http.ParseTime(v); err == nil {
-		d = time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-	} else {
-		return 0, false
-	}
-	if d > maxRetryAfter {
-		return 0, false
-	}
-	return d, true
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+	return nil
 }
 
 // logPath reduces a request URL to its path, dropping the query string so
@@ -430,36 +340,11 @@ func statusError(rawURL string, status int, body []byte) *source.Error {
 // reads WarningsFor once at the end. An identical line is dropped, since
 // Threads and Attachments walk the same message feed.
 func (c *Client) addWarnings(id string, warnings []string) {
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
+	c.warnings.Add(id, warnings...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes every
 // problem recorded across the calls made for ticket id so far.
 func (c *Client) WarningsFor(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	return c.warnings.Take(id)
 }

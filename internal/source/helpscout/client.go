@@ -21,16 +21,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
-	"net"
 	"net/http"
 	"net/url"
-	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 )
 
 // apiHost is the single host every Help Scout Mailbox API call goes to —
@@ -45,7 +43,7 @@ const defaultBaseURL = "https://" + apiHost
 // maxRetryAfter bounds how long a 429's Retry-After is honoured before the
 // call gives up and reports source.RateLimited instead of blocking a
 // triage run behind a long quota reset.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // maxJSONBody bounds an ordinary API JSON response (a conversation, a page
 // of threads, a mailbox list).
@@ -93,16 +91,16 @@ type Config struct {
 type Client struct {
 	cfg     Config
 	baseURL string // no trailing slash
-	host    string // normalised host the credential may be sent to
-	hc      *http.Client
+	// trust is api.helpscout.net alone: Help Scout serves attachment bytes
+	// from the API host itself, so there is no fetch-only CDN tier here —
+	// the one trusted host is also the one that gets the credential.
+	trust *httpx.Trust
+	hc    *http.Client
 
-	// mu guards warnings. One Client serves every ticket in a run, so two
-	// tickets can be inside a call at once.
-	mu sync.Mutex
 	// warnings holds the non-fatal problems each call recorded, keyed by
 	// the conversation id it was called with. Entries are appended by each
 	// call in a bundle and removed when read.
-	warnings map[string][]string
+	warnings httpx.Warnings
 
 	// tokMu serialises minting: it is held across the token HTTP request
 	// so a burst of concurrent calls mints one token rather than one each.
@@ -130,77 +128,17 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	if hc == nil {
 		hc = &http.Client{Timeout: 30 * time.Second}
 	}
-	c := &Client{cfg: cfg, baseURL: defaultBaseURL, host: apiHost}
+	trust, terr := httpx.NewTrust(defaultBaseURL)
+	if terr != nil {
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: %v", terr)}
+	}
+	c := &Client{cfg: cfg, baseURL: defaultBaseURL, trust: trust}
 	// A shallow copy: the Transport (and any pooled connections) is shared
 	// with the caller's client, only the redirect policy is ours. Every
 	// request this adapter makes goes through it, so a response that tries
 	// to redirect any of them off the trusted host is refused uniformly.
-	dl := *hc
-	dl.CheckRedirect = c.checkRedirect
-	c.hc = &dl
+	c.hc = httpx.Client(hc, trust, maxRedirects)
 	return c, nil
-}
-
-// checkRedirect refuses to follow a redirect off the host this client
-// trusts. A redirect Location comes back inside a server response, which
-// makes it input, not configuration: Go already strips the Authorization
-// header on a cross-host hop, but that still lets the request happen and
-// the response get written to disk as if it were the real attachment.
-func (c *Client) checkRedirect(req *http.Request, via []*http.Request) error {
-	if len(via) >= maxRedirects {
-		return fmt.Errorf("helpscout: stopped after %d redirects", maxRedirects)
-	}
-	host, trusted, _ := c.urlTrust(req.URL)
-	if !trusted {
-		return fmt.Errorf("helpscout: redirect to untrusted host %s", host)
-	}
-	return nil
-}
-
-// urlTrust reports whether a URL taken out of an API response may be
-// requested at all, and whether this client's bearer token may be sent
-// there. Help Scout serves attachment bytes from the API host itself, so
-// there is no fetch-only CDN tier here: the one trusted host is also the
-// one that gets the credential.
-//
-// The transport and the userinfo matter as much as the host. A link
-// arrives inside a response body, so a hostile or compromised instance can
-// put "http://" in front of a legitimate host and watch the token cross
-// the network in the clear, or write
-// "https://api.helpscout.net@attacker.example/x", which parses with the
-// real destination in Host and the decoy in User.
-func (c *Client) urlTrust(u *url.URL) (host string, trusted, sendAuth bool) {
-	if u == nil || u.Host == "" {
-		return "(no host)", false, false
-	}
-	host = hostKey(u.Scheme, u.Host)
-	if u.User != nil {
-		return host, false, false
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return host, false, false
-	}
-	if host == c.host {
-		return host, true, true
-	}
-	return host, false, false
-}
-
-// hostKey renders a scheme+host pair comparable: lowercased, with the DNS
-// root's trailing dot removed and the scheme's default port dropped, so
-// "API.HelpScout.net.:443" and "api.helpscout.net" are one host.
-func hostKey(scheme, host string) string {
-	host = strings.ToLower(strings.TrimSpace(host))
-	name, port, err := net.SplitHostPort(host)
-	if err != nil {
-		return strings.TrimSuffix(host, ".")
-	}
-	name = strings.TrimSuffix(name, ".")
-	scheme = strings.ToLower(scheme)
-	if (scheme == "https" && port == "443") || (scheme == "http" && port == "80") {
-		return name
-	}
-	return net.JoinHostPort(name, port)
 }
 
 // --- auth ---
@@ -252,9 +190,12 @@ func (c *Client) mintLocked(ctx context.Context) (string, error) {
 
 	resp, err := c.hc.Do(req)
 	if err != nil {
+		if host, ok := httpx.RedirectHost(err); ok {
+			return "", &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: POST %s: redirect to untrusted host %s", logPath(tokenURL), host)}
+		}
 		return "", &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: POST %s: %v", logPath(tokenURL), err)}
 	}
-	body, readErr := readLimited(resp.Body, maxJSONBody)
+	body, readErr := httpx.ReadLimited(resp.Body, maxJSONBody)
 	resp.Body.Close()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		// A token endpoint that answers 400 is answering about the
@@ -304,7 +245,7 @@ func (c *Client) apiGET(ctx context.Context, path string, query url.Values, out 
 }
 
 // apiGETAbsolute is apiGET for a caller that already holds a full URL —
-// a thread feed's "next" link, say, already checked against urlTrust.
+// a thread feed's "next" link, say, already checked against trust.Check.
 func (c *Client) apiGETAbsolute(ctx context.Context, rawURL string, out any) error {
 	body, err := c.doRaw(ctx, rawURL, true, maxJSONBody)
 	if err != nil {
@@ -346,9 +287,12 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 
 		resp, err := c.hc.Do(req)
 		if err != nil {
+			if host, ok := httpx.RedirectHost(err); ok {
+				return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: GET %s: redirect to untrusted host %s", logPath(rawURL), host)}
+			}
 			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: GET %s: %v", logPath(rawURL), err)}
 		}
-		body, readErr := readLimited(resp.Body, limit)
+		body, readErr := httpx.ReadLimited(resp.Body, limit)
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusUnauthorized && withAuth && !triedRefresh {
@@ -357,9 +301,9 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 			continue
 		}
 		if resp.StatusCode == http.StatusTooManyRequests && !triedWait {
-			if d, ok := retryAfter(resp.Header); ok {
+			if d, ok := retryAfter(resp.Header, maxRetryAfter); ok {
 				triedWait = true
-				if err := sleepCtx(ctx, d); err != nil {
+				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("helpscout: GET %s: %v", logPath(rawURL), err)}
 				}
 				continue
@@ -375,64 +319,17 @@ func (c *Client) doRaw(ctx context.Context, rawURL string, withAuth bool, limit 
 	}
 }
 
-// readLimited reads at most limit bytes and fails when the reader had more
-// to give, rather than returning a body that would decode as a short but
-// well-formed result.
-func readLimited(r io.Reader, limit int64) ([]byte, error) {
-	body, err := io.ReadAll(io.LimitReader(r, limit+1))
-	if err != nil {
-		return body, err
-	}
-	if int64(len(body)) > limit {
-		return body[:limit], fmt.Errorf("response exceeds the %d byte limit", limit)
-	}
-	return body, nil
-}
-
-// retryAfter reads a Retry-After header in either of its documented forms
-// (delta-seconds or an HTTP date) and reports whether the wait is short
-// enough to sit through. Help Scout also sends the same number as
-// X-RateLimit-Retry-After, which is read as a fallback.
-func retryAfter(h http.Header) (time.Duration, bool) {
-	v := strings.TrimSpace(h.Get("Retry-After"))
-	if v == "" {
-		v = strings.TrimSpace(h.Get("X-RateLimit-Retry-After"))
-	}
-	if v == "" {
-		return 0, false
-	}
-	var d time.Duration
-	if secs, err := strconv.Atoi(v); err == nil {
-		if secs < 0 {
-			return 0, false
+// retryAfter reads a Retry-After header, or — when Help Scout omits it —
+// its own X-RateLimit-Retry-After fallback, in either documented form, and
+// reports whether the wait is inside max.
+func retryAfter(h http.Header, max time.Duration) (time.Duration, bool) {
+	if h.Get("Retry-After") == "" {
+		if v := strings.TrimSpace(h.Get("X-RateLimit-Retry-After")); v != "" {
+			h = h.Clone()
+			h.Set("Retry-After", v)
 		}
-		d = time.Duration(secs) * time.Second
-	} else if t, err := http.ParseTime(v); err == nil {
-		d = time.Until(t)
-		if d < 0 {
-			d = 0
-		}
-	} else {
-		return 0, false
 	}
-	if d > maxRetryAfter {
-		return 0, false
-	}
-	return d, true
-}
-
-func sleepCtx(ctx context.Context, d time.Duration) error {
-	if d <= 0 {
-		return ctx.Err()
-	}
-	t := time.NewTimer(d)
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+	return httpx.RetryAfter(h, max)
 }
 
 // logPath reduces a request URL to its path, dropping the query string so
@@ -478,25 +375,7 @@ func statusError(method, rawURL string, status int, body []byte) *source.Error {
 // the caller reads WarningsFor once at the end. An identical line is
 // dropped, since Threads and Attachments walk the same thread feed.
 func (c *Client) addWarnings(id string, warnings []string) {
-	if len(warnings) == 0 {
-		return
-	}
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if c.warnings == nil {
-		c.warnings = map[string][]string{}
-	}
-	seen := make(map[string]bool, len(c.warnings[id])+len(warnings))
-	for _, w := range c.warnings[id] {
-		seen[w] = true
-	}
-	for _, w := range warnings {
-		if seen[w] {
-			continue
-		}
-		seen[w] = true
-		c.warnings[id] = append(c.warnings[id], w)
-	}
+	c.warnings.Add(id, warnings...)
 }
 
 // WarningsFor implements source.Warner: it returns and consumes every
@@ -504,12 +383,5 @@ func (c *Client) addWarnings(id string, warnings []string) {
 // the caller can surface them instead of a partial result that looks
 // complete.
 func (c *Client) WarningsFor(id string) []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	w := c.warnings[id]
-	delete(c.warnings, id)
-	if len(w) == 0 {
-		return nil
-	}
-	return append([]string(nil), w...)
+	return c.warnings.Take(id)
 }

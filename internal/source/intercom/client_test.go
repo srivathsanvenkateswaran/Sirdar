@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -489,6 +490,55 @@ func TestAttachments_RedirectToForeignHostRefused(t *testing.T) {
 	}
 }
 
+// TestAttachments_RedirectWarningCarriesNoQuery covers a trusted CDN host
+// (not the configured API host) answering a download with a redirect off
+// the trusted set — an expired pre-signed link falling back to a login URL
+// with a token in its query is the ordinary way this happens. That one
+// attachment must be skipped with a warning naming the refused host alone,
+// not fatal to the bundle (the conversation's other, unrelated attachment
+// still comes back), and the warning must never repeat the query string
+// Go's *url.Error would otherwise carry.
+func TestAttachments_RedirectWarningCarriesNoQuery(t *testing.T) {
+	cs := newCountingServer(t, apiHandler(t, "conversation.json"))
+	cdn := newFileServer(t)
+	uploads := newFileServer(t)
+	evil := newFileServer(t)
+	cdn.setRedirect("https://elsewhere.example/steal?token=abc123")
+	c := newClient(t, map[string]string{
+		apiHost:              addrOf(cs.Server),
+		cdnHost:              addrOf(cdn.Server),
+		uploadHost:           addrOf(uploads.Server),
+		"elsewhere.example":  addrOf(evil.Server),
+		"files.evil.example": addrOf(evil.Server),
+	})
+
+	dir := filepath.Join(t.TempDir(), "TCK-1")
+	atts, err := c.Attachments(context.Background(), "1001", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].Name != "trace.log" {
+		t.Fatalf("atts = %+v, want only the non-redirecting, trusted attachment", atts)
+	}
+	if hits, _ := evil.state(); hits != 0 {
+		t.Errorf("redirect target was called %d times, want 0", hits)
+	}
+
+	warnings := c.WarningsFor("1001")
+	var redirectWarning string
+	for _, w := range warnings {
+		if strings.Contains(w, "redirect to untrusted host") {
+			redirectWarning = w
+		}
+	}
+	if redirectWarning == "" || !strings.Contains(redirectWarning, "elsewhere.example") {
+		t.Fatalf("warnings = %v, want one naming the refused redirect host", warnings)
+	}
+	if strings.Contains(redirectWarning, "token") || strings.Contains(redirectWarning, "?") {
+		t.Errorf("warning carries the redirect target's query: %q", redirectWarning)
+	}
+}
+
 func TestAttachments_OversizeIsRefusedAndNotLeftOnDisk(t *testing.T) {
 	cs := newCountingServer(t, apiHandler(t, "conversation.json"))
 	cdn := newFileServer(t)
@@ -527,8 +577,8 @@ func TestSanitizeName(t *testing.T) {
 		{"a\x00b.txt", "ab.txt"},
 		{strings.Repeat("x", 300) + ".png", strings.Repeat("x", 116) + ".png"},
 	} {
-		if got := sanitizeName(tc.in); got != tc.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := httpx.SanitizeName(tc.in); got != tc.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }

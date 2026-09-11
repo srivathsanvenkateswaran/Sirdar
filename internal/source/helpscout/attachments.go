@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -29,7 +29,7 @@ type attachmentRef struct {
 // API gave, when it gave one, resolved against the API base URL if it came
 // back relative; otherwise the documented path built from ids this client
 // already holds. A link taken out of a response body is checked against
-// urlTrust before it is used, same as any other.
+// trust.Check before it is used, same as any other.
 func (c *Client) dataURL(convID string, a hsAttachment) string {
 	href := strings.TrimSpace(a.Links.Data.Href)
 	switch {
@@ -41,52 +41,6 @@ func (c *Client) dataURL(convID string, a hsAttachment) string {
 	}
 	return fmt.Sprintf("%s/v2/conversations/%s/attachments/%d/data",
 		c.baseURL, url.PathEscape(convID), a.ID)
-}
-
-// sanitizeName turns an attachment name taken from the API response into a
-// safe filename component: it strips any directory portion (so a name like
-// "../../evil.txt" cannot write outside the destination dir), drops path
-// separators and control characters, falls back to "attachment" for an
-// empty/"."/".." result, and caps the result at 120 bytes while preserving
-// the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := strings.TrimSpace(b.String())
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 // maxAttachmentJSON is how much of an attachment-data response is read.
@@ -170,9 +124,9 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			warnings = append(warnings, fmt.Sprintf("helpscout: attachment %s: invalid url", r.ID))
 			continue
 		}
-		host, trusted, _ := c.urlTrust(u)
-		if !trusted {
-			warnings = append(warnings, fmt.Sprintf("helpscout: attachment host not trusted: %s", host))
+		fetch, _, _ := c.trust.Check(u)
+		if !fetch {
+			warnings = append(warnings, fmt.Sprintf("helpscout: attachment host not trusted: %s", u.Hostname()))
 			continue
 		}
 
@@ -180,7 +134,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		if name == "" {
 			name = r.ID
 		}
-		name = sanitizeName(name)
+		name = httpx.SanitizeName(name)
 		filename := fmt.Sprintf("%d-%s", i+1, name)
 
 		if derr := c.downloadTo(ctx, r.URL, filepath.Join(dir, filename)); derr != nil {

@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -614,6 +615,81 @@ func TestAttachments_RedirectToForeignHostRefused(t *testing.T) {
 	}
 }
 
+// TestAttachments_RedirectWarningCarriesNoQuery covers the case where the
+// api.helpscout.net attachment fetch itself answers with a redirect off the
+// trusted host, carrying a token in the redirect's query — an expired
+// signed link is the ordinary way this happens. One attachment must be
+// skipped with a warning naming the refused host alone, not the error path
+// (the ticket's other, unrelated attachment still comes back), and that
+// warning must never repeat the query string Go's *url.Error would
+// otherwise carry.
+func TestAttachments_RedirectWarningCarriesNoQuery(t *testing.T) {
+	var elsewhereHits int
+	var mu sync.Mutex
+	elsewhere := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		elsewhereHits++
+		mu.Unlock()
+		_, _ = w.Write([]byte(`{"data":"c2VjcmV0"}`))
+	}))
+	defer elsewhere.Close()
+
+	convJSON := `{
+		"id": 123, "number": 1, "subject": "x", "status": "active",
+		"createdAt": "2026-09-01T10:00:00Z", "userUpdatedAt": "2026-09-01T10:00:00Z",
+		"_embedded": {"threads": [{
+			"id": 900, "type": "customer", "state": "published", "body": "x",
+			"createdAt": "2026-09-01T10:00:00Z",
+			"_embedded": {"attachments": [
+				{"id": 1, "filename": "redirected.png", "mimeType": "image/png",
+				 "_links": {"data": {"href": "https://api.helpscout.net/v2/conversations/123/attachments/1/data"}}},
+				{"id": 2, "filename": "fine.png", "mimeType": "image/png",
+				 "_links": {"data": {"href": "https://api.helpscout.net/v2/conversations/123/attachments/2/data"}}}
+			]}
+		}]}
+	}`
+	a := newAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v2/conversations/123":
+			w.Header().Set("Content-Type", "application/json")
+			_, _ = w.Write([]byte(convJSON))
+		case r.URL.Path == "/v2/conversations/123/attachments/1/data":
+			// The query is the point: an expired signed link falls back to a
+			// login URL that carries a token, and that token must not reach
+			// the warning through Go's *url.Error.
+			http.Redirect(w, r, "https://elsewhere.example/steal?token=abc123", http.StatusFound)
+		case r.URL.Path == "/v2/conversations/123/attachments/2/data":
+			_, _ = w.Write([]byte(`{"data":"aGVsbG8="}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	c := newClient(t, map[string]string{apiHost: addrOf(a.Server), "elsewhere.example": addrOf(elsewhere)})
+
+	dir := filepath.Join(t.TempDir(), "TCK-1")
+	atts, err := c.Attachments(context.Background(), "123", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].Name != "fine.png" {
+		t.Fatalf("atts = %+v, want only the non-redirecting attachment", atts)
+	}
+	mu.Lock()
+	hits := elsewhereHits
+	mu.Unlock()
+	if hits != 0 {
+		t.Errorf("redirect target was called %d times, want 0", hits)
+	}
+
+	warnings := c.WarningsFor("123")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "redirect to untrusted host elsewhere.example") {
+		t.Fatalf("warnings = %v, want one naming the untrusted redirect target", warnings)
+	}
+	if strings.Contains(warnings[0], "token") || strings.Contains(warnings[0], "?") {
+		t.Errorf("warning carries the redirect target's query: %q", warnings[0])
+	}
+}
+
 func TestAttachments_OversizeIsRefusedAndNotLeftOnDisk(t *testing.T) {
 	a := newAPI(t, conversationHandler(t, "conversation.json"))
 	c := newClient(t, map[string]string{apiHost: addrOf(a.Server)})
@@ -644,8 +720,8 @@ func TestSanitizeName(t *testing.T) {
 		{"a\x00b.txt", "ab.txt"},
 		{strings.Repeat("x", 300) + ".png", strings.Repeat("x", 116) + ".png"},
 	} {
-		if got := sanitizeName(tc.in); got != tc.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := httpx.SanitizeName(tc.in); got != tc.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
@@ -672,9 +748,9 @@ func TestURLTrust(t *testing.T) {
 		if perr != nil {
 			t.Fatalf("parse %q: %v", tc.raw, perr)
 		}
-		_, trusted, sendAuth := c.urlTrust(u)
+		trusted, sendAuth, _ := c.trust.Check(u)
 		if trusted != tc.trusted || sendAuth != tc.sendAuth {
-			t.Errorf("urlTrust(%q) = (%v, %v), want (%v, %v)", tc.raw, trusted, sendAuth, tc.trusted, tc.sendAuth)
+			t.Errorf("trust.Check(%q) = (%v, %v), want (%v, %v)", tc.raw, trusted, sendAuth, tc.trusted, tc.sendAuth)
 		}
 	}
 }

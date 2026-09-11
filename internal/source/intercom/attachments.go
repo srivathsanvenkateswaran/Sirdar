@@ -9,9 +9,9 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -21,52 +21,6 @@ type attachmentRef struct {
 	Name string
 	MIME string
 	URL  string
-}
-
-// sanitizeName turns an attachment name taken from the API response into a
-// safe filename component: it strips any directory portion (so a name like
-// "../../evil.txt" cannot write outside the destination dir), drops path
-// separators and control characters, falls back to "attachment" for an
-// empty/"."/".." result, and caps the result at 120 bytes while preserving
-// the extension.
-func sanitizeName(name string) string {
-	base := filepath.Base(name)
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := strings.TrimSpace(b.String())
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := filepath.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	stem := truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext))
-	return stem + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
 }
 
 // nameFromURL derives a filename from an attachment URL whose own name
@@ -152,7 +106,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 			continue
 		}
 
-		name := sanitizeName(r.Name)
+		name := httpx.SanitizeName(r.Name)
 		filename := fmt.Sprintf("%d-%s", i+1, name)
 
 		if derr := c.downloadTo(ctx, r.URL, sendAuth, filepath.Join(dir, filename)); derr != nil {

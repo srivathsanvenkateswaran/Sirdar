@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -509,6 +510,89 @@ func TestAttachments_RedirectToForeignHostRefused(t *testing.T) {
 	}
 }
 
+// TestAttachments_RedirectWarningCarriesNoQuery covers a trusted content
+// CDN host (not the configured API host) answering a signed-URL download
+// with a redirect off the trusted set — an expired signed link falling back
+// to a login URL with a token in its query is the ordinary way this
+// happens. That one attachment must be skipped with a warning naming the
+// refused host alone, not fatal to the bundle (the ticket's other,
+// unrelated attachment still comes back), and the warning must never repeat
+// the query string Go's *url.Error would otherwise carry.
+func TestAttachments_RedirectWarningCarriesNoQuery(t *testing.T) {
+	const redirectHost = "cdn3.hubspotusercontent-na1.net"
+	cdn := newFileServer(t)
+	cdnRedirect := newFileServer(t)
+	elsewhere := newFileServer(t)
+	// The query is the point: an expired signed link falls back to a login
+	// URL that carries a token, and that token must not reach the warning
+	// through Go's *url.Error.
+	cdnRedirect.setRedirect("https://elsewhere.example/steal?token=abc123")
+
+	ticketJSON := `{
+		"id": "7001",
+		"properties": {"subject": "x", "content": "x", "hs_pipeline_stage": "2",
+			"hs_ticket_priority": "HIGH", "createdate": "2026-09-01T10:00:00Z",
+			"hs_lastmodifieddate": "2026-09-02T12:00:00Z"},
+		"createdAt": "2026-09-01T10:00:00Z", "updatedAt": "2026-09-02T12:00:00Z",
+		"archived": false,
+		"associations": {"conversations": {"results": [{"id": "8001", "type": "ticket_to_conversation"}]}}
+	}`
+	messagesJSON := `{"results": [
+		{"id": "m-1", "type": "MESSAGE", "text": "x", "createdAt": "2026-09-01T10:00:00Z",
+		 "attachments": [{"id": "at-1", "type": "FILE", "fileId": "9001"}]},
+		{"id": "m-2", "type": "MESSAGE", "text": "x", "createdAt": "2026-09-01T10:05:00Z",
+		 "attachments": [{"id": "at-2", "type": "FILE", "fileId": "9003"}]}
+	]}`
+	cs := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		wantAuth(t, r)
+		w.Header().Set("Content-Type", "application/json")
+		switch r.URL.Path {
+		case "/crm/v3/objects/tickets/7001":
+			_, _ = w.Write([]byte(ticketJSON))
+		case "/conversations/v3/conversations/threads/8001/messages":
+			_, _ = w.Write([]byte(messagesJSON))
+		case "/files/v3/files/9001/signed-url":
+			_, _ = w.Write([]byte(`{"id":"9001","url":"https://` + redirectHost + `/hubfs/redirect","name":"redirect","extension":"png"}`))
+		case "/files/v3/files/9003/signed-url":
+			_, _ = w.Write([]byte(`{"id":"9003","url":"https://` + cdnHost + `/hubfs/fine","name":"fine","extension":"png"}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	})
+	c := newClient(t, map[string]string{
+		apiHost:             addrOf(cs.Server),
+		cdnHost:             addrOf(cdn.Server),
+		redirectHost:        addrOf(cdnRedirect.Server),
+		"elsewhere.example": addrOf(elsewhere.Server),
+	})
+
+	dir := filepath.Join(t.TempDir(), "TCK-1")
+	atts, err := c.Attachments(context.Background(), "7001", dir)
+	if err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+	if len(atts) != 1 || atts[0].ID != "9003" {
+		t.Fatalf("atts = %+v, want only the non-redirecting attachment", atts)
+	}
+	if hits, _ := elsewhere.state(); hits != 0 {
+		t.Errorf("redirect target was called %d times, want 0", hits)
+	}
+
+	warnings := c.WarningsFor("7001")
+	var redirectWarning string
+	for _, w := range warnings {
+		if strings.Contains(w, "redirect to untrusted host") {
+			redirectWarning = w
+		}
+	}
+	if redirectWarning == "" || !strings.Contains(redirectWarning, "elsewhere.example") {
+		t.Fatalf("warnings = %v, want one naming the refused redirect host", warnings)
+	}
+	if strings.Contains(redirectWarning, "token") || strings.Contains(redirectWarning, "?") {
+		t.Errorf("warning carries the redirect target's query: %q", redirectWarning)
+	}
+}
+
 func TestAttachments_OversizeIsRefusedAndNotLeftOnDisk(t *testing.T) {
 	cs := newCountingServer(t, apiHandler(t, "ticket.json"))
 	cdn := newFileServer(t)
@@ -545,8 +629,8 @@ func TestSanitizeName(t *testing.T) {
 		{"a\x00b.txt", "ab.txt"},
 		{strings.Repeat("x", 300) + ".png", strings.Repeat("x", 116) + ".png"},
 	} {
-		if got := sanitizeName(tc.in); got != tc.want {
-			t.Errorf("sanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
+		if got := httpx.SanitizeName(tc.in); got != tc.want {
+			t.Errorf("SanitizeName(%q) = %q, want %q", tc.in, got, tc.want)
 		}
 	}
 }
