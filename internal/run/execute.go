@@ -808,6 +808,13 @@ func (r *Runner) writeNote(p *prepared, kind note.Kind, filename, body string) (
 	}
 	p.state.Notes = append(p.state.Notes, runPath)
 
+	// An eval replay's note is a measurement of the agent, not a record of
+	// a ticket: filing it would overwrite the note a human wrote for the
+	// same key and reads in their vault.
+	if p.state.Eval {
+		return runPath, nil
+	}
+
 	filed := r.fileNote(p, kind, filename, body)
 	if filed == "" {
 		return runPath, nil
@@ -869,7 +876,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
 		for _, s := range states {
-			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID {
+			if s.Kind != store.KindTriage || s.Status != store.StatusCompleted || s.RunID == p.state.RunID || s.Eval {
 				continue
 			}
 			for _, path := range s.Notes {
@@ -945,6 +952,12 @@ func (r *Runner) writePlaybookSuggestions(p *prepared, f rcaFields) error {
 // it. A register that cannot be written is a warning, not a failed run:
 // the notes are already on disk.
 func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
+	// The register is the audit index of tickets that were worked. An
+	// eval replayed a stored bundle to score a prompt change, so it has
+	// nothing to add to it; its own report is .sirdar/eval/<stamp>.json.
+	if p.state.Eval {
+		return
+	}
 	row.Key = p.state.Key
 	row.RunID = p.state.RunID
 	row.Provider = p.state.Provider

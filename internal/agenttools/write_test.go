@@ -96,6 +96,83 @@ func TestWriteFileIsConfinedToTheRoot(t *testing.T) {
 	}
 }
 
+// TestWriteToolsRefuseGitAndSirdar is the second half of the confinement:
+// inside the workspace is not enough. A file written under .git/ is not
+// source — a pre-commit hook there is code the commit Sirdar makes would
+// execute — and .sirdar/ holds the run records, the register and the
+// config whose permission lists decide what the session may do.
+func TestWriteToolsRefuseGitAndSirdar(t *testing.T) {
+	dir := t.TempDir()
+	for _, existing := range []string{
+		filepath.Join(dir, ".git", "hooks", "pre-commit"),
+		filepath.Join(dir, ".sirdar", "config.yaml"),
+		filepath.Join(dir, "vendor", "dep", ".git", "hooks", "pre-commit"),
+	} {
+		if err := os.MkdirAll(filepath.Dir(existing), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(existing, []byte("original\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write, edit := writeTools(t, dir)
+
+	for _, path := range []string{
+		".git/hooks/pre-commit",
+		".git/config",
+		"./.git/hooks/post-checkout",
+		filepath.Join(dir, ".git", "hooks", "pre-push"),
+		"vendor/dep/.git/hooks/pre-commit",
+		".sirdar/config.yaml",
+		".sirdar/runs/OMNI-1/state.json",
+		filepath.Join(dir, ".sirdar", "register.jsonl"),
+	} {
+		_, err := callJSON(t, write, map[string]string{"path": path, "content": "#!/bin/sh\nowned\n"})
+		if err == nil {
+			t.Errorf("write_file accepted %q", path)
+			continue
+		}
+		if !strings.Contains(err.Error(), "never writes to") {
+			t.Errorf("write_file refused %q without saying why: %v", path, err)
+		}
+		if _, err := callJSON(t, edit, map[string]string{"path": path, "old": "original", "new": "owned"}); err == nil {
+			t.Errorf("edit_file accepted %q", path)
+		}
+	}
+
+	hook, err := os.ReadFile(filepath.Join(dir, ".git", "hooks", "pre-commit"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(hook) != "original\n" {
+		t.Fatalf("the git hook was modified: %q", hook)
+	}
+
+	// A file whose name merely starts the same way is ordinary source.
+	for _, path := range []string{".gitignore", ".github/workflows/ci.yml"} {
+		if _, err := callJSON(t, write, map[string]string{"path": path, "content": "x\n"}); err != nil {
+			t.Errorf("write_file refused an ordinary file %q: %v", path, err)
+		}
+	}
+}
+
+// TestWriteFileCreatesAMissingFileUnderTheRoot: a fix adds files, so a
+// path with no file at the end of it yet is an ordinary write as long as
+// it lands inside the workspace.
+func TestWriteFileCreatesAMissingFileUnderTheRoot(t *testing.T) {
+	dir := t.TempDir()
+	write, _ := writeTools(t, dir)
+
+	if _, err := callJSON(t, write, map[string]string{
+		"path": "export/stream/writer.go", "content": "package stream\n",
+	}); err != nil {
+		t.Fatalf("write_file: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "export", "stream", "writer.go")); err != nil {
+		t.Fatalf("the file was not created: %v", err)
+	}
+}
+
 func TestEditFileReplacesOneOccurrence(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "csv.go")

@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 func writeCfg(t *testing.T, body string) string {
@@ -780,7 +782,8 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 	if len(cfg.Permissions.FixBash) != len(DefaultFixBash) {
 		t.Fatalf("fixBash = %v, want the default list", cfg.Permissions.FixBash)
 	}
-	for _, want := range []string{"git *", "dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
+	for _, want := range []string{"git status*", "git diff*", "git log*", "git show*", "git grep*", "git blame*",
+		"dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
 		var found bool
 		for _, got := range cfg.Permissions.FixBash {
 			if got == want {
@@ -789,6 +792,28 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 		}
 		if !found {
 			t.Errorf("the default fixBash list is missing %q: %v", want, cfg.Permissions.FixBash)
+		}
+	}
+
+	// The git entries are the read-only ones. Sirdar makes the branch, the
+	// commit and the push itself, so a default that hands the agent
+	// `git commit`, `git push` or `git config` gives away reach the flow
+	// never needed.
+	for _, pattern := range cfg.Permissions.FixBash {
+		if pattern == "git *" {
+			t.Errorf("the default fixBash list still carries a blanket %q", pattern)
+		}
+	}
+	for _, banned := range []string{"git commit -m x", "git push origin main", "git config user.email x@y",
+		"git reset --hard HEAD~1", "git checkout -B other"} {
+		if ok, _ := provider.MatchCommand("", cfg.Permissions.FixBash, banned); ok {
+			t.Errorf("the default fixBash list allows %q", banned)
+		}
+	}
+	for _, wanted := range []string{"git status --porcelain", "git diff HEAD", "git log --oneline -20",
+		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./..."} {
+		if ok, reason := provider.MatchCommand("", cfg.Permissions.FixBash, wanted); !ok {
+			t.Errorf("the default fixBash list refuses %q: %s", wanted, reason)
 		}
 	}
 

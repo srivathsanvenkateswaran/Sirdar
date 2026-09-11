@@ -6,6 +6,7 @@ import (
 	"reflect"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 )
 
@@ -173,10 +174,11 @@ func lookup(doc any, path string) (any, bool) {
 	return cur, true
 }
 
+// index parses an array subscript out of a dot path. strconv.Atoi rather
+// than a scan: Sscanf reads "1abc" as 1 and reports no error, so a typo in
+// an expected.json key silently asserted about element 1.
 func index(seg string) (int, error) {
-	var i int
-	_, err := fmt.Sscanf(seg, "%d", &i)
-	return i, err
+	return strconv.Atoi(seg)
 }
 
 // Fraction is one overlap measure: how many of the things the human's note

@@ -16,7 +16,7 @@ sirdar eval OMNI-1 OMNI-2        just these
   --provider claude|codex|openai
   --model NAME
   --concurrency N
-sirdar golden add KEY [--from RUN_ID] [--golden DIR]
+sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]
 sirdar golden list [--golden DIR]
 ```
 
@@ -36,7 +36,10 @@ command drops into CI as it stands.
 ```
 
 It lives outside the repository by default, and should stay there: the bundles hold real
-customer conversations, names and attachments.
+customer conversations, names and attachments. `sirdar golden add` refuses a golden directory
+that sits inside a git work tree for that reason — the next `git add -A` would publish it, and
+a repository's history is not somewhere you can take a customer's conversation back out of.
+`--force` overrides the refusal for a repository you are certain may hold it.
 
 Building an entry is two steps. Triage the ticket for real, then:
 
@@ -136,3 +139,20 @@ keep when a run tells you something.
 The runs themselves are ordinary runs, so their directories are under `.sirdar/runs/<KEY>/` as
 usual, with the prompt, the events and the note each one produced. An eval that scores badly is
 read by opening those.
+
+### What an eval does not leave behind
+
+A replay is a measurement, not a triage, and it is marked as one: its `state.json` carries
+`"Eval": true`, and that mark changes what the run leaves behind.
+
+The note it produces stays in the run directory as `note.md`. It is **not** filed into
+`notes.dir`, where a real triage run puts it — that directory holds the note you wrote and read
+for that ticket, and an eval overwriting it would cost you the note to compare against.
+
+No row is appended to `.sirdar/register.jsonl`. The register is the audit index of tickets that
+were actually worked; the eval's own record is the report under `.sirdar/eval/`.
+
+And nothing downstream mistakes the replay for the key's newest triage. `sirdar rca` and
+`sirdar fix` both start from the newest completed triage note for a key, and they skip eval
+runs when they look — so replaying `OMNI-1234` today cannot put tomorrow's fix to work on a
+bundle captured six months ago.

@@ -11,7 +11,7 @@ func init() { commands["golden"] = cmdGolden }
 
 func cmdGolden(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR]")
+		fmt.Fprintln(stderr, "usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]")
 		return exitUsage
 	}
 	switch args[0] {
@@ -27,9 +27,10 @@ func cmdGolden(args []string, stdout, stderr io.Writer) int {
 
 func cmdGoldenAdd(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("golden add", stderr,
-		"usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR]")
+		"usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]")
 	from := fs.String("from", "", "run id to copy the bundle from (default: the newest completed triage run)")
 	golden := fs.String("golden", "", "golden set directory (default ~/.sirdar/golden)")
+	force := fs.Bool("force", false, "write the bundle even though the golden set is inside a git work tree")
 	positional, ok := parseFlags(fs, args, 1, 1, stderr)
 	if !ok {
 		return exitUsage
@@ -39,7 +40,7 @@ func cmdGoldenAdd(args []string, stdout, stderr io.Writer) int {
 	if !ok {
 		return exitUsage
 	}
-	added, err := eval.Add(cfg.Root, *golden, positional[0], *from)
+	added, err := eval.Add(cfg.Root, *golden, positional[0], *from, *force)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1

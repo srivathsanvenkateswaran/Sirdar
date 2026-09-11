@@ -49,11 +49,21 @@ type Options struct {
 	// BundleDir replaces the fetch: when it is set, prepare copies that
 	// directory into the run's bundle and never calls the tracker or the
 	// helpdesk. Everything downstream — the prompt, the session, the
-	// validation, the note, the register row — is identical, which is the
-	// point: the evaluation runner (internal/eval) replays a stored
-	// bundle through the same code path a live run takes, so what it
-	// scores is the run and not a simulation of one.
+	// validation, the note — is identical, which is the point: the
+	// evaluation runner (internal/eval) replays a stored bundle through
+	// the same code path a live run takes, so what it scores is the run
+	// and not a simulation of one.
 	BundleDir string
+
+	// Eval marks the run as a scored replay rather than a real triage.
+	// Everything up to the note is unchanged; what changes is what the
+	// run leaves behind. The note stays in the run directory: it is not
+	// filed into the notes directory, where it would overwrite the note a
+	// human wrote and reads, and no register row is appended, because the
+	// register is the audit index of tickets actually worked. The run
+	// state carries the same flag, which is what keeps an eval's note out
+	// of the "newest triage note" a later rca or fix reads.
+	Eval bool
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull

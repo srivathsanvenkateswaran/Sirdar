@@ -23,9 +23,11 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
@@ -137,6 +139,18 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	}
 
 	g := git{dir: cfg.Root}
+
+	// A rerun with --accept-deviation is a human saying yes to a commit
+	// they have already read. Cutting the branch again from origin would
+	// orphan that commit and spend a second session re-deriving it, so
+	// when the branch still carries exactly the commit the blocked run
+	// recorded, this pushes that commit and opens the pull request for it.
+	if o.AcceptDeviation && !o.DryRun {
+		if prior, rep, ok := reviewedCommit(ctx, g, cfg.Root, key); ok {
+			return pushReviewed(ctx, g, cfg, key, tn, prior, rep, o, stderr)
+		}
+	}
+
 	base, branch, err := prepareBranch(ctx, g, key, tn, o)
 	if err != nil {
 		return res, err
@@ -157,6 +171,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		Options: runner.Options{Model: o.Model, DryRun: o.DryRun},
 		Prompt:  text,
 		Branch:  branch,
+		Base:    base,
 	})
 	res.RunID, res.State = out.State.RunID, out.State
 	if err != nil {
@@ -190,6 +205,12 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	res.Commit = commit
 	fmt.Fprintf(stderr, "[%s] commit %s on %s\n", key, short(commit), branch)
 
+	// The commit goes into the run's state before anything can go wrong
+	// with the push: it is what a later --accept-deviation rerun looks for
+	// to avoid asking a second agent for work a human already reviewed.
+	recordCommit(cfg.Root, out.State.RunID, branch, base, commit, stderr, key)
+	res.State.Fix.Branch, res.State.Fix.Base, res.State.Fix.Commit = branch, base, commit
+
 	appendRegister(cfg.Root, key, out.State, tn)
 
 	if dev := strings.TrimSpace(res.Report.DeviationFromNote); dev != "" && !o.AcceptDeviation {
@@ -197,26 +218,122 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		return res, nil
 	}
 
-	if err := g.run(ctx, "push", "-u", "origin", branch); err != nil {
+	if err := publish(ctx, g, cfg, key, tn, o, &res, stderr); err != nil {
 		return res, err
 	}
-	res.Pushed = true
-	fmt.Fprintf(stderr, "[%s] pushed %s\n", key, branch)
+	return res, nil
+}
 
-	res.PRTitle, res.PRBody = pullRequestText(key, tn, res.Report)
+// publish is everything after the commit: the push, the pull request, and
+// the two copies of the triage note. Both the ordinary flow and the
+// --accept-deviation rerun end here, so a commit reaches the remote the
+// same way whichever of them made it.
+func publish(ctx context.Context, g git, cfg *config.Config, key string, tn triageNote, o Options, res *Result, stderr io.Writer) error {
+	if err := g.run(ctx, "push", "-u", "origin", res.Branch); err != nil {
+		return err
+	}
+	res.Pushed = true
+	fmt.Fprintf(stderr, "[%s] pushed %s\n", key, res.Branch)
+
+	res.PRTitle, res.PRBody = pullRequestText(key, tn, res.Report, cfg.Fix.PRIncludesComplaint)
 	if remote, err := g.remoteURL(ctx); err == nil {
-		res.CompareURL = compareURL(remote, base, branch)
+		res.CompareURL = compareURL(remote, res.Base, res.Branch)
 	}
 	if !o.NoPR {
-		if url, err := openPR(ctx, cfg.Root, base, branch, res.PRTitle, res.PRBody); err != nil {
+		if url, err := openPR(ctx, cfg.Root, res.Base, res.Branch, res.PRTitle, res.PRBody); err != nil {
 			fmt.Fprintf(stderr, "[%s] %v\n", key, err)
 		} else {
 			res.PRURL = url
 		}
 	}
 
-	res.NotesUpdated = updateNotes(tn, res.PRURL, commit, stderr, key)
+	res.NotesUpdated = updateNotes(tn, res.PRURL, res.Commit, stderr, key)
+	return nil
+}
+
+// reviewedCommit finds the commit a previous fix run left on its branch for
+// a human to read: the newest fix run for the key, when it recorded a
+// commit and its branch still points at exactly that commit. A branch that
+// has moved on, been deleted, or was never recorded means there is nothing
+// to reuse, and the caller runs the ordinary flow.
+//
+// Only the newest fix run is considered. An older commit that somebody left
+// on a branch months ago is not what "--accept-deviation" refers to.
+func reviewedCommit(ctx context.Context, g git, root, key string) (store.State, Report, bool) {
+	var rep Report
+	states, err := store.List(root, key)
+	if err != nil {
+		return store.State{}, rep, false
+	}
+	for _, s := range states {
+		if s.Kind != store.KindFix || s.Eval {
+			continue
+		}
+		if s.Status != store.StatusCompleted || s.Fix.Commit == "" || s.Fix.Branch == "" {
+			return store.State{}, rep, false
+		}
+		head, err := g.out(ctx, "rev-parse", "--verify", "--quiet", "refs/heads/"+s.Fix.Branch)
+		if err != nil || head != s.Fix.Commit {
+			return store.State{}, rep, false
+		}
+		doc, err := runner.FixReport(root, key, s.RunID)
+		if err != nil {
+			return store.State{}, rep, false
+		}
+		if err := json.Unmarshal(doc, &rep); err != nil || strings.TrimSpace(rep.Summary) == "" {
+			return store.State{}, rep, false
+		}
+		return s, rep, true
+	}
+	return store.State{}, rep, false
+}
+
+// pushReviewed completes a fix from the commit a previous run made, with no
+// agent session, no new branch and no second register row: the work already
+// exists and was recorded when it was made.
+func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn triageNote, prior store.State, rep Report, o Options, stderr io.Writer) (Result, error) {
+	res := Result{
+		Key:    key,
+		Branch: prior.Fix.Branch,
+		Base:   prior.Fix.Base,
+		RunID:  prior.RunID,
+		State:  prior,
+		Report: rep,
+		Commit: prior.Fix.Commit,
+	}
+	if res.Base == "" {
+		base, err := g.defaultBranch(ctx)
+		if err != nil {
+			return res, err
+		}
+		res.Base = base
+	}
+	if o.Base != "" {
+		res.Base = o.Base
+	}
+	fmt.Fprintf(stderr, "[%s] %s on %s is the commit run %s made; pushing it rather than starting another session\n",
+		key, short(res.Commit), res.Branch, prior.RunID)
+
+	if err := publish(ctx, g, cfg, key, tn, o, &res, stderr); err != nil {
+		return res, err
+	}
 	return res, nil
+}
+
+// recordCommit writes the branch, base and commit into the fix run's own
+// state.json. A failure is reported and otherwise ignored: the commit is
+// made, and failing the command here would only make it look as though it
+// were not.
+func recordCommit(root, runID, branch, base, commit string, stderr io.Writer, key string) {
+	rn, state, err := store.Open(root, runID)
+	if err != nil {
+		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
+		return
+	}
+	state.Fix.Branch, state.Fix.Base, state.Fix.Commit = branch, base, commit
+	if err := rn.WriteState(state); err != nil {
+		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
+	}
 }
 
 // --- the triage note --------------------------------------------------
@@ -337,7 +454,7 @@ func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Opti
 		return "", "", err
 	}
 	if !clean {
-		return "", "", fmt.Errorf("fix: working tree not clean; commit or stash your changes first:\n%s", status)
+		return "", "", dirtyTreeError(status)
 	}
 	if err := g.run(ctx, "fetch", "origin"); err != nil {
 		return "", "", err
@@ -358,6 +475,65 @@ func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Opti
 		return "", "", err
 	}
 	return base, branch, nil
+}
+
+// dirtyTreeError explains the refusal, and says the useful thing in the
+// case that catches people out: a workspace whose only uncommitted entries
+// are Sirdar's own run records. Those belong in .git/info/exclude — which
+// is what `sirdar init` writes, and what a workspace initialised before
+// that rule existed is missing — not in the commit a fix makes.
+func dirtyTreeError(status string) error {
+	if sirdarOnly(status) {
+		return fmt.Errorf("fix: working tree not clean, but every uncommitted entry is under .sirdar/ — "+
+			"Sirdar's own run records and register, not your work. Exclude them from the repository:\n\n"+
+			"  printf '%%s\\n' .sirdar/runs/ .sirdar/register.jsonl .sirdar/eval/ >> .git/info/exclude\n\n"+
+			"and run the fix again:\n%s", status)
+	}
+	return fmt.Errorf("fix: working tree not clean; commit or stash your changes first:\n%s", status)
+}
+
+// sirdarOnly reports whether every entry in a `git status --porcelain`
+// listing names a path under .sirdar/.
+func sirdarOnly(status string) bool {
+	lines := strings.Split(strings.TrimSpace(status), "\n")
+	if strings.TrimSpace(status) == "" {
+		return false
+	}
+	for _, line := range lines {
+		paths := statusPaths(line)
+		if len(paths) == 0 {
+			return false
+		}
+		for _, path := range paths {
+			if !strings.HasPrefix(path, ".sirdar/") {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// statusPaths pulls the path out of one porcelain status line — two status
+// characters, a blank, then the path — and both paths out of a rename,
+// whose two are separated by " -> ". Git quotes a path carrying anything
+// unusual, so the quotes come off before the prefix is tested.
+func statusPaths(line string) []string {
+	if len(line) < 4 {
+		return nil
+	}
+	rest := strings.TrimSpace(line[2:])
+	if from, to, ok := strings.Cut(rest, " -> "); ok {
+		return []string{unquotePath(from), unquotePath(to)}
+	}
+	return []string{unquotePath(rest)}
+}
+
+func unquotePath(p string) string {
+	p = strings.TrimSpace(p)
+	if unquoted, err := strconv.Unquote(p); err == nil {
+		return unquoted
+	}
+	return strings.Trim(p, `"`)
 }
 
 // branchSlugMax keeps a branch name short enough to read in a terminal.
@@ -383,6 +559,13 @@ func BranchName(key, title string) string {
 // is the agent's summary as the subject and the note's root cause under it,
 // and it carries no attribution trailer of any kind: the change is the
 // work of the engineer who approved the note.
+//
+// The commit is made with --no-verify. A repository's hooks are code, and
+// this commit is made moments after an agent session had write access to
+// the tree: running whatever is in .git/hooks at that point would hand a
+// prompt injection the shell it was refused everywhere else. Nothing stops
+// an operator from running their own hooks over the branch afterwards —
+// the pull request is where that check belongs.
 func commitChanges(ctx context.Context, g git, tn triageNote, rep Report) (string, error) {
 	// .sirdar/ holds run directories and the register, which are records
 	// of this run and not part of the fix.
@@ -393,7 +576,7 @@ func commitChanges(ctx context.Context, g git, tn triageNote, rep Report) (strin
 		return "", fmt.Errorf("fix: the agent changed no files; nothing to commit. Its summary was: %s", firstLine(rep.Summary))
 	}
 	subject, body := CommitMessage(tn, rep)
-	if err := g.run(ctx, "commit", "-m", subject, "-m", body); err != nil {
+	if err := g.run(ctx, "commit", "--no-verify", "-m", subject, "-m", body); err != nil {
 		return "", err
 	}
 	return g.head(ctx)
@@ -414,15 +597,26 @@ func CommitMessage(tn triageNote, rep Report) (string, string) {
 	return subject, b.String()
 }
 
-// pullRequestText renders the pull request's title and body: the symptom
-// the customer reported, the root cause the note settled on, the fix the
-// agent made, and the two links back to the systems of record.
-func pullRequestText(key string, tn triageNote, rep Report) (string, string) {
+// pullRequestText renders the pull request's title and body: the symptom,
+// the root cause the note settled on, the fix the agent made, and the two
+// links back to the systems of record.
+//
+// The symptom is the note's title unless the workspace set
+// fix.prIncludesComplaint. The complaint is the customer's own words out of
+// a support ticket, and a pull request is often public or read by people
+// who have no business with that ticket; the title says what broke without
+// quoting whoever reported it.
+func pullRequestText(key string, tn triageNote, rep Report, includeComplaint bool) (string, string) {
 	title := fmt.Sprintf("[%s] fix: %s", key, firstLine(rep.Summary))
+
+	symptom := fallback(tn.doc.Title, "See the triage note.")
+	if includeComplaint {
+		symptom = fallback(tn.doc.Complaint, tn.doc.Title, "See the triage note.")
+	}
 
 	var b strings.Builder
 	b.WriteString("## Symptom\n\n")
-	b.WriteString(fallback(tn.doc.Complaint, tn.doc.Title, "See the triage note.") + "\n\n")
+	b.WriteString(symptom + "\n\n")
 	b.WriteString("## Root cause\n\n")
 	b.WriteString(fallback(tn.doc.RootCause.Hypothesis, "See the triage note.") + "\n\n")
 	b.WriteString("## Fix\n\n")

@@ -62,6 +62,38 @@ var fixAllowed = map[string]bool{
 	"edit_file":  true,
 }
 
+// writeTools are every tool name whose arguments name a file the call
+// would change: the ones a fix may use, plus NotebookEdit, which it may
+// not. The path check runs over all of them, so the rule does not depend
+// on which names happen to be allowed today.
+var writeTools = map[string]bool{
+	"Edit":         true,
+	"Write":        true,
+	"MultiEdit":    true,
+	"NotebookEdit": true,
+	"write_file":   true,
+	"edit_file":    true,
+}
+
+// writeArgs is every argument name an editing tool names its target with:
+// Claude Code's and Codex's file_path, NotebookEdit's notebook_path, and
+// the path of Sirdar's own write_file and edit_file. A call naming none of
+// them is refused rather than approved unseen.
+type writeArgs struct {
+	FilePath     string `json:"file_path"`
+	NotebookPath string `json:"notebook_path"`
+	Path         string `json:"path"`
+}
+
+func (a writeArgs) target() string {
+	for _, p := range []string{a.FilePath, a.NotebookPath, a.Path} {
+		if strings.TrimSpace(p) != "" {
+			return p
+		}
+	}
+	return ""
+}
+
 // FixPolicy is the permission policy for a fix run: the read-only set plus
 // Edit, Write and MultiEdit, with shell commands judged against the
 // workspace's permissions.fixBash list rather than permissions.bash.
@@ -148,8 +180,14 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	if AlwaysAllowed[tool] {
 		return Decision{Allow: true}
 	}
-	if p.IsFix() && fixAllowed[tool] {
-		return Decision{Allow: true}
+	if p.IsFix() {
+		if fixAllowed[tool] {
+			return p.decideWrite(tool, input)
+		}
+		if writeTools[tool] {
+			return Decision{Allow: false, Message: "Sirdar policy: " + tool +
+				" is not one of the editing tools a fix may use"}
+		}
 	}
 	if AlwaysDenied[tool] || fixAllowed[tool] {
 		return Decision{Allow: false, Message: "Sirdar policy: triage runs are read-only"}
@@ -165,6 +203,46 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 		return p.decideBash(args.Command)
 	}
 	return Decision{Allow: false, Message: "Sirdar policy: tool " + tool + " is not permitted"}
+}
+
+// decideWrite judges where an editing tool would write. Being named in
+// fixAllowed is only half the permission: a fix session runs a provider CLI
+// whose Edit and Write take an absolute path, so without this the flow's
+// one write-enabled session could edit any file on the machine.
+//
+// The target is resolved the same way every path argument in Sirdar is
+// (ResolveWithin): relative to the workspace root, through symlinks, with
+// the nearest existing ancestor standing in for a file that does not exist
+// yet. Anything that does not land inside the root is refused, and so is
+// anything inside .git/ — where a written hook is code the next commit runs
+// — or inside the workspace's own .sirdar/, which holds the run records and
+// the permission lists this policy is built from.
+//
+// This is the outer of two gates. Sirdar's own agent loop checks the same
+// two rules again inside the tool (internal/agenttools), because a tool
+// that is only as safe as the caller in front of it is not safe.
+func (p *PermissionPolicy) decideWrite(tool string, input json.RawMessage) Decision {
+	var args writeArgs
+	_ = json.Unmarshal(input, &args)
+	target := args.target()
+	if target == "" {
+		return Decision{Allow: false, Message: "Sirdar policy: " + tool +
+			" named no file path, so where it would write cannot be checked"}
+	}
+	if strings.TrimSpace(p.Root) == "" {
+		return Decision{Allow: false, Message: "Sirdar policy: write outside the workspace: " +
+			quote(target) + " cannot be checked because the policy has no workspace root"}
+	}
+	real, err := ResolveWithin(p.Root, target)
+	if err != nil {
+		return Decision{Allow: false, Message: "Sirdar policy: write outside the workspace: " +
+			quote(target) + " does not resolve to a path inside " + quote(p.Root)}
+	}
+	if reserved := ReservedWrite(p.Root, real); reserved != "" {
+		return Decision{Allow: false, Message: "Sirdar policy: " + quote(target) +
+			" is inside " + reserved + "/, which a fix never writes to"}
+	}
+	return Decision{Allow: true}
 }
 
 // decideBash allows a command only when MatchCommand does, and reports

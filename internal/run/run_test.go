@@ -2175,8 +2175,9 @@ func TestFixRunRecordsItsKindAndPrompt(t *testing.T) {
 	if !spec.Mode.IsFix() || !spec.Policy.IsFix() {
 		t.Errorf("the fix run started a triage session: mode=%q", spec.Mode)
 	}
-	if len(spec.Policy.BashAllow) == 0 || spec.Policy.BashAllow[0] != "git *" {
-		t.Errorf("the fix session's bash list is %v", spec.Policy.BashAllow)
+	if len(spec.Policy.BashAllow) == 0 || spec.Policy.BashAllow[0] != cfg.Permissions.FixBash[0] {
+		t.Errorf("the fix session's bash list is %v, not permissions.fixBash %v",
+			spec.Policy.BashAllow, cfg.Permissions.FixBash)
 	}
 }
 

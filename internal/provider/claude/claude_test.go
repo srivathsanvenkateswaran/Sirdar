@@ -830,8 +830,10 @@ func TestResultLineIsRecognisedByItsType(t *testing.T) {
 }
 
 // TestFixModeDropsDisallowedTools: --disallowedTools is what stops the CLI
-// editing files before Sirdar is ever asked, so a fix session — which
-// exists to edit files — must not be started with it.
+// editing files before Sirdar is ever asked, so the three editing tools
+// come off it for a fix session — which exists to edit files — while
+// NotebookEdit, which nothing in the flow needs, stays refused by the CLI
+// as well as by the policy.
 func TestFixModeDropsDisallowedTools(t *testing.T) {
 	spec := provider.SessionSpec{OutputSchema: []byte(`{}`)}
 
@@ -842,11 +844,11 @@ func TestFixModeDropsDisallowedTools(t *testing.T) {
 
 	spec.Mode = provider.ModeFix
 	fix := args(spec)
-	if contains(fix, "--disallowedTools") {
-		t.Fatalf("a fix session was started with --disallowedTools: %v", fix)
-	}
 	if contains(fix, disallowedTools) {
-		t.Fatalf("a fix session was still handed the disallowed list: %v", fix)
+		t.Fatalf("a fix session was still handed the whole disallowed list: %v", fix)
+	}
+	if !contains(fix, "--disallowedTools") || !contains(fix, "NotebookEdit") {
+		t.Fatalf("a fix session may still not edit a notebook: %v", fix)
 	}
 	// Everything else about the command line is unchanged.
 	for _, want := range []string{"-p", "--permission-prompt-tool", "stdio", "--permission-mode", "default", "--json-schema"} {

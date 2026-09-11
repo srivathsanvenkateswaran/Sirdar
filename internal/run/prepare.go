@@ -89,6 +89,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		Model:     model,
 		StartedAt: now,
 		UpdatedAt: now,
+		Eval:      o.Eval,
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes

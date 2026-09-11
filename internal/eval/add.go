@@ -31,11 +31,15 @@ type Added struct {
 // assertion that will fail for the wrong reason six months from now.
 //
 // runID may be empty, in which case the newest completed triage run for the
-// key is used.
-func Add(root, goldenRoot, key, runID string) (Added, error) {
+// key is used. force skips the refusal to write a golden set into a git
+// work tree.
+func Add(root, goldenRoot, key, runID string, force bool) (Added, error) {
 	a := Added{Key: key, RunID: runID}
 	if !store.ValidKey(key) {
 		return a, fmt.Errorf("eval: %q is not a usable ticket key", key)
+	}
+	if err := checkGoldenLocation(ExpandDir(goldenRoot), force); err != nil {
+		return a, err
 	}
 
 	runDir, runID, err := findRun(root, key, runID)
@@ -77,6 +81,47 @@ func Add(root, goldenRoot, key, runID string) (Added, error) {
 	}
 	a.SkeletonWritten = true
 	return a, nil
+}
+
+// checkGoldenLocation refuses a golden set that lives inside a git work
+// tree, unless the caller forced it. A golden bundle is a real customer's
+// ticket — their words, their name, their attachments — and the default
+// location is deliberately outside any repository. Once it is inside one,
+// the next `git add -A` publishes it, and a repository's history is not
+// something you can take a customer's conversation back out of.
+func checkGoldenLocation(dir string, force bool) error {
+	if force {
+		return nil
+	}
+	worktree, ok := gitWorkTree(dir)
+	if !ok {
+		return nil
+	}
+	return fmt.Errorf("eval: %s is inside the git work tree at %s, and a golden bundle holds a real customer's "+
+		"ticket, conversation and attachments. Keep the golden set outside any repository (the default is "+
+		"~/.sirdar/golden), or pass --force if this repository is one you are certain may hold it", dir, worktree)
+}
+
+// gitWorkTree walks up from dir looking for the repository it is inside,
+// and returns that repository's directory. A ".git" entry counts whether it
+// is the directory of an ordinary clone or the file a worktree or submodule
+// carries. dir itself need not exist yet: the walk starts where it would be
+// created.
+func gitWorkTree(dir string) (string, bool) {
+	current, err := filepath.Abs(dir)
+	if err != nil {
+		return "", false
+	}
+	for {
+		if _, err := os.Lstat(filepath.Join(current, ".git")); err == nil {
+			return current, true
+		}
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", false
+		}
+		current = parent
+	}
 }
 
 // findRun resolves the run directory to copy from: the named run, or the

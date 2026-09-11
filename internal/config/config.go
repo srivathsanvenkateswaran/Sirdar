@@ -152,13 +152,26 @@ const DefaultMaxContextTokens = 128000
 const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 
 // DefaultFixBash is the shell allow-list a fix session gets when the
-// workspace configures none: the version-control commands the flow itself
-// needs, and the build and test commands a fix has to run before it can
-// claim to work. It is deliberately a build-and-test list, not a general
-// one: anything else a workspace needs is an explicit permissions.fixBash
-// entry somebody chose to write.
+// workspace configures none: the git commands that read the repository,
+// and the build and test commands a fix has to run before it can claim to
+// work. It is deliberately a read-and-build list, not a general one:
+// anything else a workspace needs is an explicit permissions.fixBash entry
+// somebody chose to write.
+//
+// The git entries are the read-only ones by name rather than a blanket
+// "git *". Sirdar makes the branch, the commit and the push itself, after
+// the report comes back and after the deviation check, so nothing in the
+// flow depends on the agent reaching `git commit`, `git push`, `git reset`
+// or `git config` — and a default that hands them over is a default that
+// lets one prompt injection rewrite history or push a branch nobody
+// reviewed.
 var DefaultFixBash = []string{
-	"git *",
+	"git status*",
+	"git diff*",
+	"git log*",
+	"git show*",
+	"git grep*",
+	"git blame*",
 	"dotnet build*",
 	"dotnet test*",
 	"npm test*",
@@ -226,6 +239,13 @@ type Config struct {
 	Attachments struct {
 		MaxBytes int64 `yaml:"maxBytes"`
 	} `yaml:"attachments"`
+	// Fix configures the one flow that writes. PRIncludesComplaint puts
+	// the customer's own words in the pull request body; it is off by
+	// default because a pull request is often public and the complaint is
+	// a quotation from a support ticket.
+	Fix struct {
+		PRIncludesComplaint bool `yaml:"prIncludesComplaint"`
+	} `yaml:"fix"`
 	Playbooks string `yaml:"playbooks"`
 	Providers struct {
 		Claude struct {

@@ -34,6 +34,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 // Spec describes one tool to the model: a stable name, a one-paragraph
@@ -147,56 +149,36 @@ func (o Options) root() (string, error) {
 // workspace, or returns errPathEscape.
 //
 // A relative path is joined onto Root; an absolute path is taken as given.
-// Both the candidate and the root are then run through EvalSymlinks — for
+// Both the candidate and the root are then resolved through symlinks — for
 // a path that does not exist yet, the nearest existing parent is resolved
 // and the remainder appended — so a symlink inside the workspace that
-// points outside it is rejected like any other outside path.
+// points outside it is rejected like any other outside path. The rule
+// itself is provider.ResolveWithin, which is also what the permission
+// policy judging a provider CLI's own Edit and Write goes through: one
+// confinement over two surfaces, rather than two that drift apart.
 func (o Options) resolve(p string) (string, error) {
-	root, err := o.root()
+	real, err := provider.ResolveWithin(o.Root, p)
 	if err != nil {
-		return "", err
-	}
-	var candidate string
-	if filepath.IsAbs(p) {
-		candidate = filepath.Clean(p)
-	} else {
-		candidate, err = filepath.Abs(filepath.Join(o.Root, p))
-		if err != nil {
-			return "", errPathEscape
-		}
-	}
-	real, err := evalNearest(candidate)
-	if err != nil {
-		return "", errPathEscape
-	}
-	if real != root && !strings.HasPrefix(real, root+string(filepath.Separator)) {
 		return "", errPathEscape
 	}
 	return real, nil
 }
 
-// evalNearest resolves symlinks in p. When p itself does not exist it walks
-// up to the nearest existing ancestor, resolves that, and re-appends the
-// missing tail — so a not-yet-created path under a symlinked directory
-// still lands on its real location.
-func evalNearest(p string) (string, error) {
-	current := p
-	rest := ""
-	for {
-		resolved, err := filepath.EvalSymlinks(current)
-		if err == nil {
-			if rest == "" {
-				return resolved, nil
-			}
-			return filepath.Join(resolved, rest), nil
-		}
-		parent := filepath.Dir(current)
-		if parent == current {
-			return "", err
-		}
-		rest = filepath.Join(filepath.Base(current), rest)
-		current = parent
+// resolveWrite is resolve for the tools that change a file: confined to the
+// workspace, and then refused for the two directories inside it a fix has
+// no business writing to. A file under .git/ is not source — a pre-commit
+// hook written there is code the commit Sirdar makes would execute — and
+// .sirdar/ holds the run records, the register and the configuration whose
+// permission lists decide what this session may do at all.
+func (o Options) resolveWrite(p string) (string, error) {
+	abs, err := o.resolve(p)
+	if err != nil {
+		return "", err
 	}
+	if reserved := provider.ReservedWrite(o.Root, abs); reserved != "" {
+		return "", fmt.Errorf("%s is inside %s/, which a fix never writes to", p, reserved)
+	}
+	return abs, nil
 }
 
 // rel renders an absolute path inside the workspace relative to root, so

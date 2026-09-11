@@ -43,11 +43,18 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
   and `2>/dev/null`) and the MCP write-verb heuristic behind `permissions.mcp`.
 - On `evalfix`, `sirdar fix` is the one session that writes, and it flips all three layers at
-  once through `SessionSpec.Mode`: no `--disallowedTools`, Codex's `workspace-write` sandbox,
-  and `agenttools.WriteSet` in the openai loop. `provider.FixPolicy` still refuses everything
-  but `Edit`/`Write`/`MultiEdit`, and matches shell commands against `permissions.fixBash`
-  rather than `permissions.bash`. The human gate is the triage note's `status`, and a non-empty
-  `deviationFromNote` in the agent's report stops the push until `--accept-deviation`.
+  once through `SessionSpec.Mode`: `--disallowedTools` drops to `NotebookEdit` alone, Codex's
+  `workspace-write` sandbox, and `agenttools.WriteSet` in the openai loop. `provider.FixPolicy`
+  still refuses everything but `Edit`/`Write`/`MultiEdit`, and matches shell commands against
+  `permissions.fixBash` rather than `permissions.bash` (whose default git entries are the
+  read-only ones: Sirdar commits and pushes, never the agent). Where a write may land is
+  checked on every call, in the policy and again inside `agenttools`, through one shared
+  helper — `provider.ResolveWithin` confines it to the root through symlinks and
+  `provider.ReservedWrite` refuses `.git/` at any depth and the workspace `.sirdar/`. Sirdar's
+  own commit passes `--no-verify`. The human gate is the triage note's `status`, and a
+  non-empty `deviationFromNote` in the agent's report stops the push until
+  `--accept-deviation`, which on a rerun pushes the commit that was reviewed rather than
+  starting a second session.
 
 ## Next steps, in order
 

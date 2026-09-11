@@ -13,6 +13,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -373,5 +374,163 @@ func TestRunKeepsGoingAfterAMissingKey(t *testing.T) {
 	}
 	if report.Results[1].Passed != 1 {
 		t.Errorf("the second key was not scored: %+v", report.Results[1])
+	}
+}
+
+// --- round 1 review: an eval leaves no record behind -------------------
+
+// TestEvalRunFilesNoNoteAndNoRegisterRow: an eval replays a stored bundle
+// to score the agent. Filing its note into the notes directory would
+// overwrite the note a human wrote and reads for that ticket, and a
+// register row would put a measurement in the audit index of tickets
+// actually worked.
+func TestEvalRunFilesNoNoteAndNoRegisterRow(t *testing.T) {
+	cfg := newWorkspace(t)
+	golden := newGolden(t, "OMNI-1", `{"classification": "code"}`, "")
+
+	// The note a human wrote for this ticket, where a triage run would
+	// file its own.
+	notesDir := cfg.ExpandPath(cfg.Notes.Dir)
+	if err := os.MkdirAll(notesDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	human := filepath.Join(notesDir, "OMNI-1 export-fails.md")
+	const humanBody = "---\nstatus: triaged\ntags: [support-duty, triage]\n---\n\n# what I found\n"
+	if err := os.WriteFile(human, []byte(humanBody), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	report, err := Run(t.Context(), newDeps(t, cfg, &stubProvider{doc: triageDoc}), nil, Options{GoldenDir: golden})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	res := report.Results[0]
+	if res.State != "completed" {
+		t.Fatalf("the replay did not complete: %+v", res)
+	}
+
+	// The human's note is untouched, and nothing else was filed beside it.
+	got, err := os.ReadFile(human)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != humanBody {
+		t.Errorf("the eval overwrote the human's note:\n%s", got)
+	}
+	entries, err := os.ReadDir(notesDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 1 {
+		t.Errorf("the eval filed a note into the notes directory: %v", entries)
+	}
+
+	// The note it produced is in the run directory, which is where the
+	// report's overlap comparison reads it from.
+	runDir := filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-1", res.RunID)
+	if _, err := os.Stat(filepath.Join(runDir, "note.md")); err != nil {
+		t.Errorf("the eval's own note is not in the run directory: %v", err)
+	}
+
+	// No register row.
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 0 {
+		t.Errorf("the eval appended register rows: %+v", rows)
+	}
+
+	// And the run is marked, which is what keeps it out of the "newest
+	// triage note" a later rca or fix reads.
+	_, state, err := store.Open(cfg.Root, res.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Eval {
+		t.Error("the run state does not say it was an eval")
+	}
+	if _, err := store.LatestNote(cfg.Root, "OMNI-1", store.KindTriage); err == nil {
+		t.Error("an eval run was taken as the newest triage note for the key")
+	}
+}
+
+// TestARealTriageNoteStillWinsAfterAnEval: the eval is skipped, not the
+// whole key. A real triage run for the same key is still found.
+func TestARealTriageNoteStillWinsAfterAnEval(t *testing.T) {
+	cfg := newWorkspace(t)
+	golden := newGolden(t, "OMNI-1", "", "")
+
+	rn, err := store.Create(cfg.Root, "OMNI-1", time.Now())
+	if err != nil {
+		t.Fatal(err)
+	}
+	runID := filepath.Base(rn.Dir)
+	if err := os.WriteFile(filepath.Join(rn.Dir, "note.md"), []byte("# real\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := rn.WriteState(store.State{
+		RunID: runID, Key: "OMNI-1", Kind: store.KindTriage, Status: store.StatusCompleted,
+		StartedAt: time.Now().Add(-time.Hour), UpdatedAt: time.Now().Add(-time.Hour),
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := Run(t.Context(), newDeps(t, cfg, &stubProvider{doc: triageDoc}), nil, Options{GoldenDir: golden}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	path, err := store.LatestNote(cfg.Root, "OMNI-1", store.KindTriage)
+	if err != nil {
+		t.Fatalf("the real triage note was lost behind the eval run: %v", err)
+	}
+	if filepath.Base(filepath.Dir(path)) != runID {
+		t.Errorf("LatestNote returned %s, not the real run %s", path, runID)
+	}
+}
+
+// TestAddRefusesAGoldenSetInsideAGitWorkTree: a golden bundle holds a real
+// customer's ticket and conversation, and a repository is not somewhere you
+// can take that back out of.
+func TestAddRefusesAGoldenSetInsideAGitWorkTree(t *testing.T) {
+	cfg := newWorkspace(t)
+	repo := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(repo, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	golden := filepath.Join(repo, "testdata", "golden")
+
+	_, err := Add(cfg.Root, golden, "OMNI-1", "", false)
+	if err == nil {
+		t.Fatal("a golden set inside a git work tree was accepted")
+	}
+	for _, want := range []string{"git work tree", "--force"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+	if _, statErr := os.Stat(golden); statErr == nil {
+		t.Error("the refusal still created the golden directory")
+	}
+
+	// --force is how somebody says they meant it: the refusal is gone and
+	// the run lookup is what fails now.
+	_, err = Add(cfg.Root, golden, "OMNI-1", "", true)
+	if err == nil || strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("--force did not lift the refusal: %v", err)
+	}
+
+	// Outside a repository it is never raised.
+	outside := filepath.Join(t.TempDir(), "golden")
+	if _, err := Add(cfg.Root, outside, "OMNI-1", "", false); err != nil && strings.Contains(err.Error(), "git work tree") {
+		t.Errorf("a golden set outside any repository was refused: %v", err)
+	}
+}
+
+func TestIndexRejectsATrailingTypo(t *testing.T) {
+	if _, err := index("1abc"); err == nil {
+		t.Error(`index("1abc") was read as 1; a typo in an expected.json key must not silently assert about element 1`)
+	}
+	if got, err := index("2"); err != nil || got != 2 {
+		t.Errorf(`index("2") = %d, %v`, got, err)
 	}
 }

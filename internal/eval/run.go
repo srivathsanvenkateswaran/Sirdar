@@ -145,6 +145,7 @@ func replay(ctx context.Context, r *runner.Runner, root, key string, o Options) 
 		Model:       o.Model,
 		Concurrency: 1,
 		BundleDir:   g.BundleDir,
+		Eval:        true,
 	})
 	if err != nil || len(outs) == 0 {
 		if err != nil {

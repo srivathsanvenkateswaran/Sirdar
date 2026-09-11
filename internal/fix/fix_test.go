@@ -406,8 +406,15 @@ func TestFixCommitsPushesAndRecords(t *testing.T) {
 	if !spec.Policy.IsFix() {
 		t.Error("the session did not get the fix policy")
 	}
-	if len(spec.Policy.BashAllow) == 0 || spec.Policy.BashAllow[0] != "git *" {
+	if len(spec.Policy.BashAllow) == 0 || spec.Policy.BashAllow[0] != w.cfg.Permissions.FixBash[0] {
 		t.Errorf("the session's bash list is %v, not permissions.fixBash", spec.Policy.BashAllow)
+	}
+	// The commit and the push are Sirdar's, so the session's own list does
+	// not reach them.
+	for _, banned := range []string{"git commit -m x", "git push origin main"} {
+		if ok, _ := provider.MatchCommand(w.root, spec.Policy.BashAllow, banned); ok {
+			t.Errorf("the fix session may run %q", banned)
+		}
 	}
 
 	// No gh, so the fallback carries the text a human pastes.
@@ -627,5 +634,234 @@ func TestLastURL(t *testing.T) {
 	}
 	if got := lastURL("nothing here"); got != "" {
 		t.Errorf("lastURL = %q", got)
+	}
+}
+
+// --- round 1 review: hooks, reruns, dirty trees, PR text --------------
+
+// TestTheCommitDoesNotRunRepositoryHooks: the commit is made moments after
+// a session with write access to the tree, so whatever is in .git/hooks at
+// that point must not be executed by it. The hook here fails loudly and
+// leaves a marker; both would show if --no-verify were dropped.
+func TestTheCommitDoesNotRunRepositoryHooks(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the hook is a shell script")
+	}
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+
+	hook := filepath.Join(w.root, ".git", "hooks", "pre-commit")
+	mustWrite(t, hook, "#!/bin/sh\ntouch \"$(git rev-parse --show-toplevel)/hook-ran\"\nexit 1\n")
+	if err := os.Chmod(hook, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	deps := newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t})
+	res, err := Run(t.Context(), deps, "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if res.Commit == "" || !res.Pushed {
+		t.Fatalf("the pre-commit hook stopped the flow: %+v", res)
+	}
+	if _, err := os.Stat(filepath.Join(w.root, "hook-ran")); err == nil {
+		t.Error("the repository's pre-commit hook was executed by Sirdar's own commit")
+	}
+}
+
+// refusingProvider fails the test if a session is started at all.
+type refusingProvider struct{ t *testing.T }
+
+func (p *refusingProvider) Name() string                                               { return "claude" }
+func (p *refusingProvider) Doctor(ctx context.Context, binary string) []provider.Check { return nil }
+
+func (p *refusingProvider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	p.t.Error("a second agent session was started for a commit a human had already reviewed")
+	return nil, fmt.Errorf("no session")
+}
+
+// TestAcceptDeviationRerunPushesTheReviewedCommit: rerunning with
+// --accept-deviation means "yes, push that" — the commit the operator just
+// read. Re-cutting the branch from origin would orphan it and spend a
+// second session deriving something else.
+func TestAcceptDeviationRerunPushesTheReviewedCommit(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "The note named export/csv.go, but the buffering is in export/writer.go"`, 1)
+
+	first, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if first.Pushed || first.Commit == "" || first.Blocked == "" {
+		t.Fatalf("the first run did not block with a commit: %+v", first)
+	}
+
+	second, err := Run(t.Context(), newDeps(w, &refusingProvider{t: t}), "OMNI-1", Options{AcceptDeviation: true})
+	if err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	if !second.Pushed || second.Blocked != "" {
+		t.Fatalf("the rerun did not push: %+v", second)
+	}
+	if second.Commit != first.Commit {
+		t.Errorf("the rerun pushed %s, not the reviewed commit %s", second.Commit, first.Commit)
+	}
+	if second.Branch != first.Branch || second.Base != first.Base {
+		t.Errorf("the rerun changed the branch: %s/%s, was %s/%s", second.Base, second.Branch, first.Base, first.Branch)
+	}
+	if second.RunID != first.RunID {
+		t.Errorf("the rerun made a new run directory %s; the work is run %s's", second.RunID, first.RunID)
+	}
+	if head := run(t, w.root, "git", "rev-parse", second.Branch); head != first.Commit {
+		t.Errorf("the branch is at %s, not the reviewed commit %s", head, first.Commit)
+	}
+	if !remoteHas(t, w.origin, second.Branch) {
+		t.Errorf("%s did not reach the remote", second.Branch)
+	}
+	// The deviation is still in the pull request text, and the report is
+	// the one the session filed.
+	if !strings.Contains(second.PRBody, "export/writer.go") {
+		t.Errorf("the pull request body lost the deviation:\n%s", second.PRBody)
+	}
+	if second.Report.Summary != "Stream the CSV export instead of buffering every row" {
+		t.Errorf("the rerun lost the agent's report: %+v", second.Report)
+	}
+	// One fix, one register row.
+	rows, err := store.ReadRegister(w.root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fixRows := 0
+	for _, row := range rows {
+		if row.Kind == "fix" {
+			fixRows++
+		}
+	}
+	if fixRows != 1 {
+		t.Errorf("the rerun appended a second register row: %+v", rows)
+	}
+	// Both copies of the note record the outcome, now that it is pushed.
+	data, err := os.ReadFile(w.filedNote)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "status: fix-pushed") {
+		t.Error("the triage note was not moved on by the rerun")
+	}
+}
+
+// TestAcceptDeviationRerunFallsBackWhenTheBranchMoved: the shortcut is only
+// for the commit that was reviewed. A branch that has moved on since is a
+// different change, so the ordinary flow runs.
+func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "different file"`, 1)
+
+	first, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+
+	// Somebody committed on top of the reviewed commit.
+	mustWrite(t, filepath.Join(w.root, "export", "extra.go"), "package export\n")
+	run(t, w.root, "git", "add", "-A", "--", ".", ":(exclude).sirdar")
+	run(t, w.root, "git", "commit", "-q", "--no-verify", "-m", "another change")
+	moved := run(t, w.root, "git", "rev-parse", "HEAD")
+	if moved == first.Commit {
+		t.Fatal("the branch did not move")
+	}
+	// The first session's scratch file under .sirdar/ is not part of the
+	// repository; the ordinary flow refuses a dirty tree, so clear it.
+	if err := os.Remove(filepath.Join(w.root, ".sirdar", "scratch.txt")); err != nil {
+		t.Fatal(err)
+	}
+
+	second, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1",
+		Options{AcceptDeviation: true})
+	if err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	if second.RunID == first.RunID {
+		t.Error("the rerun reused a run whose branch had moved on")
+	}
+	if !second.Pushed {
+		t.Errorf("the ordinary flow did not complete: %+v", second)
+	}
+}
+
+// TestDirtyTreeOfOnlySirdarFilesSaysSo: the commonest way to meet "working
+// tree not clean" is a workspace whose .sirdar/ is not excluded, and the
+// error that just says "commit or stash" sends people to commit their own
+// run records.
+func TestDirtyTreeOfOnlySirdarFilesSaysSo(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	mustWrite(t, filepath.Join(w.root, ".sirdar", "notes.md"), "scratch\n")
+
+	deps := newDeps(w, &stubProvider{report: fixReport, t: t})
+	_, err := Run(t.Context(), deps, "OMNI-1", Options{})
+	if err == nil {
+		t.Fatal("a dirty working tree was accepted")
+	}
+	for _, want := range []string{"under .sirdar/", ".git/info/exclude"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+
+	// A real uncommitted change still gets the ordinary refusal.
+	mustWrite(t, filepath.Join(w.root, "export", "scratch.go"), "package export\n")
+	_, err = Run(t.Context(), deps, "OMNI-1", Options{})
+	if err == nil {
+		t.Fatal("a dirty working tree was accepted")
+	}
+	if !strings.Contains(err.Error(), "commit or stash") {
+		t.Errorf("a tree with real changes got the .sirdar advice: %v", err)
+	}
+}
+
+func TestSirdarOnly(t *testing.T) {
+	for _, tc := range []struct {
+		status string
+		want   bool
+	}{
+		{"?? .sirdar/notes.md", true},
+		{" M .sirdar/config.yaml\n?? .sirdar/runs/OMNI-1/state.json", true},
+		{"?? .sirdar/notes.md\n M export/csv.go", false},
+		{" M export/csv.go", false},
+		{`?? ".sirdar/a file.md"`, true},
+		{"R  .sirdar/a.md -> .sirdar/b.md", true},
+		{"R  .sirdar/a.md -> export/b.md", false},
+		{"", false},
+	} {
+		if got := sirdarOnly(tc.status); got != tc.want {
+			t.Errorf("sirdarOnly(%q) = %v, want %v", tc.status, got, tc.want)
+		}
+	}
+}
+
+// TestPullRequestTextKeepsTheComplaintOut: a pull request is often public,
+// and the complaint is a quotation from a customer's support ticket.
+func TestPullRequestTextKeepsTheComplaintOut(t *testing.T) {
+	var tn triageNote
+	tn.doc.Title = "Export fails for large orders"
+	tn.doc.Complaint = "Ahmed at Acme says the export dies every morning"
+	rep := Report{Summary: "Stream the export"}
+
+	_, body := pullRequestText("OMNI-1", tn, rep, false)
+	if strings.Contains(body, "Ahmed") {
+		t.Errorf("the customer's complaint reached the pull request body by default:\n%s", body)
+	}
+	if !strings.Contains(body, tn.doc.Title) {
+		t.Errorf("the body does not say what broke:\n%s", body)
+	}
+
+	_, withIt := pullRequestText("OMNI-1", tn, rep, true)
+	if !strings.Contains(withIt, "Ahmed") {
+		t.Errorf("fix.prIncludesComplaint did not include the complaint:\n%s", withIt)
 	}
 }

@@ -18,7 +18,9 @@ Rules:
 4. Do not commit, do not create a branch, do not push, and do not open a pull request. Sirdar
    does all of that after you answer, and a commit you make yourself is a commit nobody
    reviewed. Read-only git commands (`git log`, `git show`, `git diff`, `git grep`) are fine.
-5. Do not touch `.sirdar/`, and do not edit the triage note.
+5. Do not touch `.sirdar/`, and do not edit the triage note. Writes are confined to this
+   workspace: a path outside it, anything under a `.git/` directory (hooks included), and
+   anything under `.sirdar/` are refused by the harness, not by your judgement.
 6. Every segment of a Bash command is checked against the allow-list separately, so a pipeline
    or a compound command is allowed only if each part between `|`, `&&` and `;` is allowed on
    its own.

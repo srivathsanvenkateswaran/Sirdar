@@ -82,7 +82,7 @@ triage note resolved.
 | `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
-| `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton |
+| `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
 | `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, fix date, RCA date, verdict, severity, resolution, and which notes exist |
@@ -130,7 +130,11 @@ the tracker or the helpdesk, in any mode.
 
 `sirdar fix` is the one session that may change files, and only after a human has read the note
 (see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
-`MultiEdit`; everything else is refused exactly as before.
+`MultiEdit`; everything else is refused exactly as before. Being allowed to edit is not being
+allowed to edit anything: every write's path is resolved through symlinks and refused unless it
+lands inside the workspace root, and refused again under any `.git/` directory or the
+workspace's own `.sirdar/`. Sirdar's own commit passes `--no-verify`, so a hook written during
+the session is not executed by it.
 
 ## Fix flow
 
@@ -167,6 +171,11 @@ and **nothing is pushed**. The deviation is printed prominently, the branch stay
 command exits 1. Read the diff; if you accept it, rerun with `--accept-deviation`, or push the
 branch yourself. This is the point of the field: a fix that quietly became a different change is
 the failure worth catching, so the agent is asked to declare it and the harness stops on it.
+
+The rerun pushes **the commit you read**. `--accept-deviation` on a key whose fix branch still
+points at the commit the blocked run recorded skips the agent entirely: it pushes that commit
+and opens the pull request for it. If the branch has moved on or is gone, the ordinary flow
+runs from scratch.
 
 `--dry-run` makes the branch and writes the prompt without starting an agent, which is how to
 read exactly what would be sent. `--no-pr` pushes and stops. `--base BRANCH` overrides the

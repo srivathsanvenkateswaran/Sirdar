@@ -81,9 +81,9 @@ func (o Options) writeFile(ctx context.Context, args json.RawMessage) (string, e
 	if len(a.Content) > maxWriteBytes {
 		return "", fmt.Errorf("write_file: content is %d bytes, over the %d byte limit", len(a.Content), maxWriteBytes)
 	}
-	abs, err := o.resolve(a.Path)
+	abs, err := o.resolveWrite(a.Path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("write_file: %v", err)
 	}
 	if info, statErr := os.Stat(abs); statErr == nil && info.IsDir() {
 		return "", fmt.Errorf("write_file: %s is a directory", a.Path)
@@ -130,9 +130,9 @@ func (o Options) editFile(ctx context.Context, args json.RawMessage) (string, er
 	if a.Old == a.New {
 		return "", errors.New("edit_file: old and new are identical")
 	}
-	abs, err := o.resolve(a.Path)
+	abs, err := o.resolveWrite(a.Path)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("edit_file: %v", err)
 	}
 	data, err := os.ReadFile(abs)
 	if err != nil {

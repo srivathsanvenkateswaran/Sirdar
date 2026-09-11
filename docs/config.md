@@ -56,10 +56,11 @@ rather than being silently ignored.
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
-| `permissions.fixBash` | list of string | `git *`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
+| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
+| `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
@@ -327,13 +328,18 @@ The syntax is exactly the one above: the same segment splitting, the same refusa
 substitution and redirection, the same workspace-root check on anything that looks like a path.
 Only the list changes, and only for `sirdar fix`.
 
-The default is the version-control commands the flow needs and the build and test commands a
+The default is the git commands that read the repository, and the build and test commands a
 fix has to run before it can claim to work:
 
 ```yaml
 permissions:
   fixBash:
-    - "git *"
+    - "git status*"
+    - "git diff*"
+    - "git log*"
+    - "git show*"
+    - "git grep*"
+    - "git blame*"
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
@@ -342,24 +348,46 @@ permissions:
     - "make *"
 ```
 
+The git entries are named one by one rather than covered by `git *`, and that is deliberate.
+Sirdar makes the branch, the commit and the push itself — after the JSON report comes back and
+after the deviation check — so nothing in the flow needs the agent to reach `git commit`,
+`git push`, `git reset` or `git config`. A blanket `git *` hands all of them to whatever the
+session reads in a ticket.
+
 Naming your own list replaces the default outright — it is a starting point, not a floor — so
 include whatever of it you still want:
 
 ```yaml
 permissions:
   fixBash:
-    - "git *"
+    - "git log*"
+    - "git diff*"
     - "just *"
     - "pnpm test*"
 ```
 
-Two things the list does not do. It does not decide whether the session may edit files: a fix
-session gets `Edit`, `Write` and `MultiEdit` regardless, and a triage session never does.
-And `git *` covering `git commit` and `git push` does not mean the agent makes them — the
-prompt tells it not to, and Sirdar does the committing and pushing itself, after the JSON
-report comes back and after the deviation check. If you would rather the agent could not reach
-those at all, narrow the entry to the read-only ones (`git log*`, `git show*`, `git diff*`,
-`git grep*`); nothing in the flow depends on the agent running git.
+What the list does not do is decide whether the session may edit files: a fix session gets
+`Edit`, `Write` and `MultiEdit` regardless, and a triage session never does. Where those may
+write is a separate rule, and not a configurable one — every edit is resolved through symlinks
+and refused unless it lands inside the workspace root, and refused again for anything under a
+`.git/` directory at any depth or under the workspace's own `.sirdar/`. A fix changes source,
+not hooks and not Sirdar's records.
+
+## `fix.prIncludesComplaint`
+
+The pull request `sirdar fix` opens describes the symptom, the root cause, the change and the
+checks that were run. By default the symptom is the triage note's **title** — what broke —
+rather than the complaint, which is the customer's own words out of a support ticket:
+
+```yaml
+fix:
+  prIncludesComplaint: true
+```
+
+Turn it on for a private repository where the ticket text is already in front of the same
+people. Leave it off anywhere the pull request is public, or read by anyone who has no business
+with that customer's conversation. The triage note is always linked either way, through the
+tracker and helpdesk URLs in the body.
 
 ## MCP access
 

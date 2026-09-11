@@ -21,9 +21,12 @@ type FixOptions struct {
 	// Prompt is the fully assembled fix prompt.
 	Prompt string
 
-	// Branch is the branch the workspace has already been put on, recorded
-	// in the run state so `sirdar runs` says where the work went.
+	// Branch is the branch the workspace has already been put on, and Base
+	// the branch it was cut from. Both are recorded in the run state, so
+	// `sirdar runs` says where the work went and a later rerun can find
+	// the commit this run produced.
 	Branch string
+	Base   string
 }
 
 // Fix runs one write-enabled agent session against the workspace and files
@@ -85,6 +88,8 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
 	p.state.Budget.MaxUSD = cfg.Budget.MaxUSD
+	p.state.Fix.Branch = o.Branch
+	p.state.Fix.Base = o.Base
 	if o.Branch != "" {
 		p.state.Warnings = append(p.state.Warnings, "fix branch: "+o.Branch)
 	}
