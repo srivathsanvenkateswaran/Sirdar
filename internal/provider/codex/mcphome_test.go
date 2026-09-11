@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
@@ -139,12 +140,19 @@ func childHome(t *testing.T, res provider.Result) string {
 // workspace-only session runs against declares the workspace's servers,
 // with ${VAR} expanded, and none of the operator's own.
 func TestGeneratedConfigToml(t *testing.T) {
-	t.Setenv("SIRDAR_TEST_NOTES_ROOT", "/work/notes")
-	t.Setenv("SIRDAR_TEST_NOTES_TOKEN", "s3cret")
+	// The values a ${VAR} must come from are in the session environment
+	// below, not here: a variable that exists only in this process is one
+	// internal/run would have stripped, and it must not reach the file.
+	t.Setenv("SIRDAR_TEST_NOTES_ROOT", "from-the-wrong-environment")
+	t.Setenv("SIRDAR_TEST_NOTES_TOKEN", "from-the-wrong-environment")
 
 	real := writeRealHome(t)
 	root := writeWorkspace(t, "/opt/bin/mcp")
-	home, warnings, err := newScratchHome(root, []string{"CODEX_HOME=" + real})
+	home, warnings, err := newScratchHome(root, []string{
+		"CODEX_HOME=" + real,
+		"SIRDAR_TEST_NOTES_ROOT=/work/notes",
+		"SIRDAR_TEST_NOTES_TOKEN=s3cret",
+	})
 	if err != nil {
 		t.Fatalf("newScratchHome: %v", err)
 	}
@@ -188,6 +196,22 @@ args = ["serve", "--quiet"]
 		if strings.Contains(got, leaked) {
 			t.Errorf("the operator's own MCP server survived into the generated config: %s", got)
 		}
+	}
+	if strings.Contains(got, "from-the-wrong-environment") {
+		t.Errorf("a ${VAR} was expanded from this process's environment rather than the session's: %s", got)
+	}
+
+	// The directory holds a copy of the operator's login, so it is theirs
+	// to read and nobody else's.
+	if st, err := os.Stat(home.dir); err != nil {
+		t.Fatalf("stat home: %v", err)
+	} else if st.Mode().Perm() != 0o700 {
+		t.Errorf("generated home mode = %v, want 0700", st.Mode().Perm())
+	}
+	if st, err := os.Stat(filepath.Join(home.dir, "config.toml")); err != nil {
+		t.Fatalf("stat config.toml: %v", err)
+	} else if st.Mode().Perm() != 0o600 {
+		t.Errorf("generated config.toml mode = %v, want 0600", st.Mode().Perm())
 	}
 
 	// The login is copied, not linked: a refresh in a triage run must not
@@ -379,6 +403,78 @@ func TestStripMCPServers(t *testing.T) {
 			want: "[projects.\"/w/mcp_servers\"]\ntrust_level = \"trusted\"\n",
 		},
 		{name: "empty", in: "", want: ""},
+
+		// The cases a line-based strip got wrong. Each one deleted the
+		// rest of the operator's config, which is how a session would
+		// have lost their model, their reasoning effort and their
+		// project trust along with the servers.
+		{
+			name: "a multi-line string containing a table header",
+			in: "instructions = \"\"\"\nDeclare a server like this:\n[mcp_servers.example]\ncommand = \"x\"\n\"\"\"\n" +
+				"model = \"gpt-5.6-luna\"\n",
+			want: "instructions = \"\"\"\nDeclare a server like this:\n[mcp_servers.example]\ncommand = \"x\"\n\"\"\"\n" +
+				"model = \"gpt-5.6-luna\"\n",
+		},
+		{
+			name: "a literal multi-line string containing a header",
+			in:   "notes = '''\n[mcp_servers.a]\n'''\nmodel = \"x\"\n",
+			want: "notes = '''\n[mcp_servers.a]\n'''\nmodel = \"x\"\n",
+		},
+		{
+			name: "a multi-line dotted-key array is dropped whole",
+			in:   "mcp_servers.a.args = [\n  \"--mcp\",\n  \"--quiet\",\n]\nmodel = \"x\"\n",
+			want: "model = \"x\"\n",
+		},
+		{
+			name: "a multi-line inline table is dropped whole",
+			in:   "model = \"x\"\nmcp_servers = {\n  a = { command = \"c\" },\n}\nweb_search = true\n",
+			want: "model = \"x\"\nweb_search = true\n",
+		},
+		{
+			name: "a header after other keys keeps what came before",
+			in:   "model = \"x\"\nmodel_reasoning_effort = \"medium\"\n\n[mcp_servers.a]\ncommand = \"c\"\n",
+			want: "model = \"x\"\nmodel_reasoning_effort = \"medium\"\n",
+		},
+		{
+			name: "a sub-table of a server is dropped with it",
+			in:   "[mcp_servers.foo]\ncommand = \"c\"\n\n[mcp_servers.foo.env]\nTOKEN = \"hunter2\"\n\n[tui]\ntheme = \"dark\"\n",
+			want: "[tui]\ntheme = \"dark\"\n",
+		},
+		{
+			name: "the array-of-tables form is dropped",
+			in:   "[[mcp_servers.a]]\ncommand = \"c\"\n\n[tui]\ntheme = \"dark\"\n",
+			want: "[tui]\ntheme = \"dark\"\n",
+		},
+		{
+			name: "a quoted mcp_servers key is dropped",
+			in:   "\"mcp_servers\".a.command = \"c\"\nmodel = \"x\"\n",
+			want: "model = \"x\"\n",
+		},
+		{
+			name: "unrelated tables either side survive byte for byte",
+			in:   "[tui]\ntheme = \"dark\"\n\n[mcp_servers.a]\ncommand = \"c\"\n\n[projects.\"/w\"]\ntrust_level = \"trusted\"\n",
+			want: "[tui]\ntheme = \"dark\"\n\n[projects.\"/w\"]\ntrust_level = \"trusted\"\n",
+		},
+		{
+			name: "an mcp_servers key under another table is that table's own",
+			in:   "[profiles.dev]\nmcp_servers = { a = { command = \"c\" } }\nmodel = \"x\"\n",
+			want: "[profiles.dev]\nmcp_servers = { a = { command = \"c\" } }\nmodel = \"x\"\n",
+		},
+		{
+			name: "a comment mentioning a header is not one",
+			in:   "# [mcp_servers.a] is what codex mcp add writes\nmodel = \"x\"\n",
+			want: "# [mcp_servers.a] is what codex mcp add writes\nmodel = \"x\"\n",
+		},
+		{
+			name: "a config that is nothing but servers comes back empty",
+			in:   "[mcp_servers.a]\ncommand = \"c\"\n",
+			want: "",
+		},
+		{
+			name: "a header with no trailing newline still ends the file",
+			in:   "model = \"x\"\n[mcp_servers.a]",
+			want: "model = \"x\"\n",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -408,22 +504,40 @@ func TestTOMLString(t *testing.T) {
 	}
 }
 
-func TestWorkspaceOnlyFromEnv(t *testing.T) {
-	cases := map[string]bool{
-		"":      true,
-		"1":     true,
-		"true":  true,
-		"0":     false,
-		"false": false,
-		"OFF":   false,
+// TestDoctorSetting pins where the Doctor row's workspace and setting come
+// from. With a configuration they come from it verbatim, which is the
+// whole point of the DoctorWithConfig path: the desktop app's working
+// directory is not the workspace. Without one, the fallback finds the
+// workspace by its .sirdar marker and assumes the config's own default.
+func TestDoctorSetting(t *testing.T) {
+	root, only := doctorSetting(&provider.DoctorConfig{Root: "/w", MCPWorkspaceOnly: false})
+	if root != "/w" || only {
+		t.Errorf("doctorSetting(config) = %q, %v; want /w, false", root, only)
 	}
-	for value, want := range cases {
-		env := []string{"PATH=/usr/bin"}
-		if value != "" {
-			env = append(env, envWorkspaceOnly+"="+value)
-		}
-		if got := workspaceOnly(env); got != want {
-			t.Errorf("workspaceOnly(%s=%q) = %v, want %v", envWorkspaceOnly, value, got, want)
+	root, only = doctorSetting(&provider.DoctorConfig{Root: "/w", MCPWorkspaceOnly: true})
+	if root != "/w" || !only {
+		t.Errorf("doctorSetting(config on) = %q, %v; want /w, true", root, only)
+	}
+
+	ws := t.TempDir()
+	if err := os.Mkdir(filepath.Join(ws, ".sirdar"), 0o700); err != nil {
+		t.Fatalf("mkdir .sirdar: %v", err)
+	}
+	nested := filepath.Join(ws, "a", "b")
+	if err := os.MkdirAll(nested, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	t.Chdir(nested)
+	root, only = doctorSetting(nil)
+	if !only {
+		t.Error("doctorSetting(nil) reported workspaceOnly off; the config default is on")
+	}
+	// macOS hands out /var/folders paths that resolve through a symlink,
+	// so compare what the walk found to what the walk would have started
+	// from rather than to t.TempDir's own spelling.
+	if want, err := filepath.EvalSymlinks(ws); err == nil {
+		if got, _ := filepath.EvalSymlinks(root); got != want {
+			t.Errorf("doctorSetting(nil) root = %q, want the workspace %q", got, want)
 		}
 	}
 }
@@ -460,10 +574,8 @@ func TestLiveWorkspaceOnlyMCP(t *testing.T) {
 		t.Fatalf("mkdir .sirdar: %v", err)
 	}
 	t.Setenv("SIRDAR_TEST_NOTES_TOKEN", "live-smoke-token")
-	t.Setenv(envWorkspaceOnly, "1")
-	t.Chdir(root)
 
-	check := mcpCheck(context.Background(), "codex")
+	check := mcpCheck(context.Background(), "codex", &provider.DoctorConfig{Root: root, MCPWorkspaceOnly: true})
 	t.Logf("doctor row: %s — %s (OK=%v)", check.Name, check.Detail, check.OK)
 	if !check.OK {
 		t.Fatalf("mcp check failed: %s", check.Detail)
@@ -472,5 +584,211 @@ func TestLiveWorkspaceOnlyMCP(t *testing.T) {
 		if !strings.Contains(check.Detail, want) {
 			t.Errorf("doctor row missing %q: %s", want, check.Detail)
 		}
+	}
+}
+
+// ------------------------------------------------------------ auth write-back
+
+// refreshIn rewrites the generated home's auth.json the way Codex does
+// when it refreshes the ChatGPT token mid-session.
+func refreshIn(t *testing.T, dir, body string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(dir, "auth.json"), []byte(body), 0o600); err != nil {
+		t.Fatalf("refresh auth.json: %v", err)
+	}
+}
+
+// TestAuthRefreshIsWrittenBack is the other half of copying auth.json in.
+// The copy protects the operator from a triage run corrupting their login;
+// without a write-back it also throws away a refresh they need, leaving
+// their own `codex` presenting a token this run has already replaced.
+func TestAuthRefreshIsWrittenBack(t *testing.T) {
+	real := writeRealHome(t)
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	if err != nil {
+		t.Fatalf("newScratchHome: %v", err)
+	}
+	refreshed := `{"auth_mode":"chatgpt","tokens":{"access_token":"refreshed"}}`
+	refreshIn(t, home.dir, refreshed)
+
+	warnings := home.remove()
+	b, err := os.ReadFile(filepath.Join(real, "auth.json"))
+	if err != nil {
+		t.Fatalf("read the operator's auth.json: %v", err)
+	}
+	if string(b) != refreshed {
+		t.Errorf("operator's auth.json = %s, want the refreshed token", b)
+	}
+	if st, err := os.Stat(filepath.Join(real, "auth.json")); err != nil {
+		t.Fatal(err)
+	} else if st.Mode().Perm() != 0o600 {
+		t.Errorf("auth.json mode after write-back = %v, want 0600", st.Mode().Perm())
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "written back") {
+		t.Errorf("warnings = %v, want one saying the refresh was written back", warnings)
+	}
+}
+
+// TestAuthUntouchedWhenNothingRefreshed is the ordinary case: a session
+// that never refreshed leaves the operator's file exactly as it was, and
+// says nothing about it.
+func TestAuthUntouchedWhenNothingRefreshed(t *testing.T) {
+	real := writeRealHome(t)
+	before, err := os.ReadFile(filepath.Join(real, "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	if err != nil {
+		t.Fatalf("newScratchHome: %v", err)
+	}
+	if warnings := home.remove(); len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+	after, err := os.ReadFile(filepath.Join(real, "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Errorf("auth.json = %s, want it untouched at %s", after, before)
+	}
+}
+
+// TestAuthRefreshDiscardedWhenTheirsMovedOn is the collision. Two writers
+// and no way to merge them: the run that did not ask to be an authority on
+// the operator's login stands down, and says so rather than silently
+// overwriting a token their own session just minted.
+func TestAuthRefreshDiscardedWhenTheirsMovedOn(t *testing.T) {
+	real := writeRealHome(t)
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	if err != nil {
+		t.Fatalf("newScratchHome: %v", err)
+	}
+	refreshIn(t, home.dir, `{"auth_mode":"chatgpt","tokens":{"access_token":"ours"}}`)
+
+	// Their own codex refreshed it meanwhile.
+	theirs := `{"auth_mode":"chatgpt","tokens":{"access_token":"theirs"}}`
+	if err := os.WriteFile(filepath.Join(real, "auth.json"), []byte(theirs), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	warnings := home.remove()
+	b, err := os.ReadFile(filepath.Join(real, "auth.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != theirs {
+		t.Errorf("auth.json = %s, want theirs left alone", b)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "discarded") {
+		t.Errorf("warnings = %v, want one saying the refresh was discarded", warnings)
+	}
+}
+
+// TestAuthWriteBackWithNoLogin covers an operator who has never run codex:
+// no auth.json to copy, so there is nothing to write back and nothing to
+// warn about.
+func TestAuthWriteBackWithNoLogin(t *testing.T) {
+	real := t.TempDir()
+	if err := os.WriteFile(filepath.Join(real, "config.toml"), []byte("model = \"x\"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	home, _, err := newScratchHome(t.TempDir(), []string{"CODEX_HOME=" + real})
+	if err != nil {
+		t.Fatalf("newScratchHome: %v", err)
+	}
+	if warnings := home.remove(); len(warnings) != 0 {
+		t.Errorf("warnings = %v, want none", warnings)
+	}
+	if _, err := os.Stat(filepath.Join(real, "auth.json")); !os.IsNotExist(err) {
+		t.Errorf("an auth.json was invented for an operator who has none: %v", err)
+	}
+}
+
+// ------------------------------------------------------------- stale sweep
+
+// TestSweepStaleHomes covers the SIGKILL leftover. remove never runs when
+// a session is killed outright, so the next one clears out what is old
+// enough to be nobody's — and nothing else in TMPDIR, which it shares.
+func TestSweepStaleHomes(t *testing.T) {
+	tmp := t.TempDir()
+	now := time.Now()
+
+	mk := func(name string, age time.Duration) string {
+		dir := filepath.Join(tmp, name)
+		if err := os.Mkdir(dir, 0o700); err != nil {
+			t.Fatalf("mkdir %s: %v", name, err)
+		}
+		when := now.Add(-age)
+		if err := os.Chtimes(dir, when, when); err != nil {
+			t.Fatalf("chtimes %s: %v", name, err)
+		}
+		return dir
+	}
+	stale := mk(homePrefix+"stale", 48*time.Hour)
+	fresh := mk(homePrefix+"fresh", time.Hour)
+	// Right on the boundary: a home exactly at the age is not yet stale.
+	boundary := mk(homePrefix+"boundary", staleHomeAge-time.Minute)
+	other := mk("someone-elses-tempdir", 90*24*time.Hour)
+
+	file := filepath.Join(tmp, homePrefix+"not-a-directory")
+	if err := os.WriteFile(file, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	old := now.Add(-72 * time.Hour)
+	if err := os.Chtimes(file, old, old); err != nil {
+		t.Fatal(err)
+	}
+
+	sweepStaleHomes(tmp, now)
+
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("the stale home survived the sweep: %v", err)
+	}
+	for _, keep := range []string{fresh, boundary, other, file} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Errorf("the sweep removed %s: %v", filepath.Base(keep), err)
+		}
+	}
+}
+
+// TestSessionWritesBackARefreshedLogin is the write-back where it
+// actually happens: at the end of a session, after the app-server has
+// gone, with the outcome on the event stream rather than swallowed.
+func TestSessionWritesBackARefreshedLogin(t *testing.T) {
+	real := writeRealHome(t)
+	root := writeWorkspace(t, "/opt/bin/mcp")
+	refreshed := `{"auth_mode":"chatgpt","tokens":{"access_token":"refreshed-mid-session"}}`
+
+	sess := startSession(t, "script-basic.jsonl", func(spec *provider.SessionSpec) {
+		spec.Cwd = root
+		spec.MCPStrict = true
+		spec.Env = append(spec.Env, "CODEX_HOME="+real, "SIRDAR_FAKE_REFRESH_AUTH="+refreshed)
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	b, err := os.ReadFile(filepath.Join(real, "auth.json"))
+	if err != nil {
+		t.Fatalf("read the operator's auth.json: %v", err)
+	}
+	if string(b) != refreshed {
+		t.Errorf("operator's auth.json = %s, want the token the session refreshed", b)
+	}
+
+	// The turn's completion has already closed the event stream by the
+	// time Wait tears the home down, so the account of what happened to
+	// the login travels in the tail the run records.
+	var said bool
+	for _, line := range res.StderrTail {
+		if strings.HasPrefix(line, "sirdar: codex auth:") {
+			said = true
+		}
+	}
+	if !said {
+		t.Errorf("the write-back happened without saying so; tail=%v", res.StderrTail)
 	}
 }

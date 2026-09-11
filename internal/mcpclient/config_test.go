@@ -52,15 +52,70 @@ func TestLoadWorkspaceServers(t *testing.T) {
 		t.Fatalf("env = %+v", z.Env)
 	}
 
-	if len(warnings) != 3 {
+	// Three skipped entries, and the one variable that was not set: a
+	// ${VAR} expanding to nothing is how a server ends up started with an
+	// empty token and failing for a reason nobody can see from outside.
+	if len(warnings) != 4 {
 		t.Fatalf("warnings = %+v", warnings)
 	}
 	joined := strings.Join(warnings, "\n")
-	if !containsAll(joined, `"remote"`, `"http"`, `"broken"`, "stdio only", "no command") {
+	if !containsAll(joined, `"remote"`, `"http"`, `"broken"`, "stdio only", "no command", "SIRDAR_TEST_ABSENT") {
 		t.Fatalf("warnings = %q", joined)
 	}
-	if strings.Contains(joined, `"zeta"`) || strings.Contains(joined, `"alpha"`) {
+	if strings.Contains(joined, "s3cret") {
+		t.Fatalf("a warning carried a value rather than only a name: %q", joined)
+	}
+	if strings.Contains(joined, `"alpha"`) {
 		t.Fatalf("warned about a usable server: %q", joined)
+	}
+}
+
+// TestLoadWorkspaceServersEnv is the point of the env-aware loader: a
+// ${VAR} is expanded from the environment the session will run with, not
+// from this process's, so a credential internal/run strips cannot be read
+// back out through a workspace's .mcp.json.
+func TestLoadWorkspaceServersEnv(t *testing.T) {
+	t.Setenv("SIRDAR_TEST_STRIPPED", "the-real-secret")
+
+	root := writeMCPJSON(t, `{"mcpServers":{
+		"zeta": {"command":"zeta-server","args":["--tok","${SIRDAR_TEST_STRIPPED}"],"env":{"TOKEN":"${SIRDAR_TEST_STRIPPED}"}}
+	}}`)
+
+	// The session's environment, with the credential taken out of it.
+	servers, warnings, err := LoadWorkspaceServersEnv(root, []string{"PATH=/usr/bin"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(servers) != 1 {
+		t.Fatalf("servers = %+v", servers)
+	}
+	if got := strings.Join(servers[0].Args, " "); got != "--tok " {
+		t.Fatalf("args = %q; the stripped credential came back", got)
+	}
+	if servers[0].Env["TOKEN"] != "" {
+		t.Fatalf("env = %+v; the stripped credential came back", servers[0].Env)
+	}
+	joined := strings.Join(warnings, "\n")
+	if !strings.Contains(joined, "SIRDAR_TEST_STRIPPED") {
+		t.Fatalf("no warning named the unset variable: %q", joined)
+	}
+	if strings.Contains(joined, "the-real-secret") {
+		t.Fatalf("the warning carried the value: %q", joined)
+	}
+
+	// The same file, against an environment that does have it.
+	servers, warnings, err = LoadWorkspaceServersEnv(root, []string{"SIRDAR_TEST_STRIPPED=in-session"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(servers[0].Args, " "); got != "--tok in-session" {
+		t.Fatalf("args = %q", got)
+	}
+	if len(warnings) != 0 {
+		t.Fatalf("warnings = %+v", warnings)
+	}
+	if got := strings.Join(servers[0].BaseEnv, " "); got != "SIRDAR_TEST_STRIPPED=in-session" {
+		t.Fatalf("BaseEnv = %q; the server would be started from the wrong environment", got)
 	}
 }
 

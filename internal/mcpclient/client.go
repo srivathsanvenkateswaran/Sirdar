@@ -71,7 +71,7 @@ func Start(ctx context.Context, cfg ServerConfig, stderr io.Writer) (*Client, er
 	}
 
 	cmd := exec.Command(cfg.Command, cfg.Args...)
-	cmd.Env = childEnv(cfg.Env)
+	cmd.Env = childEnv(cfg.Env, cfg.BaseEnv)
 	if cfg.Root != "" {
 		cmd.Dir = cfg.Root
 	}
@@ -118,17 +118,25 @@ func Start(ctx context.Context, cfg ServerConfig, stderr io.Writer) (*Client, er
 }
 
 // childEnv builds the server's environment: a deliberately small base
-// (PATH, HOME, LANG, each only when the parent has it) with the config's
-// own entries merged on top. Servers get what they need to find their
+// (PATH, HOME, LANG, each only when base has it) with the config's own
+// entries merged on top. Servers get what they need to find their
 // interpreter and their home directory, and nothing else of Sirdar's
 // environment — credentials included — unless .mcp.json asked for it.
-func childEnv(extra map[string]string) []string {
+//
+// base is the session's child environment when the caller supplied one
+// (ServerConfig.BaseEnv), so a credential internal/run strips does not
+// come back through PATH's neighbours; nil means this process's.
+func childEnv(extra map[string]string, base []string) []string {
+	lookup := os.LookupEnv
+	if base != nil {
+		lookup = envLookup(base)
+	}
 	env := make([]string, 0, 3+len(extra))
 	for _, k := range []string{"PATH", "HOME", "LANG"} {
 		if _, ok := extra[k]; ok {
 			continue // the config's value wins; added below
 		}
-		if v, ok := os.LookupEnv(k); ok {
+		if v, ok := lookup(k); ok {
 			env = append(env, k+"="+v)
 		}
 	}

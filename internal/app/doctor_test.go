@@ -3,12 +3,15 @@ package app
 import (
 	"bytes"
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 )
 
@@ -138,4 +141,75 @@ func TestDoctorReportsTheMCPRow(t *testing.T) {
 		}
 	}
 	t.Fatal("no mcp check in the doctor report")
+}
+
+// ---------------------------------------------------------- doctor dispatch
+
+// plainProvider implements only the base Doctor contract.
+type plainProvider struct{ binary string }
+
+func (p *plainProvider) Name() string { return "plain" }
+func (p *plainProvider) Start(context.Context, provider.SessionSpec) (provider.Session, error) {
+	return nil, errors.New("not used")
+}
+func (p *plainProvider) Doctor(_ context.Context, binary string) []provider.Check {
+	p.binary = binary
+	return []provider.Check{{Name: "plain", OK: true, Detail: "no workspace was offered"}}
+}
+
+// configProvider implements the optional half as well, and records what it
+// was told about the workspace.
+type configProvider struct {
+	plainProvider
+	got    provider.DoctorConfig
+	called bool
+}
+
+func (p *configProvider) DoctorWithConfig(_ context.Context, _ string, cfg provider.DoctorConfig) []provider.Check {
+	p.got, p.called = cfg, true
+	return []provider.Check{{Name: "config", OK: true, Detail: cfg.Root}}
+}
+
+// TestDoctorChecksHandOverTheWorkspace is the fix for a Doctor row that
+// guessed. A provider that can use the workspace configuration is given
+// it; one that cannot is called as before.
+func TestDoctorChecksHandOverTheWorkspace(t *testing.T) {
+	cfg := &config.Config{Root: "/w"}
+	cfg.MCP.WorkspaceOnly = nil // unset, so the config default (on) applies
+
+	cp := &configProvider{}
+	checks := doctorChecks(context.Background(), cp, "/bin/codex", cfg)
+	if !cp.called {
+		t.Fatal("DoctorWithConfig was not preferred over Doctor")
+	}
+	if cp.got.Root != "/w" || !cp.got.MCPWorkspaceOnly {
+		t.Errorf("DoctorConfig = %+v, want root /w with workspaceOnly on", cp.got)
+	}
+	if len(checks) != 1 || checks[0].Detail != "/w" {
+		t.Errorf("checks = %+v", checks)
+	}
+
+	off := false
+	cfg.MCP.WorkspaceOnly = &off
+	_ = doctorChecks(context.Background(), cp, "/bin/codex", cfg)
+	if cp.got.MCPWorkspaceOnly {
+		t.Error("the workspaceOnly setting did not reach the provider")
+	}
+
+	pp := &plainProvider{}
+	checks = doctorChecks(context.Background(), pp, "/bin/plain", cfg)
+	if pp.binary != "/bin/plain" {
+		t.Errorf("Doctor binary = %q", pp.binary)
+	}
+	if len(checks) != 1 || checks[0].Name != "plain" {
+		t.Errorf("checks = %+v", checks)
+	}
+}
+
+// TestCodexProviderOffersTheConfigDoctor keeps the two halves connected:
+// the wiring above only helps if the Codex adapter implements it.
+func TestCodexProviderOffersTheConfigDoctor(t *testing.T) {
+	if _, ok := codex.New().(provider.ConfigDoctor); !ok {
+		t.Error("the codex provider no longer implements provider.ConfigDoctor, so its doctor row is guessing again")
+	}
 }

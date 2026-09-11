@@ -1,10 +1,12 @@
 // Package codex adapts the OpenAI Codex CLI to Sirdar's provider contract by
 // driving `codex app-server`, its line-delimited JSON-RPC 2.0 stdio protocol.
 //
-// Sessions run with sandbox "read-only" and approvalPolicy "never", so the
-// sandbox itself refuses writes and approval requests should not arrive. Any
-// that do are declined, and every decline is surfaced as an EvPermission event
-// so an operator can see what the agent tried to do.
+// Sessions run with sandbox "read-only", so the sandbox itself refuses writes,
+// and with approvalPolicy "untrusted", so every action Codex would otherwise
+// take unattended is put to Sirdar first. Each request is answered from
+// SessionSpec.Policy — the same PermissionPolicy Claude Code's permission
+// prompts go through — and every answer is surfaced as an EvPermission event,
+// so an operator can see what the agent asked for and what it was told.
 package codex
 
 import (
@@ -22,6 +24,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
@@ -36,6 +39,40 @@ const (
 	// stderrTailLines is how much of the child's stderr is kept for
 	// diagnostics.
 	stderrTailLines = 50
+
+	// sandboxMode is Codex's own confinement: the filesystem is read-only
+	// whatever the permission policy says.
+	sandboxMode = "read-only"
+
+	// approvalPolicy decides which actions Codex asks about instead of
+	// deciding for itself, and it is the only reason Sirdar's permission
+	// policy reaches a Codex session at all.
+	//
+	// It used to be "never", which does not mean "nothing is gated": for
+	// MCP tool calls it means *refused*. A turn against codex-cli 0.154.0
+	// with a workspace MCP server ended in
+	//
+	//	"error":{"message":"MCP tool call requires approval, but approval
+	//	policy is never"}
+	//
+	// so the servers a workspace declares were being started and then
+	// never usable. Under "untrusted" the same call arrives as an
+	// approval request — an mcpServer/elicitation/request carrying
+	// _meta.codex_approval_kind "mcp_tool_call" — which is what lets
+	// permissions.mcp judge it. See docs/research/06-wire-formats.md for
+	// both transcripts.
+	//
+	// The cost is that shell commands are put to Sirdar too, and are
+	// judged by permissions.bash. That is what Claude Code sessions have
+	// always done; a Codex session was the odd one out.
+	approvalPolicy = "untrusted"
+
+	// mcpApprovalKind marks the elicitations that are really MCP tool-call
+	// approvals rather than a server asking the user a question.
+	mcpApprovalKind = "mcp_tool_call"
+
+	// readOnlyReason is what the agent is told when it asks for a write.
+	readOnlyReason = "Sirdar policy: triage runs are read-only"
 )
 
 // lastPumpDone exposes the most recent session's pump-exit signal to tests, so
@@ -99,10 +136,16 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		return nil, fmt.Errorf("codex: stderr pipe: %w", err)
 	}
 
+	policy := spec.Policy
+	if policy == nil {
+		policy = &provider.PermissionPolicy{Root: spec.Cwd}
+	}
 	s := &session{
 		cmd:        cmd,
 		spec:       spec,
+		policy:     policy,
 		home:       home,
+		pendingMCP: map[string]string{},
 		events:     make(chan provider.Event),
 		turnDone:   make(chan struct{}),
 		exited:     make(chan struct{}),
@@ -218,8 +261,8 @@ func (s *session) handshake(ctx context.Context) error {
 
 	method := "thread/start"
 	params := map[string]any{
-		"sandbox":        "read-only",
-		"approvalPolicy": "never",
+		"sandbox":        sandboxMode,
+		"approvalPolicy": approvalPolicy,
 	}
 	if s.spec.Resume != "" {
 		method = "thread/resume"
@@ -296,6 +339,13 @@ type session struct {
 	spec provider.SessionSpec
 	conn *conn
 	tail stderrTail
+
+	// policy decides every approval request. It is never nil: a spec that
+	// names none gets an empty policy, which allows the read-only tool
+	// names, denies write-shaped MCP tools by name, and allows no shell
+	// command at all — the same reading an unconfigured Claude session
+	// gets.
+	policy *provider.PermissionPolicy
 	// home is the generated CODEX_HOME this session runs against, nil
 	// when mcp.workspaceOnly is off. It is removed once the process has
 	// exited, not before: the app-server reads it for the life of the
@@ -305,9 +355,16 @@ type session struct {
 	events chan provider.Event
 	queue  eventQueue
 
-	mu         sync.Mutex
-	threadID   string
-	turnID     string
+	mu       sync.Mutex
+	threadID string
+	turnID   string
+	// pendingMCP is the tool each MCP server has in flight, by server
+	// name. An MCP tool-call approval arrives as an elicitation, which
+	// names the server in a field and the tool only inside a sentence
+	// meant for a person; the item/started that precedes it carries both
+	// as data. Keyed by server because a turn can have calls to several
+	// servers open at once, and the elicitation says which one is asking.
+	pendingMCP map[string]string
 	finalText  string
 	usage      struct{ in, out int64 }
 	turns      int
@@ -441,8 +498,22 @@ func (s *session) wait() (provider.Result, error) {
 	s.mu.Unlock()
 	_ = s.conn.notify("thread/unsubscribe", map[string]any{"threadId": threadID})
 
-	s.shutdown()
-	defer s.home.remove()
+	// Reap the child first: Codex holds the generated home open — and may
+	// still rewrite its auth.json — until it has gone. Only then is the
+	// home taken down. That is why this is not the single call to shutdown
+	// it used to be.
+	//
+	// What the login write-back has to say goes in the stderr tail, not on
+	// the event stream: a turn's completion has already closed the stream
+	// by the time Wait runs, so an event emitted here would be pushed to a
+	// queue nobody can read. The tail is carried into the run's state
+	// whatever the outcome, which is where an operator would go looking
+	// for a refresh that could not be returned.
+	s.reap()
+	for _, w := range s.home.remove() {
+		s.tail.add("sirdar: " + w)
+	}
+	s.closeStream()
 
 	s.mu.Lock()
 	res := provider.Result{Handle: s.threadID, ExitErr: s.exitErr, StderrTail: s.tail.lines()}
@@ -463,9 +534,15 @@ func (s *session) wait() (provider.Result, error) {
 	return res, err
 }
 
-// shutdown closes stdin, waits for the process (killing it after the grace
-// period), then publishes the stderr tail and closes the event stream.
+// shutdown reaps the app-server and closes the event stream.
 func (s *session) shutdown() {
+	s.reap()
+	s.closeStream()
+}
+
+// reap closes stdin and waits for the process, killing it after the grace
+// period and recording the failure if it will not go even then.
+func (s *session) reap() {
 	_ = s.conn.closeWrite()
 
 	if !waitFor(s.exited, shutdownGrace) {
@@ -480,8 +557,6 @@ func (s *session) shutdown() {
 			s.mu.Unlock()
 		}
 	}
-
-	s.closeStream()
 }
 
 // closeStream ends Events() for good: the queue is closed (pop drains what
@@ -668,6 +743,19 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 			if method == "item/completed" {
 				kind = provider.EvToolFinished
 			}
+			// An MCP call announces itself here, with its server and tool
+			// as separate fields, before Codex asks whether it may run.
+			// Remembering it is what lets the approval be decided under
+			// the tool's real name.
+			if it.Type == "mcpToolCall" && it.Server != "" {
+				s.mu.Lock()
+				if kind == provider.EvToolStarted {
+					s.pendingMCP[it.Server] = it.Tool
+				} else {
+					delete(s.pendingMCP, it.Server)
+				}
+				s.mu.Unlock()
+			}
 			s.emit(provider.Event{Kind: kind, Tool: toolName(it), Input: itemRaw.Item, Raw: raw})
 			return
 		}
@@ -801,37 +889,152 @@ func (s *session) onTurnCompleted(params, raw json.RawMessage) {
 	s.endStream()
 }
 
-// onRequest answers the server-to-client requests Codex can raise. Triage
-// sessions are read-only, so every approval is declined.
+// onRequest answers the server-to-client requests Codex can raise. Every
+// approval is decided by the session's PermissionPolicy and reported as an
+// EvPermission event, whichever way it went.
 func (s *session) onRequest(id json.RawMessage, method string, params json.RawMessage) {
 	raw := envelope(id, method, params)
 
 	switch method {
-	case "item/commandExecution/requestApproval",
-		"item/fileChange/requestApproval",
-		"item/permissions/requestApproval":
+	case "item/commandExecution/requestApproval":
+		s.decideCommand(id, params, raw)
+
+	case "item/fileChange/requestApproval":
+		// The sandbox is read-only and no permission setting makes a
+		// triage run a writer, so this one is not the policy's to weigh.
 		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
-		s.emit(provider.Event{
-			Kind:     provider.EvPermission,
-			Decision: "deny",
-			Tool:     approvalTool(method),
-			Input:    params,
-			Text:     "Sirdar policy: triage runs are read-only",
-			Raw:      raw,
-		})
+		s.denied(approvalTool(method), params, raw, readOnlyReason)
+
+	case "item/permissions/requestApproval":
+		// A request to widen the sandbox: more filesystem, or network.
+		// The answer is a granted profile rather than a decision, and an
+		// empty one grants nothing — replying {"decision":"decline"} here
+		// was not a shape this request has.
+		_ = s.conn.reply(id, map[string]any{"permissions": map[string]any{}, "scope": "turn"})
+		s.denied(approvalTool(method), params, raw, readOnlyReason)
 
 	case "item/tool/requestUserInput":
 		_ = s.conn.reply(id, map[string]any{"answers": map[string]any{}})
 		s.emit(provider.Event{Kind: provider.EvQuestion, Text: "codex asked for user input", Input: params, Raw: raw})
 
 	case "mcpServer/elicitation/request":
-		_ = s.conn.reply(id, map[string]string{"action": "decline"})
-		s.emit(provider.Event{Kind: provider.EvSystem, Text: method, Raw: raw})
+		s.decideElicitation(id, params, raw)
 
 	default:
 		_ = s.conn.reply(id, map[string]any{})
 		s.emit(provider.Event{Kind: provider.EvSystem, Text: method, Raw: raw})
 	}
+}
+
+// decideCommand puts a shell command to permissions.bash, the same
+// allow-list a Claude session's Bash calls go through.
+func (s *session) decideCommand(id, params, raw json.RawMessage) {
+	var req struct {
+		Command string `json:"command"`
+	}
+	_ = json.Unmarshal(params, &req)
+
+	input, _ := json.Marshal(map[string]string{"command": req.Command})
+	d := s.policy.Decide("Bash", input)
+	if d.Allow {
+		_ = s.conn.reply(id, map[string]string{"decision": "accept"})
+		s.emit(provider.Event{
+			Kind: provider.EvPermission, Decision: "allow",
+			Tool: "commandExecution", Input: params, Text: req.Command, Raw: raw,
+		})
+		return
+	}
+	// "decline" rather than "cancel": the agent is told no and carries on
+	// with the turn, which is how it learns to reach for something the
+	// allow-list covers instead of dying on the first refusal.
+	_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+	s.denied("commandExecution", params, raw, d.Message)
+}
+
+// elicitation is the subset of mcpServer/elicitation/request Sirdar reads.
+// Codex carries MCP tool-call approvals on this channel: _meta marks them,
+// and the tool's own name appears only inside the message written for a
+// person.
+type elicitation struct {
+	ServerName string `json:"serverName"`
+	Message    string `json:"message"`
+	Meta       struct {
+		ApprovalKind string `json:"codex_approval_kind"`
+	} `json:"_meta"`
+}
+
+// decideElicitation answers an elicitation. An MCP tool-call approval goes
+// to permissions.mcp under the tool's namespaced name, so the rules a
+// workspace already wrote for Claude mean the same thing here. A genuine
+// elicitation — a server asking the operator a question — is declined: an
+// unattended run has nobody to ask.
+func (s *session) decideElicitation(id, params, raw json.RawMessage) {
+	var e elicitation
+	_ = json.Unmarshal(params, &e)
+	if e.Meta.ApprovalKind != mcpApprovalKind {
+		_ = s.conn.reply(id, map[string]string{"action": "decline"})
+		s.emit(provider.Event{Kind: provider.EvSystem, Text: "mcpServer/elicitation/request", Raw: raw})
+		return
+	}
+
+	tool := mcpclient.ToolName(e.ServerName, s.toolInFlight(e.ServerName, e.Message))
+	d := s.policy.Decide(tool, nil)
+	if d.Allow {
+		_ = s.conn.reply(id, map[string]any{"action": "accept", "content": map[string]any{}})
+		s.emit(provider.Event{
+			Kind: provider.EvPermission, Decision: "allow",
+			Tool: tool, Input: params, Raw: raw,
+		})
+		return
+	}
+	_ = s.conn.reply(id, map[string]string{"action": "decline"})
+	s.denied(tool, params, raw, d.Message)
+}
+
+// toolInFlight names the tool an MCP approval is about. The item/started
+// notification for the call arrives before the approval and carries the
+// name as data, which is what this reads; the quoted name in the message
+// Codex wrote for a person is the fallback, and an empty string — which
+// permissions.mcp will not match — is what is left when neither works.
+func (s *session) toolInFlight(server, message string) string {
+	s.mu.Lock()
+	tool := s.pendingMCP[server]
+	s.mu.Unlock()
+	if tool != "" {
+		return tool
+	}
+	return quotedToolName(message)
+}
+
+// quotedToolName lifts the tool name out of a message such as
+//
+//	Allow the probe MCP server to run tool "delete_everything"?
+func quotedToolName(message string) string {
+	start := strings.IndexByte(message, '"')
+	if start < 0 {
+		return ""
+	}
+	rest := message[start+1:]
+	end := strings.IndexByte(rest, '"')
+	if end < 0 {
+		return ""
+	}
+	return rest[:end]
+}
+
+// denied reports a refusal to the operator, with the policy's own reason.
+func (s *session) denied(tool string, params, raw json.RawMessage, reason string) {
+	if reason == "" {
+		reason = readOnlyReason
+	}
+	s.emit(provider.Event{
+		Kind:     provider.EvPermission,
+		Decision: "deny",
+		Tool:     tool,
+		Input:    params,
+		Text:     reason,
+		Raw:      raw,
+	})
 }
 
 // approvalTool turns "item/commandExecution/requestApproval" into
@@ -905,13 +1108,27 @@ func (t *stderrTail) String() string { return strings.Join(t.lines(), "\n") }
 // ------------------------------------------------------------------- doctor
 
 // Doctor checks that the Codex CLI is installed, logged in, and that its
-// app-server starts and reports its MCP servers.
-func (codexProvider) Doctor(ctx context.Context, binary string) []provider.Check {
+// app-server starts and reports its MCP servers. With no workspace
+// configuration to hand, the MCP row falls back to the workspace it can
+// find from the working directory; DoctorWithConfig is the accurate one.
+func (p codexProvider) Doctor(ctx context.Context, binary string) []provider.Check {
+	return p.doctor(ctx, binary, nil)
+}
+
+// DoctorWithConfig is Doctor told which workspace it is reporting on, and
+// under which mcp.workspaceOnly setting. internal/app calls this one, so
+// the row is right from the desktop app and `sirdar serve` too, whose
+// working directories have nothing to do with the workspace.
+func (p codexProvider) DoctorWithConfig(ctx context.Context, binary string, cfg provider.DoctorConfig) []provider.Check {
+	return p.doctor(ctx, binary, &cfg)
+}
+
+func (codexProvider) doctor(ctx context.Context, binary string, cfg *provider.DoctorConfig) []provider.Check {
 	if binary == "" {
 		binary = defaultBinary
 	}
 	checks := []provider.Check{versionCheck(ctx, binary), loginCheck(ctx, binary)}
-	return append(checks, mcpCheck(ctx, binary))
+	return append(checks, mcpCheck(ctx, binary, cfg))
 }
 
 func versionCheck(ctx context.Context, binary string) provider.Check {
@@ -941,22 +1158,13 @@ func loginCheck(ctx context.Context, binary string) provider.Check {
 // thread would see under the mcp.workspaceOnly setting in force: against the
 // generated home when it is on, and against the operator's own Codex config
 // when it is off.
-//
-// Provider.Doctor is handed a binary and nothing else, so neither the
-// workspace nor the setting arrives the way it does in a SessionSpec: the
-// workspace is the .sirdar directory found from the working directory, and
-// the setting comes from SIRDAR_MCP_WORKSPACE_ONLY, defaulting — as the
-// config does — to on.
-func mcpCheck(ctx context.Context, binary string) provider.Check {
+func mcpCheck(ctx context.Context, binary string, cfg *provider.DoctorConfig) provider.Check {
 	const name = "codex mcp servers"
 
 	var home *scratchHome
+	root, only := doctorSetting(cfg)
 	prefix := "mcp.workspaceOnly off, the operator's own servers: "
-	if workspaceOnly(os.Environ()) {
-		root := doctorRoot(workingDir())
-		if root == "" {
-			root = workingDir()
-		}
+	if only {
 		h, _, err := newScratchHome(root, os.Environ())
 		if err != nil {
 			return provider.Check{Name: name, Detail: err.Error()}

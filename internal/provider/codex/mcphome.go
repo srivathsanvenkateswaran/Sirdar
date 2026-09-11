@@ -1,14 +1,17 @@
 package codex
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 const (
@@ -17,13 +20,16 @@ const (
 	envCodexHome = "CODEX_HOME"
 	// envKeepHome keeps a session's generated home on disk for debugging.
 	envKeepHome = "SIRDAR_KEEP_CODEX_HOME"
-	// envWorkspaceOnly tells Doctor which mcp.workspaceOnly setting to
-	// report under. Provider.Doctor is handed a binary and nothing else,
-	// so the setting cannot reach it through the SessionSpec the way it
-	// reaches Start; unset means the config default, which is on.
-	envWorkspaceOnly = "SIRDAR_MCP_WORKSPACE_ONLY"
 	// defaultCodexDir is the home Codex uses when CODEX_HOME is unset.
 	defaultCodexDir = ".codex"
+	// homePrefix names the generated homes, and is what the stale sweep
+	// recognises its own leftovers by.
+	homePrefix = "sirdar-codex-home-"
+	// staleHomeAge is how old a leftover generated home has to be before
+	// Start removes it. A session that runs longer than this keeps its
+	// own home: the sweep only ever looks at directories whose mtime is
+	// older, and a live session's home is written as it starts.
+	staleHomeAge = 24 * time.Hour
 )
 
 // scratchHome is a generated CODEX_HOME for one session: the user's own
@@ -44,21 +50,46 @@ type scratchHome struct {
 	servers []string
 	keep    bool
 	once    sync.Once
+
+	// realDir is the operator's own home, and authCopied is the bytes of
+	// their auth.json as they were copied in. Together they are what the
+	// write-back on Wait compares against: a token Codex refreshed inside
+	// the session is worth keeping, but only when the operator's own file
+	// has not moved on since.
+	realDir    string
+	authCopied []byte
+	authWarn   []string
 }
 
 // newScratchHome writes a home for the stdio servers declared in
 // <root>/.mcp.json. A root with no .mcp.json yields a home that declares
 // no servers at all, which is what mcp.workspaceOnly asks for in a
-// workspace that has written none. The warnings are LoadWorkspaceServers'
-// own, one per skipped entry.
+// workspace that has written none. The warnings are the loader's own, one
+// per skipped entry and one per unset ${VAR}.
+//
+// env is the session's child environment, not this process's: it is where
+// CODEX_HOME is read from, and where a `.mcp.json` ${VAR} is expanded
+// from, so a credential internal/run stripped cannot come back through
+// the generated config.toml.
 func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
-	servers, warnings, err := mcpclient.LoadWorkspaceServers(root)
+	servers, warnings, err := mcpclient.LoadWorkspaceServersEnv(root, env)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	dir, err := os.MkdirTemp("", "sirdar-codex-home-")
+	// A SIGKILL leaves a home behind — remove has no chance to run — so
+	// each new session clears out yesterday's. Best effort: a sweep that
+	// fails is not a reason to lose the run.
+	sweepStaleHomes(os.TempDir(), time.Now())
+
+	dir, err := os.MkdirTemp("", homePrefix)
 	if err != nil {
+		return nil, nil, err
+	}
+	// MkdirTemp already makes it 0700; say so rather than assume it, since
+	// the directory holds a copy of the operator's login.
+	if err := os.Chmod(dir, 0o700); err != nil {
+		_ = os.RemoveAll(dir)
 		return nil, nil, err
 	}
 	h := &scratchHome{dir: dir, keep: envValue(env, envKeepHome) == "1"}
@@ -67,6 +98,7 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 	}
 
 	real := realCodexHome(env)
+	h.realDir = real
 	if err := h.inherit(real); err != nil {
 		h.forceRemove()
 		return nil, nil, err
@@ -77,6 +109,27 @@ func newScratchHome(root string, env []string) (*scratchHome, []string, error) {
 		return nil, nil, err
 	}
 	return h, warnings, nil
+}
+
+// sweepStaleHomes removes generated homes left behind by sessions that
+// were killed outright. Only directories this package names, and only
+// those untouched for staleHomeAge, so a long-running session's home is
+// never taken out from under it.
+func sweepStaleHomes(tmp string, now time.Time) {
+	entries, err := os.ReadDir(tmp)
+	if err != nil {
+		return
+	}
+	for _, e := range entries {
+		if !e.IsDir() || !strings.HasPrefix(e.Name(), homePrefix) {
+			continue
+		}
+		info, err := e.Info()
+		if err != nil || now.Sub(info.ModTime()) < staleHomeAge {
+			continue
+		}
+		_ = os.RemoveAll(filepath.Join(tmp, e.Name()))
+	}
 }
 
 // inherit copies the login and links everything else. auth.json is copied
@@ -103,9 +156,12 @@ func (h *scratchHome) inherit(real string) error {
 			continue
 		}
 		if name == "auth.json" {
-			if err := copyFile(filepath.Join(real, name), filepath.Join(h.dir, name)); err != nil {
-				return fmt.Errorf("copy %s: %w", filepath.Join(real, name), err)
+			src := filepath.Join(real, name)
+			b, err := copyFile(src, filepath.Join(h.dir, name))
+			if err != nil {
+				return fmt.Errorf("copy %s: %w", src, err)
 			}
+			h.authCopied = b
 			continue
 		}
 		if err := os.Symlink(filepath.Join(real, name), filepath.Join(h.dir, name)); err != nil {
@@ -127,19 +183,91 @@ func (h *scratchHome) apply(base []string) []string {
 	return append(out, envCodexHome+"="+h.dir)
 }
 
-// remove deletes the generated home once the session that used it has
-// exited. SIRDAR_KEEP_CODEX_HOME=1 keeps it for inspection. A nil home —
-// mcp.workspaceOnly off — has nothing to remove.
-func (h *scratchHome) remove() {
+// remove returns the refreshed login to the operator's own home and then
+// deletes the generated one, once the session that used it has exited.
+// SIRDAR_KEEP_CODEX_HOME=1 keeps the directory for inspection; the
+// write-back still happens, because a token left only in a directory
+// nobody reads is a token thrown away. A nil home — mcp.workspaceOnly
+// off — has nothing to do.
+//
+// It returns whatever the write-back has to say, so the session can put
+// it in the events log rather than swallow it.
+func (h *scratchHome) remove() []string {
 	if h == nil {
-		return
+		return nil
 	}
 	h.once.Do(func() {
+		h.authWarn = h.writeBackAuth()
 		if h.keep {
 			return
 		}
 		_ = os.RemoveAll(h.dir)
 	})
+	return h.authWarn
+}
+
+// writeBackAuth copies a refreshed auth.json back to the operator's home.
+//
+// Codex rewrites auth.json when it refreshes the ChatGPT token, and it
+// rewrites the session's copy, not theirs. Leaving it there would strand
+// the refresh: their own `codex` would go on presenting the token this
+// run replaced, and on some refresh flows the old one no longer works.
+//
+// The write-back happens only when the session's copy differs from what
+// was copied in AND the real file is byte-for-byte what it was at the
+// copy. Anything else — their own session refreshed it meanwhile, the
+// file was replaced by a fresh login — means two writers, and the run
+// that did not ask to be an authority on their login stands down and
+// says so.
+func (h *scratchHome) writeBackAuth() []string {
+	if h.realDir == "" || h.authCopied == nil {
+		return nil
+	}
+	dst := filepath.Join(h.realDir, "auth.json")
+	now, err := os.ReadFile(filepath.Join(h.dir, "auth.json"))
+	if err != nil || bytes.Equal(now, h.authCopied) {
+		return nil // nothing was refreshed
+	}
+	current, err := os.ReadFile(dst)
+	if err != nil {
+		return []string{"codex auth: the session refreshed its login but " + dst + " could not be read, so it was left alone"}
+	}
+	if !bytes.Equal(current, h.authCopied) {
+		return []string{"codex auth: the session refreshed its login but " + dst +
+			" changed underneath it, so the refresh was discarded rather than overwrite yours"}
+	}
+	if err := writeFileAtomic(dst, now, 0o600); err != nil {
+		return []string{"codex auth: writing the refreshed login back to " + dst + " failed: " + err.Error()}
+	}
+	return []string{"codex auth: the session's token refresh was written back to " + dst}
+}
+
+// writeFileAtomic writes through a temporary file in the destination's own
+// directory and renames it into place, so a crash mid-write cannot leave
+// the operator with half an auth.json and no login at all.
+func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
+	f, err := os.CreateTemp(filepath.Dir(path), ".sirdar-auth-*")
+	if err != nil {
+		return err
+	}
+	tmp := f.Name()
+	defer os.Remove(tmp) // a no-op once the rename has succeeded
+	if err := f.Chmod(perm); err != nil {
+		f.Close()
+		return err
+	}
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 // forceRemove discards a half-built home, keep flag or not.
@@ -181,48 +309,189 @@ func readConfig(real string) string {
 	return string(b)
 }
 
+// mcpServersKey is the root TOML key Codex reads its MCP servers from.
+const mcpServersKey = "mcp_servers"
+
 // stripMCPServers removes every mcp_servers declaration from a config.toml
 // and leaves the rest — model, reasoning effort, project trust, profiles —
 // byte for byte, so the generated home changes which MCP servers the
 // session sees and nothing else.
+//
+// It works on statements rather than lines, because a line is not a unit
+// of TOML: a `"""…"""` value can contain the text `[mcp_servers.x]`, and
+// a value can span lines inside `[ … ]` or `{ … }`. Reading those as
+// headers cost the rest of the file — everything after such a string was
+// deleted — so the scan tracks string fences and bracket depth and only
+// ever drops a whole statement.
+//
+// What goes: the `[mcp_servers]` table and its sub-tables (including the
+// `[[mcp_servers.x]]` array form), and, at the root table only, a
+// `mcp_servers = { … }` assignment or a `mcp_servers.x.y = …` dotted key.
+// A `mcp_servers` key under some other table is that table's own key —
+// `profiles.dev.mcp_servers` is not Codex's server list — and stays.
+//
+// Blank lines and comments inside a dropped table go with it; a comment
+// written directly above the table that follows is part of that dropped
+// run and goes too, which is the one thing here that is not byte-exact.
 func stripMCPServers(cfg string) string {
 	if cfg == "" {
 		return ""
 	}
-	var out []string
-	skip := false
-	for _, line := range strings.Split(cfg, "\n") {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "[") {
-			skip = isMCPTable(trimmed)
-		}
-		if skip || isMCPAssignment(trimmed) {
+	var b strings.Builder
+	dropping, atRoot := false, true
+	for _, st := range scanTOML(cfg) {
+		switch {
+		case st.header:
+			atRoot = false
+			dropping = st.key == mcpServersKey
+		case atRoot && st.key == mcpServersKey:
 			continue
 		}
-		out = append(out, line)
+		if dropping {
+			continue
+		}
+		b.WriteString(st.text)
 	}
-	body := strings.Join(out, "\n")
-	return strings.TrimRight(body, "\n") + "\n"
+	body := strings.TrimRight(b.String(), "\n")
+	if body == "" {
+		return ""
+	}
+	return body + "\n"
 }
 
-// isMCPTable reports whether a table header opens an mcp_servers section:
-// [mcp_servers], [mcp_servers.x], [mcp_servers.x.env], [[mcp_servers.x]].
-func isMCPTable(header string) bool {
-	name := strings.TrimLeft(header, "[")
-	name = strings.TrimSpace(name)
-	return name == "mcp_servers]" || strings.HasPrefix(name, "mcp_servers.") ||
-		strings.HasPrefix(name, "mcp_servers ")
+// tomlStatement is one top-level unit of a config.toml: a table header, a
+// key/value assignment (however many lines its value spans), a comment, or
+// a blank line. text is the source verbatim, newline included, so writing
+// the kept statements back out reproduces the original byte for byte.
+type tomlStatement struct {
+	text   string
+	header bool   // a [table] or [[array of tables]] header
+	key    string // first segment of the header path or the key path, unquoted
 }
 
-// isMCPAssignment reports whether a top-level line assigns mcp_servers,
-// either whole (mcp_servers = {...}) or by dotted key.
-func isMCPAssignment(line string) bool {
-	rest, ok := strings.CutPrefix(line, "mcp_servers")
-	if !ok {
-		return false
+// scanTOML splits a config.toml into statements. A newline ends one only
+// when it falls outside every string and at bracket depth zero, which is
+// what keeps a multi-line string or a multi-line array whole.
+//
+// This is a lexer, not a parser: it is here to find statement boundaries
+// and first keys in a file Codex itself has already accepted, not to
+// validate one. Malformed input yields odd statements rather than an
+// error, and the worst that costs is a declaration left in place — the
+// generated home then has a server too many, which the doctor row and the
+// session's own EvSystem event both name.
+func scanTOML(cfg string) []tomlStatement {
+	var out []tomlStatement
+	start, depth := 0, 0
+	for i := 0; i < len(cfg); i++ {
+		switch cfg[i] {
+		case '#':
+			for i < len(cfg) && cfg[i] != '\n' {
+				i++
+			}
+			i-- // the newline is this statement's terminator; see below
+		case '"', '\'':
+			i = skipString(cfg, i)
+		case '[', '{':
+			depth++
+		case ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		case '\n':
+			if depth == 0 {
+				out = append(out, classify(cfg[start:i+1]))
+				start = i + 1
+			}
+		}
 	}
-	rest = strings.TrimLeft(rest, " \t")
-	return strings.HasPrefix(rest, "=") || strings.HasPrefix(rest, ".")
+	if start < len(cfg) {
+		out = append(out, classify(cfg[start:]))
+	}
+	return out
+}
+
+// skipString returns the index of the last byte of the string that opens
+// at i, so the caller's loop resumes after it. An unterminated string runs
+// to the end of the input, which is what a TOML parser would reject; the
+// scan only has to not run away.
+func skipString(s string, i int) int {
+	quote := s[i]
+	fence := strings.Repeat(string(quote), 3)
+	if strings.HasPrefix(s[i:], fence) {
+		if end := strings.Index(s[i+3:], fence); end >= 0 {
+			return i + 3 + end + 2
+		}
+		return len(s) - 1
+	}
+	for j := i + 1; j < len(s); j++ {
+		switch s[j] {
+		case '\\':
+			if quote == '"' {
+				j++ // \" and \\ are content, not the end
+			}
+		case quote:
+			return j
+		case '\n':
+			// A single-quoted string may not contain a newline. Treat the
+			// line end as the end of it rather than swallowing the file.
+			return j - 1
+		}
+	}
+	return len(s) - 1
+}
+
+// classify reads a statement's shape off its text.
+func classify(text string) tomlStatement {
+	st := tomlStatement{text: text}
+	trimmed := strings.TrimLeft(text, " \t")
+	switch {
+	case strings.TrimSpace(trimmed) == "", strings.HasPrefix(trimmed, "#"):
+		return st
+	case strings.HasPrefix(trimmed, "["):
+		st.header = true
+		inner := strings.TrimPrefix(strings.TrimPrefix(trimmed, "["), "[")
+		st.key = firstKey(inner)
+	default:
+		st.key = firstKey(trimmed)
+	}
+	return st
+}
+
+// firstKey returns the first segment of a dotted TOML key path, unquoted.
+// It is what decides whether a header or an assignment belongs to
+// mcp_servers, so the quoted forms matter: `"mcp_servers".x` and
+// `'mcp_servers'.x` name the same table as `mcp_servers.x`.
+func firstKey(s string) string {
+	s = strings.TrimLeft(s, " \t")
+	if s == "" {
+		return ""
+	}
+	switch s[0] {
+	case '"':
+		var b strings.Builder
+		for i := 1; i < len(s); i++ {
+			if s[i] == '\\' && i+1 < len(s) {
+				i++
+				b.WriteByte(s[i])
+				continue
+			}
+			if s[i] == '"' {
+				break
+			}
+			b.WriteByte(s[i])
+		}
+		return b.String()
+	case '\'':
+		if end := strings.IndexByte(s[1:], '\''); end >= 0 {
+			return s[1 : 1+end]
+		}
+		return s[1:]
+	}
+	end := strings.IndexAny(s, " \t.=]")
+	if end < 0 {
+		end = len(s)
+	}
+	return s[:end]
 }
 
 // renderServers writes one [mcp_servers.<name>] table per workspace server.
@@ -289,16 +558,20 @@ func tomlString(s string) string {
 	return b.String()
 }
 
-// copyFile copies src to dst with owner-only permissions.
-func copyFile(src, dst string) error {
+// copyFile copies src to dst with owner-only permissions and returns what
+// it copied, which is the baseline the write-back compares against. A src
+// that does not exist is not an error — an operator who has never logged
+// in has no auth.json — and yields no bytes, which turns the write-back
+// off.
+func copyFile(src, dst string) ([]byte, error) {
 	b, err := os.ReadFile(src)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil
+			return nil, nil
 		}
-		return err
+		return nil, err
 	}
-	return os.WriteFile(dst, b, 0o600)
+	return b, os.WriteFile(dst, b, 0o600)
 }
 
 // specRoot is the workspace whose .mcp.json governs the session. The
@@ -312,17 +585,20 @@ func specRoot(cwd, mcpConfig string) string {
 	return cwd
 }
 
-// workspaceOnly reports whether Doctor should describe a workspace-only
-// session. The setting lives in the workspace config, which Provider.Doctor
-// never sees, so the environment is the only channel; its default matches
-// the config's, which is on.
-func workspaceOnly(env []string) bool {
-	switch strings.ToLower(envValue(env, envWorkspaceOnly)) {
-	case "0", "false", "no", "off":
-		return false
-	default:
-		return true
+// doctorSetting is the workspace root and mcp.workspaceOnly value the
+// Doctor row reports under. internal/app hands both in (see
+// provider.ConfigDoctor); the fallback, for a caller with no workspace
+// configuration at all, walks up from the working directory for a .sirdar
+// and assumes the config's own default, which is on.
+func doctorSetting(cfg *provider.DoctorConfig) (root string, only bool) {
+	if cfg != nil {
+		return cfg.Root, cfg.MCPWorkspaceOnly
 	}
+	root = doctorRoot(workingDir())
+	if root == "" {
+		root = workingDir()
+	}
+	return root, true
 }
 
 // doctorRoot finds the workspace Doctor is being run against by walking up

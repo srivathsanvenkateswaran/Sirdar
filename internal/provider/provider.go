@@ -132,6 +132,28 @@ type Check struct {
 	Detail string
 }
 
+// DoctorConfig carries the parts of the workspace configuration a
+// diagnostic needs in order to report on what a run would actually do.
+// Doctor is handed a binary and nothing else, which left the Codex MCP row
+// guessing: the workspace from the process working directory, the setting
+// from an environment variable. That is accurate for `sirdar doctor` run
+// inside a workspace and wrong from the desktop app, whose working
+// directory has nothing to do with the workspace being reported on.
+type DoctorConfig struct {
+	// Root is the workspace directory, where .mcp.json is looked for.
+	Root string
+	// MCPWorkspaceOnly is the workspace's mcp.workspaceOnly setting.
+	MCPWorkspaceOnly bool
+}
+
+// ConfigDoctor is the optional half of the Doctor contract, for a provider
+// whose diagnostics depend on the workspace and not on the binary alone. A
+// caller holding the configuration should prefer it; one that does not
+// calls Doctor, and the provider falls back to what it can infer.
+type ConfigDoctor interface {
+	DoctorWithConfig(ctx context.Context, binary string, cfg DoctorConfig) []Check
+}
+
 // Provider adapts a specific agent CLI to the Session contract.
 type Provider interface {
 	Name() string

@@ -236,3 +236,116 @@ Notes on the shapes and the caveats, all observed rather than assumed:
   <id>"}`. That is why Sirdar symlinks the real home's state into the generated one instead of
   leaving it empty. (An empty thread is not written to `sessions` at all, so the probe could
   not tell a missing rollout from an unwritten one without spending a turn.)
+
+### Codex approvals: what gates an MCP tool call (probed 2026-09-11, codex-cli 0.154.0)
+
+Sirdar ran Codex with `approvalPolicy: "never"` on the reading that the read-only sandbox was
+the whole confinement and no approval would ever arrive. For MCP tool calls that reading was
+wrong in both directions: `never` does not mean "runs ungated", it means **refused**, and the
+policy that does gate them routes the approval somewhere the adapter was not looking.
+
+Two turns were spent establishing this, against a scratch `CODEX_HOME` whose `config.toml`
+declared one stdio MCP server — a Python stub exposing `delete_everything` with no
+`readOnlyHint` annotation — in a throwaway `cwd`. Same prompt both times: *Call the MCP tool
+delete_everything on the server named probe, with an empty arguments object.*
+
+**`approvalPolicy: "never"` refuses the call.** No server-to-client request of any kind; the
+item completes as failed:
+
+```json
+{"method":"item/completed","params":{"item":{"type":"mcpToolCall","id":"exec-54932ee5-…",
+  "server":"probe","tool":"delete_everything","status":"failed","arguments":{},
+  "readOnlyHint":null,"result":null,
+  "error":{"message":"MCP tool call requires approval, but approval policy is never"}}, …}}
+```
+
+So a workspace `.mcp.json` attached to a Codex session was being started, listed, offered to
+the model — and then unusable. The string is in the binary next to `core/src/mcp_tool_call.rs`
+and `mcp_tool_call_approval`, alongside `internal error: … only MCP actions can request MCP
+tool approval`, which is also why a client-initiated `mcpServer/tool/call` runs under every
+policy: probed directly, `never`, `on-request` and `untrusted` all returned the tool's result
+without asking. Only the *model's* call is gated.
+
+**`approvalPolicy: "untrusted"` asks — on the elicitation channel.** The approval does not
+arrive as `item/permissions/requestApproval` (whose params are a filesystem/network profile,
+with no tool in them) and there is no `item/mcpToolCall/requestApproval` in `ServerRequest` at
+all. It arrives as an `mcpServer/elicitation/request` marked by `_meta`:
+
+```json
+{"method":"mcpServer/elicitation/request","id":0,"params":{
+  "threadId":"01a08fb9-8f31-…","turnId":"01a08fb9-8f93-…","serverName":"probe","mode":"form",
+  "_meta":{"codex_approval_kind":"mcp_tool_call","persist":["session","always"],
+           "tool_description":"Deletes every record in the probe store. Destructive.",
+           "tool_params":{},"tool_params_display":[]},
+  "message":"Allow the probe MCP server to run tool \"delete_everything\"?",
+  "requestedSchema":{"type":"object","properties":{}}}}
+```
+
+Answered `{"action":"decline"}` (the response is `{action, content?}`, actions
+`accept | decline | cancel`), the call completes as `failed` with `user rejected MCP tool
+call`, and the turn carries on. Ordering matters and is reliable: the `item/started` for the
+`mcpToolCall` — which carries `server`, `tool` and `arguments` as *data* — precedes the
+elicitation, then `serverRequest/resolved` follows the reply.
+
+```
+26: item/started            mcpToolCall exec-2d15e1cc… server=probe tool=delete_everything
+28: mcpServer/elicitation/request id=0
+30: serverRequest/resolved  requestId=0
+32: item/completed          mcpToolCall … status=failed
+```
+
+That ordering is what Sirdar decides on: the elicitation names the server in a field but the
+tool only inside a sentence written for a person, so the preceding item supplies the tool name
+and the quoted name in `message` is the fallback.
+
+Notes and limits:
+
+- **`on-request` was not turn-verified.** The `never` branch is a special case in the refusal
+  string, so any other policy plausibly asks; `untrusted` is what was actually observed, so
+  that is what Sirdar sends. `untrusted` also puts shell commands up for approval, which is
+  the point — `permissions.bash` had no way to reach a Codex session before this.
+- **`approvalPolicy: {"granular":{…}}`** would be the narrower instrument
+  (`mcp_elicitations`, `sandbox_approval`, `rules`, `request_permissions`, `skill_approval`),
+  but the app-server rejects it without an opt-in: `askForApproval.granular requires
+  experimentalApi capability`, declared in `initialize.capabilities.experimentalApi`. Not a
+  thing to build a permission gate on while it is flagged experimental.
+- **What Codex auto-approves never reaches Sirdar.** A tool the CLI decides needs no approval
+  raises no request, so `permissions.mcp` never sees it. The stub's tool carried no
+  `readOnlyHint`; whether an annotation a *server* supplies can win itself an exemption was
+  not established, and the annotation would be the untrusted party's own claim. Worth a probe
+  before trusting the gate with a server nobody has read.
+- 0.154.0 also has hooks (`hooks/list`, `HookEventName` including `preToolUse` and
+  `permissionRequest`, `HookRunStatus` `blocked`). A `preToolUse` hook is a second, policy-
+  independent way to gate tool calls and does not depend on the approval policy at all. Not
+  used here; noted as the thing to reach for if the approval channel proves porous.
+
+### Codex and the MCP child's environment (probed 2026-09-11, codex-cli 0.154.0, no turn)
+
+The worry was that Codex hands its MCP servers the app-server's whole inherited environment,
+where Sirdar's own `mcpclient` gives them PATH, HOME and LANG and nothing else — so the same
+`.mcp.json` would expose a workspace's credentials on the Codex path and not on the openai
+one. It does not. Probed by declaring two servers whose `tools/list` names one tool per
+variable it can see (`user__present`, `zoho_refresh_token__absent`, …) and reading the answer
+off `mcpServerStatus/list`, with the app-server itself started with every variable set:
+
+| Variable in the app-server's env | Reaches the MCP child |
+|---|---|
+| `PATH`, `HOME`, `LANG`, `LOGNAME`, `SHELL`, `TERM`, `TMPDIR`, `USER` | yes |
+| `ZOHO_REFRESH_TOKEN`, `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `SIRDAR_BILLING`, `PWD`, `PYTHONPATH`, `NODE_PATH`, and every other name tried | no |
+
+And an `[mcp_servers.<name>.env]` table **merges** with that core set rather than replacing
+it: the server declaring `PROBE_DECLARED` saw it *and* still saw PATH, HOME and LANG, and
+still did not see the parent's other variables.
+
+So Codex filters by the same principle `mcpclient.childEnv` does, over a slightly wider core
+set — the difference being `LOGNAME`, `SHELL`, `TERM`, `TMPDIR` and `USER`, which a server
+started by the openai loop does not get and one started by Codex does. No credential crosses
+either way. Nothing is emitted into the generated `config.toml` to change this; the difference
+is documented in `docs/config.md` instead.
+
+A side note from the same probes: a `CODEX_HOME` that symlinks the real home's `sessions` is
+enough for `thread/resume` — a thread started in a generated home resumed cleanly in a second
+process against the same home, and `thread/items/list` returned its items. Codex also creates
+its own state files in whatever `CODEX_HOME` it is given (`state_*.sqlite`, `logs_*.sqlite`,
+`queue_*.sqlite`, `shell_snapshots/`, `tmp/`, `thread-writer-locks/`), which in Sirdar's
+generated home are symlinks to the operator's, so those writes land in the real files.
