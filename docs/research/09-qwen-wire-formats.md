@@ -17,12 +17,25 @@ Session ids, paths and token counts are illustrative. Companion to
 qwen --output-format stream-json \
   --approval-mode default \
   --json-schema '<json schema>' \
-  --model <model> --max-session-turns 5 --max-wall-time 25m \
+  --model <model> --max-session-turns 5 --max-wall-time 25m --max-tool-calls 16 \
   [--resume <session id>] \
-  [--allowed-tools run_shell_command] \
   [--mcp-config <path> --allowed-mcp-server-names <name> ...] \
+  --exclude-tools write_file --exclude-tools edit --exclude-tools replace \
+  --exclude-tools notebook_edit --exclude-tools image_gen --exclude-tools save_memory \
+  --exclude-tools enter_worktree --exclude-tools exit_worktree \
+  --exclude-tools artifact --exclude-tools record_artifact --exclude-tools record_source \
+  --exclude-tools cron_create --exclude-tools cron_delete --exclude-tools workflow \
+  --exclude-tools update_goal --exclude-tools propose_goal \
+  --exclude-tools monitor --exclude-tools send_message \
+  --exclude-tools create_sub_session --exclude-tools team_create --exclude-tools team_delete \
+  (--allowed-tools run_shell_command | --exclude-tools run_shell_command) \
   [--auth-type openai]
 ```
+
+The exclusion block is the read-only guarantee and is not optional; see
+"The headless deny is not settings-proof" below for why the CLI's own default is not enough.
+The shell is the one tool that switches sides: allow-listed when the workspace named
+`permissions.bash` patterns and excluded when it did not.
 
 The prompt goes in **on stdin** and stdin is then closed. `-p/--prompt` is deprecated in
 0.23.3 in favour of a positional argument, and both put the whole triage prompt on the
@@ -55,6 +68,11 @@ them set the CLI falls back to the operator's own `qwen` login (`qwen-oauth`, cr
 - `--bare` and `--safe-mode`: both disable settings-sourced inputs, which means **no hooks and
   no headless deny rules**. A bare run would hand the model an unguarded shell.
 - `--yolo` / `--approval-mode yolo`: auto-approves every tool with no sandbox.
+- `-s/--sandbox`: wants a container image or a macOS Seatbelt profile the operator has set up,
+  fails the run outright when it cannot start one, and is orthogonal to the exclusion list
+  above. Left for an operator who wants it to configure on the binary.
+- `--insecure`: the TLS equivalent of `--yolo`. `QWEN_TLS_INSECURE`, which sets the same thing,
+  is stripped from the child's environment for the same reason.
 
 ## Output lines (stdout), in the order they occurred
 
@@ -112,6 +130,14 @@ adding `cache_read_input_tokens` to `input_tokens` double-counts a cached Qwen t
 against a stub that reported `prompt_tokens: 1200` with `cached_tokens: 800` — Qwen emitted
 `input_tokens: 1200, cache_read_input_tokens: 800, total_tokens: 1240`.
 
+Summing each turn's `input_tokens` into a running session total looks like it would overstate a
+prompt that is largely the same every turn, but it is exactly what the CLI reports for itself:
+the result line's `input_tokens` is `computeUsageFromMetrics`' `stats.totalPromptTokens`, which
+accumulates `modelMetrics.tokens.prompt` across every API call of the session. The adapter's
+running total therefore converges on the result line rather than diverging from it, and
+tracking the per-turn maximum instead would understate a run and then jump when the result line
+replaced it.
+
 ## Permissions
 
 ### There is no `control_request` in headless mode
@@ -149,11 +175,11 @@ case YOLO: /* nothing */
 So a headless `--approval-mode default` run starts with `run_shell_command`, `monitor`, `edit`
 and `write_file` denied outright, and the model is told so in the `tool_result`:
 `Qwen Code requires permission to use "write_file", but that permission was declined. Matching
-deny rule: "edit".` **This is a genuine read-only default and Sirdar leans on it**, the same
-way the Codex adapter leans on `sandbox: read-only`.
+deny rule: "edit".`
 
 `denyUnlessAllowed` skips a tool that is *explicitly allowed*, which is either
-`permissions.allow` in a settings file or the `--allowed-tools` flag.
+`permissions.allow` in a settings file or the `--allowed-tools` flag. **That makes this default
+a convenience, not a guarantee** — see the next section for what it takes to hold it.
 
 ### Allow-rule specifiers are not enforced for the shell tool
 
@@ -183,25 +209,67 @@ Two things fall out of that table, and both are load-bearing:
 `permissions.deny: []` changes nothing; the headless deny list is assembled after settings are
 merged and an empty array does not clear it.
 
+### The headless deny is not settings-proof; `--exclude-tools` is
+
+`isExplicitlyAllowed` consults `permissions.allow` + `tools.allowed` (together `mergedAllow`)
+and `tools.core` — each of them the **merge** of the system, user (`~/.qwen/settings.json`) and
+workspace (`.qwen/settings.json`) layers. `QWEN_CODE_SYSTEM_SETTINGS_PATH` replaces only the
+system layer, so it does not shut the other two out, and anything they allow cancels the
+headless deny above.
+
+Measured. A work tree carrying
+`.qwen/settings.json` = `{"permissions":{"allow":["run_shell_command","write_file","edit","monitor","notebook_edit"]}}`,
+run headless under `--approval-mode default` with a Sirdar-style system settings file and **no
+`--allowed-tools` at all** — the "workspace named no `permissions.bash` patterns, so no shell"
+case — was offered `run_shell_command`, `monitor`, `enter_worktree`, `exit_worktree`,
+`cron_create`, `cron_delete`, `record_artifact`, `send_message` and `update_goal`. Only
+`write_file`, `edit` and `notebook_edit` stayed out, and only because the system layer's own
+`permissions.deny` covered them: deny beats allow. The shell and `monitor` had no such deny
+entry and came straight back.
+
+`--exclude-tools` closes it, and is the only thing that does. `argv.excludeTools` is appended to
+`mergedDeny` with no settings consulted; that becomes both `config.excludeTools` and
+`permissions.deny`; `isToolEnabled` returns false for an excluded name in **both** its branches,
+the empty-`coreTools` one and the explicit-allow one; and
+`PermissionManager.getToolRegistrationStatus` maps a whole-tool deny to `disabled`, which means
+the tool is never registered and its schema never reaches the model. With the same workspace
+file in place and Sirdar's exclusion list passed, none of the tools above were offered.
+
+Verified against the real 0.23.3 binary driven by a stub OpenAI-compatible endpoint, reading
+both the `tools` array of the request the CLI sends the model and the `tools` field of its
+`system/init` line.
+
 ### The host-arbitrated channel: a `PreToolUse` hook
 
 Hooks *are* consulted in headless mode, for every tool call that survives the deny list, and
 they can allow or deny with a reason. That is the per-call mediator Sirdar's
 `PermissionPolicy.Decide` plugs into. Hooks come from a settings file; Sirdar writes a private
-one and points the child at it with **`QWEN_CODE_SYSTEM_SETTINGS_PATH`**, so no workspace file
-and no `~/.qwen/settings.json` is touched:
+one, mode 0600, and points the child at it with **`QWEN_CODE_SYSTEM_SETTINGS_PATH`**. That
+replaces the system layer only — the user's and the workspace's files are still merged on top,
+which is why the guarantees live on the command line and this file only carries the hook:
 
 ```json
 {
   "hooks": {
     "PreToolUse": [
       { "matcher": "*",
-        "hooks": [{ "type": "http", "url": "http://127.0.0.1:54321/decide", "timeout": 15, "name": "sirdar-policy" }] }
+        "hooks": [{ "type": "http", "url": "http://127.0.0.1:54321/decide/<64 hex chars>", "timeout": 15, "name": "sirdar-policy" }] }
     ]
   },
   "permissions": { "deny": ["write_file", "edit", "notebook_edit"] }
 }
 ```
+
+The last path segment is a 32-byte random per-session token. Without it the endpoint is
+unauthenticated on a port any local process — or any page the operator has open — can reach,
+which would let anything forge `EvPermission` records into the run's event log or flood the
+endpoint until a genuine decision missed the 15 s timeout and failed open. Sirdar compares it
+with `subtle.ConstantTimeCompare` and additionally requires `POST` with
+`Content-Type: application/json` and no `Origin` header; a request that fails any of those gets
+a bare 401 or 415, no decision payload and no event. Reading the bundle's HTTP hook executor
+confirms the CLI's own request matches — `fetch(url, {method:"POST", headers:{"Content-Type":
+"application/json"}, redirect:"manual"})`, a server-side fetch that sends no `Origin` — and a
+live run against the real binary confirmed it on the wire.
 
 HTTP hooks are blocked from private IP ranges but **loopback is explicitly allowed**, and the
 listener is an `httptest`-style server inside the Sirdar process on `127.0.0.1:0`, so nothing
@@ -214,6 +282,13 @@ leaves the machine. Request body (exercised live):
  "tool_input":{"command":"git log -1 --oneline","description":"read the last commit"},
  "tool_use_id":"toolu_1789115022053_n4cka89p7","tool_call_id":"call_3"}
 ```
+
+The two ids are not interchangeable. **`tool_call_id` is the one the stdout stream uses** — it
+is the `id` of the assistant line's `tool_use` block and the `tool_use_id` of the matching
+`tool_result` block — while the payload's own `tool_use_id` (`toolu_<millis>_<rand>`) is the
+CLI's internal handle and appears nowhere on stdout. Sirdar records both when it answers a
+call, and reconciles on the first, which is what lets it report a tool result that arrived with
+no decision behind it.
 
 Response body:
 
@@ -234,9 +309,31 @@ the HTTP form is used because it needs no helper binary on disk.
 **The hook fails open.** Measured: with `--allowed-tools run_shell_command` and the hook URL
 pointed at a dead port, and again with a `command` hook naming a missing executable,
 `git log -1 --oneline` *ran*. A non-2xx response, a connection failure and a timeout are all
-treated as a non-blocking hook failure and the call proceeds. So the hook is a mediator, not a
-sandbox: the static guarantees have to come from the deny list (writes) and from not
-allow-listing the shell at all when the workspace named no bash patterns.
+treated as a non-blocking hook failure and the call proceeds. The bundle's executor confirms
+it: every one of those three branches returns `{success: true, output: {continue: true}}`.
+
+So the hook is a mediator, not a sandbox, and the static guarantee is `--exclude-tools`. What
+the adapter does about the fail-open itself:
+
+- **Probe before handing the session back.** After `cmd.Start`, Sirdar posts to a `/probe/<token>`
+  route on the same listener, mux and token, and fails the session outright if it does not get
+  a 204. It is a separate route so the probe judges nothing and leaves no permission record.
+- **Watch for the listener dying.** If `http.Server.Serve` returns before the process has been
+  reaped, and it was not Sirdar that closed it, the child's whole process group is SIGKILLed —
+  the child is started with `Setpgid`, so anything it spawned goes too — and the run ends with
+  an `error` event and a `Result.ExitErr` saying the permission hook stopped serving. Half a
+  run with no mediator is not a degraded run, it is an unmediated one.
+- **Never let a slow consumer become an allow.** The decision is written to the
+  `ResponseWriter` and explicitly `Flush`ed before the `EvPermission` event is published,
+  because `net/http` buffers a handler's response until it returns and publishing an event can
+  block on the event channel. Emitting first — which is what keeps a permission event ahead of
+  the `tool_result` line it belongs to — would mean a full 64-slot channel could hold the
+  decision past the 15 s hook timeout, and a deny that arrives late is an allow.
+- **Report a bypass.** Nothing on stdout says whether the hook was consulted. Sirdar matches
+  each `tool_result` against the decisions it made, keyed on `tool_call_id`, and emits an
+  `error` event reading `tool started without a Sirdar decision` for a call that succeeded
+  without one. Errored results are passed over: an excluded tool is refused by the CLI before
+  any hook is consulted, and those refusals arrive as errored results.
 
 ### Tool names
 
@@ -312,6 +409,14 @@ workspace file, pass one sentinel name that matches nothing, which yields an emp
 list. `--bare` would also give exactly the CLI-supplied servers, but it disables hooks and the
 headless deny list along with them, so it is not usable here.
 
+**The allow-list narrows by name and by nothing else.** `allowedMcpServers` is a
+`Set<string>` of names checked against the merged map's keys; it carries no notion of where a
+definition came from. So an operator-configured server that happens to share a name with one
+the workspace's `.mcp.json` declares passes the filter, and which of the two definitions
+survives `assembleMcpServers` is the merge's business. `mcp.workspaceOnly` therefore means
+"only these *names*", not "only these *servers*" — the one gap in the restriction, and the
+reason workspace server names should be distinctive.
+
 ## Exit codes, stderr, and the missing result line
 
 | Code | Meaning | Result line on stdout? |
@@ -347,7 +452,12 @@ call. There is no spend budget, because there is no cost figure on the wire.
 ## What was not exercised
 
 - A real model. The backend was a stub; token counts, `duration_api_ms` and the model's own
-  behaviour under a schema are all synthetic.
+  behaviour under a schema are all synthetic. The settings-layer and `--exclude-tools`
+  measurements above were taken the same way, against the real 0.23.3 binary with a stub
+  endpoint: what they establish is which tools the CLI registers and offers, and whether the
+  hook is called, neither of which depends on the model.
+- The probe and the mid-run listener death are exercised against the scripted fake binary in
+  `internal/provider/qwen/qwen_test.go`, not against the real CLI.
 - `--max-wall-time` / `--max-tool-calls` overruns (exit 55) and SIGINT's exit 130.
 - MCP tools actually running — the servers in the MCP table never completed a handshake, which
   is enough to prove which ones were assembled but not what a `mcp__server__tool` hook payload

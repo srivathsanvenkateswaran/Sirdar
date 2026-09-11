@@ -447,43 +447,86 @@ qwen:
 
 `qwen.apiKey` is resolved once, at startup, and held in memory. It reaches the child process as
 `OPENAI_API_KEY` and nowhere else: it is never written to a run directory and never printed by
-`sirdar doctor`. `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `QWEN_MODEL` and
-`QWEN_OAUTH` are stripped from the environment the child inherits before the configured values
-go back in, so a session's endpoint is what the workspace configured and not what happens to be
-exported in the shell that launched Sirdar.
+`sirdar doctor`. Everything Qwen Code reads to choose a backend, a credential, a settings
+location or a system prompt — `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`,
+`QWEN_API_KEY`, `QWEN_BASE_URL`, `QWEN_MODEL`, `QWEN_CODE_MODEL`, `QWEN_OAUTH`,
+`QWEN_DEFAULT_AUTH_TYPE`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `QWEN_HOME`, `QWEN_DIR`,
+`QWEN_CODE_SYSTEM_SETTINGS_PATH`, `QWEN_CODE_SYSTEM_DEFAULTS_PATH`,
+`QWEN_CODE_TRUSTED_FOLDERS_PATH`, `QWEN_CODE_MCP_APPROVALS_PATH`, `QWEN_SYSTEM_MD`,
+`QWEN_WRITE_SYSTEM_MD`, `QWEN_SYSTEM_IDENTITY_MD` and `QWEN_TLS_INSECURE` — is stripped from the
+environment the child inherits before the configured values go back in. A session's endpoint
+and settings are what the workspace configured, not what happens to be exported in the shell
+that launched Sirdar.
 
 **Permissions.** Qwen Code emits no permission request on its stdout in headless mode. Instead
 Sirdar starts a loopback HTTP listener for the session and registers it as a `PreToolUse` hook,
-through a private settings file named by `QWEN_CODE_SYSTEM_SETTINGS_PATH` — neither the
-workspace's `.qwen/settings.json` nor your `~/.qwen/settings.json` is read or written. Every
-tool call the CLI is about to make is posted to that listener, judged by the same
-`permissions.bash` / `permissions.mcp` rules every other provider uses, and answered with an
-allow or a deny whose reason the model sees as the tool result.
+through a private settings file named by `QWEN_CODE_SYSTEM_SETTINGS_PATH`. Every tool call the
+CLI is about to make is posted to that listener, judged by the same `permissions.bash` /
+`permissions.mcp` rules every other provider uses, and answered with an allow or a deny whose
+reason the model sees as the tool result.
 
-Two limits of that mechanism are worth knowing, both measured against the CLI and written up in
+`QWEN_CODE_SYSTEM_SETTINGS_PATH` replaces the **system** settings layer and nothing more: your
+`~/.qwen/settings.json` and the repository's `.qwen/settings.json` are still loaded and merged
+on top of it. It is where Sirdar registers its hook, not an isolation boundary. The guarantees
+that have to hold whatever those layers say are on the command line instead. All four points
+below were measured against 0.23.3 and are written up in
 `docs/research/09-qwen-wire-formats.md`:
 
-- **The hook fails open.** If the listener cannot be reached, Qwen Code treats it as a
-  non-blocking hook failure and runs the tool. So Sirdar also leans on the CLI's own headless
-  deny list, which refuses `run_shell_command`, `edit` and `write_file` outright, and pins
-  `write_file`, `edit` and `notebook_edit` in the session's settings file as well. Shell access
-  is lifted from that deny list **only when the workspace named `permissions.bash` patterns**;
-  a workspace that named none gets no shell at all rather than a shell guarded by something
-  that can fail open.
-- **Per-command shell rules are not available at the CLI level.** A Qwen rule written against
-  `run_shell_command` allows every command whatever specifier it carries, so the
-  `permissions.bash` allow-list is enforced by the hook and by nothing else.
+- **Write-capable tools are excluded, not merely denied.** Every session passes
+  `--exclude-tools` for `write_file`, `edit`, `replace`, `notebook_edit`, `image_gen`,
+  `save_memory`, `enter_worktree`, `exit_worktree`, `artifact`, `record_artifact`,
+  `record_source`, `cron_create`, `cron_delete`, `workflow`, `update_goal`, `propose_goal`,
+  `monitor`, `send_message`, `create_sub_session`, `team_create` and `team_delete`. Qwen Code
+  appends that flag to the merged deny list without consulting any settings layer, and a deny
+  rule beats an allow rule, so those tools are never registered and the model is never offered
+  them. This matters because the CLI's *own* headless deny — `run_shell_command`, `monitor`,
+  `edit` and `write_file` under `--approval-mode default` — is skipped for any tool that
+  `permissions.allow`, `tools.allowed` or `tools.core` names in any layer. So an operator who
+  once allowed the shell globally, or a repository carrying its own `.qwen/settings.json`, used
+  to get an unguarded shell with no hook involved: with such a workspace file and no
+  `--exclude-tools`, the model was offered `run_shell_command`, `monitor`, `enter_worktree`,
+  `cron_create`, `cron_delete`, `record_artifact`, `send_message` and `update_goal`; with the
+  flag, and the same file in place, it was offered none of them.
+- **The shell is excluded the same way unless the workspace named `permissions.bash`
+  patterns.** When it did, `--allowed-tools run_shell_command` puts the shell back and the hook
+  is its only gate — a Qwen rule written against `run_shell_command` allows every command
+  whatever specifier it carries, so per-command rules cannot be expressed at the CLI level at
+  all. `monitor` stays excluded either way: it takes a command string of its own and would be a
+  second, unjudged shell.
+- **The hook is authenticated, probed and watched.** Qwen Code fails open — a connection
+  failure, a timeout and a non-2xx are all non-blocking hook failures, and the tool runs. So the
+  hook URL carries a 32-byte random per-session token compared in constant time, and a request
+  without it, without `POST`, without `application/json`, or carrying an `Origin` header (which
+  the CLI's own server-side fetch never sends) is refused with no event recorded and no decision
+  returned. The decision is written and flushed to the child before the permission event is
+  published, so a slow event consumer cannot push a deny past the CLI's 15 s hook timeout and
+  turn it into an allow. Starting a session probes the listener and fails if it cannot be
+  reached; a listener that stops serving mid-run kills the process group and ends the run with
+  an error rather than letting it continue unmediated.
+- **A bypassed hook is visible.** Every tool result is matched against the decisions the hook
+  made, and a call that ran without one is reported as an `error` event reading `tool started
+  without a Sirdar decision`. events.jsonl shows it rather than staying silent.
 
 **Budgets.** `budget.maxTurns` becomes `--max-session-turns` (plus one, because the terminal
-`structured_output` call spends a turn of its own) and `budget.maxMinutes` becomes
-`--max-wall-time`. `budget.maxUsd` never triggers: the CLI reports no cost on the wire, so cost
-is always `0` and the turn and wall-clock budgets are what bound a run.
+`structured_output` call spends a turn of its own) and, scaled by four, `--max-tool-calls`;
+`budget.maxMinutes` becomes `--max-wall-time`. A session that named no turn budget still gets
+`--max-tool-calls 200`. `budget.maxUsd` never triggers: the CLI reports no cost on the wire, so
+cost is always `0` and the turn, tool-call and wall-clock budgets are what bound a run.
+
+Qwen Code's `-s/--sandbox` is not passed. It wants a container image or a macOS Seatbelt profile
+the operator has set up, a session that cannot start its sandbox fails outright, and it is
+orthogonal to the guarantees above — so it is left to an operator who wants it to configure on
+the binary rather than forced on every run.
 
 **MCP.** `mcp.workspaceOnly` is expressed as `--mcp-config <.mcp.json>` plus one
 `--allowed-mcp-server-names` flag per server that file declares; a workspace with no `.mcp.json`
 gets a sentinel name no server matches, which loads none. Qwen Code has no
 `--strict-mcp-config`: `--mcp-config` merges with your own servers, and the allow-list by name
-is the only thing that narrows the set.
+is the only thing that narrows the set. That narrowing is **by name only**. If one of your own
+configured servers shares a name with a server the workspace's `.mcp.json` declares, it passes
+the allow-list, and which of the two definitions the merge keeps is not something Sirdar
+controls. Keep workspace server names distinctive, or keep the operator-level ones out of a
+config a session can see.
 
 **The schema retry costs a process.** Qwen Code refuses `--input-format stream-json` alongside
 `--json-schema`, so a session takes exactly one message. When a note fails Sirdar's validation

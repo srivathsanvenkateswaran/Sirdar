@@ -10,7 +10,11 @@
 //
 //   - There is no control_request channel in headless mode. The permission
 //     mediator is a PreToolUse hook, which Sirdar serves over loopback HTTP
-//     from inside this process.
+//     from inside this process. The hook fails open — an unreachable
+//     listener means the tool runs — so it is authenticated with a
+//     per-session token, probed before the session is handed back, and
+//     watched for the rest of the run; and the tools a triage session must
+//     never reach are taken off the command line rather than left to it.
 //   - --json-schema and --input-format stream-json are mutually exclusive,
 //     so a session takes exactly one user message. Send always fails and
 //     the runner carries the schema retry into a --resume of the handle.
@@ -21,12 +25,17 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"crypto/rand"
+	"crypto/subtle"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -34,6 +43,8 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
+	"syscall"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
@@ -48,13 +59,33 @@ const (
 	interruptGrace  = 10 * time.Second
 
 	// hookTimeoutSeconds is how long Qwen Code waits for the permission
-	// hook before giving up on it. The decision is a pure function of the
-	// policy and returns immediately; the allowance is for a runner that
-	// is slow to drain the event channel.
+	// hook before giving up on it. A timeout is a non-blocking hook
+	// failure, so a decision that arrives late is an allow: the answer is
+	// therefore written and flushed before anything that can block.
 	hookTimeoutSeconds = 15
 
-	// hookPath is the endpoint the child posts PreToolUse events to.
-	hookPath = "/decide"
+	// hookPathPrefix is the endpoint the child posts PreToolUse events
+	// to; the session's token is the last path segment. probePathPrefix
+	// answers Start's own reachability probe and nothing else.
+	hookPathPrefix  = "/decide/"
+	probePathPrefix = "/probe/"
+
+	// hookTokenBytes is the size of the per-session secret that
+	// authenticates the child to the permission hook. It lives in the
+	// 0600 settings file and in this process's memory, and is never put
+	// in an event, a log line or an error.
+	hookTokenBytes = 32
+
+	// hookProbeTimeout bounds the reachability probe Start makes before
+	// it hands the session back.
+	hookProbeTimeout = 5 * time.Second
+
+	// toolCallsPerTurn converts budget.maxTurns into --max-tool-calls,
+	// and defaultMaxToolCalls bounds a session that named no turn budget.
+	// structured_output is exempt from the CLI's counter, so the terminal
+	// call needs no allowance of its own.
+	toolCallsPerTurn    = 4
+	defaultMaxToolCalls = 200
 
 	// noMCPServer is the name passed to --allowed-mcp-server-names when a
 	// session must see no MCP servers at all. Qwen Code has no
@@ -63,19 +94,68 @@ const (
 	// narrows the set. A name no server has yields an empty set.
 	noMCPServer = "__sirdar_none__"
 
-	// shellTool is the one tool whose headless deny Sirdar ever lifts,
-	// and only for a workspace that named permissions.bash patterns. The
-	// CLI cannot express "shell, but only these commands" — a rule
-	// written against the canonical name allows every command, whatever
-	// specifier it carries — so the allow-list is enforced by the hook.
+	// shellTool is the one tool whose exclusion Sirdar ever lifts, and
+	// only for a workspace that named permissions.bash patterns. The CLI
+	// cannot express "shell, but only these commands" — a rule written
+	// against the canonical name allows every command, whatever specifier
+	// it carries — so the allow-list is enforced by the hook.
 	shellTool = "run_shell_command"
 )
 
-// deniedTools are pinned into the session's settings file so writes stay
-// refused even if the permission hook never answers. Qwen Code's own
-// headless deny list already covers them under --approval-mode default;
-// this is the belt-and-braces half, the way the Claude adapter passes
-// --disallowedTools alongside its permission policy.
+// excludedTools are passed to --exclude-tools on every session. They are
+// the settings-proof half of the read-only guarantee.
+//
+// Qwen Code's own headless deny (denyUnlessAllowed in 0.23.3) refuses
+// run_shell_command, monitor, edit and write_file under --approval-mode
+// default — but only when isExplicitlyAllowed says no, and that consults
+// permissions.allow, tools.allowed and tools.core merged across the
+// system, user (~/.qwen/settings.json) and workspace (.qwen/settings.json)
+// layers. An operator who once allowed run_shell_command globally, or a
+// repository carrying its own .qwen/settings.json, therefore cancels that
+// deny. --exclude-tools does not consult any of it: the flag is appended
+// to the merged deny list unconditionally, isToolEnabled returns false for
+// an excluded name in both its branches, and PermissionManager consults
+// deny rules before allow rules, so the tool is never registered and the
+// model never sees it.
+//
+// The list is every core tool of 0.23.3 that can change a file, start a
+// process or reach outside the session. Everything else Qwen ships is
+// refused by the hook instead, because the policy answers "not permitted"
+// for any name it has not been taught (see policyNames in stream.go).
+var excludedTools = []string{
+	// writes to the workspace
+	"write_file",
+	"edit",
+	"replace", // the legacy alias of edit
+	"notebook_edit",
+	"image_gen",
+	"save_memory",
+	// writes outside it
+	"enter_worktree",
+	"exit_worktree",
+	"artifact",
+	"record_artifact",
+	"record_source",
+	"cron_create",
+	"cron_delete",
+	"workflow",
+	"update_goal",
+	"propose_goal",
+	// runs a shell command that the hook cannot judge as one:
+	// monitor takes a command string like run_shell_command does, and
+	// Qwen's own headless deny treats the two together.
+	"monitor",
+	// reaches a person or another agent
+	"send_message",
+	"create_sub_session",
+	"team_create",
+	"team_delete",
+}
+
+// deniedTools are pinned into the session's settings file as well. The
+// --exclude-tools flag above is the guarantee; this is the belt-and-braces
+// half, the way the Claude adapter passes --disallowedTools alongside its
+// permission policy.
 var deniedTools = []string{"write_file", "edit", "notebook_edit"}
 
 // Endpoint is the model endpoint a workspace configured under `qwen:`. It
@@ -114,19 +194,39 @@ func NewEndpoint(e Endpoint) provider.Provider { return &Provider{endpoint: e} }
 // Name identifies this provider in config and run records.
 func (p *Provider) Name() string { return "qwen" }
 
-// qwenEnvKeys are the variables Qwen Code reads to decide which backend
-// and which credentials a session uses. They are stripped from the child
-// environment unconditionally, so a session's endpoint is whatever the
-// workspace configured and never whatever happens to be exported in the
-// shell that launched Sirdar.
+// qwenEnvKeys are the variables Qwen Code reads to decide which backend a
+// session talks to, which credentials it uses, where it keeps its settings
+// and state, and what system prompt it runs under. They are stripped from
+// the child environment unconditionally, so a session's endpoint is
+// whatever the workspace configured and its settings are the ones Sirdar
+// wrote — never whatever happens to be exported in the shell that launched
+// Sirdar. The ones Sirdar sets itself go back in afterwards.
 var qwenEnvKeys = []string{
+	// backend and credentials
 	"OPENAI_API_KEY",
 	"OPENAI_BASE_URL",
 	"OPENAI_MODEL",
+	"QWEN_API_KEY",
+	"QWEN_BASE_URL",
 	"QWEN_MODEL",
+	"QWEN_CODE_MODEL",
 	"QWEN_OAUTH",
+	"QWEN_DEFAULT_AUTH_TYPE",
+	"GEMINI_API_KEY",
+	"GEMINI_MODEL",
+	// settings, state and trust locations
+	"QWEN_HOME",
+	"QWEN_DIR",
 	"QWEN_CODE_SYSTEM_SETTINGS_PATH",
 	"QWEN_CODE_SYSTEM_DEFAULTS_PATH",
+	"QWEN_CODE_TRUSTED_FOLDERS_PATH",
+	"QWEN_CODE_MCP_APPROVALS_PATH",
+	// system prompt overrides; QWEN_WRITE_SYSTEM_MD also writes a file
+	"QWEN_SYSTEM_MD",
+	"QWEN_WRITE_SYSTEM_MD",
+	"QWEN_SYSTEM_IDENTITY_MD",
+	// transport safety: equivalent to --insecure
+	"QWEN_TLS_INSECURE",
 }
 
 // args builds the command line. The prompt is not on it: it goes in on
@@ -160,6 +260,11 @@ func args(spec provider.SessionSpec, ep Endpoint, mcpNames []string) []string {
 	if spec.Budget.MaxMinutes > 0 {
 		out = append(out, "--max-wall-time", strconv.Itoa(spec.Budget.MaxMinutes)+"m")
 	}
+	// --max-tool-calls is the third bound, and the one that stops a
+	// session looping on a tool the policy keeps refusing. A turn can
+	// carry several calls, so the budget is scaled rather than mapped one
+	// to one; a session that named no turn budget still gets a ceiling.
+	out = append(out, "--max-tool-calls", strconv.Itoa(maxToolCalls(spec.Budget)))
 	if spec.Resume != "" {
 		out = append(out, "--resume", spec.Resume)
 	}
@@ -173,14 +278,32 @@ func args(spec provider.SessionSpec, ep Endpoint, mcpNames []string) []string {
 	for _, name := range mcpNames {
 		out = append(out, "--allowed-mcp-server-names", name)
 	}
-	// A workspace that named no bash patterns gets no shell at all:
-	// Qwen Code's headless deny refuses run_shell_command outright, and
-	// leaving that in place is the only fail-closed guarantee available,
-	// since the permission hook fails open when it cannot be reached.
+	// The read-only guarantee. Every write-capable tool is excluded on
+	// every session, whatever the operator's or the repository's own
+	// settings say, because --exclude-tools is merged into the deny list
+	// without consulting them and deny beats allow (see excludedTools).
+	for _, name := range excludedTools {
+		out = append(out, "--exclude-tools", name)
+	}
+	// The shell is excluded the same way unless the workspace named
+	// permissions.bash patterns. When it did, the hook is the gate: it
+	// decides every command, and a hook that cannot be reached aborts the
+	// session rather than letting one through (see session.watchHook).
 	if spec.Policy != nil && len(spec.Policy.BashAllow) > 0 {
 		out = append(out, "--allowed-tools", shellTool)
+	} else {
+		out = append(out, "--exclude-tools", shellTool)
 	}
 	return out
+}
+
+// maxToolCalls converts a turn budget into the CLI's cumulative tool-call
+// ceiling.
+func maxToolCalls(b provider.Budget) int {
+	if b.MaxTurns > 0 {
+		return b.MaxTurns * toolCallsPerTurn
+	}
+	return defaultMaxToolCalls
 }
 
 // mcpServerNames returns the names the session may load, and reports
@@ -276,9 +399,17 @@ func compactJSON(raw []byte) string {
 // writeSettings writes the private settings file the session runs under
 // and returns its path. It carries two things: the PreToolUse hook that
 // asks Sirdar about every tool call, and a deny list for the write tools.
-// It is pointed at with QWEN_CODE_SYSTEM_SETTINGS_PATH, so neither the
-// workspace's .qwen/settings.json nor the operator's ~/.qwen/settings.json
-// is read or written.
+//
+// QWEN_CODE_SYSTEM_SETTINGS_PATH replaces the *system* settings layer and
+// nothing else: the user's ~/.qwen/settings.json and the workspace's
+// .qwen/settings.json are still loaded and merged on top of it. This file
+// is therefore where Sirdar's hook is registered, not an isolation
+// boundary — the guarantees that have to hold whatever those layers say
+// are on the command line instead (see excludedTools).
+//
+// The URL carries the session's token as its last path segment. The file
+// is written 0600 and removed when the session ends, and the token appears
+// nowhere else.
 func writeSettings(dir, hookURL string) (string, error) {
 	type hook struct {
 		Type    string `json:"type"`
@@ -335,13 +466,18 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if err != nil {
 		return nil, fmt.Errorf("qwen permission hook: %w", err)
 	}
+	token, err := newHookToken()
+	if err != nil {
+		_ = listener.Close()
+		return nil, fmt.Errorf("qwen permission hook: %w", err)
+	}
 	dir, err := os.MkdirTemp("", "sirdar-qwen-")
 	if err != nil {
 		_ = listener.Close()
 		return nil, fmt.Errorf("qwen settings: %w", err)
 	}
-	hookURL := "http://" + listener.Addr().String() + hookPath
-	settingsPath, err := writeSettings(dir, hookURL)
+	base := "http://" + listener.Addr().String()
+	settingsPath, err := writeSettings(dir, base+hookPathPrefix+token)
 	if err != nil {
 		_ = listener.Close()
 		_ = os.RemoveAll(dir)
@@ -357,6 +493,9 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
 	cmd.Env = childEnv(spec, p.endpoint, settingsPath)
+	// Its own process group, so an abort can take the whole tree down
+	// rather than leaving a tool the CLI spawned running behind it.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	fail := func(err error) (provider.Session, error) {
 		cancelRun()
@@ -383,6 +522,9 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		stderr:     tail,
 		policy:     policy,
 		settingsIn: dir,
+		token:      token,
+		decided:    map[string]struct{}{},
+		started:    map[string]string{},
 		events:     make(chan provider.Event, eventBuffer),
 		readDone:   make(chan struct{}),
 		hookDone:   make(chan struct{}),
@@ -395,10 +537,22 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}()
 
 	if err := cmd.Start(); err != nil {
-		_ = s.hook.Close()
-		<-s.hookDone
+		s.stopHook()
 		return fail(fmt.Errorf("start %s: %w", binary, err))
 	}
+
+	// A hook that cannot be reached is not a degraded session, it is an
+	// unmediated one: Qwen Code treats a connection failure, a timeout
+	// and a non-2xx alike as a non-blocking hook failure and runs the
+	// tool. So the listener is proved to be answering before the session
+	// is handed back, and watched for the rest of the run.
+	if err := probeHook(base + probePathPrefix + token); err != nil {
+		s.abort()
+		_ = cmd.Wait()
+		s.stopHook()
+		return fail(fmt.Errorf("qwen permission hook: %w", err))
+	}
+	go s.watchHook()
 
 	// The prompt is the whole of the session's input. Qwen Code reads
 	// stdin to EOF before it starts, so it is written and closed here
@@ -413,13 +567,49 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		go func() {
 			<-s.readDone
 			_ = cmd.Wait()
-			_ = s.hook.Close()
-			<-s.hookDone
-			_ = os.RemoveAll(dir)
+			s.stopHook()
+			s.removeSettings()
 		}()
 		return nil, fmt.Errorf("qwen prompt: %w", writeErr)
 	}
 	return s, nil
+}
+
+// newHookToken mints the secret that authenticates the child to the
+// permission hook.
+func newHookToken() (string, error) {
+	b := make([]byte, hookTokenBytes)
+	if _, err := rand.Read(b); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(b), nil
+}
+
+// probeHook confirms the permission listener is answering on the address
+// the child was given. The error it returns never names the URL, because
+// the URL carries the session's token.
+func probeHook(probeURL string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), hookProbeTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, probeURL, strings.NewReader("{}"))
+	if err != nil {
+		return errors.New("the probe request could not be built")
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		var uerr *url.Error
+		if errors.As(err, &uerr) {
+			err = uerr.Err
+		}
+		return fmt.Errorf("unreachable: %w", err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<10))
+	if resp.StatusCode != http.StatusNoContent {
+		return fmt.Errorf("the probe was answered with %s", resp.Status)
+	}
+	return nil
 }
 
 func writePrompt(stdin io.WriteCloser, prompt string) error {
@@ -520,11 +710,14 @@ type session struct {
 	policy     *provider.PermissionPolicy
 	hook       *http.Server
 	settingsIn string
+	token      string // authenticates the child to the permission hook
 
 	events   chan provider.Event
 	readDone chan struct{} // closed when stdout hits EOF
 	hookDone chan struct{} // closed when the hook server has stopped
 	done     chan struct{} // closed when the process has been reaped
+
+	hookClosing atomic.Bool // set before the hook is shut down on purpose
 
 	emitMu sync.RWMutex // held for reading while an event is sent
 	closed bool         // set under emitMu before events is closed
@@ -535,7 +728,105 @@ type session struct {
 	waitErr error
 	meter   usageMeter
 
-	waitOnce sync.Once
+	// decided holds the ids of the tool calls the hook answered, and
+	// started the ids of the tool calls the stream announced but has not
+	// reported a result for yet. A result for a call that ran without a
+	// decision is a bypassed hook (see reconcile).
+	decided map[string]struct{}
+	started map[string]string
+
+	// aborted is why the session was stopped from inside the adapter,
+	// which is only ever the permission hook going away.
+	aborted string
+
+	waitOnce     sync.Once
+	settingsOnce sync.Once
+	cleanupOnce  sync.Once
+}
+
+// stopHook shuts the permission listener down on purpose and waits for
+// Serve to return, so watchHook can tell a deliberate close from a server
+// that stopped under the session's feet.
+func (s *session) stopHook() {
+	s.hookClosing.Store(true)
+	_ = s.hook.Close()
+	<-s.hookDone
+}
+
+// removeSettings deletes the 0600 settings file and the directory holding
+// it. It is safe to call more than once and from more than one goroutine.
+func (s *session) removeSettings() {
+	s.settingsOnce.Do(func() {
+		if s.settingsIn != "" {
+			_ = os.RemoveAll(s.settingsIn)
+		}
+	})
+}
+
+// abort stops the child now. SIGINT and the WaitDelay escalation are the
+// polite path; this one is for a session that has lost its mediator, where
+// anything the CLI already spawned has to go too.
+func (s *session) abort() {
+	s.cancelRun()
+	if s.cmd.Process == nil {
+		return
+	}
+	if pid := s.cmd.Process.Pid; pid > 0 {
+		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
+			return
+		}
+	}
+	_ = s.cmd.Process.Kill()
+}
+
+// watchHook aborts the session if the permission listener stops serving
+// before the process has been reaped. An early Serve return — a listener
+// closed under it, an accept loop that failed — would otherwise leave the
+// run going with every tool call failing open.
+//
+// The reason is recorded rather than emitted from here. emit blocks while
+// the caller is slow to drain, and nothing should be allowed to run while
+// this goroutine waits for a reader; the stdout reader publishes the
+// notice on its way out, and Wait carries it in the Result either way.
+func (s *session) watchHook() {
+	select {
+	case <-s.done:
+		return
+	case <-s.hookDone:
+	}
+	if s.hookClosing.Load() {
+		return
+	}
+	s.setAborted("the Sirdar permission hook stopped serving; the session was aborted rather " +
+		"than left running with every tool call failing open")
+	s.abort()
+}
+
+func (s *session) setAborted(reason string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.aborted == "" {
+		s.aborted = reason
+	}
+}
+
+func (s *session) abortedReason() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.aborted
+}
+
+// publishAbort puts the abort notice on the event stream. It runs on the
+// stdout reader's way out, the one goroutine that can be sure the channel
+// is still open.
+func (s *session) publishAbort() {
+	reason := s.abortedReason()
+	if reason == "" {
+		return
+	}
+	ev := newEvent(provider.EvError, []byte(`{"type":"sirdar_session_aborted"}`))
+	ev.Text = reason
+	s.emit(ev)
 }
 
 // usageMeter accumulates what the session has spent so far. The CLI
@@ -586,16 +877,23 @@ func (s *session) Wait() (provider.Result, error) {
 		<-s.readDone
 		err := s.cmd.Wait()
 		// Nothing will call the hook once the process has gone.
-		_ = s.hook.Close()
-		<-s.hookDone
-		if s.settingsIn != "" {
-			_ = os.RemoveAll(s.settingsIn)
-		}
+		s.stopHook()
+		s.removeSettings()
 		tail := s.stderr.snapshot()
 
 		s.mu.Lock()
 		s.res.Handle = s.handle
 		s.res.StderrTail = tail
+		// An adapter-side abort is the reason the run ended, whatever the
+		// signal that carried it out looks like, so it replaces the exit
+		// account rather than hiding behind it.
+		if s.aborted != "" {
+			s.res.ExitErr = fmt.Errorf("%s: %s%s", s.binary, s.aborted, formatTail(tail))
+			s.mu.Unlock()
+			s.cancelRun()
+			close(s.done)
+			return
+		}
 		if err != nil {
 			var exitErr *exec.ExitError
 			switch {
@@ -645,11 +943,30 @@ func exitReason(code int) string {
 // cmd.Cancel delivers SIGINT and cmd.WaitDelay escalates to SIGKILL if the
 // process is still alive after interruptGrace. It does not block; the
 // outcome shows up in Wait's Result.
-func (s *session) Cancel() { s.cancelRun() }
+//
+// Wait owns the cleanup on the normal path. Cancel arranges its own only
+// for the caller that cancels and never Waits, which would otherwise leave
+// the 0600 settings file on disk. The file is removed once the child's
+// stdout has closed, not straight away: Qwen Code re-reads its settings,
+// and taking the hook registration away from a process that is still alive
+// is exactly the unmediated run this file exists to prevent.
+func (s *session) Cancel() {
+	s.cancelRun()
+	s.cleanupOnce.Do(func() {
+		go func() {
+			select {
+			case <-s.done: // Wait reaped the session and cleaned up
+			case <-s.readDone:
+				s.removeSettings()
+			}
+		}()
+	})
+}
 
 // read consumes stdout until EOF, emitting one or more events per line.
 func (s *session) read(stdout io.Reader) {
 	defer s.closeEvents()
+	defer s.publishAbort()
 	defer close(s.readDone)
 
 	sc := bufio.NewScanner(stdout)
@@ -663,6 +980,9 @@ func (s *session) read(stdout io.Reader) {
 		for _, ev := range decode(line) {
 			s.measure(&ev)
 			s.absorb(ev)
+			s.emit(ev)
+		}
+		for _, ev := range s.reconcile(line) {
 			s.emit(ev)
 		}
 	}
@@ -699,21 +1019,78 @@ func (s *session) closeEvents() {
 // It is the session's permission mediator: Qwen Code emits no
 // control_request in headless mode, so this is the only place a host
 // decision reaches a tool call.
+//
+// Both routes are subtree patterns ending in the session's token, and both
+// compare it in constant time. Serving the subtree rather than the exact
+// token path is deliberate: a request that guesses wrong reaches this code
+// and is refused, instead of falling through to a 404 that says nothing.
 func (s *session) hookMux() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc(hookPath, s.decide)
+	mux.HandleFunc(hookPathPrefix, s.decide)
+	mux.HandleFunc(probePathPrefix, s.probe)
 	return mux
+}
+
+// probe answers Start's reachability check. It shares the listener, the
+// mux and the token with the hook, so an answer here is proof that a
+// PreToolUse post would be served too — and it judges nothing, so the
+// probe leaves no permission record behind.
+func (s *session) probe(w http.ResponseWriter, r *http.Request) {
+	if !s.authentic(r, probePathPrefix) {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// authentic reports whether a request carries this session's token in its
+// path and looks like the CLI's own fetch rather than a browser's.
+//
+// Without it any process on the machine — or any page the operator happens
+// to have open, since the listener speaks plain HTTP on loopback — could
+// post forged PreToolUse records into the run's event log, or flood the
+// endpoint until a genuine decision missed Qwen Code's hook timeout, which
+// turns a deny into an allow.
+func (s *session) authentic(r *http.Request, prefix string) bool {
+	if r.Method != http.MethodPost {
+		return false
+	}
+	// Qwen Code's HTTP hook is a server-side fetch and never sends an
+	// Origin; a request that does is a browser's, whatever it claims.
+	if r.Header.Get("Origin") != "" {
+		return false
+	}
+	got := strings.TrimPrefix(r.URL.Path, prefix)
+	return subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) == 1
 }
 
 // hookRequest is the PreToolUse payload. Every other field of the event —
 // session id, transcript path, cwd, timestamp — is ignored.
+//
+// tool_call_id is the id the stdout stream uses for the same call
+// (tool_use.id / tool_result.tool_use_id); tool_use_id is the CLI's own
+// internal id. Both are recorded, because the first is what reconcile
+// matches against and the second is what older payloads carry.
 type hookRequest struct {
-	ToolName  string          `json:"tool_name"`
-	ToolInput json.RawMessage `json:"tool_input"`
-	ToolUseID string          `json:"tool_use_id"`
+	ToolName   string          `json:"tool_name"`
+	ToolInput  json.RawMessage `json:"tool_input"`
+	ToolUseID  string          `json:"tool_use_id"`
+	ToolCallID string          `json:"tool_call_id"`
 }
 
 func (s *session) decide(w http.ResponseWriter, r *http.Request) {
+	if !s.authentic(r, hookPathPrefix) {
+		// No event and no decision payload: a caller that cannot prove it
+		// is this session's child gets nothing to work with, and forging a
+		// permission record into events.jsonl is not possible.
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if !isJSONRequest(r) {
+		http.Error(w, "unsupported media type", http.StatusUnsupportedMediaType)
+		return
+	}
+
 	body, err := io.ReadAll(io.LimitReader(r.Body, maxLineBytes))
 	if err != nil {
 		writeDecision(w, false, "Sirdar policy: the tool call could not be read")
@@ -724,19 +1101,25 @@ func (s *session) decide(w http.ResponseWriter, r *http.Request) {
 		// Qwen Code is waiting for an answer, so a payload that cannot be
 		// read is still answered — with a refusal, since nothing about it
 		// has been judged.
+		writeDecision(w, false, "Sirdar policy: the tool call could not be read")
 		ev := newEvent(provider.EvError, body)
 		ev.Text = "unparseable permission hook request"
 		s.emit(ev)
-		writeDecision(w, false, "Sirdar policy: the tool call could not be read")
 		return
 	}
 
 	decision := s.policy.Decide(policyName(req.ToolName), req.ToolInput)
+	// The verdict is recorded before the child is answered, so that a
+	// tool result for a call with no recorded decision is proof the hook
+	// was bypassed rather than a race with this handler.
+	s.noteDecision(req.ToolCallID, req.ToolUseID)
 
-	// The event goes out before the answer does. The child does not
-	// continue until it has the answer, so emitting first is what keeps a
-	// permission event ahead of the tool_use line it belongs to; the
-	// other order lets the next stdout line overtake it.
+	// The answer goes out, and is flushed, before the event does. emit
+	// blocks while the caller is slow to drain the channel, and a
+	// decision that misses the CLI's hook timeout is a non-blocking hook
+	// failure — which is to say a deny that arrives late is an allow.
+	writeDecision(w, decision.Allow, decisionReason(decision))
+
 	ev := newEvent(provider.EvPermission, body)
 	ev.Tool = req.ToolName
 	ev.Input = req.ToolInput
@@ -746,8 +1129,81 @@ func (s *session) decide(w http.ResponseWriter, r *http.Request) {
 	}
 	ev.Text = decision.Message
 	s.emit(ev)
+}
 
-	writeDecision(w, decision.Allow, decisionReason(decision))
+// isJSONRequest reports whether the body is declared as JSON, which Qwen
+// Code's hook always does.
+func isJSONRequest(r *http.Request) bool {
+	ct := r.Header.Get("Content-Type")
+	if ct == "" {
+		return false
+	}
+	mediaType, _, err := mime.ParseMediaType(ct)
+	return err == nil && mediaType == "application/json"
+}
+
+// noteDecision records that the hook judged a tool call.
+func (s *session) noteDecision(ids ...string) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, id := range ids {
+		if id != "" {
+			s.decided[id] = struct{}{}
+		}
+	}
+}
+
+// reconcile matches the stdout stream against the decisions the hook made,
+// so that a tool call which ran without one is visible in events.jsonl
+// rather than silent. Qwen Code prints the assistant's tool_use line
+// before it consults the PreToolUse hook, so the check cannot be made when
+// the call is announced: the first moment a missing decision means
+// anything is the call's result.
+//
+// A result that reports an error is passed over. The CLI refuses an
+// excluded tool itself, before any hook is consulted, and those refusals
+// arrive as errored results — counting them would bury the one case that
+// matters under a steady stream of expected ones.
+func (s *session) reconcile(raw []byte) []provider.Event {
+	var l streamLine
+	if err := json.Unmarshal(raw, &l); err != nil {
+		return nil
+	}
+	switch l.Type {
+	case "assistant":
+		s.mu.Lock()
+		defer s.mu.Unlock()
+		for _, b := range blocksOf(l.Message.Content) {
+			if b.Type == "tool_use" && b.ID != "" {
+				s.started[b.ID] = b.Name
+			}
+		}
+		return nil
+	case "user":
+		var out []provider.Event
+		for _, b := range blocksOf(l.Message.Content) {
+			if b.Type != "tool_result" || b.ToolUseID == "" {
+				continue
+			}
+			s.mu.Lock()
+			tool, started := s.started[b.ToolUseID]
+			delete(s.started, b.ToolUseID)
+			_, decided := s.decided[b.ToolUseID]
+			delete(s.decided, b.ToolUseID)
+			s.mu.Unlock()
+
+			if !started || decided || b.IsError {
+				continue
+			}
+			ev := newEvent(provider.EvError, raw)
+			ev.Tool = tool
+			ev.Text = "tool started without a Sirdar decision: " + tool +
+				" ran without the permission hook being asked about it"
+			out = append(out, ev)
+		}
+		return out
+	}
+	return nil
 }
 
 // decisionReason is what the model is told. Qwen Code requires a reason on
@@ -781,6 +1237,12 @@ func writeDecision(w http.ResponseWriter, allow bool, reason string) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_, _ = w.Write(b)
+	// net/http buffers the response until the handler returns, and the
+	// handler goes on to emit an event that can block. Flushing here is
+	// what actually puts the decision on the wire first.
+	if f, ok := w.(http.Flusher); ok {
+		f.Flush()
+	}
 }
 
 // measure turns a usage event into running session totals. A per-turn

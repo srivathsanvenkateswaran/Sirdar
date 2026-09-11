@@ -156,6 +156,15 @@ func assistantEvents(l streamLine, raw []byte) []provider.Event {
 		// One turn's tokens. The session accumulates these into running
 		// totals, so state.json shows spend as it happens rather than
 		// zeros until the result line lands.
+		//
+		// Summing input_tokens across turns looks like double counting a
+		// prompt that is mostly the same each time, but it is what the
+		// CLI itself reports: the result line's input_tokens is
+		// computeUsageFromMetrics' stats.totalPromptTokens, the running
+		// sum of every API call's prompt tokens (0.23.3). So the running
+		// total converges on the result line exactly, and tracking the
+		// per-turn maximum instead would understate the session and then
+		// jump when the result line replaced it.
 		ev := newEvent(provider.EvUsage, raw)
 		ev.InputTok = u.InputTokens
 		ev.OutputTok = u.OutputTokens
