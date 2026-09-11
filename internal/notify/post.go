@@ -26,8 +26,23 @@ const maxRetryAfter = 30 * time.Second
 // named no Retry-After.
 const defaultRetryAfter = time.Second
 
-// maxErrorBody is how much of a failed response is quoted back.
-const maxErrorBody = 256
+// maxDrainBody is how much of a failed response is read and discarded, so
+// the connection can be reused. None of it is kept: a receiver's response
+// is not trusted content, and it must never end up in a warning, a log
+// line, or the agent's view of the run.
+const maxDrainBody = 256
+
+// noRedirectClient is the client used when a destination brought none of
+// its own: it must never follow a redirect. A 307 or 308 replays the
+// method, the body and every header — including X-Sirdar-Signature and
+// whatever the destination's own headers carry — at whatever host the
+// redirect names, and an incoming webhook's URL is itself a bearer
+// credential that has no business leaving the first host.
+var noRedirectClient = &http.Client{
+	CheckRedirect: func(_ *http.Request, _ []*http.Request) error {
+		return errors.New("redirects are not followed")
+	},
+}
 
 // transport is the HTTP behaviour every destination shares: one attempt,
 // then at most one retry when the receiver said it was busy.
@@ -40,7 +55,7 @@ func (t transport) httpClient() *http.Client {
 	if t.client != nil {
 		return t.client
 	}
-	return http.DefaultClient
+	return noRedirectClient
 }
 
 func (t transport) limit() time.Duration {
@@ -89,20 +104,20 @@ func (t transport) attempt(ctx context.Context, dest string, body []byte, header
 		return -1, fmt.Errorf("notify: post to %s: %s", redact(dest), reason(err))
 	}
 	defer resp.Body.Close()
-	snippet := snippetOf(resp.Body)
+	drain(resp.Body)
 
 	switch {
 	case resp.StatusCode >= 200 && resp.StatusCode < 300:
 		return -1, nil
 	case resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode >= 500:
-		failed := fmt.Errorf("notify: %s answered %d%s", redact(dest), resp.StatusCode, snippet)
+		failed := fmt.Errorf("notify: %s answered %d", redact(dest), resp.StatusCode)
 		wait, ok := retryAfter(resp.Header.Get("Retry-After"))
 		if !ok {
 			return -1, failed
 		}
 		return wait, failed
 	default:
-		return -1, fmt.Errorf("notify: %s answered %d%s", redact(dest), resp.StatusCode, snippet)
+		return -1, fmt.Errorf("notify: %s answered %d", redact(dest), resp.StatusCode)
 	}
 }
 
@@ -153,12 +168,8 @@ func within(d time.Duration) (time.Duration, bool) {
 	return d, true
 }
 
-// snippetOf quotes the start of a failed response, which is where a
-// webhook says what it disliked ("invalid_payload", "no_service").
-func snippetOf(r io.Reader) string {
-	data, err := io.ReadAll(io.LimitReader(r, maxErrorBody))
-	if err != nil || len(bytes.TrimSpace(data)) == 0 {
-		return ""
-	}
-	return ": " + strings.TrimSpace(strings.ReplaceAll(string(data), "\n", " "))
+// drain discards a bounded amount of a response body without keeping any
+// of it, so the connection can be reused.
+func drain(r io.Reader) {
+	_, _ = io.Copy(io.Discard, io.LimitReader(r, maxDrainBody))
 }

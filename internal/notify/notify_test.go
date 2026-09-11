@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -243,14 +244,24 @@ func TestGenericPayloadHeadersAndSignature(t *testing.T) {
 	if headers.Get("Content-Type") != "application/json" {
 		t.Fatalf("content type %q", headers.Get("Content-Type"))
 	}
-	if got, want := headers.Get(SignatureHeader), Sign("s3cret", raw); got != want {
+	ts := headers.Get(TimestampHeader)
+	if ts == "" {
+		t.Fatal("no timestamp header")
+	}
+	if sec, err := strconv.ParseInt(ts, 10, 64); err != nil || time.Since(time.Unix(sec, 0)).Abs() > 10*time.Second {
+		t.Fatalf("timestamp %q is not close to now: %v", ts, err)
+	}
+	if got, want := headers.Get(SignatureHeader), Sign("s3cret", ts, raw); got != want {
 		t.Fatalf("signature %q, want %q", got, want)
 	}
 	if !strings.HasPrefix(headers.Get(SignatureHeader), "sha256=") {
 		t.Fatalf("signature format %q", headers.Get(SignatureHeader))
 	}
-	if Sign("other", raw) == Sign("s3cret", raw) {
+	if Sign("other", ts, raw) == Sign("s3cret", ts, raw) {
 		t.Fatal("the signature does not depend on the secret")
+	}
+	if Sign("s3cret", "1", raw) == Sign("s3cret", "2", raw) {
+		t.Fatal("the signature does not depend on the timestamp")
 	}
 }
 
@@ -262,8 +273,12 @@ func TestGenericWithoutSecretIsUnsigned(t *testing.T) {
 		t.Fatal(err)
 	}
 	<-rec.bodies
-	if sig := (<-rec.headers).Get(SignatureHeader); sig != "" {
+	headers := <-rec.headers
+	if sig := headers.Get(SignatureHeader); sig != "" {
 		t.Fatalf("unsigned post carried %q", sig)
+	}
+	if ts := headers.Get(TimestampHeader); ts != "" {
+		t.Fatalf("unsigned post carried a timestamp %q", ts)
 	}
 }
 
@@ -391,6 +406,61 @@ func TestErrorsNeverCarryTheWebhookURL(t *testing.T) {
 		if !strings.Contains(err.Error(), "127.0.0.1") {
 			t.Errorf("error %d does not say which host failed: %v", i, err)
 		}
+	}
+}
+
+// TestRedirectsAreNotFollowed: a webhook is bound to the destination URL,
+// so a 307/308 that would replay the body and every header — including a
+// signature — at a different host must never be followed.
+func TestRedirectsAreNotFollowed(t *testing.T) {
+	target := newRecorder(t, nil)
+	redirecting := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, target.url("/moved"), http.StatusTemporaryRedirect)
+	}))
+	t.Cleanup(redirecting.Close)
+
+	err := (&Generic{URL: redirecting.URL + "/hook", Secret: "s3cret"}).Notify(context.Background(), sampleEvent())
+	if err == nil {
+		t.Fatal("want an error: the redirect was followed instead of refused")
+	}
+	if target.requests.Load() != 0 {
+		t.Fatalf("the redirect target received %d requests, want 0", target.requests.Load())
+	}
+}
+
+// TestReasonAndTitleAreTruncated: Slack rejects a section over 3000
+// characters, and neither field is Sirdar's own text — a ticket subject, a
+// provider's error message — so both are capped rather than trusted to
+// stay short.
+func TestReasonAndTitleAreTruncated(t *testing.T) {
+	longReason := strings.Repeat("x", 500)
+	longTitle := strings.Repeat("y", 500)
+	ev := sampleEvent()
+	ev.Reason = longReason
+	ev.Title = longTitle
+
+	slackRec := newRecorder(t, nil)
+	if err := (&Slack{WebhookURL: slackRec.url("/hook")}).Notify(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	slackFlat := plainJSON(t, slackRec.body(t))
+	if strings.Contains(slackFlat, longReason) || strings.Contains(slackFlat, longTitle) {
+		t.Fatalf("the untruncated field reached Slack:\n%s", slackFlat)
+	}
+	if !strings.Contains(slackFlat, strings.Repeat("x", maxReasonLen)) {
+		t.Errorf("the reason was cut short of its limit:\n%s", slackFlat)
+	}
+	if !strings.Contains(slackFlat, strings.Repeat("y", maxTitleLen)) {
+		t.Errorf("the title was cut short of its limit:\n%s", slackFlat)
+	}
+
+	teamsRec := newRecorder(t, nil)
+	if err := (&Teams{WebhookURL: teamsRec.url("/hook")}).Notify(context.Background(), ev); err != nil {
+		t.Fatal(err)
+	}
+	teamsFlat := plainJSON(t, teamsRec.body(t))
+	if strings.Contains(teamsFlat, longReason) || strings.Contains(teamsFlat, longTitle) {
+		t.Fatalf("the untruncated field reached Teams:\n%s", teamsFlat)
 	}
 }
 

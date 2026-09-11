@@ -62,3 +62,28 @@ func subtitle(ev Event) string {
 	}
 	return strings.Join(parts, " · ")
 }
+
+// maxReasonLen and maxTitleLen bound the two free-text fields a card
+// renders. Slack rejects a section whose text passes 3000 characters, and
+// neither field needs anywhere near that to say what it is meant to say;
+// the real reason to cap them is that either one carries text Sirdar did
+// not write itself — a ticket's subject line, an error a provider returned
+// — and neither should be able to blow up the message it appears in.
+const (
+	maxReasonLen = 200
+	maxTitleLen  = 120
+)
+
+// truncateReason and truncateTitle cut a field to its limit, marking the
+// cut with an ellipsis so a reader knows the field was shortened rather
+// than that is all there was.
+func truncateReason(s string) string { return truncateRunes(s, maxReasonLen) }
+func truncateTitle(s string) string  { return truncateRunes(s, maxTitleLen) }
+
+func truncateRunes(s string, max int) string {
+	r := []rune(s)
+	if len(r) <= max {
+		return s
+	}
+	return string(r[:max]) + "…"
+}

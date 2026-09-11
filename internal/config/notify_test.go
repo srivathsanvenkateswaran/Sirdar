@@ -101,6 +101,21 @@ func TestNotifyValidation(t *testing.T) {
 			"notify.generic[0].headers.Authorization",
 		},
 		{
+			"literal Authorization header instead of a reference",
+			"\nnotify:\n  generic:\n    - url: https://hooks.example.com/x\n      headers:\n        Authorization: \"Bearer hunter2\"\n",
+			"notify.generic[0].headers.Authorization",
+		},
+		{
+			"literal header ending in -Token instead of a reference",
+			"\nnotify:\n  generic:\n    - url: https://hooks.example.com/x\n      headers:\n        X-Api-Token: hunter2\n",
+			"notify.generic[0].headers.X-Api-Token",
+		},
+		{
+			"generic url carries userinfo",
+			"\nnotify:\n  generic:\n    - url: https://user:hunter2@hooks.example.com/x\n",
+			"notify.generic[0].url",
+		},
+		{
 			"unknown key",
 			"\nnotify:\n  channel: \"#support\"\n",
 			"field channel not found",

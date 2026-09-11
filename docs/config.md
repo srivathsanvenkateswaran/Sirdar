@@ -64,7 +64,7 @@ rather than being silently ignored.
 | `notify.slack.webhookUrl` | string | none (required with `slack`) | Credential reference to a Slack incoming-webhook URL — the URL is the credential |
 | `notify.teams.webhookUrl` | string | none (required with `teams`) | Credential reference to a Teams Workflows or connector URL |
 | `notify.generic[].url` | string | none (required) | Receiver for the event as JSON; `https`, or `http` on loopback |
-| `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally |
+| `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
@@ -285,11 +285,14 @@ references when they carry a credential. Every `env:` name the block uses is str
 agent session's environment along with the adapters' credentials.
 
 A post that fails is a warning on the run and never a failed run: the note is already on disk
-when it goes out. Each post gets 10 seconds and one retry on `429` or `5xx`, honouring a
-`Retry-After` of up to 30 seconds; the failure lands in `state.json`'s `warnings` and on the
-progress stream, with the webhook URL reduced to its host so the line is safe to paste.
-`SIRDAR_NO_NOTIFY=1`, `sirdar triage --no-notify` and `sirdar rca --no-notify` silence one
-invocation.
+when it goes out, and the run does not return until every destination's post has settled. Each
+destination gets a hard 15-second ceiling — the request, and one retry on `429` or `5xx`
+honouring a `Retry-After` of up to 30 seconds, all inside that budget — and interrupting the run
+does not cut a post short, since the channel is still owed a message about a run whose note
+already exists. The failure lands in `state.json`'s `warnings` and on the progress stream, with
+the webhook URL reduced to its host and no part of the receiver's response, so the line is safe
+to paste. `SIRDAR_NO_NOTIFY=1`, `sirdar triage --no-notify` and `sirdar rca --no-notify` silence
+one invocation.
 
 Setting up each destination — the Slack app, the Teams workflow, and a receiver that verifies
 the HMAC signature — is in `docs/notifications.md`.

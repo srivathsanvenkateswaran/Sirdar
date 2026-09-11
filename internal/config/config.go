@@ -437,6 +437,9 @@ func validateNotify(n *NotifyConfig) error {
 			if value == "" {
 				return fmt.Errorf("config: %s.headers.%s: is empty", key, name)
 			}
+			if credentialShapedHeader(name) && !IsCredentialRef(value) {
+				return fmt.Errorf("config: %s.headers.%s: looks like a credential and must start with env: or keychain:", key, name)
+			}
 		}
 		if g.Secret != "" {
 			if err := credentialRef(key+".secret", g.Secret); err != nil {
@@ -456,10 +459,40 @@ func ValidateWebhookURL(key, raw string) error {
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
 		return fmt.Errorf("config: %s: must be an absolute http or https URL, got %q", key, raw)
 	}
+	if u.User != nil {
+		// The value may itself be a credential straight out of a
+		// resolved reference, so the error names the problem without
+		// echoing anything the URL carried.
+		return fmt.Errorf("config: %s: must not carry userinfo (a username or password in the URL)", key)
+	}
 	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
 		return fmt.Errorf("config: %s: must be https unless the host is loopback, got %q", key, raw)
 	}
 	return nil
+}
+
+// credentialShapedHeader reports whether name is the kind of header that
+// carries a credential: Authorization, or anything ending in -Token, -Key
+// or -Secret (case-insensitive). config.go requires those to be an env:/
+// keychain: reference, the same way it already requires one for
+// notify.slack.webhookUrl and notify.generic[].secret.
+func credentialShapedHeader(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "authorization" {
+		return true
+	}
+	for _, suffix := range []string{"-token", "-key", "-secret"} {
+		if strings.HasSuffix(n, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// IsCredentialRef reports whether v is an env: or keychain: reference
+// rather than a literal value.
+func IsCredentialRef(v string) bool {
+	return strings.HasPrefix(v, "env:") || strings.HasPrefix(v, "keychain:")
 }
 
 // isLoopback reports whether host names this machine, by name or by
@@ -706,7 +739,7 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 
 // credentialRef rejects a value that carries a secret instead of naming one.
 func credentialRef(key, ref string) error {
-	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
+	if IsCredentialRef(ref) {
 		return nil
 	}
 	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)

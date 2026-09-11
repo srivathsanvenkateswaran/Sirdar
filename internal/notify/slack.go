@@ -65,7 +65,7 @@ func slackPayload(ev Event) slackMessage {
 	if ev.Title != "" {
 		msg.Blocks = append(msg.Blocks, slackBlock{
 			Type: "section",
-			Text: &slackText{Type: "mrkdwn", Text: slackEscape(ev.Title)},
+			Text: &slackText{Type: "mrkdwn", Text: slackEscape(truncateTitle(ev.Title))},
 		})
 	}
 	if fs := fields(ev); len(fs) > 0 {
@@ -78,7 +78,7 @@ func slackPayload(ev Event) slackMessage {
 	if ev.Reason != "" {
 		msg.Blocks = append(msg.Blocks, slackBlock{
 			Type: "section",
-			Text: &slackText{Type: "mrkdwn", Text: "*Reason*\n" + slackEscape(ev.Reason)},
+			Text: &slackText{Type: "mrkdwn", Text: "*Reason*\n" + slackEscape(truncateReason(ev.Reason))},
 		})
 	}
 	if links := slackLinks(ev); links != "" {

@@ -80,7 +80,7 @@ func teamsPayload(ev Event) teamsMessage {
 		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: sub, IsSubtle: true, Wrap: true})
 	}
 	if ev.Title != "" {
-		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: ev.Title, Wrap: true})
+		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: truncateTitle(ev.Title), Wrap: true})
 	}
 	if fs := fields(ev); len(fs) > 0 {
 		facts := make([]teamsFact, 0, len(fs))
@@ -90,7 +90,7 @@ func teamsPayload(ev Event) teamsMessage {
 		card.Body = append(card.Body, teamsElement{Type: "FactSet", Facts: facts})
 	}
 	if ev.Reason != "" {
-		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: "Reason: " + ev.Reason, Wrap: true})
+		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: "Reason: " + truncateReason(ev.Reason), Wrap: true})
 	}
 	if ev.NotePath != "" {
 		card.Body = append(card.Body, teamsElement{Type: "TextBlock", Text: "note: " + ev.NotePath, IsSubtle: true, Wrap: true})

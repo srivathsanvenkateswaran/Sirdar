@@ -323,10 +323,17 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 
 const resumeContinue = "Continue where you left off and produce the JSON note."
 
+// askedPrefix marks a blocked run's Reason as carrying the agent's actual
+// question, for resumeText to recover and put to the operator. It stays
+// out of any notification: notifyReason (internal/run/notify.go) replaces
+// a Reason with this prefix with a fixed phrase before a run's completion
+// ever reaches a chat channel, since the question itself may quote the
+// ticket.
+const askedPrefix = "agent asked: "
+
 // resumeText is the message the resumed session opens with: the operator's
 // answer when the run blocked on a question, else a plain nudge to finish.
 func (r *Runner) resumeText(state store.State) (string, error) {
-	const askedPrefix = "agent asked: "
 	if !strings.HasPrefix(state.Reason, askedPrefix) {
 		return resumeContinue, nil
 	}
@@ -353,10 +360,10 @@ func (r *Runner) resumeText(state store.State) (string, error) {
 func (r *Runner) runOne(ctx context.Context, key string, kind store.Kind, o Options, rca *RCAOptions, pl *pool) (Outcome, error) {
 	p, err := r.prepare(ctx, key, kind, o, rca)
 	if err != nil {
-		return r.prepareFailed(p, key, kind, err), err
+		return r.prepareFailed(ctx, p, key, kind, err), err
 	}
 	if o.DryRun {
-		return r.finish(p, store.StatusCompleted, "dry-run", note.DigestRow{}), nil
+		return r.finish(ctx, p, store.StatusCompleted, "dry-run", note.DigestRow{}), nil
 	}
 	return r.execute(ctx, p, "", pl), nil
 }
@@ -364,18 +371,21 @@ func (r *Runner) runOne(ctx context.Context, key string, kind store.Kind, o Opti
 // prepareFailed records a run that never reached the agent. When the run
 // directory itself could not be created there is nowhere to write state, so
 // the outcome carries the reason on its own.
-func (r *Runner) prepareFailed(p *prepared, key string, kind store.Kind, err error) Outcome {
+func (r *Runner) prepareFailed(ctx context.Context, p *prepared, key string, kind store.Kind, err error) Outcome {
 	if p == nil {
 		state := store.State{Key: key, Kind: kind, Status: store.StatusFailed, Reason: err.Error(), StartedAt: r.now()}
 		return Outcome{Key: key, State: state, Digest: note.DigestRow{Key: key, State: string(store.StatusFailed), Reason: err.Error()}}
 	}
-	return r.finish(p, store.StatusFailed, err.Error(), note.DigestRow{})
+	return r.finish(ctx, p, store.StatusFailed, err.Error(), note.DigestRow{})
 }
 
 // finish stamps the run's terminal status, persists it, and builds the
 // outcome the CLI reports. row carries the fields only a completed run
 // knows (issue, confidence, classification); the rest is filled in here.
-func (r *Runner) finish(p *prepared, status store.Status, reason string, row note.DigestRow) Outcome {
+// ctx is the run's own context, passed through to the notification so a
+// post can honour whatever deadline the caller set — but decoupled from the
+// run's own cancellation: see notifyFinished.
+func (r *Runner) finish(ctx context.Context, p *prepared, status store.Status, reason string, row note.DigestRow) Outcome {
 	p.state.Status = status
 	p.state.Reason = reason
 	p.state.UpdatedAt = r.now()
@@ -385,7 +395,7 @@ func (r *Runner) finish(p *prepared, status store.Status, reason string, row not
 	// The notification goes out against the state that was just written,
 	// and a webhook that refused it is a warning on the run — which means
 	// the state file has to be written a second time to carry it.
-	if r.notifyFinished(p, row) {
+	if r.notifyFinished(ctx, p, row) {
 		if err := p.run.WriteState(p.state); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 		}

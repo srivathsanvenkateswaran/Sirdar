@@ -5,11 +5,13 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -305,7 +307,75 @@ func TestEventCarriesTheRunsFacts(t *testing.T) {
 	if !strings.HasSuffix(ev.NotePath, "OMNI-1 export-fails-for-large-orders.md") {
 		t.Errorf("note path %q", ev.NotePath)
 	}
+	if filepath.IsAbs(ev.NotePath) {
+		t.Errorf("note path %q is absolute; it leaks the workspace root and the operator's home directory", ev.NotePath)
+	}
 	if ev.Title != "" {
 		t.Errorf("the title was sent without includeTitle: %q", ev.Title)
+	}
+}
+
+// TestNotifyReasonHidesTheAgentsQuestion: a run blocked on a question tells
+// the channel that it happened, never what was asked — the question may
+// quote the ticket — while state.json (and so `sirdar resume`) keep the
+// whole thing.
+func TestNotifyReasonHidesTheAgentsQuestion(t *testing.T) {
+	hook := newWebhook(t, http.StatusOK)
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		provider.Event{Kind: provider.EvQuestion, Text: "Which database should I query, for شركة الراقي?"},
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.Notifier = &notify.Router{Notifier: &notify.Generic{URL: hook.srv.URL + "/hook"}}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusBlocked {
+		t.Fatalf("status %q", out.State.Status)
+	}
+	if !strings.Contains(out.State.Reason, "Which database") {
+		t.Fatalf("state lost the question sirdar resume needs: %q", out.State.Reason)
+	}
+	if hook.count() != 1 {
+		t.Fatalf("%d posts, want 1", hook.count())
+	}
+	payload := hook.payload(t, 0)
+	var ev notify.Event
+	if err := json.Unmarshal([]byte(payload), &ev); err != nil {
+		t.Fatalf("payload: %v\n%s", err, payload)
+	}
+	if ev.Reason != "agent asked a question" {
+		t.Errorf("reason %q, want the fixed phrase", ev.Reason)
+	}
+	if strings.Contains(payload, "Which database") || strings.Contains(payload, "شركة الراقي") {
+		t.Errorf("the agent's question reached the channel:\n%s", payload)
+	}
+}
+
+// TestNotifyFinishedIgnoresAnAlreadyDoneContext: an interrupted run has
+// already written whatever state it reached, and the channel is still owed
+// a message about it. notifyFinished derives its own context from the
+// run's with the cancellation removed, so a run context that is already
+// Done — Ctrl-C, or a caller that gave up on the run — must not stop the
+// post from going out.
+func TestNotifyFinishedIgnoresAnAlreadyDoneContext(t *testing.T) {
+	hook := newWebhook(t, http.StatusOK)
+	cfg := newWorkspace(t)
+	r := newRunner(cfg, &stubProvider{}, stubTracker{}, stubHelpdesk{})
+	r.Notifier = &notify.Router{Notifier: &notify.Generic{URL: hook.srv.URL + "/hook"}}
+
+	p := &prepared{state: store.State{Key: "OMNI-1", Kind: store.KindTriage, Status: store.StatusCompleted}}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already done before notifyFinished is ever called
+
+	if r.notifyFinished(ctx, p, note.DigestRow{}) {
+		t.Fatalf("notifyFinished reported a failure: warnings %v", p.state.Warnings)
+	}
+	if hook.count() != 1 {
+		t.Fatalf("%d posts, want 1: the done context cut the notification short", hook.count())
 	}
 }
