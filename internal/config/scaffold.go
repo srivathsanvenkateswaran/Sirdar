@@ -157,4 +157,21 @@ mcp:
   # of the three you are in.
   workspaceOnly: true
 playbooks: .sirdar/playbooks
+# Post a short digest to a chat channel or a webhook when a run finishes.
+# Metadata and note paths only: no note text ever leaves the machine, and
+# the ticket title is sent only with includeTitle: true, because a support
+# subject line routinely names the customer. A failed post is a warning on
+# the run, never a failed run. SIRDAR_NO_NOTIFY=1 silences one invocation.
+# notify:
+#   on: [completed, failed, over_budget, blocked]   # default: all four
+#   includeTitle: false
+#   slack:
+#     webhookUrl: keychain:sirdar-slack-webhook     # a credential ref: the URL is the credential
+#   teams:
+#     webhookUrl: keychain:sirdar-teams-webhook     # Workflows (Power Automate) or connector URL
+#   generic:
+#     - url: https://hooks.example.com/sirdar       # https, or http on loopback
+#       headers:
+#         Authorization: env:SIRDAR_HOOK_TOKEN      # env:/keychain: values are resolved
+#       secret: env:SIRDAR_HOOK_SECRET              # signs the body as X-Sirdar-Signature
 `

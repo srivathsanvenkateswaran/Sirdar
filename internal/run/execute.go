@@ -928,6 +928,12 @@ func (r *Runner) appendRegister(p *prepared, row store.RegisterRow) {
 	row.Model = p.state.Model
 	row.Turns = p.state.Usage.Turns
 	row.CostUSD = p.state.Usage.CostUSD
+	if p.service == "" {
+		p.service = row.Service
+	}
+	if p.notePath == "" {
+		p.notePath = row.NotePath
+	}
 	if err := store.AppendRegister(r.Config.Root, row); err != nil {
 		p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("register: %v", err))
 	}

@@ -58,6 +58,14 @@ rather than being silently ignored.
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
+| `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
+| `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
+| `notify.includeTitle` | bool | `false` | Send the ticket title; off because a support subject line routinely names the customer |
+| `notify.slack.webhookUrl` | string | none (required with `slack`) | Credential reference to a Slack incoming-webhook URL — the URL is the credential |
+| `notify.teams.webhookUrl` | string | none (required with `teams`) | Credential reference to a Teams Workflows or connector URL |
+| `notify.generic[].url` | string | none (required) | Receiver for the event as JSON; `https`, or `http` on loopback |
+| `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally |
+| `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
@@ -196,7 +204,8 @@ Resolved values are held in memory only: never written to a run directory, and n
 the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
 built-in adapters' `apiToken`, `pat`, `apiKey` and `oauthToken`, and all three parts of an `auth`
 grant — is stripped from the environment the agent process inherits, so a session that can run
-shell commands cannot read them back out. `email` is the one adapter credential field that is not
+shell commands cannot read them back out. The `notify:` block's webhook URLs, header values and
+signing secret are stripped the same way, for the same reason. `email` is the one adapter credential field that is not
 a reference: it is an account name, not a secret, and it is left in place.
 
 ## Zoho Desk OAuth
@@ -241,6 +250,49 @@ spends an agent session on it:
 
 A refused grant reports the reason the accounts server gave — `invalid_client`, `invalid_code`
 — and never any part of the credentials.
+
+## Notifications
+
+A `notify:` block posts a short digest of every finished run to a Slack channel, a Microsoft
+Teams channel, or any HTTP receiver. Every destination is optional and they can be combined;
+with no block, nothing is posted.
+
+```yaml
+notify:
+  on: [completed, failed, over_budget, blocked]   # default: all four
+  includeTitle: false
+  slack:
+    webhookUrl: keychain:sirdar-slack-webhook
+  teams:
+    webhookUrl: env:TEAMS_WEBHOOK
+  generic:
+    - url: https://hooks.example.com/sirdar
+      headers:
+        Authorization: env:SIRDAR_HOOK_TOKEN
+      secret: env:SIRDAR_HOOK_SECRET
+```
+
+The message carries the run's metadata — key, state, confidence, classification, service, run
+id, turns, cost, duration, the reason a run ended badly, and the paths and links a human follows
+— and no part of a note's body. The ticket title is sent only with `includeTitle: true`, because
+a support ticket's subject line routinely names the customer who filed it and a chat channel is
+a wider audience than the notes directory.
+
+A chat `webhookUrl` is a credential reference, never the URL itself: an incoming-webhook URL
+carries its own authorisation in its path. A generic hook's `url` is a plain URL, because the
+receiver authenticates through the headers instead; those header values, and `secret`, are
+references when they carry a credential. Every `env:` name the block uses is stripped from the
+agent session's environment along with the adapters' credentials.
+
+A post that fails is a warning on the run and never a failed run: the note is already on disk
+when it goes out. Each post gets 10 seconds and one retry on `429` or `5xx`, honouring a
+`Retry-After` of up to 30 seconds; the failure lands in `state.json`'s `warnings` and on the
+progress stream, with the webhook URL reduced to its host so the line is safe to paste.
+`SIRDAR_NO_NOTIFY=1`, `sirdar triage --no-notify` and `sirdar rca --no-notify` silence one
+invocation.
+
+Setting up each destination — the Slack app, the Teams workflow, and a receiver that verifies
+the HMAC signature — is in `docs/notifications.md`.
 
 ## Budgets
 

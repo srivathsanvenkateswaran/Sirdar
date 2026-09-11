@@ -626,6 +626,7 @@ func (s *Service) start(
 		}
 
 		s.dropJob(id)
+		s.notified(outcomes)
 		s.publish(Event{Kind: KindJobFinished, JobID: id, WorkspaceID: ws.ID, Outcomes: outcomes})
 	}()
 	return id, nil
@@ -691,6 +692,22 @@ func (s *Service) failed(keys []string, err error) []JobOutcome {
 	}
 	s.log(err)
 	return out
+}
+
+// notified records that the job's runs have finished. It posts nothing: a
+// run notifies from internal/run, the moment it writes its own terminal
+// state, which is the one path both shells and the CLI share. Publishing a
+// second digest from here would double every message a desktop or `sirdar
+// serve` session sends, and would say nothing the first did not.
+func (s *Service) notified(outcomes []JobOutcome) {
+	if len(outcomes) == 0 {
+		return
+	}
+	states := make([]string, 0, len(outcomes))
+	for _, o := range outcomes {
+		states = append(states, o.Key+" "+o.Status)
+	}
+	fmt.Fprintf(s.stderr(), "job finished: %s\n", strings.Join(states, ", "))
 }
 
 // log publishes an error as a log event for the UI's activity pane.

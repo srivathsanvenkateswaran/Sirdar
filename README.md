@@ -160,6 +160,10 @@ a vendor integration and its credentials never touch Sirdar's core or this repos
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
 including credential references, the `permissions.bash` glob syntax, and template overrides.
 
+A `notify:` block posts a one-message digest of every finished run — key, state, confidence,
+cost and the note's path, never the note's text — to Slack, Microsoft Teams or your own webhook;
+see `docs/notifications.md`.
+
 ## Development
 
 ```

@@ -19,6 +19,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -34,6 +35,9 @@ type Deps struct {
 	Helpdesk source.Helpdesk // may be nil
 	Provider provider.Provider
 	Creds    config.Resolver
+	// Notifier posts a digest when a run reaches a terminal state. Nil
+	// means the workspace configured no destination.
+	Notifier notify.Notifier
 	Now      func() time.Time
 	Stderr   io.Writer // progress lines
 	Stdin    io.Reader // for resume answers
@@ -45,6 +49,10 @@ type Options struct {
 	Model       string
 	Concurrency int
 	DryRun      bool
+	// NoNotify silences the run-completion notification for this
+	// invocation, for a batch being re-run that the channel has already
+	// heard about.
+	NoNotify bool
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull
@@ -171,6 +179,23 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 	// and every MCP server the run starts.
 	if cfg.OpenAI != nil {
 		refs = append(refs, cfg.OpenAI.APIKey)
+	}
+	// A notify destination's credentials are no different: an incoming
+	// webhook URL is a bearer credential, and a session that could read
+	// one out of its environment could post to the team's channel as
+	// Sirdar.
+	if n := cfg.Notify; n != nil {
+		for _, w := range []*config.WebhookConfig{n.Slack, n.Teams} {
+			if w != nil {
+				refs = append(refs, w.WebhookURL)
+			}
+		}
+		for _, g := range n.Generic {
+			refs = append(refs, g.Secret)
+			for _, v := range g.Headers {
+				refs = append(refs, v)
+			}
+		}
 	}
 	for _, ref := range refs {
 		if name, ok := strings.CutPrefix(ref, "env:"); ok && name != "" {
@@ -356,6 +381,14 @@ func (r *Runner) finish(p *prepared, status store.Status, reason string, row not
 	p.state.UpdatedAt = r.now()
 	if err := p.run.WriteState(p.state); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+	// The notification goes out against the state that was just written,
+	// and a webhook that refused it is a warning on the run — which means
+	// the state file has to be written a second time to carry it.
+	if r.notifyFinished(p, row) {
+		if err := p.run.WriteState(p.state); err != nil {
+			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+		}
 	}
 
 	row.Key = p.state.Key
