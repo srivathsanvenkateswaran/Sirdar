@@ -84,7 +84,8 @@ type HelpdeskRefConfig struct {
 // carry an unattended run, and auth: is the shape that can.
 //
 // ClientID, ClientSecret and RefreshToken are credential references
-// ("env:NAME" or "keychain:SERVICE"), never literal secrets.
+// ("env:NAME", "keychain:SERVICE", "file:PATH" or "cmd:COMMAND"), never
+// literal secrets.
 type OAuthConfig struct {
 	ClientID     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
@@ -120,9 +121,9 @@ func AccountsURLFor(baseURL string) string {
 // BaseURL and Model are required; everything else has a default or is
 // optional.
 //
-// APIKey is a credential reference ("env:NAME" or "keychain:SERVICE"),
-// never the key itself, and it is optional: a local llama.cpp or Ollama
-// server needs none.
+// APIKey is a credential reference ("env:NAME", "keychain:SERVICE",
+// "file:PATH" or "cmd:COMMAND"), never the key itself, and it is optional:
+// a local llama.cpp or Ollama server needs none.
 type OpenAIConfig struct {
 	BaseURL          string            `yaml:"baseUrl"`
 	APIKey           string            `yaml:"apiKey,omitempty"`
@@ -661,11 +662,12 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 }
 
 // credentialRef rejects a value that carries a secret instead of naming one.
+// The set of schemes lives in creds.go, with the resolver that reads them.
 func credentialRef(key, ref string) error {
-	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
+	if IsCredentialRef(ref) {
 		return nil
 	}
-	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
+	return fmt.Errorf("config: %s: must start with %s, got %q", key, credSchemeList, ref)
 }
 
 // WorkspaceOnlyMCP reports whether an agent session should see only the

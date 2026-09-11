@@ -19,7 +19,7 @@ rather than being silently ignored.
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
-| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME` or `keychain:SERVICE`) |
+| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) |
 | `sources.*.auth` | object | none (one of `token`/`auth` required for `zohodesk`) | OAuth refresh-token grant; see Zoho Desk OAuth below |
 | `sources.*.auth.clientId` | string | none (required with `auth`) | Credential reference to the Self Client's client id |
 | `sources.*.auth.clientSecret` | string | none (required with `auth`) | Credential reference to the Self Client's client secret |
@@ -67,7 +67,7 @@ rather than being silently ignored.
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
 | `openai.baseUrl` | string | none (required for `provider: openai`) | Chat Completions base URL, e.g. `https://openrouter.ai/api/v1` or `http://localhost:11434/v1` |
-| `openai.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; omit for a local server that needs none |
+| `openai.apiKey` | string, optional | unset | Credential reference (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) for the endpoint's key; omit for a local server that needs none |
 | `openai.model` | string | none (required for `provider: openai`) | Model the endpoint serves, e.g. `qwen/qwen3-coder`; `--model` and `model` override it |
 | `openai.maxContextTokens` | int | `128000` | Context window the loop trims old tool results against |
 | `openai.price.inputPerMTok` | float, optional | `0` | USD per million prompt tokens, used for cost and the `budget.maxUsd` check |
@@ -188,13 +188,22 @@ as oauth`, since there is no account email to show for that grant.
 
 ## Credential references
 
-`sources.*.token` (and any credential in config) is never a literal secret: config load
-rejects a value that doesn't start with `env:` or `keychain:`. Two forms:
+`sources.*.token` (and any credential in config) is never a literal secret: config load rejects
+a value that doesn't start with one of four schemes, all of which resolve on macOS, Linux and
+Windows.
 
-- `env:NAME` reads the environment variable `NAME` at fetch time. Works on every platform.
-- `keychain:SERVICE` reads a generic password from the macOS login keychain via
-  `security find-generic-password -s SERVICE -w`. **macOS only**: on other platforms a
-  `keychain:` ref fails to resolve.
+- `env:NAME` reads the environment variable `NAME` at fetch time.
+- `keychain:SERVICE` reads the operating system's own credential store: the macOS login
+  keychain via `security`, the freedesktop Secret Service via `secret-tool` (with `pass` as a
+  fallback) on Linux and the BSDs, the Windows Credential Manager via `CredRead`.
+- `file:PATH` reads a file that holds nothing but the secret. A leading `~` expands, one
+  trailing newline is dropped, and a file readable beyond its owner is refused.
+- `cmd:COMMAND` takes the standard output of a credential helper — `op read`, `bw get`,
+  `vault kv get`, `gopass show` — with a 10-second timeout.
+
+**[`docs/credentials.md`](credentials.md) is the whole story**: what to run to store a secret on
+each OS, the `file:` permission rule, `cmd:` recipes for the common password managers, and the
+rule that Sirdar never writes a credential anywhere.
 
 Resolved values are held in memory only: never written to a run directory, and never placed in
 the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
