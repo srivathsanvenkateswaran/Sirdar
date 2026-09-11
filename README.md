@@ -1,5 +1,7 @@
 # Sirdar
 
+[![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
+
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
 or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
 model — gathers evidence through the MCP servers the workspace grants it, translates the
@@ -16,9 +18,26 @@ Status: v0: command-line triage core; the board is next.
 
 ## Install
 
+**Homebrew** (macOS/Linux, once the tap and a release exist — see `docs/release.md`):
+
+```
+brew tap srivathsanvenkateswaran/sirdar
+brew install sirdar
+```
+
+**`go install`** (any commit, released or not):
+
 ```
 go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest
 ```
+
+**Release archive**: download `sirdar_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) from
+[Releases](https://github.com/srivathsanvenkateswaran/Sirdar/releases), check it against that
+release's `checksums.txt`, and put `sirdar` on your `PATH`. deb/rpm packages for Linux are
+attached to each release too.
+
+**Desktop app**: download `sirdar-desktop_<tag>_<os>_<arch>.zip` for your platform from the same
+Releases page. It's unsigned — see `docs/release.md` for the Gatekeeper/SmartScreen workaround.
 
 Or build from source:
 
@@ -27,6 +46,8 @@ git clone https://github.com/srivathsanvenkateswaran/sirdar
 cd sirdar
 make build
 ```
+
+See `docs/release.md` for how releases are cut.
 
 ## Quick start
 
@@ -167,7 +188,8 @@ is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `P
 override is available to you in config as `providers.claude.path` and `providers.codex.path`.
 The tests therefore run offline and deterministically.
 
-Release builds via `.goreleaser.yaml` stamp the version with `-X main.version=...`.
+Release builds via `.goreleaser.yaml` stamp the version, commit, and date with
+`-X main.version=... -X main.commit=... -X main.date=...`; see `docs/release.md`.
 
 ## License
 

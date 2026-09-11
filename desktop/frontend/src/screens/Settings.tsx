@@ -29,9 +29,27 @@ export default function Settings(props: {
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [doctor, setDoctor] = useState<Record<string, DoctorState>>({})
+  /** Desktop build version, when the transport exposes one (Wails only). */
+  const [version, setVersion] = useState<string | null>(null)
   /** The workspace whose Remove button is armed, if any. */
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    transport
+      .version?.()
+      .then((v) => {
+        if (!cancelled) setVersion(v)
+      })
+      .catch(() => {
+        // The HTTP transport has no Version to fail; the Wails one rarely
+        // does either. Either way the About panel just omits the version.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [transport])
 
   function disarm(): void {
     if (confirmTimer.current) clearTimeout(confirmTimer.current)
@@ -170,7 +188,7 @@ export default function Settings(props: {
 
       <section className="settings-about">
         <h2 className="panel-heading">About</h2>
-        <p className="about-version">Sirdar desktop</p>
+        <p className="about-version">Sirdar desktop{version ? ` v${version}` : ''}</p>
         <p>
           Configuration reference:{' '}
           <a href={CONFIG_DOCS_URL} target="_blank" rel="noreferrer noopener">
