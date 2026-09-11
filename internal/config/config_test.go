@@ -313,7 +313,7 @@ func TestValidateOpenAI(t *testing.T) {
 		{
 			"an unknown provider",
 			"workspace: demo\nprovider: gemini\n",
-			"claude, codex or openai",
+			"claude, codex, openai or qwen",
 		},
 	}
 	for _, c := range cases {
@@ -769,5 +769,87 @@ permissions:
 	}
 	if len(cfg.Permissions.MCP) != 1 {
 		t.Errorf("permissions.mcp %v", cfg.Permissions.MCP)
+	}
+}
+
+// TestValidateQwen covers the qwen block. Every field is optional, so
+// most of the cases here are about the ones that only make sense together.
+func TestValidateQwen(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{
+			// No block at all is the ordinary case: the CLI runs against
+			// the login the operator already gave it.
+			"no block", "workspace: demo\nprovider: qwen\n", "",
+		},
+		{
+			"model alone", "workspace: demo\nprovider: qwen\nqwen:\n  model: qwen3-coder-plus\n", "",
+		},
+		{
+			"path alone", "workspace: demo\nprovider: qwen\nqwen:\n  path: ~/bin/qwen\n", "",
+		},
+		{
+			"a whole endpoint",
+			"workspace: demo\nprovider: qwen\nqwen:\n  baseUrl: https://api.example/v1\n  model: m\n  apiKey: env:K\n",
+			"",
+		},
+		{
+			"a key with no base url",
+			"workspace: demo\nprovider: qwen\nqwen:\n  apiKey: env:K\n",
+			"qwen.baseUrl",
+		},
+		{
+			"a base url with no key",
+			"workspace: demo\nprovider: qwen\nqwen:\n  baseUrl: https://api.example/v1\n  model: m\n",
+			"qwen.apiKey",
+		},
+		{
+			"a base url with no model",
+			"workspace: demo\nprovider: qwen\nqwen:\n  baseUrl: https://api.example/v1\n  apiKey: env:K\n",
+			"qwen.model",
+		},
+		{
+			"relative baseUrl",
+			"workspace: demo\nprovider: qwen\nqwen:\n  baseUrl: /v1\n  model: m\n  apiKey: env:K\n",
+			"qwen.baseUrl",
+		},
+		{
+			"a literal key instead of a reference",
+			"workspace: demo\nprovider: qwen\nqwen:\n  baseUrl: https://api.example/v1\n  model: m\n  apiKey: sk-live-1234\n",
+			"qwen.apiKey",
+		},
+		{
+			// A qwen block left behind while the workspace runs on claude
+			// is still checked for internal consistency, the same way an
+			// unused openai block's own fields are.
+			"unused block on another provider",
+			"workspace: demo\nprovider: claude\nqwen:\n  model: m\n",
+			"",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, c.body))
+			switch {
+			case c.want == "" && err != nil:
+				t.Fatalf("Load: %v", err)
+			case c.want == "":
+			case err == nil:
+				t.Fatalf("want an error mentioning %q, got none", c.want)
+			case !strings.Contains(err.Error(), c.want):
+				t.Fatalf("error = %v, want it to mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+// TestDefaultConfigYAMLCarriesQwen keeps the scaffold's commented example
+// in step with the block the validator accepts.
+func TestDefaultConfigYAMLCarriesQwen(t *testing.T) {
+	for _, want := range []string{"claude | codex | openai | qwen", "# qwen:", "#   baseUrl:", "#   model:", "#   apiKey:"} {
+		if !strings.Contains(DefaultConfigYAML, want) {
+			t.Errorf("DefaultConfigYAML is missing %q", want)
+		}
 	}
 }

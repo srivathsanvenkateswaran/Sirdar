@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, or `openai` (Sirdar's own loop) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, or `openai` (Sirdar's own loop) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -70,6 +70,10 @@ rather than being silently ignored.
 | `openai.price.outputPerMTok` | float, optional | `0` | USD per million completion tokens |
 | `openai.temperature` | float, optional | unset (server default) | Sampling temperature sent with every request |
 | `openai.extraHeaders` | map, optional | unset | Extra request headers; `Authorization` and `Content-Type` are ignored here, the client owns them |
+| `qwen.path` | string, optional | `""` (look up `qwen` on `PATH`) | Path to the Qwen Code binary |
+| `qwen.baseUrl` | string, optional | unset | OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login |
+| `qwen.model` | string, optional | unset | Model the endpoint serves; required alongside `qwen.baseUrl`. `--model` and `model` override it |
+| `qwen.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; required alongside `qwen.baseUrl` |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -398,17 +402,103 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default), `provider: codex`, or `provider: openai` selects what drives runs;
-`--provider` on `triage` and `rca` overrides it per invocation.
+`provider: claude` (default), `provider: codex`, `provider: qwen`, or `provider: openai`
+selects what drives runs; `--provider` on `triage` and `rca` overrides it per invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
 - `providers.codex.path`: path to the `codex` binary. Empty (the default) looks it up on
   `PATH`.
+- `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in
+  the `qwen:` block rather than under `providers:` because the rest of that block — the
+  endpoint — belongs with it.
 - `billing: subscription` (default) removes `ANTHROPIC_API_KEY` from the agent's child
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
   instead.
+
+### `provider: qwen`
+
+[Qwen Code](https://github.com/QwenLM/qwen-code) is a Gemini CLI fork whose headless mode is
+modelled on Claude Code's, and despite the name it is not Qwen-only: it talks to any
+OpenAI-compatible endpoint. It is the one third-party runtime that meets the whole of Sirdar's
+contract natively — streaming events, schema-constrained output, resume, MCP, and a per-call
+permission decision the host makes.
+
+Install it with `npm i -g @qwen-code/qwen-code`. With no `qwen:` block the session runs against
+whatever login the CLI already has:
+
+```yaml
+provider: qwen
+```
+
+Name an endpoint to point it somewhere else. The three fields go together — Qwen Code selects
+its OpenAI-compatible backend only when a key, a base URL and a model are all present — so a
+local server that checks no key still needs one named:
+
+```yaml
+provider: qwen
+qwen:
+  path: qwen                                # optional
+  baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
+  model: qwen3-coder-plus
+  apiKey: keychain:dashscope-api-key
+```
+
+`qwen.apiKey` is resolved once, at startup, and held in memory. It reaches the child process as
+`OPENAI_API_KEY` and nowhere else: it is never written to a run directory and never printed by
+`sirdar doctor`. `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `QWEN_MODEL` and
+`QWEN_OAUTH` are stripped from the environment the child inherits before the configured values
+go back in, so a session's endpoint is what the workspace configured and not what happens to be
+exported in the shell that launched Sirdar.
+
+**Permissions.** Qwen Code emits no permission request on its stdout in headless mode. Instead
+Sirdar starts a loopback HTTP listener for the session and registers it as a `PreToolUse` hook,
+through a private settings file named by `QWEN_CODE_SYSTEM_SETTINGS_PATH` — neither the
+workspace's `.qwen/settings.json` nor your `~/.qwen/settings.json` is read or written. Every
+tool call the CLI is about to make is posted to that listener, judged by the same
+`permissions.bash` / `permissions.mcp` rules every other provider uses, and answered with an
+allow or a deny whose reason the model sees as the tool result.
+
+Two limits of that mechanism are worth knowing, both measured against the CLI and written up in
+`docs/research/09-qwen-wire-formats.md`:
+
+- **The hook fails open.** If the listener cannot be reached, Qwen Code treats it as a
+  non-blocking hook failure and runs the tool. So Sirdar also leans on the CLI's own headless
+  deny list, which refuses `run_shell_command`, `edit` and `write_file` outright, and pins
+  `write_file`, `edit` and `notebook_edit` in the session's settings file as well. Shell access
+  is lifted from that deny list **only when the workspace named `permissions.bash` patterns**;
+  a workspace that named none gets no shell at all rather than a shell guarded by something
+  that can fail open.
+- **Per-command shell rules are not available at the CLI level.** A Qwen rule written against
+  `run_shell_command` allows every command whatever specifier it carries, so the
+  `permissions.bash` allow-list is enforced by the hook and by nothing else.
+
+**Budgets.** `budget.maxTurns` becomes `--max-session-turns` (plus one, because the terminal
+`structured_output` call spends a turn of its own) and `budget.maxMinutes` becomes
+`--max-wall-time`. `budget.maxUsd` never triggers: the CLI reports no cost on the wire, so cost
+is always `0` and the turn and wall-clock budgets are what bound a run.
+
+**MCP.** `mcp.workspaceOnly` is expressed as `--mcp-config <.mcp.json>` plus one
+`--allowed-mcp-server-names` flag per server that file declares; a workspace with no `.mcp.json`
+gets a sentinel name no server matches, which loads none. Qwen Code has no
+`--strict-mcp-config`: `--mcp-config` merges with your own servers, and the allow-list by name
+is the only thing that narrows the set.
+
+**The schema retry costs a process.** Qwen Code refuses `--input-format stream-json` alongside
+`--json-schema`, so a session takes exactly one message. When a note fails Sirdar's validation
+the runner resumes the session id in a fresh process (`--resume`) and puts the correction there,
+which is the path it already had for Codex.
+
+`sirdar doctor` reports two rows:
+
+```
+[OK] qwen --version — 0.23.3
+[OK] qwen endpoint — https://dashscope-intl.aliyuncs.com/compatible-mode/v1 (qwen3-coder-plus)
+```
+
+Not exercised against a live model: the wire capture was driven by a stub OpenAI-compatible
+server, so the shapes are the CLI's own but no vendor model has run through this adapter yet.
 
 ### `provider: openai`
 

@@ -16,6 +16,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/openai"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/qwen"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
@@ -97,9 +98,45 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 		return codex.New(), nil
 	case "openai":
 		return openAIProvider(cfg, creds)
+	case "qwen":
+		return qwenProvider(cfg, creds)
 	default:
-		return nil, fmt.Errorf("unknown provider %q: use claude, codex or openai", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider %q: use claude, codex, openai or qwen", cfg.Provider)
 	}
+}
+
+// qwenProvider builds the adapter that drives the Qwen Code CLI. The
+// endpoint block is optional: with none of it configured the CLI uses the
+// login the operator already gave it, the same way the Claude adapter uses
+// theirs. When it is configured, the API key is resolved here, held in
+// memory, and handed to the child process in its environment and nowhere
+// else — it is never written to a run directory and never reported by
+// doctor.
+func qwenProvider(cfg *config.Config, creds config.Resolver) (provider.Provider, error) {
+	q := cfg.Qwen
+	if q == nil {
+		if cfg.Model == "" {
+			return qwen.New(), nil
+		}
+		return qwen.NewEndpoint(qwen.Endpoint{Model: cfg.Model}), nil
+	}
+	e := qwen.Endpoint{
+		Binary:  cfg.ExpandPath(q.Path),
+		Model:   q.Model,
+		BaseURL: q.BaseURL,
+	}
+	if cfg.Model != "" {
+		e.Model = cfg.Model
+	}
+	if q.APIKey != "" {
+		key, err := creds.Resolve(q.APIKey)
+		if err != nil {
+			// The reference is named, the secret is not.
+			return nil, fmt.Errorf("qwen.apiKey %s: %w", q.APIKey, err)
+		}
+		e.APIKey = key
+	}
+	return qwen.NewEndpoint(e), nil
 }
 
 // openAIProvider builds the provider that runs Sirdar's own loop against

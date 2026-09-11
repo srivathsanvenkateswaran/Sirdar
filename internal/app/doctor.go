@@ -54,6 +54,11 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 		binary = cfg.Providers.Codex.Path
 	case "openai":
 		binary = ""
+	case "qwen":
+		binary = ""
+		if cfg.Qwen != nil {
+			binary = cfg.Qwen.Path
+		}
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)

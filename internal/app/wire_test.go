@@ -706,7 +706,66 @@ func TestOpenAIProviderNeedsItsBlock(t *testing.T) {
 // provider a workspace may name.
 func TestProviderForRejectsAnUnknownName(t *testing.T) {
 	_, err := ProviderFor(&config.Config{Provider: "gemini"}, envResolver(nil))
-	if err == nil || !strings.Contains(err.Error(), "claude, codex or openai") {
+	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai or qwen") {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestQwenProviderWithoutABlock covers the ordinary case: a workspace that
+// names the provider and nothing else drives the CLI against the login the
+// operator already gave it.
+func TestQwenProviderWithoutABlock(t *testing.T) {
+	p, err := ProviderFor(&config.Config{Provider: "qwen"}, envResolver(nil))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	if p.Name() != "qwen" {
+		t.Fatalf("Name() = %q", p.Name())
+	}
+	checks := p.Doctor(context.Background(), "/no/such/binary")
+	if len(checks) != 2 || checks[0].OK {
+		t.Fatalf("doctor checks = %+v", checks)
+	}
+	if !strings.Contains(checks[1].Detail, "own login") {
+		t.Fatalf("endpoint check = %+v", checks[1])
+	}
+}
+
+// TestQwenProviderResolvesTheKeyAndKeepsItOutOfDoctor is the credential
+// half: the reference is resolved once, the secret stays in memory, and
+// the report an operator pastes into a ticket never carries it.
+func TestQwenProviderResolvesTheKeyAndKeepsItOutOfDoctor(t *testing.T) {
+	const secret = "sk-qwen-secret"
+	cfg := &config.Config{Provider: "qwen", Qwen: &config.QwenConfig{
+		BaseURL: "https://api.example/v1",
+		Model:   "qwen3-coder-plus",
+		APIKey:  "env:DASHSCOPE_API_KEY",
+	}}
+	p, err := ProviderFor(cfg, envResolver(map[string]string{"DASHSCOPE_API_KEY": secret}))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	for _, c := range p.Doctor(context.Background(), "/no/such/binary") {
+		if strings.Contains(c.Detail, secret) {
+			t.Fatalf("doctor printed the api key: %q", c.Detail)
+		}
+	}
+}
+
+// TestQwenProviderMissingKeyNamesTheReference covers the error an operator
+// sees when the variable is not set: the reference, never a guess at the
+// value.
+func TestQwenProviderMissingKeyNamesTheReference(t *testing.T) {
+	cfg := &config.Config{Provider: "qwen", Qwen: &config.QwenConfig{
+		BaseURL: "https://api.example/v1",
+		Model:   "m",
+		APIKey:  "env:DASHSCOPE_API_KEY",
+	}}
+	_, err := ProviderFor(cfg, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error for an unresolvable api key")
+	}
+	if !strings.Contains(err.Error(), "qwen.apiKey") || !strings.Contains(err.Error(), "DASHSCOPE_API_KEY") {
+		t.Fatalf("error does not name the reference: %v", err)
 	}
 }

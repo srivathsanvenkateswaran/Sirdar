@@ -68,8 +68,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates; exits 1 if any check fails |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai`, `--model NAME`, `--concurrency N`, `--dry-run` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|qwen\|openai`, `--model NAME`, `--concurrency N`, `--dry-run` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|qwen\|openai`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
 | `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, RCA date, verdict, severity, resolution, and which notes exist |
@@ -118,19 +118,29 @@ human already made.
 
 ## Models
 
-Sirdar drives a run in one of two ways. `provider: claude` and `provider: codex` spawn the
-Claude Code or Codex CLI you already have installed and signed in, so the work counts against
-the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop
-itself against any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together,
-DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own
-read-only tool set and your workspace's MCP servers, and a per-million-token price you set in
-config for the USD budget. See `docs/config.md` for the `openai:` block, and
-`docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after it.
+Sirdar drives a run in one of two ways. `provider: claude`, `provider: codex` and
+`provider: qwen` spawn the Claude Code, Codex or Qwen Code CLI you already have installed and
+signed in, so the work counts against the plan you already pay for. `provider: openai` spawns
+nothing: Sirdar runs the agent loop itself against any OpenAI-compatible Chat Completions
+endpoint — OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp
+on your own machine — with its own read-only tool set and your workspace's MCP servers, and a
+per-million-token price you set in config for the USD budget.
+
+`provider: qwen` sits between the two. Qwen Code is a full agent harness like Claude Code —
+its own tools, its own compaction, its own MCP client — and despite the name it points at any
+OpenAI-compatible endpoint, so one `qwen:` block gets you a vendor model, an aggregator, or a
+server on your own machine without Sirdar owning the loop. What you give up against Claude Code
+is the cost signal: Qwen Code reports no spend, so `budget.maxUsd` never bites and a run is
+bounded by turns and wall-clock time instead.
+
+See `docs/config.md` for the `openai:` and `qwen:` blocks,
+`docs/research/09-qwen-wire-formats.md` for the Qwen Code capture the adapter is built on, and
+`docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after them.
 
 ## Bring your own agent login
 
-Sirdar spawns the `claude` or `codex` binary already installed on your machine and signed in
-with your own account; it never stores or proxies your credentials. Usage counts against your
+Sirdar spawns the `claude`, `codex` or `qwen` binary already installed on your machine and
+signed in with your own account; it never stores or proxies your credentials. Usage counts against your
 existing Claude or ChatGPT plan the same way an interactive session would. If you'd rather pay
 per token instead, set `billing: api` in config and put an API key in the provider's environment.
 See `docs/research/03-licensing-byo-subscription.md` for the licensing research behind this.
@@ -164,7 +174,8 @@ make vet     # go vet ./...
 
 Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
 is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
-override is available to you in config as `providers.claude.path` and `providers.codex.path`.
+override is available to you in config as `providers.claude.path`, `providers.codex.path`
+and `qwen.path`.
 The tests therefore run offline and deterministically.
 
 Release builds via `.goreleaser.yaml` stamp the version with `-X main.version=...`.
