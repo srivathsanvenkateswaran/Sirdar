@@ -1,0 +1,42 @@
+{
+  "_links": {
+    "self": "https://api2.frontapp.com/conversations/cnv_1",
+    "related": {
+      "messages": "https://api2.frontapp.com/conversations/cnv_1/messages",
+      "comments": "https://api2.frontapp.com/conversations/cnv_1/comments",
+      "events": "https://api2.frontapp.com/conversations/cnv_1/events"
+    }
+  },
+  "id": "cnv_1",
+  "type": "conversation",
+  "subject": "Payments are failing on checkout",
+  "status": "assigned",
+  "status_id": "sts_1",
+  "status_category": "open",
+  "ticket_ids": ["OMNI-3217"],
+  "assignee": {
+    "id": "tea_grace",
+    "email": "grace@example.com",
+    "username": "grace",
+    "first_name": "Grace",
+    "last_name": "Hopper",
+    "type": "user"
+  },
+  "recipient": {
+    "name": "Ada Lovelace",
+    "handle": "ada@example.com",
+    "role": "to"
+  },
+  "tags": [
+    {"id": "tag_1", "name": "billing"},
+    {"id": "tag_2", "name": "urgent"}
+  ],
+  "links": [],
+  "custom_fields": {},
+  "created_at": 1788000000,
+  "updated_at": 1788001500,
+  "waiting_since": 1788001200,
+  "is_private": false,
+  "scheduled_reminders": [],
+  "metadata": {}
+}

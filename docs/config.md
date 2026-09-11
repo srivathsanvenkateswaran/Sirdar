@@ -15,11 +15,11 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
-| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) |
+| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`; required for `front`) | Credential reference to a Zoho Desk access token or a Front API token (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) |
 | `sources.*.auth` | object | none (one of `token`/`auth` required for `zohodesk`) | OAuth refresh-token grant; see Zoho Desk OAuth below |
 | `sources.*.auth.clientId` | string | none (required with `auth`) | Credential reference to the Self Client's client id |
 | `sources.*.auth.clientSecret` | string | none (required with `auth`) | Credential reference to the Self Client's client secret |
@@ -187,7 +187,7 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom` and `hubspot` are compiled into
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom`, `hubspot` and `front` are compiled into
 Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
 refresh-token grant. Config load checks what each of the others cannot work without:
 
@@ -198,11 +198,12 @@ refresh-token grant. Config load checks what each of the others cannot work with
 | `helpscout` | `clientId`, `clientSecret` | Help Scout has no API-key mode; Sirdar mints its own access tokens from the pair |
 | `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
 | `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
+| `front` | `token` | An API token from Settings → Developers; Front's OAuth flow is for multi-tenant apps |
 
-The last three talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
-`api.hubapi.com` — so none of them takes a `baseUrl`. An Intercom workspace on the EU or AU
-data-residency host is not supported by this adapter yet; calls to the US host are proxied by
-Intercom, which works but is not what Intercom recommends.
+The last four talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
+`api.hubapi.com`, `api2.frontapp.com` — so none of them takes a `baseUrl`. An Intercom workspace
+on the EU or AU data-residency host is not supported by this adapter yet; calls to the US host
+are proxied by Intercom, which works but is not what Intercom recommends.
 
 ```yaml
 sources:
@@ -243,10 +244,17 @@ sources:
     accessToken: env:HUBSPOT_PRIVATE_APP_TOKEN
 ```
 
+```yaml
+sources:
+  helpdesk:
+    adapter: front
+    token: env:FRONT_TOKEN
+```
+
 `sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
 signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
-`helpscout`, `/me` for `intercom`, the account details for `hubspot` — and names who the
-connection authenticates as, never the credential itself:
+`helpscout`, `/me` for `intercom`, the account details for `hubspot`, one page of one teammate
+for `front` — and names who the connection authenticates as, never the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
@@ -254,10 +262,11 @@ connection authenticates as, never the credential itself:
 [OK] sources.helpdesk (helpscout) — reachable as the Help Scout app
 [OK] sources.helpdesk (intercom) — reachable as the workspace access token
 [OK] sources.helpdesk (hubspot) — reachable as the private app token
+[OK] sources.helpdesk (front) — reachable as the Front API token
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant. The last three name the kind
+as oauth`, since there is no account email to show for that grant. The last four name the kind
 of grant rather than an account, because none of their probes returns an account identifier worth
 printing — the row itself is the proof the credential was accepted.
 

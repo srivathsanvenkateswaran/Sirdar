@@ -126,6 +126,9 @@ sources:
     #
     # adapter: hubspot
     # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
+    #
+    # adapter: front
+    # token: keychain:front-api-token                 # API token, Settings -> Developers
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

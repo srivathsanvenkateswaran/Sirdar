@@ -69,6 +69,11 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   yourself, posting a metadata-only digest (never the note's content) with a timestamped HMAC
   signature (`docs/notifications.md`).
 - Added three more built-in helpdesk adapters: Help Scout, Intercom, and HubSpot Service Hub.
+- Added a built-in Front helpdesk adapter, read-only over an API token (`token: env:FRONT_TOKEN`).
+  It merges Front's two thread resources — `messages`, which is what was sent to and received
+  from the customer, and `comments`, the teammate notes Front keeps internal — into one ordered
+  thread, follows each feed's `_pagination.next` under a page cap, and downloads attachments from
+  Front's own authenticated `/download/{id}` endpoint.
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
