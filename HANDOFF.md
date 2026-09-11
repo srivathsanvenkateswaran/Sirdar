@@ -1,4 +1,4 @@
-# Handoff (updated 2026-09-10, ~20:25 IST)
+# Handoff (updated 2026-09-11)
 
 Read this first when opening a new session in this project.
 
@@ -9,10 +9,9 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | v0 CLI + desktop merged: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`; Wails v2 app under `desktop/`; Zoho Desk (OAuth refresh) + external stdio adapters; dogfood fixes (finish-on-final, `permissions.mcp`, attachment caps, Zoho host trust, command policy). Research + plans in `docs/`. |
-| `~/Documents/Personal/Sirdar-adapters` | `adapters` | Built-in trackers Jira, Linear, Azure DevOps, Rally and helpdesks Zendesk, Freshdesk, all wired into config/doctor with the generic `helpdeskRef` regex. Whole-branch reviewed; last fix round (warning accumulation in Jira) in flight at handoff. Merge `main` in, then merge to `main`. |
-| `~/Documents/Personal/Sirdar-providers` | `providers` | `provider: openai`: Sirdar's own loop over OpenAI-compatible APIs (`internal/provider/openai`, `internal/agenttools`, `internal/mcpclient`). Whole-branch reviewed; fix wave + merge of `main` in flight at handoff (keep `main`'s `policy.go`, port the agenttools names). Then merge to `main`. |
-| `~/Documents/Personal/Sirdar-desktop` | `desktop` | Merged into `main` at a968576; worktree can be removed (`git worktree remove`). |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed except the openai provider: CLI (`init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`), Wails v2 desktop app under `desktop/`, built-in sources (Zoho Desk with OAuth refresh, Zendesk, Freshdesk, Jira, Linear, Azure DevOps, Rally, external stdio adapters), generic `helpdeskRef` regex, both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar-providers` | `providers` | `provider: openai`: Sirdar's own loop over OpenAI-compatible APIs (`internal/provider/openai`, `internal/agenttools`, `internal/mcpclient`). Whole-branch reviewed and fixed. Merge of `main` into it was being resolved at handoff (keep `main`'s `policy.go`; port agenttools names, `bash` routing, root confinement; move openai wiring into `internal/app`). Then merge to `main` and remove the worktree. |
+| `desktop`, `adapters` | branches on origin | Merged into `main` (a968576, 01172d3); worktrees removed. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -46,13 +45,15 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 
 ## Next steps, in order
 
-1. Land `adapters` and `providers` on `main` (each: finish the in-flight fix round, merge `main`
-   in, re-run the module tests, merge). At the providers merge keep `main`'s `policy.go` and port
-   only the agenttools names, `bash` routing and the redirection/substitution rejection if not
-   already identical. Follow-up: `docs/research/08-httpx-extraction.md` (shared HTTP helpers for
-   the seven adapters).
-2. Read `dogfood-report-2.md`; if the run completed cleanly, do two or three more tickets and
-   compare against hand-written notes; fold gotchas into `.sirdar/playbooks/`.
+1. Land `providers` on `main` (finish the merge resolution, module tests green, merge, remove
+   the worktree). Follow-up: `docs/research/08-httpx-extraction.md` (shared HTTP helpers for the
+   seven adapters; every adapter needed the same host-trust fix, so the helper is overdue).
+2. Dogfood run 2 completed two tickets cleanly (OMNI-3217, OMNI-3193; notes written within
+   milliseconds of the final answer); the run-2 findings are fixed. Next: a workspace
+   `.mcp.json` in OXO.APIs listing only the read servers the playbooks need (with
+   `mcp.workspaceOnly` the agent otherwise has no MCP tools), then two or three more tickets and
+   a comparison against hand-written notes; fold gotchas into `.sirdar/playbooks/`. Known: Claude
+   self-approves read-shaped Bash, so `permissions.bash` only sees the commands it is asked about.
 3. Fix the Janus adapter's slow get-by-key (lists 200 tickets per probe; `doctor` times out).
 4. Try `provider: openai` for real against Ollama (`qwen3-coder`) or OpenRouter on the golden
    ticket; then the roadmap's Phase 0 spikes (Anthropic-compatible endpoints behind
