@@ -1,5 +1,7 @@
 # Sirdar
 
+[![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
+
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
 or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
 model — gathers evidence through the MCP servers the workspace grants it, translates the
@@ -16,9 +18,26 @@ Status: v0: command-line triage core; the board is next.
 
 ## Install
 
+**Homebrew** (macOS/Linux, once the tap and a release exist — see `docs/release.md`):
+
+```
+brew tap srivathsanvenkateswaran/sirdar
+brew install sirdar
+```
+
+**`go install`** (any commit, released or not):
+
 ```
 go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest
 ```
+
+**Release archive**: download `sirdar_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) from
+[Releases](https://github.com/srivathsanvenkateswaran/Sirdar/releases), check it against that
+release's `checksums.txt`, and put `sirdar` on your `PATH`. deb/rpm packages for Linux are
+attached to each release too.
+
+**Desktop app**: download `sirdar-desktop_<tag>_<os>_<arch>.zip` for your platform from the same
+Releases page. It's unsigned — see `docs/release.md` for the Gatekeeper/SmartScreen workaround.
 
 Or build from source:
 
@@ -27,6 +46,8 @@ git clone https://github.com/srivathsanvenkateswaran/sirdar
 cd sirdar
 make build
 ```
+
+See `docs/release.md` for how releases are cut.
 
 ## Quick start
 
@@ -68,8 +89,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates; exits 1 if any check fails |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|qwen\|openai`, `--model NAME`, `--concurrency N`, `--dry-run` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|qwen\|openai`, `--model NAME` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
 | `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, RCA date, verdict, severity, resolution, and which notes exist |
@@ -118,13 +139,13 @@ human already made.
 
 ## Models
 
-Sirdar drives a run in one of two ways. `provider: claude`, `provider: codex` and
-`provider: qwen` spawn the Claude Code, Codex or Qwen Code CLI you already have installed and
-signed in, so the work counts against the plan you already pay for. `provider: openai` spawns
-nothing: Sirdar runs the agent loop itself against any OpenAI-compatible Chat Completions
-endpoint — OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp
-on your own machine — with its own read-only tool set and your workspace's MCP servers, and a
-per-million-token price you set in config for the USD budget.
+`provider: claude`, `provider: codex` and `provider: qwen` spawn the Claude Code, Codex or Qwen
+Code CLI you already have installed and signed in, so the work counts against the plan you
+already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop itself against
+any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together, DeepSeek,
+Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own read-only tool
+set and your workspace's MCP servers, and a per-million-token price you set in config for the
+USD budget.
 
 `provider: qwen` sits between the two. Qwen Code is a full agent harness like Claude Code —
 its own tools, its own compaction, its own MCP client — and despite the name it points at any
@@ -133,8 +154,26 @@ server on your own machine without Sirdar owning the loop. What you give up agai
 is the cost signal: Qwen Code reports no spend, so `budget.maxUsd` never bites and a run is
 bounded by turns and wall-clock time instead.
 
-See `docs/config.md` for the `openai:` and `qwen:` blocks,
-`docs/research/09-qwen-wire-formats.md` for the Qwen Code capture the adapter is built on, and
+`provider: acp` reaches the widest: one Agent Client Protocol client that drives
+any agent speaking it — Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
+more, plus Claude Code and Codex through the ACP adapters. Name the agent's launch command in
+the `acp:` block and Sirdar spawns it, hands it the workspace's MCP servers and answers its
+permission requests from the same policy every other provider uses. ACP reports no cost and
+counts a whole prompt turn as one turn, so `budget.maxMinutes` is what actually bounds those
+runs; it also has no schema field, so the note comes back as JSON in the agent's own message
+rather than as structured output. And because an ACP agent is a whole CLI with its own tools and
+its own MCP configuration, the permission policy covers what the agent chooses to ask about —
+`docs/config.md` says where that reaches and where it does not.
+
+`provider: claude` also works against an Anthropic-compatible endpoint — Ollama, llama.cpp,
+DeepSeek, GLM, Kimi, OpenRouter — by setting `billing: api` and pointing `ANTHROPIC_BASE_URL` at
+it in the environment; Anthropic documents the gateway variables that make this work but does not
+support routing non-Claude models through them, and reported cost is unreliable there, so see
+`docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
+
+See `docs/config.md` for the `openai:`, `qwen:` and `acp:` blocks,
+`docs/research/09-qwen-wire-formats.md` for the Qwen Code capture the adapter is built on,
+`docs/research/providers/acp-agents.md` for the ACP agents and their launch commands, and
 `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after them.
 
 ## Bring your own agent login
@@ -159,10 +198,39 @@ executable speaking a small line-delimited JSON protocol over stdin/stdout, name
 a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
+## Inbound triggers
+
+`sirdar serve` can take a webhook from your tracker or helpdesk and start the triage itself, so a
+ticket assigned to you is already triaged by the time you open it. Nine sources are verified —
+Jira (via an Automation rule), Linear, Azure DevOps service hooks, Rally, Zendesk, Freshdesk,
+Intercom, HubSpot, and a generic endpoint you can curl — each with its own signature or shared
+secret, a five-minute replay window where the vendor signs a timestamp, a `match` filter so only
+what is assigned to you starts a run, and a cooldown so an afternoon of editing one ticket does
+not start twelve.
+
+They are off until `webhooks.enabled: true`, and `serve` binds loopback, so exposing them is a
+decision: `--allow-remote` behind a TLS reverse proxy, or a tunnel. `docs/webhooks.md` has the
+per-source setup steps, the URL shape, and the warnings.
+
+## Languages
+
+Arabic is the default customer language in the workspace this was built for; Sirdar keeps the
+original text, writes the engineer's note in English, and drafts customer-facing text in the
+customer's language. A triage note carries the complaint translated and again verbatim, plus a
+short reply draft the engineer can send; an RCA carries a customer summary for the support
+agent to relay. Neither draft may promise a fix, a cause or a date, and Sirdar sends nothing
+itself. Set `language.notes` and `language.customer` in `.sirdar/config.yaml` for a workspace
+that reads a different pair.
+
 ## Configuration
 
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
-including credential references, the `permissions.bash` glob syntax, and template overrides.
+including credential references, the `permissions.bash` glob syntax, the `language` block, and
+template overrides. `docs/webhooks.md` covers the `webhooks` block.
+
+A `notify:` block posts a one-message digest of every finished run — key, state, confidence,
+cost and the note's path, never the note's text — to Slack, Microsoft Teams or your own webhook;
+see `docs/notifications.md`.
 
 ## Development
 
@@ -178,7 +246,8 @@ override is available to you in config as `providers.claude.path`, `providers.co
 and `qwen.path`.
 The tests therefore run offline and deterministically.
 
-Release builds via `.goreleaser.yaml` stamp the version with `-X main.version=...`.
+Release builds via `.goreleaser.yaml` stamp the version, commit, and date with
+`-X main.version=... -X main.commit=... -X main.date=...`; see `docs/release.md`.
 
 ## License
 

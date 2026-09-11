@@ -19,6 +19,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -29,15 +30,19 @@ type Client struct {
 	Tokens  TokenSource
 	HTTP    *http.Client
 
-	// mu guards warnings and lastID. One Client serves every run in a
-	// batch, so two tickets can be inside Attachments at the same time.
-	mu sync.Mutex
 	// warnings holds the non-fatal problems (individual attachment
-	// download failures) each Attachments call recorded, keyed by the
-	// ticket id it was called with, so one ticket's skipped attachment
-	// cannot be reported against another's. An entry is written when the
-	// call ends and removed when it is read.
-	warnings map[string][]string
+	// download failures) each call recorded, keyed by the ticket id it was
+	// called with, so one ticket's skipped attachment cannot be reported
+	// against another's. One Client serves every run in a batch, so two
+	// tickets can be inside Attachments at the same time. An entry is
+	// removed when it is read.
+	warnings httpx.Warnings
+
+	// mu guards the cached host trust below, which is rebuilt when BaseURL
+	// changes.
+	mu        sync.Mutex
+	hostTrust *httpx.Trust
+	trustBase string
 }
 
 // New returns a Client configured to talk to baseURL as organization orgID,
@@ -152,7 +157,7 @@ func (c *Client) send(ctx context.Context, req *http.Request) (*http.Response, e
 // maxRetryAfter is the longest 429 wait this client will sit out inline. A
 // longer one is reported to the caller, which knows about the run's budget
 // and this does not.
-const maxRetryAfter = 30 * time.Second
+const maxRetryAfter = httpx.MaxRetryAfter
 
 // sendWith is send against a particular HTTP client, so an attachment
 // download can use one with a redirect policy of its own.
@@ -163,7 +168,7 @@ const maxRetryAfter = 30 * time.Second
 // this token has expired, and answering it with a fresh one would be
 // handing that host a live credential on request.
 func (c *Client) sendWith(ctx context.Context, req *http.Request, client *http.Client) (*http.Response, error) {
-	if !c.trustedURL(req.URL.String()) {
+	if fetch, _, _ := c.trust().CheckRaw(req.URL.String()); !fetch {
 		return nil, &source.Error{Code: source.Internal, Message: "zoho desk: refusing a credentialed request to an untrusted host: " + req.URL.Host}
 	}
 	token, err := c.setHeaders(ctx, req)
@@ -176,7 +181,7 @@ func (c *Client) sendWith(ctx context.Context, req *http.Request, client *http.C
 	}
 
 	if resp.StatusCode == http.StatusTooManyRequests {
-		if wait, ok := retryAfter(resp); ok {
+		if wait, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
 			drain(resp)
 			select {
 			case <-ctx.Done():
@@ -217,32 +222,8 @@ func (c *Client) isConfiguredEndpoint(u *url.URL) bool {
 	if err != nil {
 		return false
 	}
-	return sameEndpoint(u, base)
-}
-
-// retryAfter reads a 429's Retry-After header, honouring it only when it
-// is a delay this client is willing to sit out.
-func retryAfter(resp *http.Response) (time.Duration, bool) {
-	raw := strings.TrimSpace(resp.Header.Get("Retry-After"))
-	if raw == "" {
-		return 0, false
-	}
-	if secs, err := strconv.Atoi(raw); err == nil {
-		if secs < 0 {
-			return 0, false
-		}
-		d := time.Duration(secs) * time.Second
-		return d, d <= maxRetryAfter
-	}
-	at, err := http.ParseTime(raw)
-	if err != nil {
-		return 0, false
-	}
-	d := time.Until(at)
-	if d < 0 {
-		d = 0
-	}
-	return d, d <= maxRetryAfter
+	return strings.EqualFold(u.Scheme, base.Scheme) &&
+		httpx.NormalizeHost(u.Scheme, u.Host) == httpx.NormalizeHost(base.Scheme, base.Host)
 }
 
 func drain(resp *http.Response) {

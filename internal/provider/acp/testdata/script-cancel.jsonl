@@ -1,0 +1,8 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":false,"promptCapabilities":{"image":false}},"agentInfo":{"name":"opencode","version":"0.4.1"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-3"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-3","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Working on it"}}}}
+{"$expect":"session/cancel"}
+{"$reply_to":"p1","result":{"stopReason":"cancelled"}}

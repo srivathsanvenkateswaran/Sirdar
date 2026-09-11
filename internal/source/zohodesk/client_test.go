@@ -666,10 +666,13 @@ func TestAttachments_ConcurrentCallsKeepWarningsApart(t *testing.T) {
 	}
 }
 
-// TestAttachments_ClearsWarningsOnAnEarlyReturn covers a ticket with no
-// attachments at all following one that had a failure: the earlier call's
-// warning must not be served against it.
-func TestAttachments_ClearsWarningsOnAnEarlyReturn(t *testing.T) {
+// TestAttachments_KeepsAnUnreadWarningAcrossCalls covers a ticket with no
+// attachments at all following one that had a failure. The shared store
+// appends and is cleared by the read, not by the next call: one ticket's
+// bundle is Get, then Threads, then Attachments, with a single WarningsFor
+// at the end, so a warning an earlier call recorded has to survive a later
+// one. (This adapter used to replace; every other one already appended.)
+func TestAttachments_KeepsAnUnreadWarningAcrossCalls(t *testing.T) {
 	mux := http.NewServeMux()
 	calls := 0
 	mux.HandleFunc("/api/v1/tickets/555/conversations", func(w http.ResponseWriter, r *http.Request) {
@@ -704,7 +707,7 @@ func TestAttachments_ClearsWarningsOnAnEarlyReturn(t *testing.T) {
 	if _, err := c.Attachments(context.Background(), "555", t.TempDir()); err != nil {
 		t.Fatalf("first Attachments: %v", err)
 	}
-	// Deliberately not read: the point is that the next call discards it.
+	// Deliberately not read: the point is that the next call leaves it be.
 	got, err := c.Attachments(context.Background(), "555", t.TempDir())
 	if err != nil {
 		t.Fatalf("second Attachments: %v", err)
@@ -712,8 +715,13 @@ func TestAttachments_ClearsWarningsOnAnEarlyReturn(t *testing.T) {
 	if len(got) != 0 {
 		t.Fatalf("second call returned %d attachments, want 0", len(got))
 	}
+	w := c.WarningsFor("555")
+	if len(w) != 1 || !strings.Contains(w[0], "gone") {
+		t.Fatalf("warnings = %v, want the first call's failure still there", w)
+	}
+	// Reading is what clears it.
 	if w := c.WarningsFor("555"); len(w) != 0 {
-		t.Fatalf("a ticket with no attachments inherited warnings: %v", w)
+		t.Fatalf("WarningsFor after reading = %v, want none", w)
 	}
 }
 
@@ -865,12 +873,12 @@ func TestTrustedURL(t *testing.T) {
 		"",
 	}
 	for _, raw := range trusted {
-		if !c.trustedURL(raw) {
+		if fetch, _, _ := c.trust().CheckRaw(raw); !fetch {
 			t.Errorf("%q should be trusted", raw)
 		}
 	}
 	for _, raw := range untrusted {
-		if c.trustedURL(raw) {
+		if fetch, _, _ := c.trust().CheckRaw(raw); fetch {
 			t.Errorf("%q must not be trusted", raw)
 		}
 	}

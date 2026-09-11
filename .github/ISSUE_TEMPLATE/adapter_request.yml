@@ -1,0 +1,47 @@
+name: Adapter request
+description: Ask for a tracker or helpdesk Sirdar doesn't talk to yet.
+labels: ["adapter"]
+body:
+  - type: input
+    id: system
+    attributes:
+      label: Tracker or helpdesk name
+      placeholder: e.g. Help Scout, Intercom, HubSpot, an internal tracker
+    validations:
+      required: true
+
+  - type: input
+    id: docs
+    attributes:
+      label: API docs link
+      description: A link to the system's public (or, if internal, internally-linkable) API reference.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: auth-model
+    attributes:
+      label: Auth model
+      description: How does the API authenticate a request?
+      options:
+        - API key / token (Basic auth)
+        - OAuth2 (refresh token)
+        - OAuth2 (bearer token you mint yourself)
+        - Personal access token
+        - Something else (describe below)
+    validations:
+      required: true
+
+  - type: textarea
+    id: auth-notes
+    attributes:
+      label: Auth notes
+      description: Anything the auth model dropdown didn't cover — token lifetime, scopes, whether it needs an org/account ID alongside the credential.
+
+  - type: checkboxes
+    id: willing-to-test
+    attributes:
+      label: Testing
+      options:
+        - label: I have an account on this system and can test a draft adapter against it.
+        - label: I'm willing to review a PR for this adapter even if I can't test it myself.

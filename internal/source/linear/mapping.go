@@ -9,8 +9,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -379,6 +379,17 @@ func uploadAttachments(atts []linearAttachment) []uploadRef {
 	return refs
 }
 
+// uploadTrust is the one host this adapter's API key is ever sent to.
+// Linear is a hosted service on a fixed https host, so there is no
+// plain-HTTP workspace to make an exception for.
+var uploadTrust = func() *httpx.Trust {
+	t, err := httpx.NewTrust("https://" + uploadHost)
+	if err != nil {
+		panic("linear: " + err.Error())
+	}
+	return t
+}()
+
 // isUploadURL reports whether raw may be fetched with this adapter's API
 // key: Linear's own upload host, reached over https, with no userinfo.
 //
@@ -386,22 +397,10 @@ func uploadAttachments(atts []linearAttachment) []uploadRef {
 // input rather than configuration. "http://uploads.linear.app/…" would send
 // the key over the wire in the clear, and
 // "https://uploads.linear.app@attacker.example/…" parses with the real
-// destination in Host and the decoy in User — the host comparison catches
-// the second on its own, but userinfo has no business on one of these URLs
-// either way. Linear is a hosted service on a fixed https host, so there is
-// no plain-HTTP workspace to make an exception for.
+// destination in Host and the decoy in User.
 func isUploadURL(raw string) bool {
-	u, err := url.Parse(strings.TrimSpace(raw))
-	if err != nil {
-		return false
-	}
-	if u.User != nil {
-		return false
-	}
-	if !strings.EqualFold(u.Scheme, "https") {
-		return false
-	}
-	return strings.EqualFold(u.Hostname(), uploadHost)
+	fetch, _, _ := uploadTrust.CheckRaw(raw)
+	return fetch
 }
 
 // dedupeUploads drops repeats, keeping first-seen order. A Linear upload URL
@@ -474,52 +473,6 @@ func urlPath(raw string) string {
 //
 // Same rules as the zohodesk adapter's: an attachment name comes from a
 // remote system, so it never gets to choose where the file lands.
-
-// sanitizeName turns a name taken from a URL into a safe filename component:
-// it strips any directory portion (so "../../evil.txt" cannot write outside
-// the destination dir), drops path separators and control characters, falls
-// back to "attachment" for an empty/"."/".." result, and caps the result at
-// 120 bytes while preserving the extension.
-func sanitizeName(name string) string {
-	base := path.Base(strings.ReplaceAll(name, `\`, "/"))
-
-	var b strings.Builder
-	for _, r := range base {
-		if r == '/' || r == '\\' || r < 0x20 || r == 0x7f {
-			continue
-		}
-		b.WriteRune(r)
-	}
-	clean := strings.TrimSpace(b.String())
-	if clean == "" || clean == "." || clean == ".." {
-		clean = "attachment"
-	}
-	return capBytes(clean, 120)
-}
-
-// capBytes truncates name to at most max bytes, preserving its extension
-// where possible and never splitting a multi-byte UTF-8 rune.
-func capBytes(name string, max int) string {
-	if len(name) <= max {
-		return name
-	}
-	ext := path.Ext(name)
-	if len(ext) >= max {
-		return truncateValidUTF8(name, max)
-	}
-	return truncateValidUTF8(name[:len(name)-len(ext)], max-len(ext)) + ext
-}
-
-func truncateValidUTF8(s string, max int) string {
-	if len(s) <= max {
-		return s
-	}
-	s = s[:max]
-	for len(s) > 0 && !utf8.ValidString(s) {
-		s = s[:len(s)-1]
-	}
-	return s
-}
 
 // uuidRe matches the canonical 8-4-4-4-12 form Linear uses for entity ids, so
 // a caller-supplied parent can be told apart from a human identifier.

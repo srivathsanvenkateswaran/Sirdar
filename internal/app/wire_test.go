@@ -702,11 +702,39 @@ func TestOpenAIProviderNeedsItsBlock(t *testing.T) {
 	}
 }
 
+// TestACPProviderNeedsACommand covers a workspace that selects the
+// provider with no block, and with a block naming no agent.
+func TestACPProviderNeedsACommand(t *testing.T) {
+	_, err := ProviderFor(&config.Config{Provider: "acp"}, envResolver(nil))
+	if err == nil || !strings.Contains(err.Error(), "acp block") {
+		t.Fatalf("err = %v", err)
+	}
+	_, err = ProviderFor(&config.Config{Provider: "acp", ACP: &config.ACPConfig{}}, envResolver(nil))
+	if err == nil || !strings.Contains(err.Error(), "acp.command") {
+		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestACPProviderIsBuiltFromTheBlock checks the wiring hands the adapter
+// the configured agent.
+func TestACPProviderIsBuiltFromTheBlock(t *testing.T) {
+	p, err := ProviderFor(&config.Config{
+		Provider: "acp",
+		ACP:      &config.ACPConfig{Command: "gemini", Args: []string{"--experimental-acp"}},
+	}, envResolver(nil))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	if p.Name() != "acp" {
+		t.Fatalf("Name = %q, want acp", p.Name())
+	}
+}
+
 // TestProviderForRejectsAnUnknownName keeps the message listing every
 // provider a workspace may name.
 func TestProviderForRejectsAnUnknownName(t *testing.T) {
 	_, err := ProviderFor(&config.Config{Provider: "gemini"}, envResolver(nil))
-	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai or qwen") {
+	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai, acp or qwen") {
 		t.Fatalf("err = %v", err)
 	}
 }

@@ -14,8 +14,13 @@ Rules:
 5. Never guess a ticket, customer or record match. If the identifier in the ticket does not
    resolve unambiguously, say so under open questions.
 6. When information is missing, stop and report it under open questions rather than inventing.
-7. Translate faithfully. Preserve tone and urgency; quote the original wording where the exact
-   phrase matters.
+7. Translate faithfully into the note's language: preserve tone and urgency, and quote the
+   original wording where the exact phrase matters. Keep the customer's own text as well as
+   the translation — put it in `complaintOriginal`, verbatim, in the language it was written
+   in. Write anything the customer will read (a reply draft, a summary the support agent
+   relays) in the customer's language, and invent no commitments in it: no fix, no cause, no
+   date, no compensation, nothing the ticket does not already record as promised. A polite
+   acknowledgement that the issue is being looked into is the most it may offer.
 8. Every segment of a Bash command is checked against the allow-list separately, so a
    pipeline or a compound command is allowed only if `rg foo`, `head -50` and everything
    else between `|`, `&&` and `;` are each allowed on their own.
@@ -24,6 +29,12 @@ Rules:
    transcoded or recovered here. Report it under open questions, and say plainly that its
    contents are unread rather than reasoning as though you had seen it.
 10. Answer only with the JSON object the schema describes. No prose before or after it.
+
+# Language
+
+- Write the note in en (language.notes: en). Every field is in that language except the ones named below.
+- Write customer-facing text in the language of the ticket's first customer message (language.customer: auto), and set its `language` field to that language's code.
+- Keep the customer's original wording as well as the translation, verbatim, in the field the schema gives it.
 
 # Playbooks
 
@@ -64,7 +75,9 @@ Files:
 
 - ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer.
 - title is a one-line summary of the issue.
-- complaint is the customer's complaint translated faithfully, preserving tone and urgency.
+- complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.
+- complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.
+- customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date.
 - timeline lists each event with its time, role, and summary, including what L1 already told the customer.
 - reproSteps lists the steps that reproduce the issue.
 - rootCause states the hypothesis, a confidence level (high, medium, low, or unknown), the evidence for it, and any code references.
@@ -120,7 +133,18 @@ Files:
     },
     "title": { "type": "string" },
     "complaint": { "type": "string" },
+    "complaintOriginal": { "type": "string" },
+    "customerReplyDraft": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["language", "text"],
+      "properties": {
+        "language": { "type": "string", "minLength": 2 },
+        "text": { "type": "string" }
+      }
+    },
     "timeline": {
+
       "type": "array",
       "items": {
         "type": "object",

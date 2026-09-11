@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, or `openai` (Sirdar's own loop) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -19,7 +19,7 @@ rather than being silently ignored.
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
-| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME` or `keychain:SERVICE`) |
+| `sources.*.token` | string | none (one of `token`/`auth` required for `zohodesk`) | Credential reference to a Zoho Desk access token (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) |
 | `sources.*.auth` | object | none (one of `token`/`auth` required for `zohodesk`) | OAuth refresh-token grant; see Zoho Desk OAuth below |
 | `sources.*.auth.clientId` | string | none (required with `auth`) | Credential reference to the Self Client's client id |
 | `sources.*.auth.clientSecret` | string | none (required with `auth`) | Credential reference to the Self Client's client secret |
@@ -51,19 +51,31 @@ rather than being silently ignored.
 | `notes.filenames.triage` | string | `"{key} {slug}.md"` | Filename pattern for triage notes |
 | `notes.filenames.rca` | string | `"{key} RCA {slug}.md"` | Filename pattern for RCA notes |
 | `notes.filenames.resolution` | string | `"{key} RES {slug}.md"` | Filename pattern for resolution notes |
-| `budget.maxTurns` | int | `120` | Model round-trips before a run is marked `over_budget`; see Budgets below |
+| `language.notes` | string | `en` | Language code the engineer's note is written in, including the translated complaint; see Languages below |
+| `language.customer` | string | `auto` | Language code for anything the customer reads (the triage note's reply draft, the RCA's customer summary); `auto` means the language of the ticket's first customer message |
+| `language.rtlMarkup` | bool | `true` | Wrap a right-to-left paragraph the built-in templates emit in `<div dir="rtl">`, which Obsidian renders; ignored while `notes.templates` is set |
+| `budget.maxTurns` | int | `120` |
+ Model round-trips before a run is marked `over_budget`; see Budgets below |
 | `budget.maxMinutes` | int | `25` | Wall-clock minutes before a run is cancelled and marked `over_budget` |
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
+| `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
+| `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
+| `notify.includeTitle` | bool | `false` | Send the ticket title; off because a support subject line routinely names the customer |
+| `notify.slack.webhookUrl` | string | none (required with `slack`) | Credential reference to a Slack incoming-webhook URL — the URL is the credential |
+| `notify.teams.webhookUrl` | string | none (required with `teams`) | Credential reference to a Teams Workflows or connector URL |
+| `notify.generic[].url` | string | none (required) | Receiver for the event as JSON; `https`, or `http` on loopback |
+| `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
+| `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
 | `openai.baseUrl` | string | none (required for `provider: openai`) | Chat Completions base URL, e.g. `https://openrouter.ai/api/v1` or `http://localhost:11434/v1` |
-| `openai.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; omit for a local server that needs none |
+| `openai.apiKey` | string, optional | unset | Credential reference (`env:NAME`, `keychain:SERVICE`, `file:PATH` or `cmd:COMMAND`) for the endpoint's key; omit for a local server that needs none |
 | `openai.model` | string | none (required for `provider: openai`) | Model the endpoint serves, e.g. `qwen/qwen3-coder`; `--model` and `model` override it |
 | `openai.maxContextTokens` | int | `128000` | Context window the loop trims old tool results against |
 | `openai.price.inputPerMTok` | float, optional | `0` | USD per million prompt tokens, used for cost and the `budget.maxUsd` check |
@@ -74,6 +86,18 @@ rather than being silently ignored.
 | `qwen.baseUrl` | string, optional | unset | OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login |
 | `qwen.model` | string, optional | unset | Model the endpoint serves; required alongside `qwen.baseUrl`. `--model` and `model` override it |
 | `qwen.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; required alongside `qwen.baseUrl` |
+| `webhooks.enabled` | bool | `false` | Whether `sirdar serve` registers the inbound trigger endpoints at all; with it off every path under `/hooks/` is a 404 |
+| `webhooks.sources.<name>` | object | unset | One per enabled source: `jira`, `linear`, `azdo`, `rally`, `zendesk`, `freshdesk`, `intercom`, `hubspot`, `generic`. An unknown name fails config load |
+| `webhooks.sources.<name>.secret` | string | none (required, except `azdo`) | Credential ref for the signing secret or shared secret |
+| `webhooks.sources.azdo.username` | string | none (required) | Basic-auth username configured on the Azure DevOps service hook; written literally, it is not a secret |
+| `webhooks.sources.azdo.password` | string | none (required) | Credential ref for the matching password |
+| `webhooks.match.assignee` | string, optional | unset | `me` (the account email on `sources.tracker`, else `sources.helpdesk`) or an address or account id. A delivery naming a different assignee, or none at all, is skipped |
+| `webhooks.match.statuses` | list, optional | unset | Accepted statuses, matched case-insensitively against whatever the payload carries; a payload naming no status passes |
+| `webhooks.match.labels` | list, optional | unset | Accepted labels, same semantics |
+| `webhooks.cooldown` | duration, optional | `10m` | A key triaged this recently is skipped; `0s` disables the cooldown |
+| `acp.command` | string | none (required for `provider: acp`) | The ACP agent's program: `gemini`, `goose`, `opencode`, `npx` |
+| `acp.args` | list of string, optional | unset | The rest of the agent's command line, e.g. `["--experimental-acp"]` |
+| `acp.env` | map, optional | unset | Literal environment entries added to the agent's environment; these are values, not credential references |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -89,6 +113,15 @@ path. `provider`, `billing`, and `concurrency` are validated at load time: an un
 naming the offending key. Budget values must all be greater than zero. A configured source's
 adapter-specific fields are required only for that adapter; `sources.tracker` and
 `sources.helpdesk` are each optional, but a source config with no `adapter` set is an error.
+
+## Inbound webhook triggers
+
+The `webhooks` block configures the endpoints `sirdar serve` exposes at
+`POST /hooks/<workspace-id>/<source>`, so a tracker or helpdesk can start a triage when a ticket
+is assigned. Everything in it is validated at load time whether or not it is enabled, so a
+mistyped source name or a secret written out literally fails the first time the workspace loads
+rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
+signing schemes, and the `--allow-remote` warning.
 
 ## Built-in trackers
 
@@ -188,19 +221,29 @@ as oauth`, since there is no account email to show for that grant.
 
 ## Credential references
 
-`sources.*.token` (and any credential in config) is never a literal secret: config load
-rejects a value that doesn't start with `env:` or `keychain:`. Two forms:
+`sources.*.token` (and any credential in config) is never a literal secret: config load rejects
+a value that doesn't start with one of four schemes, all of which resolve on macOS, Linux and
+Windows.
 
-- `env:NAME` reads the environment variable `NAME` at fetch time. Works on every platform.
-- `keychain:SERVICE` reads a generic password from the macOS login keychain via
-  `security find-generic-password -s SERVICE -w`. **macOS only**: on other platforms a
-  `keychain:` ref fails to resolve.
+- `env:NAME` reads the environment variable `NAME` at fetch time.
+- `keychain:SERVICE` reads the operating system's own credential store: the macOS login
+  keychain via `security`, the freedesktop Secret Service via `secret-tool` (with `pass` as a
+  fallback) on Linux and the BSDs, the Windows Credential Manager via `CredRead`.
+- `file:PATH` reads a file that holds nothing but the secret. A leading `~` expands, one
+  trailing newline is dropped, and a file readable beyond its owner is refused.
+- `cmd:COMMAND` takes the standard output of a credential helper — `op read`, `bw get`,
+  `vault kv get`, `gopass show` — with a 10-second timeout.
+
+**[`docs/credentials.md`](credentials.md) is the whole story**: what to run to store a secret on
+each OS, the `file:` permission rule, `cmd:` recipes for the common password managers, and the
+rule that Sirdar never writes a credential anywhere.
 
 Resolved values are held in memory only: never written to a run directory, and never placed in
 the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
 built-in adapters' `apiToken`, `pat`, `apiKey` and `oauthToken`, and all three parts of an `auth`
 grant — is stripped from the environment the agent process inherits, so a session that can run
-shell commands cannot read them back out. `email` is the one adapter credential field that is not
+shell commands cannot read them back out. The `notify:` block's webhook URLs, header values and
+signing secret are stripped the same way, for the same reason. `email` is the one adapter credential field that is not
 a reference: it is an account name, not a secret, and it is left in place.
 
 ## Zoho Desk OAuth
@@ -245,6 +288,52 @@ spends an agent session on it:
 
 A refused grant reports the reason the accounts server gave — `invalid_client`, `invalid_code`
 — and never any part of the credentials.
+
+## Notifications
+
+A `notify:` block posts a short digest of every finished run to a Slack channel, a Microsoft
+Teams channel, or any HTTP receiver. Every destination is optional and they can be combined;
+with no block, nothing is posted.
+
+```yaml
+notify:
+  on: [completed, failed, over_budget, blocked]   # default: all four
+  includeTitle: false
+  slack:
+    webhookUrl: keychain:sirdar-slack-webhook
+  teams:
+    webhookUrl: env:TEAMS_WEBHOOK
+  generic:
+    - url: https://hooks.example.com/sirdar
+      headers:
+        Authorization: env:SIRDAR_HOOK_TOKEN
+      secret: env:SIRDAR_HOOK_SECRET
+```
+
+The message carries the run's metadata — key, state, confidence, classification, service, run
+id, turns, cost, duration, the reason a run ended badly, and the paths and links a human follows
+— and no part of a note's body. The ticket title is sent only with `includeTitle: true`, because
+a support ticket's subject line routinely names the customer who filed it and a chat channel is
+a wider audience than the notes directory.
+
+A chat `webhookUrl` is a credential reference, never the URL itself: an incoming-webhook URL
+carries its own authorisation in its path. A generic hook's `url` is a plain URL, because the
+receiver authenticates through the headers instead; those header values, and `secret`, are
+references when they carry a credential. Every `env:` name the block uses is stripped from the
+agent session's environment along with the adapters' credentials.
+
+A post that fails is a warning on the run and never a failed run: the note is already on disk
+when it goes out, and the run does not return until every destination's post has settled. Each
+destination gets a hard 15-second ceiling — the request, and one retry on `429` or `5xx`
+honouring a `Retry-After` of up to 30 seconds, all inside that budget — and interrupting the run
+does not cut a post short, since the channel is still owed a message about a run whose note
+already exists. The failure lands in `state.json`'s `warnings` and on the progress stream, with
+the webhook URL reduced to its host and no part of the receiver's response, so the line is safe
+to paste. `SIRDAR_NO_NOTIFY=1`, `sirdar triage --no-notify` and `sirdar rca --no-notify` silence
+one invocation.
+
+Setting up each destination — the Slack app, the Teams workflow, and a receiver that verifies
+the HMAC signature — is in `docs/notifications.md`.
 
 ## Budgets
 
@@ -375,7 +464,53 @@ from the bundle, as is any file over `attachments.maxBytes`. Each dropped file i
 its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
 could not read instead of hunting for a transcoder.
 
+## Languages
+
+A support ticket and the note about it are rarely in the same language. Sirdar's workspace
+reads Arabic tickets from Saudi customers, writes the engineer's note in English, and replies
+to the customer in Arabic. The `language` block names both ends of that:
+
+```yaml
+language:
+  notes: en
+  customer: auto
+  rtlMarkup: true
+```
+
+`notes` is the language of the note itself — the title, the timeline, the hypothesis, and the
+translated complaint. There is no `auto` for it: the note is written for one team, and that
+team reads one language.
+
+`customer` is the language of the two fields a customer will see. `auto`, the default, means
+the language of the ticket's first customer message, which is what a helpdesk serving one
+country usually wants; a fixed code (`ar`, `en`, `ar-SA`) pins it regardless of what the
+ticket is in. Both values go into the prompt verbatim, so the session is told which language
+each field belongs in rather than inferring it.
+
+Three schema fields carry the result:
+
+| Field | Note | Content |
+|---|---|---|
+| `complaintOriginal` | Triage | The customer's complaint verbatim, untranslated, under `## Customer Complaint (original)` after the translated one |
+| `customerReplyDraft` | Triage | `{language, text}`: a short status update the engineer could send, under `## Customer reply draft` |
+| `rca.customerSummary` | RCA | `{language, text}`: what happened and what was done, for the support agent to relay, under `## Customer summary` |
+
+All three are optional: a ticket already written in the note's language has no original to
+keep, and a run that stops with a question has no reply to draft. The preamble forbids a
+commitment in either customer-facing field — no fix, no cause, no date, nothing the ticket
+does not already record as promised — because these are drafts a human sends, not replies
+Sirdar sends, and nothing in Sirdar writes to a helpdesk.
+
+`rtlMarkup` wraps a right-to-left paragraph the built-in templates emit in a
+`<div dir="rtl">` block. Obsidian renders that HTML, so an Arabic complaint reads the way the
+customer wrote it instead of being laid out left to right. It applies to the embedded
+templates only: with `notes.templates` set, your templates own their markup and Sirdar adds
+none. The desktop app drops the wrapper and uses `dir="auto"` instead, which resolves each
+block on its own; an engineer who would rather read the whole note pane right to left can say
+so under Settings, and that preference lives in their browser, not in this file.
+
 ## Templates override
+
 
 Each note type (`triage`, `rca`, `resolution`) has a Go `text/template` file. Defaults are
 embedded in the binary; setting `notes.templates` to a directory containing
@@ -385,8 +520,10 @@ embedded in the binary; setting `notes.templates` to a directory containing
 `sirdar init --templates` writes the three embedded defaults into `.sirdar/templates`, ready to
 edit; point `notes.templates` at that directory to use them.
 
-Templates render against `{{.doc ...}}` (the validated note JSON) and `{{.meta ...}}` (run
-metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider). Template functions:
+Templates render against `{{.doc ...}}` (the validated note JSON), `{{.meta ...}}` (run
+metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider), and `{{.rtlMarkup}}`
+(a bool, always false for an override — see Languages). Template functions:
+
 
 | Function | Signature | Use |
 |---|---|---|
@@ -395,6 +532,8 @@ metadata: key, tracker/helpdesk URLs, customer, dates, run id, provider). Templa
 | `date` | `date value` | Passes a date string through unchanged; a named place to format dates from later |
 | `default` | `default fallback value` | Renders `value`, or `fallback` when it's empty |
 | `yq` | `yq value` | Renders `value` as a YAML double-quoted, escaped scalar; used on every frontmatter value so colons, quotes, and non-Latin text can't break the frontmatter block |
+| `rtlWrap` | `rtlWrap .rtlMarkup value` | Wraps `value` in a `<div dir="rtl">` block when it contains right-to-left script and the markup is on, else renders it unchanged |
+
 
 `sirdar doctor` and `sirdar init` both render every active template against a built-in sample
 document and parse the resulting frontmatter as YAML, so a broken override is caught before a
@@ -402,8 +541,9 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default), `provider: codex`, `provider: qwen`, or `provider: openai`
-selects what drives runs; `--provider` on `triage` and `rca` overrides it per invocation.
+`provider: claude` (default), `provider: codex`, `provider: openai`, `provider: acp`, or
+`provider: qwen` selects what drives runs; `--provider` on `triage` and `rca` overrides it per
+invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
@@ -416,6 +556,20 @@ selects what drives runs; `--provider` on `triage` and `rca` overrides it per in
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
   instead.
+- `billing: subscription` also removes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and
+  `CLAUDE_CODE_USE_FOUNDRY` from the agent's child environment, one `EvSystem` event per variable
+  removed. None of them has a legitimate role in a subscription-billed run, and leaving
+  `ANTHROPIC_BASE_URL` in place is what turns a stray shell export into a credential leak: with
+  no gateway credential of its own, the CLI keeps your claude.ai OAuth login active and sends it
+  to whatever host the base URL names. `sirdar doctor`'s `claude environment` row fails when any
+  of these is set in your process environment while `billing: subscription` is in effect, and
+  names which ones Sirdar is about to strip. `billing: api` passes all of them through unchanged
+  — this is the supported way to point Sirdar at an Anthropic-compatible endpoint you control
+  (Ollama, llama.cpp, a vendor gateway) — but the CLI's reported cost is fabricated behind a
+  custom `ANTHROPIC_BASE_URL`, so `budget.maxUsd` cannot be trusted there; `doctor` reports the
+  host (never the full URL) as a reminder. See
+  `docs/research/providers/spike-anthropic-compatible.md` for the full investigation.
 
 ### `provider: qwen`
 
@@ -607,3 +761,102 @@ no other path in a run passes a credential to a child process.
 Not in v1: streaming, image content parts, `response_format: json_schema`, and resuming a
 session in a later process (`sirdar resume` starts a fresh session instead, because the
 transcript lives in the Sirdar process that ran it).
+
+### `provider: acp`
+
+The Agent Client Protocol is one JSON-RPC dialect that about forty coding agents already speak,
+so one adapter reaches all of them: Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush,
+Junie, Augment, GitHub Copilot CLI, Cursor, Devin, and Claude Code and Codex through the ACP
+adapters. `acp.command` and `acp.args` are the agent's launch command;
+`docs/research/providers/acp-agents.md` lists the ones Sirdar knows about and what each is
+started with.
+
+```yaml
+provider: acp
+acp:
+  command: gemini
+  args: ["--experimental-acp"]
+  env: {}
+```
+
+Sirdar spawns that agent, initializes it, opens a session in the workspace root and hands it the
+stdio MCP servers from the workspace's `.mcp.json`, in ACP's own `mcpServers` shape. The agent
+authenticates however its own CLI does, so `acp.env` is added to its environment rather than
+replacing it, and it holds literal values: anything put there reaches a child process, which is
+what a `keychain:` reference exists to prevent. Leave credentials in your shell and let the
+agent read them from there.
+
+What a run gives up by going through ACP, and why:
+
+- **No cost signal.** ACP's `usage_update` carries the agent's context `used`/`size` and an
+  optional session cost, and most agents send neither, so `budget.maxUsd` usually never fires.
+- **Almost nothing for `budget.maxTurns` to count.** One ACP turn is a whole prompt turn: the
+  agent may make dozens of model requests and run dozens of tools inside a single
+  `session/prompt`, and the protocol reports one turn for all of it. An ACP run normally ends
+  at turn one, or two if the note had to be retried, so a turn budget of 20 and a turn budget
+  of 2 stop the same runaway agent — which is to say neither does. **`budget.maxMinutes` is the
+  bound that actually works here.** Set it as if it were the only one.
+- **No rate-limit signal.** ACP has no equivalent of Claude Code's `rate_limit_event` or Codex's
+  `account/rateLimits/updated`, so a spent window arrives as an error and the queue does not
+  pause for it.
+- **No schema-constrained output.** `session/prompt` has no schema field, so the note schema goes
+  into the prompt and the agent's own message is parsed as JSON at the end of the turn. A
+  ```` ```json ```` fence is unwrapped and a prose preamble tolerated — the last top-level JSON
+  object in the message is taken — but a message with no object in it at all earns the usual one
+  retry turn, sent as a second `session/prompt`.
+- **No reason on a denial.** When the agent asks permission, the client may only pick one of the
+  options the agent itself offered — there is no field for a message the model would see. Sirdar
+  picks the `reject_once` option and records the policy's reason in the event log, and the
+  read-only instruction is already in the prompt so the model is not left guessing.
+
+#### What the permission policy can and cannot reach
+
+An ACP agent is a whole CLI, not a tool runner Sirdar drives. It owns its own tools, its own
+configuration and, in most cases, its own globally configured MCP servers, and the protocol
+gives a client no way to see or switch any of that off. Two consequences are worth stating
+plainly, because they are weaker than what the same settings mean for `provider: claude`:
+
+- **`mcp.workspaceOnly` cannot be enforced.** Sirdar passes the workspace's `.mcp.json` servers
+  in `session/new`, and the agent adds them to whatever it already has. There is no ACP
+  equivalent of `--strict-mcp-config`, so if your Gemini CLI or Goose install has global MCP
+  servers configured, the session gets those too. Check the agent's own config if that matters.
+- **The workspace's `.mcp.json` `env` values cross the wire.** They are sent to the agent in
+  `session/new` so it can start those servers itself, which means any secret expanded into that
+  block ends up in the agent's process, not just Sirdar's.
+
+Permission checks are advisory in the same way. `session/request_permission` is sent at the
+agent's discretion — some agents ask before every write, some ask only outside their own
+sandbox, some never ask — so Sirdar's policy governs what it is asked about and nothing else.
+When it is asked, ACP names the *kind* of the call rather than the agent's own tool name, so
+`edit`/`delete`/`move` are judged as `Write` and `execute` as `Bash` against `permissions.bash`
+whatever the agent titled them; `read` is judged as `Read`, `search` as `Grep`, `fetch` as
+`WebFetch`; an MCP tool names itself in full and goes through `permissions.mcp` unchanged; and
+a call whose kind the protocol did not state is denied, which is the read-only posture applied
+to the unknown.
+
+When an `edit`, `delete` or `move` tool call completes having never produced a permission
+request, the run records an error event naming it. Nothing can be undone at that point — the
+write already happened, inside the agent's process — but it is the difference between finding
+out and not. An agent that raises that warning is one to run against a scratch checkout, or not
+at all.
+
+Sirdar declines the write-file and terminal client capabilities at `initialize`, so a
+well-behaved agent never asks Sirdar to write a file or open a terminal *on its behalf*; one
+that asks anyway gets a JSON-RPC error and the attempt shows up as a denied permission event.
+That says nothing about what the agent can do with its own tools. It does advertise
+`fs/read_text_file` and serves it, for files inside the workspace root only — resolved through
+symlinks, so a link inside the workspace pointing out of it is refused — and for at most 8 MiB
+per read.
+
+Traffic naming a session Sirdar did not open is dropped, and requests naming one are refused.
+Some agents spawn nested subagent sessions of their own; their messages are not this run's
+transcript, and their tool calls are not this run's to approve.
+
+Resume works where the agent advertises `loadSession`: the run's handle is the ACP `sessionId`,
+and a later run reopens it with `session/load`. An agent without that capability makes
+`sirdar resume` start a fresh session rather than continue the old one.
+
+`sirdar doctor` starts the configured agent, initializes it and reports what it said about
+itself — its name and version, the protocol version, and whether it supports `loadSession` and
+image prompts — then shuts it down again. That is the cheapest way to find out whether an agent
+you have not run before works here at all.
