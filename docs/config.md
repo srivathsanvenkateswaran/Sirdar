@@ -409,6 +409,20 @@ real run rather than after.
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
   instead.
+- `billing: subscription` also removes `ANTHROPIC_BASE_URL`, `ANTHROPIC_AUTH_TOKEN`,
+  `ANTHROPIC_CUSTOM_HEADERS`, `CLAUDE_CODE_USE_BEDROCK`, `CLAUDE_CODE_USE_VERTEX`, and
+  `CLAUDE_CODE_USE_FOUNDRY` from the agent's child environment, one `EvSystem` event per variable
+  removed. None of them has a legitimate role in a subscription-billed run, and leaving
+  `ANTHROPIC_BASE_URL` in place is what turns a stray shell export into a credential leak: with
+  no gateway credential of its own, the CLI keeps your claude.ai OAuth login active and sends it
+  to whatever host the base URL names. `sirdar doctor`'s `claude environment` row fails when any
+  of these is set in your process environment while `billing: subscription` is in effect, and
+  names which ones Sirdar is about to strip. `billing: api` passes all of them through unchanged
+  — this is the supported way to point Sirdar at an Anthropic-compatible endpoint you control
+  (Ollama, llama.cpp, a vendor gateway) — but the CLI's reported cost is fabricated behind a
+  custom `ANTHROPIC_BASE_URL`, so `budget.maxUsd` cannot be trusted there; `doctor` reports the
+  host (never the full URL) as a reminder. See
+  `docs/research/providers/spike-anthropic-compatible.md` for the full investigation.
 
 ### `provider: openai`
 

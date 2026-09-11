@@ -127,6 +127,12 @@ read-only tool set and your workspace's MCP servers, and a per-million-token pri
 config for the USD budget. See `docs/config.md` for the `openai:` block, and
 `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after it.
 
+`provider: claude` also works against an Anthropic-compatible endpoint — Ollama, llama.cpp,
+DeepSeek, GLM, Kimi, OpenRouter — by setting `billing: api` and pointing `ANTHROPIC_BASE_URL` at
+it in the environment; Anthropic documents the gateway variables that make this work but does not
+support routing non-Claude models through them, and reported cost is unreliable there, so see
+`docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
+
 ## Bring your own agent login
 
 Sirdar spawns the `claude` or `codex` binary already installed on your machine and signed in

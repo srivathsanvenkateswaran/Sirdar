@@ -5,8 +5,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
@@ -59,11 +61,69 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 		binary = cfg.ExpandPath(binary)
 	}
 	raw := p.Doctor(ctx, binary)
-	out := make([]Check, 0, len(raw))
+	out := make([]Check, 0, len(raw)+1)
 	for _, c := range raw {
 		out = append(out, checkOf(c))
 	}
+	if cfg.Provider == "claude" {
+		out = append(out, claudeEnvironmentCheck(cfg))
+	}
 	return out
+}
+
+// claudeGatewayEnvVars mirrors the list internal/provider/claude's childEnv
+// strips from the agent's environment under subscription billing. Doctor
+// checks the operator's own process environment for the same names, since
+// a run that sets no spec.Env inherits os.Environ() verbatim.
+var claudeGatewayEnvVars = []string{
+	"ANTHROPIC_BASE_URL",
+	"ANTHROPIC_AUTH_TOKEN",
+	"ANTHROPIC_CUSTOM_HEADERS",
+	"CLAUDE_CODE_USE_BEDROCK",
+	"CLAUDE_CODE_USE_VERTEX",
+	"CLAUDE_CODE_USE_FOUNDRY",
+}
+
+// claudeEnvironmentCheck flags the credential-leak configuration in
+// docs/research/providers/spike-anthropic-compatible.md: subscription
+// billing with a gateway variable set in the process environment sends the
+// operator's claude.ai OAuth material to whatever host it names. Under api
+// billing the same variables are the supported way to reach an
+// Anthropic-compatible endpoint, so the check only notes that
+// budget.maxUsd cannot be trusted behind a custom base URL.
+func claudeEnvironmentCheck(cfg *config.Config) Check {
+	check := Check{Name: "claude environment"}
+	if cfg.Billing == "api" {
+		check.OK = true
+		if base := os.Getenv("ANTHROPIC_BASE_URL"); base != "" {
+			check.Detail = "custom base URL: " + hostOnly(base) + "; budget.maxUsd cannot be trusted"
+		}
+		return check
+	}
+
+	var set []string
+	for _, name := range claudeGatewayEnvVars {
+		if os.Getenv(name) != "" {
+			set = append(set, name)
+		}
+	}
+	if len(set) == 0 {
+		check.OK = true
+		return check
+	}
+	check.Detail = strings.Join(set, ", ") + " set with billing: subscription; Sirdar will strip these from the agent's environment"
+	return check
+}
+
+// hostOnly returns just the host portion of a URL, so a doctor report never
+// repeats a full base URL that might carry embedded credentials or a path
+// meant to stay private.
+func hostOnly(raw string) string {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return raw
+	}
+	return u.Host
 }
 
 // sourceChecks reaches each configured source the cheapest way that proves
