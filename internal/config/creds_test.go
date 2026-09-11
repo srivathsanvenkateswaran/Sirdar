@@ -7,6 +7,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 type fakeKC map[string]string
@@ -235,6 +236,39 @@ func TestResolveCmd(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "s3cret") {
 		t.Fatalf("%v leaks the helper's stdout", err)
+	}
+}
+
+// TestResolveCmdTimeoutKillsTheWholeGroup: a "cmd:" helper that backgrounds
+// work of its own, the way a piped helper leaves children behind it, must
+// not survive the deadline just because only the sh -c process itself was
+// signalled.
+func TestResolveCmdTimeoutKillsTheWholeGroup(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("process groups are not addressable on Windows; see internal/procgroup")
+	}
+	saved := cmdTimeout
+	cmdTimeout = 100 * time.Millisecond
+	t.Cleanup(func() { cmdTimeout = saved })
+
+	marker := filepath.Join(t.TempDir(), "marker")
+	r := testResolver()
+	command := "(sleep 0.3; touch " + marker + ") & sleep 5"
+
+	start := time.Now()
+	_, err := r.Resolve("cmd:" + command)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Fatalf("want a timeout error, got %v", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("Resolve took %s, the timeout should have fired far sooner", elapsed)
+	}
+
+	// Give the backgrounded job the time it would have needed to run if it
+	// had survived the kill, then check it never wrote its marker.
+	time.Sleep(500 * time.Millisecond)
+	if _, err := os.Stat(marker); err == nil {
+		t.Fatal("the backgrounded grandchild outlived the timeout: only the shell was killed, not its process group")
 	}
 }
 

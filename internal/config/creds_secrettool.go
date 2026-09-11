@@ -52,7 +52,7 @@ func (SecretTool) Read(service string) (string, error) {
 	case havePass:
 		out, err := runQuiet("pass", "show", passFolder+service)
 		if err != nil {
-			return "", &NotFoundError{Ref: ref, Detail: "pass has no entry " + passFolder + service}
+			return "", passError(ref, passFolder+service, err)
 		}
 		// A pass entry is a file whose first line is the password; the
 		// rest is whatever notes the operator keeps with it.
@@ -77,6 +77,26 @@ func secretToolError(ref, service string, err error) error {
 		return &NotFoundError{Ref: ref, Detail: "no secret-tool item with service=" + service}
 	}
 	return fmt.Errorf("%s: secret-tool: %w", ref, err)
+}
+
+// passError distinguishes "no such entry" — which pass reports on stderr
+// as "Error: <entry> is not in the password store." — from a failure
+// somewhere in the GPG chain underneath it (gpg-agent unreachable, no
+// secret key, a locked smartcard), which pass also reports on stderr but
+// with no such wording. The first is a missing credential; the second is
+// not, and is surfaced like secretToolError does.
+func passError(ref, entry string, err error) error {
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		if msg := firstLine(string(ee.Stderr)); msg != "" {
+			if strings.Contains(msg, "is not in the password store") {
+				return &NotFoundError{Ref: ref, Detail: "pass has no entry " + entry}
+			}
+			return fmt.Errorf("%s: pass: %s", ref, msg)
+		}
+		return &NotFoundError{Ref: ref, Detail: "pass has no entry " + entry}
+	}
+	return fmt.Errorf("%s: pass: %w", ref, err)
 }
 
 // onPath reports whether a program is available to run.

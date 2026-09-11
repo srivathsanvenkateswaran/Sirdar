@@ -102,6 +102,28 @@ func TestSecretToolFallsBackToPass(t *testing.T) {
 	}
 }
 
+// TestPassReportsAGPGAgentFailure: pass says "is not in the password
+// store" on stderr when the entry is simply absent, and says why on
+// stderr in any other wording when the GPG chain underneath it is the
+// problem (gpg-agent unreachable, no secret key, a locked smartcard). The
+// second is not a missing credential.
+func TestPassReportsAGPGAgentFailure(t *testing.T) {
+	stubPath(t, map[string]string{
+		"pass": "echo 'gpg: decryption failed: No secret key' >&2\nexit 2\n",
+	})
+	_, err := SecretTool{}.Read("zoho")
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	var nf *NotFoundError
+	if errors.As(err, &nf) {
+		t.Fatal("a broken GPG chain is not a missing credential")
+	}
+	if !strings.Contains(err.Error(), "No secret key") {
+		t.Fatalf("%v should carry pass's own message", err)
+	}
+}
+
 // TestSecretToolPrefersLibsecret: with both installed, the Secret Service
 // is the store, because that is where `secret-tool store` put the secret.
 func TestSecretToolPrefersLibsecret(t *testing.T) {

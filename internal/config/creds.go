@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 )
 
 // NotFoundError reports a credential reference that could not be resolved.
@@ -65,8 +67,12 @@ func IsCredentialRef(ref string) bool {
 
 // cmdTimeout bounds a "cmd:" reference. A credential helper that prompts
 // for a touch or a master password needs a few seconds; one that hangs
-// must not hold a run open forever.
-const cmdTimeout = 10 * time.Second
+// must not hold a run open forever. A var so a test can shorten it.
+var cmdTimeout = 10 * time.Second
+
+// killGrace is how long a timed-out helper's process group has to die
+// before Wait gives up on it.
+const killGrace = 2 * time.Second
 
 // Resolver turns a credential reference into the secret it names. A literal
 // value is always an error: config files must never hold a credential
@@ -179,6 +185,16 @@ func runSecretCommand(command string) (string, error) {
 	} else {
 		cmd = exec.CommandContext(ctx, "sh", "-c", command)
 	}
+	// The helper runs in a process group of its own so a timeout can kill
+	// everything it started: a piped helper ("op read ... | tr -d '\n'")
+	// leaves children that keep stdout open, and killing only the shell
+	// would leave them running with Wait blocked on that pipe. WaitDelay is
+	// the backstop for a grandchild that survives the group kill. This is a
+	// no-op on Windows, which has no addressable process group here; see
+	// internal/procgroup.
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
+	cmd.WaitDelay = killGrace
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
