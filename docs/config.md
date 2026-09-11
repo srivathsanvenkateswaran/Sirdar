@@ -65,6 +65,7 @@ rather than being silently ignored.
 | `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
 | `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
+| `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
 | `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
 | `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
@@ -577,6 +578,60 @@ people. Leave it off anywhere the pull request is public, or read by anyone who 
 with that customer's conversation. The triage note is always linked either way, through the
 tracker and helpdesk URLs in the body.
 
+## Web fetch
+
+`permissions.fetch` is the list of hosts a run may retrieve a URL from. It applies to Claude
+Code's `WebFetch`, the `web_fetch` in Sirdar's own agent loop and in a qwen session, and an ACP
+agent's `fetch` permission request — one list, whichever agent is driving.
+
+It is empty by default, and empty means nothing is fetchable. That is the whole point of the
+setting. A triage session reads attacker-supplied text as a matter of routine: a ticket
+comment, a page a playbook points at, a file in the repository. Before this list existed a
+fetch was approved on the tool's name alone, so an instruction hidden in any of that text could
+name a destination of its own and carry what the session had read there in a query string. The
+destination is now judged on every call.
+
+An entry is a host, not a URL:
+
+| Entry | Matches |
+|---|---|
+| `docs.example.com` | that host exactly, on any port, over https |
+| `*.example.com` | any subdomain of it, over https — **not** the bare `example.com` |
+| `http://localhost:3000` | a service on this machine, on that port, over http or https |
+| `http://127.0.0.1` | the loopback address on any port |
+
+Everything else about a URL is refused before the host is even looked at:
+
+- a scheme other than https, unless a loopback entry above covers the host;
+- userinfo — `https://docs.example.com@attacker.example/` is a request to `attacker.example`
+  that reads like one to the documentation host;
+- an IP literal, which skips the name the allow-list approved, and any private, loopback,
+  link-local (`169.254.169.254`, the cloud metadata service), carrier-NAT or multicast address
+  whatever else says;
+- a URL that does not parse, or that names no host.
+
+Entries are checked when the config loads: a path, a query, userinfo, a bare `*`, a wildcard
+anywhere but a leading `*.`, an `https://` prefix, or `http://` in front of anything that is
+not loopback all fail the load with a message naming `permissions.fetch[N]`. Each refused
+fetch names the host it turned down and the setting, so a run that needed a page tells you
+which line to add. `sirdar doctor` prints the list, or says that it is empty.
+
+Redirects do not widen it. Sirdar's own `web_fetch` already refuses a redirect off the host
+that was asked for, and each hop is put through the allow-list as well.
+
+### What `permissions.fetch` does not cover
+
+- **`WebSearch` / `web_search`.** They carry a query, not a destination, so there is no host to
+  judge and they stay allowed. The query text is a residual channel: an injected instruction
+  can put something the session read into a search term, and the search provider sees it. If
+  that matters for your tickets, the answer is to drop the tool, not to configure this list.
+- **The host's own address.** A name in the list that resolves to an internal address is
+  allowed by the list. Sirdar's own fetch has a dial guard that refuses the connection on the
+  resolved IP, so a public name pointed at `10.0.0.5` gets nothing; a provider CLI doing its
+  own fetching has whatever guard it has.
+- **A user-level allow rule in Claude Code.** See below.
+- **Codex's built-in web search.** See below.
+
 ## MCP access
 
 Two settings, and they do different jobs. `mcp.workspaceOnly` decides which servers the
@@ -684,13 +739,39 @@ construction rather than by naming convention.
 
 ### How the permissions reach each provider
 
-`permissions.bash` and `permissions.mcp` are one policy, applied at whatever point the
-provider offers to be asked.
+`permissions.bash`, `permissions.mcp` and `permissions.fetch` are one policy, applied at
+whatever point the provider offers to be asked.
 
 - **claude** — the CLI is started with `--permission-prompt-tool stdio`, so every tool call it
   is not already allowed to make arrives as a `can_use_tool` request and is answered from the
-  policy.
-- **openai** — the loop runs the tools itself, so it applies the policy before each call.
+  policy. "Not already allowed" is the catch for fetches: a `WebFetch(domain:…)` rule in the
+  operator's own `~/.claude/settings.json` is an allow rule the CLI applies itself, and a call
+  it has allowed never reaches Sirdar. So while `permissions.fetch` is empty, `WebFetch` is
+  named on `--disallowedTools`, and a deny rule beats an allow rule — no fetch happens,
+  whatever the user settings say. Once the workspace names hosts, the flag comes off so the
+  policy can judge each call, and a user-level `WebFetch(domain:…)` rule then bypasses Sirdar
+  for that domain. There is no flag that switches those rules off; keep such a rule out of
+  your user settings. `WebFetch`'s own `prompt` argument is scanned for URLs the same way a
+  Qwen or gemini-style `web_fetch`'s is (see Web fetch above): a URL quoted anywhere in the
+  prompt, even one the model only meant as instructions to itself and never intended to fetch,
+  is judged against `permissions.fetch` and denies the whole call if it is not allowed. That
+  fails closed rather than open — an unrelated URL sitting in the prompt text blocks a fetch it
+  was never the destination of — which is the trade Sirdar makes on the side of not missing a
+  URL a prompt injection did mean to route through.
+- **openai** — the loop runs the tools itself, so it applies the policy before each call. Its
+  `web_fetch` checks `permissions.fetch` a second time inside the tool, and again on every
+  redirect hop.
+- **qwen** — `web_fetch` goes through the same fail-closed `PreToolUse` hook as every other
+  tool, under the name `WebFetch`, so `permissions.fetch` decides it. `web_search` is left
+  registered and allowed (no destination to judge).
+- **acp** — a permission request whose `kind` is `fetch` is judged as `WebFetch` against
+  `permissions.fetch`, and the kind wins over the agent's own title, so an agent cannot route
+  a fetch through the MCP rules by naming it `mcp__browser__get_page`. The URL is read out of
+  the request's `rawInput` (`url`, `urls`, or a URL written into a `prompt`); a fetch request
+  Sirdar cannot find a URL in is declined rather than approved unseen. ACP leaves it to the
+  agent to decide what is worth asking about, so an agent that fetches without asking is not
+  reached by the list at all — a completed `fetch` call that never raised a permission request
+  is reported as an `EvError` on the run.
 - **codex** — a triage session runs with `sandbox: read-only`, a fix session with
   `sandbox: workspace-write`, and both with `approvalPolicy: untrusted`, so Codex asks before
   running a shell command, calling an MCP tool or writing a file, and the policy answers.
@@ -716,6 +797,18 @@ provider offers to be asked.
 
   One limit worth knowing: the policy only sees what Codex asks about. A tool Codex decides
   needs no approval runs without `permissions.mcp` being consulted.
+
+  **`permissions.fetch` does not reach Codex.** Codex's web search and page fetching are its
+  own built-in tools, run on its side and reported to the client as a finished `webSearch`
+  item; there is no approval on the wire for them, so there is nothing for the policy to
+  answer. What governs them is Codex's own configuration: the thread runs with
+  `sandbox: read-only`, which is the app-server's whole network and filesystem setting for a
+  triage thread — `thread/start` takes the sandbox mode and no separate network flag (see
+  `docs/research/06-wire-formats.md`) — and whether the web tool exists at all is the
+  `web_search` key in the operator's `config.toml`. The per-session `CODEX_HOME` Sirdar
+  generates copies that file through with only its `mcp_servers` tables replaced, so a
+  `web_search = true` an operator set globally still applies. A workspace that wants Codex not
+  to fetch has to say so in its own `config.toml`.
 
   **`item/fileChange/requestApproval` firing under `workspace-write` + `untrusted` is
   schema-derived, not yet observed live.** The command-approval and MCP-elicitation paths
@@ -982,14 +1075,11 @@ written up in `docs/research/09-qwen-wire-formats.md`:
   `mcp__server__tool` go through `permissions.mcp`. Any name the policy has not been taught —
   an MCP tool no pattern matches, or a tool a later Qwen adds and this list does not know — is
   refused with `Sirdar policy: not permitted`.
-- **`web_fetch` is approved with no inspection of the destination.** It sits in
-  `AlwaysAllowed` next to `read_file`, the same way `WebFetch` does for the Claude adapter, and
-  neither adapter's policy looks at the URL before approving the call. A prompt injected into
-  something a read tool already pulled in — a file comment, a commit message, a ticket body —
-  can ask the model to fetch an address of the attacker's choosing, carrying whatever that read
-  already put in context along with it. Known and documented rather than fixed here: a URL
-  allow-list for `web_fetch`/`WebFetch` shared across providers is a follow-up (see
-  `HANDOFF.md`).
+- **`web_fetch` is judged by `permissions.fetch`.** It reaches the hook under the name
+  `WebFetch`, and the destination in its arguments — a `url`, or a URL written into a `prompt`
+  — is matched against the workspace's host list before the call is allowed. With no list
+  configured, no fetch is. `web_search` stays allowed: it names a query and no host (see Web
+  fetch above for what that leaves open).
 
 **The shell.** It is excluded the same way unless the workspace named `permissions.bash`
 patterns. When it did, `--allowed-tools run_shell_command` puts it back and the hook is its
@@ -1059,7 +1149,8 @@ openai:
 ```
 
 What the loop gives the model: the read-only tools `read_file`, `list_dir`, `grep`, `glob`,
-`bash` (the same `permissions.bash` allow-list as every other provider) and `web_fetch`, plus
+`bash` (the same `permissions.bash` allow-list as every other provider) and `web_fetch` (the
+same `permissions.fetch` host list, checked by the policy and again inside the tool), plus
 every tool from the MCP servers in the workspace's `.mcp.json`, named `mcp__<server>__<tool>` so
 existing `mcp__` permission rules keep meaning what they meant. There is no write tool to deny:
 read-only is a property of the tool set here, not a policy applied over someone else's tools.
@@ -1168,16 +1259,20 @@ agent's discretion — some agents ask before every write, some ask only outside
 sandbox, some never ask — so Sirdar's policy governs what it is asked about and nothing else.
 When it is asked, ACP names the *kind* of the call rather than the agent's own tool name, so
 `edit`/`delete`/`move` are judged as `Write` and `execute` as `Bash` against `permissions.bash`
-whatever the agent titled them; `read` is judged as `Read`, `search` as `Grep`, `fetch` as
-`WebFetch`; an MCP tool names itself in full and goes through `permissions.mcp` unchanged; and
-a call whose kind the protocol did not state is denied, which is the read-only posture applied
-to the unknown.
+whatever the agent titled them; `fetch` is judged as `WebFetch` against `permissions.fetch`,
+with the URL read out of the request's `rawInput` and a request Sirdar can find no URL in
+declined; `read` is judged as `Read` and `search` as `Grep`; an MCP tool names itself in full
+and goes through `permissions.mcp` unchanged; and a call whose kind the protocol did not state
+is denied, which is the read-only posture applied to the unknown. The five kinds above whose
+meaning the protocol settles — the three writes, `execute` and `fetch` — are judged on the kind
+alone, so an agent cannot route a write or a fetch through the laxer MCP rules by titling it
+`mcp__editor__apply_diff` or `mcp__browser__get_page`.
 
-When an `edit`, `delete` or `move` tool call completes having never produced a permission
-request, the run records an error event naming it. Nothing can be undone at that point — the
-write already happened, inside the agent's process — but it is the difference between finding
-out and not. An agent that raises that warning is one to run against a scratch checkout, or not
-at all.
+When an `edit`, `delete`, `move`, `execute` or `fetch` tool call completes having never produced
+a permission request, the run records an error event naming it. Nothing can be undone at that
+point — the write, or the request, already happened inside the agent's process — but it is the
+difference between finding out and not. An agent that raises that warning is one to run against
+a scratch checkout, or not at all.
 
 Sirdar declines the write-file and terminal client capabilities at `initialize`, so a
 well-behaved agent never asks Sirdar to write a file or open a terminal *on its behalf*; one

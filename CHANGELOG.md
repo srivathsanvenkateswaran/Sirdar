@@ -82,3 +82,11 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added Codex workspace-MCP parity: a per-session `CODEX_HOME` carries only the workspace's own
   `.mcp.json` servers under `mcp.workspaceOnly`, and MCP, shell, and file-change approvals all
   route through Sirdar's permissions.
+- Added `permissions.fetch`, a cross-provider allow-list of the hosts a session may fetch a URL
+  from. `WebFetch` and `web_fetch` used to be approved on the tool name alone, so an instruction
+  injected into anything a read tool pulled in could name its own destination and carry what the
+  run had read there. The destination is now judged on every call — https only outside an
+  explicit loopback entry, no userinfo, no IP literals or private addresses — on Claude, on
+  qwen, in Sirdar's own agent loop, and for an ACP `fetch` request. The list is empty by
+  default, which denies every fetch; Codex's built-in web search stays governed by Codex's own
+  `config.toml` and sandbox, which is documented rather than fixed.

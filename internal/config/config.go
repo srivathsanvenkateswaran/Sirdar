@@ -11,6 +11,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 // Provider selects which agent CLI drives triage and RCA runs.
@@ -359,6 +361,17 @@ type Config struct {
 		// one does not widen the other. DefaultFixBash fills it in when
 		// the workspace names none.
 		FixBash []string `yaml:"fixBash"`
+		// Fetch is the allow-list of hosts a session may fetch a URL
+		// from: "docs.example.com" exactly, "*.example.com" for its
+		// subdomains, "http://localhost:3000" for a service this
+		// machine runs. It governs Claude's WebFetch, the openai loop's
+		// and qwen's web_fetch, and an ACP fetch permission request.
+		//
+		// Empty — the default — denies every fetch. A triage session
+		// reads attacker-supplied text all day (a ticket comment, a
+		// page, a file), and a fetch nobody judged is how that text
+		// sends what the session knows to a host of its choosing.
+		Fetch []string `yaml:"fetch"`
 	} `yaml:"permissions"`
 	// MCP controls which MCP servers the agent session can see at all.
 	// WorkspaceOnly (default true) starts the session with
@@ -542,6 +555,9 @@ func (c *Config) Validate() error {
 	if err := validateLanguage(&c.Language); err != nil {
 		return err
 	}
+	if err := validateFetch(c.Permissions.Fetch); err != nil {
+		return err
+	}
 
 	if c.Budget.MaxTurns <= 0 {
 		return fmt.Errorf("config: budget.maxTurns: must be > 0, got %d", c.Budget.MaxTurns)
@@ -613,6 +629,19 @@ func validateNotify(n *NotifyConfig) error {
 			if err := credentialRef(key+".secret", g.Secret); err != nil {
 				return err
 			}
+		}
+	}
+	return nil
+}
+
+// validateFetch checks permissions.fetch. The entries decide where a
+// session may send a request, so a malformed one is a failed load rather
+// than a line that silently matches nothing — or, worse, more than the
+// operator meant.
+func validateFetch(entries []string) error {
+	for i, entry := range entries {
+		if reason := provider.ValidateFetchEntry(entry); reason != "" {
+			return fmt.Errorf("config: permissions.fetch[%d]: %q %s", i, entry, reason)
 		}
 	}
 	return nil

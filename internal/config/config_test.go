@@ -1105,3 +1105,61 @@ func TestDefaultConfigYAMLDocumentsLanguage(t *testing.T) {
 		t.Fatalf("scaffolded language block: notes=%q customer=%q rtl=%v", c.NotesLanguage(), c.CustomerLanguage(), c.RTLMarkup())
 	}
 }
+
+// TestPermissionsFetch covers the allow-list that decides where a session
+// may fetch from: it reaches the config, an entry that cannot mean what
+// the operator meant fails the load, and the default is an empty list —
+// which denies every fetch.
+func TestPermissionsFetch(t *testing.T) {
+	root := writeCfg(t, minimal+`
+permissions:
+  fetch:
+    - "docs.example.com"
+    - "*.golang.org"
+    - "http://localhost:11434"
+`)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.Fetch) != 3 {
+		t.Fatalf("permissions.fetch %v", cfg.Permissions.Fetch)
+	}
+	if d := provider.DecideFetchURL(cfg.Permissions.Fetch, "https://pkg.golang.org/x"); !d.Allow {
+		t.Errorf("a subdomain of an allowed host: %s", d.Message)
+	}
+	if d := provider.DecideFetchURL(cfg.Permissions.Fetch, "https://attacker.example/x"); d.Allow {
+		t.Error("a host nobody named was allowed")
+	}
+
+	// The default: no key at all, and nothing is fetchable.
+	bare, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bare.Permissions.Fetch) != 0 {
+		t.Errorf("permissions.fetch defaults to %v, want empty", bare.Permissions.Fetch)
+	}
+	if d := provider.DecideFetchURL(bare.Permissions.Fetch, "https://docs.example.com/x"); d.Allow {
+		t.Error("an unconfigured workspace allowed a fetch")
+	}
+
+	bad := map[string]string{
+		"  fetch:\n    - \"*\"\n":                   "wildcard",
+		"  fetch:\n    - \"example.com/docs\"\n":    "path",
+		"  fetch:\n    - \"https://example.com\"\n": "https://",
+		"  fetch:\n    - \"http://evil.example\"\n": "not loopback",
+		"  fetch:\n    - \"user@example.com\"\n":    "userinfo",
+		"  fetch:\n    - \"ev*l.example.com\"\n":    "wildcard outside",
+	}
+	for body, want := range bad {
+		_, err := Load(writeCfg(t, minimal+"permissions:\n"+body))
+		if err == nil {
+			t.Errorf("permissions.fetch entry in %q loaded", body)
+			continue
+		}
+		if !strings.Contains(err.Error(), "permissions.fetch[0]") || !strings.Contains(err.Error(), want) {
+			t.Errorf("error for %q = %v, want one naming the key and %q", body, err, want)
+		}
+	}
+}

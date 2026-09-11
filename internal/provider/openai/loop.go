@@ -171,6 +171,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	toolOpts := agenttools.Options{
 		Root:          spec.Cwd,
 		BashAllow:     policy.BashAllow,
+		FetchAllow:    policy.FetchAllow,
 		ExtraReserved: policy.ExtraReserved,
 	}
 	locals := agenttools.ReadOnlySet(toolOpts)

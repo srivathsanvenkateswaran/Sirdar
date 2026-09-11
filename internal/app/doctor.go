@@ -32,7 +32,7 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks := []Check{{Name: "config", OK: true, Detail: filepath.Join(cfg.Root, ".sirdar", "config.yaml")}}
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg)...)
-	checks = append(checks, mcpCheck(cfg))
+	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return checks
 }
@@ -359,6 +359,20 @@ func mcpCheck(cfg *config.Config) Check {
 	} else {
 		check.Detail += "; permissions.mcp is empty, so write-shaped MCP tools are denied by name"
 	}
+	return check
+}
+
+// fetchCheck reports where a session may fetch a URL from. An empty list
+// is the default and is safe — nothing is fetchable — but a run that then
+// refuses every documentation page the playbooks point at is worth
+// explaining here rather than one denial at a time in an events log.
+func fetchCheck(cfg *config.Config) Check {
+	check := Check{Name: "fetch", OK: true}
+	if len(cfg.Permissions.Fetch) == 0 {
+		check.Detail = "permissions.fetch is empty: no web fetch is allowed, on any provider"
+		return check
+	}
+	check.Detail = "permissions.fetch allows " + strings.Join(cfg.Permissions.Fetch, ", ")
 	return check
 }
 

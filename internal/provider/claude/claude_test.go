@@ -652,6 +652,18 @@ func contains(list []string, want string) bool {
 	return false
 }
 
+// containsSubstring finds an argument that carries want inside it, which
+// is what a comma-joined flag value needs: --disallowedTools is one
+// argument holding several tool names.
+func containsSubstring(list []string, want string) bool {
+	for _, s := range list {
+		if strings.Contains(s, want) {
+			return true
+		}
+	}
+	return false
+}
+
 func containsPrefix(list []string, prefix string) bool {
 	for _, s := range list {
 		if strings.HasPrefix(s, prefix) {
@@ -659,6 +671,48 @@ func containsPrefix(list []string, prefix string) bool {
 		}
 	}
 	return false
+}
+
+// TestWebFetchIsRefusedUntilTheWorkspaceNamesAHost covers the one thing
+// --disallowedTools has to do for permissions.fetch. Claude Code applies
+// its own user-level allow rules before it asks Sirdar anything, so a
+// WebFetch(domain:…) rule in ~/.claude/settings.json would let a fetch
+// through without the permission policy ever seeing it. A deny rule beats
+// an allow rule, so with no permissions.fetch entries WebFetch is named on
+// the refusal list; with entries it comes off, and the policy judges each
+// call.
+func TestWebFetchIsRefusedUntilTheWorkspaceNamesAHost(t *testing.T) {
+	empty := provider.SessionSpec{
+		OutputSchema: []byte(`{}`),
+		Policy:       &provider.PermissionPolicy{},
+	}
+	if !containsSubstring(args(empty), "WebFetch") {
+		t.Errorf("no permissions.fetch entries: WebFetch was not refused: %v", args(empty))
+	}
+	// Also with no policy at all, which is the same statement about where
+	// a fetch may go: nobody has made one.
+	if !containsSubstring(args(provider.SessionSpec{OutputSchema: []byte(`{}`)}), "WebFetch") {
+		t.Error("a session with no policy did not refuse WebFetch")
+	}
+
+	configured := provider.SessionSpec{
+		OutputSchema: []byte(`{}`),
+		Policy:       &provider.PermissionPolicy{FetchAllow: []string{"docs.example.com"}},
+	}
+	if containsSubstring(args(configured), "WebFetch") {
+		t.Errorf("with permissions.fetch entries WebFetch must reach the policy: %v", args(configured))
+	}
+	// A fix session is judged the same way, and still may not edit a
+	// notebook.
+	configured.Mode = provider.ModeFix
+	fix := args(configured)
+	if containsSubstring(fix, "WebFetch") || !containsSubstring(fix, "NotebookEdit") {
+		t.Errorf("fix disallowed list: %v", fix)
+	}
+	configured.Policy = nil
+	if !containsSubstring(args(configured), "WebFetch") {
+		t.Errorf("a fix session with no fetch list must still refuse WebFetch: %v", args(configured))
+	}
 }
 
 // TestMCPArgs is D2's other half: with a workspace MCP config named, the
@@ -932,7 +986,7 @@ func TestFixModeDropsDisallowedTools(t *testing.T) {
 	if contains(fix, disallowedTools) {
 		t.Fatalf("a fix session was still handed the whole disallowed list: %v", fix)
 	}
-	if !contains(fix, "--disallowedTools") || !contains(fix, "NotebookEdit") {
+	if !contains(fix, "--disallowedTools") || !containsSubstring(fix, "NotebookEdit") {
 		t.Fatalf("a fix session may still not edit a notebook: %v", fix)
 	}
 	// Everything else about the command line is unchanged.
