@@ -27,6 +27,15 @@ type prepared struct {
 	bundle     ticket.Bundle
 	promptText string
 
+	// noNotify silences this run's completion notification.
+	noNotify bool
+
+	// service and notePath are what the first register row recorded: the
+	// service the note filed under and the path a human opens. The
+	// notification needs both, and only the note-writing path knows them.
+	service  string
+	notePath string
+
 	// rca runs only: the triage note under review, the copy of it in the
 	// notes directory (may be empty), and the wiki-link stem of that copy.
 	triageNotePath string
@@ -78,7 +87,9 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	if model == "" {
 		model = cfg.Model
 	}
-	p := &prepared{run: rn, kind: kind}
+	// A dry run notifies nobody: it writes a bundle and a prompt, and
+	// "completed" on the channel would claim a triage that never ran.
+	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun}
 	p.state = store.State{
 		RunID:     filepath.Base(rn.Dir),
 		Key:       key,
