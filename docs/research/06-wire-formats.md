@@ -168,3 +168,71 @@ Other useful methods: `thread/resume`, `thread/fork`, `turn/interrupt`, `turn/st
 `account/rateLimits/read`, `mcpServerStatus/list`, `model/list`. Bindings:
 `codex app-server generate-json-schema --out <dir>` writes one JSON Schema per type plus a
 combined `codex_app_server_protocol.v2.schemas.json`.
+
+### Codex MCP servers: which mechanism can restrict a thread (probed 2026-09-11, codex-cli 0.154.0)
+
+Codex reads its MCP servers from `[mcp_servers.<name>]` tables in `config.toml` under
+`CODEX_HOME`. Three mechanisms were probed against the installed CLI to find one that gives a
+thread the workspace's servers *and no others*. Only the third does. No turn was started in any
+of these probes, so none of them spent model quota.
+
+**`-c mcp_servers=...` merges, it does not replace.** With a home whose `config.toml` declares
+`notes`, both an empty override and one naming a different server left `notes` in place:
+
+```
+$ codex app-server -c 'mcp_servers={}'            → mcpServerStatus/list: codex_apps, notes
+$ codex app-server -c 'mcp_servers={swapped=...}' → mcpServerStatus/list: codex_apps, notes, swapped
+```
+
+**`thread/start`'s `config` object merges too.** `ThreadStartParams.config` is an untyped
+`object|null` in the app-server schema, and an `mcp_servers` key in it is added to the home's
+table rather than replacing it. With `notes` in `config.toml`:
+
+```json
+{"jsonrpc":"2.0","id":2,"method":"thread/start","params":{"cwd":"/tmp","sandbox":"read-only","approvalPolicy":"never",
+  "config":{"mcp_servers":{"injected":{"command":"/usr/bin/python3","args":["<fake-mcp>"],"env":{"FAKE_MCP_NAME":"injected"}}}}}}
+{"jsonrpc":"2.0","id":2,"result":{"thread":{"id":"01a08f9f-…","modelProvider":"openai","model":"gpt-5.6-luna", …}}}
+```
+
+then `mcpServerStatus/list` with that `threadId` answers `codex_apps, injected, notes` — the
+injected server is live, the home's server is still there. So the `config` object can add a
+server to a thread but can never take the operator's away.
+
+**A generated `CODEX_HOME` does what is wanted.** A directory holding a `config.toml` that
+declares only the workspace's servers, a copy of the operator's `auth.json`, and symlinks to
+every other entry of their real home:
+
+```json
+{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"clientInfo":{"name":"sirdar","title":"Sirdar","version":"0.1.0-dev"}}}
+{"jsonrpc":"2.0","id":1,"result":{"userAgent":"sirdar/0.154.0 (Mac OS 26.6.2; arm64) …","codexHome":"/private/var/folders/…/sirdar-codex-home-…","platformFamily":"unix","platformOs":"macos"}}
+{"jsonrpc":"2.0","method":"initialized","params":{}}
+{"jsonrpc":"2.0","id":2,"method":"mcpServerStatus/list","params":{}}
+{"jsonrpc":"2.0","id":2,"result":{"data":[
+  {"name":"codex_apps","authStatus":"bearerToken","serverInfo":{"name":"plugin-runtime","version":"0.1.0"},"tools":{"codex_document_control.list_document_sessions":{…}, …},"toolsError":null},
+  {"name":"notes","authStatus":"unsupported","serverInfo":{"name":"notes","version":"1.0.0"},"tools":{"notes_lookup":{…}},"toolsError":null},
+  {"name":"timeteller","authStatus":"unsupported","serverInfo":{"name":"timeteller","version":"1.0.0"},"tools":{"timeteller_lookup":{…}},"toolsError":null}],
+  "nextCursor":null}}
+```
+
+Notes on the shapes and the caveats, all observed rather than assumed:
+
+- `mcpServerStatus/list` answers `{"data":[…],"nextCursor":…}` in 0.154.0, not `{"servers":…}`.
+  Each entry carries `name`, `authStatus`, `runtimeStatus`, `serverInfo`, a `tools` map and
+  `toolsError`; `ListMcpServerStatusParams` also takes `threadId`, `detail`, `limit`, `cursor`.
+- `codex_apps` (`serverInfo.name` `plugin-runtime`) is listed even in a home with an empty
+  `config.toml` and no `plugins` directory. It is built into the CLI; nothing in the config
+  removes it.
+- The login travels in `auth.json` alone: `CODEX_HOME=<scratch> codex login status` says
+  `Logged in using ChatGPT` with the file copied in and `Not logged in` without it. The file
+  carries `auth_mode`, `tokens.{id_token,access_token,refresh_token,account_id}` and
+  `last_refresh` — Codex rewrites it when it refreshes, so the copy must stay writable.
+- A server whose command fails to start is still listed, with its `toolsError`, e.g.
+  `MCP startup failed: handshaking with MCP server failed: connection closed: initialize
+  response`. `RUST_LOG=codex_rmcp_client=trace` puts the child's own stderr in the app-server's
+  (`MCP server stderr (/usr/bin/python3): … No such file or directory`), which is how a bad
+  `command` or `args` in `.mcp.json` is diagnosed.
+- `thread/resume` reads the thread's rollout from `CODEX_HOME/sessions`: resuming an id from a
+  home that never held it fails with `{"code":-32600,"message":"no rollout found for thread id
+  <id>"}`. That is why Sirdar symlinks the real home's state into the generated one instead of
+  leaving it empty. (An empty thread is not written to `sessions` at all, so the probe could
+  not tell a missing rollout from an unwritten one without spending a turn.)

@@ -14,7 +14,9 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -58,11 +60,31 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		binary = defaultBinary
 	}
 
+	// mcp.workspaceOnly reaches this provider as SessionSpec.MCPStrict, the
+	// field Claude Code turns into --strict-mcp-config. Codex has no such
+	// flag: its MCP servers come from config.toml in CODEX_HOME, and both
+	// `-c mcp_servers=...` and thread/start's `config` object merge into
+	// that table rather than replacing it, so neither can subtract the
+	// operator's own servers. A generated home is what can.
+	var home *scratchHome
+	var warnings []string
+	if spec.MCPStrict {
+		h, w, err := newScratchHome(specRoot(spec.Cwd, spec.MCPConfig), sessionEnv(spec))
+		if err != nil {
+			return nil, fmt.Errorf("codex: workspace mcp config: %w", err)
+		}
+		home, warnings = h, w
+	}
+	started := false
+	defer func() {
+		if !started {
+			home.remove()
+		}
+	}()
+
 	cmd := exec.Command(binary, "app-server")
 	cmd.Dir = spec.Cwd
-	if len(spec.Env) > 0 {
-		cmd.Env = spec.Env
-	}
+	cmd.Env = childEnv(spec, home)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -80,6 +102,7 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 	s := &session{
 		cmd:        cmd,
 		spec:       spec,
+		home:       home,
 		events:     make(chan provider.Event),
 		turnDone:   make(chan struct{}),
 		exited:     make(chan struct{}),
@@ -124,11 +147,53 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		close(s.exited)
 	}()
 
+	// The .mcp.json warnings and the resulting server list are reported
+	// before the first turn, so an operator reading the events log can see
+	// which servers the thread was given and which entries were skipped.
+	for _, w := range warnings {
+		s.emit(provider.Event{Kind: provider.EvSystem, Text: "mcp: " + w})
+	}
+	if home != nil {
+		s.emit(provider.Event{Kind: provider.EvSystem, Text: "mcp.workspaceOnly: " + serverSummary(home.servers)})
+	}
+
 	if err := s.handshake(ctx); err != nil {
 		s.abort()
 		return nil, err
 	}
+	started = true
 	return s, nil
+}
+
+// sessionEnv is the environment the session is configured from: the
+// runner's, or this process's when the caller passed none.
+func sessionEnv(spec provider.SessionSpec) []string {
+	if len(spec.Env) > 0 {
+		return spec.Env
+	}
+	return os.Environ()
+}
+
+// childEnv is the environment the app-server is started with. Without a
+// generated home it is the caller's, unchanged — nil means the child
+// inherits this process's environment, which is what a spec with no Env
+// asks for.
+func childEnv(spec provider.SessionSpec, home *scratchHome) []string {
+	if home == nil {
+		if len(spec.Env) == 0 {
+			return nil
+		}
+		return spec.Env
+	}
+	return home.apply(sessionEnv(spec))
+}
+
+// serverSummary names the MCP servers a workspace-only thread will see.
+func serverSummary(names []string) string {
+	if len(names) == 0 {
+		return "no workspace .mcp.json servers, so the thread has no MCP tools"
+	}
+	return "the thread sees " + strings.Join(names, ", ") + " and no other MCP server"
 }
 
 // handshake runs initialize → initialized → thread/start|thread/resume →
@@ -231,6 +296,11 @@ type session struct {
 	spec provider.SessionSpec
 	conn *conn
 	tail stderrTail
+	// home is the generated CODEX_HOME this session runs against, nil
+	// when mcp.workspaceOnly is off. It is removed once the process has
+	// exited, not before: the app-server reads it for the life of the
+	// session.
+	home *scratchHome
 
 	events chan provider.Event
 	queue  eventQueue
@@ -327,6 +397,17 @@ func (s *session) Cancel() {
 	s.mu.Unlock()
 	_ = s.conn.notify("turn/interrupt", map[string]any{"threadId": threadID, "turnId": turnID})
 	_ = s.conn.closeWrite()
+	// Cancel does not reap the process, so the generated home is removed
+	// on a bounded wait for it to go. A Cancel that is followed by Wait —
+	// what the runner does — removes it there instead; whichever gets
+	// there first wins, and the other is a no-op.
+	if s.home != nil {
+		go func() {
+			if waitFor(s.exited, shutdownGrace) {
+				s.home.remove()
+			}
+		}()
+	}
 }
 
 // Wait blocks until the current turn ends, shuts the app-server down and
@@ -361,6 +442,7 @@ func (s *session) wait() (provider.Result, error) {
 	_ = s.conn.notify("thread/unsubscribe", map[string]any{"threadId": threadID})
 
 	s.shutdown()
+	defer s.home.remove()
 
 	s.mu.Lock()
 	res := provider.Result{Handle: s.threadID, ExitErr: s.exitErr, StderrTail: s.tail.lines()}
@@ -855,12 +937,37 @@ func loginCheck(ctx context.Context, binary string) provider.Check {
 	return provider.Check{Name: "codex login", Detail: detail}
 }
 
-// mcpCheck starts the app-server, initializes it and lists the MCP servers it
-// is configured with.
+// mcpCheck starts the app-server, initializes it and lists the MCP servers a
+// thread would see under the mcp.workspaceOnly setting in force: against the
+// generated home when it is on, and against the operator's own Codex config
+// when it is off.
+//
+// Provider.Doctor is handed a binary and nothing else, so neither the
+// workspace nor the setting arrives the way it does in a SessionSpec: the
+// workspace is the .sirdar directory found from the working directory, and
+// the setting comes from SIRDAR_MCP_WORKSPACE_ONLY, defaulting — as the
+// config does — to on.
 func mcpCheck(ctx context.Context, binary string) provider.Check {
 	const name = "codex mcp servers"
 
+	var home *scratchHome
+	prefix := "mcp.workspaceOnly off, the operator's own servers: "
+	if workspaceOnly(os.Environ()) {
+		root := doctorRoot(workingDir())
+		if root == "" {
+			root = workingDir()
+		}
+		h, _, err := newScratchHome(root, os.Environ())
+		if err != nil {
+			return provider.Check{Name: name, Detail: err.Error()}
+		}
+		defer h.remove()
+		home = h
+		prefix = "mcp.workspaceOnly on, from " + filepath.Join(root, ".mcp.json") + ": "
+	}
+
 	cmd := exec.Command(binary, "app-server")
+	cmd.Env = childEnv(provider.SessionSpec{}, home)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return provider.Check{Name: name, Detail: err.Error()}
@@ -912,28 +1019,54 @@ func mcpCheck(ctx context.Context, binary string) provider.Check {
 	}
 	names := mcpServerNames(raw)
 	if len(names) == 0 {
-		return provider.Check{Name: name, OK: true, Detail: "none"}
+		return provider.Check{Name: name, OK: true, Detail: prefix + "none"}
 	}
-	return provider.Check{Name: name, OK: true, Detail: strings.Join(names, ", ")}
+	return provider.Check{Name: name, OK: true, Detail: prefix + strings.Join(names, ", ")}
 }
 
-// mcpServerNames reads server names out of a mcpServerStatus/list result,
-// which is either {"servers":[{"name":...}]} or a name-keyed object.
+// workingDir is the directory Doctor was run from, "" when it cannot be
+// determined (a deleted cwd), in which case no workspace is found and the
+// check reports on a home with no servers.
+func workingDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return dir
+}
+
+// mcpServerNames reads server names out of a mcpServerStatus/list result.
+// codex-cli 0.154.0 answers {"data":[{"name":...}],"nextCursor":null}; the
+// older {"servers":[...]} shape and a name-keyed object are still read, so
+// the row does not go blank against a different build.
+//
+// codex_apps, Codex's own plugin runtime, is listed whatever the config
+// says — it is part of the CLI, not a configured server — so it is
+// reported as it comes rather than filtered out.
 func mcpServerNames(raw json.RawMessage) []string {
 	var listed struct {
+		Data []struct {
+			Name string `json:"name"`
+		} `json:"data"`
 		Servers []struct {
 			Name string `json:"name"`
 		} `json:"servers"`
 	}
-	if err := json.Unmarshal(raw, &listed); err == nil && len(listed.Servers) > 0 {
-		names := make([]string, 0, len(listed.Servers))
-		for _, srv := range listed.Servers {
-			if srv.Name != "" {
-				names = append(names, srv.Name)
-			}
+	if err := json.Unmarshal(raw, &listed); err == nil {
+		entries := listed.Data
+		if len(entries) == 0 {
+			entries = listed.Servers
 		}
-		sort.Strings(names)
-		return names
+		if len(entries) > 0 {
+			names := make([]string, 0, len(entries))
+			for _, srv := range entries {
+				if srv.Name != "" {
+					names = append(names, srv.Name)
+				}
+			}
+			sort.Strings(names)
+			return names
+		}
 	}
 
 	var keyed map[string]json.RawMessage
@@ -941,6 +1074,9 @@ func mcpServerNames(raw json.RawMessage) []string {
 		return nil
 	}
 	if _, ok := keyed["servers"]; ok {
+		return nil
+	}
+	if _, ok := keyed["data"]; ok {
 		return nil
 	}
 	names := make([]string, 0, len(keyed))

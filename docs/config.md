@@ -57,7 +57,7 @@ rather than being silently ignored.
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns the agent's `Bash` tool calls must match to be allowed; see Bash permission globs below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name; see MCP access below |
-| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded |
+| `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
@@ -320,12 +320,41 @@ that catches the obvious ways out.
 Two settings, and they do different jobs. `mcp.workspaceOnly` decides which servers the
 session can see at all; `permissions.mcp` decides which of their tools it may call.
 
+The setting applies to `provider: claude` and `provider: codex`. Each CLI takes a different
+route to the same place.
+
 With `mcp.workspaceOnly: true` (the default) and a `.mcp.json` in the workspace root, Sirdar
 starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mcp.json`, so
 the session loads those servers and no others.
 
+Codex has no such flag. Its MCP servers come from `[mcp_servers.<name>]` tables in the
+`config.toml` inside `CODEX_HOME`, and neither override mechanism can subtract one:
+`codex app-server -c mcp_servers=...` and `thread/start`'s `config` object both merge into the
+configured table rather than replacing it (verified against codex-cli 0.154.0; the responses
+are in `docs/research/06-wire-formats.md`). So Sirdar generates a `CODEX_HOME` per session
+instead:
+
+- `config.toml` is the operator's own file with every `mcp_servers` declaration stripped out,
+  followed by one `[mcp_servers.<name>]` table per stdio server in the workspace's
+  `.mcp.json`. Model, reasoning effort, project trust and everything else they set carries
+  over verbatim, so a workspace-only run differs in its MCP servers and nothing else.
+- `${VAR}` and `$VAR` in a server's `args` and `env` are expanded from Sirdar's own
+  environment as the file is written, the same expansion `provider: openai` does.
+- `auth.json` is **copied** in, so the session bills against the operator's login and a token
+  refresh inside a triage run cannot damage the file their own `codex` sessions read.
+- every other entry of their real `CODEX_HOME` — `sessions`, `history.jsonl`, the state
+  databases, `skills`, `plugins`, caches — is symlinked, so a thread started here is still on
+  disk for the resume a schema retry needs.
+- the directory is removed once the session's process has exited. Set
+  `SIRDAR_KEEP_CODEX_HOME=1` to keep it and read the generated `config.toml`.
+
+One server is in every Codex thread whatever the configuration says: `codex_apps`, the CLI's
+own plugin runtime. It is part of Codex, like its shell tool, rather than something the
+operator configured, and `permissions.mcp` judges its tools by name like any other.
+
 With `mcp.workspaceOnly: true` and no such file, Sirdar passes
-`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` — strict against an empty config — so
+`--strict-mcp-config --mcp-config '{"mcpServers":{}}'` to Claude — strict against an empty
+config — and generates a Codex home whose `config.toml` declares no servers, so
 the session has **no MCP tools at all**. That is the safe reading of the setting, and it is a
 change from earlier versions, which passed neither flag and let the session inherit every
 user-level server the operator had (one dogfood run saw 102 tools from six of them, including
@@ -334,8 +363,9 @@ agent to query Grafana or a database will now get nothing back until those serve
 into `<workspace>/.mcp.json`; `sirdar doctor`'s `mcp` row says which of the three states the
 workspace is in.
 
-With `mcp.workspaceOnly: false`, neither flag is passed and the session inherits the
-operator's own MCP servers. `permissions.mcp` still decides which of their tools it may call.
+With `mcp.workspaceOnly: false`, neither flag is passed and no Codex home is generated: the
+session inherits the operator's own MCP servers, from `~/.claude.json` or `~/.codex/config.toml`
+as the case may be. `permissions.mcp` still decides which of their tools it may call.
 
 `provider: openai` is not affected by the setting, because it never had the wider reach to
 give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is the only file

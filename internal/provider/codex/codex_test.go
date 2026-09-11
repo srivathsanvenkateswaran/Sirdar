@@ -16,12 +16,17 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
-// TestMain doubles as the fake Codex app-server: when SIRDAR_FAKE_CODEX names
-// a script, the test binary replays that script over stdio instead of running
-// tests. The provider spawns `<binary> app-server`, so the fake ignores argv.
+// TestMain doubles as two fakes: with SIRDAR_FAKE_CODEX naming a script the
+// test binary replays it over stdio as the Codex app-server, and with
+// SIRDAR_FAKE_MCP naming a server it answers the MCP handshake as a stdio
+// MCP server, which is what the live smoke test points Codex at. The
+// provider spawns `<binary> app-server`, so both fakes ignore argv.
 func TestMain(m *testing.M) {
 	if script := os.Getenv("SIRDAR_FAKE_CODEX"); script != "" {
 		os.Exit(fakeServer(script))
+	}
+	if name := os.Getenv("SIRDAR_FAKE_MCP"); name != "" {
+		os.Exit(fakeMCPServer(name))
 	}
 	os.Exit(m.Run())
 }
@@ -55,6 +60,11 @@ func fakeServer(scriptPath string) int {
 		fmt.Fprintln(os.Stderr, "fake codex:", err)
 		return 2
 	}
+
+	// The child's environment is only observable through stderr, which the
+	// session keeps as its tail, so the home it was started against is
+	// reported the same way stdin is echoed.
+	fmt.Fprintf(os.Stderr, "ENV: CODEX_HOME=%s\n", os.Getenv("CODEX_HOME"))
 
 	in := make(chan inbound, 64)
 	go func() {
