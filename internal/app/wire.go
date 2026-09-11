@@ -21,6 +21,9 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/jira"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
@@ -365,7 +368,7 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
-	case "zendesk", "freshdesk":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
 		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
@@ -373,9 +376,13 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 }
 
 // newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
-// a plain credential ref — zendesk and freshdesk — resolving it on the way
-// in. zohodesk is built separately (ZohoTokenSource) because of its
-// refresh-token grant option.
+// plain credential refs — zendesk, freshdesk, helpscout, intercom and
+// hubspot — resolving them on the way in. zohodesk is built separately
+// (ZohoTokenSource) because of its refresh-token grant option.
+//
+// helpscout is the one that keeps refreshing after this point: it is
+// handed a client id and secret rather than a token, and mints its own
+// access tokens for as long as the client lives.
 //
 // Resolved secrets stay in the returned client: they are never written to a
 // run directory and never reach the agent's environment.
@@ -412,6 +419,46 @@ func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.
 			Domain: sc.Domain,
 			APIKey: apiKey,
 		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "helpscout":
+		clientID, err := resolveRef(creds, "clientId", sc.ClientID)
+		if err != nil {
+			return nil, err
+		}
+		clientSecret, err := resolveRef(creds, "clientSecret", sc.ClientSecret)
+		if err != nil {
+			return nil, err
+		}
+		c, err := helpscout.New(helpscout.Config{
+			ClientID:     clientID,
+			ClientSecret: clientSecret,
+		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "intercom":
+		accessToken, err := resolveRef(creds, "accessToken", sc.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		c, err := intercom.New(intercom.Config{AccessToken: accessToken}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "hubspot":
+		accessToken, err := resolveRef(creds, "accessToken", sc.AccessToken)
+		if err != nil {
+			return nil, err
+		}
+		c, err := hubspot.New(hubspot.Config{AccessToken: accessToken}, hc)
 		if err != nil {
 			return nil, err
 		}

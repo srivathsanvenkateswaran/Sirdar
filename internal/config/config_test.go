@@ -491,6 +491,9 @@ func TestBuiltinHelpdeskUnderTrackerIsRejected(t *testing.T) {
 		"    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n",
 		"    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n",
 		"    adapter: zohodesk\n    orgId: \"1\"\n    baseUrl: https://desk.zoho.com\n    token: env:ZOHO\n",
+		"    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n",
+		"    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n",
+		"    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n",
 	} {
 		_, err := Load(writeCfg(t, trackerCfg(block)))
 		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk") {
@@ -509,6 +512,9 @@ func TestAuthIsRejectedOnNonZohoAdapters(t *testing.T) {
 		"jira":      trackerCfg("    adapter: jira\n    baseUrl: https://acme.atlassian.net\n    pat: env:JIRA_PAT\n" + auth),
 		"linear":    trackerCfg("    adapter: linear\n    apiKey: env:LINEAR_KEY\n" + auth),
 		"zendesk":   helpdeskCfg("    adapter: zendesk\n    subdomain: acme\n    oauthToken: env:ZENDESK_OAUTH\n" + auth),
+		"helpscout": helpdeskCfg("    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n" + auth),
+		"intercom":  helpdeskCfg("    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n" + auth),
+		"hubspot":   helpdeskCfg("    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n" + auth),
 		"freshdesk": helpdeskCfg("    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n" + auth),
 		"exec":      helpdeskCfg("    adapter: exec\n    command: ./tickets.sh\n" + auth),
 	} {
@@ -648,6 +654,78 @@ func TestValidateFreshdeskCredentialRefIsNotALiteral(t *testing.T) {
 	}
 }
 
+// --- Help Scout, Intercom, HubSpot ---
+
+// TestValidateFixedHostHelpdesks covers the three adapters that talk to one
+// fixed vendor host and so have nothing to configure but their credentials:
+// what each cannot work without, and that a missing one is named.
+func TestValidateFixedHostHelpdesks(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "helpscout valid",
+			block: "    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n",
+		},
+		{
+			name:  "helpscout missing clientId",
+			block: "    adapter: helpscout\n    clientSecret: env:HS_SECRET\n",
+			want:  "sources.helpdesk.clientId",
+		},
+		{
+			name:  "helpscout missing clientSecret",
+			block: "    adapter: helpscout\n    clientId: env:HS_ID\n",
+			want:  "sources.helpdesk.clientSecret",
+		},
+		{
+			name:  "intercom valid",
+			block: "    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n",
+		},
+		{
+			name:  "intercom missing accessToken",
+			block: "    adapter: intercom\n",
+			want:  "sources.helpdesk.accessToken",
+		},
+		{
+			name:  "hubspot valid",
+			block: "    adapter: hubspot\n    accessToken: keychain:hubspot-token\n",
+		},
+		{
+			name:  "hubspot missing accessToken",
+			block: "    adapter: hubspot\n",
+			want:  "sources.helpdesk.accessToken",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestValidateFixedHostHelpdeskCredentialRefsAreNotLiterals(t *testing.T) {
+	for key, block := range map[string]string{
+		"clientId":     "    adapter: helpscout\n    clientId: shhh\n    clientSecret: env:HS_SECRET\n",
+		"clientSecret": "    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: shhh\n",
+		"accessToken":  "    adapter: intercom\n    accessToken: shhh\n",
+	} {
+		_, err := Load(writeCfg(t, helpdeskCfg(block)))
+		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk."+key) {
+			t.Errorf("%s: want an error naming the key, got %v", key, err)
+		}
+	}
+}
+
 // --- helpdeskRef fallback ---
 
 func TestValidateHelpdeskRef(t *testing.T) {
@@ -733,6 +811,7 @@ func TestDefaultConfigYAMLLoads(t *testing.T) {
 	for _, want := range []string{
 		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
 		"# adapter: zendesk", "# adapter: freshdesk",
+		"# adapter: helpscout", "# adapter: intercom", "# adapter: hubspot",
 		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
 	} {
 		if !strings.Contains(DefaultConfigYAML, want) {

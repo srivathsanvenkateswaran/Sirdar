@@ -1,0 +1,95 @@
+{
+  "type": "conversation",
+  "id": "1001",
+  "created_at": 1788000000,
+  "updated_at": 1788003600,
+  "state": "open",
+  "open": true,
+  "read": true,
+  "priority": "priority",
+  "title": "",
+  "source": {
+    "type": "conversation",
+    "id": "9001",
+    "delivered_as": "customer_initiated",
+    "subject": "",
+    "body": "<p>Payments are failing on <b>checkout</b>.</p>",
+    "author": {"type": "user", "id": "c-1", "name": "Ada Lovelace", "email": "ada@example.com"},
+    "attachments": [
+      {
+        "type": "upload",
+        "name": "trace.log",
+        "url": "https://acme.intercom-attachments-7.com/i/o/trace.log",
+        "content_type": "text/plain",
+        "filesize": 11
+      }
+    ]
+  },
+  "contacts": {"type": "contact.list", "contacts": [{"type": "contact", "id": "c-1"}]},
+  "conversation_parts": {
+    "type": "conversation_part.list",
+    "conversation_parts": [
+      {
+        "type": "conversation_part",
+        "id": "p-1",
+        "part_type": "comment",
+        "body": "<p>Looking into it now.</p>",
+        "created_at": 1788001000,
+        "author": {"type": "admin", "id": "a-1", "name": "Grace Hopper"},
+        "attachments": []
+      },
+      {
+        "type": "conversation_part",
+        "id": "p-2",
+        "part_type": "note",
+        "body": "<p>Card processor is rate limiting us.</p>",
+        "created_at": 1788001500,
+        "author": {"type": "admin", "id": "a-1", "name": "Grace Hopper"},
+        "attachments": []
+      },
+      {
+        "type": "conversation_part",
+        "id": "p-3",
+        "part_type": "comment",
+        "body": "<p>Auto-reply: someone will be with you shortly.</p>",
+        "created_at": 1788001700,
+        "author": {"type": "bot", "id": "b-1", "name": "Operator"},
+        "attachments": []
+      },
+      {
+        "type": "conversation_part",
+        "id": "p-4",
+        "part_type": "assignment",
+        "body": null,
+        "created_at": 1788001800,
+        "author": {"type": "admin", "id": "a-1", "name": "Grace Hopper"},
+        "attachments": []
+      },
+      {
+        "type": "conversation_part",
+        "id": "p-5",
+        "part_type": "comment",
+        "body": "<p>Here is the screenshot.</p>",
+        "created_at": 1788002000,
+        "author": {"type": "user", "id": "c-1", "name": "Ada Lovelace"},
+        "attachments": [
+          {
+            "type": "upload",
+            "name": "../../shot.png",
+            "url": "https://acme.intercomcdn.com/i/o/shot.png",
+            "content_type": "image/png",
+            "filesize": 11
+          },
+          {
+            "type": "upload",
+            "name": "offsite.png",
+            "url": "https://files.evil.example/steal",
+            "content_type": "image/png",
+            "filesize": 11
+          }
+        ]
+      }
+    ],
+    "total_count": 6
+  }
+}

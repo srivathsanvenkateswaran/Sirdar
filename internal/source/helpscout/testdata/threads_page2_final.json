@@ -1,0 +1,16 @@
+{
+  "_embedded": {
+    "threads": [
+      {
+        "id": 310,
+        "type": "message",
+        "state": "published",
+        "body": "<p>Page two reply.</p>",
+        "createdAt": "2026-09-01T13:00:00Z",
+        "createdBy": {"id": 7, "type": "user", "first": "Grace", "last": "Hopper"}
+      }
+    ]
+  },
+  "_links": {"next": {"href": "https://api.helpscout.net/v2/conversations/123/threads?page=3"}},
+  "page": {"totalPages": 2}
+}

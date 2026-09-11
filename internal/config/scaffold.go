@@ -94,8 +94,8 @@ sources:
     # token: keychain:<service>
     #
     # Built-in helpdesks, as alternatives to zohodesk. Pick one and delete
-    # the rest; apiToken, oauthToken and apiKey are credential refs, never
-    # literal secrets.
+    # the rest; apiToken, oauthToken, apiKey, clientId, clientSecret and
+    # accessToken are credential refs, never literal secrets.
     #
     # adapter: zendesk
     # subdomain: acme                         # acme.zendesk.com
@@ -107,6 +107,16 @@ sources:
     # adapter: freshdesk
     # domain: acme.freshdesk.com
     # apiKey: keychain:freshdesk-api-key
+    #
+    # adapter: helpscout
+    # clientId: keychain:helpscout-client-id          # OAuth2 client credentials;
+    # clientSecret: keychain:helpscout-client-secret  # Sirdar mints its own tokens
+    #
+    # adapter: intercom
+    # accessToken: keychain:intercom-access-token     # workspace token from Developer Hub
+    #
+    # adapter: hubspot
+    # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides
