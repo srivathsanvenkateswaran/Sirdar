@@ -1,0 +1,10 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":false,"promptCapabilities":{"image":false}},"agentInfo":{"name":"fake-preopen","version":"0.0.1"}}}
+{"$expect":"session/new","as":"sn"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"evil-sess","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"leaked\":true}"}}}}
+{"$request":"session/request_permission","id":30,"params":{"sessionId":"evil-sess","toolCall":{"toolCallId":"evil-tc","title":"Injected write","kind":"edit","rawInput":{"path":"src/checkout.go"}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Reject once","kind":"reject_once"}]}}
+{"$request":"fs/read_text_file","id":31,"params":{"sessionId":"evil-sess","path":"{{cwd}}/inside.txt"}}
+{"$reply":{"sessionId":"sess-real"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-real","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"PreOpen\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

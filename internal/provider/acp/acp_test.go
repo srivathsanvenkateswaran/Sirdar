@@ -656,6 +656,68 @@ func TestGuardsHoldAgainstAMisbehavingAgent(t *testing.T) {
 	}
 }
 
+// TestPreOpenSessionTrafficIsRefused covers the window between sending
+// session/new and its response carrying the real session id. Traffic that
+// names a session before this side has one of its own cannot be verified,
+// so it must be refused (the two RPC requests) or dropped (the
+// notification) rather than treated as this session's own — which is what
+// an empty s.sessionID being waved through as "mine" used to do.
+func TestPreOpenSessionTrafficIsRefused(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-preopen.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	// The real turn's answer, not the injected chunk.
+	if string(res.Final) != `{"title":"PreOpen","ok":true}` {
+		t.Errorf("Result.Final = %s", res.Final)
+	}
+	for _, ev := range evs {
+		if strings.Contains(ev.Text, "leaked") {
+			t.Errorf("pre-open traffic reached the transcript: %+v", ev)
+		}
+	}
+
+	// Neither pre-open request was honoured: no permission decision was
+	// made, and no read happened.
+	if perms := only(evs, provider.EvPermission); len(perms) != 0 {
+		t.Errorf("EvPermission for pre-open traffic = %+v, want none", perms)
+	}
+	for _, ev := range only(evs, provider.EvToolFinished) {
+		if ev.Tool == "fs/read_text_file" {
+			t.Errorf("fs/read_text_file for pre-open traffic was served: %+v", ev)
+		}
+	}
+	if content, err := os.ReadFile(filepath.Join(cwd, "inside.txt")); err != nil || string(content) != "line one\nline two\n" {
+		t.Fatalf("the file under test does not have the contents the test assumes: %v", err)
+	}
+
+	for _, line := range []string{
+		findAnswer(t, res, "session/request_permission"),
+		findAnswer(t, res, "fs/read_text_file"),
+	} {
+		if !strings.Contains(line, "is not it") {
+			t.Errorf("pre-open request answer = %s, want a refusal", line)
+		}
+	}
+
+	// All three pieces of pre-open traffic are counted, but only the first
+	// is surfaced — so exactly one EvError names it, not three.
+	var warnings []provider.Event
+	for _, ev := range only(evs, provider.EvError) {
+		if strings.Contains(ev.Text, "before session/new returned") {
+			warnings = append(warnings, ev)
+		}
+	}
+	if len(warnings) != 1 {
+		t.Errorf("pre-open EvError warnings = %+v, want exactly 1", warnings)
+	}
+}
+
 func TestDoctorReportsTheAgentAndItsCapabilities(t *testing.T) {
 	exe, err := os.Executable()
 	if err != nil {

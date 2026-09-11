@@ -427,6 +427,11 @@ type session struct {
 	}
 	calls map[string]*trackedCall // toolCallId → what is known of it
 
+	// preOpenDropped counts session-scoped traffic that arrived before
+	// session/new (or session/load) gave this side a session id to check
+	// ownership against. See owns and preOpenTraffic.
+	preOpenDropped int
+
 	turnDone   chan struct{}
 	turnClosed bool
 	turnErr    error
@@ -1206,6 +1211,14 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		return
 	}
 	if !s.owns(payload.SessionID) {
+		if !s.sessionKnown() {
+			// Arrived before session/new returned: this side has no
+			// session id yet to check the notification against, so
+			// nothing about it can be trusted as belonging to the run
+			// that was asked for.
+			s.preOpenTraffic("session/update", raw)
+			return
+		}
 		// A nested subagent session's traffic, which belongs to a turn
 		// this run did not ask for and must not be folded into its
 		// transcript — least of all its agent_message_chunks, which are
@@ -1316,16 +1329,54 @@ func (s *session) onUsage(u sessionUpdate, raw json.RawMessage) {
 
 // owns reports whether a session-scoped message belongs to this session.
 // An empty id on the wire is taken as this session's, since an agent that
-// omits the field has only one; an empty id on this side means the session
-// is still being opened and nothing else can have arrived yet.
+// omits the field has only one — but only once this side has a session id
+// of its own to check against. Before that (between sending session/new and
+// its response carrying the id) nothing legitimate is session-scoped yet:
+// session/load is the one case that starts sooner, and it records the id
+// before making the call, so it is unaffected. An empty s.sessionID here
+// therefore means every session-scoped message is refused or dropped, not
+// waved through.
 func (s *session) owns(sessionID string) bool {
-	if sessionID == "" {
-		return true
-	}
 	s.mu.Lock()
 	mine := s.sessionID
 	s.mu.Unlock()
-	return mine == "" || mine == sessionID
+	if mine == "" {
+		return false
+	}
+	return sessionID == "" || mine == sessionID
+}
+
+// sessionKnown reports whether this side has recorded a session id yet.
+// Used alongside owns to tell "not open yet" apart from "belongs to some
+// other session" when deciding whether to count and warn about dropped
+// traffic.
+func (s *session) sessionKnown() bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.sessionID != ""
+}
+
+// preOpenTraffic records session-scoped agent traffic that arrived before
+// this side had a session id to check ownership against — traffic that, in
+// ACP, has no legitimate source, since nothing session-scoped is supposed
+// to arrive before session/new returns. The first occurrence is surfaced as
+// an EvError so it is visible in events.jsonl; later ones are only counted,
+// so a chatty or misbehaving agent cannot flood the log.
+func (s *session) preOpenTraffic(method string, raw json.RawMessage) {
+	s.mu.Lock()
+	s.preOpenDropped++
+	first := s.preOpenDropped == 1
+	s.mu.Unlock()
+	if !first {
+		return
+	}
+	s.emit(provider.Event{
+		Kind: provider.EvError,
+		Text: "acp: the agent sent " + method + " before session/new returned; " +
+			"session-scoped traffic cannot be verified until this side has a session id, " +
+			"so it is refused or dropped",
+		Raw: raw,
+	})
 }
 
 // track records what is known about a tool call and returns the merged
@@ -1488,6 +1539,9 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 	}
 
 	if !s.owns(req.SessionID) {
+		if !s.sessionKnown() {
+			s.preOpenTraffic("session/request_permission", raw)
+		}
 		s.refuseSession(id, "session/request_permission", req.SessionID, raw)
 		return
 	}
@@ -1614,6 +1668,9 @@ func (s *session) onReadTextFile(id json.RawMessage, params, raw json.RawMessage
 		return
 	}
 	if !s.owns(req.SessionID) {
+		if !s.sessionKnown() {
+			s.preOpenTraffic("fs/read_text_file", raw)
+		}
 		s.refuseSession(id, "fs/read_text_file", req.SessionID, raw)
 		return
 	}
