@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -186,7 +187,14 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}
 
 	if cfg.MCPWorkspaceOnly {
-		servers, warnings, err := mcpclient.LoadWorkspaceServers(spec.Cwd)
+		// The session's own environment, not this process's: internal/run
+		// strips the workspace's credentials out of it, and a ${VAR} in
+		// .mcp.json must not be able to read one back.
+		env := spec.Env
+		if len(env) == 0 {
+			env = os.Environ()
+		}
+		servers, warnings, err := mcpclient.LoadWorkspaceServersEnv(spec.Cwd, env)
 		if err != nil {
 			// A workspace that configured MCP servers and cannot be read
 			// still gets its run: the local tools are enough for most
