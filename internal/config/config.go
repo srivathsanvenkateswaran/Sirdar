@@ -84,7 +84,8 @@ type HelpdeskRefConfig struct {
 // carry an unattended run, and auth: is the shape that can.
 //
 // ClientID, ClientSecret and RefreshToken are credential references
-// ("env:NAME" or "keychain:SERVICE"), never literal secrets.
+// ("env:NAME", "keychain:SERVICE", "file:PATH" or "cmd:COMMAND"), never
+// literal secrets.
 type OAuthConfig struct {
 	ClientID     string `yaml:"clientId"`
 	ClientSecret string `yaml:"clientSecret"`
@@ -120,9 +121,9 @@ func AccountsURLFor(baseURL string) string {
 // BaseURL and Model are required; everything else has a default or is
 // optional.
 //
-// APIKey is a credential reference ("env:NAME" or "keychain:SERVICE"),
-// never the key itself, and it is optional: a local llama.cpp or Ollama
-// server needs none.
+// APIKey is a credential reference ("env:NAME", "keychain:SERVICE",
+// "file:PATH" or "cmd:COMMAND"), never the key itself, and it is optional:
+// a local llama.cpp or Ollama server needs none.
 type OpenAIConfig struct {
 	BaseURL          string            `yaml:"baseUrl"`
 	APIKey           string            `yaml:"apiKey,omitempty"`
@@ -157,7 +158,42 @@ const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 // it, so it is named in a warning instead.
 const DefaultAttachmentMaxBytes = 10 << 20
 
+// LanguageConfig names the two languages a run writes in.
+//
+// Notes is the language of the engineer's note — the whole body of it,
+// including the translated complaint. Customer is the language of anything
+// the customer will read: the reply draft on a triage note, the customer
+// summary on an RCA. "auto" means the language of the ticket's first
+// customer message, which is what a helpdesk that serves one country
+// mostly wants; a fixed code ("ar", "en", "fr") pins it instead.
+//
+// RTLMarkup wraps a right-to-left paragraph the default templates emit in
+// a <div dir="rtl"> block. Obsidian renders that HTML, so an Arabic
+// complaint reads the way the customer wrote it instead of being laid out
+// left to right. It applies only to the embedded templates: a workspace
+// with its own notes.templates owns its markup, and Sirdar does not add
+// any to it.
+type LanguageConfig struct {
+	Notes     string `yaml:"notes"`
+	Customer  string `yaml:"customer"`
+	RTLMarkup *bool  `yaml:"rtlMarkup"`
+}
+
+// DefaultNotesLanguage is the language an engineer's note is written in
+// when the workspace names none.
+const DefaultNotesLanguage = "en"
+
+// CustomerLanguageAuto is the customer: value meaning "whatever language
+// the ticket's first customer message is in".
+const CustomerLanguageAuto = "auto"
+
+// languageCode matches a BCP 47-shaped tag loose enough for the codes a
+// helpdesk deals in ("ar", "en", "ar-SA", "zh-Hant") and strict enough to
+// reject a sentence typed into the field.
+var languageCode = regexp.MustCompile(`^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$`)
+
 // Config is a fully loaded, defaulted, and validated workspace configuration.
+
 type Config struct {
 	Workspace string   `yaml:"workspace"`
 	Provider  Provider `yaml:"provider"`
@@ -181,7 +217,13 @@ type Config struct {
 		MaxMinutes int     `yaml:"maxMinutes"`
 		MaxUSD     float64 `yaml:"maxUsd"`
 	} `yaml:"budget"`
-	Concurrency int `yaml:"concurrency"`
+	// Language says which language the engineer's note is written in and
+	// which language anything shown to a customer is written in. They are
+	// rarely the same: the workspace this was built for reads Arabic
+	// tickets, keeps its notes in English, and replies to the customer in
+	// Arabic again.
+	Language    LanguageConfig `yaml:"language"`
+	Concurrency int            `yaml:"concurrency"`
 	Permissions struct {
 		Bash []string `yaml:"bash"`
 		// MCP is a list of glob patterns matched against a tool's full
@@ -279,6 +321,17 @@ func applyDefaults(c *Config) {
 	if c.Playbooks == "" {
 		c.Playbooks = ".sirdar/playbooks"
 	}
+	if c.Language.Notes == "" {
+		c.Language.Notes = DefaultNotesLanguage
+	}
+	if c.Language.Customer == "" {
+		c.Language.Customer = CustomerLanguageAuto
+	}
+	if c.Language.RTLMarkup == nil {
+		yes := true
+		c.Language.RTLMarkup = &yes
+	}
+
 	if c.OpenAI != nil && c.OpenAI.MaxContextTokens == 0 {
 		c.OpenAI.MaxContextTokens = DefaultMaxContextTokens
 	}
@@ -336,6 +389,10 @@ func (c *Config) Validate() error {
 	if c.Concurrency < 1 {
 		return fmt.Errorf("config: concurrency: must be >= 1, got %d", c.Concurrency)
 	}
+	if err := validateLanguage(&c.Language); err != nil {
+		return err
+	}
+
 	if c.Budget.MaxTurns <= 0 {
 		return fmt.Errorf("config: budget.maxTurns: must be > 0, got %d", c.Budget.MaxTurns)
 	}
@@ -357,7 +414,22 @@ func (c *Config) Validate() error {
 	return nil
 }
 
+// validateLanguage checks the language block. notes: has to be a language
+// code — there is no "auto" for it, since the engineer's note is written
+// for one team and that team reads one language. customer: is a code or
+// "auto".
+func validateLanguage(l *LanguageConfig) error {
+	if !languageCode.MatchString(l.Notes) {
+		return fmt.Errorf("config: language.notes: must be a language code such as en or ar, got %q", l.Notes)
+	}
+	if l.Customer != CustomerLanguageAuto && !languageCode.MatchString(l.Customer) {
+		return fmt.Errorf("config: language.customer: must be auto or a language code such as ar, got %q", l.Customer)
+	}
+	return nil
+}
+
 // validateOpenAI checks the openai block. baseUrl and model are required
+
 // only when the workspace actually selects the provider — an openai block
 // left in place while running on claude is not an error — but the fields
 // that are set are checked either way, so a bad value is caught at load
@@ -590,11 +662,12 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 }
 
 // credentialRef rejects a value that carries a secret instead of naming one.
+// The set of schemes lives in creds.go, with the resolver that reads them.
 func credentialRef(key, ref string) error {
-	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
+	if IsCredentialRef(ref) {
 		return nil
 	}
-	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
+	return fmt.Errorf("config: %s: must start with %s, got %q", key, credSchemeList, ref)
 }
 
 // WorkspaceOnlyMCP reports whether an agent session should see only the
@@ -604,7 +677,34 @@ func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
 }
 
+// RTLMarkup reports whether the embedded note templates should wrap a
+// right-to-left paragraph in a <div dir="rtl"> block. It is the default,
+// and a Config built by hand (in a test, say) reads as the default rather
+// than as "off".
+func (c *Config) RTLMarkup() bool {
+	return c.Language.RTLMarkup == nil || *c.Language.RTLMarkup
+}
+
+// NotesLanguage is the language the engineer's note is written in, or the
+// default when the workspace named none.
+func (c *Config) NotesLanguage() string {
+	if c.Language.Notes == "" {
+		return DefaultNotesLanguage
+	}
+	return c.Language.Notes
+}
+
+// CustomerLanguage is the language customer-facing text is written in, or
+// "auto" when the workspace named none.
+func (c *Config) CustomerLanguage() string {
+	if c.Language.Customer == "" {
+		return CustomerLanguageAuto
+	}
+	return c.Language.Customer
+}
+
 // AttachmentMaxBytes is the configured attachment size cap, or the default
+
 // when the workspace did not set one.
 func (c *Config) AttachmentMaxBytes() int64 {
 	if c.Attachments.MaxBytes <= 0 {

@@ -26,4 +26,6 @@ export interface Transport {
   resume(ws: string, runId: string, answer?: string): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
   register(ws: string): Promise<RegisterRow[]>; doctor(ws: string): Promise<Check[]>; quota(): Promise<Quota[]>;
   subscribe(handler: (e: AppEvent) => void): () => void;
+  /** Desktop build version, e.g. "1.2.3" or "dev". Only the Wails transport implements it. */
+  version?(): Promise<string>;
 }

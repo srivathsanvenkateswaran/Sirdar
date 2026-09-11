@@ -14,7 +14,13 @@ const STICK_SLACK = 24
 /**
  * The live log. It follows the tail while the engineer is at the bottom and
  * stops the moment they scroll up to read something, offering a pill back.
+ *
+ * It is pinned `dir="ltr"`. What it shows is tool names, file paths, queries
+ * and JSON, and a right-to-left layout moves their leading slashes, brackets
+ * and colons to the wrong end — so the one place an Arabic string appears here
+ * (a quoted ticket line) is worth less than keeping every path readable.
  */
+
 export default function EventStream({
   events,
   startedAt,
@@ -79,8 +85,9 @@ export default function EventStream({
             : `${shownCount} of ${events.length}`}
         </span>
       </div>
-      <div className="stream">
-        <div className="stream-scroll" ref={scrollRef} onScroll={onScroll}>
+      <div className="stream" dir="ltr">
+        <div className="stream-scroll" ref={scrollRef} onScroll={onScroll} data-testid="event-stream">
+
           {shown.length === 0 ? (
             <p className="stream-empty">
               {events.length === 0

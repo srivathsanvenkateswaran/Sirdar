@@ -22,6 +22,14 @@ Register: [[_Issue Register]] · RCA: <fill: RCA> · Resolution: <fill: Resoluti
 
 Customer reports the export fails for orders over 500 lines.
 
+## Customer Complaint (original)
+
+<div dir="rtl">
+
+التصدير لا يعمل عندما يحتوي الطلب على أكثر من ٥٠٠ بند. الملف ينزل فارغًا.
+
+</div>
+
 ## Conversation Summary
 
 - **2026-09-01T10:00:00Z** (customer): Reported the export failing.
@@ -65,3 +73,13 @@ Risks: Streaming changes the export's error-handling path.
 ## Open Questions
 
 - Is 500 lines the exact threshold, or does it vary by column count?
+
+## Customer reply draft
+
+Language: ar. A draft, not a sent reply: read it before you send it. It promises nothing the ticket does not already record.
+
+<div dir="rtl">
+
+شكرًا لتواصلكم. تم تحويل البلاغ إلى الفريق الهندسي ونحن ننظر في المشكلة الآن. سنوافيكم بأي مستجد فور توفره.
+
+</div>

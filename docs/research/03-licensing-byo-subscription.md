@@ -74,6 +74,104 @@ Authentication facts that matter for a wrapper (code.claude.com/docs/en/authenti
   even though the headless doc says it will become the default for `-p` in a future release.
   Pin behaviour explicitly.
 
+## Third-party backends for Claude Code (primary text)
+
+Checked 2026-09-11. Full working, probes and the Sirdar recommendation are in
+`docs/research/providers/spike-anthropic-compatible.md`; this section records the quotes.
+
+**The mechanism is documented and supported.** `ANTHROPIC_BASE_URL`
+(code.claude.com/docs/en/env-vars):
+
+> Override the API endpoint to route requests through a proxy or gateway. When set to a
+> non-first-party host, MCP tool search is disabled by default. Set `ENABLE_TOOL_SEARCH=true` if
+> your proxy forwards `tool_reference` blocks. As of v2.1.196, Remote Control is disabled when
+> this points at a host other than `api.anthropic.com`, matching its behavior on Amazon Bedrock,
+> Google Cloud's Agent Platform, and Microsoft Foundry
+
+`ANTHROPIC_AUTH_TOKEN` on the same page:
+
+> Custom value for the `Authorization` header (the value you set here will be prefixed with
+> `Bearer `)
+
+**Non-Claude models behind it are unsupported, not prohibited.**
+code.claude.com/docs/en/llm-gateway:
+
+> Any gateway that exposes a supported API format works. Anthropic doesn't endorse, maintain, or
+> audit third-party gateway products, and doesn't support routing Claude Code to non-Claude
+> models through any gateway.
+
+That sentence is the whole of Anthropic's position on the question. It is framed as endorsement,
+maintenance and auditing — no "must not", no "not permitted", no enforcement language, in
+contrast to the credential clause quoted above, which carries all three plus "Anthropic reserves
+the right to take measures to enforce these restrictions".
+
+**A gateway credential replacing the subscription is described as ordinary.** Same page:
+
+> While a gateway credential variable or `apiKeyHelper` is active, a developer's claude.ai
+> subscription isn't used: the credential replaces the subscription login for that session, and
+> the subscription's usage limits don't apply. That traffic is billed per token to whoever owns
+> the credential the gateway forwards [...]
+
+**Base URL without a credential keeps the subscription active — and ships its OAuth material
+to the configured host.** Same page:
+
+> `ANTHROPIC_BASE_URL` is the variable that points Claude Code at the gateway. Setting only that
+> variable, without a gateway credential, doesn't replace the subscription. Requests still route
+> through the gateway, but a saved claude.ai login remains the active credential, so its usage
+> limits and billing apply.
+
+and code.claude.com/docs/en/llm-gateway-protocol, on `anthropic-beta`:
+
+> When the developer authenticates with a claude.ai login, which is possible when
+> `ANTHROPIC_BASE_URL` is set without a gateway credential variable, this header also carries an
+> OAuth capability that the upstream requires, and stripping it fails those requests with `401`
+
+This is the combination Sirdar must refuse: `billing: subscription` strips `ANTHROPIC_API_KEY`
+but passes `ANTHROPIC_BASE_URL` through, so a stray export would send the user's subscription
+credential to a third party. `billing: api` plus an explicit credential is the supported shape.
+
+**Provisioning your own keys is carved out of the credential prohibition.**
+code.claude.com/docs/en/legal-and-compliance, immediately after the "does not permit third-party
+developers" sentence already quoted above:
+
+> This does not restrict how customers provision and manage their own API keys or third-party
+> inference provider credentials — for example, configuring an API key in a development
+> environment, secrets manager, or machine image for use by the customer's own authorized users
+> — provided the resulting usage is billed to the key owner under their agreement with Anthropic
+> (or the applicable provider) and is not resold or intermediated as described above.
+
+**Not addressed anywhere in the terms.** The Consumer Terms, the Commercial Terms and the Usage
+Policy say nothing about `ANTHROPIC_BASE_URL`, proxies, claude-code-router, LiteLLM, or running
+the harness against a non-Anthropic model (all three fetched 2026-09-11). The nearest Commercial
+Terms language, A.2, disclaims rather than restricts:
+
+> Customer may elect (in its sole discretion) to use features, services or other content made
+> available by third parties to Customer through the Services ("Third Party Features"). Customer
+> acknowledges and agrees that Third Party Features are not Services and, accordingly, Anthropic
+> is not responsible for them.
+
+The restriction clauses that do exist are aimed elsewhere: Commercial Terms D.4 ("access the
+Services to build a competing product or service, including to train competing AI models or
+resell the Services"), Consumer Terms section 3 ("To develop any products or services that
+compete with our Services"), and the Usage Policy's bar on "Utilization of inputs and outputs to
+train an AI model (e.g., 'model scraping' or 'model distillation') without prior authorization
+from Anthropic". A session that never reaches Anthropic's inference engages none of them.
+
+**No OpenAI-compatible or generic proxy is documented.** The gateway compatibility guide lists
+three API formats a gateway may expose — Anthropic Messages (`ANTHROPIC_BASE_URL`), Amazon
+Bedrock InvokeModel (`ANTHROPIC_BEDROCK_BASE_URL`), and Google Cloud's Agent Platform rawPredict
+(`ANTHROPIC_VERTEX_BASE_URL`) — with Microsoft Foundry and Claude Platform on AWS implementing
+the Anthropic Messages format under their own variables. Chat Completions is not among them, and
+claude-code-router and LiteLLM are named nowhere in the docs. Neither is discouraged by name
+either. An OpenAI-shaped backend needs a translating proxy, which is the ground Sirdar's
+`provider: openai` already covers without one.
+
+**Verdict.** Permitted: pointing the unmodified CLI at a non-Anthropic host, with an API key or
+gateway token. Prohibited: third parties routing other people's Free/Pro/Max credentials, and
+intermediating claude.ai credentials or session tokens. Not addressed: whether the model behind
+the base URL may be a non-Claude model — covered only by the support disclaimer, which carries
+no prohibition.
+
 ## How the existing wrappers integrate
 
 | Tool | Claude mechanism | Codex mechanism | Inherits login? |
@@ -156,4 +254,8 @@ github.com/pingdotgg/t3code · github.com/BloopAI/vibe-kanban (crates/executors/
 conductor.build/docs/reference/harnesses/claude-code · github.com/multica-ai/multica (server/pkg/agent/claude.go, issues/2563) ·
 github.com/paperclipai/paperclip (docs/adapters/claude-local.md) · github.com/smtg-ai/claude-squad ·
 learn.chatgpt.com/docs/auth · learn.chatgpt.com/docs/pricing · github.com/openai/codex (sdk/typescript/README.md, discussions/8338) ·
-developers.openai.com/codex/app-server · developers.openai.com/community/codex-for-oss · docs.openclaw.ai/providers/openai
+developers.openai.com/codex/app-server · developers.openai.com/community/codex-for-oss · docs.openclaw.ai/providers/openai ·
+code.claude.com/docs/en/llm-gateway · code.claude.com/docs/en/llm-gateway-connect ·
+code.claude.com/docs/en/llm-gateway-protocol · code.claude.com/docs/en/env-vars ·
+code.claude.com/docs/en/third-party-integrations · anthropic.com/legal/commercial-terms ·
+anthropic.com/legal/aup

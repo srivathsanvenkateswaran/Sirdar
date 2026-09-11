@@ -1,5 +1,7 @@
 # Sirdar
 
+[![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
+
 An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
 or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
 model — gathers evidence through the MCP servers the workspace grants it, translates the
@@ -16,9 +18,26 @@ Status: v0: command-line triage core; the board is next.
 
 ## Install
 
+**Homebrew** (macOS/Linux, once the tap and a release exist — see `docs/release.md`):
+
+```
+brew tap srivathsanvenkateswaran/sirdar
+brew install sirdar
+```
+
+**`go install`** (any commit, released or not):
+
 ```
 go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest
 ```
+
+**Release archive**: download `sirdar_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) from
+[Releases](https://github.com/srivathsanvenkateswaran/Sirdar/releases), check it against that
+release's `checksums.txt`, and put `sirdar` on your `PATH`. deb/rpm packages for Linux are
+attached to each release too.
+
+**Desktop app**: download `sirdar-desktop_<tag>_<os>_<arch>.zip` for your platform from the same
+Releases page. It's unsigned — see `docs/release.md` for the Gatekeeper/SmartScreen workaround.
 
 Or build from source:
 
@@ -27,6 +46,8 @@ git clone https://github.com/srivathsanvenkateswaran/sirdar
 cd sirdar
 make build
 ```
+
+See `docs/release.md` for how releases are cut.
 
 ## Quick start
 
@@ -127,6 +148,12 @@ read-only tool set and your workspace's MCP servers, and a per-million-token pri
 config for the USD budget. See `docs/config.md` for the `openai:` block, and
 `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after it.
 
+`provider: claude` also works against an Anthropic-compatible endpoint — Ollama, llama.cpp,
+DeepSeek, GLM, Kimi, OpenRouter — by setting `billing: api` and pointing `ANTHROPIC_BASE_URL` at
+it in the environment; Anthropic documents the gateway variables that make this work but does not
+support routing non-Claude models through them, and reported cost is unreliable there, so see
+`docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
+
 ## Bring your own agent login
 
 Sirdar spawns the `claude` or `codex` binary already installed on your machine and signed in
@@ -149,10 +176,22 @@ executable speaking a small line-delimited JSON protocol over stdin/stdout, name
 a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
+## Languages
+
+Arabic is the default customer language in the workspace this was built for; Sirdar keeps the
+original text, writes the engineer's note in English, and drafts customer-facing text in the
+customer's language. A triage note carries the complaint translated and again verbatim, plus a
+short reply draft the engineer can send; an RCA carries a customer summary for the support
+agent to relay. Neither draft may promise a fix, a cause or a date, and Sirdar sends nothing
+itself. Set `language.notes` and `language.customer` in `.sirdar/config.yaml` for a workspace
+that reads a different pair.
+
 ## Configuration
 
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
-including credential references, the `permissions.bash` glob syntax, and template overrides.
+including credential references, the `permissions.bash` glob syntax, the `language` block, and
+template overrides.
+
 
 ## Development
 
@@ -167,7 +206,8 @@ is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `P
 override is available to you in config as `providers.claude.path` and `providers.codex.path`.
 The tests therefore run offline and deterministically.
 
-Release builds via `.goreleaser.yaml` stamp the version with `-X main.version=...`.
+Release builds via `.goreleaser.yaml` stamp the version, commit, and date with
+`-X main.version=... -X main.commit=... -X main.date=...`; see `docs/release.md`.
 
 ## License
 

@@ -168,14 +168,21 @@ func TestRenderFallsBackToEmbeddedForOtherKindsWhenOverridingOne(t *testing.T) {
 	m := triageMeta()
 	m.Links.Triage = "OMNI-1 export-fails"
 	m.Links.Resolution = "OMNI-1 export-fails-resolution"
-	r := Renderer{TemplatesDir: dir}
-	got, err := r.Render(RCA, doc, m)
+	got, err := (Renderer{TemplatesDir: dir}).Render(RCA, doc, m)
 	if err != nil {
 		t.Fatalf("Render(RCA): %v", err)
 	}
-	want := readTestdata(t, "rca.golden.md")
-	if got != string(want) {
-		t.Fatalf("Render(RCA) with an unrelated override in TemplatesDir should still match the embedded golden")
+	// Not the golden: a workspace with its own templates gets no RTL
+	// markup from Sirdar, and the golden carries it. The embedded
+	// template with the same markup setting is the comparison that
+	// still says "the fallback happened".
+	off := false
+	want, err := (Renderer{RTLMarkup: &off}).Render(RCA, doc, m)
+	if err != nil {
+		t.Fatalf("Render(RCA) from the embedded default: %v", err)
+	}
+	if got != want {
+		t.Fatalf("Render(RCA) with an unrelated override in TemplatesDir should still render the embedded template:\n--- got ---\n%s\n--- want ---\n%s", got, want)
 	}
 }
 
@@ -526,5 +533,192 @@ func TestDigestTruncatesIssueByRuneNotByte(t *testing.T) {
 	}
 	if strings.Contains(got, want+"ع") {
 		t.Fatalf("Digest issue was not truncated to 60 runes:\n%s", got)
+	}
+}
+
+// --- Bilingual sections ---
+
+func TestRenderTriageKeepsTheOriginalComplaintVerbatim(t *testing.T) {
+	doc := readTestdata(t, "triage.json")
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+
+	var decoded struct {
+		ComplaintOriginal  string `json:"complaintOriginal"`
+		CustomerReplyDraft struct {
+			Language string `json:"language"`
+			Text     string `json:"text"`
+		} `json:"customerReplyDraft"`
+	}
+	if err := json.Unmarshal(doc, &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+
+	for _, want := range []string{
+		"## Customer Complaint (original)",
+		decoded.ComplaintOriginal,
+		"## Customer reply draft",
+		decoded.CustomerReplyDraft.Text,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("rendered triage note is missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRenderTriageWrapsArabicInAnRTLDivByDefault(t *testing.T) {
+	doc := readTestdata(t, "triage.json")
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	if n := strings.Count(got, `<div dir="rtl">`); n != 2 {
+		t.Fatalf("got %d rtl wrappers, want one around the original complaint and one around the reply draft:\n%s", n, got)
+	}
+}
+
+func TestRenderTriageOmitsRTLMarkupWhenTurnedOff(t *testing.T) {
+	doc := readTestdata(t, "triage.json")
+	off := false
+	got, err := (Renderer{RTLMarkup: &off}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	if strings.Contains(got, `<div dir="rtl">`) {
+		t.Fatalf("rtlMarkup off still emitted the wrapper:\n%s", got)
+	}
+	if !strings.Contains(got, "## Customer Complaint (original)") {
+		t.Fatalf("the original complaint section went missing with rtlMarkup off:\n%s", got)
+	}
+}
+
+// A workspace with its own templates owns its markup, so the wrapper is
+// off there whatever language.rtlMarkup says — including for the kinds it
+// did not override, which still render from the embedded default.
+func TestRenderOmitsRTLMarkupWhenTheWorkspaceHasItsOwnTemplates(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "rca.md.tmpl"), []byte("unrelated override\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	doc := readTestdata(t, "triage.json")
+	on := true
+	got, err := (Renderer{TemplatesDir: dir, RTLMarkup: &on}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	if strings.Contains(got, `<div dir="rtl">`) {
+		t.Fatalf("a workspace with notes.templates got Sirdar's RTL markup:\n%s", got)
+	}
+}
+
+func TestRenderTriageSkipsTheBilingualSectionsWhenTheDocOmitsThem(t *testing.T) {
+	var decoded map[string]any
+	if err := json.Unmarshal(readTestdata(t, "triage.json"), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	delete(decoded, "complaintOriginal")
+	delete(decoded, "customerReplyDraft")
+	doc, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	for _, unwanted := range []string{"## Customer Complaint (original)", "## Customer reply draft", "<no value>"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("a note without the optional fields still rendered %q:\n%s", unwanted, got)
+		}
+	}
+}
+
+func TestRenderRCARendersTheCustomerSummary(t *testing.T) {
+	doc := readTestdata(t, "rca.json")
+	m := triageMeta()
+	m.Links.Triage = "OMNI-1 export-fails"
+	got, err := (Renderer{}).Render(RCA, doc, m)
+	if err != nil {
+		t.Fatalf("Render(RCA): %v", err)
+	}
+	if !strings.Contains(got, "## Customer summary") {
+		t.Fatalf("rendered RCA note has no customer summary:\n%s", got)
+	}
+	if !strings.Contains(got, `<div dir="rtl">`) {
+		t.Fatalf("the Arabic customer summary was not wrapped for RTL:\n%s", got)
+	}
+}
+
+func TestRenderRCASkipsTheCustomerSummaryWhenTheDocOmitsIt(t *testing.T) {
+	var decoded map[string]any
+	if err := json.Unmarshal(readTestdata(t, "rca.json"), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	delete(decoded["rca"].(map[string]any), "customerSummary")
+	doc, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	m := triageMeta()
+	m.Links.Triage = "OMNI-1 export-fails"
+	got, err := (Renderer{}).Render(RCA, doc, m)
+	if err != nil {
+		t.Fatalf("Render(RCA): %v", err)
+	}
+	if strings.Contains(got, "## Customer summary") {
+		t.Fatalf("an RCA without a customer summary still rendered the section:\n%s", got)
+	}
+}
+
+// Latin text is left alone: the wrapper is for a paragraph that is
+// actually right-to-left, not for every optional field.
+func TestRenderLeavesLatinTextUnwrapped(t *testing.T) {
+	var decoded map[string]any
+	if err := json.Unmarshal(readTestdata(t, "triage.json"), &decoded); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	decoded["complaintOriginal"] = "The export downloads an empty file."
+	decoded["customerReplyDraft"] = map[string]any{
+		"language": "en",
+		"text":     "Thank you for getting in touch. We are looking into it.",
+	}
+	doc, err := json.Marshal(decoded)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+
+	got, err := (Renderer{}).Render(Triage, doc, triageMeta())
+	if err != nil {
+		t.Fatalf("Render(Triage): %v", err)
+	}
+	if strings.Contains(got, `<div dir="rtl">`) {
+		t.Fatalf("Latin text was wrapped as right-to-left:\n%s", got)
+	}
+	if !strings.Contains(got, "The export downloads an empty file.") {
+		t.Fatalf("the original complaint went missing:\n%s", got)
+	}
+}
+
+func TestHasRTL(t *testing.T) {
+	cases := []struct {
+		text string
+		want bool
+	}{
+		{"The export downloads an empty file.", false},
+		{"التصدير لا يعمل", true},
+		{"OMNI-2510: التصدير لا يعمل", true},
+		{"עברית", true},
+		{"", false},
+		{"123 456", false},
+	}
+	for _, c := range cases {
+		if got := hasRTL(c.text); got != c.want {
+			t.Errorf("hasRTL(%q) = %v, want %v", c.text, got, c.want)
+		}
 	}
 }

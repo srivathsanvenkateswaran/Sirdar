@@ -110,3 +110,13 @@ Why missed: Triage did not have profiling data available.
 ## Lessons
 
 - Load test with realistic data sizes, not fixtures.
+
+## Customer summary
+
+Language: ar. What the support agent can relay to the customer: what happened and what was done, and nothing beyond it.
+
+<div dir="rtl">
+
+كان التصدير يحمّل الطلب بالكامل في الذاكرة قبل كتابة الملف، فتفشل الطلبات الكبيرة. تمت معالجة السبب وإعادة تشغيل عمليات التصدير المتأثرة.
+
+</div>
