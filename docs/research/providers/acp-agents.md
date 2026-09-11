@@ -20,7 +20,7 @@ These speak ACP themselves, usually behind a flag.
 
 | Agent | `command` | `args` | Notes |
 |---|---|---|---|
-| Gemini CLI | `npx` | `["@google/gemini-cli@0.59.0", "--acp"]` | Or `gemini` with `["--experimental-acp"]` for a locally installed CLI; the flag name differs between versions — unverified which your build takes |
+| Gemini CLI | `gemini` | `["--experimental-acp"]` | The form the scaffold and `docs/config.md` use, for a locally installed CLI. The registry's own entry is `npx` with `["@google/gemini-cli@0.59.0", "--acp"]`, so the flag name differs between versions — unverified which your build takes; `sirdar doctor` settles it in one run |
 | Goose (Block) | `goose` | `["acp"]` | Distributed as a binary, no npx wrapper in the registry |
 | Qwen Code (Alibaba) | `npx` | `["@qwen-code/qwen-code@0.23.2", "--acp", "--experimental-skills"]` | |
 | Kimi CLI (Moonshot) | `kimi` | unverified | Binary; the registry lists no argv |
@@ -52,9 +52,11 @@ handle.
 ```yaml
 provider: acp
 acp:
-  command: npx
-  args: ["@google/gemini-cli@0.59.0", "--acp"]
+  command: gemini
+  args: ["--experimental-acp"]
   env: {}
+budget:
+  maxMinutes: 20   # the bound that actually works for ACP; see docs/config.md
 ```
 
 Then:
@@ -77,7 +79,14 @@ not found" and "not logged in" actually appear.
 - **Image prompts.** Without them, screenshot attachments are named in the prompt text rather
   than sent; the agent can still read them off disk if it has a read tool.
 - **Whether it sends `usage_update`, and whether that carries a `cost`.** Most do not. With no
-  cost, `budget.maxUsd` never triggers and the run is bounded by turns and minutes alone.
+  cost, `budget.maxUsd` never triggers — and since a whole prompt turn counts as one turn,
+  `budget.maxTurns` does not either. `budget.maxMinutes` is the bound.
+- **Whether it asks permission, and for what.** `session/request_permission` is sent at the
+  agent's discretion. Watch a first run's event log: an `edit` or `execute` tool call that
+  completes without a permission event raises a warning, and that warning is the signal to run
+  this agent against a scratch checkout rather than a real one.
+- **What MCP servers it already has.** Sirdar adds the workspace's to whatever the agent is
+  configured with globally; `mcp.workspaceOnly` cannot reach across ACP.
 - **Whether it honours the JSON-only instruction.** ACP has no schema field, so this is the
   whole of the structured-output mechanism. An agent that habitually answers in prose costs a
   retry turn on every run.

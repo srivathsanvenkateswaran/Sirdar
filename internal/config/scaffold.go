@@ -25,8 +25,9 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #     HTTP-Referer: https://github.com/srivathsanvenkateswaran/Sirdar
 # provider: acp drives any agent that speaks the Agent Client Protocol —
 # Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
-# more — over one adapter. There is no cost signal, so budgets are by turns
-# and minutes. Uncomment the block and set provider: acp to use it.
+# more — over one adapter. There is no cost signal, and a whole prompt turn
+# counts as one turn, so budget.maxMinutes is what bounds an acp run.
+# Uncomment the block and set provider: acp to use it.
 # acp:
 #   command: gemini                         # or goose, opencode, qwen, npx
 #   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]

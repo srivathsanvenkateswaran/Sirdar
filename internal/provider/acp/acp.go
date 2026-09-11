@@ -17,9 +17,15 @@
 //     puts the runner's one schema-retry turn on the wire as a second
 //     session/prompt.
 //   - No cost or token accounting beyond usage_update's context used/size
-//     and an optional session cost, which many agents never send. Runs are
-//     bounded by budget.maxTurns and budget.maxMinutes; budget.maxUsd only
-//     bites for an agent that reports a cost.
+//     and an optional session cost, which many agents never send, so
+//     budget.maxUsd usually never fires.
+//   - Almost nothing for budget.maxTurns to count. One ACP turn is a whole
+//     prompt turn: the agent may make dozens of model requests and run
+//     dozens of tools inside a single session/prompt, and the protocol
+//     reports one turn for all of it. A run therefore normally ends at
+//     turn one or two, and budget.maxMinutes is the bound that actually
+//     stops a runaway agent. Set it as if it were the only one, because
+//     for most ACP agents it is.
 //   - No rate-limit signal at all, so a spent window looks like an error,
 //     not a pause.
 //   - No message on a permission denial. The client may only select one of
@@ -30,6 +36,19 @@
 // Sirdar declines the write-file and terminal client capabilities at
 // initialize rather than denying each request, and answers the fs and
 // terminal methods an agent calls anyway with a JSON-RPC error.
+//
+// What that does not amount to is a sandbox, and the difference matters
+// more here than for the other providers. An ACP agent is a whole CLI with
+// its own tools, its own configuration and, in most cases, its own global
+// MCP servers, none of which the protocol lets a client see or switch off:
+// mcp.workspaceOnly cannot be enforced across this boundary the way
+// --strict-mcp-config enforces it for Claude Code. Permission requests are
+// the agent's to send, so Sirdar's policy governs what it is asked about
+// and nothing else; a write that completes having asked nobody is reported
+// as an error after the fact (see the tool_call_update handler) because
+// that is the only move left. Note too that the workspace's .mcp.json env
+// values are sent to the agent in session/new, so any secret in them
+// crosses the wire into that agent's process.
 package acp
 
 import (
@@ -175,9 +194,8 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		closing:    make(chan struct{}),
 		pumpDone:   make(chan struct{}),
 		driverDone: make(chan struct{}),
-		toolNames:  map[string]string{},
+		calls:      map[string]*trackedCall{},
 	}
-	lastPumpDone = s.pumpDone
 	s.queue.cond = sync.NewCond(&s.queue.mu)
 	s.conn = newConn(stdout, stdin)
 	s.conn.onNotify = s.onNotify
@@ -281,6 +299,13 @@ func (s *session) handshake(ctx context.Context) error {
 		if !init.AgentCapabilities.LoadSession {
 			return fmt.Errorf("acp: this agent cannot resume a session (no loadSession capability); start a fresh run")
 		}
+		// The id is recorded before the call, not after: session/load
+		// replays the whole prior conversation as a burst of
+		// session/update notifications while the call is still open, and
+		// the session filter has to recognise them as this session's.
+		s.mu.Lock()
+		s.sessionID = s.spec.Resume
+		s.mu.Unlock()
 		if _, err := s.conn.call("session/load", map[string]any{
 			"sessionId":  s.spec.Resume,
 			"cwd":        s.spec.Cwd,
@@ -288,9 +313,6 @@ func (s *session) handshake(ctx context.Context) error {
 		}); err != nil {
 			return fmt.Errorf("acp: session/load: %w", err)
 		}
-		s.mu.Lock()
-		s.sessionID = s.spec.Resume
-		s.mu.Unlock()
 		return nil
 	}
 
@@ -375,11 +397,6 @@ func agentLabel(init initializeResult) string {
 	return fmt.Sprintf("%s, protocol v%d", name, init.ProtocolVersion)
 }
 
-// lastPumpDone exposes the most recent session's pump-exit signal to tests,
-// so a failed Start can be checked for a leaked goroutine. Tests in this
-// package therefore must not run in parallel.
-var lastPumpDone chan struct{}
-
 // ------------------------------------------------------------------ session
 
 type session struct {
@@ -408,7 +425,7 @@ type session struct {
 		in, out int64
 		cost    float64
 	}
-	toolNames map[string]string // toolCallId → display name
+	calls map[string]*trackedCall // toolCallId → what is known of it
 
 	turnDone   chan struct{}
 	turnClosed bool
@@ -440,6 +457,13 @@ type session struct {
 }
 
 func (s *session) Events() <-chan provider.Event { return s.events }
+
+// pumpExited closes when the goroutine feeding Events() has returned. It
+// is what the package's own tests assert against; nothing outside this
+// package can reach it, which is the point — a session's teardown is
+// observable per session rather than through a package variable every
+// concurrent Start would race on.
+func (s *session) pumpExited() <-chan struct{} { return s.pumpDone }
 
 // Handle returns the ACP sessionId. A later run resumes it with
 // session/load, which only works against an agent advertising
@@ -495,6 +519,15 @@ func (s *session) Cancel() {
 	s.mu.Lock()
 	sessionID := s.sessionID
 	s.mu.Unlock()
+	if sessionID == "" {
+		// There is no session to cancel: the agent is still starting, or
+		// it never got as far as answering session/new. Nothing it is
+		// doing is work this run asked for, so it goes now rather than
+		// after a grace period spent waiting for a reply to a
+		// notification naming no session.
+		killGroup(s.cmd)
+		return
+	}
 	_ = s.conn.notify("session/cancel", map[string]any{"sessionId": sessionID})
 	s.cancelOnce.Do(func() {
 		time.AfterFunc(cancelGrace, func() {
@@ -805,20 +838,72 @@ func compactJSON(raw []byte) []byte {
 	return out.Bytes()
 }
 
-// jsonObject returns text as a JSON object, unwrapping a single fenced
-// block first, or nil when it is not one. Only an object counts: the note
-// schemas are objects, and accepting a bare string or number here would
-// hand the runner something that can never validate.
+// jsonObject returns the run's note from the turn's assistant text, or nil
+// when there is none.
+//
+// A fence is unwrapped first, and then the *last* top-level JSON object in
+// what remains is taken. Agents that were asked for JSON and nothing else
+// routinely lead with a sentence anyway ("Here is the triage note:"), and
+// an answer that is otherwise perfectly good should not be thrown away and
+// retried over a prefix. Taking the last one rather than the first is what
+// makes that safe: an agent that quotes an example object and then answers
+// is answering with the second.
+//
+// Only an object counts. The note schemas are objects, and accepting a
+// bare string or array here would hand the runner something that can never
+// validate.
 func jsonObject(text string) json.RawMessage {
-	trimmed := strings.TrimSpace(stripFence(text))
-	if !strings.HasPrefix(trimmed, "{") || !json.Valid([]byte(trimmed)) {
+	return lastJSONObject(stripFence(text))
+}
+
+// lastJSONObject scans for balanced top-level { } spans, ignoring braces
+// inside string literals, and returns the last one that parses.
+func lastJSONObject(text string) json.RawMessage {
+	var (
+		depth int
+		start = -1
+		inStr bool
+		esc   bool
+		best  string
+	)
+	for i := 0; i < len(text); i++ {
+		c := text[i]
+		if inStr {
+			switch {
+			case esc:
+				esc = false
+			case c == '\\':
+				esc = true
+			case c == '"':
+				inStr = false
+			}
+			continue
+		}
+		switch c {
+		case '"':
+			inStr = true
+		case '{':
+			if depth == 0 {
+				start = i
+			}
+			depth++
+		case '}':
+			if depth == 0 {
+				continue
+			}
+			depth--
+			if depth == 0 && start >= 0 {
+				if candidate := text[start : i+1]; json.Valid([]byte(candidate)) {
+					best = candidate
+				}
+				start = -1
+			}
+		}
+	}
+	if best == "" {
 		return nil
 	}
-	var probe map[string]json.RawMessage
-	if err := json.Unmarshal([]byte(trimmed), &probe); err != nil {
-		return nil
-	}
-	return json.RawMessage(trimmed)
+	return json.RawMessage(best)
 }
 
 // stripFence removes one surrounding ```json (or ```) code fence, which is
@@ -1088,6 +1173,14 @@ type sessionUpdate struct {
 	} `json:"usage"`
 }
 
+// trackedCall is what the session remembers about one tool call between
+// its tool_call, its permission request and its tool_call_update.
+type trackedCall struct {
+	name  string
+	kind  string
+	asked bool
+}
+
 type costBlock struct {
 	Amount   float64 `json:"amount"`
 	Currency string  `json:"currency"`
@@ -1112,6 +1205,13 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 	if err := json.Unmarshal(params, &payload); err != nil {
 		return
 	}
+	if !s.owns(payload.SessionID) {
+		// A nested subagent session's traffic, which belongs to a turn
+		// this run did not ask for and must not be folded into its
+		// transcript — least of all its agent_message_chunks, which are
+		// what the run's answer is parsed out of.
+		return
+	}
 	u := payload.Update
 
 	switch u.SessionUpdate {
@@ -1132,11 +1232,7 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 
 	case "tool_call":
 		name := displayName(u.Kind, u.Title)
-		if u.ToolCallID != "" {
-			s.mu.Lock()
-			s.toolNames[u.ToolCallID] = name
-			s.mu.Unlock()
-		}
+		s.track(u.ToolCallID, name, u.Kind)
 		s.emit(provider.Event{
 			Kind:  provider.EvToolStarted,
 			Tool:  name,
@@ -1148,12 +1244,29 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		if u.Status != "completed" && u.Status != "failed" {
 			return
 		}
+		call := s.track(u.ToolCallID, displayName(u.Kind, u.Title), u.Kind)
 		s.emit(provider.Event{
 			Kind:  provider.EvToolFinished,
-			Tool:  s.toolName(u),
+			Tool:  call.name,
 			Input: toolInput(u),
 			Raw:   raw,
 		})
+		if u.Status == "completed" && writeKinds[call.kind] && !call.asked {
+			// ACP leaves it to the agent to decide what is worth asking
+			// about, so a completed write that never produced a
+			// session/request_permission is the harness finding out after
+			// the fact. It cannot be undone; it can be made impossible to
+			// miss.
+			s.emit(provider.Event{
+				Kind: provider.EvError,
+				Text: fmt.Sprintf("acp: the agent completed a %q tool call (%s) without asking permission; "+
+					"this agent does not route that kind through session/request_permission, "+
+					"so Sirdar's read-only policy could not be applied to it", call.kind, call.name),
+				Tool:  call.name,
+				Input: toolInput(u),
+				Raw:   raw,
+			})
+		}
 
 	case "plan":
 		s.emit(provider.Event{Kind: provider.EvSystem, Text: "acp plan", Input: u.Entries, Raw: raw})
@@ -1201,16 +1314,62 @@ func (s *session) onUsage(u sessionUpdate, raw json.RawMessage) {
 	})
 }
 
-func (s *session) toolName(u sessionUpdate) string {
-	if u.ToolCallID != "" {
-		s.mu.Lock()
-		name, ok := s.toolNames[u.ToolCallID]
-		s.mu.Unlock()
-		if ok {
-			return name
-		}
+// owns reports whether a session-scoped message belongs to this session.
+// An empty id on the wire is taken as this session's, since an agent that
+// omits the field has only one; an empty id on this side means the session
+// is still being opened and nothing else can have arrived yet.
+func (s *session) owns(sessionID string) bool {
+	if sessionID == "" {
+		return true
 	}
-	return displayName(u.Kind, u.Title)
+	s.mu.Lock()
+	mine := s.sessionID
+	s.mu.Unlock()
+	return mine == "" || mine == sessionID
+}
+
+// track records what is known about a tool call and returns the merged
+// state. A tool_call_update carries only the fields that changed, so the
+// kind and the title usually arrive once, on the tool_call, and everything
+// after that has to be looked up by id.
+func (s *session) track(id, name, kind string) trackedCall {
+	if id == "" {
+		return trackedCall{name: name, kind: kind}
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	call, ok := s.calls[id]
+	if !ok {
+		call = &trackedCall{}
+		s.calls[id] = call
+	}
+	if kind != "" {
+		call.kind = kind
+	}
+	if name != "" && (call.name == "" || call.name == "tool") {
+		call.name = name
+	}
+	if call.name == "" {
+		call.name = name
+	}
+	return *call
+}
+
+// markAsked records that a tool call went through
+// session/request_permission, so a completed write that did not can be
+// told apart from one that did.
+func (s *session) markAsked(id, kind string) {
+	if id == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	call, ok := s.calls[id]
+	if !ok {
+		call = &trackedCall{kind: kind}
+		s.calls[id] = call
+	}
+	call.asked = true
 }
 
 // displayName is what the event log and the progress view call a tool.
@@ -1300,6 +1459,22 @@ func (s *session) refuse(id json.RawMessage, method, capability string, params, 
 	})
 }
 
+// refuseSession declines a request that names a session this client did
+// not open — a nested subagent session, which ACP lets an agent create for
+// itself. Sirdar's policy, its workspace root and its budget describe the
+// session it asked for, and none of them can be honestly applied to
+// another one, so the request is answered with an error rather than
+// guessed at.
+func (s *session) refuseSession(id json.RawMessage, method, sessionID string, raw json.RawMessage) {
+	_ = s.conn.replyError(id, codeInvalidParams,
+		"sirdar serves only the session it opened; "+sessionID+" is not it")
+	s.emit(provider.Event{
+		Kind: provider.EvSystem,
+		Text: "acp: refused " + method + " for another session (" + sessionID + ")",
+		Raw:  raw,
+	})
+}
+
 // onPermission answers session/request_permission from the run's
 // PermissionPolicy. ACP gives the client no field to attach a reason to its
 // answer — it may only pick one of the agent's own options — so the policy's
@@ -1311,6 +1486,12 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 		_ = s.conn.replyError(id, codeInvalidParams, "malformed session/request_permission")
 		return
 	}
+
+	if !s.owns(req.SessionID) {
+		s.refuseSession(id, "session/request_permission", req.SessionID, raw)
+		return
+	}
+	s.markAsked(req.ToolCall.ToolCallID, req.ToolCall.Kind)
 
 	tool := policyTool(req.ToolCall.Kind, req.ToolCall.Title)
 	decision := provider.Decision{Allow: false, Message: "Sirdar policy: no permission policy is configured"}
@@ -1379,13 +1560,28 @@ var kindTools = map[string]string{
 	"think":   "TodoWrite",
 }
 
-// policyTool is the name the permission policy judges. An MCP tool names
-// itself in full and is passed through, so mcp__ rules apply; anything else
-// is the kind's Sirdar equivalent, and a kind with no equivalent
+// writeKinds are the kinds whose ACP kind is authoritative and cannot be
+// talked out of by a title. The title is agent-authored text, so an agent
+// that titles an edit "mcp__editor__apply_diff" would otherwise route a
+// write through permissions.mcp, where a read-shaped name is allowed by
+// default — a self-chosen string deciding whether a write is permitted.
+// These four kinds are judged on the kind alone.
+var writeKinds = map[string]bool{
+	"edit": true, "delete": true, "move": true, "execute": true,
+}
+
+// policyTool is the name the permission policy judges.
+//
+// A kind that describes a change (writeKinds) wins outright. Otherwise an
+// MCP tool names itself in full and is passed through, so mcp__ rules
+// apply; then the kind's Sirdar equivalent; and a kind with no equivalent
 // (switch_mode, other, or none at all) falls back to the agent's title,
 // which the policy denies — the read-only posture applied to a tool call
 // whose nature the protocol did not state.
 func policyTool(kind, title string) string {
+	if writeKinds[kind] {
+		return kindTools[kind]
+	}
 	if strings.HasPrefix(title, "mcp__") {
 		return title
 	}
@@ -1417,6 +1613,10 @@ func (s *session) onReadTextFile(id json.RawMessage, params, raw json.RawMessage
 		_ = s.conn.replyError(id, codeInvalidParams, "malformed fs/read_text_file")
 		return
 	}
+	if !s.owns(req.SessionID) {
+		s.refuseSession(id, "fs/read_text_file", req.SessionID, raw)
+		return
+	}
 
 	if !withinRoot(s.spec.Cwd, req.Path) {
 		_ = s.conn.replyError(id, codeInvalidParams,
@@ -1432,19 +1632,55 @@ func (s *session) onReadTextFile(id json.RawMessage, params, raw json.RawMessage
 		return
 	}
 
-	data, err := os.ReadFile(req.Path)
+	// Off the reader goroutine: this handler runs on the one goroutine
+	// reading the agent's stdout, and a read off a slow disk — or a
+	// network mount — would stall every notification behind it, including
+	// the response to the session/prompt that is open at the time.
+	go s.serveReadTextFile(id, req.Path, req.Line, req.Limit, params, raw)
+}
+
+// serveReadTextFile answers one in-workspace read. Writes are serialised by
+// the connection, so replying from here is safe.
+func (s *session) serveReadTextFile(id json.RawMessage, path string, line, limit int, params, raw json.RawMessage) {
+	content, err := readTextFile(path)
 	if err != nil {
 		_ = s.conn.replyError(id, codeInvalidParams, err.Error())
 		return
 	}
-	content := sliceLines(string(data), req.Line, req.Limit)
-	_ = s.conn.reply(id, map[string]any{"content": content})
+	_ = s.conn.reply(id, map[string]any{"content": sliceLines(content, line, limit)})
 	s.emit(provider.Event{
 		Kind:  provider.EvToolFinished,
 		Tool:  "fs/read_text_file",
 		Input: params,
 		Raw:   raw,
 	})
+}
+
+// maxReadBytes caps what one fs/read_text_file may return. The response is
+// a single JSON-RPC line the agent has to hold in memory and then feed to a
+// model, so a multi-gigabyte log answered in full helps nobody and can take
+// the agent down with it. The refusal names the size so the agent can ask
+// again with line and limit — which this handler honours.
+const maxReadBytes = 8 << 20
+
+func readTextFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	// One byte over the cap is read on purpose: it is the difference
+	// between a file that fits and one that was truncated.
+	data, err := io.ReadAll(io.LimitReader(f, maxReadBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(data) > maxReadBytes {
+		return "", fmt.Errorf("%s is larger than the %d MiB fs/read_text_file limit; ask again with line and limit",
+			path, maxReadBytes>>20)
+	}
+	return string(data), nil
 }
 
 // sliceLines applies ACP's optional line (1-based start) and limit (max
@@ -1466,38 +1702,52 @@ func sliceLines(content string, line, limit int) string {
 	return strings.Join(lines, "\n")
 }
 
-// withinRoot reports whether path is an absolute path inside root.
+// withinRoot reports whether path is an absolute path inside root, with
+// both sides resolved through symlinks first.
 //
-// The cheap comparison is lexical, the same reach as the permission
-// policy's own path check. When that says no, both sides are resolved
-// through symlinks and compared again, because they routinely disagree for
-// honest reasons: macOS's /var is a symlink to /private/var, so a workspace
-// under a temporary directory has two names and an agent that asked with
-// the resolved one would be refused a file plainly inside the workspace.
-// Resolving only ever admits paths that really are inside root.
+// Resolving is the answer, not the fallback. A lexical comparison says yes
+// to <cwd>/link/id_rsa where link is a symlink the agent itself could have
+// created pointing at the home directory, which is the whole of what this
+// check exists to refuse. Resolving also settles the honest disagreements
+// in the other direction — macOS's /var is a symlink to /private/var, so a
+// workspace under a temporary directory has two names — and admits those.
+//
+// The lexical comparison is only reached when a path cannot be resolved at
+// all (a root that has gone away, a candidate with no existing ancestor),
+// where refusing outright would be the wrong answer for the common case of
+// a file the agent is about to be told does not exist.
 func withinRoot(root, path string) bool {
 	if root == "" || path == "" || !filepath.IsAbs(path) {
 		return false
 	}
-	if lexicallyWithin(root, path) {
-		return true
+	realRoot, rootErr := filepath.EvalSymlinks(root)
+	realPath, pathErr := resolveCandidate(path)
+	if rootErr == nil && pathErr == nil {
+		return lexicallyWithin(realRoot, realPath)
 	}
-	realRoot, err := filepath.EvalSymlinks(root)
-	if err != nil {
-		return false
+	return lexicallyWithin(root, path)
+}
+
+// resolveCandidate resolves path through symlinks. A file that does not
+// exist yet cannot be resolved, so the nearest existing ancestor is
+// resolved instead and the remainder rebuilt on top of it — which still
+// follows every symlink in the part of the path that does exist.
+func resolveCandidate(path string) (string, error) {
+	if resolved, err := filepath.EvalSymlinks(path); err == nil {
+		return resolved, nil
 	}
-	realPath, err := filepath.EvalSymlinks(path)
-	if err != nil {
-		// The file itself may not exist, which is the agent's problem and
-		// not a reason to answer the wrong question here: resolve the
-		// directory it would live in instead.
-		dir, dirErr := filepath.EvalSymlinks(filepath.Dir(path))
-		if dirErr != nil {
-			return false
+	dir, rest := filepath.Clean(path), ""
+	for {
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", fmt.Errorf("acp: no existing ancestor of %s", path)
 		}
-		realPath = filepath.Join(dir, filepath.Base(path))
+		rest = filepath.Join(filepath.Base(dir), rest)
+		dir = parent
+		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+			return filepath.Join(resolved, rest), nil
+		}
 	}
-	return lexicallyWithin(realRoot, realPath)
 }
 
 func lexicallyWithin(root, path string) bool {
@@ -1581,7 +1831,7 @@ func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
 	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
 	defer cancel()
 
-	init, err := probe(ctx, command, args)
+	init, err := probe(ctx, command, args, childEnv(nil, p.cfg.Env), workingDir())
 	if err != nil {
 		return []provider.Check{{Name: "acp agent", Detail: label + ": " + err.Error()}}
 	}
@@ -1604,10 +1854,16 @@ func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
 
 // probe runs one initialize exchange against a freshly spawned agent and
 // kills it again.
-func probe(ctx context.Context, command string, args []string) (initializeResult, error) {
+func probe(ctx context.Context, command string, args []string, env []string, dir string) (initializeResult, error) {
 	var init initializeResult
 
 	cmd := exec.Command(command, args...)
+	// The same environment and working directory a run would give the
+	// agent, so doctor answers the question a run will ask rather than a
+	// neighbouring one: an agent that finds its login from acp.env, or its
+	// config from the directory it starts in, must be probed with both.
+	cmd.Env = env
+	cmd.Dir = dir
 	setpgid(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -1682,6 +1938,18 @@ func probe(ctx context.Context, command string, args []string) (initializeResult
 	case <-ctx.Done():
 		return init, withTail(errors.New("the agent did not answer initialize"), &tail)
 	}
+}
+
+// workingDir is the directory doctor starts the agent in. Provider.Doctor
+// is not handed the workspace root — the provider contract gives it only a
+// binary — so this is Sirdar's own directory, which is the workspace root
+// for a doctor run invoked there.
+func workingDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return ""
+	}
+	return dir
 }
 
 // withTail adds the agent's last stderr line to an error, which is where

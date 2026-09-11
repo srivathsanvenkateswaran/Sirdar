@@ -213,6 +213,18 @@ func workspace(t *testing.T) string {
 	if err := os.WriteFile(filepath.Join(dir, "inside.txt"), []byte("line one\nline two\n"), 0o644); err != nil {
 		t.Fatalf("write inside.txt: %v", err)
 	}
+
+	// A symlink inside the workspace pointing out of it, which is the
+	// escape a lexical path check would wave through. t.TempDir gives each
+	// call its own directory under the test's, so this one is a sibling of
+	// the workspace rather than a child.
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("private key"), 0o600); err != nil {
+		t.Fatalf("write secret.txt: %v", err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
 	return dir
 }
 
@@ -560,10 +572,87 @@ func TestResumeNeedsTheLoadSessionCapability(t *testing.T) {
 	if !strings.Contains(err.Error(), "loadSession") {
 		t.Errorf("error = %v", err)
 	}
+	// That Start returned at all is the leak check: abort joins the event
+	// pump before it gives up, so a pump parked on a channel nobody reads
+	// would hang here rather than leak quietly.
+}
+
+// TestEventPumpExitsWithTheSession is the same goroutine-teardown check on
+// the path that succeeds.
+func TestEventPumpExitsWithTheSession(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-basic.jsonl", cwd, nil)
+	drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
 	select {
-	case <-lastPumpDone:
+	case <-sess.(*session).pumpExited():
 	case <-time.After(5 * time.Second):
-		t.Error("the event pump leaked after a failed Start")
+		t.Error("the event pump is still running after Wait")
+	}
+}
+
+// TestGuardsHoldAgainstAMisbehavingAgent covers the three things a run has
+// to survive from an agent it does not control: a nested subagent session
+// talking over the run's own, a symlink out of the workspace, and a write
+// that completed without ever asking.
+func TestGuardsHoldAgainstAMisbehavingAgent(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-guards.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	// The subagent session's message is not this session's answer.
+	if string(res.Final) != `{"title":"Guarded","ok":true}` {
+		t.Errorf("Result.Final = %s", res.Final)
+	}
+	for _, ev := range evs {
+		if strings.Contains(ev.Text, "leaked") {
+			t.Errorf("a subagent session's message reached the transcript: %+v", ev)
+		}
+	}
+	if len(only(evs, provider.EvToolStarted)) != 1 {
+		t.Errorf("tool started events = %+v", only(evs, provider.EvToolStarted))
+	}
+
+	// Both requests naming the subagent session are refused.
+	for _, line := range []string{
+		findAnswer(t, res, "session/request_permission"),
+		findAnswer(t, res, "fs/read_text_file"),
+	} {
+		if !strings.Contains(line, "is not it") {
+			t.Errorf("subagent request answer = %s, want a refusal", line)
+		}
+	}
+
+	// The read through the symlink is refused as out of workspace.
+	escape := ""
+	for _, line := range res.StderrTail {
+		if strings.Contains(line, "fs/read_text_file: ") {
+			escape = line
+		}
+	}
+	if !strings.Contains(escape, "outside it") {
+		t.Errorf("symlinked read answer = %s, want a refusal", escape)
+	}
+	if content, err := os.ReadFile(filepath.Join(cwd, "escape", "secret.txt")); err != nil || string(content) != "private key" {
+		t.Fatalf("the symlink under test does not lead to the file it is meant to: %v", err)
+	}
+
+	// The unannounced write is reported, since it cannot be prevented.
+	warned := false
+	for _, ev := range only(evs, provider.EvError) {
+		if strings.Contains(ev.Text, "without asking permission") && ev.Tool == "edit" {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("a completed edit tool call raised no warning; errors = %+v", only(evs, provider.EvError))
 	}
 }
 
@@ -608,9 +697,15 @@ func TestStripFenceAndJSONObject(t *testing.T) {
 		{"{\"a\":1}", `{"a":1}`},
 		{"```json\n{\"a\":1}\n```", `{"a":1}`},
 		{"```\n{\"a\":1}\n```", `{"a":1}`},
-		{"Here you go:\n{\"a\":1}", ""},
+		// A prose prefix is tolerated, and the last top-level object wins,
+		// so an agent that shows an example before answering is read as
+		// having answered.
+		{"Here you go:\n{\"a\":1}", `{"a":1}`},
+		{"e.g. {\"a\":1}\nand the note:\n{\"b\":2}", `{"b":2}`},
+		{`{"text":"a } brace in a string"}`, `{"text":"a } brace in a string"}`},
 		{"just prose", ""},
 		{"[1,2,3]", ""},
+		{"{\"a\":", ""},
 	}
 	for _, c := range cases {
 		got := string(jsonObject(c.in))
@@ -626,6 +721,14 @@ func TestPolicyToolMapsACPKinds(t *testing.T) {
 		{"edit", "Edit src/main.go", "Write"},
 		{"execute", "Run tests", "Bash"},
 		{"", "mcp__grafana__query_loki_logs", "mcp__grafana__query_loki_logs"},
+		{"read", "mcp__grafana__query_loki_logs", "mcp__grafana__query_loki_logs"},
+		// A kind that describes a change is judged on the kind, whatever
+		// the agent chose to call it: an mcp__-shaped title must not carry
+		// a write into permissions.mcp, where a read-shaped name passes.
+		{"edit", "mcp__editor__apply_diff", "Write"},
+		{"delete", "mcp__fs__remove_path", "Write"},
+		{"move", "mcp__fs__rename", "Write"},
+		{"execute", "mcp__shell__run_command", "Bash"},
 		{"other", "Do a thing", "Do a thing"},
 		{"", "", "unknown"},
 	}
