@@ -5,6 +5,10 @@ project_name: sirdar
 before:
   hooks:
     - go mod tidy
+    # `sirdar serve` embeds the shared frontend from internal/httpapi/ui/dist
+    # (internal/httpapi/ui/ui.go). The checked-in placeholder there is just a
+    # .gitkeep, so an unbuilt tree ships a binary whose web UI is empty.
+    - make ui
 
 builds:
   - id: sirdar
@@ -15,23 +19,110 @@ builds:
     goos:
       - darwin
       - linux
+      - windows
     goarch:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X main.version={{.Version}}
+      - -s -w -X main.version={{.Version}} -X main.commit={{.ShortCommit}} -X main.date={{.Date}}
 
 archives:
   - id: sirdar
+    ids: [sirdar]
     name_template: "sirdar_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
 
 checksum:
   name_template: "checksums.txt"
 
+# Grouped by conventional-commit prefix; anything under `docs:` (and the
+# usual merge noise) never makes it into the release notes.
 changelog:
   use: git
   sort: asc
+  groups:
+    - title: "Features"
+      regexp: '^.*?feat(\([[:word:]-]+\))??!?:.+$'
+      order: 0
+    - title: "Fixes"
+      regexp: '^.*?fix(\([[:word:]-]+\))??!?:.+$'
+      order: 1
+    - title: "Other"
+      order: 999
+  filters:
+    exclude:
+      - '^docs'
+      - '^test'
+      - '^chore'
+      - 'Merge pull request'
+      - 'Merge branch'
 
 release:
+  github:
+    owner: srivathsanvenkateswaran
+    name: Sirdar
+  # A draft is never auto-published. Someone has to open it on GitHub, read
+  # the notes, and hit "Publish release" on purpose.
   draft: true
+
+# Publishes a Homebrew formula to a separate tap repo. That repo
+# (srivathsanvenkateswaran/homebrew-sirdar) does not exist yet — create it as
+# an empty public GitHub repo before the first real (non-draft) release; see
+# docs/release.md for the exact steps. `skip_upload: auto` means goreleaser
+# skips the formula push for prereleases and, more importantly, never pushes
+# for a draft: a draft release has no public tag for `brew` to point at, so
+# publishing the formula before the release is published would 404.
+brews:
+  - name: sirdar
+    repository:
+      owner: srivathsanvenkateswaran
+      name: homebrew-sirdar
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    skip_upload: auto
+    description: "An open-source harness for engineering-level support tickets."
+    homepage: "https://github.com/srivathsanvenkateswaran/Sirdar"
+    license: "Apache-2.0"
+    install: |
+      bin.install "sirdar"
+    test: |
+      system "#{bin}/sirdar", "version"
+
+# deb/rpm packages for Linux. nfpm only packages the linux binaries from the
+# `sirdar` build above; darwin and windows archives are untouched by this.
+nfpms:
+  - id: sirdar
+    package_name: sirdar
+    file_name_template: "sirdar_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    maintainer: "Srivathsan Venkateswaran"
+    description: "An open-source harness for engineering-level support tickets."
+    homepage: "https://github.com/srivathsanvenkateswaran/Sirdar"
+    license: "Apache-2.0"
+    formats:
+      - deb
+      - rpm
+    bindir: /usr/bin
+
+# TODO: winget manifest, once the tap and a few releases have proven the
+# archive naming is stable. See https://goreleaser.com/customization/winget/
+# winget:
+#   - name: sirdar
+#     publisher: srivathsanvenkateswaran
+#     license: Apache-2.0
+#     homepage: "https://github.com/srivathsanvenkateswaran/Sirdar"
+#     repository:
+#       owner: srivathsanvenkateswaran
+#       name: winget-pkgs
+#       token: "{{ .Env.WINGET_GITHUB_TOKEN }}"
+
+# TODO: scoop bucket, same reasoning as winget above.
+# scoop:
+#   - name: sirdar
+#     homepage: "https://github.com/srivathsanvenkateswaran/Sirdar"
+#     license: Apache-2.0
+#     repository:
+#       owner: srivathsanvenkateswaran
+#       name: scoop-sirdar
+#       token: "{{ .Env.SCOOP_GITHUB_TOKEN }}"

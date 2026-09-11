@@ -11,8 +11,9 @@ import (
 	"os/exec"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 )
 
 const (
@@ -79,7 +80,7 @@ func Start(ctx context.Context, cfg ServerConfig, stderr io.Writer) (*Client, er
 	// launched through npx/uvx or a shell wrapper leaves grandchildren
 	// holding the inherited stdio pipes; killing only cmd.Process would
 	// leave those running and cmd.Wait blocked on the pipes they hold.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	procgroup.Setup(cmd)
 
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
@@ -442,18 +443,10 @@ func exitErr(err error) error {
 	return err
 }
 
-// killGroup SIGKILLs the server's process group (see the Setpgid comment
-// in Start), falling back to the immediate child if the group is gone.
+// killGroup SIGKILLs the server's process group (see the procgroup.Setup
+// call in Start), falling back to the immediate child if the group is gone.
 func (c *Client) killGroup() {
-	if c.cmd.Process == nil {
-		return
-	}
-	if pid := c.cmd.Process.Pid; pid > 0 {
-		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
-			return
-		}
-	}
-	_ = c.cmd.Process.Kill()
+	_ = procgroup.Kill(c.cmd)
 }
 
 // intID decodes a JSON-RPC id as an int. Sirdar only ever waits on ids

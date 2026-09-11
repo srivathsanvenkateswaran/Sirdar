@@ -31,6 +31,11 @@ type Bridge struct {
 // NewBridge returns the Bridge over svc that main passes to wails.Run.
 func NewBridge(svc *app.Service) *Bridge { return &Bridge{svc: svc} }
 
+// Version returns the desktop build's version, as stamped by
+// `wails build -ldflags "-X main.version=..."`. It has no app.Service
+// counterpart, so it is not in bridgeMethods: there is nothing to forward to.
+func (b *Bridge) Version() string { return version }
+
 // --- workspaces -------------------------------------------------------
 
 // Workspaces lists every registered workspace.

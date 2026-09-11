@@ -11,9 +11,9 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
@@ -60,7 +60,7 @@ func Start(ctx context.Context, command string, stderr io.Writer) (*Client, erro
 	// inherited stdio pipes open; killing only cmd.Process would leave
 	// those descendants running and cmd.Wait blocked on the pipes they
 	// still hold, well past the 5s deadline.
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	procgroup.Setup(cmd)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, fmt.Errorf("start adapter: %w", err)
@@ -360,13 +360,8 @@ func (c *Client) Close() error {
 }
 
 // killGroup sends SIGKILL to the adapter's whole process group (see the
-// Setpgid comment in Start), falling back to killing just cmd.Process if
-// the group is somehow gone already.
+// procgroup.Setup call in Start), falling back to killing just cmd.Process
+// if the group is somehow gone already.
 func (c *Client) killGroup() {
-	if pid := c.cmd.Process.Pid; pid > 0 {
-		if err := syscall.Kill(-pid, syscall.SIGKILL); err == nil {
-			return
-		}
-	}
-	_ = c.cmd.Process.Kill()
+	_ = procgroup.Kill(c.cmd)
 }
