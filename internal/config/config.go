@@ -3,6 +3,7 @@ package config
 
 import (
 	"fmt"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -174,6 +175,46 @@ const RallyDefaultBaseURL = "https://rally1.rallydev.com"
 // it, so it is named in a warning instead.
 const DefaultAttachmentMaxBytes = 10 << 20
 
+// NotifyConfig posts a short digest of every finished run to a chat
+// channel or a webhook receiver. Every destination is optional and any
+// number may be configured at once; a workspace with no notify block posts
+// nothing.
+//
+// On lists the terminal states worth hearing about; empty means all four.
+// IncludeTitle is off because a support ticket's subject routinely names
+// the customer who filed it, and a chat channel is a wider audience than
+// the notes directory. The note's body is never sent, whatever it is set to.
+//
+// Slack.WebhookURL and Teams.WebhookURL are credential references
+// ("env:NAME" or "keychain:SERVICE"), never the URL itself: an incoming
+// webhook URL carries its own authorisation in its path, so it is a secret.
+// A generic hook's url is a plain URL — it identifies a receiver that
+// authenticates with the headers instead — and its headers' values and
+// secret are credential references when they carry one.
+type NotifyConfig struct {
+	On           []string       `yaml:"on,omitempty"`
+	IncludeTitle bool           `yaml:"includeTitle,omitempty"`
+	Slack        *WebhookConfig `yaml:"slack,omitempty"`
+	Teams        *WebhookConfig `yaml:"teams,omitempty"`
+	Generic      []GenericHook  `yaml:"generic,omitempty"`
+}
+
+// WebhookConfig is one chat destination: the credential reference holding
+// its incoming-webhook URL.
+type WebhookConfig struct {
+	WebhookURL string `yaml:"webhookUrl"`
+}
+
+// GenericHook is one receiver that takes the run event as JSON.
+type GenericHook struct {
+	URL     string            `yaml:"url"`
+	Headers map[string]string `yaml:"headers,omitempty"`
+	Secret  string            `yaml:"secret,omitempty"`
+}
+
+// NotifyStates are the terminal run states a notify.on list may name.
+var NotifyStates = map[string]bool{"completed": true, "failed": true, "over_budget": true, "blocked": true}
+
 // LanguageConfig names the two languages a run writes in.
 //
 // Notes is the language of the engineer's note — the whole body of it,
@@ -277,6 +318,7 @@ type Config struct {
 	// exposes. They are off unless enabled, and exposing them off the
 	// loopback interface needs `serve --allow-remote` and a TLS proxy.
 	Webhooks WebhooksConfig `yaml:"webhooks"`
+	Notify   *NotifyConfig  `yaml:"notify,omitempty"`
 
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
 }
@@ -436,7 +478,61 @@ func (c *Config) Validate() error {
 	if err := validateSource("sources.helpdesk", c.Sources.Helpdesk, false); err != nil {
 		return err
 	}
-	return validateWebhooks(&c.Webhooks)
+	if err := validateWebhooks(&c.Webhooks); err != nil {
+		return err
+	}
+	return validateNotify(c.Notify)
+}
+
+// validateNotify checks the notify block: the states named are states a run
+// can end in, the chat webhooks name a credential rather than carry one,
+// and every URL is one Sirdar will post a run's metadata to.
+func validateNotify(n *NotifyConfig) error {
+	if n == nil {
+		return nil
+	}
+	for _, state := range n.On {
+		if !NotifyStates[state] {
+			return fmt.Errorf("config: notify.on: must be completed, failed, over_budget or blocked, got %q", state)
+		}
+	}
+	for _, f := range []struct {
+		key string
+		w   *WebhookConfig
+	}{{"notify.slack", n.Slack}, {"notify.teams", n.Teams}} {
+		if f.w == nil {
+			continue
+		}
+		if f.w.WebhookURL == "" {
+			return fmt.Errorf("config: %s.webhookUrl: is required", f.key)
+		}
+		if err := credentialRef(f.key+".webhookUrl", f.w.WebhookURL); err != nil {
+			return err
+		}
+	}
+	for i, g := range n.Generic {
+		key := fmt.Sprintf("notify.generic[%d]", i)
+		if err := ValidateWebhookURL(key+".url", g.URL); err != nil {
+			return err
+		}
+		for name, value := range g.Headers {
+			if strings.TrimSpace(name) == "" {
+				return fmt.Errorf("config: %s.headers: a header name is empty", key)
+			}
+			if value == "" {
+				return fmt.Errorf("config: %s.headers.%s: is empty", key, name)
+			}
+			if credentialShapedHeader(name) && !IsCredentialRef(value) {
+				return fmt.Errorf("config: %s.headers.%s: looks like a credential and must start with env: or keychain:", key, name)
+			}
+		}
+		if g.Secret != "" {
+			if err := credentialRef(key+".secret", g.Secret); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
 }
 
 // validateLanguage checks the language block. notes: has to be a language
@@ -468,6 +564,55 @@ func validateACP(c *Config) error {
 		return fmt.Errorf("config: acp.command: is required when provider is acp")
 	}
 	return nil
+}
+
+// ValidateWebhookURL accepts an absolute https URL, or an http one on the
+// loopback interface for a receiver running on this machine. Plain http to
+// anywhere else would put the run's metadata, and any token the headers
+// carry, on the wire in the clear.
+func ValidateWebhookURL(key, raw string) error {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") {
+		return fmt.Errorf("config: %s: must be an absolute http or https URL, got %q", key, raw)
+	}
+	if u.User != nil {
+		// The value may itself be a credential straight out of a
+		// resolved reference, so the error names the problem without
+		// echoing anything the URL carried.
+		return fmt.Errorf("config: %s: must not carry userinfo (a username or password in the URL)", key)
+	}
+	if u.Scheme == "http" && !isLoopback(u.Hostname()) {
+		return fmt.Errorf("config: %s: must be https unless the host is loopback, got %q", key, raw)
+	}
+	return nil
+}
+
+// credentialShapedHeader reports whether name is the kind of header that
+// carries a credential: Authorization, or anything ending in -Token, -Key
+// or -Secret (case-insensitive). config.go requires those to be an env:/
+// keychain: reference, the same way it already requires one for
+// notify.slack.webhookUrl and notify.generic[].secret.
+func credentialShapedHeader(name string) bool {
+	n := strings.ToLower(strings.TrimSpace(name))
+	if n == "authorization" {
+		return true
+	}
+	for _, suffix := range []string{"-token", "-key", "-secret"} {
+		if strings.HasSuffix(n, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
+// isLoopback reports whether host names this machine, by name or by
+// address.
+func isLoopback(host string) bool {
+	if strings.EqualFold(host, "localhost") {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
 }
 
 // validateOpenAI checks the openai block. baseUrl and model are required

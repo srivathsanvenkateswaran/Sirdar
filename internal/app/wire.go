@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/acp"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
@@ -60,6 +61,15 @@ func BuildDeps(cfg *config.Config, providerName, model string, stderr io.Writer)
 		Stdin:    os.Stdin,
 		Env:      os.Environ(),
 	}
+
+	// A notify block that cannot be resolved — an env: ref for a webhook
+	// nobody exported — costs the workspace its notifications, not its
+	// runs. It is said once, here, rather than once per finished run.
+	notifier, err := notify.FromConfig(cfg, creds)
+	if err != nil {
+		fmt.Fprintf(stderr, "sirdar: notifications are off: %v\n", err)
+	}
+	deps.Notifier = notifier
 
 	if sc := cfg.Sources.Tracker; sc != nil {
 		tracker, err := adapters.tracker(cfg, sc, creds)
