@@ -198,7 +198,7 @@ Retries were discarded when the queue backend returned a transient error.
           "additionalProperties": false,
           "required": ["language", "text"],
           "properties": {
-            "language": { "type": "string", "enum": ["ar", "en"] },
+            "language": { "type": "string", "minLength": 2 },
             "text": { "type": "string" }
           }
         },
