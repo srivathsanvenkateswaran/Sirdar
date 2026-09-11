@@ -93,6 +93,14 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 
 	resp, err := c.send(ctx, req)
 	if err != nil {
+		// A refused redirect is reported by host alone: the *url.Error Go
+		// wraps it in carries the target's full path and query, which is
+		// attacker-authored (the Location header) and may itself carry a
+		// token, and has no business in a message a run surfaces to an
+		// agent.
+		if host, ok := httpx.RedirectHost(err); ok {
+			return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("zoho desk: GET %s: redirect to untrusted host %s", path, host)}
+		}
 		var serr *source.Error
 		if errors.As(err, &serr) {
 			return nil, serr
@@ -119,11 +127,21 @@ func (c *Client) getRaw(ctx context.Context, path string, query url.Values) ([]b
 // either way it should not be read into memory whole.
 const maxJSONBytes = 8 << 20
 
+// http returns the client every request is sent with, wrapped in the same
+// trust-checked redirect policy Attachments uses: the API path sends the
+// orgId header and a live "Authorization: Zoho-oauthtoken" credential on
+// every request, and Go only strips Authorization (not a custom header like
+// orgId) on a cross-host redirect — it still follows the hop and still hands
+// the response back. Wrapping here, rather than once in New, matches trust()
+// being rebuilt whenever BaseURL changes: an unwrapped HTTP field set by a
+// caller is wrapped fresh on every call rather than trusted to have been
+// wrapped already.
 func (c *Client) http() *http.Client {
-	if c.HTTP != nil {
-		return c.HTTP
+	base := c.HTTP
+	if base == nil {
+		base = &http.Client{Timeout: 30 * time.Second}
 	}
-	return &http.Client{Timeout: 30 * time.Second}
+	return httpx.Client(base, c.trust(), maxRedirects)
 }
 
 // setHeaders puts the org id and a current access token on req, returning

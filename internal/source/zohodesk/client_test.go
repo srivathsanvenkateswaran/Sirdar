@@ -977,6 +977,52 @@ func TestAttachments_RedirectToAForeignHostIsRefused(t *testing.T) {
 	}
 }
 
+// TestGet_RedirectToAForeignHostIsRefused: the main API path (Get, via
+// getRaw/send) must refuse a cross-host redirect the same way Attachments
+// does. Go strips the Authorization header on a cross-host hop but still
+// follows it and still hands back the response, and it strips nothing from
+// the orgId header at all — so the fix has to be the redirect policy
+// refusing the hop outright, not trusting Go's header stripping. The
+// resulting error must name only the foreign host, never the redirect's
+// full path and query (a Location header is attacker-authored and can carry
+// a token of its own).
+func TestGet_RedirectToAForeignHostIsRefused(t *testing.T) {
+	var foreignHits int32
+	foreign := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&foreignHits, 1)
+		w.Write([]byte("stolen"))
+	}))
+	t.Cleanup(foreign.Close)
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/api/v1/tickets/911", func(w http.ResponseWriter, r *http.Request) {
+		checkHeaders(t, r)
+		http.Redirect(w, r, foreign.URL+"/steal?token=super-secret", http.StatusFound)
+	})
+	desk := httptest.NewServer(mux)
+	t.Cleanup(desk.Close)
+
+	c := NewWithToken(desk.URL, testOrgID, testToken)
+	c.HTTP = desk.Client()
+
+	_, err := c.Get(context.Background(), "911")
+	if err == nil {
+		t.Fatal("a redirect off the desk host must be refused, not followed")
+	}
+	if n := atomic.LoadInt32(&foreignHits); n != 0 {
+		t.Fatalf("the redirect target was contacted %d times", n)
+	}
+
+	msg := err.Error()
+	wantHost := strings.TrimPrefix(foreign.URL, "http://")
+	if !strings.Contains(msg, wantHost) {
+		t.Fatalf("error %q does not name the refused host %q", msg, wantHost)
+	}
+	if strings.Contains(msg, "steal") || strings.Contains(msg, "super-secret") {
+		t.Fatalf("error %q leaks the redirect's path or query, not just its host", msg)
+	}
+}
+
 // TestSend_RetryAfterIsHonouredOnce is the 429 path: a short Retry-After
 // is sat out and the request replayed, and only once.
 func TestSend_RetryAfterIsHonouredOnce(t *testing.T) {
