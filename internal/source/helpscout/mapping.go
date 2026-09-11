@@ -108,13 +108,18 @@ type hsLinks struct {
 	} `json:"next"`
 }
 
-// hsThreadPage is one page of the thread feed, whether it arrived embedded
-// on the conversation or from following a "next" link.
+// hsThreadPage is one page of the dedicated thread-list endpoint
+// (`GET /v2/conversations/{id}/threads?page=N`), the only place a "next"
+// link or a page count for the thread feed appears: the single-conversation
+// `?embed=threads` response carries neither.
 type hsThreadPage struct {
 	Embedded struct {
 		Threads []hsThread `json:"threads"`
 	} `json:"_embedded"`
 	Links hsLinks `json:"_links"`
+	Page  struct {
+		TotalPages int `json:"totalPages"`
+	} `json:"page"`
 }
 
 type hsConversation struct {
@@ -134,7 +139,6 @@ type hsConversation struct {
 	Embedded        struct {
 		Threads []hsThread `json:"threads"`
 	} `json:"_embedded"`
-	Links hsLinks `json:"_links"`
 }
 
 // parseTime parses a Help Scout timestamp (RFC3339, e.g.
@@ -240,16 +244,32 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 // --- Threads ---
 
 // listThreads returns every thread on a conversation: the page embedded on
-// the conversation itself, then each "next" page until the feed ends or
-// maxThreadPages is reached. A "next" link arrives inside a response body,
-// so it is checked against urlTrust before it is followed — an untrusted
-// one stops pagination with a warning rather than being fetched.
-func (c *Client) listThreads(ctx context.Context, conv hsConversation) ([]hsThread, []string, error) {
+// the conversation itself (via `?embed=threads`), plus whatever the
+// dedicated thread-list endpoint has beyond it.
+//
+// The embedded response carries no pagination link of its own — a
+// realistic Help Scout response has only `_links.self` on it — so a full
+// page (threadsPageSize entries) is the only signal that more threads might
+// exist. When it is, the rest is fetched from
+// `GET /v2/conversations/{id}/threads?page=N` starting at page 2, following
+// that endpoint's own `_links.next` and `page.totalPages` until the feed
+// ends or maxThreadPages total pages (the embedded one included) have been
+// read. A "next" link arrives inside a response body, so it is checked
+// against urlTrust before it is followed — an untrusted one stops
+// pagination with a warning rather than being fetched.
+func (c *Client) listThreads(ctx context.Context, id string, conv hsConversation) ([]hsThread, []string, error) {
 	all := append([]hsThread(nil), conv.Embedded.Threads...)
-	next := conv.Links.Next.Href
 	var warnings []string
 
-	for page := 1; next != ""; page++ {
+	if len(conv.Embedded.Threads) < threadsPageSize {
+		// A short first page is the whole feed: Help Scout would not hand
+		// back fewer than a full page unless there was nothing left.
+		return all, warnings, nil
+	}
+
+	pagesSeen := 1 // the embedded page already counts as page 1
+	next := fmt.Sprintf("%s/v2/conversations/%s/threads?page=2", c.baseURL, url.PathEscape(id))
+	for next != "" {
 		u, err := url.Parse(next)
 		if err != nil {
 			warnings = append(warnings, "helpscout: thread page link is not a valid url")
@@ -260,7 +280,7 @@ func (c *Client) listThreads(ctx context.Context, conv hsConversation) ([]hsThre
 			warnings = append(warnings, fmt.Sprintf("helpscout: thread page host not trusted: %s", host))
 			break
 		}
-		if page >= maxThreadPages {
+		if pagesSeen >= maxThreadPages {
 			warnings = append(warnings, fmt.Sprintf("helpscout: thread pages capped at %d", maxThreadPages))
 			break
 		}
@@ -270,10 +290,14 @@ func (c *Client) listThreads(ctx context.Context, conv hsConversation) ([]hsThre
 			return nil, nil, err
 		}
 		all = append(all, pg.Embedded.Threads...)
+		pagesSeen++
 		if pg.Links.Next.Href == next {
 			// A feed whose next link points at the page just read would
 			// loop for ever; stop rather than trust it.
 			warnings = append(warnings, "helpscout: thread pagination stopped on a self-referential next link")
+			break
+		}
+		if pg.Page.TotalPages != 0 && pagesSeen >= pg.Page.TotalPages {
 			break
 		}
 		next = pg.Links.Next.Href
@@ -328,7 +352,7 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	if err != nil {
 		return nil, err
 	}
-	threads, warnings, err := c.listThreads(ctx, conv)
+	threads, warnings, err := c.listThreads(ctx, id, conv)
 	if err != nil {
 		return nil, err
 	}

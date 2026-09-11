@@ -460,7 +460,13 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	if content != "" {
 		text, _ := htmltext.ToMarkdown(content)
 		author := ""
+		// The ticket's own content is the customer's original description
+		// only when the ticket has a contact association to attribute it
+		// to; a ticket created without one (an internal ticket, an import)
+		// is staff content, not a customer's words.
+		role := ticket.RoleAgent
 		if ids := t.assocIDs("contact"); len(ids) > 0 {
+			role = ticket.RoleCustomer
 			if contact, lerr := c.lookupContact(ctx, ids[0]); lerr == nil {
 				author = contact.name()
 			} else {
@@ -470,7 +476,7 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 		out = append(out, ticket.Message{
 			At:     parseTime(firstNonEmpty(props["createdate"], t.CreatedAt)),
 			Author: author,
-			Role:   ticket.RoleCustomer,
+			Role:   role,
 			Text:   text,
 		})
 	}

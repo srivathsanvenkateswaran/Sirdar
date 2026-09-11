@@ -12,5 +12,5 @@
     ]
   },
   "_links": {"next": {"href": "https://api.helpscout.net/v2/conversations/123/threads?page=3"}},
-  "page": {"totalPages": 5}
+  "page": {"totalPages": 2}
 }

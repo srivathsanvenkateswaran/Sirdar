@@ -143,11 +143,11 @@ func (d Deps) childEnv() []string {
 
 // credentialEnvNames collects the variable names behind every "env:"
 // credential reference in the workspace configuration — the sources' and
-// the model endpoint's alike. An OAuth grant's
-// client secret and refresh token are longer-lived than the access token a
-// static token: ref holds, so they matter here more, not less: a refresh
-// token read out of the agent's environment mints access tokens until
-// somebody revokes it at the Zoho console. A built-in tracker's or
+// the model endpoint's alike. An OAuth grant's client secret and refresh
+// token matter here more, not less, than a plain "token:" ref's access
+// token: they are longer-lived, since a refresh token read out of the
+// agent's environment mints access tokens until somebody revokes it at the
+// Zoho console. A built-in tracker's or
 // helpdesk's apiToken, pat, apiKey, oauthToken, accessToken or Help Scout
 // clientId/clientSecret is stripped for the same reason: the agent reads
 // the tickets Sirdar hands it, never the source. Help Scout's pair is the

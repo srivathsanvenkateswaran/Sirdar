@@ -66,15 +66,15 @@ type icPart struct {
 }
 
 type icConversation struct {
-	Type      string `json:"type"`
-	ID        string `json:"id"`
-	Title     string `json:"title"`
-	State     string `json:"state"`
-	Open      bool   `json:"open"`
-	Priority  string `json:"priority"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
-	Source    icSource
+	Type      string   `json:"type"`
+	ID        string   `json:"id"`
+	Title     string   `json:"title"`
+	State     string   `json:"state"`
+	Open      bool     `json:"open"`
+	Priority  string   `json:"priority"`
+	CreatedAt int64    `json:"created_at"`
+	UpdatedAt int64    `json:"updated_at"`
+	Source    icSource `json:"source"`
 	Contacts  struct {
 		Contacts []icAuthor `json:"contacts"`
 	} `json:"contacts"`
@@ -311,10 +311,11 @@ func authorRole(t string) ticket.Role {
 }
 
 // Threads returns the conversation as an ordered thread: the source
-// message first, then each conversation part that carries text or an
-// attachment. Parts with neither — Intercom emits one for every
-// assignment, close and reopen — are left out rather than filling the
-// thread with empty entries.
+// message first, then each conversation part, each held to the same
+// filter — neither text nor an attachment means it is left out rather than
+// filling the thread with an empty entry. Intercom emits a body-less part
+// for every assignment, close and reopen, and a source message can
+// likewise carry an empty body.
 //
 // Intercom caps an inline part list at 500 entries; when the conversation
 // says it has more than it sent, that is recorded as a warning, since
@@ -329,13 +330,15 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 	msgs := make(ticket.Thread, 0, len(conv.ConversationParts.Parts)+1)
 
 	sourceText, _ := htmltext.ToMarkdown(conv.Source.Body)
-	msgs = append(msgs, ticket.Message{
-		At:            unixTime(conv.CreatedAt),
-		Author:        conv.Source.Author.name(),
-		Role:          authorRole(conv.Source.Author.Type),
-		Text:          sourceText,
-		AttachmentIDs: attachmentIDs(conv.Source.ID, "source", conv.Source.Attachments),
-	})
+	if strings.TrimSpace(sourceText) != "" || len(conv.Source.Attachments) > 0 {
+		msgs = append(msgs, ticket.Message{
+			At:            unixTime(conv.CreatedAt),
+			Author:        conv.Source.Author.name(),
+			Role:          authorRole(conv.Source.Author.Type),
+			Text:          sourceText,
+			AttachmentIDs: attachmentIDs(conv.Source.ID, "source", conv.Source.Attachments),
+		})
+	}
 
 	for _, p := range conv.ConversationParts.Parts {
 		text, _ := htmltext.ToMarkdown(p.Body)

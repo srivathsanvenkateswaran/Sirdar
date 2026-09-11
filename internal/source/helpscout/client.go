@@ -65,10 +65,19 @@ const tokenSkew = 60 * time.Second
 var maxAttachmentBytes int64 = 64 << 20
 
 // maxThreadPages bounds how many pages of a conversation's thread feed are
-// followed. A feed still paginating past this many pages stops with a
-// warning rather than sweeping without bound. It is a var so a test can
-// shrink it instead of needing a 100-page fixture.
+// read in total, the page embedded on the conversation included. A feed
+// still paginating past this many pages stops with a warning rather than
+// sweeping without bound. It is a var so a test can shrink it instead of
+// needing a 100-page fixture.
 var maxThreadPages = 100
+
+// threadsPageSize is Help Scout's page size for the thread feed (per the
+// vendor docs: most list endpoints default to 50/page), and so also the
+// size of the page embedded on a conversation via `?embed=threads`. A
+// shorter embedded page is the whole feed; a full one is the signal to
+// fetch the rest from the dedicated thread-list endpoint. It is a var so a
+// test can shrink it instead of needing a 50-thread fixture.
+var threadsPageSize = 50
 
 // Config holds one Help Scout account's settings. Secrets arrive already
 // resolved by the wiring layer, so every field is a plain string.

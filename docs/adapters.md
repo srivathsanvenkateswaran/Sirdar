@@ -410,12 +410,15 @@ a state change with no body (role `system`). Anything else — `chat`,
 `beaconchat`, `phone`, `forwardchild`, `forwardparent` — falls back to
 `createdBy.type`. Bodies are HTML and go through `htmltext`. Draft threads
 are left out: an unsent reply is not part of the conversation that happened.
-Threads beyond the embedded page are followed through the feed's `_links.next`,
-which is checked against `api.helpscout.net` before it is fetched.
+The single-conversation `?embed=threads` response carries no pagination link
+of its own, so a full page (the same size Help Scout uses for the dedicated
+thread-list endpoint) is the signal that more threads might exist; the rest
+is fetched from `GET /v2/conversations/{id}/threads?page=N`, following that
+endpoint's own `_links.next` and `page.totalPages`, each page checked against
+`api.helpscout.net` before it is fetched.
 `Attachments` reads each thread's `_embedded.attachments` and fetches the
-bytes from
-`/v2/conversations/{id}/threads/{threadId}/attachments/{attachmentId}/data`,
-which returns them base64-encoded inside JSON.
+bytes from `/v2/conversations/{id}/attachments/{attachmentId}/data`, which
+returns them base64-encoded inside JSON.
 
 **Known limitations.**
 - Everything, attachment bytes included, comes from `api.helpscout.net`, so
@@ -460,9 +463,11 @@ empty with a warning rather than a wrong link.
 entry in `conversation_parts`. Roles come from `author.type`: `user` and
 `lead` are the customer, `admin` and `team` are staff, `bot` is `system`; a
 part whose `part_type` is `note` is admin-to-admin and gets the
-` (internal)` author suffix. Parts carrying neither text nor an attachment —
-Intercom emits one for every assignment, close and reopen — are left out
-rather than filling the thread with empty entries. `Attachments` downloads
+` (internal)` author suffix. The source message and every part are held to
+the same filter: neither text nor an attachment means it is left out rather
+than filling the thread with an empty entry — Intercom emits a body-less
+part for every assignment, close and reopen, and a source message can
+likewise carry an empty `body`. `Attachments` downloads
 the source message's and each part's `attachments[]`; the access token goes
 only to `api.intercom.io`, while `*.intercom.io`, `*.intercomcdn.com`,
 `*.intercomassets.com` and the numbered `intercom-attachments-N.com` family
@@ -510,8 +515,10 @@ object endpoints, cached per client. The URL is
 id read once from `GET /account-info/v3/details`.
 
 **Threads and attachments.** A HubSpot ticket does not carry its
-conversation inline: the ticket's own `content` is the customer's original
-description and becomes the first message, and everything after it comes
+conversation inline: the ticket's own `content` becomes the first message,
+attributed to the customer only when the ticket has a contact association
+to name — a ticket created without one is staff content, not a customer's
+words, so it maps to `agent` instead. Everything after it comes
 from the associated Conversations-inbox thread, through
 `GET /conversations/v3/conversations/threads/{threadId}/messages` (paged by
 `paging.next.after`, capped at 100 pages). A message's `type` is the

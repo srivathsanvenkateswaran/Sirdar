@@ -70,8 +70,9 @@ var maxAttachmentBytes int64 = 64 << 20
 var maxMessagePages = 100
 
 // messagesPerPage is the page size asked for when listing a thread's
-// messages. It is a var for the same reason.
-var messagesPerPage = 100
+// messages: HubSpot's own documented cap for the threads/messages
+// endpoints. It is a var for the same reason as maxMessagePages.
+var messagesPerPage = 500
 
 // Config holds one HubSpot account's settings. Secrets arrive already
 // resolved by the wiring layer, so every field is a plain string.

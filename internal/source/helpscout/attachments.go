@@ -30,7 +30,7 @@ type attachmentRef struct {
 // back relative; otherwise the documented path built from ids this client
 // already holds. A link taken out of a response body is checked against
 // urlTrust before it is used, same as any other.
-func (c *Client) dataURL(convID string, threadID int64, a hsAttachment) string {
+func (c *Client) dataURL(convID string, a hsAttachment) string {
 	href := strings.TrimSpace(a.Links.Data.Href)
 	switch {
 	case href == "":
@@ -39,8 +39,8 @@ func (c *Client) dataURL(convID string, threadID int64, a hsAttachment) string {
 	default:
 		return href
 	}
-	return fmt.Sprintf("%s/v2/conversations/%s/threads/%d/attachments/%d/data",
-		c.baseURL, url.PathEscape(convID), threadID, a.ID)
+	return fmt.Sprintf("%s/v2/conversations/%s/attachments/%d/data",
+		c.baseURL, url.PathEscape(convID), a.ID)
 }
 
 // sanitizeName turns an attachment name taken from the API response into a
@@ -136,7 +136,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	if err != nil {
 		return nil, err
 	}
-	threads, pagingWarnings, err := c.listThreads(ctx, conv)
+	threads, pagingWarnings, err := c.listThreads(ctx, id, conv)
 	if err != nil {
 		return nil, err
 	}
@@ -148,7 +148,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 				ID:   strconv.FormatInt(a.ID, 10),
 				Name: a.Filename,
 				MIME: a.MimeType,
-				URL:  c.dataURL(id, th.ID, a),
+				URL:  c.dataURL(id, a),
 			})
 		}
 	}

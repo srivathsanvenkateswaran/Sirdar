@@ -20,5 +20,5 @@
       }
     ]
   },
-  "_links": {"next": {"href": "https://api.helpscout.net/v2/conversations/123/threads?page=2"}}
+  "_links": {"self": {"href": "https://api.helpscout.net/v2/conversations/123"}}
 }

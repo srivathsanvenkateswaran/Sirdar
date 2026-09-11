@@ -417,6 +417,9 @@ func TestThreads_FollowsNextPageLink(t *testing.T) {
 	a := newAPI(t, conversationHandler(t, "conversation_paged.json"))
 	c := newClient(t, map[string]string{apiHost: addrOf(a.Server)})
 
+	oldSize := threadsPageSize
+	threadsPageSize = 1 // the fixture embeds one thread, which must read as a full first page
+	defer func() { threadsPageSize = oldSize }()
 	old := maxThreadPages
 	maxThreadPages = 2
 	defer func() { maxThreadPages = old }()
@@ -441,23 +444,78 @@ func TestThreads_FollowsNextPageLink(t *testing.T) {
 }
 
 func TestThreads_UntrustedNextPageStopsWithWarning(t *testing.T) {
-	a := newAPI(t, conversationHandler(t, "conversation_untrusted_page.json"))
+	// The embedded page is trusted by construction (api.helpscout.net), but
+	// its own "next" link — read from the dedicated threads endpoint's
+	// response, not the conversation's — points off-host; that page must be
+	// skipped rather than fetched.
+	a := newAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v2/conversations/123":
+			writeFixture(t, w, "conversation_untrusted_page.json")
+		case r.URL.Path == "/v2/conversations/123/threads":
+			writeFixture(t, w, "threads_untrusted_next.json")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
+		}
+	})
 	evil := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Errorf("untrusted thread page host was called: %s", r.URL.Path)
 	}))
 	defer evil.Close()
 	c := newClient(t, map[string]string{apiHost: addrOf(a.Server), "threads.evil.example": addrOf(evil)})
 
+	old := threadsPageSize
+	threadsPageSize = 1 // both fixtures embed one thread, which must read as a full page
+	defer func() { threadsPageSize = old }()
+
 	th, err := c.Threads(context.Background(), "123")
 	if err != nil {
 		t.Fatalf("Threads: %v", err)
 	}
-	if len(th) != 1 {
-		t.Fatalf("len(thread) = %d, want 1", len(th))
+	if len(th) != 2 {
+		t.Fatalf("len(thread) = %d, want 2 (the embedded page plus the one trusted follow-up page)", len(th))
 	}
 	warnings := c.WarningsFor("123")
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "threads.evil.example") {
 		t.Errorf("warnings = %v, want one naming the untrusted host", warnings)
+	}
+}
+
+func TestThreads_StopsAtTotalPages(t *testing.T) {
+	// The dedicated endpoint's own page.totalPages says the feed ends at
+	// page 2, even though that page's "next" link (unrealistically) still
+	// points further: pagination must stop on totalPages without needing
+	// the maxThreadPages cap to kick in.
+	a := newAPI(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == "/v2/conversations/123":
+			writeFixture(t, w, "conversation_paged.json")
+		case r.URL.Path == "/v2/conversations/123/threads":
+			writeFixture(t, w, "threads_page2_final.json")
+		default:
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte(`{"error":"not found"}`))
+		}
+	})
+	c := newClient(t, map[string]string{apiHost: addrOf(a.Server)})
+
+	old := threadsPageSize
+	threadsPageSize = 1
+	defer func() { threadsPageSize = old }()
+
+	th, err := c.Threads(context.Background(), "123")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(th) != 2 {
+		t.Fatalf("len(thread) = %d, want 2", len(th))
+	}
+	if got := a.count("/v2/conversations/123/threads"); got != 1 {
+		t.Errorf("threads endpoint hits = %d, want 1 (totalPages stops it before a third page)", got)
+	}
+	if w := c.WarningsFor("123"); w != nil {
+		t.Errorf("warnings = %v, want none", w)
 	}
 }
 

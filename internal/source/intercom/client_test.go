@@ -118,7 +118,7 @@ func apiHandler(t *testing.T, convFixture string) http.HandlerFunc {
 		switch r.URL.Path {
 		case "/me":
 			writeFixture(t, w, "me.json")
-		case "/conversations/1001":
+		case "/conversations/1001", "/conversations/1002":
 			if got := r.URL.Query().Get("display_as"); got != "plaintext" {
 				t.Errorf("display_as = %q, want plaintext", got)
 			}
@@ -324,6 +324,24 @@ func TestThreads_OrderRolesAndInternalNotes(t *testing.T) {
 	}
 	if got := c.WarningsFor("1001"); got != nil {
 		t.Errorf("warnings after read = %v, want nil", got)
+	}
+}
+
+func TestThreads_EmptySourceBodySkipped(t *testing.T) {
+	cs := newCountingServer(t, apiHandler(t, "conversation_empty_source.json"))
+	c := newClient(t, map[string]string{apiHost: addrOf(cs.Server)})
+
+	th, err := c.Threads(context.Background(), "1002")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	// The source message carries neither text nor an attachment (a bot
+	// automation start), so only the one real part survives the filter.
+	if len(th) != 1 {
+		t.Fatalf("len(thread) = %d, want 1: %+v", len(th), th)
+	}
+	if th[0].Author != "Ada Lovelace" || th[0].Role != ticket.RoleCustomer {
+		t.Errorf("message = %+v", th[0])
 	}
 }
 

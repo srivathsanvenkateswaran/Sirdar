@@ -114,7 +114,7 @@ func apiHandler(t *testing.T, ticketFixture string) http.HandlerFunc {
 		switch r.URL.Path {
 		case "/account-info/v3/details":
 			writeFixture(t, w, "account_info.json")
-		case "/crm/v3/objects/tickets/7001", "/crm/v3/objects/tickets/7002":
+		case "/crm/v3/objects/tickets/7001", "/crm/v3/objects/tickets/7002", "/crm/v3/objects/tickets/7003":
 			if got := r.URL.Query().Get("properties"); got != ticketProperties {
 				t.Errorf("properties = %q, want %q", got, ticketProperties)
 			}
@@ -343,6 +343,44 @@ func TestThreads_NoConversationAssociationWarnsAndKeepsContent(t *testing.T) {
 	warnings := c.WarningsFor("7002")
 	if len(warnings) != 1 || warnings[0] != "hubspot: ticket has no associated conversation" {
 		t.Errorf("warnings = %v, want the no-conversation warning", warnings)
+	}
+}
+
+func TestThreads_ContentRoleFollowsContactAssociation(t *testing.T) {
+	cs := newCountingServer(t, apiHandler(t, "ticket.json"))
+	c := newClient(t, map[string]string{apiHost: addrOf(cs.Server)})
+
+	th, err := c.Threads(context.Background(), "7001")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(th) == 0 {
+		t.Fatalf("len(thread) = 0, want at least the ticket content")
+	}
+	if th[0].Role != ticket.RoleCustomer {
+		t.Errorf("content role = %q, want %q (the ticket has a contact association)", th[0].Role, ticket.RoleCustomer)
+	}
+}
+
+func TestThreads_ContentDefaultsToAgentWithoutContact(t *testing.T) {
+	cs := newCountingServer(t, apiHandler(t, "ticket_no_contact.json"))
+	c := newClient(t, map[string]string{apiHost: addrOf(cs.Server)})
+
+	th, err := c.Threads(context.Background(), "7003")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(th) != 1 {
+		t.Fatalf("len(thread) = %d, want 1 (the ticket's own content)", len(th))
+	}
+	if th[0].Role != ticket.RoleAgent {
+		t.Errorf("content role = %q, want %q (no contact association to attribute it to)", th[0].Role, ticket.RoleAgent)
+	}
+	if th[0].Author != "" {
+		t.Errorf("content author = %q, want empty (no contact to name)", th[0].Author)
+	}
+	if !strings.Contains(th[0].Text, "Archive the stale test accounts.") {
+		t.Errorf("content text = %q", th[0].Text)
 	}
 }
 

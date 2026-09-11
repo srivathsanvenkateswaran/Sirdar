@@ -625,12 +625,15 @@ func validateOAuth(prefix string, a *OAuthConfig) error {
 	return nil
 }
 
-// credentialRef rejects a value that carries a secret instead of naming one.
+// credentialRef rejects a value that carries a secret instead of naming
+// one. The error names the key and the accepted prefixes only, never the
+// value: a misconfigured field is as likely to hold the secret itself as a
+// typo, and that must never end up in a log line or a warning.
 func credentialRef(key, ref string) error {
 	if strings.HasPrefix(ref, "env:") || strings.HasPrefix(ref, "keychain:") {
 		return nil
 	}
-	return fmt.Errorf("config: %s: must start with env: or keychain:, got %q", key, ref)
+	return fmt.Errorf("config: %s: must start with env: or keychain:", key)
 }
 
 // WorkspaceOnlyMCP reports whether an agent session should see only the

@@ -1,0 +1,36 @@
+{
+  "type": "conversation",
+  "id": "1002",
+  "created_at": 1788000000,
+  "updated_at": 1788001000,
+  "state": "open",
+  "open": true,
+  "read": true,
+  "priority": "priority",
+  "title": "",
+  "source": {
+    "type": "conversation",
+    "id": "9002",
+    "delivered_as": "automated",
+    "subject": "",
+    "body": "",
+    "author": {"type": "bot", "id": "b-1", "name": "Operator"},
+    "attachments": []
+  },
+  "contacts": {"type": "contact.list", "contacts": [{"type": "contact", "id": "c-1"}]},
+  "conversation_parts": {
+    "type": "conversation_part.list",
+    "conversation_parts": [
+      {
+        "type": "conversation_part",
+        "id": "p-1",
+        "part_type": "comment",
+        "body": "<p>Hi, my payment failed.</p>",
+        "created_at": 1788000500,
+        "author": {"type": "user", "id": "c-1", "name": "Ada Lovelace"},
+        "attachments": []
+      }
+    ],
+    "total_count": 1
+  }
+}
