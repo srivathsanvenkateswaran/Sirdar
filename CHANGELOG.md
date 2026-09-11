@@ -69,6 +69,12 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   yourself, posting a metadata-only digest (never the note's content) with a timestamped HMAC
   signature (`docs/notifications.md`).
 - Added three more built-in helpdesk adapters: Help Scout, Intercom, and HubSpot Service Hub.
+- Added a built-in ServiceNow adapter, the first that serves either role: one incident is both
+  the customer's ticket and the work item, so the same block works under `sources.tracker` or
+  `sources.helpdesk`. It reads the Table API for the record, `sys_journal_field` for the
+  conversation (work notes internal, comments customer-visible) and the Attachment API for the
+  files, authenticating with a basic username/password pair or an OAuth bearer token
+  (`docs/adapters.md`, `docs/research/adapters/servicenow.md`).
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).

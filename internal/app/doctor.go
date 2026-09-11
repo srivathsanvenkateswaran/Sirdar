@@ -214,7 +214,10 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "servicenow":
+		// ServiceNow is here under either role: the same client answers
+		// both, and its Ping is the one authenticated round trip worth
+		// making whichever role it was configured for.
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -287,6 +290,15 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		return "the workspace access token"
 	case "hubspot":
 		return "the private app token"
+	case "servicenow":
+		// The instance is worth naming: one workspace can point at a dev
+		// instance and a production one on different days. The password
+		// and the OAuth token are named only by kind.
+		who := "the OAuth token"
+		if sc.Username != "" {
+			who = sc.Username
+		}
+		return who + " on " + builtinEndpoint(sc)
 	default:
 		return "configured"
 	}

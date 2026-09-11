@@ -553,6 +553,120 @@ from without it, since the signed URL carries its own signature.
 - An `L-` prefix the source page associated with "customer agent" is not
   mapped, on the grounds that guessing wrong here is worse than the default.
 
+### ServiceNow
+
+```yaml
+sources:
+  helpdesk:
+    adapter: servicenow
+    instance: acme                     # acme.service-now.com
+    username: sirdar.integration       # literal, not a credential ref
+    password: env:SERVICENOW_PASSWORD
+```
+
+ServiceNow is the one built-in that serves either role. The same incident
+is the customer's ticket and the work item, so the block above works
+unchanged under `sources.tracker`, and a workspace that configures it there
+and names no `sources.helpdesk` still gets the conversation — the wiring
+layer picks up the same client's helpdesk view.
+
+**Getting credentials.** Either a local integration user (`username` plus
+`password`, sent as HTTP basic, which is what ServiceNow's own REST
+examples use) or an OAuth 2.0 access token (`oauthToken`, sent as a bearer
+header) — one or the other, never both. The user needs read access to the
+configured table, to `sys_journal_field` for the conversation, and the
+attachment read role. `username` is a literal rather than a credential ref
+on purpose: it is the half of basic auth that is not a secret, and naming
+it is what lets `sirdar doctor` say who the connection authenticates as.
+Give the integration user a **UTC timezone** — see the timestamp
+limitation below.
+
+`instance` is the instance name (`acme`) or its host
+(`acme.service-now.com`); `baseUrl` overrides the request target for a
+vanity domain or a proxy. `table` defaults to `incident` and can name
+`sc_task` or `sn_customerservice_case` instead, though the field set this
+adapter asks for is the ITSM one.
+
+**Get.** Reads `GET /api/now/table/{table}/{sys_id}` when the id is a
+sys_id (32 hex characters) and
+`GET /api/now/table/{table}?sysparm_query=number={id}` when it is a record
+number, so `INC0010023` and the sys_id behind it both work. Every record
+request carries `sysparm_display_value=true` and
+`sysparm_exclude_reference_link=true`, so `caller_id` arrives as
+"Abel Tuter" rather than as the sys_id it stores. `Subject` is
+`short_description`, `Status` is `state`, `Channel` is `contact_type`,
+`Contact` is the caller and `Customer` the company; `number`, `category`,
+`urgency`, `impact`, `assignment_group`, `close_notes` and the caller's
+email travel in `Fields`. The URL is
+`{base}/nav_to.do?uri={table}.do?sys_id={sys_id}` — the record's own API
+link is not what an operator wants to click.
+
+**Threads.** The record's own `description` comes first, as the caller's
+words when there is a caller and as staff content when there is not — an
+incident opened without one is an engineer's own, not a customer's.
+Everything after it is the journal: `GET /api/now/table/sys_journal_field`
+filtered to `element_id={sys_id}^elementINcomments,work_notes` and ordered
+by `sys_created_on`, paged with `sysparm_offset`/`sysparm_limit` a hundred
+at a time. Roles follow ServiceNow's own visibility split rather than a
+guess: a **work note** never reaches the caller, so it is `agent` with the
+` (internal)` author suffix; a **comment** is customer-visible, and is
+`customer` when the entry's `sys_created_by` is the caller (matched against
+the dot-walked `caller_id.user_name`, then the display name). An
+unrecognised author is `agent`, which is the safer default — a message
+wrongly attributed to the customer reads as the customer's own words.
+
+**Attachments.** `GET /api/now/attachment` filtered to
+`table_name={table}^table_sys_id={sys_id}`, then each row's `download_link`
+(or `/api/now/attachment/{sys_id}/file` derived from the row's own sys_id
+when the instance omits one). ServiceNow serves attachment bytes from the
+instance itself rather than from a CDN, so this adapter has no fetch-only
+host tier: the one trusted host is the instance, it is the one that gets
+the credential, and a `download_link` pointing anywhere else is refused
+with a warning naming the host alone. A redirect off the instance stops
+the download rather than being followed — an instance behind SSO answers
+an unaccepted credential with the sign-in form, and an HTML body where a
+binary was expected is refused too, so a login page is never written to
+disk under an attachment's name.
+
+**List (tracker role).** `sysparm_query` built from the filter:
+`assigned_to.user_name={assignee}` (or `assigned_to=javascript:gs.getUserID()`
+for `me`), `state={status}` or `active=true` when no status was named, and
+`ORDERBYDESCsys_updated_on`. Paged with `sysparm_offset` a hundred at a
+time, default 100 records and a hard 200.
+
+**Known limitations.**
+- **Timestamps carry no offset.** With `sysparm_display_value=true` the
+  instance renders them in the integration user's display timezone and
+  names no zone, and this adapter reads a naive timestamp as UTC. An
+  integration user on any other timezone shifts every time in the bundle by
+  that offset — hence the UTC integration user above.
+- **`CustomerID` is dot-walked or empty.** A reference field in display
+  mode carries no id, so the company's sys_id comes from
+  `company.sys_id`; an instance that will not serve the dot-walk leaves
+  `CustomerID` empty rather than repeating the company name as if it were
+  an identifier.
+- **`sys_journal_field` is ACL-restricted on many instances.** An
+  integration user who can read `incident` cannot always read the journal.
+  That is a warning on the bundle, not a failed fetch: the record's own
+  description still reaches the agent, and the warning says the
+  conversation is missing.
+- **A filter value cannot carry `^`.** The encoded-query syntax has no
+  escape sequence, so a value containing the separator would start a
+  condition of its own; it is stripped and the run gets a warning rather
+  than a silently different working set.
+- Journal and attachment pagination stop at 20 pages each, list at 20 too,
+  with a warning naming the cap — offset pagination has no
+  end-of-results signal beyond a short page, and a miscounting instance
+  should cost a warning rather than an endless sweep.
+- Rate limits are set per instance by the customer's own admin, so there is
+  no published number to code against: a 429 is retried once after
+  honouring `Retry-After` up to 30 seconds, and reported as rate-limited
+  otherwise.
+- The field names, the journal-table shape and the dot-walks are standard
+  ServiceNow platform behaviour but were not all confirmable against a live
+  documentation page; `docs/research/adapters/servicenow.md` records which
+  is which.
+
 ## helpdeskRef fallback
 
 None of the four adapters above guess a helpdesk reference from free text —

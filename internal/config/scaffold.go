@@ -126,6 +126,18 @@ sources:
     #
     # adapter: hubspot
     # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
+    #
+    # adapter: servicenow
+    # instance: acme                          # acme.service-now.com
+    # table: incident                         # or sc_task, sn_customerservice_case
+    # username: sirdar.integration            # literal login name, not a secret
+    # password: keychain:servicenow-password  # basic auth, instead of oauthToken
+    # oauthToken: keychain:servicenow-oauth-token  # instead of username + password
+    #
+    # ServiceNow is the one built-in that serves either role: the same
+    # incident is the customer's ticket and the work item, so the same
+    # block works under sources.tracker when ServiceNow is where the work
+    # is tracked too.
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

@@ -284,8 +284,12 @@ Sirdar talks to trackers and helpdesks through adapters. Several ship built into
 
 | Kind | Supported |
 |---|---|
-| Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally |
-| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub (more planned, see `docs/research/adapters/helpdesks.md`) |
+| Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally, ServiceNow |
+| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub, ServiceNow (more planned, see `docs/research/adapters/helpdesks.md`) |
+
+ServiceNow appears on both rows because one incident is both records: configure it under
+`sources.tracker`, `sources.helpdesk`, or leave it under the tracker and let the same client
+serve the conversation.
 
 Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
 executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so

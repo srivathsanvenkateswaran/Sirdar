@@ -715,6 +715,67 @@ func TestValidateFixedHostHelpdesks(t *testing.T) {
 	}
 }
 
+// TestValidateServiceNow covers the one built-in that serves either role:
+// what it cannot work without, that the two auth modes are exclusive, and
+// that it is accepted under sources.tracker as well as sources.helpdesk.
+func TestValidateServiceNow(t *testing.T) {
+	const basic = "    adapter: servicenow\n    instance: acme\n    username: sirdar.integration\n    password: env:SNOW_PASSWORD\n"
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{name: "basic auth", block: basic},
+		{name: "bearer", block: "    adapter: servicenow\n    instance: acme\n    oauthToken: env:SNOW_TOKEN\n"},
+		{name: "baseUrl instead of instance", block: "    adapter: servicenow\n    baseUrl: https://acme.service-now.com\n    oauthToken: env:SNOW_TOKEN\n"},
+		{name: "another table", block: basic + "    table: sn_customerservice_case\n"},
+		{
+			name:  "no instance",
+			block: "    adapter: servicenow\n    oauthToken: env:SNOW_TOKEN\n",
+			want:  "sources.helpdesk.instance",
+		},
+		{
+			name:  "no credentials",
+			block: "    adapter: servicenow\n    instance: acme\n",
+			want:  "username + password or oauthToken",
+		},
+		{
+			name:  "both auth modes",
+			block: basic + "    oauthToken: env:SNOW_TOKEN\n",
+			want:  "not both",
+		},
+		{
+			name:  "password without username",
+			block: "    adapter: servicenow\n    instance: acme\n    password: env:SNOW_PASSWORD\n",
+			want:  "both username and password",
+		},
+		{
+			name:  "password is a literal",
+			block: "    adapter: servicenow\n    instance: acme\n    username: sirdar.integration\n    password: hunter2\n",
+			want:  "sources.helpdesk.password",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+
+	// The same block under sources.tracker: ServiceNow is where plenty of
+	// shops track the work as well as take the ticket.
+	if _, err := Load(writeCfg(t, trackerCfg(basic))); err != nil {
+		t.Fatalf("servicenow under sources.tracker: %v", err)
+	}
+}
+
 func TestValidateFixedHostHelpdeskCredentialRefsAreNotLiterals(t *testing.T) {
 	for key, block := range map[string]string{
 		"clientId":     "    adapter: helpscout\n    clientId: shhh\n    clientSecret: env:HS_SECRET\n",
@@ -814,6 +875,7 @@ func TestDefaultConfigYAMLLoads(t *testing.T) {
 		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
 		"# adapter: zendesk", "# adapter: freshdesk",
 		"# adapter: helpscout", "# adapter: intercom", "# adapter: hubspot",
+		"# adapter: servicenow",
 		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
 	} {
 		if !strings.Contains(DefaultConfigYAML, want) {

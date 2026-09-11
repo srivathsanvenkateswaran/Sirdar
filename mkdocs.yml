@@ -76,6 +76,7 @@ nav:
           - Jira: research/adapters/jira.md
           - Linear: research/adapters/linear.md
           - Rally: research/adapters/rally.md
+          - ServiceNow: research/adapters/servicenow.md
       - Providers:
           - ACP protocol: research/providers/acp-protocol.md
           - ACP agents: research/providers/acp-agents.md

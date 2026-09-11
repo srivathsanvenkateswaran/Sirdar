@@ -1,0 +1,27 @@
+{
+  "result": {
+    "sys_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+    "number": "INC0010023",
+    "short_description": "Export to CSV fails",
+    "description": "<p>The export button returns a 500 for every report.</p>",
+    "state": "In Progress",
+    "priority": "2 - High",
+    "urgency": "2 - Medium",
+    "impact": "2 - Medium",
+    "category": "Software",
+    "subcategory": "Reporting",
+    "contact_type": "Email",
+    "assignment_group": "Service Desk",
+    "assigned_to": "Beth Anglin",
+    "opened_by": "Abel Tuter",
+    "caller_id": "Abel Tuter",
+    "caller_id.user_name": "abel.tuter",
+    "caller_id.email": "abel.tuter@example.com",
+    "company": {"display_value": "ACME Corp", "value": "31bea3d53790200044e0bfc8bcbe5dec"},
+    "company.sys_id": "31bea3d53790200044e0bfc8bcbe5dec",
+    "sys_created_on": "2026-09-10 08:30:00",
+    "sys_updated_on": "2026-09-11 09:15:00",
+    "opened_at": "2026-09-10 08:29:00",
+    "active": "true"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "result": [
+    {
+      "sys_id": "att9",
+      "file_name": "invoice.pdf",
+      "content_type": "application/pdf",
+      "table_name": "incident",
+      "table_sys_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "download_link": "https://attacker.example.com/api/now/attachment/att9/file?token=leak-me"
+    }
+  ]
+}
