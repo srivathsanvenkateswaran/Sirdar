@@ -496,6 +496,7 @@ func TestBuiltinHelpdeskUnderTrackerIsRejected(t *testing.T) {
 		"    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n",
 		"    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n",
 		"    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n",
+		"    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
 	} {
 		_, err := Load(writeCfg(t, trackerCfg(block)))
 		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk") {
@@ -517,6 +518,7 @@ func TestAuthIsRejectedOnNonZohoAdapters(t *testing.T) {
 		"helpscout": helpdeskCfg("    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n" + auth),
 		"intercom":  helpdeskCfg("    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n" + auth),
 		"hubspot":   helpdeskCfg("    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n" + auth),
+		"gorgias":   helpdeskCfg("    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n" + auth),
 		"freshdesk": helpdeskCfg("    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n" + auth),
 		"exec":      helpdeskCfg("    adapter: exec\n    command: ./tickets.sh\n" + auth),
 	} {
@@ -715,6 +717,61 @@ func TestValidateFixedHostHelpdesks(t *testing.T) {
 	}
 }
 
+// --- Gorgias ---
+
+// TestValidateGorgias covers the per-account adapter: it needs a host (one
+// of account or baseUrl), the login email that is its Basic username, and
+// the API key that is its password.
+func TestValidateGorgias(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "account form",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+		},
+		{
+			name:  "baseUrl form",
+			block: "    adapter: gorgias\n    baseUrl: https://acme.gorgias.com\n    email: ops@acme.com\n    apiKey: keychain:gorgias-api-key\n",
+		},
+		{
+			name:  "no host",
+			block: "    adapter: gorgias\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "one of account or baseUrl",
+		},
+		{
+			name:  "no email",
+			block: "    adapter: gorgias\n    account: acme\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "sources.helpdesk.email",
+		},
+		{
+			name:  "no apiKey",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n",
+			want:  "sources.helpdesk.apiKey",
+		},
+		{
+			name:  "apiKey carries the secret instead of naming it",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: shhh\n",
+			want:  "sources.helpdesk.apiKey",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateFixedHostHelpdeskCredentialRefsAreNotLiterals(t *testing.T) {
 	for key, block := range map[string]string{
 		"clientId":     "    adapter: helpscout\n    clientId: shhh\n    clientSecret: env:HS_SECRET\n",
@@ -814,6 +871,7 @@ func TestDefaultConfigYAMLLoads(t *testing.T) {
 		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
 		"# adapter: zendesk", "# adapter: freshdesk",
 		"# adapter: helpscout", "# adapter: intercom", "# adapter: hubspot",
+		"# adapter: gorgias",
 		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
 	} {
 		if !strings.Contains(DefaultConfigYAML, want) {

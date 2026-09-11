@@ -13,6 +13,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
@@ -529,6 +530,118 @@ func TestNewBuiltinHelpdeskFreshdeskMissingCredentialNamesTheKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:FRESHDESK_KEY") {
 		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// --- Gorgias ---
+
+// TestNewBuiltinHelpdeskGorgias proves the resolved apiKey reaches the wire
+// as the HTTP Basic password, with the configured login email as the
+// username, and that the client is pointed at the configured account host.
+func TestNewBuiltinHelpdeskGorgias(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotPath string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		mu.Unlock()
+		w.Write([]byte(`{"id":31,"domain":"acme.gorgias.com"}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"GORGIAS_KEY": "key-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("ops@acme.com:key-1"))
+	if gotAuth != want {
+		t.Fatalf("Authorization = %q, want the email as username and the resolved key as password", gotAuth)
+	}
+	if gotPath != "/api/account" {
+		t.Fatalf("Ping path = %q, want the account endpoint", gotPath)
+	}
+}
+
+func TestNewBuiltinHelpdeskGorgiasMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:GORGIAS_KEY") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestBuildDepsGorgiasHelpdesk covers sources.helpdesk wiring end to end
+// through BuildDeps, the same path a real command takes, in the account
+// form an operator actually writes.
+func TestBuildDepsGorgiasHelpdesk(t *testing.T) {
+	t.Setenv("GORGIAS_KEY", "key-1")
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("BuildDeps: %v", err)
+	}
+	if _, ok := deps.Helpdesk.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", deps.Helpdesk)
+	}
+}
+
+// TestBuiltinHelpdeskProbeGorgias covers the doctor row: it names the login
+// email the connection authenticates as and never the API key.
+func TestBuiltinHelpdeskProbeGorgias(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":31}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+	t.Setenv("GORGIAS_KEY", "key-1")
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (gorgias)", sc)
+	if !check.OK {
+		t.Fatalf("check: %+v", check)
+	}
+	if check.Detail != "reachable as ops@acme.com" {
+		t.Fatalf("detail = %q, want it to name the login email", check.Detail)
+	}
+	if strings.Contains(check.Detail, "key-1") {
+		t.Fatalf("doctor printed the secret: %q", check.Detail)
 	}
 }
 

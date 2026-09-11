@@ -72,6 +72,7 @@ nav:
       - Qwen Code wire formats: research/09-qwen-wire-formats.md
       - Adapters:
           - Azure DevOps: research/adapters/azure-devops.md
+          - Gorgias: research/adapters/gorgias.md
           - Helpdesks: research/adapters/helpdesks.md
           - Jira: research/adapters/jira.md
           - Linear: research/adapters/linear.md

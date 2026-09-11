@@ -22,6 +22,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
@@ -405,7 +406,7 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "gorgias":
 		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
@@ -413,8 +414,8 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 }
 
 // newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
-// plain credential refs — zendesk, freshdesk, helpscout, intercom and
-// hubspot — resolving them on the way in. zohodesk is built separately
+// plain credential refs — zendesk, freshdesk, helpscout, intercom, hubspot
+// and gorgias — resolving them on the way in. zohodesk is built separately
 // (ZohoTokenSource) because of its refresh-token grant option.
 //
 // helpscout is the one that keeps refreshing after this point: it is
@@ -496,6 +497,26 @@ func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.
 			return nil, err
 		}
 		c, err := hubspot.New(hubspot.Config{AccessToken: accessToken}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "gorgias":
+		apiKey, err := resolveRef(creds, "apiKey", sc.APIKey)
+		if err != nil {
+			return nil, err
+		}
+		// The email is the Basic username and is written literally in the
+		// config: it identifies the account, it is not a secret, and
+		// making it a credential ref would mean an operator storing their
+		// own address in a keychain.
+		c, err := gorgias.New(gorgias.Config{
+			Account: sc.Account,
+			BaseURL: sc.BaseURL,
+			Email:   sc.Email,
+			APIKey:  apiKey,
+		}, hc)
 		if err != nil {
 			return nil, err
 		}

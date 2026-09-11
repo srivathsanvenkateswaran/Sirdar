@@ -126,6 +126,12 @@ sources:
     #
     # adapter: hubspot
     # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
+    #
+    # adapter: gorgias
+    # account: acme                           # acme.gorgias.com
+    # baseUrl: ""                             # optional override, e.g. a proxy
+    # email: you@acme.com                     # basic auth username; the login email
+    # apiKey: keychain:gorgias-api-key        # basic auth password
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

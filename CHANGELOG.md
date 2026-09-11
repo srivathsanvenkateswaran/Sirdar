@@ -69,6 +69,10 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   yourself, posting a metadata-only digest (never the note's content) with a timestamped HMAC
   signature (`docs/notifications.md`).
 - Added three more built-in helpdesk adapters: Help Scout, Intercom, and HubSpot Service Hub.
+- Added a built-in Gorgias helpdesk adapter (`adapter: gorgias`): per-account host from
+  `account` or `baseUrl`, HTTP Basic with the login `email` and an `apiKey` credential
+  reference, the cursor-paginated `/api/messages` feed as the thread, and attachment
+  downloads that send the key only to the configured account host.
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).

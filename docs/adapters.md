@@ -225,8 +225,8 @@ collection, following each entry's `Content` reference to an
 
 ## Built-in helpdesk adapters
 
-Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom and HubSpot Service Hub
-implement the `helpdesk` role only — `Get`, `Threads`, `Attachments`, no
+Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub and
+Gorgias implement the `helpdesk` role only — `Get`, `Threads`, `Attachments`, no
 `List` — and are compiled into Sirdar the same way the four trackers above
 are, no separate process required.
 Credentials are `env:NAME` or `keychain:SERVICE` references, same as
@@ -552,6 +552,82 @@ from without it, since the signed URL carries its own signature.
   rather than a content type.
 - An `L-` prefix the source page associated with "customer agent" is not
   mapped, on the grounds that guessing wrong here is worse than the default.
+
+### Gorgias
+
+```yaml
+sources:
+  helpdesk:
+    adapter: gorgias
+    account: acme                 # acme.gorgias.com
+    email: ops@acme.com           # HTTP Basic username; not a secret
+    apiKey: env:GORGIAS_API_KEY   # HTTP Basic password
+```
+
+`baseUrl: https://acme.gorgias.com` can be given instead of `account`, for an
+account reached through a proxy; one of the two is required.
+
+**Getting credentials.** Generate an API key under Settings → REST API in the
+Gorgias UI. It is sent as HTTP Basic auth with your Gorgias login email as
+the username and the key as the password — the documented mechanism for a
+private integration. Gorgias also has an OAuth2 flow, but it is for public
+apps distributed through its app store and its access tokens expire after 24
+hours, so a single-tenant read-only integration has no use for either half of
+it. The key carries whatever the owning account can already see; Gorgias has
+no per-key scope picker.
+
+**Get.** Fetches `GET /api/tickets/{id}`, which answers with the bare ticket
+object. `Status` is `status`, `Channel` is `channel`. `Customer` is the
+Gorgias customer's display name and `Contact` their email address — Gorgias's
+customer is a person, and a ticket carries no organisation object, so that is
+the most either field can honestly say. `tags`, `via`, `language`, the
+assignee's name and a `closedAt` go into `Fields`. The web URL is
+`{baseUrl}/app/ticket/{id}`, built here: the ticket's own `uri` is an API
+URI, not a browser link.
+
+**Threads and attachments.** The thread comes from
+`GET /api/messages?ticket_id={id}` — a top-level collection, not a
+ticket-scoped sub-path — asked for oldest first (`order_by=created_datetime:asc`)
+in pages of 100, following `meta.next_cursor`. Gorgias has two booleans
+rather than an author-type enum, and they mean different things: `public` is
+the customer-facing split (an internal note is not public) and `from_agent`
+is the direction. A non-public message, or one on the `internal-note`
+channel, is agent-to-agent and gets the ` (internal)` author suffix; a
+public message with `from_agent: false` is the customer; a public message a
+rule sent (`rule_id`) is automation and maps to `system`; anything else is an
+agent. A message body is `body_text` where Gorgias sent one and `body_html`
+through the Markdown converter otherwise. `Attachments` downloads each
+message's `attachments[]`; the API key is sent only to the configured account
+host, and Gorgias's other hosts are fetched from without it, since those URLs
+carry their own signature.
+
+**Known limitations.**
+- The Gorgias Ticket object has **no priority field** — priority lives in
+  tags or a custom field, whose names are per-account. `Priority` is
+  therefore left empty and the tags are passed through as they are, rather
+  than one of them being guessed at.
+- A Gorgias File object has no id of its own; the URL is the identifier. The
+  attachment ids Sirdar uses are `"<message id>-<1-based index>"`, stable for
+  as long as the message is.
+- A download from the account host answers `307` with a signed URL. If that
+  redirect points outside `*.gorgias.com`, it is refused before the request
+  is made and the file is reported as a per-ticket warning naming the host
+  and nothing else — a redirect `Location` arrives inside a server response,
+  which makes it input rather than configuration. Trusting a storage host
+  found on a live account is a one-line change to `gorgiasHosts`, and is
+  deliberately not guessed at here.
+- Message pagination is capped at 100 pages; a ticket past that is truncated
+  with a run warning rather than swept indefinitely. The feed is asked for
+  oldest first so a truncated thread keeps the customer's opening complaint.
+- Attachment MIME comes from the File object's declared `content_type`;
+  downloads do not sniff the response's own `Content-Type`.
+- The message feed is a filtered collection rather than a ticket
+  sub-resource, so `Threads` on a ticket id that does not exist yields an
+  empty thread rather than a not-found error. `Get`, which a bundle calls
+  first, does answer not-found.
+- `stripped_text` is not preferred over `body_text`: it drops quoted history
+  and signatures, and a triage note is read by someone who wants the thread
+  as the customer wrote it.
 
 ## helpdeskRef fallback
 

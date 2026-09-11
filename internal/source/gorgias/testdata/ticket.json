@@ -1,0 +1,38 @@
+{
+  "id": 921,
+  "uri": "https://acme.gorgias.com/api/tickets/921",
+  "external_id": null,
+  "status": "open",
+  "channel": "email",
+  "via": "email",
+  "from_agent": false,
+  "spam": false,
+  "imported": null,
+  "language": "ar",
+  "subject": "تصدير التقرير لا يعمل",
+  "customer": {
+    "id": 4561,
+    "email": "rania@example.com",
+    "firstname": "Rania",
+    "lastname": "Haddad",
+    "name": "Rania Haddad",
+    "meta": null
+  },
+  "assignee_user": {
+    "id": 77,
+    "email": "l1@acme.com",
+    "firstname": "Sami",
+    "lastname": "Nasr",
+    "name": "Sami Nasr"
+  },
+  "tags": [
+    {"id": 1, "name": "billing"},
+    {"id": 2, "name": "urgent"},
+    {"id": 3, "name": "   "}
+  ],
+  "custom_fields": null,
+  "created_datetime": "2026-09-10T08:30:00.123456+00:00",
+  "updated_datetime": "2026-09-10T11:05:00+00:00",
+  "closed_datetime": null,
+  "opened_datetime": "2026-09-10T08:31:00+00:00"
+}
