@@ -55,6 +55,16 @@
       "properties": {
         "title": { "type": "string" },
         "summary": { "type": "string" },
+        "customerSummary": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["language", "text"],
+          "properties": {
+            "language": { "type": "string", "minLength": 2 },
+            "text": { "type": "string" }
+          }
+        },
+
         "impact": {
           "type": "object",
           "additionalProperties": false,

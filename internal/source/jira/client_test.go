@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -800,8 +801,8 @@ func TestEffectiveLimit(t *testing.T) {
 		{500, maxListResults},
 	}
 	for _, tc := range cases {
-		if got := effectiveLimit(tc.in); got != tc.want {
-			t.Errorf("effectiveLimit(%d) = %d, want %d", tc.in, got, tc.want)
+		if got, _ := httpx.Limit(tc.in, defaultListResults, maxListResults); got != tc.want {
+			t.Errorf("Limit(%d) = %d, want %d", tc.in, got, tc.want)
 		}
 	}
 	if defaultListResults != 100 || maxListResults != 200 {
@@ -1019,6 +1020,27 @@ func TestRateLimitedSkipsALongRetryAfter(t *testing.T) {
 	}
 }
 
+// TestGetRefusesAnOversizedBody: a JSON response is read under a ceiling
+// that fails rather than truncating, so a body that would otherwise be
+// decoded as a short but well-formed issue is an error instead.
+func TestGetRefusesAnOversizedBody(t *testing.T) {
+	t.Parallel()
+	ts, mux := startServer(t)
+	mux.HandleFunc("/rest/api/2/issue/SUP-42", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"key":"SUP-42","fields":{"summary":"`))
+		_, _ = w.Write([]byte(strings.Repeat("x", maxJSONBody)))
+		_, _ = w.Write([]byte(`"}}`))
+	})
+
+	c := newClient(t, ts, cloudConfig())
+	_, err := c.Get(context.Background(), "SUP-42")
+	wantSourceError(t, err, source.Internal)
+	if err != nil && !strings.Contains(err.Error(), "read body") {
+		t.Errorf("error = %v, want it to name the body read", err)
+	}
+}
+
 func TestRetryAfter(t *testing.T) {
 	t.Parallel()
 	tests := []struct {
@@ -1040,12 +1062,12 @@ func TestRetryAfter(t *testing.T) {
 			if tt.header != "" {
 				h.Set("Retry-After", tt.header)
 			}
-			got, ok := retryAfter(h)
+			got, ok := httpx.RetryAfter(h, maxRetryAfter)
 			if ok != tt.wantOK {
-				t.Fatalf("retryAfter(%q) ok = %v, want %v", tt.header, ok, tt.wantOK)
+				t.Fatalf("RetryAfter(%q) ok = %v, want %v", tt.header, ok, tt.wantOK)
 			}
 			if ok && got != tt.wantDur {
-				t.Errorf("retryAfter(%q) = %s, want %s", tt.header, got, tt.wantDur)
+				t.Errorf("RetryAfter(%q) = %s, want %s", tt.header, got, tt.wantDur)
 			}
 		})
 	}
@@ -1285,8 +1307,9 @@ func TestTrustedURL(t *testing.T) {
 			if err != nil {
 				t.Fatalf("New: %v", err)
 			}
-			if _, got := c.trustedRawURL(tt.raw); got != tt.want {
-				t.Errorf("trustedRawURL(%q) with base %q = %v, want %v", tt.raw, tt.baseURL, got, tt.want)
+			got, _, _ := c.trust.CheckRaw(tt.raw)
+			if got != tt.want {
+				t.Errorf("trust.CheckRaw(%q) with base %q = %v, want %v", tt.raw, tt.baseURL, got, tt.want)
 			}
 		})
 	}
@@ -1344,10 +1367,11 @@ func TestSanitizeName(t *testing.T) {
 		{"screenshot.png", "screenshot.png"},
 		{"../../etc/passwd", "passwd"},
 		{"/absolute/path/log.txt", "log.txt"},
-		// Backslashes are not a path separator on this platform, so they are
-		// stripped rather than split on; either way nothing survives that
-		// could point outside the destination directory.
-		{`windows\path\note.txt`, "windowspathnote.txt"},
+		// The shared helper treats a backslash as a separator rather than
+		// stripping it, which is what Rally and Linear already did: a
+		// Windows-shaped name is input like any other, and splitting on it
+		// is the safer of the two readings.
+		{`windows\path\note.txt`, "note.txt"},
 		{"", "attachment"},
 		{".", "attachment"},
 		{"..", "attachment"},
@@ -1357,12 +1381,12 @@ func TestSanitizeName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.in, func(t *testing.T) {
 			t.Parallel()
-			got := sanitizeName(tt.in)
+			got := httpx.SanitizeName(tt.in)
 			if got != tt.want {
-				t.Errorf("sanitizeName(%q) = %q, want %q", tt.in, got, tt.want)
+				t.Errorf("SanitizeName(%q) = %q, want %q", tt.in, got, tt.want)
 			}
 			if len(got) > 120 {
-				t.Errorf("sanitizeName(%q) is %d bytes, want no more than 120", tt.in, len(got))
+				t.Errorf("SanitizeName(%q) is %d bytes, want no more than 120", tt.in, len(got))
 			}
 		})
 	}

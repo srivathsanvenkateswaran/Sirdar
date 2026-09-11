@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { Check, Transport, Workspace } from '../api/types'
+import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
 import '../components/panels.css'
+
 
 type DoctorState =
   | { status: 'loading' }
@@ -29,9 +31,29 @@ export default function Settings(props: {
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
   const [doctor, setDoctor] = useState<Record<string, DoctorState>>({})
+  /** Desktop build version, when the transport exposes one (Wails only). */
+  const [version, setVersion] = useState<string | null>(null)
   /** The workspace whose Remove button is armed, if any. */
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rtl = useSyncExternalStore(subscribePreferRTL, prefersRTL, () => false)
+
+
+  useEffect(() => {
+    let cancelled = false
+    transport
+      .version?.()
+      .then((v) => {
+        if (!cancelled) setVersion(v)
+      })
+      .catch(() => {
+        // The HTTP transport has no Version to fail; the Wails one rarely
+        // does either. Either way the About panel just omits the version.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [transport])
 
   function disarm(): void {
     if (confirmTimer.current) clearTimeout(confirmTimer.current)
@@ -168,9 +190,29 @@ export default function Settings(props: {
         {addError && <p className="form-error">{addError}</p>}
       </section>
 
+      <section className="settings-reading">
+        <h2 className="panel-heading">Reading</h2>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={rtl}
+            onChange={(e) => setPreferRTL(e.target.checked)}
+          />
+          <span>Prefer right-to-left layout for Arabic content</span>
+        </label>
+        <p className="about-note">
+          Notes mix an English body with the customer's own Arabic, and each block is laid
+          out from its own first letter either way. This lays the whole note pane out right
+          to left. It is remembered in this browser and changes nothing in the workspace or
+          in the note on disk; the run's event log stays left to right, where paths and tool
+          names are readable.
+        </p>
+      </section>
+
       <section className="settings-about">
+
         <h2 className="panel-heading">About</h2>
-        <p className="about-version">Sirdar desktop</p>
+        <p className="about-version">Sirdar desktop{version ? ` v${version}` : ''}</p>
         <p>
           Configuration reference:{' '}
           <a href={CONFIG_DOCS_URL} target="_blank" rel="noreferrer noopener">

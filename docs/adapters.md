@@ -835,3 +835,18 @@ for line in sys.stdin:
     if req["method"] == "shutdown":
         break
 ```
+
+The built-in adapters are in-process Go rather than subprocesses, but they
+face the same HTTP problems a private one does, and they answer them in one
+place: `internal/source/httpx`. It holds the host trust that decides whether
+a URL taken out of a response body may be fetched and whether the credential
+may go with it (`Trust`, `HostRule`), the redirect policy that applies that
+decision to every hop (`RedirectPolicy`, `Client`), `Retry-After` parsing and
+a context-aware sleep (`RetryAfter`, `SleepCtx`), body ceilings that fail
+rather than truncate (`ReadLimited`), attachment downloads that stream to a
+temporary file and rename on success (`Download`, `Save`), filename
+sanitising (`SanitizeName`), the per-ticket warning store behind
+`source.Warner` (`Warnings`), and the `List` bounds from this document
+(`Limit`, `PageSize`). A Go adapter written against the stdio protocol can
+import it; an adapter in another language has the same list of things to get
+right, and the package's doc comments say why each one is there.

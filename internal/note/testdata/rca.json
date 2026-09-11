@@ -2,6 +2,10 @@
   "rca": {
     "title": "Export job times out on large orders",
     "summary": "The CSV export buffered the entire result set in memory before writing it, so orders over 500 line items exceeded the request timeout. This has been happening since the export feature shipped, but only became visible once customers started placing bulk orders. The fix streams rows to the response instead of buffering them.",
+    "customerSummary": {
+      "language": "ar",
+      "text": "كان التصدير يحمّل الطلب بالكامل في الذاكرة قبل كتابة الملف، فتفشل الطلبات الكبيرة. تمت معالجة السبب وإعادة تشغيل عمليات التصدير المتأثرة."
+    },
     "impact": {
       "customersAffected": "1 confirmed, likely more with large orders",
       "recordsAffected": "n/a",
