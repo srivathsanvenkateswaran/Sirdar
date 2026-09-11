@@ -1,0 +1,34 @@
+{
+  "id": "10046",
+  "key": "SUP-46",
+  "fields": {
+    "summary": "Attachment list points one file at another host",
+    "description": "See the attached captures.",
+    "status": { "name": "Open", "statusCategory": { "key": "new", "name": "To Do" } },
+    "priority": { "name": "Medium" },
+    "reporter": { "displayName": "Dana Okoro", "accountId": "acc-dana", "accountType": "customer" },
+    "issuetype": { "name": "Support" },
+    "project": { "key": "SUP", "name": "Customer Support", "projectTypeKey": "service_desk" },
+    "created": "2026-09-09T09:00:00.000+0000",
+    "updated": "2026-09-09T09:30:00.000+0000",
+    "attachment": [
+      {
+        "id": "9101",
+        "filename": "same-host.png",
+        "mimeType": "image/png",
+        "content": "https://jira.example.com/rest/api/2/attachment/content/9101",
+        "created": "2026-09-09T09:01:00.000+0000",
+        "size": 64
+      },
+      {
+        "id": "9102",
+        "filename": "stolen.png",
+        "mimeType": "image/png",
+        "content": "https://attacker.example/rest/api/2/attachment/content/9102",
+        "created": "2026-09-09T09:02:00.000+0000",
+        "size": 64
+      }
+    ],
+    "comment": { "startAt": 0, "maxResults": 0, "total": 0, "comments": [] }
+  }
+}

@@ -111,8 +111,8 @@ when `--pr` is given and `gh` is available, the PR's title, body, and diff.
 The agent session runs with permission to read the workspace and to run the `Bash` commands
 listed under `permissions.bash` in config; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are
 always denied. Every segment of a compound command has to match a pattern, command substitution
-and redirection are refused outright, and so is an argument that points outside the workspace
-root — a guard rail rather than a sandbox, described in `docs/config.md`. Sirdar never writes to
+and redirection are refused outright — bar `2>&1` and `2>/dev/null`, which write nothing — and
+so is an argument that points outside the workspace root — a guard rail rather than a sandbox, described in `docs/config.md`. Sirdar never writes to
 the tracker or helpdesk and never opens a PR itself: the RCA and Resolution notes record a fix a
 human already made.
 
@@ -137,10 +137,16 @@ See `docs/research/03-licensing-byo-subscription.md` for the licensing research 
 
 ## Adapters
 
-Sirdar talks to trackers and helpdesks through adapters: small processes speaking a
-line-delimited JSON protocol over stdin/stdout, so a vendor integration and its credentials
-never touch Sirdar's core or this repository. Zoho Desk ships built in; anything else, such as
-Jira or Janus or an internal tracker, is a separate executable named in config. See
+Sirdar talks to trackers and helpdesks through adapters. Several ship built into the binary:
+
+| Kind | Supported |
+|---|---|
+| Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally |
+| Helpdesks | Zoho Desk, Zendesk, Freshdesk (more planned, see `docs/research/adapters/helpdesks.md`) |
+
+Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
+executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so
+a vendor integration and its credentials never touch Sirdar's core or this repository. See
 `docs/adapters.md`.
 
 ## Configuration

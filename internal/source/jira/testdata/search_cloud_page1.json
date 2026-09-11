@@ -1,0 +1,35 @@
+{
+  "nextPageToken": "cursor-page-2",
+  "issues": [
+    {
+      "id": "10042",
+      "key": "SUP-42",
+      "fields": {
+        "summary": "Payment webhook retries stall after 3 attempts",
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate", "name": "In Progress" } },
+        "priority": { "name": "High" },
+        "assignee": { "displayName": "Priya Raman", "accountId": "acc-priya" },
+        "issuetype": { "name": "Support" },
+        "project": { "key": "SUP", "name": "Customer Support", "projectTypeKey": "service_desk" },
+        "labels": ["payments"],
+        "created": "2026-09-01T09:14:22.000+0000",
+        "updated": "2026-09-08T16:02:11.000+0000"
+      }
+    },
+    {
+      "id": "10043",
+      "key": "SUP-43",
+      "fields": {
+        "summary": "Refund confirmation email never arrives",
+        "status": { "name": "Waiting for support", "statusCategory": { "key": "new", "name": "To Do" } },
+        "priority": { "name": "Medium" },
+        "assignee": { "displayName": "Priya Raman", "accountId": "acc-priya" },
+        "issuetype": { "name": "Support" },
+        "project": { "key": "SUP", "name": "Customer Support", "projectTypeKey": "service_desk" },
+        "labels": [],
+        "created": "2026-09-05T12:00:00.000+0000",
+        "updated": "2026-09-07T08:30:00.000+0000"
+      }
+    }
+  ]
+}

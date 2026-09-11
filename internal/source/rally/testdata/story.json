@@ -1,0 +1,48 @@
+{
+  "QueryResult": {
+    "_rallyAPIMajor": "2",
+    "Errors": [],
+    "Warnings": [],
+    "TotalResultCount": 1,
+    "StartIndex": 1,
+    "PageSize": 1,
+    "Results": [
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/hierarchicalrequirement/77700",
+        "_type": "HierarchicalRequirement",
+        "ObjectID": 77700,
+        "FormattedID": "US777",
+        "Name": "Show retry history on the webhook detail page",
+        "Description": "<p>Merchants cannot see why a webhook stopped.</p><p><img src=\"/slm/attachment/55501/screenshot.png\" alt=\"retry panel mock\" /></p><ul><li>List every attempt</li><li>Show the response code</li></ul>",
+        "Notes": "",
+        "ScheduleState": "In-Progress",
+        "Owner": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9002",
+          "_refObjectName": "Bo Builder",
+          "_type": "User",
+          "UserName": "bo@example.com"
+        },
+        "Project": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/project/301",
+          "_refObjectName": "Payments",
+          "_type": "Project"
+        },
+        "Iteration": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/iteration/55",
+          "_refObjectName": "Sprint 42",
+          "_type": "Iteration"
+        },
+        "Tags": { "Count": 0, "_tagsNameArray": [] },
+        "Feature": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/portfolioitem/feature/900",
+          "_refObjectName": "Webhook reliability",
+          "_type": "PortfolioItem",
+          "FormattedID": "F42"
+        },
+        "CreationDate": "2026-09-03T11:00:00.000Z",
+        "LastUpdateDate": "2026-09-10T08:05:00.000Z",
+        "c_ZendeskTicketID": ""
+      }
+    ]
+  }
+}

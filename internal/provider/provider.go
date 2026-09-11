@@ -32,9 +32,15 @@ type SessionSpec struct {
 	Binary       string   // path override; "" = look up on PATH
 
 	// MCPConfig is the path to the only MCP server file the session may
-	// load. Empty means the provider passes nothing and the session sees
-	// whatever the operator has configured globally.
+	// load. Empty means there is no such file.
 	MCPConfig string
+
+	// MCPStrict says the session must see the servers in MCPConfig and no
+	// others. With MCPStrict set and MCPConfig empty the session gets no
+	// MCP servers at all, which is what mcp.workspaceOnly asks for in a
+	// workspace that has written no .mcp.json. With MCPStrict false the
+	// session inherits whatever the operator has configured globally.
+	MCPStrict bool
 }
 
 // EventKind identifies the kind of a Session event.

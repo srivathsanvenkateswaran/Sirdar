@@ -1,0 +1,58 @@
+{
+  "id": 4242,
+  "rev": 7,
+  "fields": {
+    "System.Id": 4242,
+    "System.WorkItemType": "Bug",
+    "System.Title": "Login fails for SSO users",
+    "System.State": "Active",
+    "System.Reason": "New",
+    "System.AreaPath": "Fabrikam\\Web",
+    "System.IterationPath": "Fabrikam\\Sprint 42",
+    "System.Tags": "sso; regression ;customer",
+    "System.Parent": 4000,
+    "System.AssignedTo": {
+      "displayName": "Ada Lovelace",
+      "uniqueName": "ada@contoso.com",
+      "id": "11111111-1111-1111-1111-111111111111"
+    },
+    "System.CreatedBy": {
+      "displayName": "Grace Hopper",
+      "uniqueName": "grace@contoso.com"
+    },
+    "System.CreatedDate": "2026-09-01T09:00:00Z",
+    "System.ChangedDate": "2026-09-08T14:30:00Z",
+    "System.Description": "<p>Customers on <b>SSO</b> cannot sign in.</p>",
+    "Microsoft.VSTS.TCM.ReproSteps": "<ol><li>Open the portal</li><li>Pick <i>SSO</i></li></ol><p><img src=\"{{BASE}}/Fabrikam/_apis/wit/attachments/bbbbbbbb-2222-3333-4444-555555555555?fileName=screen%20shot.png\" alt=\"screen\"></p>",
+    "Microsoft.VSTS.Common.Priority": 2,
+    "Microsoft.VSTS.Common.Severity": "2 - High",
+    "Custom.HelpdeskId": "ZD-99"
+  },
+  "relations": [
+    {
+      "rel": "AttachedFile",
+      "url": "{{BASE}}/Fabrikam/_apis/wit/attachments/aaaaaaaa-1111-2222-3333-444444444444",
+      "attributes": { "name": "../../evil log.txt", "resourceSize": 12 }
+    },
+    {
+      "rel": "Hyperlink",
+      "url": "https://mysupport.contoso.com/tickets/1",
+      "attributes": { "comment": "decoy: not a subdomain of the helpdesk domain" }
+    },
+    {
+      "rel": "Hyperlink",
+      "url": "https://eu.support.contoso.com/tickets/8899",
+      "attributes": { "comment": "helpdesk ticket 8899" }
+    },
+    {
+      "rel": "System.LinkTypes.Hierarchy-Reverse",
+      "url": "{{BASE}}/_apis/wit/workItems/4000",
+      "attributes": { "name": "Parent" }
+    }
+  ],
+  "_links": {
+    "self": { "href": "{{BASE}}/_apis/wit/workItems/4242" },
+    "html": { "href": "https://dev.azure.com/contoso/Fabrikam/_workitems/edit/4242" }
+  },
+  "url": "{{BASE}}/_apis/wit/workItems/4242"
+}

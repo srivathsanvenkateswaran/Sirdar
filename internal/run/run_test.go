@@ -168,6 +168,16 @@ func newWorkspaceWith(t *testing.T, body string) *config.Config {
 type stubTracker struct {
 	gate func(key string)
 	err  error
+	// warningsFor stands in for a tracker that degraded without failing —
+	// a comment page it could not read, an attachment it skipped — keyed
+	// by the ticket key the warning belongs to.
+	warningsFor map[string][]string
+}
+
+// WarningsFor implements source.Warner. The tracker side of a bundle
+// degrades exactly as the helpdesk side does, so prepare has to drain both.
+func (s stubTracker) WarningsFor(key string) []string {
+	return s.warningsFor[key]
 }
 
 func (s stubTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
@@ -445,6 +455,72 @@ func runDir(t *testing.T, cfg *config.Config, out Outcome) string {
 }
 
 // --- tests ------------------------------------------------------------
+
+// TestFrontmatterPrefersTheDocumentsCustomer is N2 of the second dogfood:
+// the frontmatter took customer and customer_id from the helpdesk bundle
+// alone, so a run whose agent resolved the real company from logs filed
+// the note under the wrong one with an empty id. The document's values
+// win; the bundle's disagreement is kept in the run's warnings.
+func TestFrontmatterPrefersTheDocumentsCustomer(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"مؤسسة شيك الراقي","customerId":"5598"`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's customer fields did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer: "مؤسسة شيك الراقي"`) || !strings.Contains(note, `customer_id: "5598"`) {
+		t.Fatalf("frontmatter kept the bundle's customer:\n%s", note)
+	}
+
+	// The helpdesk's own answer is not thrown away: it is in state.json,
+	// so the two can be compared after the fact.
+	warnings := strings.Join(out.State.Warnings, "\n")
+	for _, want := range []string{"frontmatter customer", "شركة", "frontmatter customer_id", "4561"} {
+		if !strings.Contains(warnings, want) {
+			t.Fatalf("warning %q missing from %q", want, warnings)
+		}
+	}
+}
+
+// A document that leaves the customer blank keeps the bundle's, which is
+// the only value either note ever had before.
+func TestFrontmatterFallsBackToTheBundlesCustomer(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"","customerId":""`, 1)
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer: "شركة"`) || !strings.Contains(note, `customer_id: "4561"`) {
+		t.Fatalf("frontmatter lost the bundle's customer:\n%s", note)
+	}
+	if w := strings.Join(outs[0].State.Warnings, "\n"); strings.Contains(w, "frontmatter") {
+		t.Fatalf("nothing disagreed, so nothing should be warned about: %q", w)
+	}
+}
 
 func TestTriageHappyPath(t *testing.T) {
 	cfg := newWorkspace(t)
@@ -855,6 +931,46 @@ func TestHelpdeskWarningsReachThePrompt(t *testing.T) {
 	found := false
 	for _, w := range out.State.Warnings {
 		if strings.Contains(w, "download attachment a2") {
+			found = true
+		}
+	}
+	if !found {
+		t.Fatalf("run state warnings: %v", out.State.Warnings)
+	}
+}
+
+// TestTrackerWarningsReachThePrompt covers a tracker that answered with an
+// issue and, separately, reported what it could not read. Nothing failed,
+// so the warning is the only thing telling the agent the record in front of
+// it is incomplete — and it is keyed by the tracker key, not the helpdesk
+// id.
+func TestTrackerWarningsReachThePrompt(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	tr := stubTracker{warningsFor: map[string][]string{
+		"OMNI-1": {"jira: comment pagination stopped after 100 pages"},
+		"OMNI-9": {"jira: a warning for another ticket entirely"},
+	}}
+	r := newRunner(cfg, p, tr, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	promptText := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(promptText, "stopped after 100 pages") {
+		t.Fatalf("prompt is missing the tracker warning:\n%s", promptText)
+	}
+	if strings.Contains(promptText, "another ticket entirely") {
+		t.Fatalf("prompt carries another ticket's tracker warning:\n%s", promptText)
+	}
+	found := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "stopped after 100 pages") {
 			found = true
 		}
 	}
@@ -1403,6 +1519,252 @@ func contains(list []string, want string) bool {
 	return false
 }
 
+// --- helpdeskRef fallback ---------------------------------------------
+
+// zohoURLRule is the rule that used to be hardcoded: it finds the Zoho Desk
+// ticket URL a triager pasted into the tracker description, then narrows it
+// to the ticket number the Desk API answers to.
+func zohoURLRule() *config.SourceConfig {
+	return &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+}
+
+func TestHelpdeskRefFallback(t *testing.T) {
+	cases := []struct {
+		name        string
+		description string
+		want        string
+		wantWarning bool
+	}{
+		{
+			name:        "the agent-console URL shape",
+			description: "Customer cannot export.\n\nZoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789\n",
+			want:        "1234567890123456789",
+		},
+		{
+			name:        "the ShowHomePage URL shape",
+			description: "Zoho Ticket URL: https://desk.zoho.com/support/acme/ShowHomePage.do#Cases/dv/987654321\nfiled by L1.",
+			want:        "987654321",
+		},
+		{
+			name:        "a description with no Zoho URL at all",
+			description: "Customer cannot export. Reported over the phone.",
+			want:        "",
+		},
+		{
+			name:        "a match the idPattern cannot narrow",
+			description: "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/none",
+			want:        "",
+			wantWarning: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg}}
+
+			tt := ticket.TrackerTicket{Key: "OMNI-1", Description: tc.description}
+			p := &prepared{}
+			var b ticket.Bundle
+			r.applyHelpdeskRefFallback(p, &b, &tt)
+
+			if tt.HelpdeskRef != tc.want {
+				t.Errorf("HelpdeskRef = %q, want %q", tt.HelpdeskRef, tc.want)
+			}
+			if got := len(b.Warnings) > 0; got != tc.wantWarning {
+				t.Errorf("warnings = %v, want a warning: %v", b.Warnings, tc.wantWarning)
+			}
+			if len(b.Warnings) != len(p.state.Warnings) {
+				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
+			}
+		})
+	}
+}
+
+// The value quoted in the idPattern warning comes out of a ticket
+// description, so its length is whoever wrote that description's choice. A
+// warning line goes into prompt.md and the run state, and neither wants a
+// paragraph of prose.
+func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter: "jira",
+		BaseURL: "https://acme.atlassian.net",
+		PAT:     "env:JIRA_PAT",
+		HelpdeskRef: &config.HelpdeskRefConfig{
+			Pattern:   `Zoho Ticket URL:\s*(\S+)`,
+			IDPattern: `(\d+)$`,
+		},
+	}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	long := strings.Repeat("x", 500)
+	tt := ticket.TrackerTicket{Key: "OMNI-1", Description: "Zoho Ticket URL: " + long}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+
+	if len(b.Warnings) != 1 {
+		t.Fatalf("warnings = %v, want exactly one", b.Warnings)
+	}
+	if n := len(b.Warnings[0]); n > 250 {
+		t.Errorf("warning is %d bytes long; the captured value was not truncated: %q", n, b.Warnings[0])
+	}
+	if !strings.Contains(b.Warnings[0], "…") {
+		t.Errorf("warning does not mark the value as truncated: %q", b.Warnings[0])
+	}
+	if strings.Contains(b.Warnings[0], long) {
+		t.Errorf("warning still carries the whole captured value: %q", b.Warnings[0])
+	}
+}
+
+// TestHelpdeskRefFallbackWithoutARule leaves the reference alone when the
+// workspace configured no rule at all.
+func TestHelpdeskRefFallbackWithoutARule(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear", APIKey: "env:LINEAR_KEY"}
+	r := &Runner{Deps: Deps{Config: cfg}}
+
+	tt := ticket.TrackerTicket{Description: "Zoho Ticket URL: https://desk.zoho.com/agent/a/support/tickets/details/42"}
+	var b ticket.Bundle
+	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	if tt.HelpdeskRef != "" {
+		t.Fatalf("HelpdeskRef = %q, want it left empty", tt.HelpdeskRef)
+	}
+}
+
+// descTracker is a tracker whose issue carries a helpdesk URL in its
+// description and a native HelpdeskRef only when one is set.
+type descTracker struct {
+	description string
+	helpdeskRef string
+}
+
+func (d descTracker) Get(ctx context.Context, key string) (ticket.TrackerTicket, error) {
+	return ticket.TrackerTicket{Key: key, Title: "Export fails", Description: d.description, HelpdeskRef: d.helpdeskRef}, nil
+}
+
+func (d descTracker) List(ctx context.Context, f source.ListFilter) ([]ticket.TrackerTicket, error) {
+	return nil, nil
+}
+
+// TestFetchBundleAppliesAndDefersToTheAdapter: the fallback fills in a
+// missing reference and never overrides one the adapter found itself.
+func TestFetchBundleAppliesAndDefersToTheAdapter(t *testing.T) {
+	const desc = "Zoho Ticket URL: https://desk.zoho.com/agent/acme/support/tickets/details/1234567890123456789"
+
+	for _, tc := range []struct {
+		name   string
+		native string
+		want   string
+	}{
+		{name: "the adapter found nothing", native: "", want: "1234567890123456789"},
+		{name: "the adapter found its own reference", native: "555", want: "555"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := &config.Config{}
+			cfg.Sources.Tracker = zohoURLRule()
+			r := &Runner{Deps: Deps{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}}
+
+			b, err := r.fetchBundle(context.Background(), "OMNI-1", &prepared{})
+			if err != nil {
+				t.Fatalf("fetchBundle: %v", err)
+			}
+			if b.Tracker.HelpdeskRef != tc.want {
+				t.Fatalf("HelpdeskRef = %q, want %q", b.Tracker.HelpdeskRef, tc.want)
+			}
+		})
+	}
+}
+
+// TestCredentialEnvNamesCoversBuiltinTrackers: every env: ref a built-in
+// tracker names is stripped from the agent's environment, for the same
+// reason the Zoho token is — an agent that runs shell commands must not be
+// able to read the tracker's credentials back out.
+func TestCredentialEnvNamesCoversBuiltinTrackers(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Tracker = &config.SourceConfig{
+		Adapter:  "jira",
+		BaseURL:  "https://acme.atlassian.net",
+		Email:    "you@acme.com",
+		APIToken: "env:JIRA_TOKEN",
+		PAT:      "env:JIRA_PAT",
+		APIKey:   "env:LINEAR_KEY",
+	}
+	cfg.Sources.Helpdesk = &config.SourceConfig{Adapter: "zohodesk", Token: "env:ZOHO_TOKEN"}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"JIRA_TOKEN", "JIRA_PAT", "LINEAR_KEY", "ZOHO_TOKEN"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "JIRA_TOKEN=x", "JIRA_PAT=y", "LINEAR_KEY=z", "ZOHO_TOKEN=w", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"JIRA_TOKEN=", "JIRA_PAT=", "LINEAR_KEY=", "ZOHO_TOKEN="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+}
+
+// TestCredentialEnvNamesCoversZendeskAndFreshdesk: a helpdesk configured as
+// zendesk or freshdesk strips its apiToken/oauthToken/apiKey refs from the
+// agent's environment the same way every other built-in source does.
+func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:    "zendesk",
+		Subdomain:  "acme",
+		Email:      "agent@acme.com",
+		APIToken:   "env:ZENDESK_TOKEN",
+		OAuthToken: "env:ZENDESK_OAUTH",
+	}
+
+	names := credentialEnvNames(cfg)
+	for _, want := range []string{"ZENDESK_TOKEN", "ZENDESK_OAUTH"} {
+		if !names[want] {
+			t.Errorf("%s is not treated as a credential", want)
+		}
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "ZENDESK_TOKEN=x", "ZENDESK_OAUTH=y", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	for _, gone := range []string{"ZENDESK_TOKEN=", "ZENDESK_OAUTH="} {
+		if strings.Contains(got, gone) {
+			t.Errorf("%s survived into the agent environment: %s", gone, got)
+		}
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+
+	cfg2 := &config.Config{Billing: "subscription"}
+	cfg2.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "freshdesk",
+		Domain:  "acme.freshdesk.com",
+		APIKey:  "env:FRESHDESK_KEY",
+	}
+	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
+		t.Error("FRESHDESK_KEY is not treated as a credential")
+	}
+}
+
 // TestFinalEndsTheSessionDeterministically is the D1 regression: the first
 // real run produced a schema-valid note at 9 minutes and then sat for
 // another 15 until the wall-clock budget killed it, because nothing closed
@@ -1420,6 +1782,7 @@ func TestFinalEndsTheSessionDeterministically(t *testing.T) {
 		<-s.cancelled // the CLI stays alive after its result line
 	}}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
 
 	start := time.Now()
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -1432,8 +1795,8 @@ func TestFinalEndsTheSessionDeterministically(t *testing.T) {
 	if out.State.Status != store.StatusCompleted {
 		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
 	}
-	if elapsed > closeGrace+10*time.Second {
-		t.Fatalf("the run took %s; a session that will not exit must be cancelled %s after the note", elapsed, closeGrace)
+	if elapsed > 2*time.Second {
+		t.Fatalf("the run took %s; a session that will not exit must be cancelled %s after the note", elapsed, r.CloseGrace)
 	}
 	if got := p.session(0).inputCloseCount(); got == 0 {
 		t.Fatal("the session's input was never closed")
@@ -1610,5 +1973,107 @@ func TestSessionSpecCarriesMCPPolicy(t *testing.T) {
 	}
 	if d := spec.Policy.Decide("mcp__grafana__create_incident", nil); d.Allow {
 		t.Error("a write-shaped MCP tool reached the session as allowed")
+	}
+	if !spec.MCPStrict {
+		t.Error("mcp.workspaceOnly must reach the provider as MCPStrict")
+	}
+}
+
+// TestSessionSpecIsStrictWithoutAWorkspaceMCPConfig is N3 of the second
+// dogfood: with mcp.workspaceOnly on and no .mcp.json the run passed the
+// provider nothing at all, and the session quietly loaded every user-level
+// server. Strict travels with the setting, not with the file.
+func TestSessionSpecIsStrictWithoutAWorkspaceMCPConfig(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+	spec := p.spec(0)
+	if spec.MCPConfig != "" {
+		t.Errorf("there is no workspace .mcp.json to name, got %q", spec.MCPConfig)
+	}
+	if !spec.MCPStrict {
+		t.Error("the session must still be restricted, or workspaceOnly means nothing here")
+	}
+}
+
+// TestASecondFinalIsIgnored is R5: a provider that repeats its result line
+// — a resumed session replaying it, a CLI that says goodbye twice — filed
+// the note a second time and left the register with a duplicate row.
+func TestASecondFinalIsIgnored(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		finalEvent(triageDoc),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	rows, err := store.ReadRegister(cfg.Root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 1 {
+		t.Fatalf("register rows: %d, want the note filed once", len(rows))
+	}
+}
+
+// TestUsageKeepsTheHighestReport is R6: usage was assigned from whichever
+// event arrived last, so a schema retry in a fresh session — whose turn
+// and cost counters start again at zero — handed the run back a budget it
+// had already spent.
+func TestUsageKeepsTheHighestReport(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(
+		provider.Event{Kind: provider.EvUsage, Turns: 5, InputTok: 900, OutputTok: 300, CostUSD: 0.4},
+		provider.Event{Kind: provider.EvUsage, Turns: 1, InputTok: 20, OutputTok: 5, CostUSD: 0.05},
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	u := outs[0].State.Usage
+	if u.Turns != 5 || u.InputTokens != 900 || u.OutputTokens != 300 || u.CostUSD != 0.4 {
+		t.Fatalf("usage %+v, want the highest figure each counter reached", u)
+	}
+}
+
+// TestFailureAfterTheNoteIsAWarning is R7: a provider that fell apart once
+// the note was on disk left nothing in the run's state to say so, because
+// the completed branch read only completeErr.
+func TestFailureAfterTheNoteIsAWarning(t *testing.T) {
+	cfg := newWorkspace(t)
+	events := []provider.Event{finalEvent(triageDoc)}
+	for i := 0; i < 10; i++ {
+		events = append(events, provider.Event{Kind: provider.EvError, Text: "not json"})
+	}
+	p := &stubProvider{script: replay(events...)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !hasWarningContaining(out.State.Warnings, "malformed provider lines") {
+		t.Fatalf("warnings %v, want the provider failure reported as one", out.State.Warnings)
 	}
 }

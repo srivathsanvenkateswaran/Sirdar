@@ -1,0 +1,20 @@
+{
+  "isLast": true,
+  "issues": [
+    {
+      "id": "10044",
+      "key": "SUP-44",
+      "fields": {
+        "summary": "Statement PDF renders blank for Arabic locale",
+        "status": { "name": "In Progress", "statusCategory": { "key": "indeterminate", "name": "In Progress" } },
+        "priority": { "name": "Low" },
+        "assignee": { "displayName": "Priya Raman", "accountId": "acc-priya" },
+        "issuetype": { "name": "Support" },
+        "project": { "key": "SUP", "name": "Customer Support", "projectTypeKey": "service_desk" },
+        "labels": ["i18n"],
+        "created": "2026-09-06T15:20:00.000+0000",
+        "updated": "2026-09-06T15:45:00.000+0000"
+      }
+    }
+  ]
+}

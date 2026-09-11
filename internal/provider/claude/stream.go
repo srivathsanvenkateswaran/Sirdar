@@ -162,6 +162,36 @@ func rateLimitNote(window string, utilization float64, overage bool) string {
 	return note
 }
 
+// isRoundTrip reports whether an assistant line completes one model
+// round-trip, which is the unit the CLI counts in the result line's
+// num_turns.
+//
+// Claude Code emits one stdout line per content block, so a single model
+// response arrives as a thinking line, then a tool_use line, and a
+// response that calls three tools in parallel arrives as three tool_use
+// lines. Counting every assistant line ran about 1.5x ahead of num_turns
+// — 61 against the CLI's 41 on a real run — and cancelled a session
+// mid-tool on a budget it had not spent. A line carrying a tool_use block
+// or a non-empty text answer is one round-trip; a thinking-only line is
+// part of the round-trip that follows it.
+func isRoundTrip(raw []byte) bool {
+	var l streamLine
+	if err := json.Unmarshal(raw, &l); err != nil || l.Type != "assistant" {
+		return false
+	}
+	for _, b := range blocksOf(l.Message.Content) {
+		switch b.Type {
+		case "tool_use":
+			return true
+		case "text":
+			if strings.TrimSpace(b.Text) != "" {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func assistantEvents(l streamLine, raw []byte) []provider.Event {
 	var events []provider.Event
 	if u := l.Message.Usage; u != nil && (u.Input() > 0 || u.OutputTokens > 0) {

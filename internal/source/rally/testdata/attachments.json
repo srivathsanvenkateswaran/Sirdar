@@ -1,0 +1,45 @@
+{
+  "QueryResult": {
+    "_rallyAPIMajor": "2",
+    "Errors": [],
+    "Warnings": [],
+    "TotalResultCount": 3,
+    "StartIndex": 1,
+    "PageSize": 200,
+    "Results": [
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/attachment/55501",
+        "_type": "Attachment",
+        "ObjectID": 55501,
+        "Name": "screenshot.png",
+        "ContentType": "image/png",
+        "Size": 11,
+        "Content": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/attachmentcontent/55501",
+          "_type": "AttachmentContent"
+        }
+      },
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/attachment/55502",
+        "_type": "Attachment",
+        "ObjectID": 55502,
+        "Name": "../../etc/passwd",
+        "ContentType": "text/plain",
+        "Size": 6,
+        "Content": {
+          "_ref": "https://rally.example.com/slm/webservice/v2.0/attachmentcontent/55502",
+          "_type": "AttachmentContent"
+        }
+      },
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/attachment/55503",
+        "_type": "Attachment",
+        "ObjectID": 55503,
+        "Name": "no-content.txt",
+        "ContentType": "text/plain",
+        "Size": 0,
+        "Content": null
+      }
+    ]
+  }
+}

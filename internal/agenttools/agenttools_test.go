@@ -402,7 +402,7 @@ func TestBashDeniesRedirection(t *testing.T) {
 	for _, command := range []string{
 		"git log > /tmp/x",
 		"cat go.mod >> ~/.zshrc",
-		"rg foo 2>/dev/null",
+		"cat go.mod 2> err.log",
 		"cat < go.mod",
 		"rg foo <(git log)",
 	} {
@@ -415,6 +415,15 @@ func TestBashDeniesRedirection(t *testing.T) {
 	// Quoted, the same character is a search pattern.
 	if _, err := call(t, bash, `{"command":"rg \"a>b\" go.mod"}`); err != nil {
 		t.Errorf("a quoted > was treated as a redirection: %v", err)
+	}
+
+	// The exceptions are the two stderr redirections that write nothing:
+	// they are how an agent quiets a probe, and refusing them cost real
+	// evidence for no gain.
+	for _, command := range []string{"cat go.mod 2>/dev/null", "cat go.mod 2>&1"} {
+		if _, err := call(t, bash, `{"command":`+quote(command)+`}`); err != nil {
+			t.Errorf("%q was refused: %v", command, err)
+		}
 	}
 }
 

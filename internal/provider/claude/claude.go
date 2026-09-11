@@ -32,6 +32,10 @@ const (
 	// disallowedTools is belt-and-braces with PermissionPolicy: the CLI
 	// refuses these before it ever asks Sirdar.
 	disallowedTools = "Write,Edit,MultiEdit,NotebookEdit"
+	// emptyMCPConfig is an inline MCP configuration that declares no
+	// servers. Passed with --strict-mcp-config it is how a session is
+	// started with no MCP tools at all.
+	emptyMCPConfig = `{"mcpServers":{}}`
 )
 
 // Provider starts Claude Code sessions.
@@ -69,8 +73,18 @@ func args(spec provider.SessionSpec) []string {
 	// With a config named, the session loads those MCP servers and only
 	// those: --strict-mcp-config is what keeps the operator's own global
 	// connectors — deploy, buy, send — out of a read-only triage run.
-	if spec.MCPConfig != "" {
+	//
+	// MCPStrict with no config named means the workspace asked for that
+	// restriction and has no .mcp.json to be restricted to. The flag pair
+	// is still passed, against an empty inline config, because the
+	// alternative — passing neither — silently loads every user-level
+	// server, which is how a dogfood run ended up with 102 MCP tools
+	// including deploy_to_vercel while mcp.workspaceOnly was true.
+	switch {
+	case spec.MCPConfig != "":
 		out = append(out, "--strict-mcp-config", "--mcp-config", spec.MCPConfig)
+	case spec.MCPStrict:
+		out = append(out, "--strict-mcp-config", "--mcp-config", emptyMCPConfig)
 	}
 	return append(out, "--disallowedTools", disallowedTools)
 }
@@ -286,11 +300,10 @@ type session struct {
 // the result line, so a run can show turns and tokens as they happen
 // rather than only once it is over.
 type usageMeter struct {
-	turns    int
-	inTok    int64
-	outTok   int64
-	costUSD  float64
-	reported bool // a result line has given authoritative totals
+	turns   int
+	inTok   int64
+	outTok  int64
+	costUSD float64
 }
 
 // Events returns the activity stream. The channel is buffered; the caller
@@ -529,27 +542,47 @@ func (s *session) writeControlResponse(requestID string, response map[string]any
 // and no turn number; the result line carries the session's own totals and
 // replaces the running count, since it is the figure the operator is
 // billed against.
+//
+// Which of the two it is comes from the line's own type, not from the
+// numbers on it: a result line reporting a free, zero-turn session was
+// read as a per-turn event and had its totals added to the running count
+// instead of replacing them.
+//
+// The running turn count moves only on a line that is a model round-trip
+// (see isRoundTrip), so it tracks the CLI's own num_turns instead of
+// running ahead of it; when the result line arrives its num_turns is the
+// authoritative total and the meter is reconciled to it.
 func (s *session) measure(ev *provider.Event) {
 	if ev.Kind != provider.EvUsage {
 		return
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if ev.Turns > 0 || ev.CostUSD > 0 {
+	if isResultLine(ev.Raw) {
 		s.meter.turns = ev.Turns
 		s.meter.inTok = ev.InputTok
 		s.meter.outTok = ev.OutputTok
 		s.meter.costUSD = ev.CostUSD
-		s.meter.reported = true
 		return
 	}
-	s.meter.turns++
+	if isRoundTrip(ev.Raw) {
+		s.meter.turns++
+	}
 	s.meter.inTok += ev.InputTok
 	s.meter.outTok += ev.OutputTok
 	ev.Turns = s.meter.turns
 	ev.InputTok = s.meter.inTok
 	ev.OutputTok = s.meter.outTok
 	ev.CostUSD = s.meter.costUSD
+}
+
+// isResultLine reports whether raw is the CLI's terminal "result" line,
+// the one that carries the session's own totals.
+func isResultLine(raw []byte) bool {
+	var probe struct {
+		Type string `json:"type"`
+	}
+	return json.Unmarshal(raw, &probe) == nil && probe.Type == "result"
 }
 
 // absorb records the parts of an event that belong to the terminal Result.

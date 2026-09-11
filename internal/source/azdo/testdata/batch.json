@@ -1,0 +1,41 @@
+{
+  "4242": {
+    "id": 4242,
+    "rev": 7,
+    "fields": {
+      "System.WorkItemType": "Bug",
+      "System.Title": "Login fails for SSO users",
+      "System.State": "Active",
+      "System.AssignedTo": { "displayName": "Ada Lovelace", "uniqueName": "ada@contoso.com" },
+      "System.AreaPath": "Fabrikam\\Web",
+      "System.ChangedDate": "2026-09-08T14:30:00Z",
+      "System.Description": "<p>Customers on <b>SSO</b> cannot sign in.</p>",
+      "Microsoft.VSTS.Common.Priority": 2,
+      "Custom.HelpdeskId": "ZD-99"
+    }
+  },
+  "4243": {
+    "id": 4243,
+    "rev": 2,
+    "fields": {
+      "System.WorkItemType": "Task",
+      "System.Title": "Add SSO regression test",
+      "System.State": "New",
+      "System.AreaPath": "Fabrikam\\Web",
+      "System.ChangedDate": "2026-09-07T09:00:00Z",
+      "Microsoft.VSTS.Common.Priority": 3
+    }
+  },
+  "4244": {
+    "id": 4244,
+    "rev": 1,
+    "fields": {
+      "System.WorkItemType": "Bug",
+      "System.Title": "Token refresh loops",
+      "System.State": "Active",
+      "System.AreaPath": "Fabrikam\\Api",
+      "System.ChangedDate": "2026-09-06T09:00:00Z",
+      "Microsoft.VSTS.Common.Priority": 1
+    }
+  }
+}

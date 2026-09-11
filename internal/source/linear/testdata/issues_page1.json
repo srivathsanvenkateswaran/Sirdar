@@ -1,0 +1,47 @@
+{
+  "data": {
+    "issues": {
+      "nodes": [
+        {
+          "id": "aaaa1111-0000-4000-8000-000000000011",
+          "identifier": "ENG-201",
+          "title": "Retry budget exhausted too early",
+          "description": "",
+          "priority": 1,
+          "priorityLabel": "Urgent",
+          "state": { "name": "Todo", "type": "unstarted" },
+          "assignee": { "name": "Dana Okoro", "email": "dana@example.com" },
+          "team": { "key": "ENG", "name": "Engineering" },
+          "project": { "name": "Payments hardening" },
+          "parent": null,
+          "labels": { "nodes": [{ "name": "bug" }] },
+          "url": "https://linear.app/acme/issue/ENG-201",
+          "createdAt": "2026-09-03T10:00:00.000Z",
+          "updatedAt": "2026-09-08T10:00:00.000Z",
+          "attachments": { "nodes": [] },
+          "customerNeeds": { "nodes": [] }
+        },
+        {
+          "id": "aaaa1111-0000-4000-8000-000000000012",
+          "identifier": "ENG-202",
+          "title": "Webhook replay drops idempotency key",
+          "description": "",
+          "priority": 3,
+          "priorityLabel": "Medium",
+          "state": { "name": "In Progress", "type": "started" },
+          "assignee": { "name": "Dana Okoro", "email": "dana@example.com" },
+          "team": { "key": "ENG", "name": "Engineering" },
+          "project": null,
+          "parent": null,
+          "labels": { "nodes": [] },
+          "url": "https://linear.app/acme/issue/ENG-202",
+          "createdAt": "2026-09-04T10:00:00.000Z",
+          "updatedAt": "2026-09-08T11:00:00.000Z",
+          "attachments": { "nodes": [] },
+          "customerNeeds": { "nodes": [] }
+        }
+      ],
+      "pageInfo": { "hasNextPage": true, "endCursor": "cursor-page-1" }
+    }
+  }
+}

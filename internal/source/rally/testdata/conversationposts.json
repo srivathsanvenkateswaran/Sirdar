@@ -1,0 +1,36 @@
+{
+  "QueryResult": {
+    "_rallyAPIMajor": "2",
+    "Errors": [],
+    "Warnings": [],
+    "TotalResultCount": 3,
+    "StartIndex": 1,
+    "PageSize": 200,
+    "Results": [
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/conversationpost/3003",
+        "_type": "ConversationPost",
+        "ObjectID": 3003,
+        "Text": "<p>Third: shipping the fix in <strong>2026.09</strong>.</p>",
+        "User": { "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9002", "_refObjectName": "Bo Builder" },
+        "CreationDate": "2026-09-09T15:00:00.000Z"
+      },
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/conversationpost/3001",
+        "_type": "ConversationPost",
+        "ObjectID": 3001,
+        "Text": "<p>First: reproduced on staging.</p>",
+        "User": { "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9001", "_refObjectName": "Ann Agent" },
+        "CreationDate": "2026-09-02T10:00:00.000Z"
+      },
+      {
+        "_ref": "https://rally.example.com/slm/webservice/v2.0/conversationpost/3002",
+        "_type": "ConversationPost",
+        "ObjectID": 3002,
+        "Text": "<p>Second: the retry budget is exhausted early.</p>",
+        "User": { "_ref": "https://rally.example.com/slm/webservice/v2.0/user/9003", "_refObjectName": "Cy Reviewer" },
+        "CreationDate": "2026-09-05T12:30:00.000Z"
+      }
+    ]
+  }
+}

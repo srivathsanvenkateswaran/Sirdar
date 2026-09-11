@@ -1,0 +1,24 @@
+{
+  "ticket": {
+    "id": 555,
+    "subject": "Export fails",
+    "status": "open",
+    "priority": "high",
+    "via": { "channel": "web" },
+    "requester_id": 100,
+    "organization_id": 200,
+    "group_id": 300,
+    "assignee_id": 400,
+    "tags": ["billing", "urgent"],
+    "type": "incident",
+    "created_at": "2026-09-10T06:00:00Z",
+    "updated_at": "2026-09-10T06:30:00Z"
+  },
+  "users": [
+    { "id": 100, "name": "John Doe", "role": "end-user" },
+    { "id": 400, "name": "Agent Carol", "role": "agent" }
+  ],
+  "organizations": [
+    { "id": 200, "name": "Acme Co" }
+  ]
+}

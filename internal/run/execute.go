@@ -24,7 +24,9 @@ const maxMalformed = 10
 
 // closeGrace is how long a session gets to end on its own after its input
 // has been closed, before it is cancelled outright. The note is already on
-// disk by then; this only decides how the process is reaped.
+// disk by then; this only decides how the process is reaped. Runner.CloseGrace
+// overrides it, which is how a test asserts the reaping without waiting
+// ten seconds for it.
 const closeGrace = 10 * time.Second
 
 // execution is the state the event loop accumulates for one session.
@@ -179,6 +181,12 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.interrupted {
 			p.state.Warnings = append(p.state.Warnings, "interrupted after the note was produced")
 		}
+		if ex.failure != "" {
+			// Whatever went wrong after the note landed is still worth
+			// reading — it is the only account of a provider that died
+			// mid-sentence — but it does not make the run a failure.
+			p.state.Warnings = append(p.state.Warnings, ex.failure+", after the note was written")
+		}
 		if timedOut.Load() {
 			p.state.Warnings = append(p.state.Warnings,
 				fmt.Sprintf("the session was still running when the %d minute budget expired, after the note was written", r.Config.Budget.MaxMinutes))
@@ -228,6 +236,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			Root:      cfg.Root,
 		},
 		MCPConfig: cfg.MCPConfigPath(),
+		MCPStrict: cfg.WorkspaceOnlyMCP(),
 		Budget: provider.Budget{
 			MaxTurns:   cfg.Budget.MaxTurns,
 			MaxMinutes: cfg.Budget.MaxMinutes,
@@ -425,23 +434,31 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 
 	switch ev.Kind {
 	case provider.EvUsage:
-		p.state.Usage = store.Usage{
-			Turns:        ev.Turns,
-			InputTokens:  ev.InputTok,
-			OutputTokens: ev.OutputTok,
-			CostUSD:      ev.CostUSD,
-		}
+		// The highest figure each session reported, not the last one:
+		// a schema retry runs in a fresh session whose counters start at
+		// zero, and assigning those would hand the run back a turn and
+		// cost budget it has already spent.
+		//
+		// The provider's running turn count is an estimate of the same
+		// unit the CLI reports and never runs ahead of it, and the
+		// provider reconciles its meter to the result line's num_turns,
+		// so taking the maximum lands on the provider's own total.
+		u := &p.state.Usage
+		u.Turns = max(u.Turns, ev.Turns)
+		u.InputTokens = max(u.InputTokens, ev.InputTok)
+		u.OutputTokens = max(u.OutputTokens, ev.OutputTok)
+		u.CostUSD = max(u.CostUSD, ev.CostUSD)
 		p.state.UpdatedAt = r.now()
 		if err := p.run.WriteState(p.state); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 		}
 		b := r.Config.Budget
 		switch {
-		case b.MaxUSD > 0 && ev.CostUSD > b.MaxUSD:
-			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", ev.CostUSD, b.MaxUSD)
+		case b.MaxUSD > 0 && u.CostUSD > b.MaxUSD:
+			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", u.CostUSD, b.MaxUSD)
 			sess.Cancel()
-		case b.MaxTurns > 0 && ev.Turns > b.MaxTurns:
-			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", ev.Turns, b.MaxTurns)
+		case b.MaxTurns > 0 && u.Turns > b.MaxTurns:
+			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
 			sess.Cancel()
 		}
 
@@ -468,6 +485,14 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 // handleFinal validates the session's JSON output. The first failure buys
 // one retry turn quoting the validation errors; the second ends the run.
 func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
+	// A session that has already produced a valid note is done. A provider
+	// that emits a second final line — a resumed session replaying its
+	// result, a CLI that repeats itself on the way out — must not file the
+	// note twice and hand the register a duplicate row.
+	if len(ex.final) > 0 {
+		return
+	}
+
 	doc := []byte(ev.Final)
 	if len(doc) == 0 {
 		doc = []byte(strings.TrimSpace(ev.Text))
@@ -533,7 +558,7 @@ func (r *Runner) endSession(p *prepared, sess provider.Session) {
 	if err := sess.CloseInput(); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] close session input: %v\n", p.state.Key, err)
 	}
-	time.AfterFunc(closeGrace, sess.Cancel)
+	time.AfterFunc(r.grace(), sess.Cancel)
 }
 
 // resumeForRetry starts a new session that continues the finished one,
@@ -578,7 +603,9 @@ type triageFields struct {
 	Complaint      string `json:"complaint"`
 	Classification string `json:"classification"`
 	Ticket         struct {
-		Service string `json:"service"`
+		Service    string `json:"service"`
+		Customer   string `json:"customer"`
+		CustomerID string `json:"customerId"`
 	} `json:"ticket"`
 	RootCause struct {
 		Confidence string `json:"confidence"`
@@ -631,6 +658,7 @@ func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error)
 	filename := note.Filename(cfg.Notes.Filenames.Triage, key, slug)
 
 	meta := r.meta(p, f.Ticket.Service)
+	r.applyDocumentCustomer(p, &meta, f.Ticket.Customer, f.Ticket.CustomerID)
 	meta.Links.Triage = stem(filename)
 	meta.Links.RCA = stem(note.Filename(cfg.Notes.Filenames.RCA, key, slug))
 	meta.Links.Resolution = stem(note.Filename(cfg.Notes.Filenames.Resolution, key, slug))
@@ -930,6 +958,38 @@ func (r *Runner) meta(p *prepared, service string) note.Meta {
 	return m
 }
 
+// applyDocumentCustomer lets the note say who the customer is. The
+// helpdesk's account fields are only where the ticket was filed: an
+// agent that has read the thread, the attachments and the logs routinely
+// resolves a different company, or the id the helpdesk never held, and the
+// frontmatter used to carry the bundle's answer regardless. The
+// document's value wins when it has one; the bundle's is the fallback.
+//
+// A disagreement is not silently resolved: the bundle's value goes into
+// the run's warnings, so state.json still says what the helpdesk claimed
+// and the two can be compared later.
+func (r *Runner) applyDocumentCustomer(p *prepared, m *note.Meta, customer, customerID string) {
+	for _, f := range []struct {
+		field   string
+		fromDoc string
+		into    *string // holds the bundle's value on the way in
+	}{
+		{"customer", strings.TrimSpace(customer), &m.Customer},
+		{"customer_id", strings.TrimSpace(customerID), &m.CustomerID},
+	} {
+		if f.fromDoc == "" {
+			continue
+		}
+		bundle := *f.into
+		if bundle != "" && bundle != f.fromDoc {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf(
+				"frontmatter %s: the note says %q, the helpdesk bundle says %q; the note's value was used",
+				f.field, f.fromDoc, bundle))
+		}
+		*f.into = f.fromDoc
+	}
+}
+
 func (r *Runner) renderer() note.Renderer {
 	dir := ""
 	if r.Config.Notes.Templates != "" {
@@ -988,4 +1048,13 @@ func firstSentence(s string) string {
 		return strings.TrimSpace(s[:i+1])
 	}
 	return s
+}
+
+// grace is how long endSession waits before cancelling, taking the
+// Runner's override when it has one.
+func (r *Runner) grace() time.Duration {
+	if r.CloseGrace > 0 {
+		return r.CloseGrace
+	}
+	return closeGrace
 }

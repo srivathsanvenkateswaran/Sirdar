@@ -27,6 +27,46 @@ sources:
   tracker:
     adapter: exec
     command: ~/bin/<tracker-adapter>
+    # Built-in trackers, as alternatives to an exec adapter. Pick one and
+    # delete the rest; apiToken, pat and apiKey are credential refs, never
+    # literal secrets.
+    #
+    # adapter: jira
+    # baseUrl: https://acme.atlassian.net   # or the Data Center instance URL
+    # deployment: auto                      # cloud | datacenter | auto (probes /rest/api/2/serverInfo)
+    # email: you@acme.com                   # Cloud: sent with apiToken as basic auth
+    # apiToken: keychain:jira-api-token     # Cloud
+    # pat: keychain:jira-pat                # Data Center, instead of email + apiToken
+    # projectKey: ACME                      # optional: scopes list to one project
+    # epicLinkField: customfield_10014      # optional: Data Center epic-link field, by id or name
+    #
+    # adapter: linear
+    # apiKey: keychain:linear-api-key
+    # teamKey: ENG                          # optional: scopes list to one team
+    #
+    # adapter: azdo
+    # orgUrl: https://dev.azure.com/acme    # or a Server collection URL
+    # project: Payments
+    # pat: keychain:azdo-pat
+    # helpdeskLinkDomain: acme.zohodesk.com # optional: host marking a Hyperlink relation as the helpdesk ticket
+    # helpdeskField: Custom.SupportTicket   # optional: fallback custom field
+    #
+    # adapter: rally
+    # baseUrl: https://rally1.rallydev.com  # default
+    # apiKey: keychain:rally-api-key
+    # workspace: "12345678910"              # workspace _ref or ObjectID
+    # project: "12345678911"                # optional: scopes list
+    # types: [Defect, HierarchicalRequirement]
+    # helpdeskField: c_SupportTicket        # optional
+    #
+    # Fallback for a tracker that records the helpdesk link only as text in
+    # the description. It runs after the adapter's own linkage and fills in
+    # only where the adapter found none. Both patterns take exactly one
+    # capture group: pattern's group is the reference, and idPattern, when
+    # set, narrows it to the id the helpdesk API expects.
+    # helpdeskRef:
+    #   pattern: 'Zoho Ticket URL:\s*(\S+)'
+    #   idPattern: '(\d+)$'
   helpdesk:
     adapter: zohodesk
     orgId: "<org-id>"
@@ -43,6 +83,21 @@ sources:
     # working an hour after it was issued, so it suits a run you are
     # watching, not a scheduled one.
     # token: keychain:<service>
+    #
+    # Built-in helpdesks, as alternatives to zohodesk. Pick one and delete
+    # the rest; apiToken, oauthToken and apiKey are credential refs, never
+    # literal secrets.
+    #
+    # adapter: zendesk
+    # subdomain: acme                         # acme.zendesk.com
+    # baseUrl: ""                             # optional override, e.g. a proxy
+    # email: you@acme.com                     # basic auth, sent with apiToken
+    # apiToken: keychain:zendesk-api-token    # basic auth, instead of oauthToken
+    # oauthToken: keychain:zendesk-oauth-token  # instead of email + apiToken
+    #
+    # adapter: freshdesk
+    # domain: acme.freshdesk.com
+    # apiKey: keychain:freshdesk-api-key
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides
@@ -51,8 +106,14 @@ notes:
     rca: "{key} RCA {slug}.md"
     resolution: "{key} RES {slug}.md"
 budget:
-  maxTurns: 60
+  # A turn is one model round-trip: one assistant message that calls a tool
+  # or gives the final answer. It is the same unit the Claude CLI reports as
+  # num_turns, and a triage of a busy ticket takes 40-60 of them.
+  maxTurns: 120
   maxMinutes: 25
+  # Claude reports cost only when the session ends, so this is an end-of-run
+  # check: it records an overspend, it cannot stop one. maxTurns and
+  # maxMinutes are the budgets that bite while a run is going.
   maxUsd: 5
 concurrency: 1
 attachments:
@@ -61,7 +122,9 @@ attachments:
                            # bundle and named in a warning instead.
 permissions:
   # Every segment of a pipeline or compound command has to match a pattern:
-  # "rg foo | head -50" needs both "rg *" and "head *".
+  # "rg foo | head -50" needs both "rg *" and "head *". A segment that
+  # redirects or substitutes ($(…), backticks, >, >>, <, &>) is refused
+  # whatever the patterns say; 2>&1 and 2>/dev/null are the exceptions.
   bash:
     - "git log*"
     - "git show*"
@@ -74,17 +137,24 @@ permissions:
     - "wc *"
     - "file *"
     - "which *"
+    - "echo *"
   # Globs matched against an MCP tool's full name. While this list is empty,
-  # read-shaped MCP tools are allowed and write-shaped ones (create_*,
-  # deploy_*, send_*, buy_*, …) are denied by name. Naming patterns here
-  # replaces that heuristic outright: anything unlisted is then denied.
+  # a tool is allowed unless a word of its name is a write verb (create,
+  # update, delete, send, deploy, buy, save, log, …). A name that also
+  # carries a read word (query, select, read, search, list, get, find,
+  # describe, show) is a read whatever else it says, so run_query and
+  # run_select go through. Naming patterns here replaces that heuristic
+  # outright: anything unlisted is then denied.
   mcp: []
     # - "mcp__grafana__query_*"
     # - "mcp__grafana__list_*"
 mcp:
   # Start the session against <workspace>/.mcp.json and nothing else, so the
   # operator's own global connectors are not loaded into a triage run. With
-  # no such file the session sees every user-level server; doctor says so.
+  # no such file the session is started against an empty MCP config and has
+  # no MCP tools at all, so a playbook that names one gets nothing; write the
+  # servers the playbooks need into <workspace>/.mcp.json. doctor says which
+  # of the three you are in.
   workspaceOnly: true
 playbooks: .sirdar/playbooks
 `
