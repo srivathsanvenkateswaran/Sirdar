@@ -122,10 +122,11 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
    OpenRouter), `provider: acp` (start with Gemini CLI per `docs/research/providers/acp-agents.md`),
    and `provider: qwen` against a real Qwen Code login. None of the three has run against
    anything but scripted fake agents so far.
-3. Fix the Janus adapter's slow get-by-key (lists 200 tickets per probe; `doctor` times out).
-4. Continue dogfood run 2's follow-ups: a workspace `.mcp.json` in OXO.APIs listing only the read
-   servers the playbooks need (with `mcp.workspaceOnly` the agent otherwise has no MCP tools),
-   then two or three more tickets and a comparison against hand-written notes; fold gotchas into
+3. Janus get-by-key is fixed in the private adapter (`?ticket_keys=` filter); `sirdar doctor` in
+   OXO.APIs passed every row on 2026-09-11 with the merged binary, and a `--dry-run` triage of the
+   golden ticket produced its bundle and prompt. Nothing to do here unless doctor regresses.
+4. Continue dogfood run 2's follow-ups: the workspace `.mcp.json` in OXO.APIs exists (doctor reports
+   it with 12 `permissions.mcp` patterns); next is two or three more tickets and a comparison against hand-written notes; fold gotchas into
    `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
    sees the commands it is asked about.
 5. Live-check `permissions.fetch` against a real Claude Code install: confirm that a
