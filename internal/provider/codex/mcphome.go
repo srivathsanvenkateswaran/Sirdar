@@ -40,6 +40,12 @@ const (
 	// mtime alone — a long-running turn is not guaranteed to touch its
 	// own home, but its process either is or is not still there.
 	lockFileName = ".sirdar-lock"
+	// lockStaleAge is how old a lock file's own recorded start time may
+	// get before lockPID stops vouching for its pid, whether or not a
+	// process with that number still happens to be running: pids wrap
+	// around, and a lock this old naming a live pid is more plausibly
+	// reuse than a session that has genuinely been open for a week.
+	lockStaleAge = 7 * 24 * time.Hour
 )
 
 // scratchHome is a generated CODEX_HOME for one session: the user's own
@@ -163,17 +169,26 @@ func writeLock(dir string) error {
 
 // lockPID reads the pid a generated home's lock file names. ok is false
 // when the home has no lock file (older than this mechanism, or already
-// half torn down) or the file does not parse, in which case the sweep
-// falls back to mtime alone rather than treat an unreadable lock as a
-// license to keep the directory forever.
+// half torn down), the file does not parse, or its recorded start time
+// cannot be read or is older than lockStaleAge — in every one of those
+// cases the sweep falls back to mtime alone rather than treat the lock as a
+// license to keep the directory forever. A start time this old is worth
+// distrusting even when the pid it names is alive: the two are only bound
+// together by the OS not having reused the number since, and lockStaleAge
+// is well past any turn Sirdar expects to run.
 func lockPID(dir string) (pid int, ok bool) {
 	b, err := os.ReadFile(filepath.Join(dir, lockFileName))
 	if err != nil {
 		return 0, false
 	}
-	line, _, _ := strings.Cut(string(b), "\n")
+	line, rest, _ := strings.Cut(string(b), "\n")
 	n, err := strconv.Atoi(strings.TrimSpace(line))
 	if err != nil || n <= 0 {
+		return 0, false
+	}
+	startLine, _, _ := strings.Cut(rest, "\n")
+	start, err := time.Parse(time.RFC3339, strings.TrimSpace(startLine))
+	if err != nil || time.Since(start) > lockStaleAge {
 		return 0, false
 	}
 	return n, true

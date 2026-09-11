@@ -838,6 +838,68 @@ func TestSweepRemovesADeadLock(t *testing.T) {
 	}
 }
 
+// TestLockPIDDistrustsAnOldStartTime is the unit-level check on lockPID
+// itself: a lock recording this process's own pid — genuinely alive — is
+// still not vouched for once its start time is old enough, and neither is
+// one whose start time cannot be parsed at all.
+func TestLockPIDDistrustsAnOldStartTime(t *testing.T) {
+	write := func(t *testing.T, body string) string {
+		t.Helper()
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, lockFileName), []byte(body), 0o600); err != nil {
+			t.Fatalf("write lock: %v", err)
+		}
+		return dir
+	}
+
+	fresh := write(t, fmt.Sprintf("%d\n%s\n", os.Getpid(), time.Now().UTC().Format(time.RFC3339)))
+	if pid, ok := lockPID(fresh); !ok || pid != os.Getpid() {
+		t.Errorf("lockPID(fresh) = %d, %v; want this process's pid, true", pid, ok)
+	}
+
+	stale := write(t, fmt.Sprintf("%d\n%s\n", os.Getpid(), time.Now().Add(-8*24*time.Hour).UTC().Format(time.RFC3339)))
+	if pid, ok := lockPID(stale); ok {
+		t.Errorf("lockPID(stale) = %d, %v; want ok=false for a start time older than lockStaleAge", pid, ok)
+	}
+
+	unparsable := write(t, fmt.Sprintf("%d\nnot-a-time\n", os.Getpid()))
+	if pid, ok := lockPID(unparsable); ok {
+		t.Errorf("lockPID(unparsable) = %d, %v; want ok=false for a start time that does not parse", pid, ok)
+	}
+}
+
+// TestSweepRemovesAStaleLockEvenIfAlive covers pid reuse: a lock naming a
+// pid that is genuinely running is not enough to protect a home once the
+// lock's own recorded start time is older than lockStaleAge — at that age,
+// the process behind the pid is more plausibly a stranger that happened to
+// land on the same number than the session that wrote the lock.
+func TestSweepRemovesAStaleLockEvenIfAlive(t *testing.T) {
+	tmp := t.TempDir()
+	now := time.Now()
+
+	dir := filepath.Join(tmp, homePrefix+"old-lock")
+	if err := os.Mkdir(dir, 0o700); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	// This test process is certainly alive, so its own pid stands in for
+	// the "still running" half of the scenario; the lock's start time is
+	// what makes it stale.
+	body := fmt.Sprintf("%d\n%s\n", os.Getpid(), now.Add(-8*24*time.Hour).UTC().Format(time.RFC3339))
+	if err := os.WriteFile(filepath.Join(dir, lockFileName), []byte(body), 0o600); err != nil {
+		t.Fatalf("write lock: %v", err)
+	}
+	old := now.Add(-48 * time.Hour)
+	if err := os.Chtimes(dir, old, old); err != nil {
+		t.Fatalf("chtimes: %v", err)
+	}
+
+	sweepStaleHomes(tmp, now)
+
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("a home with a stale lock survived the sweep despite its pid being alive: %v", err)
+	}
+}
+
 // TestSessionWritesBackARefreshedLogin is the write-back where it
 // actually happens: at the end of a session, after the app-server has
 // gone, with the outcome on the event stream rather than swallowed.

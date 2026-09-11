@@ -896,6 +896,7 @@ func TestFixModeFileChangesGoThroughThePolicy(t *testing.T) {
 		{"a patch that also writes a git hook is not", 402, `{"decision":"decline"}`},
 		{"an approval whose paths are unknown is not", 403, `{"decision":"decline"}`},
 		{"a standing grant for a whole root is not", 404, `{"decision":"decline"}`},
+		{"a patch that renames into a git hook is not", 405, `{"decision":"decline"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := replyTo(t, res, tc.id); got != tc.want {
@@ -918,19 +919,68 @@ func TestFixModeFileChangesGoThroughThePolicy(t *testing.T) {
 	if len(allowed) != 1 || !strings.Contains(allowed[0].Text, "internal/svc/handler.go") {
 		t.Errorf("file-change allows = %+v, want one naming the file it wrote", allowed)
 	}
-	if len(denials) != 3 {
-		t.Fatalf("file-change denials = %d, want 3: %+v", len(denials), denials)
+	if len(denials) != 4 {
+		t.Fatalf("file-change denials = %d, want 4: %+v", len(denials), denials)
 	}
 	// The reason the agent is shown is the policy's own, so it can tell a
 	// reserved path from a patch nobody could check.
 	if !strings.Contains(denials[0].Text, ".git/hooks/x") {
 		t.Errorf("the hook denial does not name the reserved path: %q", denials[0].Text)
 	}
-	if !strings.Contains(denials[1].Text, "named no path") {
-		t.Errorf("the unknown-paths denial does not say why: %q", denials[1].Text)
+	if !strings.Contains(denials[1].Text, ".git/hooks/pre-commit") {
+		t.Errorf("the move denial does not name the reserved destination: %q", denials[1].Text)
 	}
-	if !strings.Contains(denials[2].Text, "root") {
-		t.Errorf("the grantRoot denial does not say why: %q", denials[2].Text)
+	if !strings.Contains(denials[2].Text, "named no path") {
+		t.Errorf("the unknown-paths denial does not say why: %q", denials[2].Text)
+	}
+	if !strings.Contains(denials[3].Text, "root") {
+		t.Errorf("the grantRoot denial does not say why: %q", denials[3].Text)
+	}
+}
+
+// TestFixModeFileChangePoisonedAfterApproval covers a patch Codex revises
+// after Sirdar has already accepted it: the earlier accept was judged
+// against a set of destinations that no longer holds, so it is worthless,
+// and the item is declined from then on with the operator told why.
+func TestFixModeFileChangePoisonedAfterApproval(t *testing.T) {
+	sess := startSession(t, "script-fix-filechange-patchupdate.jsonl", func(spec *provider.SessionSpec) {
+		spec.Mode = provider.ModeFix
+		spec.Policy = provider.FixPolicy(spec.Cwd, nil, nil, nil)
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if got := replyTo(t, res, 501); got != `{"decision":"accept"}` {
+		t.Errorf("reply to 501 = %s, want accept", got)
+	}
+	if got := replyTo(t, res, 502); got != `{"decision":"decline"}` {
+		t.Errorf("reply to 502 = %s, want decline", got)
+	}
+
+	var sawError bool
+	for _, ev := range evs {
+		if ev.Kind == provider.EvError && strings.Contains(ev.Text, "fc_poison") {
+			sawError = true
+		}
+	}
+	if !sawError {
+		t.Errorf("no EvError naming the item whose patch changed after approval; events=%+v", evs)
+	}
+
+	var denials []provider.Event
+	for _, ev := range evs {
+		if ev.Kind == provider.EvPermission && ev.Tool == "fileChange" && ev.Decision == "deny" {
+			denials = append(denials, ev)
+		}
+	}
+	if len(denials) != 1 {
+		t.Fatalf("file-change denials = %d, want 1: %+v", len(denials), denials)
+	}
+	if !strings.Contains(denials[0].Text, "already approved") {
+		t.Errorf("the poisoned-item denial does not say why: %q", denials[0].Text)
 	}
 }
 
@@ -944,7 +994,7 @@ func TestTriageFileChangesStayRefused(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Wait: %v", err)
 	}
-	for _, id := range []int{401, 402, 403, 404} {
+	for _, id := range []int{401, 402, 403, 404, 405} {
 		if got := replyTo(t, res, id); got != `{"decision":"decline"}` {
 			t.Errorf("reply to %d = %s, want a decline", id, got)
 		}

@@ -97,6 +97,16 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 6. Release: goreleaser config exists; `version` is a var; CI on Go 1.26 with a frontend job;
    desktop CI matrix in `.github/workflows/desktop.yml` (unsigned artifacts).
 
+## What is unverified
+
+- **`item/fileChange/requestApproval` firing under Codex's `sandbox: workspace-write` +
+  `approvalPolicy: untrusted`.** `docs/research/06-wire-formats.md` confirms the
+  command-approval and MCP-elicitation paths against a live `codex app-server` turn; the
+  file-change path was built the same way, off the app-server's declared `ServerRequest`
+  schema, but has not itself been watched fire — no turn that actually has Codex write a file
+  has been run against it. One dogfood fix turn where the agent writes through a hook would
+  confirm it; none has been run, to keep this round free of paid Codex turns.
+
 ## Known gaps (deliberate)
 
 No writes to any helpdesk or tracker (`sirdar fix`, on `evalfix`, writes to git and GitHub and

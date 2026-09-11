@@ -151,19 +151,21 @@ func (codexProvider) Start(ctx context.Context, spec provider.SessionSpec) (prov
 		policy = &provider.PermissionPolicy{Root: spec.Cwd}
 	}
 	s := &session{
-		cmd:            cmd,
-		spec:           spec,
-		policy:         policy,
-		home:           home,
-		pendingMCP:     map[string][]string{},
-		pendingChanges: map[string][]string{},
-		events:         make(chan provider.Event),
-		turnDone:       make(chan struct{}),
-		exited:         make(chan struct{}),
-		stdoutDone:     make(chan struct{}),
-		stderrDone:     make(chan struct{}),
-		stopped:        make(chan struct{}),
-		pumpDone:       make(chan struct{}),
+		cmd:             cmd,
+		spec:            spec,
+		policy:          policy,
+		home:            home,
+		pendingMCP:      map[string][]string{},
+		pendingChanges:  map[string][]string{},
+		approvedChanges: map[string][]string{},
+		poisonedChanges: map[string]bool{},
+		events:          make(chan provider.Event),
+		turnDone:        make(chan struct{}),
+		exited:          make(chan struct{}),
+		stdoutDone:      make(chan struct{}),
+		stderrDone:      make(chan struct{}),
+		stopped:         make(chan struct{}),
+		pumpDone:        make(chan struct{}),
 	}
 	lastPumpDone = s.pumpDone
 	s.queue.cond = sync.NewCond(&s.queue.mu)
@@ -400,12 +402,25 @@ type session struct {
 	// Without the paths there is nothing for the fix policy to confine,
 	// so the entry recorded here is what makes the approval decidable.
 	pendingChanges map[string][]string
-	finalText      string
-	usage          struct{ in, out int64 }
-	turns          int
-	turnDone       chan struct{}
-	turnClosed     bool
-	turnErr        error
+	// approvedChanges is, per fileChange item id Sirdar has already
+	// accepted, the destinations that acceptance was judged against. It is
+	// what a later patchUpdated is compared to: Codex applies whatever the
+	// patch looks like when the item completes, not what it looked like at
+	// approval time, so an item is only as trustworthy as the assumption
+	// that its destinations never move again after the accept.
+	approvedChanges map[string][]string
+	// poisonedChanges marks a fileChange item whose patchUpdated changed its
+	// destinations after Sirdar had already approved a different set. Once
+	// poisoned, every requestApproval naming that item is declined outright
+	// — the item's own bookkeeping can no longer be trusted to say what it
+	// will actually write.
+	poisonedChanges map[string]bool
+	finalText       string
+	usage           struct{ in, out int64 }
+	turns           int
+	turnDone        chan struct{}
+	turnClosed      bool
+	turnErr         error
 
 	// streamClosed records that the event queue has been closed, so
 	// Events() has ended and no further turn can be started on this
@@ -757,10 +772,18 @@ type item struct {
 	Questions json.RawMessage `json:"questions"`
 }
 
-// fileChange is one entry of a fileChange item's patch. Only the path is
-// read: it is what the fix policy judges.
+// fileChange is one entry of a fileChange item's patch. path is where the
+// entry already lives; kind.move_path, when the app-server's FileChange enum
+// sends an "update" with a rename, is the second location the patch writes
+// to. Both are destinations the fix policy has to judge — a change whose own
+// path is innocuous can still relocate the file to somewhere path never
+// names, such as .git/hooks.
 type fileChange struct {
 	Path string `json:"path"`
+	Kind struct {
+		Type     string `json:"type"`
+		MovePath string `json:"move_path"`
+	} `json:"kind"`
 }
 
 func (s *session) onNotify(method string, params json.RawMessage) {
@@ -838,6 +861,13 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		// can name files the item/started did not. The approval must be
 		// judged against what would actually be written, so the tracked
 		// paths are replaced by the ones this notification carries.
+		//
+		// But a revision can also arrive *after* Sirdar has already
+		// accepted the item — Codex applies whatever the patch looks like
+		// when the item completes, not what it looked like at approval
+		// time. If the destinations changed since the accept, the accept
+		// no longer means anything: the item is poisoned, and any further
+		// approval naming it is declined regardless of what it asks for.
 		var payload struct {
 			ItemID  string       `json:"itemId"`
 			Changes []fileChange `json:"changes"`
@@ -845,8 +875,20 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		if err := json.Unmarshal(params, &payload); err != nil || payload.ItemID == "" {
 			return
 		}
+		newPaths := changePaths(payload.Changes)
 		s.mu.Lock()
-		s.pendingChanges[payload.ItemID] = changePaths(payload.Changes)
+		approved, wasApproved := s.approvedChanges[payload.ItemID]
+		if wasApproved && !samePaths(approved, newPaths) {
+			s.poisonedChanges[payload.ItemID] = true
+			s.mu.Unlock()
+			s.emit(provider.Event{
+				Kind: provider.EvError,
+				Text: fmt.Sprintf("codex: fileChange %s changed after it was approved; declining any further approval for it", payload.ItemID),
+				Raw:  raw,
+			})
+			return
+		}
+		s.pendingChanges[payload.ItemID] = newPaths
 		s.mu.Unlock()
 
 	case "turn/started":
@@ -939,6 +981,13 @@ func (s *session) onTurnCompleted(params, raw json.RawMessage) {
 		}
 	}
 	finalText := s.finalText
+	// A fileChange item's bookkeeping belongs to the turn it was raised in:
+	// item ids do not carry across turns, and a straggler an item/completed
+	// never arrived for (the turn ended some other way) should not linger
+	// and be judged against a future turn's approval.
+	s.pendingChanges = map[string][]string{}
+	s.approvedChanges = map[string][]string{}
+	s.poisonedChanges = map[string]bool{}
 	s.mu.Unlock()
 
 	if payload.Turn.Status == "failed" {
@@ -1082,8 +1131,18 @@ func (s *session) decideFileChange(id, params, raw json.RawMessage) {
 	}
 
 	s.mu.Lock()
+	poisoned := s.poisonedChanges[req.ItemID]
 	paths := s.pendingChanges[req.ItemID]
 	s.mu.Unlock()
+	if poisoned {
+		// patchUpdated changed this item's destinations after Sirdar had
+		// already approved a different set (see onNotify). Nothing this
+		// request asks for is trusted any more.
+		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+		s.denied(tool, params, raw, "Sirdar policy: this file change's patch changed after it was "+
+			"already approved, so it is declined")
+		return
+	}
 	if len(paths) == 0 {
 		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
 		s.denied(tool, params, raw, "Sirdar policy: the file change named no path, "+
@@ -1101,6 +1160,9 @@ func (s *session) decideFileChange(id, params, raw json.RawMessage) {
 			return
 		}
 	}
+	s.mu.Lock()
+	s.approvedChanges[req.ItemID] = paths
+	s.mu.Unlock()
 	_ = s.conn.reply(id, map[string]string{"decision": "accept"})
 	s.emit(provider.Event{
 		Kind: provider.EvPermission, Decision: "allow",
@@ -1108,13 +1170,35 @@ func (s *session) decideFileChange(id, params, raw json.RawMessage) {
 	})
 }
 
-// changePaths lifts the paths out of a fileChange item's changes, dropping
-// entries that name none.
+// samePaths reports whether a and b name the same destinations, independent
+// of order: a patch revision is only compared for what it touches, not the
+// order the app-server happened to list it in.
+func samePaths(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	sa, sb := append([]string(nil), a...), append([]string(nil), b...)
+	sort.Strings(sa)
+	sort.Strings(sb)
+	for i := range sa {
+		if sa[i] != sb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+// changePaths lifts every destination out of a fileChange item's changes:
+// each entry's own path, plus its move_path when the change renames the
+// file. Entries that name neither are dropped.
 func changePaths(changes []fileChange) []string {
 	var out []string
 	for _, c := range changes {
 		if strings.TrimSpace(c.Path) != "" {
 			out = append(out, c.Path)
+		}
+		if strings.TrimSpace(c.Kind.MovePath) != "" {
+			out = append(out, c.Kind.MovePath)
 		}
 	}
 	return out

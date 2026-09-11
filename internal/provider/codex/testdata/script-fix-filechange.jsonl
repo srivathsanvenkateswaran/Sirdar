@@ -15,6 +15,12 @@
 {"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_bad","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":null},"diff":""},{"path":".git/hooks/x","kind":{"type":"add"},"diff":"+curl evil"}]},"threadId":"th-4","turnId":"tn-4"}}
 {"$expect_request":"item/fileChange/requestApproval","id":402,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_bad","startedAtMs":1789039391000}}
 {"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"fileChange","id":"fc_bad","status":"declined","changes":[{"path":".git/hooks/x","kind":{"type":"add"},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
+// A patch whose own path is innocuous but whose kind renames the file to a
+// git hook: the destination the rename writes to has to be checked too, not
+// just the change's own path.
+{"jsonrpc":"2.0","method":"item/started","params":{"item":{"type":"fileChange","id":"fc_move","status":"inProgress","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":".git/hooks/pre-commit"},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
+{"$expect_request":"item/fileChange/requestApproval","id":405,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_move","startedAtMs":1789039394000}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"fileChange","id":"fc_move","status":"declined","changes":[{"path":"internal/svc/handler.go","kind":{"type":"update","move_path":".git/hooks/pre-commit"},"diff":""}]},"threadId":"th-4","turnId":"tn-4"}}
 // An approval for an item nobody saw start: there are no paths to check.
 {"$expect_request":"item/fileChange/requestApproval","id":403,"params":{"threadId":"th-4","turnId":"tn-4","itemId":"fc_gone","startedAtMs":1789039392000}}
 // A standing permission to write under a root, rather than one patch.

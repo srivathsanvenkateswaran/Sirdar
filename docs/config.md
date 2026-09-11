@@ -694,8 +694,9 @@ provider offers to be asked.
   MCP tool-call approvals to `permissions.mcp`. A file change is refused outright in a triage
   run; in a fix run it is judged path by path, by the same rules a Claude fix's `Edit` calls
   go through — inside the workspace root, and not under `.git/`, `.sirdar/` or the hooks
-  directory. The paths come from the `fileChange` item that precedes the approval, since the
-  approval itself carries only the item's id; an approval whose paths are unknown, and a
+  directory. The paths come from the `fileChange` item that precedes the approval (including
+  any destination a rename writes to via the change's `kind.move_path`), since the approval
+  itself carries only the item's id; an approval whose paths are unknown, and a
   request to hold a write permission open for a whole root rather than for this one patch,
   are both declined. A request to widen the sandbox is refused whatever the settings say.
   Every answer, allowed or refused, is an `EvPermission` line in the run's events with the
@@ -711,6 +712,14 @@ provider offers to be asked.
 
   One limit worth knowing: the policy only sees what Codex asks about. A tool Codex decides
   needs no approval runs without `permissions.mcp` being consulted.
+
+  **`item/fileChange/requestApproval` firing under `workspace-write` + `untrusted` is
+  schema-derived, not yet observed live.** The command-approval and MCP-elicitation paths
+  above were each confirmed against a running `codex app-server` (see
+  `docs/research/06-wire-formats.md`); the file-change path was built by reading the
+  app-server's declared `ServerRequest` shape, on the same reasoning that put it there, and
+  has not itself been watched fire on an actual turn. One dogfood fix turn that has the agent
+  write through a hook — a live run, deliberately spending Codex quota — would confirm it.
 
 ## Attachment filtering
 
