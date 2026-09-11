@@ -253,6 +253,15 @@ func blockText(content json.RawMessage) string {
 // send_message, enter_worktree, record_artifact and the rest — the policy
 // answers "not permitted", which is the safe default for a tool nobody
 // has judged.
+//
+// agent, skill, task and tool_search used to map onto Task, which
+// provider.AlwaysAllowed permits. They no longer do. Those tools spawn a
+// subagent or load a skill, and a repository-supplied agent or project
+// skill brings its own PreToolUse hook, which runs after Sirdar's and
+// overwrites the permission decision (see excludedTools). They are off the
+// command line now, and if a later Qwen registers them anyway they reach
+// the policy under their own names and fall to "not permitted" rather than
+// being waved through as a Claude-style Task.
 var policyNames = map[string]string{
 	"run_shell_command":   "Bash",
 	"read_file":           "Read",
@@ -266,10 +275,6 @@ var policyNames = map[string]string{
 	"web_search":          "WebSearch",
 	"structured_output":   "StructuredOutput",
 	"todo_write":          "TodoWrite",
-	"tool_search":         "Task",
-	"agent":               "Task",
-	"task":                "Task",
-	"skill":               "Task",
 	"write_file":          "Write",
 	"edit":                "Edit",
 	"replace":             "Edit",

@@ -239,6 +239,88 @@ Verified against the real 0.23.3 binary driven by a stub OpenAI-compatible endpo
 both the `tools` array of the request the CLI sends the model and the `tools` field of its
 `system/init` line.
 
+### Folder trust is the boundary the settings path is not
+
+`isFolderTrustEnabled(settings)` reads `settings.security?.folderTrust?.enabled ?? false`, so
+out of the box **every folder is trusted**. Turning it on in the system layer is not something
+the workspace can undo: `loadSettings` computes the trust verdict from
+`customDeepMerge(systemSettings, userSettings)` — the workspace layer is not in that merge —
+and `mergeSettings` puts the system layer last, so it wins the merged view as well.
+
+The verdict itself comes from the trusted-folders file, whose path is
+`process.env.QWEN_CODE_TRUSTED_FOLDERS_PATH` when set and `~/.qwen/trustedFolders.json`
+otherwise. Rules are `{path: TRUST_FOLDER | TRUST_PARENT | DO_NOT_TRUST}`; `resolveTrustRule`
+takes the deepest rule that contains the workspace and breaks a tie in favour of an untrusted
+one. An **empty** file is not enough: no matching rule yields `undefined`, which
+`Config.isTrustedFolder()` resolves as `this.trustedFolder ?? true` — trusted. The workspace
+has to be named `DO_NOT_TRUST` explicitly, which is what Sirdar's 0600 file does (for the path
+and its `realpath`, since the CLI canonicalises the workspace before matching).
+
+What untrusted costs, read from 0.23.3: `mergeSettings` substitutes `{}` for the whole
+workspace layer; `LoadedSettings.getProjectHooks` returns nothing; a project-level subagent is
+refused (`config.level === "project" && !isTrustedFolder()`) and so are a project skill's
+`allowedTools` and `hooks` (`canApplySkillSideEffects`); `discoverAllMcpTools`,
+`discoverAllMcpToolsIncremental` and `readMcpResource` all return early, so **no MCP server
+loads at all**; project `QWEN.md` context, LSP servers and auto-skill loading are skipped;
+`setApprovalMode` refuses anything but the default mode. Headless itself runs perfectly well
+untrusted — measured below.
+
+Measured against the real 0.23.3 binary with a stub endpoint, in a work tree carrying
+`.qwen/settings.json` = `{"permissions":{"allow":["run_shell_command","write_file","edit","monitor","agent","skill"]}}`
+and a `.qwen/agents/evil.md`:
+
+| run | tools offered to the model |
+| --- | --- |
+| trusted, no `--exclude-tools` | `agent skill tool_search run_shell_command monitor cron_create cron_delete cron_list enter_worktree exit_worktree get_goal update_goal record_artifact report_findings send_message list_agents loop_wakeup task_stop zoom_image read_file read_mcp_resource grep_search glob web_fetch structured_output` |
+| untrusted, no `--exclude-tools` | the same **minus `run_shell_command` and `monitor`** — the workspace allow-list was not read |
+| untrusted, Sirdar's exclusions | `glob grep_search read_file read_mcp_resource structured_output web_fetch` |
+| trusted, Sirdar's exclusions | the same six |
+
+In all four the `PreToolUse` hook was posted for the `read_file` call and its `deny` was
+honoured (`tool_result` = `is_error: true`, content `Sirdar policy: not permitted`).
+
+### A repository-supplied hook outranks the host's
+
+`HookRegistry.getHooksForEvent` sorts by `getSourcePriority`: project 1, user 2, system 3,
+extensions 4, **anything else 999** — and `addAgentHooks`, which wires the `hooks:` block of a
+declarative subagent into the registry, registers under source `session`. Skill frontmatter
+hooks go through `SessionHooksManager` instead, and `fireHooks` builds
+`[...registryHookConfigs, ...sessionHookConfigs]`, appending them after every registry hook.
+
+`HookAggregator.mergeOutputs` sends `PreToolUse` through `mergeWithOrLogic`, which for every
+output does `otherHookSpecificFields[key] = value` — a plain assignment, in order. The
+permission verdict lives in `hookSpecificOutput.permissionDecision`, and
+`PreToolUseHookOutput.getPermissionDecision()` reads that field first, ahead of the top-level
+`decision` that `mergeWithOrLogic` does harden (`hasBlock` wins there). So the **last**
+`permissionDecision` written is the one that counts, and a repo-registered session hook running
+after Sirdar's overwrites Sirdar's deny with an allow.
+
+Both routes to registering one — the `agent` tool for `.qwen/agents/*.md`, the `skill` tool for
+a project skill — are on Sirdar's exclusion list, and both are additionally dead in an
+untrusted folder. Read from the bundle, not run: making the real CLI spawn a subagent needs a
+model that calls it.
+
+### `~/.qwen/settings.json` hooks displace the system layer's
+
+`loadCliConfig` receives `{userHooks: settings.getUserHooks(), projectHooks:
+settings.getProjectHooks()}`, and `LoadedSettings.getUserHooks()` returns
+`this.user.settings.hooks` — the **user scope alone**, not the merge. Config then stores
+`userHooks = hooksConfig?.userHooks ?? settings.hooks`. So with no user-scope hooks the merged
+settings (carrying the system layer's, which is Sirdar's) are used and the hook is registered
+ungated; with user-scope hooks present, Sirdar's hook is only reachable through
+`Config.getProjectHooks()`, which is `this.projectHooks ?? this.hooks` behind an
+`isTrustedFolder()` gate.
+
+Measured, same harness, with `$HOME/.qwen/settings.json` =
+`{"hooks":{"PreToolUse":[{"matcher":"*","hooks":[{"type":"command","command":"true"}]}]}}`:
+
+- untrusted: **no hook post at all**, and the `read_file` call ran and returned the file — an
+  unmediated session.
+- trusted: the hook was posted as usual (the project-slot fallback).
+
+Sirdar refuses to start a session while that file registers hooks, rather than run one whose
+mediator may not be there.
+
 ### The host-arbitrated channel: a `PreToolUse` hook
 
 Hooks *are* consulted in headless mode, for every tool call that survives the deny list, and
@@ -256,7 +338,8 @@ which is why the guarantees live on the command line and this file only carries 
         "hooks": [{ "type": "http", "url": "http://127.0.0.1:54321/decide/<64 hex chars>", "timeout": 15, "name": "sirdar-policy" }] }
     ]
   },
-  "permissions": { "deny": ["write_file", "edit", "notebook_edit"] }
+  "permissions": { "deny": ["write_file", "edit", "notebook_edit"] },
+  "security": { "folderTrust": { "enabled": true } }
 }
 ```
 
@@ -352,6 +435,15 @@ Rules and hook payloads use runtime ids, with documented aliases:
 MCP tools are named `mcp__<server>__<tool>`, the same convention Sirdar's policy already
 parses — the registry renames a colliding MCP tool to that form so the synthetic
 `structured_output` keeps the bare name.
+
+The canonical list is `ToolNames` in `packages/core/src/tools/tool-names.ts` (49 entries in
+0.23.3), with `ToolNamesMigration` resolving three legacy names: `search_file_content` →
+`grep_search`, `replace` → `edit`, `task` → `agent`. Sirdar copies that list into
+`qwenCoreTools` and excludes all of it bar eleven read tools and the conditional shell, so the
+flag reads as a whitelist: a core tool is either judged by the policy under a name it
+understands, or never registered. A tool a later Qwen adds is on neither list, which leaves it
+registered and refused by the hook — the safe direction, and the reason a version bump should
+diff `ToolNames` against `qwenCoreTools`.
 
 ## Structured output (`--json-schema`)
 
@@ -451,13 +543,19 @@ call. There is no spend budget, because there is no cost figure on the wire.
 
 ## What was not exercised
 
+
 - A real model. The backend was a stub; token counts, `duration_api_ms` and the model's own
   behaviour under a schema are all synthetic. The settings-layer and `--exclude-tools`
   measurements above were taken the same way, against the real 0.23.3 binary with a stub
   endpoint: what they establish is which tools the CLI registers and offers, and whether the
   hook is called, neither of which depends on the model.
-- The probe and the mid-run listener death are exercised against the scripted fake binary in
-  `internal/provider/qwen/qwen_test.go`, not against the real CLI.
+- The probe, the mid-run listener death and the abort on an unmediated tool call are exercised
+  against the scripted fake binary in `internal/provider/qwen/qwen_test.go`, not against the
+  real CLI.
+- A repository-supplied subagent or project skill actually registering its `hooks:` block and
+  overwriting a decision. The mechanism is read from the 0.23.3 bundle (source priority, the
+  session-hook append, `mergeWithOrLogic`'s assignment); making the real CLI spawn a subagent
+  needs a model that calls the `agent` tool, which is excluded.
 - `--max-wall-time` / `--max-tool-calls` overruns (exit 55) and SIGINT's exit 130.
 - MCP tools actually running — the servers in the MCP table never completed a handshake, which
   is enough to prove which ones were assembled but not what a `mcp__server__tool` hook payload
