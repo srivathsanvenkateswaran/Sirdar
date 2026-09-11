@@ -9,10 +9,10 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"syscall"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
@@ -142,7 +142,7 @@ func sweepStaleHomes(tmp string, now time.Time) {
 			continue
 		}
 		dir := filepath.Join(tmp, e.Name())
-		if pid, ok := lockPID(dir); ok && processAlive(pid) {
+		if pid, ok := lockPID(dir); ok && procgroup.Alive(pid) {
 			continue
 		}
 		info, err := e.Info()
@@ -177,18 +177,6 @@ func lockPID(dir string) (pid int, ok bool) {
 		return 0, false
 	}
 	return n, true
-}
-
-// processAlive reports whether pid names a running process. Signal 0
-// delivers nothing; the kernel call still fails with ESRCH when no process
-// by that pid exists, which is enough to tell a live session's lock from a
-// leftover one a dead process cannot renew. syscall.Kill is used directly
-// rather than os.FindProcess().Signal: on Unix the latter tracks its own
-// "already finished" state per Process value and reports that instead of
-// asking the kernel, which is wrong for a Process obtained by pid rather
-// than from the exec that started it.
-func processAlive(pid int) bool {
-	return syscall.Kill(pid, syscall.Signal(0)) == nil
 }
 
 // inherit copies the login and links everything else. auth.json is copied
