@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 )
 
 // version, commit, and date are stamped at release time with -ldflags
@@ -29,7 +30,7 @@ func run(args []string, stdout, stderr io.Writer) int {
 		return 2
 	}
 	if args[0] == "version" {
-		fmt.Fprintf(stdout, "sirdar v%s (%s, %s)\n", version, commit, date)
+		fmt.Fprintf(stdout, "sirdar %s (%s, %s)\n", displayVersion(version), commit, date)
 		return 0
 	}
 	cmd, ok := commands[args[0]]
@@ -54,4 +55,12 @@ commands:
   register    print the register
   serve       serve the web UI and API on loopback
   version     print version`)
+}
+
+// displayVersion prefixes release versions with "v" and leaves dev builds as they are.
+func displayVersion(v string) string {
+	if v == "" || v == "dev" || strings.HasPrefix(v, "v") {
+		return v
+	}
+	return "v" + v
 }
