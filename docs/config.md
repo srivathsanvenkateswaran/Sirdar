@@ -607,8 +607,10 @@ location or a system prompt — `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MOD
 `QWEN_DEFAULT_AUTH_TYPE`, `GEMINI_API_KEY`, `GEMINI_MODEL`, `QWEN_HOME`, `QWEN_DIR`,
 `QWEN_CODE_SYSTEM_SETTINGS_PATH`, `QWEN_CODE_SYSTEM_DEFAULTS_PATH`,
 `QWEN_CODE_TRUSTED_FOLDERS_PATH`, `QWEN_CODE_MCP_APPROVALS_PATH`, `QWEN_SYSTEM_MD`,
-`QWEN_WRITE_SYSTEM_MD`, `QWEN_SYSTEM_IDENTITY_MD` and `QWEN_TLS_INSECURE` — is stripped from the
-environment the child inherits before the configured values go back in. A session's endpoint
+`QWEN_WRITE_SYSTEM_MD`, `QWEN_SYSTEM_IDENTITY_MD`, `QWEN_TLS_INSECURE`, `QWEN_CODE_SAFE_MODE` and
+`QWEN_CODE_SIMPLE` (the last two force `disableAllHooks`, same as the settings-layer field below)
+— is stripped from the environment the child inherits before the configured values go back in.
+A session's endpoint
 and settings are what the workspace configured, not what happens to be exported in the shell
 that launched Sirdar. Two of those go back in pointing at files Sirdar wrote for the session
 and deletes after it: `QWEN_CODE_SYSTEM_SETTINGS_PATH`, which carries the permission hook, and
@@ -624,9 +626,13 @@ reason the model sees as the tool result.
 `QWEN_CODE_SYSTEM_SETTINGS_PATH` replaces the **system** settings layer and nothing more:
 your `~/.qwen/settings.json` and the repository's `.qwen/settings.json` are still loaded and
 merged on top of it. It is where Sirdar registers its hook, not an isolation boundary. The
-guarantees that have to hold whatever those layers say are on the command line and in the
-folder-trust posture instead. Everything below was measured against 0.23.3 and is written up in
-`docs/research/09-qwen-wire-formats.md`:
+guarantees that have to hold whatever those layers say are on the command line, in the
+folder-trust posture, and in two fields the system layer wins a merge conflict over: the
+session's settings pin `disableAllHooks: false` and `security.allowedHttpHookUrls` to exactly
+this session's hook URL, so a workspace or user layer that sets `disableAllHooks` (directly, or
+through `QWEN_CODE_SAFE_MODE`/`QWEN_CODE_SIMPLE` above) or names some other allowed hook URL
+cannot silence or redirect the mediator. Everything below was measured against 0.23.3 and is
+written up in `docs/research/09-qwen-wire-formats.md`:
 
 - **Only read tools are registered.** Every session passes `--exclude-tools` for every core
   tool of 0.23.3 except the ones a triage session reads with: `read_file`, `read_many_files`,
@@ -672,13 +678,21 @@ folder-trust posture instead. Everything below was measured against 0.23.3 and i
   `mcp.workspaceOnly: false` — therefore runs trusted, and its `.qwen/settings.json` layer is
   live again; the exclusions above still hold, and a hook that layer registers runs *before*
   Sirdar's, so it cannot overwrite a decision. The default (`mcp.workspaceOnly` with no
-  `.mcp.json`, which loads no servers) runs untrusted.
-- **A user-level `hooks` block refuses the session.** Qwen Code hands its Config the user
-  scope's own hooks when `~/.qwen/settings.json` has any, and Sirdar's system-layer hook then
-  falls through to the project slot, which an untrusted folder empties — the session would run
-  with no mediator at all. Measured against the real binary: with such a file, no `PreToolUse`
-  post arrived and the tool call ran unjudged. So Sirdar refuses to start a qwen session while
-  that file registers hooks, and says which file to change.
+  `.mcp.json`, which loads no servers) runs untrusted. A trusted workspace that actually carries
+  its own `.qwen/settings.json` or `.qwen/agents/` gets a `system` event naming the path rather
+  than a refusal — MCP is exactly the case that has to keep trust to work, so refusing here
+  would take away the one thing trust was kept for.
+- **A user-level `hooks` block, or `disableAllHooks`, refuses the session.** Qwen Code hands
+  its Config the user scope's own hooks when `~/.qwen/settings.json` has any, and Sirdar's
+  system-layer hook then falls through to the project slot, which an untrusted folder empties —
+  the session would run with no mediator at all. Measured against the real binary: with such a
+  file, no `PreToolUse` post arrived and the tool call ran unjudged. So Sirdar refuses to start a
+  qwen session while that file registers hooks or sets `disableAllHooks: true` (belt and braces
+  alongside the system-layer pin above), and says which file and why. The same check refuses
+  outright, naming `HOME`, when neither `HOME` nor `USERPROFILE` is set in the session's
+  environment: Node's own home lookup does not depend on either being set, so a session that had
+  them stripped could still have the child read a real `~/.qwen/settings.json` this check never
+  saw, and silently treating that as "no user hooks" would be the wrong direction to fail in.
 - **The hook is authenticated, probed and watched.** Qwen Code fails open — a connection
   failure, a timeout and a non-2xx are all non-blocking hook failures, and the tool runs. So the
   hook URL carries a 32-byte random per-session token compared in constant time, and a request
@@ -699,6 +713,14 @@ folder-trust posture instead. Everything below was measured against 0.23.3 and i
   `mcp__server__tool` go through `permissions.mcp`. Any name the policy has not been taught —
   an MCP tool no pattern matches, or a tool a later Qwen adds and this list does not know — is
   refused with `Sirdar policy: not permitted`.
+- **`web_fetch` is approved with no inspection of the destination.** It sits in
+  `AlwaysAllowed` next to `read_file`, the same way `WebFetch` does for the Claude adapter, and
+  neither adapter's policy looks at the URL before approving the call. A prompt injected into
+  something a read tool already pulled in — a file comment, a commit message, a ticket body —
+  can ask the model to fetch an address of the attacker's choosing, carrying whatever that read
+  already put in context along with it. Known and documented rather than fixed here: a URL
+  allow-list for `web_fetch`/`WebFetch` shared across providers is a follow-up (see
+  `HANDOFF.md`).
 
 **The shell.** It is excluded the same way unless the workspace named `permissions.bash`
 patterns. When it did, `--allowed-tools run_shell_command` puts it back and the hook is its

@@ -43,13 +43,21 @@ func TestMain(m *testing.M) {
 // through Result.StderrTail.
 func fakeCLI(script string) int {
 	// Report a clean interrupt so a test can tell SIGINT from SIGKILL.
-	interrupted := make(chan os.Signal, 1)
-	signal.Notify(interrupted, os.Interrupt)
-	go func() {
-		<-interrupted
-		fmt.Fprintln(os.Stderr, "SIGINT")
-		os.Exit(0)
-	}()
+	// SIRDAR_FAKE_QWEN_IGNORE_INTERRUPT skips this registration, so the
+	// platform's default SIGINT disposition (terminate, but not gracefully
+	// the way this handler does) applies instead — the nearest a Unix test
+	// can get to Windows, where Signal(os.Interrupt) never reaches the
+	// child at all and only the process-group kill after the grace period
+	// ends it.
+	if os.Getenv("SIRDAR_FAKE_QWEN_IGNORE_INTERRUPT") == "" {
+		interrupted := make(chan os.Signal, 1)
+		signal.Notify(interrupted, os.Interrupt)
+		go func() {
+			<-interrupted
+			fmt.Fprintln(os.Stderr, "SIGINT")
+			os.Exit(0)
+		}()
+	}
 
 	fmt.Fprintln(os.Stderr, "ARGV:"+mustJSON(os.Args[1:]))
 	for _, name := range []string{"OPENAI_API_KEY", "OPENAI_BASE_URL", "OPENAI_MODEL", "QWEN_MODEL"} {
@@ -897,6 +905,86 @@ func TestRepositoryAgentCannotWiden(t *testing.T) {
 	}
 }
 
+// TestTrustedResidueWarnsWithoutRefusing is the last fix-round-3 item: a
+// session that keeps folder trust for MCP has the workspace's own
+// .qwen/settings.json and .qwen/agents/ live (see trustNeededForMCP and
+// writeSettings), which is worth telling the operator about — but not a
+// reason to refuse the session, since MCP is exactly the case that has to
+// keep trust to work at all.
+func TestTrustedResidueWarnsWithoutRefusing(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"t1"}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"t1","result":"ok","usage":{}}`,
+	)
+	spec := fakeSpec(t, script) // no MCPStrict: trustNeededForMCP is true, folder stays trusted
+	qwenDir := filepath.Join(spec.Cwd, ".qwen")
+	if err := os.MkdirAll(filepath.Join(qwenDir, "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(qwenDir, "settings.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("trusted residue must warn, not refuse: %v", err)
+	}
+	events, res := drain(t, s)
+	if res.ExitErr != nil {
+		t.Fatalf("exit err %v", res.ExitErr)
+	}
+
+	warnings := warningEvents(events)
+	if len(warnings) != 2 {
+		t.Fatalf("want one warning for the settings file and one for the agents directory, got %+v", warnings)
+	}
+	var sawSettings, sawAgents bool
+	for _, w := range warnings {
+		if strings.Contains(w.Text, filepath.Join(qwenDir, "settings.json")) {
+			sawSettings = true
+		}
+		if strings.Contains(w.Text, filepath.Join(qwenDir, "agents")) {
+			sawAgents = true
+		}
+	}
+	if !sawSettings || !sawAgents {
+		t.Fatalf("warnings must name both paths: %+v", warnings)
+	}
+
+	// The untrusted case (MCPStrict with no config) gets no such warning:
+	// Qwen Code would skip both files anyway.
+	spec2 := fakeSpec(t, script)
+	spec2.MCPStrict = true
+	qwenDir2 := filepath.Join(spec2.Cwd, ".qwen")
+	if err := os.MkdirAll(filepath.Join(qwenDir2, "agents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(qwenDir2, "settings.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s2, err := New().Start(context.Background(), spec2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events2, _ := drain(t, s2)
+	if n := len(warningEvents(events2)); n != 0 {
+		t.Fatalf("an untrusted workspace must get no residue warning, got %d", n)
+	}
+}
+
+// warningEvents returns the EvSystem events carrying a "warning" field,
+// as opposed to the init/status ones Qwen Code's own stream produces under
+// the same event kind.
+func warningEvents(events []provider.Event) []provider.Event {
+	var out []provider.Event
+	for _, ev := range kinds(events, provider.EvSystem) {
+		if strings.Contains(string(ev.Raw), `"warning"`) {
+			out = append(out, ev)
+		}
+	}
+	return out
+}
+
 // TestUserHooksRefuseTheSession covers the one configuration in which
 // Sirdar's hook would not be registered at all: Qwen Code hands Config
 // the user scope's own hooks when it has any, and Sirdar's system-layer
@@ -935,6 +1023,57 @@ func TestUserHooksRefuseTheSession(t *testing.T) {
 	}
 	if _, res := drain(t, s); res.ExitErr != nil {
 		t.Fatalf("exit err %v", res.ExitErr)
+	}
+}
+
+// TestUserSettingsHooksDisableAllHooksRefusesTheSession is the second
+// belt-and-braces half of item 1: even though writeSettings pins the
+// system layer's disableAllHooks to false, a user-scope settings file
+// that sets it true is refused rather than trusted to lose the merge.
+func TestUserSettingsHooksDisableAllHooksRefusesTheSession(t *testing.T) {
+	home := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(home, ".qwen"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, ".qwen", "settings.json"),
+		[]byte(`{"disableAllHooks":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	spec := fakeSpec(t, "testdata/script-basic.jsonl")
+	spec.Env = append(spec.Env, "HOME="+home)
+
+	s, err := New().Start(context.Background(), spec)
+	if err == nil {
+		s.Cancel()
+		t.Fatal("a user settings file that sets disableAllHooks must not start a session")
+	}
+	if !strings.Contains(err.Error(), "disableAllHooks") {
+		t.Fatalf("the refusal must say why: %v", err)
+	}
+}
+
+// TestUserSettingsHooksUnresolvableHomeRefuses covers the gap where
+// stripping HOME/USERPROFILE from the child's own environment (see
+// qwenEnvKeys and childEnv) does not stop Node's own home lookup from
+// finding the operator's real ~/.qwen/settings.json. Reading no hooks
+// there, because this check could not even open the file, must not be
+// read as "no user hooks" — it has to refuse instead.
+func TestUserSettingsHooksUnresolvableHomeRefuses(t *testing.T) {
+	path, reason, err := userSettingsHooks([]string{"A=1", "PATH=/usr/bin"})
+	if err == nil {
+		t.Fatalf("an environment naming no HOME or USERPROFILE must be a refusal, got path=%q reason=%q", path, reason)
+	}
+	if !strings.Contains(err.Error(), "HOME") {
+		t.Fatalf("the refusal must name HOME: %v", err)
+	}
+
+	// A HOME (or USERPROFILE) that does resolve, even to a directory with
+	// no ~/.qwen/settings.json at all, is not this refusal.
+	if _, _, err := userSettingsHooks([]string{"HOME=" + t.TempDir()}); err != nil {
+		t.Fatalf("a resolvable HOME with no settings file must not be refused: %v", err)
+	}
+	if _, _, err := userSettingsHooks([]string{"USERPROFILE=" + t.TempDir()}); err != nil {
+		t.Fatalf("USERPROFILE must be consulted when HOME is absent: %v", err)
 	}
 }
 
@@ -1010,10 +1149,17 @@ func TestChildEnv(t *testing.T) {
 		"A=1", "OPENAI_API_KEY=leaked", "OPENAI_BASE_URL=http://leaked",
 		"OPENAI_MODEL=leaked", "QWEN_MODEL=leaked",
 		"QWEN_CODE_SYSTEM_SETTINGS_PATH=/somewhere/else", "B=2",
+		"QWEN_CODE_SAFE_MODE=1", "QWEN_CODE_SIMPLE=1",
 	}}
 
 	env := childEnv(spec, Endpoint{}, "/tmp/s.json", "/tmp/t.json")
-	for _, banned := range []string{"OPENAI_API_KEY=leaked", "OPENAI_BASE_URL=http://leaked", "OPENAI_MODEL=leaked", "QWEN_MODEL=leaked"} {
+	for _, banned := range []string{
+		"OPENAI_API_KEY=leaked", "OPENAI_BASE_URL=http://leaked", "OPENAI_MODEL=leaked", "QWEN_MODEL=leaked",
+		// Either one forces disableAllHooks, which writeSettings and
+		// userSettingsHooks also guard against — this is the strip-list
+		// half of that belt-and-braces (see qwenEnvKeys).
+		"QWEN_CODE_SAFE_MODE=1", "QWEN_CODE_SIMPLE=1",
+	} {
 		if contains(env, banned) {
 			t.Fatalf("%q survived into the child env", banned)
 		}
@@ -1250,6 +1396,74 @@ func TestCancelSendsInterrupt(t *testing.T) {
 	<-drained
 }
 
+// TestCancelReportsCancelledEvenWhenTheChildIsForceKilled is item 4's
+// Wait-side fix. With no handler installed, SIGINT's default disposition
+// terminates the fake CLI at the OS level instead of letting it choose its
+// own graceful exit(0) — the nearest a Unix test can get to what a forced
+// kill after the grace period looks like on Windows, where cmd.Cancel's
+// Signal(os.Interrupt) is unimplemented and never delivers at all. Either
+// way the child dies abnormally (an *exec.ExitError, same shape as an
+// ordinary crash), and Wait still has to report "cancelled" rather than an
+// exit code, because the reason it died was Cancel(), not the process's
+// own outcome.
+func TestCancelReportsCancelledEvenWhenTheChildIsForceKilled(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"w1"}`,
+		`{"$block":true}`,
+	)
+	spec := fakeSpec(t, script)
+	spec.Env = append(spec.Env, "SIRDAR_FAKE_QWEN_IGNORE_INTERRUPT=1")
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range s.Events() {
+		}
+	}()
+
+	deadline := time.Now().Add(3 * time.Second)
+	for s.Handle() == "" && time.Now().Before(deadline) {
+		time.Sleep(5 * time.Millisecond)
+	}
+	if s.Handle() != "w1" {
+		t.Fatalf("session did not start, handle %q", s.Handle())
+	}
+
+	s.Cancel()
+
+	type outcome struct {
+		res provider.Result
+		err error
+	}
+	done := make(chan outcome, 1)
+	go func() {
+		res, err := s.Wait()
+		done <- outcome{res, err}
+	}()
+	select {
+	case got := <-done:
+		if got.err != nil {
+			t.Fatalf("Wait after Cancel: %v", got.err)
+		}
+		if got.res.ExitErr == nil || !strings.Contains(got.res.ExitErr.Error(), "cancelled") {
+			t.Fatalf("a cancelled session that died on a forced kill must still report "+
+				"cancelled, got: %v", got.res.ExitErr)
+		}
+		if strings.Contains(got.res.ExitErr.Error(), "exited with code") {
+			t.Fatalf("the exit-code report must not win over the cancellation: %v", got.res.ExitErr)
+		}
+		if containsPrefix(got.res.StderrTail, "SIGINT") {
+			t.Fatal("this child was told to ignore SIGINT; a clean interrupt would defeat the test")
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("Wait did not return after Cancel forced a kill")
+	}
+	<-drained
+}
+
 // TestHookDeathAbortsTheSession is the fail-open fix. Qwen Code treats a
 // connection failure, a timeout and a non-2xx alike as a non-blocking hook
 // failure and runs the tool anyway, so a permission listener that stops
@@ -1435,6 +1649,10 @@ func TestSettingsContent(t *testing.T) {
 		Permissions struct {
 			Deny []string `json:"deny"`
 		} `json:"permissions"`
+		DisableAllHooks *bool `json:"disableAllHooks"`
+		Security        struct {
+			AllowedHTTPHookURLs []string `json:"allowedHttpHookUrls"`
+		} `json:"security"`
 	}
 	if err := json.Unmarshal(b, &s); err != nil {
 		t.Fatal(err)
@@ -1447,6 +1665,18 @@ func TestSettingsContent(t *testing.T) {
 	url, err := hookURLFromSettings(path)
 	if err != nil || url != "http://127.0.0.1:1234/decide/tok" {
 		t.Fatalf("hook url %q / %v", url, err)
+	}
+
+	// The system layer wins a merge conflict over disableAllHooks and
+	// allowedHttpHookUrls against the user and workspace layers, so
+	// pinning both here is what keeps a foreign setting (or
+	// QWEN_CODE_SAFE_MODE/QWEN_CODE_SIMPLE forcing disableAllHooks) from
+	// silencing or redirecting the hook.
+	if s.DisableAllHooks == nil || *s.DisableAllHooks {
+		t.Fatalf("disableAllHooks must be pinned false: %s", b)
+	}
+	if len(s.Security.AllowedHTTPHookURLs) != 1 || s.Security.AllowedHTTPHookURLs[0] != url {
+		t.Fatalf("security.allowedHttpHookUrls must carry only this session's hook url: %s", b)
 	}
 
 	info, err := os.Stat(path)

@@ -60,6 +60,10 @@ binary was in flight at handoff; its report is `dogfood-report-2.md`.
 5. More helpdesks: Help Scout, Intercom, HubSpot (`docs/research/adapters/helpdesks.md`).
 6. Release: goreleaser config exists; `version` is a var; CI on Go 1.26 with a frontend job;
    desktop CI matrix in `.github/workflows/desktop.yml` (unsigned artifacts).
+7. A URL allow-list for `web_fetch`/`WebFetch`, shared across providers: `internal/provider/
+   policy.go`'s `AlwaysAllowed` approves both with no inspection of the destination, so a prompt
+   injected into something a read tool already pulled in can direct a fetch to an attacker's own
+   host (see the qwen section of `docs/config.md`).
 
 ## Known gaps (deliberate)
 

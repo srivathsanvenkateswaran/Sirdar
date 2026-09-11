@@ -39,6 +39,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -267,6 +268,12 @@ var qwenEnvKeys = []string{
 	"QWEN_SYSTEM_IDENTITY_MD",
 	// transport safety: equivalent to --insecure
 	"QWEN_TLS_INSECURE",
+	// either one forces disableAllHooks, which would silence Sirdar's
+	// PreToolUse hook the same way a settings-layer disableAllHooks does
+	// (see writeSettings and userSettingsHooks); stripped alongside the
+	// rest rather than trusted from the launching shell.
+	"QWEN_CODE_SAFE_MODE",
+	"QWEN_CODE_SIMPLE",
 }
 
 // args builds the command line. The prompt is not on it: it goes in on
@@ -474,6 +481,17 @@ func compactJSON(raw []byte) string {
 // The URL carries the session's token as its last path segment. The file
 // is written 0600 and removed when the session ends, and the token appears
 // nowhere else.
+//
+// disableAllHooks and security.allowedHttpHookUrls are pinned here too,
+// both false/this-URL-only, because the system layer wins a merge conflict
+// over the user and workspace layers on both fields: a workspace that sets
+// disableAllHooks (or QWEN_CODE_SAFE_MODE/QWEN_CODE_SIMPLE forcing it, see
+// qwenEnvKeys) cannot silence the hook, and a workspace or user
+// allowedHttpHookUrls list naming some other endpoint cannot keep Qwen
+// Code from posting to this one. userSettingsHooks refuses the session
+// outright when the user layer sets disableAllHooks, belt and braces
+// against this override not taking effect the way the system-layer
+// precedence promises.
 func writeSettings(dir, hookURL string, folderTrust bool) (string, error) {
 	type hook struct {
 		Type    string `json:"type"`
@@ -493,9 +511,11 @@ func writeSettings(dir, hookURL string, folderTrust bool) (string, error) {
 				}},
 			}},
 		},
-		"permissions": map[string]any{"deny": deniedTools},
+		"permissions":     map[string]any{"deny": deniedTools},
+		"disableAllHooks": false,
 		"security": map[string]any{
-			"folderTrust": map[string]any{"enabled": folderTrust},
+			"folderTrust":         map[string]any{"enabled": folderTrust},
+			"allowedHttpHookUrls": []string{hookURL},
 		},
 	}
 	b, err := json.Marshal(settings)
@@ -557,8 +577,37 @@ func trustNeededForMCP(spec provider.SessionSpec) bool {
 	return spec.MCPConfig != "" || !spec.MCPStrict
 }
 
+// trustedResidueWarnings names the workspace's own .qwen/settings.json and
+// .qwen/agents directory when either is present, for a session that has
+// kept folder trust to load MCP servers. In that mode Qwen Code reads both
+// live (an untrusted folder would skip them instead), so the operator is
+// told what the repository under triage is bringing to the run rather than
+// having the session refused outright — refusing would also take away MCP,
+// which is the one thing trust was kept for.
+func trustedResidueWarnings(workspace string) []string {
+	var out []string
+	if p := filepath.Join(workspace, ".qwen", "settings.json"); pathExists(p) {
+		out = append(out, "the workspace's own "+p+" is loaded because this session kept folder "+
+			"trust for MCP; the tool exclusions and the system-layer hook overrides still hold")
+	}
+	if p := filepath.Join(workspace, ".qwen", "agents"); pathExists(p) {
+		out = append(out, "the workspace's own "+p+" is loaded because this session kept folder "+
+			"trust for MCP; the agent/skill/task tools it could register are excluded on every "+
+			"session regardless")
+	}
+	return out
+}
+
+// pathExists reports whether a file or directory is there, without caring
+// which.
+func pathExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
+}
+
 // userSettingsHooks reports whether the operator's own user-scope
-// settings file registers hooks, and names the file when it does.
+// settings file would leave the session unmediated, and names the file
+// and the reason when it would.
 //
 // This decides whether Sirdar's hook reaches the child at all. The CLI
 // hands Config a userHooks value of `settings.getUserHooks() ?? merged`,
@@ -568,29 +617,50 @@ func trustNeededForMCP(spec provider.SessionSpec) bool {
 // Sirdar's hook falls through to getProjectHooks(), which returns nothing
 // in an untrusted folder. The session would then run with no mediator at
 // all, which reconcile would catch at the first tool result and abort.
-// Refusing up front says so in one place instead.
-func userSettingsHooks(env []string) (string, bool) {
+// Refusing up front says so in one place instead. A user settings file
+// that sets disableAllHooks is refused the same way, belt and braces
+// alongside the system-layer override writeSettings pins (see there).
+//
+// A HOME/USERPROFILE this function cannot resolve is refused too, rather
+// than read as "no user hooks": Node's own home lookup (os.homedir())
+// does not depend on either variable being set — it falls back to
+// os/user and platform APIs — so a session whose environment had them
+// stripped could still have the child consult a real
+// ~/.qwen/settings.json this check never saw.
+func userSettingsHooks(env []string) (path string, reason string, err error) {
 	home := envValue(env, "HOME")
 	if home == "" {
 		home = envValue(env, "USERPROFILE")
 	}
 	if home == "" {
-		return "", false
+		return "", "", errors.New("HOME (or USERPROFILE) is not set in the session's environment, " +
+			"so the operator's user-scope settings file cannot be located and checked for hooks " +
+			"or disableAllHooks that would leave the session unmediated; Node's own home lookup " +
+			"would still find one")
 	}
-	path := filepath.Join(home, ".qwen", "settings.json")
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", false
+	path = filepath.Join(home, ".qwen", "settings.json")
+	b, readErr := os.ReadFile(path)
+	if readErr != nil {
+		return "", "", nil
 	}
 	var f struct {
-		Hooks map[string]json.RawMessage `json:"hooks"`
+		Hooks           map[string]json.RawMessage `json:"hooks"`
+		DisableAllHooks bool                       `json:"disableAllHooks"`
 	}
-	if err := json.Unmarshal(b, &f); err != nil {
+	if unmarshalErr := json.Unmarshal(b, &f); unmarshalErr != nil {
 		// An unreadable user settings file is the CLI's problem to
 		// report, not a reason to refuse a session here.
-		return "", false
+		return "", "", nil
 	}
-	return path, len(f.Hooks) > 0
+	switch {
+	case len(f.Hooks) > 0:
+		return path, "registers hooks of its own, which take the place of Sirdar's " +
+			"PreToolUse hook and would leave the session with no permission mediator", nil
+	case f.DisableAllHooks:
+		return path, "sets disableAllHooks, which would silence Sirdar's PreToolUse hook " +
+			"and leave the session with no permission mediator", nil
+	}
+	return path, "", nil
 }
 
 func envValue(env []string, name string) string {
@@ -623,14 +693,17 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if len(env) == 0 {
 		env = os.Environ()
 	}
-	// A user-scope hooks block displaces Sirdar's own (see
-	// userSettingsHooks), which would leave the session unmediated. That
-	// is a configuration Sirdar cannot make safe, so it is refused here
-	// rather than discovered at the first tool call.
-	if path, ok := userSettingsHooks(env); ok {
-		return nil, fmt.Errorf("qwen permission hook: %s registers hooks of its own, "+
-			"which take the place of Sirdar's PreToolUse hook and would leave the session "+
-			"with no permission mediator; move those hooks elsewhere to run qwen under Sirdar", path)
+	// A user-scope hooks block, or disableAllHooks, displaces Sirdar's own
+	// (see userSettingsHooks), which would leave the session unmediated.
+	// That is a configuration Sirdar cannot make safe, so it is refused
+	// here rather than discovered at the first tool call.
+	userPath, userReason, err := userSettingsHooks(env)
+	if err != nil {
+		return nil, fmt.Errorf("qwen permission hook: %w", err)
+	}
+	if userReason != "" {
+		return nil, fmt.Errorf("qwen permission hook: %s %s; change that file to run qwen under Sirdar",
+			userPath, userReason)
 	}
 	workspace, err := workspaceDir(spec.Cwd)
 	if err != nil {
@@ -656,7 +729,18 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	base := "http://" + listener.Addr().String()
 	// Trust is off unless the session was configured to load MCP servers,
 	// which an untrusted folder would silently give it none of.
-	folderTrust := !trustNeededForMCP(spec)
+	needsMCPTrust := trustNeededForMCP(spec)
+	folderTrust := !needsMCPTrust
+	// A session that keeps trust for MCP has the workspace's own
+	// .qwen/settings.json and .qwen/agents/*.md live (see writeSettings and
+	// trustNeededForMCP): the exclusions and the system-layer overrides
+	// above still hold, but the repository is bringing configuration of
+	// its own to the run, which is worth saying rather than refusing —
+	// MCP is exactly the case that has to keep trust to work at all.
+	var startupWarnings []string
+	if needsMCPTrust {
+		startupWarnings = trustedResidueWarnings(workspace)
+	}
 	settingsPath, err := writeSettings(dir, base+hookPathPrefix+token, folderTrust)
 	if err != nil {
 		_ = listener.Close()
@@ -677,19 +761,32 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	reaped := make(chan struct{})
 	cmd := exec.CommandContext(runCtx, binary, args(spec, p.endpoint, mcpNames)...)
 	cmd.Cancel = func() error {
-		// SIGINT first: Qwen Code writes its result line on the way out.
-		err := cmd.Process.Signal(os.Interrupt)
 		// Go's own WaitDelay escalation signals the process, not the
 		// group, so a tool the CLI spawned would survive it. This one
 		// takes the group, and stands down once the child is reaped so a
 		// recycled pid is never signalled.
-		time.AfterFunc(interruptGrace, func() {
-			select {
-			case <-reaped:
-			default:
-				_ = procgroup.Kill(cmd)
-			}
-		})
+		scheduleGroupKill := func() {
+			time.AfterFunc(interruptGrace, func() {
+				select {
+				case <-reaped:
+				default:
+					_ = procgroup.Kill(cmd)
+				}
+			})
+		}
+		if runtime.GOOS == "windows" {
+			// Signal(os.Interrupt) is not implemented on Windows and
+			// always errors there, which otherwise left Wait unable to
+			// tell a cancelled run from an ordinary exit (see Wait's use
+			// of runCtx below). There is no polite path on this
+			// platform, so skip straight to the group kill once the
+			// grace period elapses.
+			scheduleGroupKill()
+			return nil
+		}
+		// SIGINT first: Qwen Code writes its result line on the way out.
+		err := cmd.Process.Signal(os.Interrupt)
+		scheduleGroupKill()
 		return err
 	}
 	// Later than the group kill above, which is the escalation that
@@ -722,6 +819,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	s := &session{
 		binary:     binary,
 		cmd:        cmd,
+		runCtx:     runCtx,
 		cancelRun:  cancelRun,
 		stderr:     tail,
 		policy:     policy,
@@ -759,6 +857,13 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		return fail(fmt.Errorf("qwen permission hook: %w", err))
 	}
 	go s.watchHook()
+
+	// Queued ahead of anything the CLI itself writes, and before the
+	// stdout reader starts, so the events channel is guaranteed still
+	// open (see closeEvents, which only read() ever calls).
+	for _, w := range startupWarnings {
+		s.emit(warningEvent(w))
+	}
 
 	// The prompt is the whole of the session's input. Qwen Code reads
 	// stdin to EOF before it starts, so it is written and closed here
@@ -910,8 +1015,16 @@ func startsWithDigit(s string) bool {
 
 // session is one running qwen process.
 type session struct {
-	binary     string
-	cmd        *exec.Cmd
+	binary string
+	cmd    *exec.Cmd
+	// runCtx is cancelRun's context: cancelled by Cancel() and by the
+	// caller's own ctx being cancelled or timing out, and by nothing
+	// else (an adapter-side abort takes the s.aborted path instead,
+	// which Wait checks before this). Wait reads its Err() rather than
+	// pattern-matching cmd.Wait's returned error, because cmd.Cancel's
+	// own error on Windows (Signal(os.Interrupt) is unimplemented there)
+	// would otherwise mask a cancelled run as a plain exit code.
+	runCtx     context.Context
 	cancelRun  context.CancelFunc
 	stderr     *tailWriter
 	policy     *provider.PermissionPolicy
@@ -1112,13 +1225,22 @@ func (s *session) Wait() (provider.Result, error) {
 		if err != nil {
 			var exitErr *exec.ExitError
 			switch {
+			case s.runCtx.Err() != nil:
+				// Cancel() or the caller's own ctx stopped the session;
+				// that is a reported outcome, not a Wait failure. Checked
+				// ahead of the exit-code classification below and by
+				// runCtx's own state rather than by pattern-matching err,
+				// because a forced kill ends the child abnormally either
+				// way (an *exec.ExitError, same as an ordinary crash) and
+				// because cmd.Cancel's returned error is platform-
+				// dependent — Signal(os.Interrupt) is unimplemented on
+				// Windows and always errors there, which previously left
+				// this classification landing in the default branch below
+				// instead of reporting the cancellation.
+				s.res.ExitErr = fmt.Errorf("%s cancelled: %w%s", s.binary, err, formatTail(tail))
 			case errors.As(err, &exitErr):
 				s.res.ExitErr = fmt.Errorf("%s exited with code %d (%s)%s",
 					s.binary, exitErr.ExitCode(), exitReason(exitErr.ExitCode()), formatTail(tail))
-			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
-				// Cancel() or the caller's context stopped the session;
-				// that is a reported outcome, not a Wait failure.
-				s.res.ExitErr = fmt.Errorf("%s cancelled: %w%s", s.binary, err, formatTail(tail))
 			default:
 				s.res.ExitErr = err
 				s.waitErr = err

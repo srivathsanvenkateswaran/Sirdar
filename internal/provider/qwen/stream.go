@@ -292,3 +292,16 @@ func policyName(tool string) string {
 func newEvent(kind provider.EventKind, raw []byte) provider.Event {
 	return provider.Event{Kind: kind, At: time.Now(), Raw: json.RawMessage(raw)}
 }
+
+// warningEvent builds an EvSystem event for something the operator should
+// see but that does not stop the session — the trusted-folder residue
+// notice from Start is the one caller today.
+func warningEvent(text string) provider.Event {
+	raw, err := json.Marshal(map[string]string{"warning": text})
+	if err != nil {
+		raw = []byte(`{"warning":true}`)
+	}
+	ev := newEvent(provider.EvSystem, raw)
+	ev.Text = text
+	return ev
+}
