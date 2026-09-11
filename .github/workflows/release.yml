@@ -23,7 +23,7 @@ jobs:
           # it needs the full history, not the default shallow clone.
           fetch-depth: 0
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           go-version: '1.26'
 
@@ -65,7 +65,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-go@v5
+      - uses: actions/setup-go@v7
         with:
           # wails v2.15.0 declares `go 1.25.0`, so the module's go directive
           # is 1.25.0 and an older toolchain refuses to build it (matches
