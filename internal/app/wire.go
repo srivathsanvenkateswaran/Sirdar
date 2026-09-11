@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -456,14 +455,13 @@ func ExpandCommand(cfg *config.Config, command string) string {
 	return program + " " + args
 }
 
-// KeychainFor returns the platform's keychain reader, or nil where there is
-// none: on those platforms a "keychain:" credential ref is an error and
-// only "env:" refs work, as the spec says.
-func KeychainFor() config.KeychainReader {
-	if runtime.GOOS == "darwin" {
-		return config.MacKeychain{}
-	}
-	return nil
+// KeychainFor returns the credential store this platform ships with: the
+// macOS login keychain, the freedesktop Secret Service on Linux and the
+// BSDs, the Windows Credential Manager. It is nil only on a platform that
+// has none Sirdar can read, where a "keychain:" ref is an error and the
+// env:, file: and cmd: schemes are what remain.
+func KeychainFor() config.SecretStore {
+	return config.PlatformSecretStore()
 }
 
 // syncWriter serialises writes to one writer.

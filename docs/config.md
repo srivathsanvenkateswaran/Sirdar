@@ -184,13 +184,22 @@ as oauth`, since there is no account email to show for that grant.
 
 ## Credential references
 
-`sources.*.token` (and any credential in config) is never a literal secret: config load
-rejects a value that doesn't start with `env:` or `keychain:`. Two forms:
+`sources.*.token` (and any credential in config) is never a literal secret: config load rejects
+a value that doesn't start with one of four schemes, all of which resolve on macOS, Linux and
+Windows.
 
-- `env:NAME` reads the environment variable `NAME` at fetch time. Works on every platform.
-- `keychain:SERVICE` reads a generic password from the macOS login keychain via
-  `security find-generic-password -s SERVICE -w`. **macOS only**: on other platforms a
-  `keychain:` ref fails to resolve.
+- `env:NAME` reads the environment variable `NAME` at fetch time.
+- `keychain:SERVICE` reads the operating system's own credential store: the macOS login
+  keychain via `security`, the freedesktop Secret Service via `secret-tool` (with `pass` as a
+  fallback) on Linux and the BSDs, the Windows Credential Manager via `CredRead`.
+- `file:PATH` reads a file that holds nothing but the secret. A leading `~` expands, one
+  trailing newline is dropped, and a file readable beyond its owner is refused.
+- `cmd:COMMAND` takes the standard output of a credential helper — `op read`, `bw get`,
+  `vault kv get`, `gopass show` — with a 10-second timeout.
+
+**[`docs/credentials.md`](credentials.md) is the whole story**: what to run to store a secret on
+each OS, the `file:` permission rule, `cmd:` recipes for the common password managers, and the
+rule that Sirdar never writes a credential anywhere.
 
 Resolved values are held in memory only: never written to a run directory, and never placed in
 the agent's environment. Every `env:` variable named anywhere in `sources.*` — `token`, the
