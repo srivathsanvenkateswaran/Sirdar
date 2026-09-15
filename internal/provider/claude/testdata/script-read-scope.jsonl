@@ -1,0 +1,8 @@
+{"type":"system","subtype":"init","cwd":"/w","session_id":"sess-read","tools":["Read"],"model":"m","permissionMode":"default"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"/etc/passwd"}}]}}
+{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Read","input":{"file_path":"/etc/passwd"},"tool_use_id":"t1"}}
+{"$wait":"control_response"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t2","name":"Read","input":{"file_path":"ledger.go"}}]}}
+{"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool","tool_name":"Read","input":{"file_path":"ledger.go"},"tool_use_id":"t2"}}
+{"$wait":"control_response"}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"sess-read","result":"{}","structured_output":{},"total_cost_usd":0.0,"usage":{"input_tokens":1,"output_tokens":1}}

@@ -425,7 +425,7 @@ func TestSessionRunsATurnAndReturnsTheNote(t *testing.T) {
 			outside = line
 		}
 	}
-	if !strings.Contains(outside, "outside it") {
+	if !strings.Contains(outside, "read outside the workspace") {
 		t.Errorf("out-of-workspace read answer = %s, want a JSON-RPC error", outside)
 	}
 }
@@ -669,6 +669,47 @@ func TestEventPumpExitsWithTheSession(t *testing.T) {
 	}
 }
 
+// TestReadScopeReachesBothACPPaths pins the read scope on the two routes
+// an ACP agent can read through: a permission request for its own read
+// tool, and a fs/read_text_file it asks the client to serve. A path inside
+// the workspace goes through on both; one outside is refused on both, with
+// the reason naming the path.
+func TestReadScopeReachesBothACPPaths(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-read-scope.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	perms := only(evs, provider.EvPermission)
+	var inside, outside *provider.Event
+	for i, ev := range perms {
+		switch {
+		case strings.Contains(string(ev.Input), "inside.txt"):
+			inside = &perms[i]
+		case strings.Contains(string(ev.Input), "/etc/passwd") && ev.Tool == "Read":
+			outside = &perms[i]
+		}
+	}
+	if inside == nil || inside.Decision != "allow" {
+		t.Errorf("the in-workspace read was not allowed: %+v", inside)
+	}
+	if outside == nil || outside.Decision != "deny" {
+		t.Fatalf("the out-of-workspace read was not denied: %+v", outside)
+	}
+	if !strings.Contains(outside.Text, "read outside the workspace: /etc/passwd") {
+		t.Errorf("denial %q does not name the path", outside.Text)
+	}
+
+	answer := findAnswer(t, res, "fs/read_text_file")
+	if !strings.Contains(answer, "read outside the workspace: /etc/passwd") {
+		t.Errorf("fs/read_text_file answer = %s, want the read-scope refusal", answer)
+	}
+}
+
 // TestGuardsHoldAgainstAMisbehavingAgent covers the three things a run has
 // to survive from an agent it does not control: a nested subagent session
 // talking over the run's own, a symlink out of the workspace, and a write
@@ -713,7 +754,7 @@ func TestGuardsHoldAgainstAMisbehavingAgent(t *testing.T) {
 			escape = line
 		}
 	}
-	if !strings.Contains(escape, "outside it") {
+	if !strings.Contains(escape, "read outside the workspace") {
 		t.Errorf("symlinked read answer = %s, want a refusal", escape)
 	}
 	if content, err := os.ReadFile(filepath.Join(cwd, "escape", "secret.txt")); err != nil || string(content) != "private key" {

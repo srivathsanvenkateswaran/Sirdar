@@ -1820,11 +1820,28 @@ func policyTool(kind, title string) string {
 	return "unknown"
 }
 
+// readScope is where this session's reads may land: the run's read scope
+// when it has a policy, and the session's own working directory when it
+// does not, which is what this handler confined itself to before the scope
+// existed.
+func (s *session) readScope() provider.ReadScope {
+	scope := s.spec.Policy.ReadScope()
+	if !scope.Confined() {
+		scope.Roots = []string{s.spec.Cwd}
+	}
+	return scope
+}
+
 // onReadTextFile serves fs/read_text_file, the one filesystem capability
-// Sirdar advertises, for files inside the workspace only. A path outside it
-// is refused: the agent is investigating this workspace, and an agent that
-// asks the client to read ~/.aws/credentials is asking the client to hand
-// it over.
+// Sirdar advertises, for files inside the session's read scope only: the
+// workspace, the run's own directory and bundle, and whatever
+// permissions.readAlso names. Anything else is refused — the agent is
+// investigating this workspace, and an agent that asks the client to read
+// ~/.aws/credentials is asking the client to hand it over.
+//
+// It is the same scope the permission policy applies to a read tool the
+// agent runs on its own side (PermissionPolicy.decideRead), so an agent
+// cannot reach a file by asking the client for it instead.
 func (s *session) onReadTextFile(id json.RawMessage, params, raw json.RawMessage) {
 	var req struct {
 		SessionID string `json:"sessionId"`
@@ -1844,15 +1861,15 @@ func (s *session) onReadTextFile(id json.RawMessage, params, raw json.RawMessage
 		return
 	}
 
-	if !withinRoot(s.spec.Cwd, req.Path) {
-		_ = s.conn.replyError(id, codeInvalidParams,
-			"sirdar serves fs/read_text_file inside the workspace only: "+req.Path+" is outside it")
+	if _, err := s.readScope().Resolve(req.Path); err != nil {
+		reason := "Sirdar policy: " + provider.ErrReadEscape.Error() + ": " + req.Path
+		_ = s.conn.replyError(id, codeInvalidParams, reason)
 		s.emit(provider.Event{
 			Kind:     provider.EvPermission,
 			Decision: "deny",
 			Tool:     "fs/read_text_file",
 			Input:    params,
-			Text:     "Sirdar policy: " + req.Path + " is outside the workspace root",
+			Text:     reason,
 			Raw:      raw,
 		})
 		return
@@ -1926,59 +1943,6 @@ func sliceLines(content string, line, limit int) string {
 		lines = lines[:limit]
 	}
 	return strings.Join(lines, "\n")
-}
-
-// withinRoot reports whether path is an absolute path inside root, with
-// both sides resolved through symlinks first.
-//
-// Resolving is the answer, not the fallback. A lexical comparison says yes
-// to <cwd>/link/id_rsa where link is a symlink the agent itself could have
-// created pointing at the home directory, which is the whole of what this
-// check exists to refuse. Resolving also settles the honest disagreements
-// in the other direction — macOS's /var is a symlink to /private/var, so a
-// workspace under a temporary directory has two names — and admits those.
-//
-// The lexical comparison is only reached when a path cannot be resolved at
-// all (a root that has gone away, a candidate with no existing ancestor),
-// where refusing outright would be the wrong answer for the common case of
-// a file the agent is about to be told does not exist.
-func withinRoot(root, path string) bool {
-	if root == "" || path == "" || !filepath.IsAbs(path) {
-		return false
-	}
-	realRoot, rootErr := filepath.EvalSymlinks(root)
-	realPath, pathErr := resolveCandidate(path)
-	if rootErr == nil && pathErr == nil {
-		return lexicallyWithin(realRoot, realPath)
-	}
-	return lexicallyWithin(root, path)
-}
-
-// resolveCandidate resolves path through symlinks. A file that does not
-// exist yet cannot be resolved, so the nearest existing ancestor is
-// resolved instead and the remainder rebuilt on top of it — which still
-// follows every symlink in the part of the path that does exist.
-func resolveCandidate(path string) (string, error) {
-	if resolved, err := filepath.EvalSymlinks(path); err == nil {
-		return resolved, nil
-	}
-	dir, rest := filepath.Clean(path), ""
-	for {
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("acp: no existing ancestor of %s", path)
-		}
-		rest = filepath.Join(filepath.Base(dir), rest)
-		dir = parent
-		if resolved, err := filepath.EvalSymlinks(dir); err == nil {
-			return filepath.Join(resolved, rest), nil
-		}
-	}
-}
-
-func lexicallyWithin(root, path string) bool {
-	root, path = filepath.Clean(root), filepath.Clean(path)
-	return path == root || strings.HasPrefix(path, root+string(filepath.Separator))
 }
 
 // envelope rebuilds a message as it arrived, for Event.Raw.

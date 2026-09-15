@@ -444,6 +444,77 @@ func lastToolMessage(t *testing.T, req capturedRequest) string {
 // TestLoopSendContinuesAfterAFinal covers the runner's schema retry: the
 // note failed validation, the answer has to be asked for again on the same
 // session, and the events of that second attempt have to be observable.
+// TestLoopJudgesWhereAReadLooks: the loop runs its own tools, so the read
+// scope is applied twice on this provider — once by the policy in front of
+// the call, and once inside the tool. A read of the run directory the
+// policy named goes through both; a read of a file outside every root is
+// refused by the policy and never reaches the tool.
+func TestLoopJudgesWhereAReadLooks(t *testing.T) {
+	root := t.TempDir()
+	runDir := t.TempDir()
+	elsewhere := t.TempDir()
+	mustWrite(t, filepath.Join(runDir, "bundle", "thread.md"), "the customer wrote in\n")
+	mustWrite(t, filepath.Join(elsewhere, "secret.txt"), "not yours\n")
+
+	cs := newChatServer(t, scripted(
+		toolCallReply("c1", "read_file", `{"path":`+quoteJSON(filepath.Join(runDir, "bundle", "thread.md"))+`}`, 10, 1),
+		toolCallReply("c2", "read_file", `{"path":`+quoteJSON(filepath.Join(elsewhere, "secret.txt"))+`}`, 10, 1),
+		toolCallReply("c3", submitNoteTool, noteJSON, 10, 1),
+	))
+
+	sess := newSession(t, cs, LoopConfig{MaxContextTokens: 128000}, provider.SessionSpec{
+		Cwd: root,
+		Policy: &provider.PermissionPolicy{
+			Root:      root,
+			ReadRoots: []string{runDir},
+		},
+		Budget: provider.Budget{MaxTurns: 10},
+	})
+
+	events := drain(t, sess)
+	var perms []provider.Event
+	var finished []provider.Event
+	for _, ev := range events {
+		switch ev.Kind {
+		case provider.EvPermission:
+			perms = append(perms, ev)
+		case provider.EvToolFinished:
+			finished = append(finished, ev)
+		}
+	}
+	if len(perms) != 2 {
+		t.Fatalf("permission events = %d, want 2", len(perms))
+	}
+	if perms[0].Decision != "allow" {
+		t.Errorf("the run bundle was not readable: %s", perms[0].Text)
+	}
+	if perms[1].Decision != "deny" ||
+		!strings.Contains(perms[1].Text, "read outside the workspace") {
+		t.Errorf("the outside read was not refused: %+v", perms[1])
+	}
+	if len(finished) != 1 || !strings.Contains(finished[0].Text, "the customer wrote in") {
+		t.Errorf("tool results = %+v", finished)
+	}
+}
+
+func mustWrite(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func quoteJSON(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
+}
+
 func TestLoopSendContinuesAfterAFinal(t *testing.T) {
 	cs := newChatServer(t, scripted(
 		toolCallReply("c1", submitNoteTool, `{"title":""}`, 50, 5),
