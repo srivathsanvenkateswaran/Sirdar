@@ -17,6 +17,10 @@
   display: flex;
   flex-direction: column;
   flex: 0 0 var(--sd-sidebar-w);
+  /* The basis is the width. Without this a flex item's floor is its
+     min-content, and one long mono quota line was widening the whole
+     sidebar past 300 — which is where the sheet's lanes went. */
+  min-inline-size: 0;
   min-block-size: 0;
   padding-block: 20px var(--sd-space-4);
   padding-inline: var(--sd-space-4);
@@ -36,6 +40,7 @@
 
 .sd-sidebar__nav {
   display: flex;
+  flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
   padding-block-start: var(--sd-space-4);
@@ -43,13 +48,26 @@
 
 /* ---------- recent sessions ---------- */
 
+/*
+ * The one part of the sidebar that gives way on a short window: the list
+ * shrinks and scrolls before the footer card, and the New session button in
+ * it, is pushed off the bottom.
+ */
 .sd-sidebar__recent {
   display: flex;
+  flex: 0 1 auto;
   flex-direction: column;
   gap: 2px;
+  min-block-size: 0;
   margin-block-start: 20px;
   padding-block-start: var(--sd-space-4);
   border-block-start: 1px solid var(--sd-rule);
+  overflow-y: auto;
+}
+
+.sd-sidebar__recent-label,
+.sd-recent-row {
+  flex: 0 0 auto;
 }
 
 .sd-sidebar__recent-label {
@@ -119,6 +137,23 @@
   color: var(--sd-ink-3);
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-micro);
+}
+
+/* ---------- plan usage ---------- */
+
+/*
+ * The footer card's quota chips: one column, one chip per line, at every
+ * width. A provider with two windows (5h and 7d) is two lines, never two
+ * chips wrapping into each other. The chip itself never breaks its line;
+ * see src/ui/quota-chip.
+ */
+.quota-meter,
+.quota-meter__provider {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 6px;
+  min-inline-size: 0;
 }
 
 /* ---------- the workspace switcher ---------- */
@@ -233,14 +268,20 @@
 /* ---------- the collapsed rail ---------- */
 
 /*
- * Under 900px the sidebar keeps the icons and drops the labels, which is where
- * a board with six lanes starts needing every pixel of the sheet. The switch
- * is an attribute rather than a media query so the nav item and the footer
- * card, which are library components, do not have to know Sirdar's breakpoint.
+ * Under 1024px (the narrow band of styles/tokens.css) the sidebar keeps the
+ * icons and drops the labels, which is where a board with six lanes starts
+ * needing every pixel of the sheet. The switch is an attribute rather than a
+ * media query so the nav item and the footer card, which are library
+ * components, do not have to know Sirdar's breakpoint; Sidebar.tsx sets it
+ * from the same query.
  */
 .sd-sidebar[data-collapsed='true'] {
-  flex-basis: 72px;
-  padding-inline: var(--sd-space-2);
+  flex-basis: 56px;
+  padding-inline: var(--sd-space-1);
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-nav-row {
+  padding-inline: 0;
 }
 
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand {

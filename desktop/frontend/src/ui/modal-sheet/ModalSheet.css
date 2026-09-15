@@ -18,8 +18,11 @@
 
 .sd-modal {
   display: flex;
-  inline-size: min(1160px, 92vw);
-  block-size: min(820px, 88vh);
+  /* The mock's 1160 by 820, or the window less a 24px margin on each side,
+     whichever is smaller: on a 900-tall MacBook the sheet is 852 tall and
+     its panel scrolls inside. */
+  inline-size: min(1160px, calc(100vw - 48px));
+  block-size: min(820px, calc(100vh - 48px));
   min-block-size: 0;
   border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-sheet);
@@ -189,12 +192,26 @@
   border-block-start: 1px solid var(--sd-rule);
 }
 
+/* Compact (under 1200): the nav column narrows to 220 and the panel's inset
+   comes in to 24, so the settings rows keep their width. */
+@media (max-width: 1199px) {
+  .sd-modal__nav {
+    flex-basis: 220px;
+  }
+
+  .sd-modal__title,
+  .sd-modal__body,
+  .sd-modal__footer {
+    padding-inline: var(--sd-space-5);
+  }
+}
+
 /* Under 720px the nav column stacks above the panel rather than eating half
    the window. */
 @media (max-width: 720px) {
   .sd-modal {
     flex-direction: column;
-    block-size: min(720px, 92vh);
+    block-size: min(720px, calc(100vh - 48px));
   }
 
   .sd-modal__nav {

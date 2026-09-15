@@ -6,6 +6,7 @@
   display: inline-flex;
   align-items: center;
   gap: var(--sd-space-2);
+  max-inline-size: 100%;
   padding-block: 2px;
   padding-inline: var(--sd-space-2);
   border-radius: var(--sd-radius-pill);
@@ -13,9 +14,28 @@
   font-size: var(--sd-text-micro);
   font-variant-numeric: tabular-nums;
   color: var(--sd-ink-2);
+  /* One line at every width: "claude 7d ▮▮▮ 88% · 1h 58m". The countdown is
+     the part that gives way, and the chip's title says it in full. */
+  white-space: nowrap;
+  overflow: hidden;
   /* Provider names, window labels and percentages are all identifiers or
      numbers; they do not mirror inside an Arabic header. */
   unicode-bidi: isolate;
+}
+
+/* The words and the percentage never shrink. What gives way, in order: the
+   countdown (shrink 4, then cut), then the bar down to 24px. */
+.sd-quota > * {
+  flex: 0 0 auto;
+}
+
+.sd-quota > .sd-quota__bar {
+  flex: 0 1 56px;
+  min-inline-size: 24px;
+}
+
+.sd-quota > .sd-quota__reset {
+  flex: 0 4 auto;
 }
 
 .sd-quota__provider {
@@ -62,8 +82,18 @@
   color: var(--sd-st-failed);
 }
 
+/* "· 1h 58m": the middot is drawn, not typed, so the text node stays a bare
+   countdown for the title and the bar's name. */
 .sd-quota__reset {
+  flex: 0 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--sd-ink-3);
+}
+
+.sd-quota__reset::before {
+  content: '· ';
 }
 
 @media (prefers-reduced-motion: reduce) {

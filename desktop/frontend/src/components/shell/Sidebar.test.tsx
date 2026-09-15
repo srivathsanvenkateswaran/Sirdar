@@ -2,10 +2,11 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
+import { stubMatchMedia } from '../../lib/mediaStub'
 import { run } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
-import Sidebar, { recentRuns } from './Sidebar'
+import Sidebar, { RAIL_AT, recentRuns } from './Sidebar'
 
 afterEach(() => {
   localStorage.removeItem('sirdar.showLibrary')
@@ -54,6 +55,35 @@ function mount(props: Partial<React.ComponentProps<typeof Sidebar>> = {}, action
   )
   return { onNavigate, onSelectWorkspace, onAddWorkspace, ...view }
 }
+
+describe('the rail under 1024', () => {
+  it('collapses to icons with each row named by its tooltip, and comes back when the window widens', () => {
+    const media = stubMatchMedia([RAIL_AT])
+    try {
+      setShowLibrary(false)
+      const { container } = mount()
+      const sidebar = container.querySelector('.sd-sidebar')!
+      expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+      const nav = screen.getByRole('navigation', { name: 'Screens' })
+      for (const row of within(nav).getAllByRole('button')) {
+        // The label is still in the DOM for a screen reader; the tooltip is
+        // what a sighted reader gets from a 56px rail.
+        expect(row).toHaveAttribute('title', row.textContent)
+      }
+      expect(within(nav).getByRole('button', { name: 'Board' })).toHaveAttribute('title', 'Board')
+
+      act(() => media.set(RAIL_AT, false))
+      expect(sidebar).not.toHaveAttribute('data-collapsed')
+      expect(within(nav).getByRole('button', { name: 'Board' })).not.toHaveAttribute('title')
+    } finally {
+      media.restore()
+    }
+  })
+
+  it('asks for the narrow band, the one the tokens file names', () => {
+    expect(RAIL_AT).toBe('(max-width: 1023px)')
+  })
+})
 
 describe('the sidebar nav', () => {
   it('lists the five screens an engineer works in, in order', () => {

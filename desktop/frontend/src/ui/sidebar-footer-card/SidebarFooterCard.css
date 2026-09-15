@@ -34,10 +34,22 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-inline-size: 0;
   /* A workspace with several budgeted providers must not push the primary
      action off the bottom of the sidebar. */
   max-block-size: 32vh;
   overflow-y: auto;
+}
+
+/* Each provider's chips are one line each, and give way before the card. */
+.sd-sidebar-foot__quotas > * {
+  min-inline-size: 0;
+}
+
+/* In the card the chips sit in a column on the card's own inset, so the
+   pill's side padding is dead space a 220 sidebar cannot spare. */
+.sd-sidebar-foot__quotas .sd-quota {
+  padding-inline: 0;
 }
 
 /* The action is the full content width of the card, as the app-shell language

@@ -421,6 +421,22 @@
   font-size: var(--sd-text-ledger);
 }
 
+/*
+ * Compact (under 1200): the Installed table drops its Driven by column —
+ * the row's title says it — and the remaining five fit the 220-nav sheet
+ * without scrolling.
+ */
+@media (max-width: 1199px) {
+  .settings-table__row {
+    grid-template-columns: 118px 150px 82px minmax(0, 1fr) auto;
+    min-inline-size: 560px;
+  }
+
+  .settings-table__driven {
+    display: none;
+  }
+}
+
 /* Under 720px the table rows stack their cells rather than scrolling. */
 @media (max-width: 720px) {
   .settings-server {

@@ -7,7 +7,11 @@ export interface QuotaChipProps {
   window: string
   /** 0 to 100. Anything outside that is clamped, never wrapped. */
   percent: number
-  /** Already formatted: "resets in 2h 14m". This component does no arithmetic. */
+  /**
+   * The countdown to the reset, already formatted: "2h 14m". Drawn after a
+   * middot at the chip's end, and said in full ("resets in 2h 14m") in the
+   * chip's title and the bar's name. This component does no arithmetic.
+   */
   resetsIn?: string
   /** When the workspace has stopped starting runs against this provider. */
   overBudget?: boolean
@@ -41,16 +45,16 @@ export default function QuotaChip({
   const pct = clamp(percent)
   const level = overBudget || pct >= 100 ? 'over' : pct >= WARN_AT ? 'warn' : 'ok'
   const rounded = Math.round(pct)
+  // The chip is one line at every width, so what does not fit is cut and
+  // the title says the whole of it.
+  const resets = resetsIn ? `resets in ${resetsIn}` : ''
+  const sentence = `${provider} ${quotaWindow}: ${rounded}% used${resets ? `, ${resets}` : ''}`
 
   return (
-    <div className="sd-quota" data-level={level}>
+    <div className="sd-quota" data-level={level} title={resets || undefined}>
       <span className="sd-quota__provider">{provider}</span>
       <span className="sd-quota__window">{quotaWindow}</span>
-      <span
-        className="sd-quota__bar"
-        role="img"
-        aria-label={`${provider} ${quotaWindow}: ${rounded}% used`}
-      >
+      <span className="sd-quota__bar" role="img" aria-label={sentence}>
         <span className="sd-quota__fill" style={{ inlineSize: `${pct}%` }} />
       </span>
       <span className="sd-quota__pct" dir="ltr">

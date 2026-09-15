@@ -45,6 +45,9 @@ a.sd-run-card:hover {
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
+  /* A title that is one long token — an attachment's file name — breaks
+     inside the card rather than running out of it. */
+  overflow-wrap: anywhere;
   font-size: var(--sd-text-body);
   font-weight: 400;
   line-height: 1.35;
@@ -57,6 +60,7 @@ a.sd-run-card:hover {
 
 .sd-run-card__foot {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-2);
@@ -64,13 +68,30 @@ a.sd-run-card:hover {
   margin-block-start: var(--sd-space-3);
 }
 
-/* The state is the side that gives way when the card is narrow: the key and
-   the mark keep their width and the state's word is cut with an ellipsis. */
+/*
+ * The foot never wraps. The state is the side that gives way when the card
+ * is narrow: the key and the mark keep their width, and inside the glyph it
+ * is the word that is cut with an ellipsis — the icon and the clock keep
+ * theirs, so a running card at 200 wide still says when it started.
+ */
 .sd-run-card__state {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  /* What the word cannot give up, the icon does: it is clipped rather than
+     drawn over the key beside it. */
+  overflow: hidden;
+}
+
+.sd-run-card__state > .sd-state {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.sd-run-card__state .sd-state__word {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sd-run-card__who {
@@ -91,6 +112,53 @@ a.sd-run-card:hover {
   /* A key is an identifier: it stays left to right whichever way the prose
      around it runs. */
   unicode-bidi: isolate;
+}
+
+/*
+ * A narrow lane: the card's type steps down one notch and the padding comes
+ * in to 12. The lane's body is the `lane` container (src/ui/kanban-column),
+ * and under 200 wide is where the foot's key and mark leave the state glyph
+ * no room at the mock's sizes. The same step is repeated below as a media
+ * rule for the compact band, where every lane is under 200 anyway, so the
+ * step still happens in a browser without container queries.
+ */
+@container lane (max-width: 200px) {
+  .sd-run-card {
+    padding-block: var(--sd-space-3);
+    padding-inline: var(--sd-space-3);
+  }
+
+  .sd-run-card__title {
+    font-size: var(--sd-text-meta);
+  }
+
+  .sd-run-card__state > .sd-state {
+    font-size: var(--sd-text-ledger);
+  }
+
+  .sd-run-card__key {
+    font-size: var(--sd-text-micro);
+  }
+}
+
+/* Compact (under 1200): the card's type steps down one notch. */
+@media (max-width: 1199px) {
+  .sd-run-card {
+    padding-block: var(--sd-space-3);
+    padding-inline: var(--sd-space-3);
+  }
+
+  .sd-run-card__title {
+    font-size: var(--sd-text-meta);
+  }
+
+  .sd-run-card__state > .sd-state {
+    font-size: var(--sd-text-ledger);
+  }
+
+  .sd-run-card__key {
+    font-size: var(--sd-text-micro);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

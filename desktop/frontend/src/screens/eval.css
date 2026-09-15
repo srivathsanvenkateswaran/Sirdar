@@ -13,8 +13,8 @@
   flex: 1;
   flex-direction: column;
   min-block-size: 0;
-  padding-block: 40px var(--sd-space-6);
-  padding-inline: var(--sd-space-7);
+  padding-block: var(--sd-page-pad-block) var(--sd-space-6);
+  padding-inline: var(--sd-page-pad-inline);
   overflow-y: auto;
 }
 
@@ -66,14 +66,31 @@
   min-inline-size: 0;
 }
 
-/* Under 1100px the report drops under the cards rather than squeezing them. */
-@media (max-width: 1100px) {
+/*
+ * Compact (under 1200): the report drops under the cards rather than
+ * squeezing them, and the head's actions wrap under the title, at its
+ * leading edge, rather than crowding it.
+ */
+@media (max-width: 1199px) {
   .eval-body {
     flex-direction: column;
   }
 
   .eval-col-l {
     flex-basis: auto;
+  }
+
+  .eval-head .sd-page-head {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .eval-actions {
+    align-items: flex-start;
+  }
+
+  .eval-actions__row {
+    flex-wrap: wrap;
   }
 }
 

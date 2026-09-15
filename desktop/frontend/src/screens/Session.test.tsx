@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail, RunEvent } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../lib/jobs'
+import { stubMatchMedia } from '../lib/mediaStub'
 import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { BELOW_STANDARD } from '../lib/useMediaQuery'
 import { createFakeTransport, diff, type FakeTransport } from '../store/fakeTransport'
-import Session from './Session'
+import Session, { statsTitle } from './Session'
 
 const RUN: RunDetail = {
   runId: '20260910-1000-omni-2510',
@@ -183,6 +185,55 @@ describe('Session', () => {
     expect(screen.getByText('claude-haiku-4-5')).toBeInTheDocument()
     expect(screen.getByText('turns')).toBeInTheDocument()
     expect(f.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
+  })
+
+  describe('the topbar under 1200', () => {
+    it('keeps the clock and the cost and moves the rest into a title', async () => {
+      const media = stubMatchMedia([BELOW_STANDARD])
+      try {
+        const f = fake()
+        const { container } = renderSession(f)
+        await screen.findByRole('heading', { name: 'OMNI-2510' })
+
+        const stats = container.querySelector('.session-stats')!
+        expect(stats).toHaveAttribute('data-compact', 'true')
+        expect(stats).toHaveAttribute('title', 'claude · claude-haiku-4-5 · 3 turns')
+        expect(within(stats as HTMLElement).queryByText('turns')).toBeNull()
+        expect(within(stats as HTMLElement).queryByText('claude-haiku-4-5')).toBeNull()
+        expect(stats.querySelectorAll('.session-stat')).toHaveLength(2)
+        // The mark is still on the composer's Model chip; only the topbar's is gone.
+        expect(screen.getAllByRole('img', { name: 'Claude' })).toHaveLength(1)
+
+        // The window widens: the stats come back.
+        act(() => media.set(BELOW_STANDARD, false))
+        expect(stats).not.toHaveAttribute('title')
+        expect(within(stats as HTMLElement).getByText('turns')).toBeInTheDocument()
+      } finally {
+        media.restore()
+      }
+    })
+
+    it('says the provider, the model and the turns in one line', () => {
+      expect(statsTitle({ provider: 'claude', model: 'sonnet', usage: { turns: 1 } })).toBe(
+        'claude · sonnet · 1 turn',
+      )
+      expect(statsTitle({ provider: 'codex' })).toBe('codex · model unknown · 0 turns')
+    })
+
+    it('keeps the assignee line while the stats collapse', async () => {
+      const media = stubMatchMedia([BELOW_STANDARD])
+      try {
+        const f = fake({ detail: { ...RUN, assignee: 'Sri Venkateswaran' } })
+        const { container } = renderSession(f, { title: 'Statement export times out' })
+        await screen.findByRole('heading', { name: 'OMNI-2510' })
+        expect(container.querySelector('.sd-assigned')).toHaveTextContent(
+          'assigned to Sri Venkateswaran',
+        )
+        expect(container.querySelector('.session-stats')).toHaveAttribute('data-compact', 'true')
+      } finally {
+        media.restore()
+      }
+    })
   })
 
   it('says in the topbar who the ticket is assigned to, and nothing when nobody is', async () => {

@@ -15,9 +15,10 @@ where the measurements come from.
 
 - `div.sd-modal-scrim` — `--sd-scrim`, `position: fixed`, `inset: 0`. A click
   on the scrim itself closes.
-- `div.sd-modal` — `min(900px, 92vw)` by `min(640px, 88vh)`, centred both
-  axes, `--sd-radius-md`, `--sd-sheet` fill, 1px `--sd-rule`, **no shadow**.
-- `nav.sd-modal__nav` — 200 wide, `--sd-card-row`, flush to the leading edge,
+- `div.sd-modal` — `min(1160px, calc(100vw - 48px))` by `min(820px,
+  calc(100vh - 48px))`, centred both axes, `--sd-radius-sheet`, `--sd-sheet`
+  fill, 1px `--sd-rule`, **no shadow**. The panel's body scrolls inside it.
+- `nav.sd-modal__nav` — 260 wide (220 under 1200), `--sd-card-row`, flush to the leading edge,
   full height, carrying the modal's leading corners by way of the sheet's
   `overflow: hidden`.
   - `p.sd-modal__nav-label` — a group heading, 11px `--sd-ink-3`,
@@ -97,6 +98,12 @@ motion: the scrim and the sheet both cross-fade at 1ms with no scale, which is
 the answer `03-desktop-app.md` section 11 states.
 
 ## Changelog
+
+### 2026-09-16 (responsive)
+The sheet is `min(1160px, calc(100vw - 48px))` by `min(820px, calc(100vh -
+48px))` — a 24px margin on every side, in place of the 92vw/88vh it had,
+which let an 820-tall sheet spill past a 900-tall window's scrim. Under 1200
+the nav is 220 wide and the panel's inset 24.
 
 ### 2026-09-15 (inert, heading focus)
 The window behind the sheet is `inert` while it is open, and focus lands on

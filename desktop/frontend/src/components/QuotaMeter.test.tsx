@@ -21,8 +21,8 @@ describe('formatSeenAgo', () => {
 describe('formatResetIn', () => {
   it('counts down to the minute', () => {
     const now = Date.parse('2026-09-10T12:00:00Z')
-    expect(formatResetIn('2026-09-10T14:14:00Z', now)).toBe('resets in 2h 14m')
-    expect(formatResetIn('2026-09-10T11:00:00Z', now)).toBe('resets in 0h 0m')
+    expect(formatResetIn('2026-09-10T14:14:00Z', now)).toBe('2h 14m')
+    expect(formatResetIn('2026-09-10T11:00:00Z', now)).toBe('0h 0m')
   })
 })
 
@@ -41,11 +41,15 @@ describe('QuotaMeter', () => {
         sevenDay: { utilization: 0.1, resetsAt: new Date(Date.now() + 7200_000).toISOString() },
       },
     ]
-    render(<QuotaMeter quota={quota} />)
+    const { container } = render(<QuotaMeter quota={quota} />)
     expect(screen.getByText('42%')).toBeInTheDocument()
     expect(screen.getByText('10%')).toBeInTheDocument()
     expect(screen.getByText('5h')).toBeInTheDocument()
     expect(screen.getByText('7d')).toBeInTheDocument()
+    // The chip line carries the bare countdown; "resets in" is its title.
+    const chips = container.querySelectorAll('.sd-quota')
+    expect(chips[0]).toHaveAttribute('title', 'resets in 1h 0m')
+    expect(chips[0].querySelector('.sd-quota__reset')).toHaveTextContent(/^1h 0m$/)
   })
 
   it('renders one bar from usedPercent for a Codex quota', () => {

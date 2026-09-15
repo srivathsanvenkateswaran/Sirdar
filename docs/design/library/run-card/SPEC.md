@@ -36,8 +36,9 @@ session's.
 - `span.sd-run-card__foot` — flex, space-between, 12px under the chip. On the
   leading side `__state`: the state glyph (`src/ui/state-glyph`) with its
   word in the state's hue and, on a live or blocked run only, the mono
-  clock; it is the side that gives way when the card is narrow, cut with an
-  ellipsis. On the trailing side `__who`, which never shrinks: `__key`
+  clock; it is the side that gives way when the card is narrow, and the
+  word is what is cut with an ellipsis — the foot never wraps. On the
+  trailing side `__who`, which never shrinks: `__key`
   (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`), the
   assignee's avatar, and the provider mark at `sm`. The key is left out of the
   foot when it is already the title.
@@ -116,6 +117,13 @@ Contrast: title `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3`
 hover border transitions.
 
 ## Changelog
+
+### 2026-09-15 (responsive)
+The foot is `flex-wrap: nowrap` and the cut moves inside the glyph: `__state`
+is a flex item that shrinks, and it is `.sd-state__word` that ellipsises, so
+the icon and the clock keep their width on a 200-wide lane. Under 1200 the
+card steps down one notch — 12px padding, the title at `--sd-text-meta`, the
+state at `--sd-text-ledger`, the key at `--sd-text-micro`.
 
 ### 2026-09-16 (assignee round)
 `assignee` joins the props and draws an avatar at the foot, before the
