@@ -22,6 +22,12 @@ export interface RunCardProps {
   clock?: string
   /** The clock's tooltip: what it is counting. */
   clockTitle?: string
+  /**
+   * The accessible name, when the click does something other than open a
+   * session: a queued ticket's card starts a triage, and its name says so.
+   * Defaults to `<key>: <title>`.
+   */
+  label?: string
   onOpen: () => void
 }
 
@@ -49,6 +55,7 @@ export default function RunCard({
   provider,
   clock,
   clockTitle,
+  label,
   onOpen,
 }: RunCardProps): JSX.Element {
   const live = status === 'preparing' || status === 'running'
@@ -61,7 +68,7 @@ export default function RunCard({
       className="sd-run-card"
       data-status={status}
       data-live={live ? 'true' : undefined}
-      aria-label={`${runKey}: ${heading}`}
+      aria-label={label ?? `${runKey}: ${heading}`}
       onClick={onOpen}
     >
       <span className="sd-run-card__title" dir="auto">
