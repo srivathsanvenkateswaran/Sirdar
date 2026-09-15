@@ -1037,10 +1037,11 @@ whatever point the provider offers to be asked.
   Google's Antigravity CLI offers no point at which a host can be asked: a headless run
   auto-denies whatever needs approval and decides everything else from files Sirdar does not
   own. What Sirdar does instead is start every session in `--mode plan`, report the CLI's own
-  refusals as `EvPermission` lines with a `deny` decision, and raise an `EvError` when a write
-  or a shell command *completes* in a triage session — which is the only way a guarantee that
-  did not hold can become visible. `sirdar fix` is refused on this provider for the same
-  reason. See `provider: agy` below.
+  refusals as `EvPermission` lines with a `deny` decision, and raise an `EvBreach` when a write
+  or a shell command *completes* in a triage session — which ends the run `failed` and files
+  nothing, because a guarantee that did not hold cannot be carried as a warning on a note that
+  claims it did. `sirdar fix` is refused on this provider for the same reason, before it cuts a
+  branch. See `provider: agy` below.
 - **acp** — a permission request whose `kind` is `fetch` is judged as `WebFetch` against
   `permissions.fetch`, and the kind wins over the agent's own title, so an agent cannot route
   a fetch through the MCP rules by naming it `mcp__browser__get_page`. The URL is read out of
@@ -1534,13 +1535,27 @@ or a `.agents/hooks.json` inside the repository being triaged. Four consequences
   visible on the stream the CLI has already decided it, and there is no earlier point to stand
   at. A `permissions.allow` rule in the operator's own settings file still applies to a headless
   run, and Sirdar can neither see it nor override it.
-- **Sirdar watches instead.** A refusal the CLI makes is reported as a permission event with a
-  `deny` decision, so a run's event log reads the way it does for a mediated provider. A write
-  or a shell command that *completes* in a triage session is reported as an `error` event naming
-  the tool — because the guarantee rests on the CLI's own refusal, a refusal that did not happen
-  has to be visible rather than passed over. Plan mode's own implementation-plan artifact, which
-  it writes into `~/.gemini/antigravity-cli/brain/<conversation>/`, is the one exemption: it
-  lands in the CLI's state directory, outside the workspace, on every plan-mode run.
+- **Sirdar watches instead, and a completed write fails the run.** A refusal the CLI makes is
+  reported as a permission event with a `deny` decision, so a run's event log reads the way it
+  does for a mediated provider. A write or a shell command that *completes* in a triage session
+  is a **breach**: the session is cancelled on the spot, its process group killed, and the run
+  ends `failed` with the reason `read-only breach: <tool> <path|command>`. No triage note is
+  written and no register row is added, because both would assert a read-only run that did not
+  happen. The tools watched are `write_to_file`, `replace_file_content`,
+  `multi_replace_file_content`, `sed_file`, `notebook_edit`, `run_command`,
+  `send_command_input`, `notebook_execution`, `browser_subagent`, `execute_browser_javascript`
+  and `call_mcp_tool`.
+
+  One exemption, and it is narrow: plan mode's own implementation-plan artifact, written into
+  `~/.gemini/antigravity-cli/brain/<conversation id>/` on every plan-mode run. That directory
+  and no other — the CLI keeps a `scratch/` directory beside it, and `scratch/` is where the
+  research capture caught a real write landing on disk.
+
+  A completed `run_command` is a breach even though one capture showed a plan-mode `touch x`
+  reporting `DONE` with no file created anywhere. Until the CLI distinguishes "ran" from
+  "declined to run" on that line, this fails closed: a run that fails over a harmless no-op is
+  rerun in a minute, whereas a note asserting a read-only run over a command that really
+  executed is wrong and invisible.
 - **`mcp.workspaceOnly` cannot be enforced.** The CLI reads one global
   `~/.gemini/config/mcp_config.json` for every session and takes no flag that narrows or
   replaces it — no `--mcp-config`, no `--strict-mcp-config`, no allow-list by server name. A
@@ -1552,12 +1567,16 @@ or a `.agents/hooks.json` inside the repository being triaged. Four consequences
 - **`sirdar fix` is refused outright.** Letting `agy` write needs
   `--dangerously-skip-permissions`, which approves every tool including a write into
   `.git/hooks/pre-commit`, and `provider.FixPolicy`'s per-call path confinement — the thing that
-  keeps a fix inside the workspace — has nothing to attach to. A fix run under `provider: agy`
-  fails at start with an error saying so, and `doctor` says it before you try. Triage and rca
-  are unaffected.
+  keeps a fix inside the workspace — has nothing to attach to. `sirdar fix` refuses **before it
+  touches git**: no branch is cut, no worktree is added, no run directory is created, and the
+  workspace is exactly as you left it. `doctor` says the same thing before you try. Triage and
+  rca are unaffected.
 
-`budget.maxUsd` does not bite either: there is no cost field anywhere on this wire, so a run's
-cost is reported as `0`. `budget.maxTurns` is counted by Sirdar off the stream's `result`
+`billing: api` is rejected at config load. It is the switch that leaves an API key in the
+agent's environment, and this adapter strips `GEMINI_API_KEY` and `GOOGLE_GEMINI_BASE_URL`
+unconditionally; accepting the word and ignoring it would read as a billing mode that had been
+chosen and honoured. `budget.maxUsd` does not bite either: there is no cost field anywhere on
+this wire, so a run's cost is reported as `0`. `budget.maxTurns` is counted by Sirdar off the stream's `result`
 events, since the CLI has no turn or tool-call ceiling of its own; `budget.maxMinutes` becomes
 `--print-timeout`, which the CLI does enforce.
 
@@ -1572,6 +1591,11 @@ CLI's `ANTHROPIC_BASE_URL`: with it set and `modelProvider: "gemini"` configured
 stops billing against the operator's Antigravity login and starts billing an API key against
 whatever base URL another variable names.
 
+Proxy variables (`HTTP_PROXY`, `HTTPS_PROXY`, `NO_PROXY` and their lowercase spellings) are
+passed through unchanged, as they are for every other adapter: an operator behind a corporate
+proxy needs them to reach Google at all, and they route the same traffic to the same place
+rather than redirecting it somewhere else.
+
 The OAuth login itself is in the OS keyring, not under `~/.gemini` and not in the environment,
 which is why the adapter strips rather than relocating `HOME` to isolate the CLI's
 configuration: a relocated `HOME` might break the keyring lookup, and a failed lookup is a dead
@@ -1583,14 +1607,23 @@ run.
 [OK] agy --version — 1.2.3
 [OK] agy models — signed in, 15 models available
 [OK] agy model — gemini-3.6-flash-low
+[!!] agy settings — /Users/you/.gemini/antigravity-cli/settings.json — permissions.allow: none;
+     permissions.deny: none; this workspace is in trustedWorkspaces
 [!!] agy mcp scope — the CLI loads ~/.gemini/config/mcp_config.json for every session and takes
      no flag that narrows or replaces it; it declares no servers, so this session sees none
 [!!] agy fix mode — `sirdar fix` is refused on provider agy: …
 ```
 
-The last two are warnings, not failures: they never change an exit code, and they are there
-because both gaps are permanent properties of the CLI rather than something an operator can
+The last three are warnings, not failures: they never change an exit code, and they are there
+because the gaps are permanent properties of the CLI rather than something an operator can
 misconfigure.
+
+The `agy settings` row is the one to read before a first run. It reads the CLI's own
+`settings.json` and lists `permissions.allow`, `permissions.deny` and `permissions.ask`, plus
+whether this workspace is in `trustedWorkspaces`. That file is where the read-only guarantee
+really rests: an `allow` rule added months ago for interactive use turns plan mode's refusal
+into a completed write, which Sirdar can only notice afterwards and fail the run over. Sirdar
+never writes to this file — reporting it is the whole of what it can do.
 
 #### What has and has not been verified
 
@@ -1599,9 +1632,13 @@ refusal of an out-of-workspace write, the headless auto-deny, `--conversation` r
 exit codes were all watched on live runs against a real account
 (`docs/research/10-antigravity-wire-formats.md`). What has **not** been established: what
 `--sandbox` refuses that the permission layer would not; why one plan-mode `run_command`
-reported `DONE` with no side effect rather than a denial; and how a workspace the operator has
-already trusted interactively behaves in the CLI's default mode — every write test ran in an
-untrusted temporary repository. No Sirdar triage has yet run end to end on this provider.
+reported `DONE` with no side effect rather than a denial (the adapter fails closed on it, and
+the research note says what that costs); whether a `fileAccessPolicy: FILE_ACCESS_POLICY_DENY`
+written into a project file under `~/.gemini/config/projects/` is honoured in a headless run —
+the schema and its precedence are verified, the enforcement is not, and Sirdar does not write
+to that directory in any case; and how a workspace the operator has already trusted
+interactively behaves in the CLI's default mode — every write test ran in an untrusted
+temporary repository. No Sirdar triage has yet run end to end on this provider.
 
 ### `provider: openai`
 

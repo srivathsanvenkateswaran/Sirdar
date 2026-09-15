@@ -1123,6 +1123,22 @@ func TestValidateAgy(t *testing.T) {
 			"workspace: demo\nprovider: claude\nagy:\n  effort: nope\n",
 			"agy.effort",
 		},
+		{
+			// billing: api is the switch that leaves an API key in the
+			// agent's environment. The agy adapter strips GEMINI_API_KEY
+			// unconditionally, so the word would be accepted and ignored
+			// — a billing mode that looks chosen and honoured and is
+			// neither.
+			"api billing has no meaning here",
+			"workspace: demo\nprovider: agy\nbilling: api\n",
+			"billing: api has no meaning on provider agy",
+		},
+		{"subscription billing is the one that fits", "workspace: demo\nprovider: agy\nbilling: subscription\n", ""},
+		{
+			// The same key on the provider it was built for is untouched.
+			"api billing on claude is unaffected",
+			"workspace: demo\nprovider: claude\nbilling: api\n", "",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

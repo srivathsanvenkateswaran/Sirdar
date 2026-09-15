@@ -172,6 +172,7 @@ type drained struct {
 	toolStarted []string
 	permissions []provider.Event
 	errs        []provider.Event
+	breaches    []provider.Event
 	systems     []string
 	final       *provider.Event
 	usage       []provider.Event
@@ -191,6 +192,8 @@ func drain(t *testing.T, s provider.Session) drained {
 			d.permissions = append(d.permissions, ev)
 		case provider.EvError:
 			d.errs = append(d.errs, ev)
+		case provider.EvBreach:
+			d.breaches = append(d.breaches, ev)
 		case provider.EvSystem:
 			d.systems = append(d.systems, ev.Text)
 		case provider.EvUsage:
@@ -253,6 +256,9 @@ func TestBasicSession(t *testing.T) {
 	// A refused tool is not a breach; nothing should have been raised.
 	if len(d.errs) != 0 {
 		t.Errorf("unexpected errors %+v", d.errs)
+	}
+	if len(d.breaches) != 0 {
+		t.Errorf("unexpected breaches %+v", d.breaches)
 	}
 }
 
@@ -363,10 +369,8 @@ func TestPolicyNeverDecidesAWrite(t *testing.T) {
 		t.Errorf("tool %q", d.permissions[0].Tool)
 	}
 	// The refusal is not a breach: nothing was written.
-	for _, e := range d.errs {
-		if strings.Contains(e.Text, "read-only guarantee") {
-			t.Errorf("a refused write was reported as a breach: %v", e.Text)
-		}
+	if len(d.breaches) != 0 {
+		t.Errorf("a refused write was reported as a breach: %+v", d.breaches)
 	}
 	// And Sirdar never wrote a permission answer back: the only thing on
 	// stdin is the user turn.
@@ -380,7 +384,9 @@ func TestPolicyNeverDecidesAWrite(t *testing.T) {
 
 // TestCompletedWriteIsReportedAsABreach is the other half: when the CLI
 // does not refuse — because the operator's own settings.json allowed it,
-// which Sirdar can neither see nor override — the run's event log says so.
+// which Sirdar can neither see nor override — the session raises a breach,
+// which is a kind of its own and not one more error line for the
+// malformed-line counter to shrug off.
 func TestCompletedWriteIsReportedAsABreach(t *testing.T) {
 	script := writeScript(t,
 		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
@@ -395,18 +401,159 @@ func TestCompletedWriteIsReportedAsABreach(t *testing.T) {
 	if _, err := s.Wait(); err != nil {
 		t.Fatal(err)
 	}
-	if !containsSubstring(errTexts(d.errs), "read-only guarantee") {
-		t.Fatalf("a completed write was not reported: %+v", d.errs)
+	if len(d.breaches) != 1 {
+		t.Fatalf("a completed write was not raised as a breach: %+v", d.all)
+	}
+	if len(d.errs) != 0 {
+		t.Errorf("a breach was also raised as an error: %+v", d.errs)
+	}
+	breach := d.breaches[0]
+	// The first line is the run's terminal reason, so it names the tool
+	// and the path and stops there.
+	if got := firstLineOf(breach.Text); got != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("breach reason %q", got)
+	}
+	if breach.Tool != "write_to_file" {
+		t.Errorf("breach tool %q", breach.Tool)
+	}
+	if !strings.Contains(breach.Text, "settings.json") {
+		t.Errorf("the breach should say where to look: %q", breach.Text)
 	}
 }
 
-// TestStateDirWriteIsNotABreach exempts plan mode's own artifact, which is
-// written into the CLI's state directory on every plan-mode run.
-func TestStateDirWriteIsNotABreach(t *testing.T) {
+// TestCompletedRunCommandIsABreach is the controller's ruling on the one
+// unexplained capture: a plan-mode `touch x` that reported DONE with no
+// file on disk. Until the CLI explains it, a completed run_command is a
+// breach like any other — the failure mode of being wrong is a run that
+// ends failed, not a run that files a read-only note over a command that
+// really ran.
+func TestCompletedRunCommandIsABreach(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"run_command","tool_info":{"name":"run_command","parameters":{"CommandLine":"touch x"}}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.breaches) != 1 {
+		t.Fatalf("a completed run_command was not raised as a breach: %+v", d.all)
+	}
+	// The command is what the reason names, not a path.
+	if got := firstLineOf(d.breaches[0].Text); got != "read-only breach: run_command touch x" {
+		t.Errorf("breach reason %q", got)
+	}
+}
+
+// TestCompletedMCPCallIsABreach: an MCP server's own tools are opaque to
+// this adapter — one `call_mcp_tool` step whatever the server did — and
+// the session sees whatever servers the operator configured globally. Left
+// off execTools, an MCP write is the one kind that completes in silence.
+func TestCompletedMCPCallIsABreach(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"call_mcp_tool","tool_info":{"name":"call_mcp_tool","parameters":{"ServerName":"github","ToolName":"create_pull_request"}}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.breaches) != 1 {
+		t.Fatalf("a completed call_mcp_tool was not raised as a breach: %+v", d.all)
+	}
+	if got := firstLineOf(d.breaches[0].Text); got != "read-only breach: call_mcp_tool github/create_pull_request" {
+		t.Errorf("breach reason %q", got)
+	}
+}
+
+// TestBreachNamesThePathFromTheActiveLine is the shape the research
+// capture actually has: the ACTIVE line spells the parameters out and the
+// DONE line that follows elides tool_info. Reading the path off the DONE
+// line alone gets nothing, so the session remembers the ACTIVE line's
+// arguments by step_index and matches them on DONE.
+func TestBreachNamesThePathFromTheActiveLine(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"write_to_file","tool_info":{"name":"write_to_file","parameters":{"TargetFile":"/work/src/a.go"}}}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_to_file","duration_seconds":0.099246,"tool_info":{}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.breaches) != 1 {
+		t.Fatalf("breaches %+v", d.all)
+	}
+	if got := firstLineOf(d.breaches[0].Text); got != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("breach reason %q: the path should come from the ACTIVE line", got)
+	}
+	// The finished-tool event itself carries the remembered arguments too,
+	// so the run's event log records what the call was on.
+	for _, ev := range d.all {
+		if ev.Kind == provider.EvToolFinished && !strings.Contains(string(ev.Input), "/work/src/a.go") {
+			t.Errorf("tool_finished input %s: the remembered arguments should be filled in", ev.Input)
+		}
+	}
+}
+
+// TestRememberedPathExemptsThePlanArtifact is the same pairing on the
+// exemption side: a plan artifact whose DONE line elides its path must
+// still be recognised as the artifact rather than reported as a breach on
+// a path nobody can see.
+func TestRememberedPathExemptsThePlanArtifact(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
-	artifact := filepath.Join(home, stateDirParent, stateDirChild, "brain", "c1", "implementation_plan.md")
+	artifact := filepath.Join(home, stateDirParent, stateDirChild, planDirName, "c1", "implementation_plan.md")
+	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"ACTIVE","step_type":"tool","tool_name":"write_to_file","tool_info":{"name":"write_to_file","parameters":{"TargetFile":`+mustJSON(artifact)+`}}}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"DONE","step_type":"tool","tool_name":"write_to_file","tool_info":{}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.breaches) != 0 {
+		t.Fatalf("the plan artifact was reported as a breach: %+v", d.breaches)
+	}
+	if !containsSubstring(d.systems, "plan directory") {
+		t.Errorf("the artifact write was not reported at all: %v", d.systems)
+	}
+}
+
+// TestPlanDirWriteIsNotABreach exempts plan mode's own artifact, which is
+// written into <state dir>/brain/<conversation id>/ on every plan-mode
+// run.
+func TestPlanDirWriteIsNotABreach(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
+	artifact := filepath.Join(home, stateDirParent, stateDirChild, planDirName, "c1", "implementation_plan.md")
 	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -424,11 +571,71 @@ func TestStateDirWriteIsNotABreach(t *testing.T) {
 	if _, err := s.Wait(); err != nil {
 		t.Fatal(err)
 	}
-	if containsSubstring(errTexts(d.errs), "read-only guarantee") {
-		t.Fatalf("the plan artifact was reported as a breach: %+v", d.errs)
+	if len(d.breaches) != 0 {
+		t.Fatalf("the plan artifact was reported as a breach: %+v", d.breaches)
 	}
-	if !containsSubstring(d.systems, "state directory") {
+	if !containsSubstring(d.systems, "plan directory") {
 		t.Errorf("the artifact write was not reported at all: %v", d.systems)
+	}
+}
+
+// TestStateDirOutsideThePlanDirIsABreach is what the narrowed exemption
+// buys. scratch/ sits beside brain/ under the same state directory, and it
+// is where the research capture found a default-mode run depositing a file
+// the agent had been told to write to an absolute path. A directory-wide
+// exemption reported that as bookkeeping; this one reports it as what it
+// is. A write into another conversation's brain/ directory is a breach for
+// the same reason: it is not this session's artifact.
+func TestStateDirOutsideThePlanDirIsABreach(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	stateRoot := filepath.Join(home, stateDirParent, stateDirChild)
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{"scratch", filepath.Join(stateRoot, "scratch", "a.txt")},
+		{"another conversation", filepath.Join(stateRoot, planDirName, "c2", "implementation_plan.md")},
+		{"state dir root", filepath.Join(stateRoot, "settings.json")},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.MkdirAll(filepath.Dir(tc.path), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			script := writeScript(t,
+				`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+				`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"write_to_file","tool_info":{"name":"write_to_file","parameters":{"TargetFile":`+mustJSON(tc.path)+`}}}}`,
+				`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+			)
+			s, err := New().Start(context.Background(), fakeSpec(t, script))
+			if err != nil {
+				t.Fatal(err)
+			}
+			d := drain(t, s)
+			if _, err := s.Wait(); err != nil {
+				t.Fatal(err)
+			}
+			if len(d.breaches) != 1 {
+				t.Fatalf("a write to %s was not raised as a breach: %+v", tc.path, d.all)
+			}
+		})
+	}
+}
+
+// TestSupportsFixIsFalse is what `sirdar fix` asks before it touches git.
+func TestSupportsFixIsFalse(t *testing.T) {
+	p := New()
+	fs, ok := p.(provider.FixSupport)
+	if !ok {
+		t.Fatal("the agy provider must declare its fix support, so the refusal can come before the branch")
+	}
+	if fs.SupportsFix() {
+		t.Fatal("agy cannot run a fix session")
+	}
+	if err := provider.RefuseFix(p); !errors.Is(err, ErrFixUnsupported) {
+		t.Fatalf("RefuseFix returned %v, want the same error Start gives", err)
 	}
 }
 
@@ -634,7 +841,7 @@ func TestDoctorRows(t *testing.T) {
 	for _, c := range checks {
 		byName[c.Name] = c
 	}
-	for _, name := range []string{"agy --version", "agy models", "agy model", "agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy --version", "agy models", "agy model", "agy settings", "agy mcp scope", "agy fix mode"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("missing doctor row %q: %+v", name, checks)
 		}
@@ -648,7 +855,7 @@ func TestDoctorRows(t *testing.T) {
 	if byName["agy model"].Severity() != provider.LevelOK {
 		t.Errorf("a configured model on the list should pass: %+v", byName["agy model"])
 	}
-	for _, name := range []string{"agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy settings", "agy mcp scope", "agy fix mode"} {
 		c := byName[name]
 		if c.Severity() != provider.LevelWarn {
 			t.Errorf("%s should warn, not fail or pass silently: %+v", name, c)
@@ -657,6 +864,108 @@ func TestDoctorRows(t *testing.T) {
 	if !strings.Contains(byName["agy mcp scope"].Detail, "mcp.workspaceOnly cannot be enforced") {
 		t.Errorf("mcp row %+v", byName["agy mcp scope"])
 	}
+}
+
+// TestDoctorReadsTheCLIsSettingsFile is the row that names the file the
+// read-only guarantee actually rests on. Sirdar cannot see this file from
+// inside a session and cannot override it with a flag, so doctor reading
+// it out is the only warning an operator gets before a permissions.allow
+// rule turns a refusal into a completed write.
+func TestDoctorReadsTheCLIsSettingsFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
+
+	root := filepath.Join(home, "work", "omni")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, stateDirParent, stateDirChild)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settings := `{"permissions":{"allow":["write_file","run_command(git *)"],"deny":["run_command(rm *)"],"ask":["browser"]},` +
+		`"trustedWorkspaces":[` + mustJSON(root) + `]}`
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"), []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	p := NewConfig(Config{Binary: os.Args[0]})
+	row := doctorRow(t, p, provider.DoctorConfig{Root: root}, "agy settings")
+	if row.Severity() != provider.LevelWarn {
+		t.Fatalf("the settings row should warn: %+v", row)
+	}
+	for _, want := range []string{
+		"permissions.allow: run_command(git *), write_file",
+		"permissions.deny: run_command(rm *)",
+		"permissions.ask: browser",
+		"auto-denied",
+		"this workspace is in trustedWorkspaces",
+		"turns agy's refusal into a completed write",
+	} {
+		if !strings.Contains(row.Detail, want) {
+			t.Errorf("settings row is missing %q:\n%s", want, row.Detail)
+		}
+	}
+}
+
+// A workspace the operator never trusted, and a settings file with no
+// permission rules at all, is the common case and has to read plainly.
+func TestDoctorSettingsRowWithNoRules(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
+
+	dir := filepath.Join(home, stateDirParent, stateDirChild)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "settings.json"),
+		[]byte(`{"trustedWorkspaces":["/somewhere/else"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	row := doctorRow(t, NewConfig(Config{Binary: os.Args[0]}),
+		provider.DoctorConfig{Root: filepath.Join(home, "work")}, "agy settings")
+	for _, want := range []string{"permissions.allow: none", "permissions.deny: none", "is not in trustedWorkspaces"} {
+		if !strings.Contains(row.Detail, want) {
+			t.Errorf("settings row is missing %q:\n%s", want, row.Detail)
+		}
+	}
+	if strings.Contains(row.Detail, "permissions.ask") {
+		t.Errorf("an empty ask list should not be listed: %s", row.Detail)
+	}
+}
+
+// A missing settings file is not an error: the CLI runs on its defaults.
+// The row says so rather than reading as a broken installation.
+func TestDoctorSettingsRowWithNoFile(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
+
+	row := doctorRow(t, NewConfig(Config{Binary: os.Args[0]}), provider.DoctorConfig{Root: home}, "agy settings")
+	if row.Severity() != provider.LevelWarn {
+		t.Fatalf("the settings row should warn: %+v", row)
+	}
+	if !strings.Contains(row.Detail, "does not exist") {
+		t.Errorf("settings row %q", row.Detail)
+	}
+}
+
+// doctorRow runs the provider's diagnostics and returns the named row.
+func doctorRow(t *testing.T, p provider.Provider, cfg provider.DoctorConfig, name string) provider.Check {
+	t.Helper()
+	for _, c := range p.(*Provider).DoctorWithConfig(context.Background(), "", cfg) {
+		if c.Name == name {
+			return c
+		}
+	}
+	t.Fatalf("no %q row", name)
+	return provider.Check{}
 }
 
 func TestDoctorWarnsOnAModelTheAccountLacks(t *testing.T) {
@@ -674,6 +983,15 @@ func TestDoctorWarnsOnAModelTheAccountLacks(t *testing.T) {
 		return
 	}
 	t.Fatal("no model row")
+}
+
+// firstLineOf is the run layer's view of an event's text: the terminal
+// reason a run is finished with.
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }
 
 func errTexts(events []provider.Event) []string {

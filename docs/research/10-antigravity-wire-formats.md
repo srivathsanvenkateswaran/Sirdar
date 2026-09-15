@@ -243,11 +243,58 @@ So the permission model is **static and file-based**, not a per-call conversatio
 | Lever | Scope | Can Sirdar use it? |
 |---|---|---|
 | `permissions.allow` / `deny` / `ask` in `~/.gemini/antigravity-cli/settings.json` | global, all `agy` sessions | no — it would rewrite the operator's own config |
-| project permissions under `~/.gemini/config/projects/<id>.json` | per project, higher precedence than global (inferred, from the changelog) | no — same file-ownership problem, and the project id is not the workspace |
+| project permissions under `~/.gemini/config/projects/<id>.json` | per project, highest precedence (verified) | no — see "The project lever", below |
 | `<workspace>/.agents/hooks.json` `PreToolUse` command hook, returning `{"decision":"allow"\|"deny"\|"ask"\|"force_ask"}` | per workspace | **no** — it lives inside the customer's repository, and Sirdar never writes to the workspace |
 | `--mode plan` | per session, a flag | **yes** |
 | `--sandbox` | per session, a flag | yes, but see below |
 | `--dangerously-skip-permissions` | per session, a flag | never for triage |
+
+### The project lever, spiked 2026-09-15
+
+`--new-project` is the one flag that looks like it could give Sirdar a permissions file of its
+own, so it was spiked directly. What it does, **verified** with no model call
+(`agy --new-project models`, which resolves the project before running the subcommand):
+
+- it writes `~/.gemini/config/projects/<uuid>.json`, named after the working directory and
+  pointing at it: `{"id":"<uuid>","name":"Sirdar","projectResources":{"resources":[{"folderUri":
+  "file:///…/Sirdar"}]}}`. A plain `--help` run creates nothing, so the file is written during
+  project resolution and not by flag parsing.
+- the file it writes carries **no permission block at all** — three keys, none of them about
+  what a session may do.
+- the schema behind it does have one. The `Project` message has `settings` and
+  `permissionGrants` fields (verified from the binary's symbol table:
+  `project_go_proto.(*Project).GetSettings`, `GetPermissionGrants`), and `ProjectSettings`
+  carries `fileAccessPolicy`, `autoExecutionPolicy`, `permissionPreset`, `sandboxMode`,
+  `artifactReviewMode` and `internetPolicy`. The enum values include exactly the rules a
+  read-only run would want: `FILE_ACCESS_POLICY_DENY`, `AUTO_EXECUTION_POLICY_REQUIRE_REVIEW`,
+  `PERMISSION_PRESET_NONE`.
+- the changelog embedded in the binary says these take precedence: "Improved permission config
+  merging priorities by ensuring project-specific configurations (located in
+  `~/.gemini/config/projects/`) take precedence over global settings in
+  `~/.gemini/antigravity-cli/settings.json`" (verified as a string; the behaviour itself was
+  not exercised).
+
+**Not adopted**, for three reasons, in order of weight:
+
+1. The file is not Sirdar's. `~/.gemini/config/projects/` is the operator's own directory,
+   shared with the Antigravity IDE and every other `agy` session, and the CLI writes to it
+   itself ("project: failed to update default project name to %s"). Writing deny rules into it
+   is the same file-ownership problem as `settings.json`, one directory along — and this
+   adapter has refused that from the start, which is why it strips redirecting environment
+   variables instead of relocating `HOME`.
+2. `--new-project` mints a **new** uuid every invocation and takes no name or id to reuse, so a
+   Sirdar sweep would leave one project per run in a list the operator sees in their IDE.
+   Creating one project once and passing `--project <id>` thereafter means Sirdar keeping a
+   handle to a record in somebody else's config file.
+3. Whether a hand-written `settings.fileAccessPolicy: FILE_ACCESS_POLICY_DENY` is actually
+   honoured in a headless plan-mode run cannot be established without a live model turn, and
+   this spike was explicitly budgeted for none. Adopting an unverified lever *as* the read-only
+   guarantee would be worse than what the adapter has now — plan mode, which was verified to
+   refuse a write, plus a breach detector that fails closed.
+
+If a later round spends one live run on it, the thing to test is a project whose `settings`
+block sets `FILE_ACCESS_POLICY_DENY`, driven with `--project <id> --mode plan`, against a
+prompt that asks for a write into the workspace.
 
 The `.agents/hooks.json` hook is the one thing here that resembles qwen's `PreToolUse` mediator
 — same event names, same allow/deny verdict, plus an `overwrite` that rewrites the tool's
@@ -276,12 +323,25 @@ A temp git repository, one prompt asking for a file write and a `touch`, no TTY,
   for write_file(/private/tmp/agyplan_a.txt)`, `denied_actions: [{"action":"write_file"}]`.
 - `write_to_file ~/.gemini/antigravity-cli/brain/<conv>/implementation_plan.md` → **allowed**.
   Plan mode's own artifact directory is exempt; it is inside `agy`'s state, not the workspace.
+  The adapter's exemption is that path and no wider: `<state dir>/brain/<conversation id>/`,
+  using the conversation id off the session's own stream. It deliberately does **not** cover
+  the state directory as a whole, because `scratch/` sits beside `brain/` and `scratch/` is
+  where the default-mode run above really did put a file.
 - `run_command` → observed **both ways across two runs**. A compound
   `touch /tmp/agy_plan_marker && echo MARKERDONE` was **denied** with the same "headless cannot
   prompt" refusal. A bare `touch x` in an earlier plan-mode run reported `state: DONE` with no
   error — and yet **no `x` file exists anywhere on the machine** (searched the workspace, the
   scratch directory, the brain directory and `$HOME`). So that call produced no side effect
   either, but it was not reported as a denial and the mechanism was not established.
+
+  **Known false-positive risk, accepted.** The adapter treats every completed `run_command` as
+  a breach, which ends the run. If the unexplained `DONE`-with-no-effect case is the CLI
+  reporting a plan-mode no-op rather than a command that ran, a run will occasionally fail over
+  a command that did nothing. That is the direction this fails in on purpose: the alternative
+  is filing a triage note that asserts a read-only run over a command that really executed, and
+  a spurious failure is cheap to rerun while a false read-only claim is not visible at all.
+  Removing the rule needs the CLI to explain the case — a `DONE` line that distinguishes "ran"
+  from "declined to run" — not a guess about which it was.
 
 **`--sandbox`**, verified only that it does not change `permission_mode` (still
 `request-review`) and does not lift a denial. Its help text is "Run in a sandbox with terminal
@@ -302,14 +362,34 @@ policies, including `permissions`, file access, sandbox mode, auto-execution, an
 review"), and Sirdar cannot see, let alone override, what is in that file.
 
 So the guarantee this adapter can make is: **plan mode plus a workspace that is not trusted,
-with every denial reported as an event, and no allow rule ever written by Sirdar.** That is
-weaker than Claude's `--disallowedTools` + policy or qwen's `--exclude-tools`, and the adapter
-says so in `doctor` rather than pretending otherwise.
+with every denial reported as an event, no allow rule ever written by Sirdar, and a completed
+write or command ending the run.** That last clause is what makes it a guarantee rather than a
+hope. A write that gets through is not a warning on a note: the session is cancelled on the
+spot, its process group killed, and the run ends `failed` with the reason
+`read-only breach: <tool> <path|command>`. No note is filed and no register row is written,
+because both of them would assert the thing that just failed to be true. It is weaker than
+Claude's `--disallowedTools` + policy or qwen's `--exclude-tools` — those refuse the call, this
+one can only refuse the run — and `doctor` says so rather than pretending otherwise.
+
+What counts as a completed write, in the adapter: `write_to_file`, `replace_file_content`,
+`multi_replace_file_content`, `sed_file`, `notebook_edit`, and for commands `run_command`,
+`send_command_input`, `notebook_execution`, `browser_subagent`,
+`execute_browser_javascript` and `call_mcp_tool`. The MCP tool is on the list because the CLI
+reports one `call_mcp_tool` step whatever the server went on to do, and the session sees
+whichever servers the operator configured globally — left off, an MCP write is the one kind
+that completes in silence.
+
+The path a breach names comes off the step's **`ACTIVE`** line, matched to the `DONE` line by
+`step_index`. The capture above shows why: the `DONE` line elides `tool_info`, so reading the
+target off the line that says the write finished gets nothing at all.
 
 And for `sirdar fix`: there is no per-call mediation, so `provider.FixPolicy`'s path
 confinement — the thing that keeps a fix inside the workspace and out of `.git/` — has nothing
 to attach to. The only way to let `agy` write is `--dangerously-skip-permissions`, which
-approves everything including `.git/hooks/pre-commit`. **This provider refuses fix mode.**
+approves everything including `.git/hooks/pre-commit`. **This provider refuses fix mode**, and
+it refuses it before `sirdar fix` touches git at all: the provider answers `SupportsFix()`
+false, which the fix entry asks before it fetches the default branch, cuts a branch or adds a
+worktree.
 
 ## Workspace trust
 
@@ -344,7 +424,10 @@ There is no `--mcp-config` flag, no `--strict-mcp-config`, and no allow-list by 
 **So `mcp.workspaceOnly` is not enforceable on this provider.** The adapter cannot point a
 session at the workspace's `.mcp.json`, and cannot keep the operator's own global servers out.
 The tool set the session is offered still contains `call_mcp_tool`, and a call through it is
-judged by no Sirdar policy at all. Doctor warns, loudly, and `docs/config.md` records it.
+judged by no Sirdar policy at all. Doctor warns, loudly, and `docs/config.md` records it. A
+`call_mcp_tool` step that completes is therefore treated as a breach like any other completed
+command: the adapter cannot tell a read from a write through it, and the read-only side of that
+guess is the one that fails silently.
 
 ## Environment
 
@@ -407,7 +490,12 @@ CLI has no turn or tool-call ceiling of its own — no `--max-turns`, no `--max-
 ## What this capture did not establish
 
 - Whether `--sandbox` refuses anything the permission layer would otherwise allow.
-- Why one plan-mode `run_command` reported `DONE` with no side effect instead of a denial.
+- Why one plan-mode `run_command` reported `DONE` with no side effect instead of a denial. The
+  adapter fails closed on it in the meantime; see the accepted false-positive note above.
+- Whether a `ProjectSettings` block written by hand into
+  `~/.gemini/config/projects/<id>.json` — `fileAccessPolicy: FILE_ACCESS_POLICY_DENY` — is
+  honoured in a headless plan-mode run. The schema and the precedence are verified; the
+  enforcement is not, and testing it needs a live model turn. See "The project lever".
 - How a **trusted** workspace behaves in default mode — every write test here ran in an
   untrusted temp repository.
 - Whether `--effort` is refused for the Claude and GPT-OSS models on the list.

@@ -262,10 +262,12 @@ in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is 
 whose read-only guarantee Sirdar does not impose: the CLI gives a parent process no way to
 mediate a tool call, so every session runs in the CLI's own `--mode plan`, `permissions.bash`,
 `permissions.mcp` and `permissions.fetch` are never consulted, `mcp.workspaceOnly` cannot be
-enforced, and `sirdar fix` is refused outright. What Sirdar does instead is watch and report:
-a refusal the CLI makes appears as a denied permission, and a write that *completes* in a triage
-session is raised as an error. There is no cost on that wire either, so `budget.maxUsd` never
-bites. Read the `provider: agy` section of `docs/config.md` before choosing it.
+enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
+watch, and fail loudly: a refusal the CLI makes appears as a denied permission, and a write or a
+command that *completes* in a triage session ends the run — the session is killed and the run is
+`failed`, with no note written and no register row added, because both would assert a read-only
+run that did not happen. There is no cost on that wire either, so `budget.maxUsd` never bites.
+Read the `provider: agy` section of `docs/config.md` before choosing it.
 
 `provider: acp` reaches the widest: one Agent Client Protocol client that drives
 any agent speaking it — Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty

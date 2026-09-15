@@ -73,13 +73,24 @@ const (
 	// because the account default is a Pro model on an unknown quota.
 	defaultModel = "gemini-3.6-flash-low"
 
-	// stateDirName is the CLI's own state directory under the operator's
-	// home. Plan mode writes its implementation-plan artifact there and
-	// the CLI keeps a scratch directory beside it, so a write landing
-	// inside it is the CLI's own bookkeeping rather than a breach of the
-	// read-only guarantee — see observeWrite.
+	// stateDirParent and stateDirChild name the CLI's own state directory
+	// under the operator's home, ~/.gemini/antigravity-cli.
 	stateDirParent = ".gemini"
 	stateDirChild  = "antigravity-cli"
+
+	// planDirName is the one directory under the state directory a
+	// plan-mode session is expected to write into: brain/<conversation
+	// id>/ holds this conversation's implementation-plan artifact, which
+	// every plan-mode run produces.
+	//
+	// The exemption stops there and does not cover the state directory as
+	// a whole. Beside brain/ the CLI keeps scratch/, and scratch/ is
+	// exactly where the research capture found a default-mode run
+	// depositing a file the agent had been asked to write to an absolute
+	// path — a real write, performed on the operator's disk, that an
+	// exemption for the whole directory would have reported as
+	// bookkeeping. See observeWrite.
+	planDirName = "brain"
 )
 
 // writeTools are the tool names that change a file. A triage session must
@@ -97,29 +108,68 @@ var writeTools = map[string]bool{
 
 // execTools are the tool names that run a program. The same reasoning
 // applies: a triage session should see every one of these refused.
+//
+// call_mcp_tool is on the list because an MCP server's own tools are
+// opaque: the CLI reports one `call_mcp_tool` step whatever the server
+// went on to do, and the session cannot see the servers the operator
+// configured globally, let alone which of their tools write. Left off the
+// list, an MCP write is the one kind that completes invisibly.
 var execTools = map[string]bool{
 	"run_command":                true,
 	"send_command_input":         true,
 	"notebook_execution":         true,
 	"browser_subagent":           true,
 	"execute_browser_javascript": true,
+	"call_mcp_tool":              true,
 }
 
-// pathArgs is every argument name an `agy` tool names its target file
-// with. The keys are Cascade's PascalCase, not the snake_case the other
-// adapters read, which is why this cannot reuse the policy's writeArgs.
-type pathArgs struct {
+// toolArgs is every argument name an `agy` tool names its subject with:
+// the file a write targets, the command line an exec runs, the server and
+// tool an MCP call reaches. The keys are Cascade's PascalCase, not the
+// snake_case the other adapters read, which is why this cannot reuse the
+// policy's writeArgs.
+type toolArgs struct {
 	TargetFile   string `json:"TargetFile"`
 	FilePath     string `json:"FilePath"`
 	NotebookPath string `json:"NotebookPath"`
 	AbsolutePath string `json:"AbsolutePath"`
+
+	CommandLine string `json:"CommandLine"`
+	Command     string `json:"Command"`
+
+	ServerName string `json:"ServerName"`
+	ToolName   string `json:"ToolName"`
 }
 
-func (a pathArgs) target() string {
+func (a toolArgs) target() string {
 	for _, p := range []string{a.TargetFile, a.FilePath, a.NotebookPath, a.AbsolutePath} {
 		if strings.TrimSpace(p) != "" {
 			return p
 		}
+	}
+	return ""
+}
+
+// subject is what the tool call acted on, for the breach to name: the path
+// for a write, the command line for an exec, the server's tool for an MCP
+// call. Empty when the arguments named none, which a DONE line with its
+// tool_info elided and no ACTIVE line to match leaves it.
+func (a toolArgs) subject() string {
+	if t := a.target(); t != "" {
+		return t
+	}
+	for _, c := range []string{a.CommandLine, a.Command} {
+		if strings.TrimSpace(c) != "" {
+			return c
+		}
+	}
+	switch {
+	case a.ServerName != "" && a.ToolName != "":
+		return a.ServerName + "/" + a.ToolName
+	case a.ToolName != "":
+		return a.ToolName
+	case a.ServerName != "":
+		return a.ServerName
 	}
 	return ""
 }
@@ -298,6 +348,14 @@ var ErrFixUnsupported = errors.New(
 		"confines a write to the workspace by judging each call, and there is nothing here to " +
 		"judge. Run `sirdar fix` under provider: claude, codex or openai")
 
+// SupportsFix is false, and is asked before `sirdar fix` does anything at
+// all. Start refuses a fix spec too, but by then the branch has been cut
+// and a worktree added for a session that was never going to run.
+func (p *Provider) SupportsFix() bool { return false }
+
+// FixRefusal is the reason, the same one Start gives.
+func (p *Provider) FixRefusal() error { return ErrFixUnsupported }
+
 // Start launches the CLI and sends the prompt as the first user line.
 func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
 	if spec.Mode.IsFix() {
@@ -356,6 +414,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		events:    make(chan provider.Event, eventBuffer),
 		readDone:  make(chan struct{}),
 		done:      make(chan struct{}),
+		pending:   map[int]toolArgsMemo{},
 	}
 	if err := cmd.Start(); err != nil {
 		cancelRun()
@@ -450,8 +509,120 @@ func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg prov
 			"run `agy models` and set agy.model to one that is")
 	}
 
-	checks := []provider.Check{version, login, model, mcpCheck(cfg), fixCheck()}
+	checks := []provider.Check{version, login, model, settingsCheck(cfg), mcpCheck(cfg), fixCheck()}
 	return checks
+}
+
+// agySettings is the part of the CLI's own settings file that decides what
+// a Sirdar session will be allowed to do. Sirdar neither writes this file
+// nor passes a flag that overrides it, so reporting it is the only thing
+// doctor can do about it.
+type agySettings struct {
+	Permissions struct {
+		Allow []string `json:"allow"`
+		Deny  []string `json:"deny"`
+		Ask   []string `json:"ask"`
+	} `json:"permissions"`
+	TrustedWorkspaces []string `json:"trustedWorkspaces"`
+}
+
+// settingsCheck reports ~/.gemini/antigravity-cli/settings.json: the
+// permission rules in it and whether this workspace is trusted.
+//
+// This is the file the read-only guarantee actually rests on. Plan mode
+// refuses a write because nothing in permissions.allow approves one; a
+// single allow rule the operator added months ago for their own
+// interactive use turns that refusal into a completed write, which a
+// Sirdar run can then only report after the fact (see observeWrite). The
+// row exists so an operator reads the rules before a run trips over them.
+//
+// It is always a warning, never a failure: a permissive rule is the
+// operator's own decision about their own machine, and doctor's job here
+// is to make it visible rather than to veto it.
+func settingsCheck(cfg provider.DoctorConfig) provider.Check {
+	const name = "agy settings"
+	path, err := settingsPath()
+	if err != nil {
+		return provider.Warn(name, "the home directory could not be found, so "+
+			"the CLI's settings.json cannot be read; Sirdar cannot tell what this session will be allowed to do")
+	}
+	b, err := os.ReadFile(path)
+	switch {
+	case errors.Is(err, os.ErrNotExist):
+		return provider.Warn(name, path+" does not exist: the CLI will run on its defaults, "+
+			"and this workspace is not in trustedWorkspaces")
+	case err != nil:
+		return provider.Warn(name, path+" could not be read: "+err.Error()+
+			"; Sirdar cannot tell what this session will be allowed to do")
+	}
+	var s agySettings
+	if err := json.Unmarshal(b, &s); err != nil {
+		return provider.Warn(name, path+" is not valid JSON ("+err.Error()+
+			"); the CLI reads this file for every session and Sirdar cannot tell what it will allow")
+	}
+
+	parts := []string{
+		"permissions.allow: " + ruleList(s.Permissions.Allow),
+		"permissions.deny: " + ruleList(s.Permissions.Deny),
+	}
+	if len(s.Permissions.Ask) > 0 {
+		// Headless runs cannot prompt, so an ask rule is an auto-deny
+		// rather than a question, which is worth saying plainly.
+		parts = append(parts, "permissions.ask: "+ruleList(s.Permissions.Ask)+
+			" (a headless run cannot prompt, so these are auto-denied)")
+	}
+	trust := "this workspace is not in trustedWorkspaces"
+	if trustsWorkspace(s.TrustedWorkspaces, cfg.Root) {
+		trust = "this workspace is in trustedWorkspaces"
+	}
+	parts = append(parts, trust)
+
+	detail := path + " — " + strings.Join(parts, "; ")
+	if len(s.Permissions.Allow) > 0 {
+		detail += ". An allow rule is what turns agy's refusal into a completed write, " +
+			"which a triage run can only report afterwards and then fail on"
+	}
+	return provider.Warn(name, detail)
+}
+
+func settingsPath() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, stateDirParent, stateDirChild, "settings.json"), nil
+}
+
+func ruleList(rules []string) string {
+	if len(rules) == 0 {
+		return "none"
+	}
+	out := append([]string(nil), rules...)
+	sort.Strings(out)
+	return strings.Join(out, ", ")
+}
+
+// trustsWorkspace reports whether root is one of the trusted workspaces.
+// Both sides are resolved before they are compared, so a workspace reached
+// through a symlink is not reported as untrusted.
+func trustsWorkspace(trusted []string, root string) bool {
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	want := resolvePath(root)
+	for _, t := range trusted {
+		if t = strings.TrimSpace(t); t != "" && resolvePath(t) == want {
+			return true
+		}
+	}
+	return false
+}
+
+func resolvePath(p string) string {
+	if resolved, err := filepath.EvalSymlinks(p); err == nil {
+		return resolved
+	}
+	return filepath.Clean(p)
 }
 
 // mcpCheck reports what MCP servers the session will actually see, which
@@ -563,6 +734,12 @@ type session struct {
 	events   chan provider.Event
 	readDone chan struct{}
 	done     chan struct{}
+
+	// pending carries a tool call's arguments from the ACTIVE line that
+	// started the step to the DONE line that ended it, keyed by
+	// step_index. It is touched only by the read goroutine, so it needs no
+	// lock of its own.
+	pending map[int]toolArgsMemo
 
 	writeMu   sync.Mutex
 	stdinShut bool
@@ -685,6 +862,7 @@ func (s *session) read(stdout io.Reader) {
 		}
 		line := append([]byte(nil), raw...)
 		for _, ev := range decode(line) {
+			s.rememberTool(&ev)
 			s.measure(&ev)
 			s.absorb(ev)
 			s.events <- ev
@@ -700,18 +878,74 @@ func (s *session) read(stdout io.Reader) {
 	}
 }
 
+// toolArgsMemo is what an ACTIVE line said about a tool call, kept until
+// its DONE line arrives.
+type toolArgsMemo struct {
+	name string
+	args json.RawMessage
+}
+
+// rememberTool carries a tool call's name and arguments from the line that
+// started the step to the line that ended it.
+//
+// The exemption and the breach both need the path, and the capture in
+// docs/research/10-antigravity-wire-formats.md shows the terminal line
+// eliding it: the ACTIVE line spells out `"tool_info":{"name":...,
+// "parameters":{"TargetFile":"/…/scratch/a.txt"}}` and the DONE line that
+// follows carries `"tool_info":{…}`. Reading the path off the DONE line
+// alone therefore gets nothing, which would exempt nothing and name
+// nothing. step_index is what pairs the two lines.
+//
+// The enrichment happens before the event is emitted, so the run's event
+// log and the operator's progress line get the path too, not just the
+// breach check.
+func (s *session) rememberTool(ev *provider.Event) {
+	idx, ok := stepIndex(ev.Raw)
+	if !ok {
+		return
+	}
+	switch ev.Kind {
+	case provider.EvToolStarted:
+		if ev.Tool != "" || len(ev.Input) > 0 {
+			s.pending[idx] = toolArgsMemo{name: ev.Tool, args: ev.Input}
+		}
+	case provider.EvToolFinished, provider.EvPermission:
+		memo, held := s.pending[idx]
+		if !held {
+			return
+		}
+		delete(s.pending, idx)
+		if ev.Tool == "" {
+			ev.Tool = memo.name
+		}
+		if emptyArgs(ev.Input) {
+			ev.Input = memo.args
+		}
+	}
+}
+
+// emptyArgs reports whether a tool call's arguments say nothing, which is
+// what an elided tool_info leaves behind.
+func emptyArgs(input json.RawMessage) bool {
+	s := strings.TrimSpace(string(input))
+	return s == "" || s == "null" || s == "{}"
+}
+
 // observeWrite is this adapter's substitute for a permission policy.
 //
 // Sirdar cannot judge an `agy` tool call: by the time one is on the
 // stream, the CLI has already allowed or refused it. What Sirdar can do is
 // notice that a triage session, which is supposed to write nothing,
-// finished a write or ran a command — and say so, so the run's event log
-// records a guarantee that did not hold rather than passing over it.
+// finished a write or ran a command — and end the run over it. A read-only
+// guarantee that has already failed is not something a run can carry a
+// warning about and go on to file a note under.
 //
-// Plan mode's own implementation-plan artifact is the one exemption: it is
-// written into the CLI's state directory under the operator's home, not
-// into the workspace, and it is written on every plan-mode run. A write
-// there is bookkeeping and is reported as a system event instead.
+// Plan mode's own implementation-plan artifact is the one exemption, and
+// it is drawn as narrowly as the conversation id allows:
+// <state dir>/brain/<conversation id>/. That directory is this session's
+// own and is written on every plan-mode run. Everything else under the
+// state directory — scratch/ above all, where the research capture caught
+// a real write landing — is a breach like any other.
 func (s *session) observeWrite(ev provider.Event) *provider.Event {
 	if ev.Kind != provider.EvToolFinished {
 		return nil
@@ -720,25 +954,37 @@ func (s *session) observeWrite(ev provider.Event) *provider.Event {
 	if !isWrite && !execTools[ev.Tool] {
 		return nil
 	}
-	if isWrite && s.withinStateDir(ev.Input) {
-		note := systemNotice("agy wrote " + targetOf(ev.Input) + " inside its own state directory; " +
+	if isWrite && s.withinPlanDir(ev.Input) {
+		note := systemNotice("agy wrote " + targetOf(ev.Input) + " inside this conversation's own plan directory; " +
 			"plan mode keeps its implementation-plan artifact there, outside the workspace")
 		return &note
 	}
-	breach := newEvent(provider.EvError, ev.Raw)
+
+	subject := subjectOf(ev.Input)
+	headline := "read-only breach: " + ev.Tool
+	if subject != "" {
+		headline += " " + oneLine(subject)
+	}
+	breach := newEvent(provider.EvBreach, ev.Raw)
 	breach.Tool = ev.Tool
 	breach.Input = ev.Input
-	breach.Text = "read-only guarantee: a triage session completed " + ev.Tool +
-		", which agy should have refused. Check ~/.gemini/antigravity-cli/settings.json for a " +
-		"permissions.allow rule that approves it — Sirdar cannot see or override that file"
+	breach.Text = headline + "\na triage session completed " + ev.Tool +
+		", which agy should have refused. Sirdar cannot mediate an agy tool call, so this run is " +
+		"ended rather than filed. Check ~/.gemini/antigravity-cli/settings.json for a " +
+		"permissions.allow rule that approves it — Sirdar can neither see nor override that file"
 	return &breach
 }
 
-// withinStateDir reports whether a tool call's target path resolves inside
-// the CLI's own state directory. With no state directory known, nothing is
-// exempt.
-func (s *session) withinStateDir(input json.RawMessage) bool {
+// withinPlanDir reports whether a tool call's target path resolves inside
+// <state dir>/brain/<conversation id>/. With no state directory known, or
+// before any line has named the conversation, nothing is exempt — which is
+// the safe direction: an unexempted write is reported, not hidden.
+func (s *session) withinPlanDir(input json.RawMessage) bool {
 	if s.stateDir == "" {
+		return false
+	}
+	conversation := s.Handle()
+	if conversation == "" {
 		return false
 	}
 	target := targetOf(input)
@@ -749,7 +995,11 @@ func (s *session) withinStateDir(input json.RawMessage) bool {
 	if err != nil {
 		real = filepath.Clean(target)
 	}
-	rel, err := filepath.Rel(s.stateDir, real)
+	planDir := filepath.Join(s.stateDir, planDirName, conversation)
+	if resolved, err := filepath.EvalSymlinks(planDir); err == nil {
+		planDir = resolved
+	}
+	rel, err := filepath.Rel(planDir, real)
 	if err != nil {
 		return false
 	}
@@ -757,9 +1007,26 @@ func (s *session) withinStateDir(input json.RawMessage) bool {
 }
 
 func targetOf(input json.RawMessage) string {
-	var args pathArgs
+	var args toolArgs
 	_ = json.Unmarshal(input, &args)
 	return args.target()
+}
+
+func subjectOf(input json.RawMessage) string {
+	var args toolArgs
+	_ = json.Unmarshal(input, &args)
+	return args.subject()
+}
+
+// oneLine flattens a multi-line command into something a run's terminal
+// reason can carry on one line.
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	const max = 120
+	if len(s) > max {
+		s = s[:max] + "…"
+	}
+	return s
 }
 
 // measure turns a usage event into running session totals.

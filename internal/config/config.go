@@ -983,6 +983,20 @@ func validateQwen(c *Config) error {
 // worth catching at load time rather than as an argument-parse failure
 // halfway through a triage sweep.
 func validateAgy(c *Config) error {
+	// billing: api has nothing to mean here. It is the switch that tells
+	// the Claude adapter to leave ANTHROPIC_API_KEY and the gateway
+	// variables in the agent's environment; the agy adapter strips
+	// GEMINI_API_KEY and GOOGLE_GEMINI_BASE_URL unconditionally and has
+	// no setting that stops it, because swapping the operator's
+	// Antigravity login for an API key mid-run is the one thing this
+	// provider will not do. Accepting the word and ignoring it would read
+	// as a billing mode that was chosen and honoured.
+	if c.Provider == "agy" && strings.TrimSpace(c.Billing) == "api" {
+		return fmt.Errorf("config: billing: api has no meaning on provider agy: the session runs " +
+			"against the Google account the operator's own `agy` binary is signed in to, and the " +
+			"adapter strips GEMINI_API_KEY and GOOGLE_GEMINI_BASE_URL from it. Remove the billing " +
+			"key or set billing: subscription")
+	}
 	a := c.Agy
 	if a == nil {
 		return nil

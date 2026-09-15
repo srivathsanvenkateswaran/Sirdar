@@ -319,6 +319,17 @@ func isResultLine(raw []byte) bool {
 	return json.Unmarshal(raw, &probe) == nil && probe.Event == "result"
 }
 
+// stepIndex is the step a line belongs to, and whether it names one at
+// all. A step's ACTIVE and DONE lines share it, which is what lets the
+// session pair a tool call's arguments with its completion.
+func stepIndex(raw []byte) (int, bool) {
+	var l streamLine
+	if err := json.Unmarshal(raw, &l); err != nil || l.StepUpdate == nil {
+		return 0, false
+	}
+	return l.StepUpdate.StepIndex, true
+}
+
 // conversationID pulls the resume handle off any line that carries one.
 // init names it at the top level; step_update and result repeat it inside
 // their payloads.

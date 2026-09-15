@@ -64,6 +64,13 @@ type execution struct {
 	overBudget  string
 	interrupted bool
 	failure     string
+
+	// breach is set when the provider reported that a read-only session
+	// did something a read-only session cannot do. It is kept apart from
+	// failure because it outranks everything, the note included: a run
+	// that saw one files nothing and ends failed, however far along it
+	// was. See provider.EvBreach.
+	breach string
 }
 
 // liveSession holds the session the run is currently reading from. The
@@ -320,6 +327,14 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	}
 
 	switch {
+	case ex.breach != "":
+		// Ahead of the note, which is the whole point. A triage run's
+		// product is a note asserting that nothing was written; a run
+		// that watched a write complete cannot file one, and the answer
+		// it was about to give is worth less than the fact that the
+		// guarantee failed. handleFinal refuses to file after a breach,
+		// so on the ordinary path there is no note to disown here.
+		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
 	case len(ex.final) > 0:
 		// The note validated and was filed the moment it arrived. What
 		// happened to the session afterwards — a bad exit, an interrupt,
@@ -624,6 +639,8 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 		fmt.Fprintf(w, "[%s] final\n", key)
 	case provider.EvError:
 		fmt.Fprintf(w, "[%s] error %s\n", key, firstLine(ev.Text))
+	case provider.EvBreach:
+		fmt.Fprintf(w, "[%s] failed %s\n", key, firstLine(ev.Text))
 	case provider.EvQuestion:
 		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
 	case provider.EvRateLimited:
@@ -723,6 +740,21 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 			sess.Cancel()
 		}
 
+	case provider.EvBreach:
+		// There is no counter here and no threshold: one is enough. The
+		// session is stopped on the spot — Cancel kills the whole process
+		// group, so the agent's own children go with it — and nothing
+		// this run produces is filed. The first breach is the one
+		// reported, because it is the one the later ones followed from.
+		if ex.breach == "" {
+			ex.breach = firstLine(ev.Text)
+		}
+		// Stopped beside the cancel it decided, as the budget branches
+		// do: the breach is why this session is ending, and the stall
+		// guard must not fire behind it and misname the reason.
+		ex.stall.stop()
+		sess.Cancel()
+
 	case provider.EvFinal:
 		r.handleFinal(ctx, p, sess, ex, ev)
 	}
@@ -750,6 +782,15 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// a budget that goes over after the note was filed is still only a
 	// warning on a completed run, which is the ordering above.
 	if ex.overBudget != "" {
+		return
+	}
+
+	// A breach decided the same way, and harder. The session was
+	// cancelled the moment it was seen, but the answer can already be in
+	// flight — and filing it would put a note on disk and a row in the
+	// register asserting a read-only run, which is exactly what did not
+	// happen. complete() is never reached.
+	if ex.breach != "" {
 		return
 	}
 
