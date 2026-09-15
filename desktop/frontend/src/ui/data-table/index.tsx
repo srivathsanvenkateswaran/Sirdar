@@ -81,6 +81,7 @@ export default function DataTable<Row>({
                   key={column.id}
                   scope="col"
                   style={column.width ? { width: column.width } : undefined}
+                  data-column={column.id}
                   data-numeric={column.numeric ? 'true' : undefined}
                   aria-sort={
                     active ? ANNOUNCED[sort.direction] : column.sortable ? 'none' : undefined
@@ -112,7 +113,11 @@ export default function DataTable<Row>({
               <Fragment key={rowKey(row)}>
                 <tr>
                   {columns.map((column) => (
-                    <td key={column.id} data-numeric={column.numeric ? 'true' : undefined}>
+                    <td
+                      key={column.id}
+                      data-column={column.id}
+                      data-numeric={column.numeric ? 'true' : undefined}
+                    >
                       {column.numeric ? (
                         <span dir="ltr">{column.cell(row)}</span>
                       ) : (

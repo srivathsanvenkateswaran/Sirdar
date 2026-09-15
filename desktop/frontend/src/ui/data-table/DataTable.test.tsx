@@ -39,6 +39,16 @@ describe('DataTable', () => {
     expect(screen.getByRole('table', { name: 'Runs in this workspace' })).toBeInTheDocument()
   })
 
+  it('names the column on every cell, so a screen can hide one at a width', () => {
+    render(table())
+    expect(screen.getByRole('columnheader', { name: 'Ticket' })).toHaveAttribute(
+      'data-column',
+      'title',
+    )
+    const cells = screen.getAllByRole('cell').filter((c) => c.getAttribute('data-column') === 'cost')
+    expect(cells.map((c) => c.textContent)).toEqual(['$0.42', '$1.08'])
+  })
+
   it('renders every row once', () => {
     render(table())
     expect(screen.getAllByRole('row')).toHaveLength(3)
