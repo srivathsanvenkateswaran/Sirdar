@@ -27,8 +27,7 @@ func newDiffWorkspace(t *testing.T) *diffWorkspace {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
 	}
-	root, notes := newWorkspace(t, "fakeclaude.sh")
-	_ = notes
+	root, _ := newWorkspace(t, "fakeclaude.sh")
 
 	git(t, root, "init", "-b", "main", ".")
 	if err := exec.Command("git", "-C", root, "var", "GIT_AUTHOR_IDENT").Run(); err != nil {

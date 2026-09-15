@@ -21,6 +21,8 @@ var bridgeMethods = []string{
 	"Events",
 	"Note",
 	"Prompt",
+	"RunDiff",
+	"DropHunk",
 	"StartTriage",
 	"StartRCA",
 	"StartFix",
