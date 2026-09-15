@@ -9,11 +9,13 @@ import Register, { csvFileName, whenLabel } from './Register'
 /*
  * The clock is frozen at noon UTC on Monday 14 September 2026, so "this
  * week" and the grid's last column are the same for every run of this file.
+ * Only `Date` is faked: the timers stay real, so testing-library's polling
+ * is not waiting on a clock that has to be advanced.
  */
 const NOW = Date.parse('2026-09-14T12:00:00Z')
 
 beforeEach(() => {
-  vi.useFakeTimers({ shouldAdvanceTime: true })
+  vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(NOW)
 })
 
