@@ -239,7 +239,11 @@ export default function Sidebar(props: {
         }
         quotas={quota.length > 0 ? <QuotaMeter quota={quota} /> : undefined}
         action={
-          primary ? (
+          primary?.inline ? (
+            // The screen is drawing its own filled button; this one steps
+            // down so the window still has one.
+            <Button onClick={() => onNavigate({ name: 'new' })}>New session</Button>
+          ) : primary ? (
             <Button
               variant="primary"
               busy={primary.busy}

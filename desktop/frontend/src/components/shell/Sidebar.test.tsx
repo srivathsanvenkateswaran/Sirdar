@@ -240,6 +240,25 @@ describe('the sidebar footer', () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 
+  // The session's Answer sits in the composer, beside the text it commits.
+  // The footer then keeps New session, demoted, so the window still has
+  // exactly one filled button.
+  it('demotes New session while a screen draws its own filled button inline', () => {
+    setShowLibrary(false)
+
+    function Publisher(): null {
+      useProvidePrimaryAction({ label: 'Answer', onRun: () => {}, inline: true })
+      return null
+    }
+
+    const { onNavigate } = mount({}, <Publisher />)
+    expect(screen.queryByRole('button', { name: /Answer/ })).toBeNull()
+    const demoted = screen.getByRole('button', { name: 'New session' })
+    expect(demoted).toHaveAttribute('data-variant', 'secondary')
+    fireEvent.click(demoted)
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
+  })
+
   it('is titled Plan usage', () => {
     setShowLibrary(false)
     mount()
