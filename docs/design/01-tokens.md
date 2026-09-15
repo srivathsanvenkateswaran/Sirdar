@@ -1,0 +1,187 @@
+# Tokens
+
+## 1. Source of truth
+
+**One file, `desktop/frontend/src/styles/tokens.css`, is the only place a value is
+declared.** Three consumers read it and none of them redeclares anything:
+
+| Consumer | How it gets the file |
+|---|---|
+| Desktop app | `@import './styles/tokens.css'` at the top of `styles.css`, which keeps the shell rules and drops its own `:root` block |
+| Landing site | copied into the site build by a `make tokens` step that runs `cp`, plus a CI check that the copy is byte-identical to the source |
+| Docs site | `docs/stylesheets/tokens.css`, same copy step, imported ahead of `extra.css` so Material for MkDocs' own `--md-*` variables can be assigned from Sirdar tokens |
+
+The copy is a copy, not a fork. If the three ever disagree, the desktop file is right and
+the other two are stale. That is the same rule Tatak states at the top of its
+`app/styles/tokens.css`, and it exists for the same reason: the alternative is five
+spellings of the word hairline.
+
+**Nothing outside this file may declare a colour.** `components/panels.css` and
+`components/run/run.css` currently declare seven local colours between them
+(`--run-warn`, `--run-error`, `--panel-warn`, `--panel-danger`, and their dark-mode
+overrides). Those move here. The migration map in section 5 says where each one lands.
+
+Naming: every token is prefixed `--sd-`. The app's current unprefixed names collide with
+Material for MkDocs and with anything a landing-page component library brings in, and a
+prefix is what makes one file safe to drop into three builds.
+
+## 2. Colour tokens
+
+Ratios are measured against the ground the token is used on and are stated per row. All
+clear 4.5:1.
+
+### Ground and surface
+
+| Token | Light | Dark | Rationale |
+|---|---|---|---|
+| `--sd-paper` | `#FAF7EC` | `#14151A` | Warm paper, not white. The warmth is what makes a dense board readable for an hour without the glare of `#ffffff`. Today's `--paper` is `#fbfbfa`, which is warm by 1 step; this is warm by about 8. |
+| `--sd-surface` | `#FFFDF7` | `#1C1E25` | A half-step above paper, not pure white. Pure white on a warm ground reads blue. |
+| `--sd-sunk` | `#F1EDDF` | `#0F1014` | Lane wells, input rest, code blocks. Replaces `--lane`. |
+| `--sd-band-deep` | `#1F2B52` | `#232F58` | The full-bleed section band. Derived from the app's existing accent `#4340c8` pulled down in lightness and desaturated, so the band and the accent are the same hue family. Paper on it: **12.83:1** light, **10.48:1** dark. |
+| `--sd-band-ink` | `#17181C` | `#0C0D10` | The second band. Same value as `--sd-ink` in light, so an ink band is literally the text colour enlarged. |
+
+### Ink ramp
+
+| Token | Light | Dark | On paper | Rationale |
+|---|---|---|---|---|
+| `--sd-ink` | `#17181C` | `#E9E7DF` | 16.54 / 14.72 | Headlines and body. The dark value is warm (`#E9E7DF`, not a neutral grey) so the two themes read as one product. |
+| `--sd-ink-2` | `#4A4E58` | `#A6A9B2` | 7.76 / 7.76 | Secondary body, card titles, field labels. The two themes are matched to the same ratio on purpose. |
+| `--sd-ink-3` | `#676B74` | `#8C919B` | 4.98 / 5.76 | Meta, timestamps, help text. This is the floor of the ramp: on `--sd-sunk` it is **4.56:1**, which is the tightest pair the file ships and the reason `--sd-sunk` is not any darker. |
+| `--sd-rule` | `#E3DFD1` | `#2A2D34` | n/a | Hairlines between rows. Not a text colour and never used as one. |
+| `--sd-rule-strong` | `#C9C4B2` | `#3D424B` | n/a | Card and input borders, the event stream's rail, the dark-mode hard shadow. |
+
+### Accent and highlight
+
+| Token | Light | Dark | Rationale |
+|---|---|---|---|
+| `--sd-accent` | `#3B3AA6` | `#A6A2FF` | Links, focus ring, and a live run. One accent means "Sirdar itself", which is the rule the app already follows. Deepened from `#4340c8` to clear the warm ground: **8.36:1** light, **8.02:1** dark. |
+| `--sd-accent-ink` | `#FFFDF7` | `#14151A` | Text on an accent fill. **8.82:1** light, **8.02:1** dark. |
+| `--sd-accent-soft` | `color-mix(in srgb, var(--sd-accent) 10%, transparent)` | `... 16% ...` | Nav current-page fill, selected row. A tint, never a text colour. |
+| `--sd-highlight` | `#E4E0FF` | `#2E2A55` | The one soft fill, on the primary button and the marker sweep under a hovered link. A tint of the accent, which is what keeps it from being Wispr Flow's lavender by a different name. |
+| `--sd-highlight-ink` | `#17181C` | `#DDD8FF` | Text on the highlight. **13.86:1** light, **9.72:1** dark. |
+
+### Status
+
+Meaning is fixed by the run state machine in the CLI. Light values are deepened from
+today's to clear 4.5:1 on warm paper.
+
+| Token | Light | Dark | On paper | Means |
+|---|---|---|---|---|
+| `--sd-st-queue` | `#63676F` | `#9298A3` | 5.29 / 6.29 | queued, nothing has happened |
+| `--sd-st-live` | `var(--sd-accent)` | `var(--sd-accent)` | 8.36 / 8.02 | preparing, running |
+| `--sd-st-blocked` | `#A15C07` | `#E0A14A` | 4.84 / 8.13 | agent asked something, or a rate limit |
+| `--sd-st-triaged` | `#0E6F66` | `#58C7BA` | 5.62 / 8.94 | completed, a note exists |
+| `--sd-st-done` | `#17713A` | `#6EC98A` | 5.66 / 9.02 | resolved, RCA written |
+| `--sd-st-failed` | `#B02418` | `#F08C8C` | 6.29 / 7.67 | failed, over budget, stalled |
+
+`--sd-st-blocked` at 4.84:1 is the tightest status pair. It is used as 11px uppercase mono
+in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
+
+## 3. Type, spacing, radius, elevation, motion
+
+| Token | Value | Rationale |
+|---|---|---|
+| `--sd-font-display` | `Newsreader, Georgia, 'Noto Naskh Arabic', serif` | Variable weight with a true italic, drawn for screens. Arabic sits behind it as a fallback and carries no Latin glyphs, so Latin still renders in Newsreader. That fallback trick is already how `--sans` works today. |
+| `--sd-font-ui` | `Inter, -apple-system, 'IBM Plex Sans Arabic', system-ui, sans-serif` | Tabular figures, large x-height at 13px. |
+| `--sd-font-mono` | `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace` | Unambiguous `0/O`, tabular by default. |
+| `--sd-space-1` .. `--sd-space-10` | 4, 8, 12, 16, 24, 32, 48, 64, 96, 128px | 4px base. |
+| `--sd-radius-xs` | `4px` | badges, kbd, chips |
+| `--sd-radius-sm` | `8px` | inputs, buttons, board cards |
+| `--sd-radius-md` | `12px` | panels, dialogs, run cards |
+| `--sd-radius-lg` | `20px` | landing cards, media frames |
+| `--sd-radius-band` | `40px` / `64px` at `min-width: 768px` | full-bleed bands |
+| `--sd-radius-pill` | `999px` | nav pills, segmented control, status chips |
+| `--sd-shadow-hard` | `2px 2px 0 0 var(--sd-ink)` (light), `2px 2px 0 0 var(--sd-rule-strong)` (dark) | Primary action only. Flips to `-2px 2px 0 0` under `[dir="rtl"]`. |
+| `--sd-shadow-soft` | `0 4px 20px rgba(23,24,28,.10)` | Dialogs, toasts, the floating nav bar. Nothing else. |
+| `--sd-dur-1` .. `--sd-dur-4` | `120ms`, `200ms`, `300ms`, `350ms` | |
+| `--sd-ease` | `cubic-bezier(.22,.61,.36,1)` | Entrances and transforms. Colour changes use plain `ease`. |
+| `--sd-measure-wide` | `1200px` | landing section content |
+| `--sd-measure-prose` | `68ch` | docs body, note pane |
+| `--sd-gutter` | `12px` app, `24px` landing | today's app gutter is 12px and stays |
+
+## 4. What a token is not
+
+A token is not a component-local constant. `--run-line` is an alias for `--border`, not a
+new idea, and it does not belong in the file. A value used by exactly one selector stays in
+that selector's rule. The test: if two components would have to agree on it, it is a token.
+
+## 5. Migration map
+
+Left column is what exists today. Nothing is renamed in place: the new names land first,
+the old names become one-line aliases so no rule has to be rewritten on the same commit,
+and the aliases are deleted in a second pass once `grep -r 'var(--paper'` returns nothing.
+
+### `desktop/frontend/src/styles.css`
+
+| Today | Becomes | Note |
+|---|---|---|
+| `--paper` | `--sd-paper` | value changes `#fbfbfa` to `#FAF7EC` |
+| `--surface` | `--sd-surface` | `#ffffff` to `#FFFDF7` |
+| `--lane` | `--sd-sunk` | renamed: the same value serves lane wells, inputs and code blocks, and "lane" is board-specific |
+| `--ink` | `--sd-ink` | `#191a1c` to `#17181C` |
+| `--ink-2` | `--sd-ink-2` | `#5b5f66` to `#4A4E58` |
+| `--ink-3` | `--sd-ink-3` | `#686d75` to `#676B74`. Note today's `--ink-3` is *lighter* than `--ink-2` in dark mode and darker in light; the new ramp is monotonic in both |
+| `--rule` | `--sd-rule` | |
+| `--rule-strong` | `--sd-rule-strong` | |
+| `--accent` | `--sd-accent` | `#4340c8` to `#3B3AA6` light, `#9b98ff` to `#A6A2FF` dark |
+| `--accent-ink` | `--sd-accent-ink` | |
+| `--accent-soft` | `--sd-accent-soft` | changes from a literal `rgba()` to `color-mix`, so it follows the accent |
+| `--st-queue` | `--sd-st-queue` | `#6b7280` to `#63676F` |
+| `--st-live` | `--sd-st-live` | unchanged, still `var(--sd-accent)` |
+| `--st-blocked` | `--sd-st-blocked` | `#b45309` to `#A15C07` |
+| `--st-triaged` | `--sd-st-triaged` | `#0f766e` to `#0E6F66` |
+| `--st-done` | `--sd-st-done` | `#15803d` to `#17713A` |
+| `--st-failed` | `--sd-st-failed` | `#b91c1c` to `#B02418` |
+| `--sans` | `--sd-font-ui` | the system stack is replaced by self-hosted Inter; the Arabic fallbacks stay in the stack, in the same position and for the same reason |
+| `--mono` | `--sd-font-mono` | JetBrains Mono ahead of `ui-monospace` |
+| `--radius` (3px) | split: `--sd-radius-xs`, `--sd-radius-sm`, `--sd-radius-md` | one value cannot serve a badge and a dialog once radii get large. Every `border-radius: var(--radius)` needs a per-selector decision; the component specs in `library/` carry it |
+| `--gutter` | `--sd-gutter` | unchanged at 12px in the app |
+| `--bg` | alias `var(--sd-surface)` | delete after the second pass |
+| `--fg` | alias `var(--sd-ink)` | delete after the second pass |
+| `--muted` | alias `var(--sd-ink-3)` | 45 uses in `panels.css` alone; the alias is what makes this migration one commit rather than forty |
+| `--border`, `--line` | alias `var(--sd-rule)` | |
+
+### `components/run/run.css`
+
+| Today | Becomes |
+|---|---|
+| `--run-line` | `var(--sd-rule)` directly; the local declaration and its fallback chain go |
+| `--run-ok` | `var(--sd-st-triaged)`. Today it aliases `--accent`, which means an allowed tool call and a live run wear the same hue. They are different facts |
+| `--run-warn` (`#9a6207` / `#e0a35c`) | `var(--sd-st-blocked)` (`#A15C07` / `#E0A14A`) |
+| `--run-error` (`#b42318` / `#f08a80`) | `var(--sd-st-failed)` (`#B02418` / `#F08C8C`) |
+| `--run-tint` | `color-mix(in srgb, var(--sd-st-triaged) 12%, transparent)` |
+
+### `components/panels.css`
+
+| Today | Becomes |
+|---|---|
+| `--panel-ok` | `var(--sd-st-done)`. Today it aliases `--accent`; a passing doctor check is not a live run |
+| `--panel-warn` (`#9a6b00` / `#d9a441`) | `var(--sd-st-blocked)` |
+| `--panel-danger` (`#b3392a` / `#e0685a`) | `var(--sd-st-failed)` |
+
+That removes both `@media (prefers-color-scheme: dark)` blocks from `panels.css` and
+`run.css`: once the hues are tokens, the theme switch happens in one place.
+
+### Docs site
+
+`docs/stylesheets/extra.css` assigns Material's variables from Sirdar's, rather than
+restating hexes:
+
+| Material | Sirdar |
+|---|---|
+| `--md-primary-fg-color` | `var(--sd-band-deep)` |
+| `--md-accent-fg-color` | `var(--sd-accent)` |
+| `--md-default-bg-color` | `var(--sd-paper)` |
+| `--md-default-fg-color` | `var(--sd-ink)` |
+| `--md-code-bg-color` | `var(--sd-sunk)` |
+| `--md-typeset-a-color` | `var(--sd-accent)` |
+
+`mkdocs.yml` keeps `primary: indigo` as the palette name; the CSS overrides the values.
+
+## 6. Test
+
+`desktop/frontend/src/styles.contrast.test.ts` already parses the app's `:root` blocks and
+asserts contrast. Point it at `styles/tokens.css` instead and add the pairs this file
+states a ratio for, including the two tight ones (`--sd-ink-3` on `--sd-sunk` at 4.56,
+`--sd-st-blocked` on `--sd-paper` at 4.84). A token that cannot state its ratio does not
+ship.

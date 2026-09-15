@@ -6,6 +6,9 @@ helpdesk_id: {{yq .meta.HelpdeskID}}
 helpdesk_url: {{yq .meta.HelpdeskURL}}
 customer: {{yq .meta.Customer}}
 customer_id: {{yq .meta.CustomerID}}
+{{- if .meta.CustomerIDs}}
+customer_ids: {{yq .meta.CustomerIDs}}
+{{- end}}
 date: {{yq .meta.Date}}
 priority: {{yq .meta.Priority}}
 service: {{yq .meta.Service}}
@@ -72,6 +75,15 @@ Risks: {{.doc.proposedFix.risks}}
 ## Open Questions
 {{range .doc.openQuestions}}
 - {{.}}
+{{- end}}
+{{- if .meta.SkippedAttachments}}
+
+## Attachments not reviewed
+
+This run could not open these; their contents were never read:
+{{range .meta.SkippedAttachments}}
+- **{{.Name}}** ({{.Type}}, {{.Size}}): {{.Reason}}
+{{- end}}
 {{- end}}
 {{- if .doc.customerReplyDraft}}
 

@@ -67,7 +67,7 @@ rather than being silently ignored.
 | `budget.stallMinutes` | int | `6` | Minutes of complete silence from the provider before the run is cancelled and marked `failed` with `stalled: no activity for Nm`; `0` turns the check off. See Budgets below |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
-| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
+| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `npx tsc --noEmit*`, `go build*`, `go test*`, `go vet*`, `gofmt -l*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
 | `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
@@ -620,8 +620,11 @@ permissions:
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
+    - "npx tsc --noEmit*"
     - "go build*"
     - "go test*"
+    - "go vet*"
+    - "gofmt -l*"
     - "make *"
 ```
 
@@ -692,11 +695,12 @@ through.
 
 ### What the allow-list does not confine
 
-`make *`, `go test*`, `npm test*` and `dotnet test*` run the workspace's own build system, and
-a build system runs whatever the repository tells it to: a Makefile target, a `go:generate`
-directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of that, and no
-allow-list can — approving `make test` is approving the Makefile on the branch the session is
-standing on.
+`make *`, `go test*`, `npm test*`, `npx tsc --noEmit*` and `dotnet test*` run the workspace's own
+build system, and a build system runs whatever the repository tells it to: a Makefile target, a
+`go:generate` directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of
+that, and no allow-list can — approving `make test` is approving the Makefile on the branch the
+session is standing on. `go vet*` and `gofmt -l*` are the exception in this list: both are
+read-only static checks over the source tree and run no repository-defined code.
 
 That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
 what it changed or its report is worthless, and the trust it asks for is the trust you already

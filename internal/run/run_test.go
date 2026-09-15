@@ -209,6 +209,9 @@ type stubHelpdesk struct {
 	// is written to the bundle at the given size, which is what the
 	// runner's size cap and MIME allow-list are applied to.
 	files []stubAttachment
+	// helpdesk, when set, replaces the sample helpdesk ticket Get returns —
+	// for tests that need a Customer/CustomerID other than the fixture's.
+	helpdesk *ticket.HelpdeskTicket
 }
 
 // stubAttachment is one downloaded attachment and the number of bytes it
@@ -228,6 +231,9 @@ func (s stubHelpdesk) WarningsFor(id string) []string {
 func (s stubHelpdesk) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, error) {
 	if s.getErr != nil {
 		return ticket.HelpdeskTicket{}, s.getErr
+	}
+	if s.helpdesk != nil {
+		return *s.helpdesk, nil
 	}
 	return *sampleBundle().Helpdesk, nil
 }
@@ -527,6 +533,110 @@ func TestFrontmatterFallsBackToTheBundlesCustomer(t *testing.T) {
 	}
 	if w := strings.Join(outs[0].State.Warnings, "\n"); strings.Contains(w, "frontmatter") {
 		t.Fatalf("nothing disagreed, so nothing should be warned about: %q", w)
+	}
+}
+
+// TestFrontmatterCustomerSuffixDoesNotWarn is the first live triage's N1:
+// every note tripped "frontmatter customer: the note says ... the helpdesk
+// bundle says ..." because the agent (or an older bundle field) appended a
+// domain, CompanyID or company code to the customer name in a different
+// shape than the bundle's own field carried it — "Acme Corp (domain 3521)"
+// against "Acme Corp - 3521". The two names agree once that suffix is
+// stripped, so this must not warn, even though the two raw strings differ.
+func TestFrontmatterCustomerSuffixDoesNotWarn(t *testing.T) {
+	cfg := newWorkspace(t)
+	hd := stubHelpdesk{helpdesk: &ticket.HelpdeskTicket{
+		ID: "555", Subject: "تصدير", Customer: "Acme Corp - 3521", CustomerID: "4561",
+		URL: "https://h/555", Priority: "high",
+	}}
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"Acme Corp (domain 3521)","customerId":"4561"`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's customer field did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer: "Acme Corp (domain 3521)"`) {
+		t.Fatalf("frontmatter did not keep the note's customer:\n%s", note)
+	}
+	if w := strings.Join(out.State.Warnings, "\n"); strings.Contains(w, "frontmatter customer:") {
+		t.Fatalf("names agreeing once the suffix is stripped should not warn: %q", w)
+	}
+}
+
+// A genuine disagreement between two different company names still warns
+// even after normalization: TestFrontmatterCustomerSuffixDoesNotWarn must
+// not have made the check toothless.
+func TestFrontmatterCustomerMismatchStillWarns(t *testing.T) {
+	cfg := newWorkspace(t)
+	hd := stubHelpdesk{helpdesk: &ticket.HelpdeskTicket{
+		ID: "555", Subject: "تصدير", Customer: "Acme Corp - 3521", CustomerID: "4561",
+		URL: "https://h/555", Priority: "high",
+	}}
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"Widgets Inc (domain 9001)","customerId":"4561"`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's customer field did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	warnings := strings.Join(out.State.Warnings, "\n")
+	for _, want := range []string{"frontmatter customer", "Widgets Inc (domain 9001)", "Acme Corp - 3521"} {
+		if !strings.Contains(warnings, want) {
+			t.Fatalf("warning %q missing from %q", want, warnings)
+		}
+	}
+}
+
+// customerIds keeps any extra identifier the agent found out of the
+// customer field it flows alongside, and out of the mismatch warning: it
+// has no bundle counterpart to disagree with.
+func TestFrontmatterCustomerIDsRendered(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc,
+		`"customer":"شركة","customerId":"4561"`,
+		`"customer":"شركة","customerId":"4561","customerIds":["domain-42","code-7"]`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's ticket field did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	note := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(note, `customer_ids: "domain-42, code-7"`) {
+		t.Fatalf("frontmatter did not carry customer_ids:\n%s", note)
+	}
+	if strings.Contains(note, `customer: "شركة (domain-42`) {
+		t.Fatalf("the identifiers leaked into the customer field:\n%s", note)
 	}
 }
 
@@ -1656,12 +1766,11 @@ func TestHelpdeskRefFallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{}
 			cfg.Sources.Tracker = zohoURLRule()
-			r := &Runner{Deps: Deps{Config: cfg}}
+			f := &Fetcher{Config: cfg}
 
 			tt := ticket.TrackerTicket{Key: "OMNI-1", Description: tc.description}
-			p := &prepared{}
 			var b ticket.Bundle
-			r.applyHelpdeskRefFallback(p, &b, &tt)
+			f.applyHelpdeskRefFallback(&b, &tt)
 
 			if tt.HelpdeskRef != tc.want {
 				t.Errorf("HelpdeskRef = %q, want %q", tt.HelpdeskRef, tc.want)
@@ -1669,8 +1778,8 @@ func TestHelpdeskRefFallback(t *testing.T) {
 			if got := len(b.Warnings) > 0; got != tc.wantWarning {
 				t.Errorf("warnings = %v, want a warning: %v", b.Warnings, tc.wantWarning)
 			}
-			if len(b.Warnings) != len(p.state.Warnings) {
-				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
+			if len(b.Warnings) != len(f.warnings) {
+				t.Errorf("the run state and the prompt disagree: %v vs %v", f.warnings, b.Warnings)
 			}
 		})
 	}
@@ -1691,12 +1800,12 @@ func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
 			IDPattern: `(\d+)$`,
 		},
 	}
-	r := &Runner{Deps: Deps{Config: cfg}}
+	f := &Fetcher{Config: cfg}
 
 	long := strings.Repeat("x", 500)
 	tt := ticket.TrackerTicket{Key: "OMNI-1", Description: "Zoho Ticket URL: " + long}
 	var b ticket.Bundle
-	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	f.applyHelpdeskRefFallback(&b, &tt)
 
 	if len(b.Warnings) != 1 {
 		t.Fatalf("warnings = %v, want exactly one", b.Warnings)
@@ -1717,11 +1826,11 @@ func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
 func TestHelpdeskRefFallbackWithoutARule(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear", APIKey: "env:LINEAR_KEY"}
-	r := &Runner{Deps: Deps{Config: cfg}}
+	f := &Fetcher{Config: cfg}
 
 	tt := ticket.TrackerTicket{Description: "Zoho Ticket URL: https://desk.zoho.com/agent/a/support/tickets/details/42"}
 	var b ticket.Bundle
-	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	f.applyHelpdeskRefFallback(&b, &tt)
 	if tt.HelpdeskRef != "" {
 		t.Fatalf("HelpdeskRef = %q, want it left empty", tt.HelpdeskRef)
 	}
@@ -1758,11 +1867,11 @@ func TestFetchBundleAppliesAndDefersToTheAdapter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{}
 			cfg.Sources.Tracker = zohoURLRule()
-			r := &Runner{Deps: Deps{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}}
+			f := &Fetcher{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}
 
-			b, err := r.fetchBundle(context.Background(), "OMNI-1", &prepared{})
+			b, _, err := f.Fetch(context.Background(), "OMNI-1", t.TempDir())
 			if err != nil {
-				t.Fatalf("fetchBundle: %v", err)
+				t.Fatalf("Fetch: %v", err)
 			}
 			if b.Tracker.HelpdeskRef != tc.want {
 				t.Fatalf("HelpdeskRef = %q, want %q", b.Tracker.HelpdeskRef, tc.want)
@@ -2089,6 +2198,52 @@ func TestOversizeAndUnreadableAttachmentsAreDropped(t *testing.T) {
 	}
 	if strings.Contains(prompt, "attachments/2-screen.mp4") {
 		t.Error("the prompt still lists the dropped video as a file to read")
+	}
+}
+
+// TestNoteListsAttachmentsNotReviewed covers the second finding from the
+// first live triage and eval runs: an attachment the run could not view —
+// too large, or a type it cannot open — was only ever recorded as a run
+// warning. A reader of the note itself had no way to learn that evidence
+// went unread. The note now carries an "Attachments not reviewed" section,
+// built from the bundle's own record of what was dropped rather than from
+// anything the agent said, so it is there even when the agent never
+// mentions it.
+func TestNoteListsAttachmentsNotReviewed(t *testing.T) {
+	cfg := newWorkspace(t)
+	cfg.Attachments.MaxBytes = 1024
+	hd := stubHelpdesk{files: []stubAttachment{
+		{ticket.Attachment{ID: "a1", Name: "shot.png", MIME: "image/png", Path: "attachments/1-shot.png"}, 10},
+		{ticket.Attachment{ID: "a2", Name: "screen.mp4", MIME: "video/mp4", Path: "attachments/2-screen.mp4"}, 4096},
+		{ticket.Attachment{ID: "a3", Name: "voice.ogg", MIME: "audio/ogg", Path: "attachments/3-voice.ogg"}, 30},
+	}}
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, hd)
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	got := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if !strings.Contains(got, "## Attachments not reviewed") {
+		t.Fatalf("no \"Attachments not reviewed\" section:\n%s", got)
+	}
+	for _, want := range []string{
+		"screen.mp4", "video/mp4", "4.0 KiB", "over the 1.0 KiB limit",
+		"voice.ogg", "audio/ogg", "30 B", "cannot be opened in this session",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("the attachments-not-reviewed section is missing %q:\n%s", want, got)
+		}
+	}
+	// The one attachment the session could read is not listed as unread.
+	if strings.Contains(got, "shot.png") {
+		t.Errorf("the kept attachment should not appear as not reviewed:\n%s", got)
 	}
 }
 

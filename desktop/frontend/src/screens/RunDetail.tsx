@@ -52,6 +52,13 @@ type Tab = (typeof TABS)[number]['id']
 
 const LIVE = new Set(['preparing', 'running'])
 
+/**
+ * The states a run does not come back from. `blocked` is not one of them: it
+ * is waiting for an answer and resumes into `running`, so Cancel stays on
+ * offer there and the artefacts are not asked for again.
+ */
+const TERMINAL = new Set(['completed', 'failed', 'over_budget'])
+
 /** How long the copy button stays on "Copied" before it says its name again. */
 const COPIED_MS = 1500
 
@@ -78,17 +85,24 @@ export default function RunDetail(props: {
   const [golden, setGolden] = useState('')
   const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(() => Date.now())
+  /** Bumped when the run finishes, to re-ask for artefacts written at the end. */
+  const [artefacts, setArtefacts] = useState(0)
   const seen = useRef<Set<number>>(new Set())
+  /** The status of the previous render, for spotting the run finishing. */
+  const wasStatus = useRef('')
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const jobId = useRunJob(runId)
 
-  const live = LIVE.has(detail?.status ?? '')
+  const status = detail?.status ?? ''
+  const live = LIVE.has(status)
+  const terminal = TERMINAL.has(status)
 
   // Subscribe before backfilling so nothing written between the two is lost;
   // the index dedupe absorbs whatever the two deliveries have in common.
   useEffect(() => {
     let cancelled = false
     seen.current = new Set()
+    wasStatus.current = ''
     setDetail(null)
     setEvents([])
     setLoadError('')
@@ -146,6 +160,38 @@ export default function RunDetail(props: {
       unsubscribe()
     }
   }, [transport, workspaceId, runId])
+
+  /*
+   * A run opened while it was still working keeps whatever it had at the time.
+   * The note, the fix result and the rest of state.json are written as the run
+   * finishes, so a screen that only asked on mount went on saying "No note yet"
+   * for a run that had one, and the reader had to leave and come back.
+   *
+   * `run.updated` patches the status into `detail` as the store sees it move,
+   * so the moment it turns terminal is visible here: ask for the run again,
+   * and bump the counter the artefact panes read so they ask too.
+   */
+  useEffect(() => {
+    const before = wasStatus.current
+    wasStatus.current = status
+    if (!LIVE.has(before) || !TERMINAL.has(status)) return
+
+    let cancelled = false
+    setArtefacts((n) => n + 1)
+    transport
+      .run(workspaceId, runId)
+      .then((d) => {
+        if (!cancelled) setDetail(d)
+      })
+      .catch(() => {
+        // The header already carries the finished status from the event; a
+        // re-read that fails leaves the screen as it was rather than blanking
+        // a run the reader is looking at.
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [status, transport, workspaceId, runId])
 
   useEffect(() => {
     if (!live) return
@@ -340,19 +386,22 @@ export default function RunDetail(props: {
           <button type="button" className="run-btn" onClick={onBack}>
             Back
           </button>
-          <button
-            type="button"
-            className="run-btn"
-            onClick={cancel}
-            disabled={!jobId || pending !== ''}
-            title={
-              jobId
-                ? 'Stop the run this window started'
-                : 'Only a run started from this window can be cancelled'
-            }
-          >
-            Cancel
-          </button>
+          {/* Nothing is left to stop once the run has ended. */}
+          {terminal ? null : (
+            <button
+              type="button"
+              className="run-btn"
+              onClick={cancel}
+              disabled={!jobId || pending !== ''}
+              title={
+                jobId
+                  ? 'Stop the run this window started'
+                  : 'Only a run started from this window can be cancelled'
+              }
+            >
+              Cancel
+            </button>
+          )}
           {canStartRCA ? (
             <button
               type="button"
@@ -478,6 +527,7 @@ export default function RunDetail(props: {
               workspaceId={workspaceId}
               runId={runId}
               kinds={noteKinds}
+              reload={artefacts}
             />
           ) : null}
           {tab === 'prompt' ? (

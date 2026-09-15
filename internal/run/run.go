@@ -60,6 +60,18 @@ type Options struct {
 	// and not a simulation of one.
 	BundleDir string
 
+	// AsOf assembles the bundle as the ticket stood at that instant
+	// instead of as it stands now: thread messages written later are
+	// dropped, the attachments only they pointed at are dropped, and
+	// every pull-request reference is redacted out of the tracker and
+	// helpdesk records and out of the messages that remain. What was
+	// removed is counted in the bundle's manifest.
+	//
+	// It applies to a fetched bundle only. A replayed BundleDir is taken
+	// as it stands, because a golden bundle built with a cutoff already
+	// has one and cutting it twice would say it had two.
+	AsOf time.Time
+
 	// Eval marks the run as a scored replay rather than a real triage.
 	// Everything up to the note is unchanged; what changes is what the
 	// run leaves behind. The note stays in the run directory: it is not

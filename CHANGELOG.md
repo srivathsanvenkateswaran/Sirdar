@@ -91,6 +91,18 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
+- Added `sirdar golden add KEY --retro --pr URL`, which builds a golden entry out of a ticket
+  whose fix has already merged: the bundle is assembled as of the moment an engineer picked the
+  ticket up — thread messages and attachments from after it dropped, every pull-request URL and
+  `PR #N` mention redacted to `[redacted: pull request]` — and the merged pull request is filed
+  beside it as ground truth in `retro.json` and `pr.diff`. The cutoff is the earliest of the
+  ticket's first `in_progress` transition and the first pull request's `created_at`, or whatever
+  `--as-of` names. The ticket is read through the workspace's own adapters, the pull request
+  through `gh` with exec and never a shell, and nothing is written back to either system
+  (`docs/eval.md`).
+- Added an as-of cutoff to bundle assembly (`run.Options.AsOf`), so a bundle can be built as the
+  ticket stood at an instant rather than as it stands now. What it dropped and redacted is
+  counted in `bundle/manifest.json`.
 - Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory

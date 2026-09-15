@@ -78,28 +78,55 @@ func BuildDeps(cfg *config.Config, providerName, model string, stderr io.Writer)
 	}
 	deps.Notifier = notifier
 
+	if err := adapters.wire(cfg, creds, &deps.Tracker, &deps.Helpdesk); err != nil {
+		return runner.Deps{}, cleanup, err
+	}
+	return deps, cleanup, nil
+}
+
+// BuildSources assembles only the ticket sources a workspace configures, for
+// a command that reads a ticket without running a session: `sirdar golden
+// add --retro` builds a bundle out of a closed ticket and never starts a
+// provider, and asking for one it will not use would fail a workspace whose
+// agent CLI is not installed on this machine. The returned func releases the
+// adapter subprocesses and must be called even when the error is nil.
+func BuildSources(cfg *config.Config, stderr io.Writer) (source.Tracker, source.Helpdesk, func(), error) {
+	stderr = Synced(stderr)
+	creds := config.Resolver{Keychain: KeychainFor()}
+	adapters := &adapterSet{stderr: stderr}
+
+	var tracker source.Tracker
+	var helpdesk source.Helpdesk
+	if err := adapters.wire(cfg, creds, &tracker, &helpdesk); err != nil {
+		return nil, nil, adapters.close, err
+	}
+	return tracker, helpdesk, adapters.close, nil
+}
+
+// wire fills in whichever of the two roles the configuration names.
+func (a *adapterSet) wire(cfg *config.Config, creds config.Resolver, tracker *source.Tracker, helpdesk *source.Helpdesk) error {
 	if sc := cfg.Sources.Tracker; sc != nil {
-		tracker, err := adapters.tracker(cfg, sc, creds)
+		t, err := a.tracker(cfg, sc, creds)
 		if err != nil {
-			return runner.Deps{}, cleanup, fmt.Errorf("sources.tracker: %w", err)
+			return fmt.Errorf("sources.tracker: %w", err)
 		}
-		deps.Tracker = tracker
+		*tracker = t
 	}
 	if sc := cfg.Sources.Helpdesk; sc != nil {
-		helpdesk, err := adapters.helpdesk(cfg, sc, creds)
+		h, err := a.helpdesk(cfg, sc, creds)
 		if err != nil {
-			return runner.Deps{}, cleanup, fmt.Errorf("sources.helpdesk: %w", err)
+			return fmt.Errorf("sources.helpdesk: %w", err)
 		}
-		deps.Helpdesk = helpdesk
-	} else if adapters.trackerHelpdesk != nil {
+		*helpdesk = h
+	} else if a.trackerHelpdesk != nil {
 		// Trackers like Jira Service Management and Linear carry the
 		// customer conversation on the issue itself, so one adapter can
 		// serve both roles. A configured sources.helpdesk always wins:
 		// an operator who named a separate helpdesk meant the thread to
 		// come from there.
-		deps.Helpdesk = adapters.trackerHelpdesk
+		*helpdesk = a.trackerHelpdesk
 	}
-	return deps, cleanup, nil
+	return nil
 }
 
 // ProviderFor returns the adapter for the provider a workspace names. The

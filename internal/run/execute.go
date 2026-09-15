@@ -874,9 +874,10 @@ type triageFields struct {
 	Complaint      string `json:"complaint"`
 	Classification string `json:"classification"`
 	Ticket         struct {
-		Service    string `json:"service"`
-		Customer   string `json:"customer"`
-		CustomerID string `json:"customerId"`
+		Service     string   `json:"service"`
+		Customer    string   `json:"customer"`
+		CustomerID  string   `json:"customerId"`
+		CustomerIDs []string `json:"customerIds"`
 	} `json:"ticket"`
 	RootCause struct {
 		Confidence string `json:"confidence"`
@@ -934,6 +935,7 @@ func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error)
 
 	meta := r.meta(p, f.Ticket.Service)
 	r.applyDocumentCustomer(p, &meta, f.Ticket.Customer, f.Ticket.CustomerID)
+	meta.CustomerIDs = strings.Join(f.Ticket.CustomerIDs, ", ")
 	meta.Links.Triage = stem(filename)
 	meta.Links.RCA = stem(note.Filename(cfg.Notes.Filenames.RCA, key, slug))
 	meta.Links.Resolution = stem(note.Filename(cfg.Notes.Filenames.Resolution, key, slug))
@@ -1275,6 +1277,11 @@ func (r *Runner) meta(p *prepared, service string) note.Meta {
 		m.Customer = b.Helpdesk.Customer
 		m.CustomerID = b.Helpdesk.CustomerID
 	}
+	for _, a := range b.SkippedAttachments {
+		m.SkippedAttachments = append(m.SkippedAttachments, note.SkippedAttachment{
+			Name: a.Name, Type: a.Type, Size: a.Size, Reason: a.Reason,
+		})
+	}
 	return m
 }
 
@@ -1287,27 +1294,55 @@ func (r *Runner) meta(p *prepared, service string) note.Meta {
 //
 // A disagreement is not silently resolved: the bundle's value goes into
 // the run's warnings, so state.json still says what the helpdesk claimed
-// and the two can be compared later.
+// and the two can be compared later. The prompt now tells the agent to
+// copy ticket.customer verbatim (see prompt.triageFieldGuidance and
+// customerName in internal/prompt), but an older note, or a provider that
+// does not follow it, may still carry an appended domain, CompanyID or
+// company code — "Acme Corp (3521)" against a bundle of "Acme Corp - 3521".
+// customer, unlike customer_id, is compared after stripping that kind of
+// suffix, so a name that only disagrees with the bundle by such an
+// identifier is not warned about.
 func (r *Runner) applyDocumentCustomer(p *prepared, m *note.Meta, customer, customerID string) {
 	for _, f := range []struct {
-		field   string
-		fromDoc string
-		into    *string // holds the bundle's value on the way in
+		field     string
+		fromDoc   string
+		into      *string // holds the bundle's value on the way in
+		normalize bool
 	}{
-		{"customer", strings.TrimSpace(customer), &m.Customer},
-		{"customer_id", strings.TrimSpace(customerID), &m.CustomerID},
+		{"customer", strings.TrimSpace(customer), &m.Customer, true},
+		{"customer_id", strings.TrimSpace(customerID), &m.CustomerID, false},
 	} {
 		if f.fromDoc == "" {
 			continue
 		}
 		bundle := *f.into
-		if bundle != "" && bundle != f.fromDoc {
+		disagrees := bundle != "" && bundle != f.fromDoc
+		if disagrees && f.normalize && normalizeCustomerName(bundle) == normalizeCustomerName(f.fromDoc) {
+			disagrees = false
+		}
+		if disagrees {
 			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf(
 				"frontmatter %s: the note says %q, the helpdesk bundle says %q; the note's value was used",
 				f.field, f.fromDoc, bundle))
 		}
 		*f.into = f.fromDoc
 	}
+}
+
+// normalizeCustomerName strips an identifier a source appended to a
+// customer name — " (3521)", " (domain 3521)", " - 3521" — so two spellings
+// of the same base name compare equal. It cuts at the first " (" or " - "
+// and trims what remains, case-insensitively.
+func normalizeCustomerName(s string) string {
+	s = strings.TrimSpace(s)
+	cut := len(s)
+	if i := strings.Index(s, " ("); i >= 0 && i < cut {
+		cut = i
+	}
+	if i := strings.Index(s, " - "); i >= 0 && i < cut {
+		cut = i
+	}
+	return strings.ToLower(strings.TrimSpace(s[:cut]))
 }
 
 func (r *Runner) renderer() note.Renderer {

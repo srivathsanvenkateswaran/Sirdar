@@ -880,6 +880,199 @@ func TestLastURL(t *testing.T) {
 	}
 }
 
+// --- round 2 live-run fix: literal \n in the agent's JSON summary ------
+
+// TestSummarySubjectUnescapesAndSplits is the live-run bug: an agent's JSON
+// summary carried a doubled backslash before the n, which json.Unmarshal
+// decodes into the two literal characters \ and n rather than a line
+// break, so the whole multi-line summary landed on the commit subject line
+// verbatim, backslashes and all.
+func TestSummarySubjectUnescapesAndSplits(t *testing.T) {
+	for _, tc := range []struct {
+		name           string
+		summary        string
+		wantSubject    string
+		wantBodyPrefix string // "" means body must be empty
+	}{
+		{
+			name:           "literal backslash-n from a doubled JSON escape",
+			summary:        `Count a customer return once in Ledger.ApplyMovement\n\nThe Return case added the amount twice.`,
+			wantSubject:    "Count a customer return once in Ledger.ApplyMovement",
+			wantBodyPrefix: "The Return case added the amount twice.",
+		},
+		{
+			name:           "literal backslash-r-backslash-n",
+			summary:        `Fix the export timeout\r\nStream rows instead of buffering.`,
+			wantSubject:    "Fix the export timeout",
+			wantBodyPrefix: "Stream rows instead of buffering.",
+		},
+		{
+			name:           "a real newline needs no unescaping",
+			summary:        "Fix the export timeout\nStream rows instead of buffering.",
+			wantSubject:    "Fix the export timeout",
+			wantBodyPrefix: "Stream rows instead of buffering.",
+		},
+		{
+			name:           "single line has no body",
+			summary:        "Stream the CSV export instead of buffering every row",
+			wantSubject:    "Stream the CSV export instead of buffering every row",
+			wantBodyPrefix: "",
+		},
+		{
+			name:           "leading blank lines are skipped before the subject is picked",
+			summary:        "\n\n  Fix the export timeout  \nDetails follow.",
+			wantSubject:    "Fix the export timeout",
+			wantBodyPrefix: "Details follow.",
+		},
+		{
+			name:           "an attribution trailer never reaches the body",
+			summary:        "Fix the export timeout\nStream rows.\nCo-Authored-By: Claude <noreply@anthropic.com>\nGenerated with Claude Code",
+			wantSubject:    "Fix the export timeout",
+			wantBodyPrefix: "Stream rows.",
+		},
+		{
+			name:           "a subject over 72 characters is cut at a word boundary",
+			summary:        "Stop the reconciliation job from double counting a customer's returned order line items",
+			wantSubject:    "Stop the reconciliation job from double counting a customer's returned",
+			wantBodyPrefix: "",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			subject, body := summarySubject(tc.summary)
+			if subject != tc.wantSubject {
+				t.Errorf("subject = %q, want %q", subject, tc.wantSubject)
+			}
+			if len(subject) > subjectMaxLen {
+				t.Errorf("subject %q is %d characters, over the %d cap", subject, len(subject), subjectMaxLen)
+			}
+			if strings.Contains(subject, `\n`) || strings.Contains(subject, "\n") {
+				t.Errorf("subject %q still carries a line break", subject)
+			}
+			if tc.wantBodyPrefix == "" {
+				if body != "" {
+					t.Errorf("body = %q, want empty", body)
+				}
+				return
+			}
+			if !strings.HasPrefix(body, tc.wantBodyPrefix) {
+				t.Errorf("body = %q, want prefix %q", body, tc.wantBodyPrefix)
+			}
+			for _, banned := range []string{"Co-Authored-By", "Generated with"} {
+				if strings.Contains(body, banned) {
+					t.Errorf("body carries an AI attribution trailer (%q): %q", banned, body)
+				}
+			}
+		})
+	}
+}
+
+func TestCapLine(t *testing.T) {
+	for _, tc := range []struct {
+		s    string
+		max  int
+		want string
+	}{
+		{"short", 72, "short"},
+		{"exactly seven", 13, "exactly seven"},
+		{"cut at the nearest word boundary before the limit is reached here", 40, "cut at the nearest word boundary before"},
+		{"nospacesatalltocutonwithinthelimitatall", 10, "nospacesat"},
+	} {
+		if got := capLine(tc.s, tc.max); got != tc.want {
+			t.Errorf("capLine(%q, %d) = %q, want %q", tc.s, tc.max, got, tc.want)
+		}
+		if len(capLine(tc.s, tc.max)) > tc.max {
+			t.Errorf("capLine(%q, %d) exceeded the cap", tc.s, tc.max)
+		}
+	}
+}
+
+func TestStripAIAttribution(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"line one\nCo-Authored-By: Claude <noreply@anthropic.com>\nline two", "line one\nline two"},
+		{"line one\nco-authored-by: someone\nline two", "line one\nline two"},
+		{"Generated with Claude Code\nline two", "line two"},
+		{"nothing to strip here", "nothing to strip here"},
+	} {
+		if got := stripAIAttribution(tc.in); got != tc.want {
+			t.Errorf("stripAIAttribution(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestCollapseBlankLines(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{"a\n\n\nb", "a\n\nb"},
+		{"a\n\n\n\n\nb", "a\n\nb"},
+		{"a\n\nb", "a\n\nb"},
+		{"a\nb", "a\nb"},
+	} {
+		if got := collapseBlankLines(tc.in); got != tc.want {
+			t.Errorf("collapseBlankLines(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestUnescapeNewlines(t *testing.T) {
+	for _, tc := range []struct{ in, want string }{
+		{`a\nb`, "a\nb"},
+		{`a\r\nb`, "a\nb"},
+		{"a\r\nb", "a\nb"},
+		{"a\rb", "a\nb"},
+		{"a\nb", "a\nb"},
+	} {
+		if got := unescapeNewlines(tc.in); got != tc.want {
+			t.Errorf("unescapeNewlines(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
+}
+
+// TestCommitMessageUnescapesTheSubject reproduces the live-run bug end to
+// end: CommitMessage must not let the agent's escaped newlines or an
+// attribution trailer reach the subject, and any remaining lines must move
+// into the body ahead of the root-cause paragraph.
+func TestCommitMessageUnescapesTheSubject(t *testing.T) {
+	var tn triageNote
+	tn.doc.RootCause.Hypothesis = "The Return case added the amount twice."
+	rep := Report{
+		Summary: `Count a customer return once in Ledger.ApplyMovement\n\nThe Return case added the amount twice.\nCo-Authored-By: Claude <noreply@anthropic.com>`,
+	}
+
+	subject, body := CommitMessage(tn, rep)
+	if subject != "fix: Count a customer return once in Ledger.ApplyMovement" {
+		t.Errorf("subject = %q", subject)
+	}
+	if strings.Contains(subject, `\n`) {
+		t.Errorf("subject still carries a literal backslash-n: %q", subject)
+	}
+	if strings.Contains(body, "Co-Authored-By") {
+		t.Errorf("body carries an AI attribution trailer:\n%s", body)
+	}
+	if !strings.Contains(body, "Root cause: The Return case added the amount twice.") {
+		t.Errorf("body lost the root cause:\n%s", body)
+	}
+	if strings.Contains(body, "\n\n\n") {
+		t.Errorf("body has a run of 3+ blank lines:\n%q", body)
+	}
+}
+
+// TestPullRequestTextUnescapesTheTitle is the same scenario against the pull
+// request fallback text, since the agent's report feeds both.
+func TestPullRequestTextUnescapesTheTitle(t *testing.T) {
+	var tn triageNote
+	tn.doc.Title = "Return counted twice"
+	rep := Report{
+		Summary: `Count a customer return once\nGenerated with Claude Code`,
+	}
+
+	title, body := pullRequestText("OMNI-9", tn, rep, false)
+	if title != "[OMNI-9] fix: Count a customer return once" {
+		t.Errorf("title = %q", title)
+	}
+	if strings.Contains(body, "Generated with") {
+		t.Errorf("body carries an AI attribution trailer:\n%s", body)
+	}
+}
+
 // --- round 1 review: hooks, reruns, dirty trees, PR text --------------
 
 // TestTheCommitDoesNotRunRepositoryHooks: the commit is made moments after
