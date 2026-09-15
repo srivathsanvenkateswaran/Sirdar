@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { ConfigSummary, MCPInventory, Transport, Workspace } from '../api/types'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import { reasonOf } from '../lib/format'
 import Button from '../ui/button'
 import ModalSheet, { type ModalNavGroup } from '../ui/modal-sheet'
 import { AboutPage, LibraryPage, ReadingPage } from './settings/AppPages'
@@ -29,7 +30,7 @@ import {
 } from './settings/icons'
 import MCPPage, { type InventoryState } from './settings/MCPPage'
 import ProvidersPage from './settings/ProvidersPage'
-import { message, type DoctorState, type Loaded } from './settings/shared'
+import { type DoctorState, type Loaded } from './settings/shared'
 import ToolsPage, { useToolTester } from './settings/ToolsPage'
 import './settings/settings.css'
 
@@ -171,7 +172,7 @@ export default function Settings(props: {
         if (!cancelled) setSummary({ ws, state: { status: 'done', data } })
       })
       .catch((err: unknown) => {
-        if (!cancelled) setSummary({ ws, state: { status: 'error', message: message(err) } })
+        if (!cancelled) setSummary({ ws, state: { status: 'error', message: reasonOf(err) } })
       })
     return () => {
       cancelled = true
@@ -196,7 +197,7 @@ export default function Settings(props: {
       })
       .catch((err: unknown) => {
         setInventory((prev) =>
-          still(prev) ? { ws, state: { status: 'error', message: message(err) } } : prev,
+          still(prev) ? { ws, state: { status: 'error', message: reasonOf(err) } } : prev,
         )
       })
   }, [transport, ws, needsInventory, inventory.status])
@@ -207,7 +208,7 @@ export default function Settings(props: {
     transport
       .doctor(ws)
       .then((checks) => setDoctor({ ws, state: { status: 'done', checks } }))
-      .catch((err: unknown) => setDoctor({ ws, state: { status: 'error', message: message(err) } }))
+      .catch((err: unknown) => setDoctor({ ws, state: { status: 'error', message: reasonOf(err) } }))
   }, [transport, ws])
 
   const testServers = useCallback(() => {
@@ -219,7 +220,7 @@ export default function Settings(props: {
         setInventory({ ws, state: { status: 'done', data } })
         setTested(ws)
       })
-      .catch((err: unknown) => setInventory({ ws, state: { status: 'error', message: message(err) } }))
+      .catch((err: unknown) => setInventory({ ws, state: { status: 'error', message: reasonOf(err) } }))
       .finally(() => setConnecting(false))
   }, [transport, ws, connecting])
 

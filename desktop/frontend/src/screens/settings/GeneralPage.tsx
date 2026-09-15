@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { ConfigSummary, Transport, Workspace } from '../../api/types'
+import { reasonOf } from '../../lib/format'
 import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
@@ -53,6 +54,8 @@ export default function GeneralPage({
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
+  /** Why the last Remove was refused, under the row it was pressed on. */
+  const [removeError, setRemoveError] = useState<{ id: string; reason: string } | null>(null)
   /** The workspace whose Remove button is armed, if any. */
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -74,7 +77,7 @@ export default function GeneralPage({
       setRoot('')
       onWorkspacesChanged()
     } catch (err) {
-      setAddError(err instanceof Error ? err.message : String(err))
+      setAddError(reasonOf(err))
     } finally {
       setAdding(false)
     }
@@ -93,7 +96,15 @@ export default function GeneralPage({
       return
     }
     setConfirming('')
-    await transport.removeWorkspace(ws.id)
+    setRemoveError(null)
+    try {
+      await transport.removeWorkspace(ws.id)
+    } catch (err) {
+      // The row stays, with the reason under it: a registry that refused is
+      // not a workspace that went away.
+      setRemoveError({ id: ws.id, reason: reasonOf(err) })
+      return
+    }
     onWorkspacesChanged()
   }
 
@@ -214,7 +225,16 @@ export default function GeneralPage({
             <SettingRow
               key={w.id}
               label={w.name}
-              value={<code className="settings-mono">{w.root}</code>}
+              value={
+                <>
+                  <code className="settings-mono">{w.root}</code>
+                  {removeError?.id === w.id && (
+                    <span className="form-error" role="alert">
+                      Could not remove: {removeError.reason}
+                    </span>
+                  )}
+                </>
+              }
               control={
                 <button
                   type="button"

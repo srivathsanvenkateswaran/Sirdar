@@ -206,7 +206,14 @@ export type AppEvent =
   | { kind: 'quota.updated'; quota: Quota }
   | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
   | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
-  | { kind: 'log'; text: string };
+  | { kind: 'log'; text: string }
+  /**
+   * The transport's own word on the stream, never sent by the service: 'lost'
+   * when the event source drops (it retries on its own), 'open' when it is
+   * back. The store resyncs runs and queue on the way back, since whatever
+   * happened in between was never delivered.
+   */
+  | { kind: 'live'; state: 'open' | 'lost' };
 /** The one-off overrides every start accepts; empty means the workspace's own. */
 export interface Overrides { provider?: string; model?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }

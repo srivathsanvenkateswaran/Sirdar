@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { MCPCallResult, MCPInventory, MCPToolList, Transport } from '../../api/types'
+import { reasonOf } from '../../lib/format'
 import Button from '../../ui/button'
 import { SettingCard } from '../../ui/setting-row'
-import { message, VerdictChip, type Loaded } from './shared'
+import { VerdictChip, type Loaded } from './shared'
 
 /** One hand-run call, kept for the session. */
 export interface RecentCall {
@@ -93,7 +94,7 @@ export function useToolTester(
         setTool(firstAllowed(data))
       })
       .catch((err: unknown) => {
-        if (!cancelled) setTools({ status: 'error', message: message(err) })
+        if (!cancelled) setTools({ status: 'error', message: reasonOf(err) })
       })
     return () => {
       cancelled = true
@@ -129,7 +130,7 @@ export function useToolTester(
         setResult(got)
         setRecent((r) => [{ at, server, tool, result: got }, ...r].slice(0, 20))
       })
-      .catch((err: unknown) => setFailure(message(err)))
+      .catch((err: unknown) => setFailure(reasonOf(err)))
       .finally(() => setCalling(false))
   }
 

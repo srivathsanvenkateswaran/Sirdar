@@ -262,6 +262,18 @@ describe('General', () => {
   })
 })
 
+describe('Workspaces', () => {
+  it('keeps the row and says why when a removal is refused', async () => {
+    const removeWorkspace = vi.fn().mockRejectedValue(new Error('a run is in progress'))
+    const { onWorkspacesChanged } = open({}, transportWith({ removeWorkspace }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove omni' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm remove omni' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not remove: a run is in progress')
+    expect(screen.getByRole('button', { name: 'Remove omni' })).toBeInTheDocument()
+    expect(onWorkspacesChanged).not.toHaveBeenCalled()
+  })
+})
+
 describe('Providers', () => {
   it('shows the default provider with its mark and lists every provider with its facts', async () => {
     open({ page: 'providers' })

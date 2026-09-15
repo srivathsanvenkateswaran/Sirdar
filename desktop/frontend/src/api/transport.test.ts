@@ -260,6 +260,54 @@ describe('http transport', () => {
  * slice arrives as null; these cases pin both halves for the six new methods,
  * against a stub bridge.
  */
+/**
+ * The event stream, against a stand-in for the browser's EventSource: the
+ * frames the service names arrive under their kind, and the browser's own
+ * open and error signals reach the handler as the stream's state.
+ */
+describe('http transport events', () => {
+  class FakeEventSource {
+    static last: FakeEventSource | null = null
+    listeners = new Map<string, EventListener[]>()
+    closed = false
+    constructor(public url: string) {
+      FakeEventSource.last = this
+    }
+    addEventListener(kind: string, listener: EventListener) {
+      this.listeners.set(kind, [...(this.listeners.get(kind) ?? []), listener])
+    }
+    removeEventListener(kind: string, listener: EventListener) {
+      this.listeners.set(kind, (this.listeners.get(kind) ?? []).filter((l) => l !== listener))
+    }
+    close() {
+      this.closed = true
+    }
+    fire(kind: string, data?: string) {
+      for (const listener of this.listeners.get(kind) ?? []) listener({ data } as MessageEvent)
+    }
+  }
+
+  it('reports the stream lost and open again, and stops listening once unsubscribed', () => {
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const handler = vi.fn()
+    const off = createTransport().subscribe(handler)
+    const source = FakeEventSource.last as FakeEventSource
+    expect(source.url).toBe('/api/events')
+
+    source.fire('error')
+    source.fire('open')
+    source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    expect(handler.mock.calls.map(([e]) => e.kind)).toEqual(['live', 'live', 'run.updated'])
+    expect(handler.mock.calls[0][0]).toEqual({ kind: 'live', state: 'lost' })
+    expect(handler.mock.calls[1][0]).toEqual({ kind: 'live', state: 'open' })
+
+    off()
+    source.fire('error')
+    expect(handler).toHaveBeenCalledTimes(3)
+    expect(source.closed).toBe(true)
+  })
+})
+
 describe('wails transport', () => {
   function stubBridge(methods: Record<string, (...args: unknown[]) => unknown>) {
     const bound: Record<string, ReturnType<typeof vi.fn>> = {}
