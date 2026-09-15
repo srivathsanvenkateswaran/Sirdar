@@ -63,6 +63,14 @@ describe('percent', () => {
   })
 })
 
+describe('reasonOf', () => {
+  it('reads the message off an Error and stringifies anything else', () => {
+    expect(reasonOf(new Error('no such job'))).toBe('no such job')
+    expect(reasonOf('refused')).toBe('refused')
+    expect(reasonOf(404)).toBe('404')
+  })
+})
+
 describe('parseKeys', () => {
   it('splits on commas, spaces and newlines and drops repeats', () => {
     expect(parseKeys('OMNI-1, OMNI-2 OMNI-3\nOMNI-1')).toEqual(['OMNI-1', 'OMNI-2', 'OMNI-3'])

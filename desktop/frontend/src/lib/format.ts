@@ -107,6 +107,15 @@ export function percent(value: number | undefined): string {
 }
 
 /**
+ * The reason a call failed, as one line for a screen to show: an Error's
+ * message, or whatever else was thrown, stringified. Every catch that shows a
+ * reason reads it through here rather than spelling the same ternary itself.
+ */
+export function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+/**
  * Splits a free-text key list on commas, spaces and newlines, trims, and drops
  * duplicates while keeping the order the engineer typed.
  */
@@ -120,13 +129,4 @@ export function parseKeys(input: string): string[] {
     out.push(key)
   }
   return out
-}
-
-/**
- * The one line a screen shows for a failure. An `Error` is its message; a
- * transport that rejected with anything else is shown as that thing's text,
- * so a bare string or a number thrown somewhere still says something.
- */
-export function reasonOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
 }

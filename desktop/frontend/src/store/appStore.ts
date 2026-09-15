@@ -7,7 +7,7 @@ import type {
   Transport,
   Workspace,
 } from '../api/types'
-import { parseTime } from '../lib/format'
+import { parseTime, reasonOf } from '../lib/format'
 import { clearJob, setRunJob } from '../lib/jobs'
 
 /**
@@ -52,13 +52,14 @@ export interface InboundDelivery {
 export const INBOUND_LIMIT = 50
 
 /**
- * A job this window started that names no ticket key.
+ * A job the screen that started it can cancel.
  *
- * Every other job is paired with a run as its first `run.updated` arrives, and
- * Run detail cancels it from there. A whole-set eval names no key at all, so no
- * run can ever claim it and nothing in the window would otherwise hold its id:
- * once started it could only be stopped by quitting the app. These are kept on
- * the state so the screen that started one can offer Cancel.
+ * A triage, RCA or fix is paired with a run as its first `run.updated`
+ * arrives, and Run detail cancels it from there. An eval is different: over
+ * the whole set it names no key at all, so no run can ever claim it, and over
+ * named keys it is many runs on a screen that shows none of them. Every eval
+ * job is kept on the state, so the Eval screen can offer Cancel for it; the
+ * name is what the list was first for.
  */
 export interface KeylessJob {
   jobId: string
@@ -66,6 +67,13 @@ export interface KeylessJob {
   /** What the job is, for the button beside it. */
   label: string
 }
+
+/**
+ * Whether the window is still hearing from the service. 'lost' is the HTTP
+ * event stream dropping; the browser retries on its own, and the store
+ * resyncs when it is back. The desktop bridge never drops.
+ */
+export type LiveUpdates = 'live' | 'lost'
 
 export interface AppState {
   transport: Transport
@@ -80,10 +88,12 @@ export interface AppState {
   toasts: Toast[]
   /** Inbound webhook deliveries, newest first. */
   inbound: InboundDelivery[]
-  /** Jobs this window started that no run will ever claim; see KeylessJob. */
+  /** Jobs the screen that started them can cancel; see KeylessJob. */
   keylessJobs: KeylessJob[]
   /** True until `init()` has finished its first pass, so the board can say so. */
   loading: boolean
+  /** Whether the event stream is up; see LiveUpdates. */
+  liveUpdates: LiveUpdates
 }
 
 export interface TriageOptions {
@@ -200,8 +210,7 @@ function writeStoredWorkspace(id: string): void {
  * JSON error body.
  */
 export function isQueueUnsupported(err: unknown): boolean {
-  const message = err instanceof Error ? err.message : String(err ?? '')
-  return /\b501\b|unsupported|not implemented/i.test(message)
+  return /\b501\b|unsupported|not implemented/i.test(reasonOf(err ?? ''))
 }
 
 /** What a delivery's toast says: who sent it, about what, and what came of it. */
@@ -221,10 +230,9 @@ export function inboundText(entry: { source: string; key: string; outcome: HookO
   }
 }
 
+/** The reason for a toast; a rejection that says nothing still says something. */
 function errorText(err: unknown): string {
-  if (err instanceof Error && err.message) return err.message
-  const text = String(err ?? '')
-  return text || 'Something went wrong'
+  return reasonOf(err ?? '') || 'Something went wrong'
 }
 
 /** Replaces the entry with the same runId, or prepends it when it is new. */
@@ -265,6 +273,7 @@ export function createAppStore(transport: Transport): AppStore {
     inbound: [],
     keylessJobs: [],
     loading: true,
+    liveUpdates: 'live',
   }
 
   const listeners = new Set<() => void>()
@@ -341,23 +350,38 @@ export function createAppStore(transport: Transport): AppStore {
   }
 
   /**
-   * Remembers a job until every key it was given has a run. A job that names
-   * no key is remembered on the state instead: no run will claim it, so the
-   * screen that started it is the only place Cancel can live.
+   * Remembers a job until every key it was given has a run, so each run can
+   * be cancelled from its own screen. A job given a label is also kept on the
+   * state, for the screen that started it to cancel as a whole: every eval,
+   * whether it names keys or not.
    */
   function track(
     jobId: string,
     workspaceId: string,
     keys: string[],
     startedAt: number,
-    label = '',
+    label?: string,
   ): void {
     if (!jobId) return
-    if (keys.length === 0) {
+    if (label !== undefined) {
       set({ keylessJobs: [...state.keylessJobs, { jobId, workspaceId, label }] })
-      return
     }
-    pending.push({ jobId, workspaceId, keys: new Set(keys), startedAt })
+    if (keys.length > 0) pending.push({ jobId, workspaceId, keys: new Set(keys), startedAt })
+  }
+
+  /** The Eval screen's name for a job: what it was run over. */
+  function evalLabel(keys: string[] | undefined): string {
+    if (!keys || keys.length === 0) return 'Eval of the whole golden set'
+    return keys.length === 1 ? `Eval of ${keys[0]}` : `Eval of ${keys.length} keys`
+  }
+
+  /**
+   * Reads the workspace and the quota again after the stream was down: an
+   * event that fired in between was never delivered, and a card left on
+   * "running" for a run that finished is the wrong thing to show.
+   */
+  function resync(): void {
+    void Promise.all([loadWorkspace(state.currentWorkspaceId), loadQuota()])
   }
 
   /**
@@ -433,6 +457,19 @@ export function createAppStore(transport: Transport): AppStore {
         toast(inboundText(entry), event.outcome === 'rejected' ? 'error' : 'info')
         return
       }
+      case 'live': {
+        // The browser retries a dropped stream by itself and reports every
+        // attempt; only the change of state is worth a word.
+        if (event.state === 'lost' && state.liveUpdates !== 'lost') {
+          set({ liveUpdates: 'lost' })
+          toast('Live updates lost; reconnecting.', 'error')
+        } else if (event.state === 'open' && state.liveUpdates === 'lost') {
+          set({ liveUpdates: 'live' })
+          toast('Live updates are back.')
+          resync()
+        }
+        return
+      }
       // `run.event` is a per-line firehose; Run detail subscribes for itself.
       default:
         return
@@ -455,10 +492,17 @@ export function createAppStore(transport: Transport): AppStore {
       // StrictMode mounts effects twice in development; one load is enough.
       if (started) return
       started = true
+      // Subscribed before anything is read, so a workspace list that cannot
+      // be read leaves the stream up, and an event that lands during the
+      // first read is not lost to it. One subscription outlives a retry.
+      unsubscribe ??= transport.subscribe(apply)
       let workspaces: Workspace[] = []
       try {
         workspaces = await transport.workspaces()
       } catch (err) {
+        // The latch is let go so the next init() can try again, which is
+        // what the board's own retry does.
+        started = false
         if (!disposed) {
           set({ loading: false })
           toast(`Could not load workspaces. ${errorText(err)}`, 'error')
@@ -473,7 +517,6 @@ export function createAppStore(transport: Transport): AppStore {
       set({ workspaces, currentWorkspaceId: current, loading: false })
       if (current) writeStoredWorkspace(current)
 
-      unsubscribe = transport.subscribe(apply)
       await Promise.all([loadWorkspace(current), loadQuota()])
     },
 
@@ -563,7 +606,7 @@ export function createAppStore(transport: Transport): AppStore {
       try {
         const started = await transport.startEval(workspaceId, keys, opts)
         if (disposed) return
-        track(started?.jobId ?? '', workspaceId, keys ?? [], askedAt, 'Eval of the whole golden set')
+        track(started?.jobId ?? '', workspaceId, keys ?? [], askedAt, evalLabel(keys))
         toast(
           keys && keys.length > 0
             ? `Eval started for ${keys.length === 1 ? keys[0] : `${keys.length} keys`}.`

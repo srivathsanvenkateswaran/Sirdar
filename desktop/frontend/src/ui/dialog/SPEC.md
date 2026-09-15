@@ -64,11 +64,23 @@ Built. `desktop/frontend/src/ui/dialog/`. It replaces `.scrim` and `.dialog` in
 `role="dialog"` with `aria-modal="true"`, labelled by its own heading. Focus
 moves to the first control on open, cycles inside on Tab and Shift+Tab, and
 returns to the opener on close. Escape closes from anywhere in the window.
+While it is open everything outside it carries the `inert` attribute — every
+sibling of every ancestor, since the dialog is rendered in place — so the
+board behind the scrim takes no click, no focus and no place in the
+accessibility tree; `aria-modal` alone only tells a screen reader so. The
+attribute comes off before focus returns, because an inert opener cannot take
+it.
 Contrast: title and body `--sd-ink` on `--sd-surface` **17.44:1** light and
 **13.44:1** dark. Reduced motion: the entrance animation is dropped; the dialog
 is simply there.
 
 ## Changelog
+
+### 2026-09-15 (inert)
+The rest of the window is `inert` while the dialog is open, through the
+exported `inertOutside` helper the Modal sheet shares. Before this a pointer
+could still press the board behind the scrim, and a screen reader's virtual
+cursor could still wander into it.
 
 ### 2026-09-15
 Added. Initial spec from `styles.css` `.dialog` / `.scrim`. Radius moves 5px to

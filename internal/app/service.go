@@ -294,7 +294,7 @@ func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
 	}
 	out := make([]RunSummary, 0, len(states))
 	for _, st := range states {
-		out = append(out, SummaryOf(st))
+		out = append(out, SummaryAt(runDir(root, st.Key, st.RunID), st))
 	}
 	return out, nil
 }
@@ -515,7 +515,7 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 			UpdatedAt:   wireTime(t.UpdatedAt),
 		}
 		if states, err := store.List(ws.Root, t.Key); err == nil && len(states) > 0 {
-			latest := SummaryOf(states[0])
+			latest := SummaryAt(runDir(ws.Root, t.Key, states[0].RunID), states[0])
 			row.LatestRun = &latest
 		}
 		out = append(out, row)

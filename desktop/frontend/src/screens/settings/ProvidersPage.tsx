@@ -152,10 +152,8 @@ export default function ProvidersPage({
               value={
                 <span className="settings-provider">
                   <ProviderMark provider={provider} size="sm" />
-                  <span>
-                    {provider} · {model}
-                    {billing ? ` · ${billing}` : ''}
-                  </span>
+                  {/* Only the parts the config names: a workspace on the provider's default model has no model to print. */}
+                  <span>{[provider, model, billing].filter(Boolean).join(' · ')}</span>
                 </span>
               }
               control={
