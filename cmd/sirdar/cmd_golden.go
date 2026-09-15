@@ -136,7 +136,7 @@ func cmdGoldenAddRetro(key, golden, asOfText string, prs repeatedFlag, force boo
 	defer stop()
 
 	fetcher := &runner.Fetcher{Config: cfg, Tracker: tracker, Helpdesk: helpdesk, Stderr: stderr}
-	added, err := eval.AddRetro(ctx, fetcher, key, eval.RetroOptions{
+	added, err := eval.AddRetro(ctx, fetcher, key, eval.AddRetroOptions{
 		GoldenDir: golden,
 		PRURLs:    prs,
 		AsOf:      asOf,

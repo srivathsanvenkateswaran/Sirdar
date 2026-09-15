@@ -100,6 +100,18 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `--as-of` names. The ticket is read through the workspace's own adapters, the pull request
   through `gh` with exec and never a shell, and nothing is written back to either system
   (`docs/eval.md`).
+- Added `sirdar eval --retro`, which replays a golden key at the commit its fix branched from —
+  triage from the as-of bundle, then `fix --local` from that triage note, and a blind RCA behind
+  `--with-rca` — and scores what came back against the pull request a human merged: the note's
+  code references against the files the change touched, the agent's own diff against the
+  pull request's by file overlap and by hunk, and, behind `--rubric`, one extra provider call
+  answering a fixed JSON rubric. Each stage is the ordinary command at `--at <baseCommit>`, in a
+  linked worktree of its own, marked as an eval: no note is filed, no register row is appended
+  and nothing is pushed. The fix and the RCA are handed the run id of the retro's own triage
+  note, because the newest-triage-note lookup skips eval runs on purpose and would otherwise
+  find nothing. It exits 0 whatever the table says, because a retro is a measurement and not a
+  gate; the report lands in `.sirdar/eval/<ts>-retro.json` and the Eval screen's Retro section
+  reads the last one (`docs/eval.md`).
 - Added an as-of cutoff to bundle assembly (`run.Options.AsOf`), so a bundle can be built as the
   ticket stood at an instant rather than as it stands now. What it dropped and redacted is
   counted in `bundle/manifest.json`.

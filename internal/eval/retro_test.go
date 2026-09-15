@@ -116,7 +116,7 @@ func TestAddRetroWritesTheEntryAndItsGroundTruth(t *testing.T) {
 	fakeGH(t, ghScript)
 	golden := t.TempDir()
 
-	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{
+	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{
 		GoldenDir: golden,
 		PRURLs:    []string{retroPRURL},
 	})
@@ -202,7 +202,7 @@ func TestAddRetroPrefersTheEarlierInProgressTransition(t *testing.T) {
 		{At: retroPickup, From: "Open", To: "In Progress"},
 		{At: retroPickup.Add(3 * time.Hour), From: "In Progress", To: "Done"},
 	}}
-	added, err := AddRetro(context.Background(), retroFetcher(tracker), "OMNI-7", RetroOptions{
+	added, err := AddRetro(context.Background(), retroFetcher(tracker), "OMNI-7", AddRetroOptions{
 		GoldenDir: golden,
 		PRURLs:    []string{retroPRURL},
 	})
@@ -225,7 +225,7 @@ func TestAddRetroTakesAnExplicitAsOf(t *testing.T) {
 	golden := t.TempDir()
 
 	want := retroOpened.Add(15 * time.Minute)
-	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{
+	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{
 		GoldenDir: golden,
 		PRURLs:    []string{retroPRURL},
 		AsOf:      want,
@@ -256,7 +256,7 @@ exit 1
 	golden := t.TempDir()
 	urls := []string{retroPRURL, "https://github.com/acme/omni/pull/489"}
 
-	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{
+	added, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{
 		GoldenDir: golden,
 		PRURLs:    urls,
 	})
@@ -304,7 +304,7 @@ func TestAddRetroFailsClearlyWithoutAUsableGH(t *testing.T) {
 			}
 			golden := t.TempDir()
 
-			_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{
+			_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{
 				GoldenDir: golden,
 				PRURLs:    []string{retroPRURL},
 			})
@@ -324,7 +324,7 @@ func TestAddRetroFailsClearlyWithoutAUsableGH(t *testing.T) {
 func TestAddRetroRefusesAnArgumentThatIsNotAURL(t *testing.T) {
 	fakeGH(t, ghScript)
 	for _, bad := range []string{"482", "--repo=acme/omni", "-R"} {
-		_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{
+		_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{
 			GoldenDir: t.TempDir(),
 			PRURLs:    []string{bad},
 		})
@@ -337,7 +337,7 @@ func TestAddRetroRefusesAnArgumentThatIsNotAURL(t *testing.T) {
 // --retro without a pull request has no ground truth and no cutoff, and is
 // refused before anything is read.
 func TestAddRetroNeedsAPullRequest(t *testing.T) {
-	_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", RetroOptions{GoldenDir: t.TempDir()})
+	_, err := AddRetro(context.Background(), retroFetcher(retroTracker{}), "OMNI-7", AddRetroOptions{GoldenDir: t.TempDir()})
 	if err == nil || !strings.Contains(err.Error(), "at least one --pr") {
 		t.Fatalf("err = %v", err)
 	}

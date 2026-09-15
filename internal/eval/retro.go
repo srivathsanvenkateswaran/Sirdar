@@ -24,31 +24,133 @@ import (
 // the engineer started, the pull requests that closed the ticket, and what
 // building the bundle had to take out of it.
 //
-// It is the file a retrospective score reads. The bundle says what the
-// engineer knew; this says what they did about it.
+// It is what `sirdar golden add --retro` writes and what
+// `sirdar eval --retro` reads. The bundle says what the engineer knew; this
+// says what they did about it.
 type Retro struct {
-	Key        string    `json:"key"`
-	AsOf       time.Time `json:"asOf"`
-	BaseCommit string    `json:"baseCommit"`
-	PRURLs     []string  `json:"prUrls"`
-	PRDiff     string    `json:"prDiff"`
-	PRFiles    []string  `json:"prFiles"`
-	Redacted   Redacted  `json:"redacted"`
+	Key string `json:"key"`
+	// AsOf is the cutoff the bundle was captured at: the moment work
+	// started on the ticket, before any comment naming the fix.
+	AsOf time.Time `json:"asOf"`
+	// BaseCommit is the commit the pull request branched from. Every
+	// retro run stands at it, so the agent sees the repository as the
+	// engineer saw it.
+	BaseCommit string `json:"baseCommit"`
+	// PRURLs are the merged pull requests the change landed in.
+	PRURLs []string `json:"prUrls"`
+	// PRDiff is the unified diff's file name, relative to the golden
+	// entry's directory. Empty means RetroDiffName.
+	PRDiff string `json:"prDiff"`
+	// PRFiles are the paths those pull requests touched.
+	PRFiles  []string `json:"prFiles"`
+	Redacted Redacted `json:"redacted"`
+
+	// Dir is the golden entry's directory, filled in by LoadRetro rather
+	// than read from the file.
+	Dir string `json:"-"`
 }
 
-// Redacted is what the as-of cutoff removed from the bundle beside it.
+// Redacted counts what the as-of cutoff took out of the bundle beside it,
+// so a reader of a retro score can tell how much of the ticket the agent
+// was deliberately not shown.
 type Redacted struct {
 	PRLinks            int `json:"prLinks"`
 	CommentsDropped    int `json:"commentsDropped"`
 	AttachmentsDropped int `json:"attachmentsDropped"`
 }
 
+// RetroFile is the name a golden entry's retro descriptor carries.
+const RetroFile = "retro.json"
+
 // RetroDiffName is the file the pull-request diff is written to, inside the
 // golden entry and named by Retro.PRDiff.
 const RetroDiffName = "pr.diff"
 
-// RetroOptions are the inputs to AddRetro beyond the ticket key.
-type RetroOptions struct {
+// DiffPath is the absolute path of the pull request's diff.
+func (r Retro) DiffPath() string {
+	name := r.PRDiff
+	if name == "" {
+		name = RetroDiffName
+	}
+	return filepath.Join(r.Dir, name)
+}
+
+// ReadDiff parses the pull request's diff.
+func (r Retro) ReadDiff() (Diff, error) {
+	data, err := os.ReadFile(r.DiffPath())
+	if err != nil {
+		return Diff{}, fmt.Errorf("eval: read %s: %w", r.DiffPath(), err)
+	}
+	return ParseDiff(string(data)), nil
+}
+
+// Files are the pull request's paths, normalised. retro.json's own list is
+// preferred, because it is what the human's tooling recorded; a retro.json
+// that carries none falls back to the diff.
+func (r Retro) Files(prDiff Diff) []string {
+	source := r.PRFiles
+	if len(source) == 0 {
+		source = prDiff.Paths()
+	}
+	out := make([]string, 0, len(source))
+	for _, p := range source {
+		if p = NormalizePath(p); p != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// LoadRetro reads one golden key's retro descriptor. A key with no
+// retro.json is not an error anywhere it is asked for optionally; callers
+// that need one check HasRetro first.
+func LoadRetro(root, key string) (Retro, error) {
+	dir := filepath.Join(root, key)
+	path := filepath.Join(dir, RetroFile)
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return Retro{}, fmt.Errorf("eval: read %s: %w", path, err)
+	}
+	var r Retro
+	if err := json.Unmarshal(data, &r); err != nil {
+		return Retro{}, fmt.Errorf("eval: parse %s: %w", path, err)
+	}
+	r.Dir = dir
+	if r.Key == "" {
+		r.Key = key
+	}
+	if r.BaseCommit == "" {
+		return r, fmt.Errorf("eval: %s names no baseCommit", path)
+	}
+	if _, err := os.Stat(r.DiffPath()); err != nil {
+		return r, fmt.Errorf("eval: %s: %w", key, err)
+	}
+	return r, nil
+}
+
+// HasRetro reports whether a golden key can be replayed as a retro.
+func HasRetro(root, key string) bool {
+	return fileExists(filepath.Join(root, key, RetroFile))
+}
+
+// RetroKeys lists the golden keys that carry a retro.json, sorted. It is
+// what `sirdar eval --retro` replays when it is given no keys.
+func RetroKeys(root string) ([]string, error) {
+	keys, err := Keys(root)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]string, 0, len(keys))
+	for _, k := range keys {
+		if HasRetro(root, k) {
+			out = append(out, k)
+		}
+	}
+	return out, nil
+}
+
+// AddRetroOptions are the inputs to AddRetro beyond the ticket key.
+type AddRetroOptions struct {
 	// GoldenDir is the golden set to write into. Empty means DefaultDir.
 	GoldenDir string
 	// PRURLs are the merged pull requests that closed the ticket. At
@@ -95,7 +197,7 @@ type AddedRetro struct {
 // so nothing is written back to the tracker or the helpdesk. The pull
 // request is read through the gh CLI, invoked with exec and never through a
 // shell, using only `pr view` and `pr diff`.
-func AddRetro(ctx context.Context, f *runner.Fetcher, key string, o RetroOptions) (AddedRetro, error) {
+func AddRetro(ctx context.Context, f *runner.Fetcher, key string, o AddRetroOptions) (AddedRetro, error) {
 	a := AddedRetro{Key: key}
 	if !store.ValidKey(key) {
 		return a, fmt.Errorf("eval: %q is not a usable ticket key", key)
@@ -164,10 +266,10 @@ func AddRetro(ctx context.Context, f *runner.Fetcher, key string, o RetroOptions
 		return a, fmt.Errorf("eval: write %s: %w", a.DiffPath, err)
 	}
 
-	a.RetroPath = filepath.Join(a.Dir, "retro.json")
+	a.RetroPath = filepath.Join(a.Dir, RetroFile)
 	raw, err := json.MarshalIndent(a.Retro, "", "  ")
 	if err != nil {
-		return a, fmt.Errorf("eval: marshal retro.json: %w", err)
+		return a, fmt.Errorf("eval: marshal %s: %w", RetroFile, err)
 	}
 	if err := os.WriteFile(a.RetroPath, append(raw, '\n'), 0o644); err != nil {
 		return a, fmt.Errorf("eval: write %s: %w", a.RetroPath, err)

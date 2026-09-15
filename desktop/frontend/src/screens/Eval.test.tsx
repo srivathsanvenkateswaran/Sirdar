@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AppEvent, EvalReport, GoldenEntry, Transport } from '../api/types'
-import Eval, { pct } from './Eval'
+import type { AppEvent, EvalReport, GoldenEntry, RetroReport, Transport } from '../api/types'
+import Eval, { jaccard, pct } from './Eval'
 
 const GOLDEN: GoldenEntry[] = [
   {
@@ -59,11 +59,53 @@ const REPORT: EvalReport = {
   ],
 }
 
+const RETRO: RetroReport = {
+  path: '/work/.sirdar/eval/20260915T090000Z-retro.json',
+  at: '2026-09-15T09:00:00Z',
+  provider: 'claude',
+  model: 'sonnet',
+  goldenDir: '/golden',
+  withRca: false,
+  rubric: true,
+  results: [
+    {
+      key: 'OMNI-2510',
+      baseCommit: 'abc123',
+      costUsd: 3.75,
+      triage: { runId: 't1', state: 'completed', costUsd: 1.25 },
+      fix: { runId: 'f1', state: 'completed', costUsd: 2.5, commit: 'deadbee' },
+      triageScore: {
+        classification: 'code',
+        confidence: 'high',
+        codeRefsPathOverlap: { matched: 1, total: 2, score: 0.5 },
+        prFilesHit: { matched: 2, total: 3, score: 2 / 3 },
+        missedFiles: ['internal/export/pool.go'],
+      },
+      fixScore: {
+        filesJaccard: { intersection: 1, union: 2, score: 0.5 },
+        hunkOverlap: { matched: 1, total: 2, score: 0.5 },
+        linesAdded: { agent: 2, pr: 4 },
+        linesRemoved: { agent: 1, pr: 3 },
+        buildPassed: true,
+      },
+      rubric: { sameRootCause: true, sameFix: false, verdict: 'partial', reasoning: 'half the change' },
+    },
+    {
+      key: 'OMNI-2511',
+      baseCommit: 'def456',
+      costUsd: 0.4,
+      reason: 'triage: failed — provider exited 1',
+      triage: { runId: 't2', state: 'failed', costUsd: 0.4 },
+    },
+  ],
+}
+
 function fakeTransport(over: Partial<Transport> = {}) {
   let handler: ((e: AppEvent) => void) | undefined
   const transport = {
     golden: vi.fn(async () => GOLDEN),
     evalReports: vi.fn(async () => [REPORT]),
+    latestRetro: vi.fn(async () => RETRO),
     subscribe: vi.fn((h: (e: AppEvent) => void) => {
       handler = h
       return () => {}
@@ -101,6 +143,59 @@ describe('pct', () => {
   })
 })
 
+describe('jaccard', () => {
+  it('renders the file overlap the way the CLI table does', () => {
+    expect(jaccard({ intersection: 1, union: 2, score: 0.5 })).toBe('1/2 50%')
+  })
+
+  // Two diffs that changed nothing between them are two missing diffs, not
+  // a perfect match.
+  it('renders an empty union as a dash, not as 100%', () => {
+    expect(jaccard({ intersection: 0, union: 0, score: 0 })).toBe('—')
+    expect(jaccard(undefined)).toBe('—')
+  })
+})
+
+describe('Eval retro section', () => {
+  it('draws the last retro report against the change a human merged', async () => {
+    mount()
+    const table = await screen.findByRole('table', {
+      name: 'Each key against the change a human merged',
+    })
+    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
+    const cells = within(row).getAllByRole('cell')
+    expect(cells.map((c) => c.textContent)).toEqual([
+      'code',
+      'high',
+      '1/2 50%',
+      '2/3 67%',
+      '1/2 50%',
+      '1/2 50%',
+      'yes',
+      'partial',
+      '$3.75',
+    ])
+    expect(screen.getByText(/20260915T090000Z-retro\.json/)).toBeInTheDocument()
+  })
+
+  it('names the files the note never found and the rubric it was given', async () => {
+    mount()
+    await screen.findByText('internal/export/pool.go')
+    expect(screen.getByText(/rubric partial — half the change/)).toBeInTheDocument()
+  })
+
+  it('says why a key has no scores', async () => {
+    mount()
+    await screen.findByText('triage: failed — provider exited 1')
+  })
+
+  it('points at the command when the workspace has run no retro', async () => {
+    mount({ latestRetro: vi.fn(async () => null) })
+    await screen.findByText(/No retro has been recorded/)
+    expect(screen.getByText('sirdar eval --retro')).toBeInTheDocument()
+  })
+})
+
 describe('Eval', () => {
   it('lists the golden set with how much a human has written about each key', async () => {
     mount()
@@ -113,7 +208,10 @@ describe('Eval', () => {
 
   it('draws the score table of the newest report', async () => {
     mount()
-    const row = (await screen.findByRole('row', { name: /OMNI-2510/ })) as HTMLElement
+    // Scoped to this table: the Retro section below has a row for the
+    // same key.
+    const table = await screen.findByRole('table', { name: 'Score per key' })
+    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
     const cells = within(row).getAllByRole('cell')
     expect(cells.map((c) => c.textContent)).toEqual([
       'completed',

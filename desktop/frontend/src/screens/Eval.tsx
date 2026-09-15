@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
-import type { EvalReport, EvalResult, GoldenEntry, Transport } from '../api/types'
+import type {
+  EvalReport,
+  EvalResult,
+  GoldenEntry,
+  RetroReport,
+  RetroResult,
+  Transport,
+} from '../api/types'
 import ProviderFields from '../components/run/ProviderFields'
 import '../components/panels.css'
 
@@ -7,6 +14,22 @@ import '../components/panels.css'
 export function pct(f?: { matched: number; total: number; score: number }): string {
   if (!f || f.total === 0) return '—'
   return `${f.matched}/${f.total} ${Math.round(f.score * 100)}%`
+}
+
+/**
+ * The file overlap of two diffs, rendered as the CLI renders it. A union of
+ * zero is two diffs that changed nothing between them, which is a dash
+ * rather than a perfect score.
+ */
+export function jaccard(j?: { intersection: number; union: number; score: number }): string {
+  if (!j || j.union === 0) return '—'
+  return `${j.intersection}/${j.union} ${Math.round(j.score * 100)}%`
+}
+
+/** yes, no, or a dash for a session that said nothing legible about it. */
+function yesNo(b?: boolean): string {
+  if (b === undefined || b === null) return '—'
+  return b ? 'yes' : 'no'
 }
 
 /** The local time a report was written, or its raw stamp when unparseable. */
@@ -52,6 +75,47 @@ function ResultRow({ result }: { result: EvalResult }): JSX.Element {
   )
 }
 
+function RetroRow({ result }: { result: RetroResult }): JSX.Element {
+  const triage = result.triageScore
+  const fix = result.fixScore
+  const missed = triage?.missedFiles ?? []
+  return (
+    <>
+      <tr className="eval-row" data-state={result.triage?.state ?? 'failed'}>
+        <th scope="row" className="mono">
+          {result.key}
+        </th>
+        <td>{triage?.classification || '—'}</td>
+        <td>{triage?.confidence || '—'}</td>
+        <td>{pct(triage?.codeRefsPathOverlap)}</td>
+        <td>{pct(triage?.prFilesHit)}</td>
+        <td>{jaccard(fix?.filesJaccard)}</td>
+        <td>{pct(fix?.hunkOverlap)}</td>
+        <td>{yesNo(fix?.buildPassed)}</td>
+        <td>{result.rubric?.verdict ?? '—'}</td>
+        <td>${result.costUsd.toFixed(2)}</td>
+      </tr>
+      {result.reason || missed.length > 0 || result.rubric?.reasoning ? (
+        <tr className="eval-row eval-row--why">
+          <td colSpan={10}>
+            {result.reason ? <p className="eval-why">{result.reason}</p> : null}
+            {missed.length > 0 ? (
+              <p className="eval-why">
+                the note never named <span className="mono">{missed.join(', ')}</span>
+              </p>
+            ) : null}
+            {result.rubric?.reasoning ? (
+              <p className="eval-why">
+                rubric {result.rubric.verdict} — {result.rubric.reasoning}
+              </p>
+            ) : null}
+          </td>
+        </tr>
+      ) : null}
+    </>
+  )
+}
+
 /**
  * The golden set and what the last eval scored against it.
  *
@@ -77,6 +141,7 @@ export default function Eval(props: {
   const { transport, workspaceId, defaultProvider, jobs, onStartEval, onCancelJob } = props
   const [golden, setGolden] = useState<GoldenEntry[] | null>(null)
   const [reports, setReports] = useState<EvalReport[]>([])
+  const [retro, setRetro] = useState<RetroReport | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
@@ -87,12 +152,15 @@ export default function Eval(props: {
     if (!workspaceId) return
     setError('')
     try {
-      const [entries, found] = await Promise.all([
+      const [entries, found, lastRetro] = await Promise.all([
         transport.golden(workspaceId),
         transport.evalReports(workspaceId),
+        // A workspace that has never run a retro answers null.
+        transport.latestRetro(workspaceId),
       ])
       setGolden(entries)
       setReports(found)
+      setRetro(lastRetro)
     } catch (err) {
       setGolden([])
       setError(err instanceof Error ? err.message : String(err))
@@ -269,6 +337,55 @@ export default function Eval(props: {
                 ))}
               </tbody>
             </table>
+          </>
+        )}
+      </section>
+
+      <section className="eval-report eval-retro">
+        <h2 className="panel-heading">Retro</h2>
+        {!retro ? (
+          <p className="empty-state">
+            No retro has been recorded for this workspace. A retro replays a ticket at the commit
+            its fix branched from and scores what came back against the pull request that fixed
+            it: <code>sirdar eval --retro</code>.
+          </p>
+        ) : (
+          <>
+            <p className="eval-meta">
+              {when(retro.at)} · {retro.provider}
+              {retro.model ? ` ${retro.model}` : ''}
+              {retro.rubric ? ' · rubric' : ''}
+              {retro.withRca ? ' · with rca' : ''} · <span className="mono">{retro.path}</span>
+            </p>
+            <table className="eval-table">
+              <caption className="visually-hidden">
+                Each key against the change a human merged
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col">Key</th>
+                  <th scope="col">Class</th>
+                  <th scope="col">Confidence</th>
+                  <th scope="col">Refs</th>
+                  <th scope="col">PR files</th>
+                  <th scope="col">Files</th>
+                  <th scope="col">Hunks</th>
+                  <th scope="col">Build</th>
+                  <th scope="col">Rubric</th>
+                  <th scope="col">Cost</th>
+                </tr>
+              </thead>
+              <tbody>
+                {retro.results.map((r) => (
+                  <RetroRow key={r.key} result={r} />
+                ))}
+              </tbody>
+            </table>
+            <p className="about-note">
+              A retro is a measurement, not a gate: there is no threshold it passes. Refs is how
+              much of what the note pointed at the change touched, PR files how much of the change
+              the note found, Files and Hunks how close the agent's own diff came.
+            </p>
           </>
         )}
       </section>

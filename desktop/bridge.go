@@ -108,6 +108,10 @@ func (b *Bridge) AddGolden(ws, key, runId string) (app.GoldenEntry, error) {
 // EvalReports returns the workspace's recorded eval reports, newest first.
 func (b *Bridge) EvalReports(ws string) ([]app.EvalReport, error) { return b.svc.EvalReports(ws) }
 
+// LatestRetro returns the newest retro report recorded for the workspace,
+// or nil when it has run none.
+func (b *Bridge) LatestRetro(ws string) (*app.RetroReport, error) { return b.svc.LatestRetro(ws) }
+
 // ConfigSummary reports the workspace's notify and webhooks configuration
 // with every credential reference cut back to its scheme.
 func (b *Bridge) ConfigSummary(ws string) (app.ConfigSummary, error) {

@@ -33,6 +33,7 @@ function fakeTransport(overrides: Partial<Transport> = {}): Transport {
     startFix: notImplemented,
     startEval: notImplemented,
     evalReports: notImplemented,
+    latestRetro: notImplemented,
     golden: notImplemented,
     addGolden: notImplemented,
     configSummary: notImplemented,

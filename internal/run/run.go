@@ -116,6 +116,14 @@ type RCAOptions struct {
 	Options
 	PRURL      string
 	Resolution string
+
+	// TriageNote is the triage note this run reviews, named outright,
+	// instead of the newest completed triage note for the key. A
+	// retrospective evaluation makes its own triage and marks it `eval`,
+	// which keeps its note out of store.LatestNote deliberately — an
+	// eval's note must never be what a real rca reads — so the evaluation
+	// names the note it has just produced.
+	TriageNote string
 }
 
 // Outcome is one run's result: its final state and the digest line the CLI

@@ -57,6 +57,7 @@ type fake struct {
 	gotFix       FixOptions
 	gotEvalKeys  []string
 	gotEval      EvalOptions
+	retro        *RetroReport
 	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
 	gotCancelled JobID
@@ -290,6 +291,13 @@ func (f *fake) StartEval(_ context.Context, wsID string, keys []string, o EvalOp
 	f.gotEvalKeys, f.gotEval = keys, o
 	f.mu.Unlock()
 	return knownJob, nil
+}
+
+func (f *fake) LatestRetro(wsID string) (*RetroReport, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	return f.retro, nil
 }
 
 func (f *fake) EvalReports(wsID string) ([]EvalReport, error) {

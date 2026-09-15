@@ -27,6 +27,7 @@ function fakeTransport(rows: RegisterRow[] | Error): Transport {
     startFix: notImplemented,
     startEval: notImplemented,
     evalReports: notImplemented,
+    latestRetro: notImplemented,
     golden: notImplemented,
     addGolden: notImplemented,
     configSummary: notImplemented,
