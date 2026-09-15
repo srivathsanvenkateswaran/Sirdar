@@ -106,7 +106,11 @@ export interface Check { name: string; ok: boolean; level?: CheckLevel; detail: 
 
 // --- eval and the golden set ---
 /** One key in the golden set. The bundle itself never crosses to the UI. */
-export interface GoldenEntry { key: string; dir: string; bundleDir: string; assertions: number; hasExpectedNote: boolean }
+export interface GoldenEntry {
+  key: string; dir: string; bundleDir: string; assertions: number; hasExpectedNote: boolean;
+  /** The entry carries a retro.json, so a suite can replay it against the merged fix. */
+  hasRetro?: boolean
+}
 export interface EvalCheck { key: string; kind: 'equals'|'contains'|'min'; pass: boolean; detail?: string }
 export interface EvalFraction { matched: number; total: number; score: number }
 /** How much of the human-written note the produced one covered. */
