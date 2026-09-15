@@ -1,0 +1,45 @@
+{
+  "_pagination": {"next": "https://api2.frontapp.com/conversations/cnv_1/messages?page_token=PAGE2"},
+  "_links": {"self": "https://api2.frontapp.com/conversations/cnv_1/messages"},
+  "_results": [
+    {
+      "id": "msg_1",
+      "type": "email",
+      "is_inbound": true,
+      "draft_mode": null,
+      "created_at": 1788000000,
+      "subject": "Payments are failing on checkout",
+      "blurb": "Payments are failing on checkout.",
+      "author": null,
+      "recipients": [
+        {"name": "Ada Lovelace", "handle": "ada@example.com", "role": "from"},
+        {"name": "Support", "handle": "support@acme.test", "role": "to"}
+      ],
+      "body": "<p>Payments are failing on <strong>checkout</strong>.</p>",
+      "text": "Payments are failing on checkout.",
+      "attachments": [
+        {
+          "id": "fil_trace",
+          "filename": "trace.log",
+          "url": "https://api2.frontapp.com/download/fil_trace",
+          "content_type": "text/plain",
+          "size": 11,
+          "metadata": {"is_inline": false, "cid": ""}
+        }
+      ]
+    },
+    {
+      "id": "msg_draft",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": "shared",
+      "created_at": 1788000300,
+      "blurb": "Half-written reply",
+      "author": {"id": "tea_grace", "first_name": "Grace", "last_name": "Hopper", "type": "user"},
+      "recipients": [{"name": "Ada Lovelace", "handle": "ada@example.com", "role": "to"}],
+      "body": "<p>Half-written reply that was never sent.</p>",
+      "text": "Half-written reply that was never sent.",
+      "attachments": []
+    }
+  ]
+}

@@ -496,6 +496,8 @@ func TestBuiltinHelpdeskUnderTrackerIsRejected(t *testing.T) {
 		"    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n",
 		"    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n",
 		"    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n",
+		"    adapter: front\n    token: env:FRONT_TOKEN\n",
+		"    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
 	} {
 		_, err := Load(writeCfg(t, trackerCfg(block)))
 		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk") {
@@ -517,7 +519,9 @@ func TestAuthIsRejectedOnNonZohoAdapters(t *testing.T) {
 		"helpscout": helpdeskCfg("    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: env:HS_SECRET\n" + auth),
 		"intercom":  helpdeskCfg("    adapter: intercom\n    accessToken: env:INTERCOM_TOKEN\n" + auth),
 		"hubspot":   helpdeskCfg("    adapter: hubspot\n    accessToken: env:HUBSPOT_TOKEN\n" + auth),
+		"gorgias":   helpdeskCfg("    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n" + auth),
 		"freshdesk": helpdeskCfg("    adapter: freshdesk\n    domain: acme.freshdesk.com\n    apiKey: env:FRESHDESK_KEY\n" + auth),
+		"front":     helpdeskCfg("    adapter: front\n    token: env:FRONT_TOKEN\n" + auth),
 		"exec":      helpdeskCfg("    adapter: exec\n    command: ./tickets.sh\n" + auth),
 	} {
 		_, err := Load(writeCfg(t, body))
@@ -656,9 +660,9 @@ func TestValidateFreshdeskCredentialRefIsNotALiteral(t *testing.T) {
 	}
 }
 
-// --- Help Scout, Intercom, HubSpot ---
+// --- Help Scout, Intercom, HubSpot, Front ---
 
-// TestValidateFixedHostHelpdesks covers the three adapters that talk to one
+// TestValidateFixedHostHelpdesks covers the four adapters that talk to one
 // fixed vendor host and so have nothing to configure but their credentials:
 // what each cannot work without, and that a missing one is named.
 func TestValidateFixedHostHelpdesks(t *testing.T) {
@@ -699,6 +703,75 @@ func TestValidateFixedHostHelpdesks(t *testing.T) {
 			block: "    adapter: hubspot\n",
 			want:  "sources.helpdesk.accessToken",
 		},
+		{
+			name:  "front valid",
+			block: "    adapter: front\n    token: env:FRONT_TOKEN\n",
+		},
+		{
+			name:  "front missing token",
+			block: "    adapter: front\n",
+			want:  "sources.helpdesk.token",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, helpdeskCfg(tc.block)))
+			switch {
+			case tc.want == "" && err != nil:
+				t.Fatalf("want the config to load, got %v", err)
+			case tc.want != "" && err == nil:
+				t.Fatalf("want an error containing %q, got none", tc.want)
+			case tc.want != "" && !strings.Contains(err.Error(), tc.want):
+				t.Fatalf("error %v does not contain %q", err, tc.want)
+			}
+		})
+	}
+}
+
+// --- Gorgias ---
+
+// TestValidateGorgias covers the per-account adapter: it needs a host (one
+// of account or baseUrl), the login email that is its Basic username, and
+// the API key that is its password.
+func TestValidateGorgias(t *testing.T) {
+	cases := []struct {
+		name  string
+		block string
+		want  string
+	}{
+		{
+			name:  "account form",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+		},
+		{
+			name:  "baseUrl form",
+			block: "    adapter: gorgias\n    baseUrl: https://acme.gorgias.com\n    email: ops@acme.com\n    apiKey: keychain:gorgias-api-key\n",
+		},
+		{
+			name:  "no host",
+			block: "    adapter: gorgias\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "one of account or baseUrl",
+		},
+		{
+			name:  "account and baseUrl both set",
+			block: "    adapter: gorgias\n    account: acme\n    baseUrl: https://acme.gorgias.com\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "not both",
+		},
+		{
+			name:  "no email",
+			block: "    adapter: gorgias\n    account: acme\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "sources.helpdesk.email",
+		},
+		{
+			name:  "no apiKey",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n",
+			want:  "sources.helpdesk.apiKey",
+		},
+		{
+			name:  "apiKey carries the secret instead of naming it",
+			block: "    adapter: gorgias\n    account: acme\n    email: ops@acme.com\n    apiKey: shhh\n",
+			want:  "sources.helpdesk.apiKey",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -720,6 +793,7 @@ func TestValidateFixedHostHelpdeskCredentialRefsAreNotLiterals(t *testing.T) {
 		"clientId":     "    adapter: helpscout\n    clientId: shhh\n    clientSecret: env:HS_SECRET\n",
 		"clientSecret": "    adapter: helpscout\n    clientId: env:HS_ID\n    clientSecret: shhh\n",
 		"accessToken":  "    adapter: intercom\n    accessToken: shhh\n",
+		"token":        "    adapter: front\n    token: shhh\n",
 	} {
 		_, err := Load(writeCfg(t, helpdeskCfg(block)))
 		if err == nil || !strings.Contains(err.Error(), "sources.helpdesk."+key) {
@@ -814,6 +888,7 @@ func TestDefaultConfigYAMLLoads(t *testing.T) {
 		"# adapter: jira", "# adapter: linear", "# adapter: azdo", "# adapter: rally",
 		"# adapter: zendesk", "# adapter: freshdesk",
 		"# adapter: helpscout", "# adapter: intercom", "# adapter: hubspot",
+		"# adapter: front", "# adapter: gorgias",
 		"# helpdeskRef:", `#   pattern: 'Zoho Ticket URL:\s*(\S+)'`, `#   idPattern: '(\d+)$'`,
 	} {
 		if !strings.Contains(DefaultConfigYAML, want) {

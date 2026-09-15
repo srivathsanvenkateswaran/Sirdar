@@ -241,7 +241,7 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias":
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -276,12 +276,13 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 }
 
 // builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
-// freshdesk, helpscout, intercom, hubspot) with the credentials the config
-// names and calls its Ping: one authenticated round trip proving the base
-// URL/domain, the credential and the network all work. The detail names
-// who the connection authenticates as — an email for Zendesk basic auth,
-// "oauth" for a bearer token, the account domain for Freshdesk, the kind
-// of grant for the three fixed-host vendors — never the secret itself.
+// freshdesk, helpscout, intercom, hubspot, front, gorgias) with the
+// credentials the config names and calls its Ping: one authenticated round
+// trip proving the base URL/domain, the credential and the network all
+// work. The detail names who the connection authenticates as — an email
+// for Zendesk and Gorgias basic auth, "oauth" for a bearer token, the
+// account domain for Freshdesk, the kind of grant for the four fixed-host
+// vendors — never the secret itself.
 func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
 	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
@@ -320,6 +321,15 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		return "the workspace access token"
 	case "hubspot":
 		return "the private app token"
+	case "front":
+		// Front documents no identity endpoint, so there is no teammate
+		// or company name to print: the reachable row is the proof the
+		// API token was accepted.
+		return "the Front API token"
+	case "gorgias":
+		// The login email is the Basic username. It identifies the
+		// account; the API key is the password and is never printed.
+		return sc.Email
 	default:
 		return "configured"
 	}

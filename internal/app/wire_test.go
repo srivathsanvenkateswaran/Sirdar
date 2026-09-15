@@ -13,6 +13,8 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/front"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
@@ -532,6 +534,118 @@ func TestNewBuiltinHelpdeskFreshdeskMissingCredentialNamesTheKey(t *testing.T) {
 	}
 }
 
+// --- Gorgias ---
+
+// TestNewBuiltinHelpdeskGorgias proves the resolved apiKey reaches the wire
+// as the HTTP Basic password, with the configured login email as the
+// username, and that the client is pointed at the configured account host.
+func TestNewBuiltinHelpdeskGorgias(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotPath string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		mu.Unlock()
+		w.Write([]byte(`{"id":31,"domain":"acme.gorgias.com"}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"GORGIAS_KEY": "key-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("ops@acme.com:key-1"))
+	if gotAuth != want {
+		t.Fatalf("Authorization = %q, want the email as username and the resolved key as password", gotAuth)
+	}
+	if gotPath != "/api/account" {
+		t.Fatalf("Ping path = %q, want the account endpoint", gotPath)
+	}
+}
+
+func TestNewBuiltinHelpdeskGorgiasMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:GORGIAS_KEY") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestBuildDepsGorgiasHelpdesk covers sources.helpdesk wiring end to end
+// through BuildDeps, the same path a real command takes, in the account
+// form an operator actually writes.
+func TestBuildDepsGorgiasHelpdesk(t *testing.T) {
+	t.Setenv("GORGIAS_KEY", "key-1")
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("BuildDeps: %v", err)
+	}
+	if _, ok := deps.Helpdesk.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", deps.Helpdesk)
+	}
+}
+
+// TestBuiltinHelpdeskProbeGorgias covers the doctor row: it names the login
+// email the connection authenticates as and never the API key.
+func TestBuiltinHelpdeskProbeGorgias(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":31}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+	t.Setenv("GORGIAS_KEY", "key-1")
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (gorgias)", sc)
+	if !check.OK {
+		t.Fatalf("check: %+v", check)
+	}
+	if check.Detail != "reachable as ops@acme.com" {
+		t.Fatalf("detail = %q, want it to name the login email", check.Detail)
+	}
+	if strings.Contains(check.Detail, "key-1") {
+		t.Fatalf("doctor printed the secret: %q", check.Detail)
+	}
+}
+
 // TestBuildDepsZendeskHelpdesk covers sources.helpdesk wiring end to end
 // through buildDeps, the same path a real command takes.
 func TestBuildDepsZendeskHelpdesk(t *testing.T) {
@@ -802,13 +916,13 @@ func TestQwenProviderMissingKeyNamesTheReference(t *testing.T) {
 	}
 }
 
-// --- built-in helpdesk adapters (helpscout, intercom, hubspot) ---
+// --- built-in helpdesk adapters (helpscout, intercom, hubspot, front) ---
 
 // rewriteTransport sends every request to addr while leaving the request's
 // own URL (and so the adapter's host checks, which run before the
-// transport) untouched. Help Scout, Intercom and HubSpot each talk to one
-// fixed vendor host over https with no baseUrl override to point at a test
-// server, so this is how their wiring gets exercised for real.
+// transport) untouched. Help Scout, Intercom, HubSpot and Front each talk to
+// one fixed vendor host over https with no baseUrl override to point at a
+// test server, so this is how their wiring gets exercised for real.
 type rewriteTransport struct {
 	addr string
 	base http.RoundTripper
@@ -984,6 +1098,52 @@ func TestNewBuiltinHelpdeskHubSpotMissingCredentialNamesTheKey(t *testing.T) {
 	}
 }
 
+// TestNewBuiltinHelpdeskFront proves the resolved API token, not the env:
+// ref, is what reaches Front's wire as a bearer header, and that the probe
+// hits the endpoint the doctor row is built on.
+func TestNewBuiltinHelpdeskFront(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotPath string
+	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		mu.Unlock()
+		w.Write([]byte(`{"_links":{"self":"https://api2.frontapp.com/teammates"},"_results":[]}`))
+	})
+
+	sc := &config.SourceConfig{Adapter: "front", Token: "env:FRONT_TOKEN"}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"FRONT_TOKEN": "fr-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*front.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *front.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if gotAuth != "Bearer fr-1" {
+		t.Fatalf("Authorization = %q, want Bearer fr-1", gotAuth)
+	}
+	if gotPath != "/teammates" {
+		t.Fatalf("Ping path = %q, want the teammates endpoint", gotPath)
+	}
+}
+
+func TestNewBuiltinHelpdeskFrontMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{Adapter: "front", Token: "env:FRONT_TOKEN"}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "token") || !strings.Contains(err.Error(), "env:FRONT_TOKEN") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
 // TestBuildDepsFixedHostHelpdesks covers sources.helpdesk wiring end to end
 // through BuildDeps for each of the three, the same path a real command
 // takes.
@@ -992,11 +1152,16 @@ func TestBuildDepsFixedHostHelpdesks(t *testing.T) {
 	t.Setenv("HS_SECRET", "secret-1")
 	t.Setenv("INTERCOM_TOKEN", "ic-1")
 	t.Setenv("HUBSPOT_TOKEN", "pat-1")
+	t.Setenv("FRONT_TOKEN", "fr-1")
 
 	for name, tc := range map[string]struct {
 		sc   *config.SourceConfig
 		want string
 	}{
+		"front": {
+			sc:   &config.SourceConfig{Adapter: "front", Token: "env:FRONT_TOKEN"},
+			want: "*front.Client",
+		},
 		"helpscout": {
 			sc:   &config.SourceConfig{Adapter: "helpscout", ClientID: "env:HS_ID", ClientSecret: "env:HS_SECRET"},
 			want: "*helpscout.Client",
@@ -1029,22 +1194,31 @@ func TestBuildDepsFixedHostHelpdesks(t *testing.T) {
 // names the kind of grant it authenticated with and never the secret.
 func TestBuiltinHelpdeskProbeFixedHostAdapters(t *testing.T) {
 	helpdeskTestServer(t, func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/v2/oauth2/token" {
+		switch r.URL.Path {
+		case "/v2/oauth2/token":
 			w.Write([]byte(`{"token_type":"bearer","access_token":"minted-1","expires_in":172800}`))
-			return
+		case "/teammates":
+			w.Write([]byte(`{"_results":[]}`))
+		default:
+			w.Write([]byte(`{"portalId":1234567}`))
 		}
-		w.Write([]byte(`{"portalId":1234567}`))
 	})
 	t.Setenv("HS_ID", "id-1")
 	t.Setenv("HS_SECRET", "secret-1")
 	t.Setenv("INTERCOM_TOKEN", "ic-1")
 	t.Setenv("HUBSPOT_TOKEN", "pat-1")
+	t.Setenv("FRONT_TOKEN", "fr-1")
 
 	for name, tc := range map[string]struct {
 		sc     *config.SourceConfig
 		detail string
 		secret string
 	}{
+		"front": {
+			sc:     &config.SourceConfig{Adapter: "front", Token: "env:FRONT_TOKEN"},
+			detail: "reachable as the Front API token",
+			secret: "fr-1",
+		},
 		"helpscout": {
 			sc:     &config.SourceConfig{Adapter: "helpscout", ClientID: "env:HS_ID", ClientSecret: "env:HS_SECRET"},
 			detail: "reachable as the Help Scout app",

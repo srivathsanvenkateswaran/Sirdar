@@ -1,0 +1,16 @@
+{
+  "id": "cnv_2",
+  "type": "conversation",
+  "subject": "Shipping delay",
+  "status": "unassigned",
+  "status_category": "waiting",
+  "ticket_ids": [],
+  "assignee": null,
+  "recipient": {"name": "", "handle": "+15551234567", "role": "to"},
+  "tags": [],
+  "custom_fields": {},
+  "created_at": 1788000000,
+  "waiting_since": 1788009000,
+  "is_private": true,
+  "metadata": {}
+}
