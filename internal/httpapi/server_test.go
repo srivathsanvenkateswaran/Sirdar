@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 )
 
 // do issues one request against a handler built on f and returns the
@@ -389,6 +391,38 @@ func TestResumeUnknownRun(t *testing.T) {
 	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/runs/nope/resume", `{}`), 404, "not_found")
 }
 
+func TestSteer(t *testing.T) {
+	f := newFake()
+	var got steerResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"Now write the RCA from this"}`), 202, &got)
+	if got.JobID != knownJob || got.RunID != knownRun || f.gotSteer != "Now write the RCA from this" {
+		t.Fatalf("job %q run %q text %q", got.JobID, got.RunID, f.gotSteer)
+	}
+}
+
+// A steer is an instruction; without one there is nothing to send, and
+// the service is not asked.
+func TestSteerRequiresText(t *testing.T) {
+	f := newFake()
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"  "}`), 400, "bad_request")
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{}`), 400, "bad_request")
+	if f.gotSteer != "" {
+		t.Fatalf("the service was asked to steer %q", f.gotSteer)
+	}
+}
+
+func TestSteerUnknownRun(t *testing.T) {
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/runs/nope/steer", `{"text":"go"}`), 404, "not_found")
+}
+
+// A run that refuses the steer on its own state — still running, over a
+// budget — is a conflict, not a server error and not a missing id.
+func TestSteerRefusedIsAConflict(t *testing.T) {
+	f := newFake()
+	f.steerErr = fmt.Errorf("%w: run r1 is running", app.ErrSteerRefused)
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"go"}`), 409, "conflict")
+}
+
 func TestCancel(t *testing.T) {
 	f := newFake()
 	w := do(t, f, "POST", "/api/jobs/"+knownJob+"/cancel", "")
@@ -495,6 +529,34 @@ func TestStaticFallsBackToIndex(t *testing.T) {
 	h.ServeHTTP(w, httptest.NewRequest("GET", "/runs/"+knownRun, nil))
 	if w.Code != 200 || !strings.Contains(w.Body.String(), "<title>Sirdar</title>") {
 		t.Fatalf("status %d body %q", w.Code, w.Body.String())
+	}
+}
+
+// An upgraded `sirdar serve` must not be shadowed by an index.html the
+// browser kept from the build before it, so the page carries no-store. The
+// hashed assets beside it are content-addressed and keep whatever caching
+// http.ServeFileFS gives them.
+func TestStaticHTMLIsNeverCached(t *testing.T) {
+	h := New(newFake(), uiFS())
+	for _, path := range []string{"/", "/runs/" + knownRun} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+			t.Errorf("%s: Cache-Control %q, want no-store", path, cc)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/assets/app.js", nil))
+	if cc := w.Header().Get("Cache-Control"); cc == "no-store" {
+		t.Errorf("a hashed asset is cacheable; got %q", cc)
+	}
+
+	// The not-built page is HTML too, and the build it tells you to run is
+	// exactly what would otherwise be shadowed by a cached copy of it.
+	w = httptest.NewRecorder()
+	New(newFake(), fstest.MapFS{}).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("not-built page: Cache-Control %q, want no-store", cc)
 	}
 }
 

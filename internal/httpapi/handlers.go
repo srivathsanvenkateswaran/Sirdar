@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -82,6 +84,67 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, jobResponse{id})
+}
+
+// runDiff is GET /api/workspaces/{id}/runs/{runId}/diff: one fix run's
+// change, file by file, with the unified patch under it.
+//
+// It starts nothing and writes nothing — the commit was made when the fix
+// ran — so it carries no gate beyond the ones every read route has. A run
+// with no change to show is a 404 naming the reason: a triage run, or a fix
+// whose worktree is gone and which never recorded a commit.
+func (s *server) runDiff(w http.ResponseWriter, r *http.Request) {
+	d, err := s.svc.RunDiff(r.PathValue("id"), r.PathValue("runId"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
+}
+
+// dropHunk is POST /api/workspaces/{id}/runs/{runId}/diff/drop: revert one
+// hunk out of the fix commit and amend it in place, then answer with the
+// change as it stands afterwards.
+//
+// It is refused on a listener other machines can reach, for the reason
+// startFix is: this rewrites a commit in the operator's repository, and a
+// server with no authentication of any kind must not offer that to whoever
+// turns out to be able to reach the port.
+//
+// The refusals that are not about the listener are 409s with a reason: the
+// run is still live, its worktree is gone, its branch is already pushed, or
+// the etag says the patch the hunk index was read from is not the patch
+// that is there now.
+func (s *server) dropHunk(w http.ResponseWriter, r *http.Request) {
+	if !s.loopbackOnly {
+		writeError(w, http.StatusForbidden, "forbidden",
+			"dropping a hunk rewrites a commit in the operator's repository, so it is refused on a listener"+
+				" other machines can reach; use `sirdar runs diff --drop` or a server bound to loopback")
+		return
+	}
+	var body struct {
+		Path string `json:"path"`
+		Hunk int    `json:"hunk"`
+		ETag string `json:"etag"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if body.Path == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "path is required")
+		return
+	}
+	if body.ETag == "" {
+		writeError(w, http.StatusBadRequest, "bad_request",
+			"etag is required: it is the etag of the diff the hunk index was read from")
+		return
+	}
+	d, err := s.svc.DropHunk(r.Context(), r.PathValue("id"), r.PathValue("runId"), body.Path, body.Hunk, body.ETag)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, d)
 }
 
 // startEval is POST /api/workspaces/{id}/eval: replay the golden set and
@@ -178,6 +241,83 @@ func (s *server) addGolden(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, entry)
+}
+
+// mcpServers is GET /api/workspaces/{id}/mcp: the MCP servers a run in
+// this workspace would be offered. With ?connect=1 each is started and its
+// tools counted, which is slow enough that it is never the default.
+//
+// Nothing here carries a credential value: an entry's env and headers
+// cross as key names, and its command line crosses as configured rather
+// than expanded.
+func (s *server) mcpServers(w http.ResponseWriter, r *http.Request) {
+	connect, ok := boolParam(w, r, "connect")
+	if !ok {
+		return
+	}
+	inv, err := s.svc.MCPServers(r.Context(), r.PathValue("id"), connect)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, inv)
+}
+
+// mcpTools is GET /api/workspaces/{id}/mcp/{server}/tools: every tool the
+// server lists, with the verdict a run would get for it and the rule that
+// settled it.
+func (s *server) mcpTools(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.MCPTools(r.Context(), r.PathValue("id"), r.PathValue("server"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// mcpCall is POST /api/workspaces/{id}/mcp/{server}/call: run one tool by
+// hand. A tool the workspace's permissions would refuse a run is refused
+// here too — 403, with the same reason, and nothing started.
+func (s *server) mcpCall(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Tool string          `json:"tool"`
+		Args json.RawMessage `json:"args"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if body.Tool == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "tool is required")
+		return
+	}
+	res, err := s.svc.MCPCall(r.Context(), r.PathValue("id"), r.PathValue("server"), body.Tool, body.Args)
+	switch {
+	case errors.Is(err, ErrMCPDenied):
+		writeJSON(w, http.StatusForbidden, res)
+		return
+	case err != nil:
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// boolParam reads a query parameter that is on when present and not "0" or
+// "false", refusing anything else so a typo is a 400 rather than an
+// expensive default nobody asked for.
+func boolParam(w http.ResponseWriter, r *http.Request, name string) (bool, bool) {
+	raw := r.URL.Query().Get(name)
+	switch raw {
+	case "":
+		return false, true
+	case "1", "true", "yes":
+		return true, true
+	case "0", "false", "no":
+		return false, true
+	default:
+		writeError(w, http.StatusBadRequest, "bad_request", name+" must be 1 or 0")
+		return false, false
+	}
 }
 
 // configSummary is GET /api/workspaces/{id}/config/summary: the notify and

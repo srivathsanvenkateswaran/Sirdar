@@ -54,6 +54,7 @@ var mutatingRoutes = map[string]struct {
 	"golden":    {"POST", "/api/workspaces/" + knownWS + "/golden", `{"key":"OMNI-2510"}`},
 	"workspace": {"POST", "/api/workspaces", `{"root":"/repos/other"}`},
 	"resume":    {"POST", "/api/workspaces/" + knownWS + "/runs/" + knownRun + "/resume", `{"answer":"yes"}`},
+	"steer":     {"POST", "/api/workspaces/" + knownWS + "/runs/" + knownRun + "/steer", `{"text":"go on"}`},
 }
 
 // A form is the whole attack: a page the operator has open posts to the

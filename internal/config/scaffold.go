@@ -51,6 +51,8 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   command: gemini                         # or goose, opencode, qwen, npx
 #   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]
 #   env: {}                                 # added to the agent's environment
+#   mode: plan                              # override the session mode id;
+#                                           # normally picked automatically
 # provider: cursor drives the Cursor Agent CLI against the login the
 # cursor-agent binary already holds. It is the one provider whose read-only
 # guarantee is enforced by the vendor's backend rather than by Sirdar: the

@@ -10,7 +10,7 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 Sirdar as it stands today, before the first tagged release:
 
 A command-line harness (`sirdar init`, `doctor`, `triage`, `rca`, `resume`, `runs`,
-`register`, `serve`) that reads an engineering-support ticket from a tracker and a
+`register`, `mcp`, `serve`) that reads an engineering-support ticket from a tracker and a
 helpdesk, hands it to a coding agent inside a read-only workspace, and writes a
 Triage Note recording the agent's root-cause hypothesis for a human to review. Once a
 human has made and merged the actual fix, `sirdar rca` writes the RCA and Resolution
@@ -29,12 +29,15 @@ binary);
 hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
 execution mode rather than by a policy Sirdar enforces — a write or a command that
 completes anyway ends the session and fails the run, and `sirdar fix` is refused
-before it cuts a branch; `provider: agy` drives Google's
-Antigravity CLI against the operator's own Google account, triage and rca only — that CLI
-gives a parent process no way to mediate a tool call, so the read-only guarantee is its own
-plan mode plus a watch that fails the run: a write or a command that completes ends the
-session and files nothing. `mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is
-refused before it cuts a branch.
+before it cuts a branch; `provider: agy` drives Google's Antigravity CLI against the
+operator's own Google account, triage and rca only — that CLI gives a parent process no
+way to mediate a tool call, so permissions are set for the session in a project file
+Sirdar writes under `~/.gemini/config/projects` and deletes when the run ends (a read
+allowed, every write, command and URL fetch denied), on top of the CLI's own plan mode,
+plus a watch that fails the run: a write or a command that completes ends the session
+and files nothing, and so does a session that completed no read at all.
+`mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is refused before it cuts
+a branch.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
@@ -76,6 +79,15 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   and Resolution notes by the slug predicted from the triage title; when the rca retitles the
   issue and files under a different name, both halves of the note are rewritten, instead of the
   frontmatter alone being right and the body links leading nowhere.
+- Added `sirdar steer RUN_ID "instruction"` and `POST /api/workspaces/{id}/runs/{runId}/steer`:
+  a follow-up instruction on a finished (or blocked) run continues the same run. The transcript
+  grows in place with a `steer` line saying who answered — the session that wrote the note
+  (`claude`, `codex`, `qwen`, `openai` resume it by handle) or a fresh session primed with the
+  run's prompt and answer (`acp`); `cursor` and `agy` refuse through the new
+  `provider.Steerable` contract. The note is rendered again and a register row appended only
+  when the answer changes; turns, minutes and cost accumulate on the run and the same caps apply
+  to the total. A `--local` or deviation-blocked fix run is steered in its own worktree with its
+  commit amended, never pushed (`docs/steer.md`).
 - Tagging a release now builds and drafts it end to end: CLI archives for all three platforms,
   deb/rpm packages, checksums, a Homebrew tap formula, and desktop app zips, all attached to one
   GitHub release that stays a draft until a human clicks Publish (`docs/release.md`).
@@ -95,6 +107,19 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `provider: acp`, an Agent Client Protocol client that can drive any ACP-speaking coding
   agent (Gemini CLI, Goose, OpenCode, and others) the same way Sirdar already drives Claude Code
   and Codex.
+- Added a review pass over a finished fix run, with no agent in it: `sirdar runs diff <run-id>`
+  prints the commit as a unified patch (`--files` for the file list), and
+  `GET /api/workspaces/{id}/runs/{runId}/diff` serves the same reading as JSON — the base and
+  head commits, the branch, whether the worktree is still there, whether the branch is pushed, a
+  per-file list with line counts, and the patch capped at 2 MiB. `sirdar runs diff <run-id>
+  --drop <path>:<n>`, and `POST .../diff/drop`, revert one hunk out of the commit and amend it in
+  place, keeping the original commit message and appending a `review` event to the run log. The
+  drop is refused while the run is live, once the worktree is gone, once the branch is pushed, and
+  whenever the `etag` says the patch the hunk index was counted in is not the patch that is there
+  now (`docs/fix.md`, "Reviewing the change").
+- `sirdar serve` now sends `Cache-Control: no-store` on the UI's HTML, so an upgraded binary is
+  not shadowed by an `index.html` the browser kept from the build before it. The hashed assets
+  beside it are content-addressed and stay cacheable.
 - Added inbound webhooks: `sirdar serve` can now be triggered directly by a tracker or helpdesk
   when a ticket is assigned, with per-source signature verification (`docs/webhooks.md`).
 - Added run-completion notifications to Slack, Microsoft Teams, or any HTTP endpoint you run
@@ -116,6 +141,25 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   conversation (work notes internal, comments customer-visible) and the Attachment API for the
   files, authenticating with a basic username/password pair or an OAuth bearer token
   (`docs/adapters.md`, `docs/research/adapters/servicenow.md`).
+- Added `sirdar mcp`, which answers what a run's MCP access would be without starting a run.
+  `sirdar mcp list` names the servers the workspace declares — and, with `mcp.workspaceOnly`
+  off, the operator's global ones too, scoped `global` — with their transport and command or
+  URL, and with `env` and `headers` reduced to key names so no credential value is ever
+  printed. `--connect` starts each, initializes, counts its tools and times it, or prints the
+  error; an HTTP 401 or 403 reads `401 from the token, check its scope` and never carries the
+  token. `sirdar mcp tools SERVER` lists every tool with the verdict a run would get and the
+  rule that settled it (a `permissions.mcp` pattern, a write word, a generic passthrough, a
+  read word, or a name the heuristic recognises nothing in), from the same
+  `provider.DecideMCPTool` the policy calls — one function, so the two cannot drift.
+  `sirdar mcp call SERVER TOOL [--args '<json>']` runs one by hand: a denied tool is refused
+  with that same reason and exit 2, its server never started, and an allowed one's output is
+  capped at 64 KiB with a `truncated` line. `sirdar serve` gains the same three at
+  `GET /api/workspaces/{id}/mcp` (`?connect=1`), `GET …/mcp/{server}/tools` and
+  `POST …/mcp/{server}/call`, loopback-only and behind the existing cross-site guard, with a
+  denied tool answered `403` carrying the reason (`docs/config.md`, "Checking it").
+- Added a streamable-HTTP MCP transport to `internal/mcpclient`, so an `"type": "http"` entry in
+  `.mcp.json` can be listed, inspected and called by `sirdar mcp`. Sirdar's own agent loop
+  (`provider: openai`) still starts stdio servers only, and the listing says so on the row.
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).

@@ -891,6 +891,17 @@ func TestFixIsRefusedBeforeGit(t *testing.T) {
 	}
 }
 
+// TestSteerIsRefused pins the other early refusal: `sirdar steer` asks
+// provider.PlanSteer before it touches the run's state, and a provider
+// that cannot judge a tool call before it runs cannot take an open-ended
+// follow-up instruction.
+func TestSteerIsRefused(t *testing.T) {
+	c, err := provider.PlanSteer(New())
+	if c != provider.ContinueNone || !errors.Is(err, ErrSteerUnsupported) {
+		t.Fatalf("PlanSteer = %q, %v; want ContinueNone and ErrSteerUnsupported", c, err)
+	}
+}
+
 // --- proxy variables ---------------------------------------------------
 
 // TestProxyVariablesPassThroughAndAreReported covers the environment

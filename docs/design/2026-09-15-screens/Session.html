@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Sirdar walkthrough · Session</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:13px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+a{color:#3B3AA6}a:hover{color:#2B2A80}
+.app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
+.sidebar{display:flex;flex-direction:column;flex:0 0 208px;padding:8px;background:transparent}
+.brand{display:flex;align-items:center;min-height:32px;padding:0 8px;font-family:var(--sd-font-mono);font-size:13px;font-weight:600;letter-spacing:.06em}
+.nav{display:flex;flex-direction:column;padding-top:8px}
+.navrow{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;margin:2px 0;padding:4px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:13px;font-weight:500;line-height:1.4}
+.navrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.navrow svg{width:16px;height:16px;flex:0 0 auto}
+.navcount{margin-left:auto;padding:0 8px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:10.5px;line-height:16px}
+.recent{display:flex;flex-direction:column;margin-top:12px;padding-top:8px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 8px 4px;color:var(--sd-ink-3);font-size:10.5px;letter-spacing:.06em}
+.recentrow{display:flex;align-items:center;gap:8px;min-height:26px;margin:1px 0;padding:3px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:12px}
+.recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:11.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.dot[data-live="true"]{background:var(--sd-accent)}
+.dot[data-blocked="true"]{background:var(--sd-st-blocked)}
+.foot{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:8px;border-top:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border-radius:8px;font-weight:500}
+.switcher svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:2px}
+.quota{display:flex;align-items:center;gap:8px;padding:2px 8px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:58px}
+.quota .bar{display:block;flex:1;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.quota .pct{min-width:3ch;text-align:right}
+.quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:28px;padding:4px 12px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.primary[data-disabled="true"]{opacity:.45}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:4px 12px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink-2)}
+.btn svg{width:14px;height:14px}
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:8px 8px 8px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-sheet);overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:15px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.stat{padding:0 10px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:1.5;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
+.badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
+.badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
+.badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
+.badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
+.fact{display:inline-flex;align-items:center;min-height:20px;padding:0 8px;border-radius:4px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:10.5px;font-weight:500;line-height:20px;white-space:nowrap}
+.mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.h-serif{margin:0;font-family:var(--sd-font-display);font-size:24px;font-weight:400;line-height:1.2}
+.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:7px 10px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-3);font-size:12px}
+.tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
+.tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
+.body{display:grid;grid-template-columns:minmax(0,1fr) 440px;flex:1;min-height:0}
+.left{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
+.right{display:flex;flex-direction:column;min-width:0;min-height:0}
+.stream{flex:1;min-height:0;overflow:hidden;padding:10px 0 12px;font-size:12px}
+.sys{margin:0 16px 6px;padding:6px 10px;border-radius:8px;background:var(--sd-card-row);color:var(--sd-ink-2);font-size:11.5px;line-height:1.45}
+.sys .mono{color:var(--sd-ink-3)}
+.you{display:flex;gap:10px;margin:10px 16px 6px}
+.you .who{flex:0 0 3.3rem;padding-top:3px;font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.you .say{padding:8px 12px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface);font-size:13px;line-height:1.5;max-width:70ch}
+.turn{display:flex;align-items:center;gap:10px;margin:12px 16px 4px;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.turn .line{flex:1;height:1px;background:var(--sd-rule)}
+.ev{display:grid;grid-template-columns:3.3rem 2.2rem minmax(0,1fr);column-gap:8px;margin:0 16px}
+.ev .at{padding-top:3px;font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.ev .mark{padding:3px 0 3px 8px;border-left:2px solid var(--sd-rule);font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.5;color:var(--sd-ink-3)}
+.ev .main{min-width:0;padding:2px 16px 2px 0;line-height:1.45}
+.ev[data-v="allow"] .mark{border-color:var(--sd-st-triaged);color:var(--sd-st-triaged)}
+.ev[data-v="deny"] .mark{border-color:var(--sd-st-blocked);color:var(--sd-st-blocked)}
+.ev[data-v="write"] .mark{border-color:var(--sd-accent);color:var(--sd-accent)}
+.ev[data-v="callout"] .mark{border-color:var(--sd-st-blocked);color:var(--sd-st-blocked)}
+.ev[data-v="final"] .mark{border-color:var(--sd-accent);color:var(--sd-accent)}
+.line1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tool{flex:none;font-family:var(--sd-font-mono);font-weight:600}
+.sum{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sd-font-mono);color:var(--sd-ink-3)}
+.ev[data-v="deny"] .tool,.ev[data-v="deny"] .why{color:var(--sd-st-blocked)}
+.why{font-family:var(--sd-font-mono)}
+.said{max-width:72ch;white-space:pre-wrap;font-size:12.5px}
+.said code{font-family:var(--sd-font-mono);font-size:.92em;background:rgba(23,24,28,.06);padding:0 3px;border-radius:2px}
+.callout{max-width:72ch;margin:2px 0;padding:8px 10px;border:1px solid rgba(161,92,7,.4);border-radius:8px;background:rgba(161,92,7,.08)}
+.callout .head{font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-st-blocked)}
+.callout .q{margin-top:2px;font-size:12.5px}
+.composer{margin:0 16px 14px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface)}
+.composer .text{padding:10px 12px 4px;min-height:44px;font-size:13px;line-height:1.5;color:var(--sd-ink)}
+.composer .bar{display:flex;align-items:center;gap:6px;padding:6px 8px 8px}
+.chip{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 8px;border:1px solid var(--sd-rule);border-radius:999px;font-size:11px;color:var(--sd-ink-2);background:transparent}
+.chip .mono{color:var(--sd-ink-3)}
+.composer .bar .primary{margin-left:auto;min-height:28px}
+.kbd{padding:0 4px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:10.5px;line-height:1.5;opacity:.6}
+.files{border-bottom:1px solid var(--sd-rule)}
+.file{display:flex;align-items:center;gap:8px;padding:6px 16px;font-family:var(--sd-font-mono);font-size:11.5px}
+.file[data-on="true"]{background:var(--sd-card-row)}
+.file .path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .add{color:var(--sd-st-done)}.file .del{color:var(--sd-st-failed)}
+.file .rev{color:var(--sd-ink-3);font-family:var(--sd-font-ui)}
+.diff{flex:1;min-height:0;overflow:hidden;font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.55}
+.hunk{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px;background:var(--sd-sunk);color:var(--sd-ink-3);border-top:1px solid var(--sd-rule);border-bottom:1px solid var(--sd-rule)}
+.hunk .acts{display:flex;gap:4px}
+.hunk .btn{min-height:22px;padding:0 8px;font-size:11px;font-family:var(--sd-font-ui)}
+.dl{display:grid;grid-template-columns:3.2rem 1fr;padding:0 16px 0 0;white-space:pre}
+.dl .n{padding-left:16px;color:var(--sd-ink-3);text-align:right;padding-right:10px}
+.dl[data-t="add"]{background:rgba(23,113,58,.10)}.dl[data-t="del"]{background:rgba(176,36,24,.10)}
+.dl[data-t="add"] .c{color:var(--sd-st-done)}.dl[data-t="del"] .c{color:var(--sd-st-failed)}
+.checks{display:flex;flex-direction:column;gap:4px;padding:8px 16px;border-top:1px solid var(--sd-rule);font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-2)}
+.checks .ok{color:var(--sd-st-done)}
+.wt{display:flex;align-items:center;gap:8px;padding:10px 16px;border-top:1px solid var(--sd-rule);font-size:12px;color:var(--sd-ink-3)}
+.wt .mono{color:var(--sd-ink-2)}
+.wt .btn{margin-left:auto}
+  </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="demo-bar"><span class="step">2 of 10</span><span class="name">Session</span><span class="what">The harness surface. The agent's transcript on the left, its changes on the right, and the composer at the bottom for answering its question or steering it. Here the run is blocked on a question.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="SessionEmpty.html">Back</a><a href="Review.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From Start on a new session, from a card on the Board, a row in the Register, or a recent session in the sidebar.</div>
+<div class="app">
+<div class="sidebar">
+  <div class="brand">SIRDAR</div>
+  <nav class="nav">
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-cur="board"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+  </nav>
+  <div class="recent">
+    <div class="recent-label">Recent sessions</div>
+    <div class="recentrow" data-current="true"><span class="dot" data-blocked="true"></span><span class="key">SBX-1</span><span class="kind">fix</span></div>
+    <div class="recentrow"><span class="dot" data-live="true"></span><span class="key">SBX-4</span><span class="kind">triage</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-3</span><span class="kind">rca</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
+  </div>
+  <div class="foot">
+    <div class="switcher"><span>acme-support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="quotas">
+      <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
+      <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
+      <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
+    </div>
+    <div class="btn" data-sb="new">New session</div>
+  </div>
+</div>
+<div class="sheet">
+  <div class="topbar">
+    <span class="key">SBX-1</span><span class="kind">fix</span><span class="badge" data-s="blocked">blocked · waiting on you</span>
+    <span class="title">Product 00219 stock shows 1 more than the movement report</span>
+    <div class="stats"><span class="stat">claude · <b>sonnet</b></span><span class="stat"><b>04:12</b></span><span class="stat"><b>23</b> turns</span><span class="stat"><b>$0.41</b></span></div>
+    <span class="btn ghost">Cancel</span>
+  </div>
+  <div class="body">
+    <div class="left">
+      <div class="stream">
+        <div class="sys">Session opened from <span class="mono">SBX-1</span> · bundle: ticket, 3 helpdesk messages, 1 attachment · playbook <span class="mono">stock-ledger</span> · worktree <span class="mono">.sirdar/worktrees/run-7f3a</span></div>
+        <div class="you"><span class="who">you</span><div class="say">Triage is done and the root cause is confirmed. Fix it in the worktree: keep the change to the Return branch and add a test for a partial return.</div></div>
+        <div class="turn"><span>turn 1</span><span class="line"></span><span>00:04</span></div>
+        <div class="ev" data-v="allow"><span class="at">00:05</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Read</span><span class="sum">app/ledger.go · 212 lines</span></div></div></div>
+        <div class="ev" data-v="allow"><span class="at">00:06</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Grep</span><span class="sum">"Return" app/ · 4 matches</span></div></div></div>
+        <div class="ev" data-v="allow"><span class="at">00:09</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Bash</span><span class="sum">go test ./app/... · ok 0.8s</span></div></div></div>
+        <div class="ev"><span class="at">00:31</span><span class="mark">·</span><div class="main"><div class="said">The double count is in <code>ApplyMovement</code>: a Return is applied as a receipt on line 89 and then again by the adjustment branch on line 91, which was added for partial returns and never guarded. I will guard the second branch on <code>m.Partial</code> and cover both paths in the test.</div></div></div>
+        <div class="turn"><span>turn 2</span><span class="line"></span><span>00:34</span></div>
+        <div class="ev" data-v="write"><span class="at">00:35</span><span class="mark">edit</span><div class="main"><div class="line1"><span class="tool">Edit</span><span class="sum">app/ledger.go · +4 −6 · inside the worktree</span></div></div></div>
+        <div class="ev" data-v="write"><span class="at">00:52</span><span class="mark">edit</span><div class="main"><div class="line1"><span class="tool">Write</span><span class="sum">app/ledger_test.go · +21 · inside the worktree</span></div></div></div>
+        <div class="ev" data-v="deny"><span class="at">01:03</span><span class="mark">no</span><div class="main"><div class="line1"><span class="tool">Bash</span><span class="sum">git commit -m "fix: guard partial return"</span></div><div class="why">read-only outside the worktree: commits are yours to make</div></div></div>
+        <div class="ev" data-v="allow"><span class="at">01:10</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Bash</span><span class="sum">go test ./app/... · ok 1.2s · 12 passed</span></div></div></div>
+        <div class="ev" data-v="callout"><span class="at">01:14</span><span class="mark">?</span><div class="main"><div class="callout"><div class="head">The agent is asking</div><div class="q">Ledgers already affected still carry the extra unit. Should the resolution note propose a one-off recount for those SKUs, or leave existing balances alone?</div></div></div></div>
+      </div>
+      <div class="composer">
+        <div class="text">Propose the recount as a separate step in the resolution note. No schema change, and do not touch balances in this fix.</div>
+        <div class="bar">
+          <span class="chip">Attach</span>
+          <span class="chip">Playbook <span class="mono">stock-ledger</span></span>
+          <span class="chip">Model <span class="mono">claude · sonnet</span></span>
+          <span class="primary">Answer <span class="kbd">⌘↵</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="right">
+      <div class="tabs"><span class="tab" data-on="true">Changes<span class="n">2</span></span><span class="tab">Note</span><span class="tab">Bundle</span><span class="tab">Tools<span class="n">9</span></span></div>
+      <div class="files">
+        <div class="file" data-on="true"><span class="path">app/ledger.go</span><span class="add">+4</span><span class="del">−6</span><span class="rev">reviewed</span></div>
+        <div class="file"><span class="path">app/ledger_test.go</span><span class="add">+21</span><span class="del">−0</span><span class="rev">new</span></div>
+      </div>
+      <div class="diff">
+        <div class="hunk"><span>@@ -88,12 +88,10 @@ func (l *Ledger) ApplyMovement(m Movement)</span><span class="acts"><span class="btn pale">Keep</span><span class="btn ghost">Drop</span></span></div>
+        <div class="dl"><span class="n">88</span><span class="c">    case Return:</span></div>
+        <div class="dl"><span class="n">89</span><span class="c">        l.onHand[m.SKU] += m.Qty</span></div>
+        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust reserved</span></div>
+        <div class="dl" data-t="del"><span class="n">91</span><span class="c">-       l.adjust(m.SKU, m.Qty)</span></div>
+        <div class="dl" data-t="del"><span class="n">92</span><span class="c">-       if m.Partial {</span></div>
+        <div class="dl" data-t="del"><span class="n">93</span><span class="c">-           l.reserved[m.SKU] -= m.Qty</span></div>
+        <div class="dl" data-t="del"><span class="n">94</span><span class="c">-       }</span></div>
+        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation;</span></div>
+        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // a full one is counted by the receipt</span></div>
+        <div class="dl" data-t="add"><span class="n">92</span><span class="c">+       if m.Partial {</span></div>
+        <div class="dl" data-t="add"><span class="n">93</span><span class="c">+           l.reserved[m.SKU] -= m.Qty</span></div>
+        <div class="dl"><span class="n">94</span><span class="c">        }</span></div>
+        <div class="dl"><span class="n">95</span><span class="c">        l.log(m)</span></div>
+        <div class="dl"><span class="n">96</span><span class="c">    case Sale:</span></div>
+      </div>
+      <div class="checks"><span><span class="ok">ok</span>  go build ./...</span><span><span class="ok">ok</span>  go vet ./...</span><span><span class="ok">ok</span>  go test ./app/... · 12 passed · 1.2s</span></div>
+      <div class="wt"><span>Branch</span><span class="mono">sirdar/SBX-1</span><span class="btn">Create branch</span></div>
+    </div>
+  </div>
+</div>
+</div>
+<script>
+(function(){
+  var map={"Changes": "Review.html", "Create branch": "Review.html", "Cancel": "Board.html", "app/ledger.go": "Review.html", "app/ledger_test.go": "Review.html", "Answer": "Session.html"}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); var keys=Object.keys(map).sort(function(a,b){return b.length-a.length;}); var k=keys.find(function(k){return t===k||t.indexOf(k+' ')===0;}); if(k) link(el,map[k]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
+</body>
+</html>

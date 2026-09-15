@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 )
 
@@ -839,22 +840,95 @@ func argTokens(segment string) []string {
 }
 
 // decideMCP applies permissions.mcp when the workspace configured it, and
-// the write-verb heuristic when it did not.
+// the write-verb heuristic when it did not. Both answers come out of
+// DecideMCPTool, which is also what `sirdar mcp tools` reports: one
+// function, so a verdict read without a run is the verdict a run gets.
 func (p *PermissionPolicy) decideMCP(tool string) Decision {
-	if len(p.MCPAllow) > 0 {
-		for _, pattern := range p.MCPAllow {
-			if MatchGlob(pattern, tool) {
-				return Decision{Allow: true}
-			}
-		}
+	v := DecideMCPTool(tool, p.MCPAllow)
+	switch {
+	case v.Allow:
+		return Decision{Allow: true}
+	case v.Rule == MCPRuleNotListed:
 		return Decision{Allow: false, Message: "Sirdar policy: MCP tool " + tool +
-			" is not in permissions.mcp (" + strings.Join(p.MCPAllow, ", ") + ")"}
-	}
-	if MCPLooksLikeWrite(tool) {
+			" is not in permissions.mcp (" + v.Detail + ")"}
+	default:
 		return Decision{Allow: false, Message: "Sirdar policy: MCP tool " + tool +
 			" looks like a write and is not in permissions.mcp"}
 	}
-	return Decision{Allow: true}
+}
+
+// MCPRule names the rule that settled an MCP tool's verdict, so a caller
+// can say more than allowed/denied without deriving the decision a second
+// time from the tool name.
+type MCPRule string
+
+const (
+	// MCPRulePattern allowed the tool: Detail is the permissions.mcp
+	// pattern it matched.
+	MCPRulePattern MCPRule = "pattern"
+	// MCPRuleNotListed denied it: permissions.mcp is non-empty and no
+	// pattern in it matched. Detail is that list, comma-separated.
+	MCPRuleNotListed MCPRule = "not-listed"
+	// MCPRuleWriteWord denied it: Detail is the write word in its name.
+	MCPRuleWriteWord MCPRule = "write-word"
+	// MCPRulePassthrough denied it: Detail is the word that makes the name
+	// describe a transport rather than an operation.
+	MCPRulePassthrough MCPRule = "passthrough"
+	// MCPRuleUnrecognised denied it: the name carries no read word at all,
+	// so nothing in it says the call only reads.
+	MCPRuleUnrecognised MCPRule = "unrecognised"
+	// MCPRuleReadWord allowed it: Detail is the read word, with no write
+	// or passthrough word beside it.
+	MCPRuleReadWord MCPRule = "read-word"
+)
+
+// MCPVerdict is the whole answer about one MCP tool: the decision a run
+// would get, the rule that settled it, and the pattern or word that rule
+// turned on.
+type MCPVerdict struct {
+	Allow  bool
+	Rule   MCPRule
+	Detail string
+}
+
+// Reason renders the verdict as the sentence `sirdar mcp tools` prints
+// beside a tool and the API returns in its reason field.
+func (v MCPVerdict) Reason() string {
+	switch v.Rule {
+	case MCPRulePattern:
+		return "matched permissions.mcp pattern " + strconv.Quote(v.Detail)
+	case MCPRuleNotListed:
+		return "not in permissions.mcp (" + v.Detail + ")"
+	case MCPRuleWriteWord:
+		return "write word " + strconv.Quote(v.Detail) + " in the name"
+	case MCPRulePassthrough:
+		return "generic passthrough: " + strconv.Quote(v.Detail) +
+			" names a transport, so the arguments decide what the call does"
+	case MCPRuleUnrecognised:
+		return "no read word in the name, so nothing in it says the call only reads"
+	case MCPRuleReadWord:
+		return "read word " + strconv.Quote(v.Detail) + ", with no write word beside it"
+	default:
+		return string(v.Rule)
+	}
+}
+
+// DecideMCPTool answers for one namespaced tool name (mcp__server__tool)
+// under one permissions.mcp allow-list, exactly as a run's policy does: a
+// non-empty allow-list is the whole rule, an empty one falls back to the
+// name heuristic. PermissionPolicy.Decide and `sirdar mcp tools` both go
+// through here, so what an operator is shown and what a session is given
+// cannot drift apart.
+func DecideMCPTool(tool string, allow []string) MCPVerdict {
+	if len(allow) > 0 {
+		for _, pattern := range allow {
+			if MatchGlob(pattern, tool) {
+				return MCPVerdict{Allow: true, Rule: MCPRulePattern, Detail: pattern}
+			}
+		}
+		return MCPVerdict{Rule: MCPRuleNotListed, Detail: strings.Join(allow, ", ")}
+	}
+	return mcpNameVerdict(tool)
 }
 
 // MCPLooksLikeWrite reports whether an MCP tool's name describes anything
@@ -884,33 +958,40 @@ func (p *PermissionPolicy) decideMCP(tool string) Decision {
 // fails closed for a workspace that configured nothing, and
 // permissions.mcp is how a workspace that needs one of these says so.
 func MCPLooksLikeWrite(tool string) bool {
+	return !mcpNameVerdict(tool).Allow
+}
+
+// mcpNameVerdict is MCPLooksLikeWrite with its reasoning kept: the rule
+// that decided and the word that rule turned on. MCPLooksLikeWrite is the
+// boolean view of the same walk, so the two cannot disagree.
+func mcpNameVerdict(tool string) MCPVerdict {
 	words := mcpNameWords(tool)
 
 	for _, w := range words {
 		if mcpWriteVerbs[w] {
-			return true
+			return MCPVerdict{Rule: MCPRuleWriteWord, Detail: w}
 		}
 	}
 	for _, w := range words {
 		if mcpPassthroughWords[w] {
-			return true
+			return MCPVerdict{Rule: MCPRulePassthrough, Detail: w}
 		}
 	}
 	// A tool called nothing but "query" names no object to query, which is
 	// the same generic passthrough an api_request is.
 	if len(words) == 1 && words[0] == "query" {
-		return true
+		return MCPVerdict{Rule: MCPRulePassthrough, Detail: "query"}
 	}
 	for _, w := range words {
 		if mcpReadWords[w] {
-			return false
+			return MCPVerdict{Allow: true, Rule: MCPRuleReadWord, Detail: w}
 		}
 	}
 	// No write word, no passthrough word, and no read word either: the name
 	// says nothing this heuristic recognises, so it is judged a write
 	// rather than approved unseen. A workspace that knows better names the
 	// tool in permissions.mcp.
-	return true
+	return MCPVerdict{Rule: MCPRuleUnrecognised}
 }
 
 // mcpNameWords splits an MCP tool's own name segment into lower-case
