@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest'
  *
  * `src/ui/library.test.ts` checks that no component declares a colour and that
  * every component uses logical properties. Those rules were never only about
- * the library: a hex slipped into `panels.css` looks right in the theme it was
+ * the library: a hex slipped into `board.css` looks right in the theme it was
  * written in and wrong in the other one, and a `margin-left` in `run.css` puts
  * the quote rail on the wrong side of an Arabic note. Both failures are
  * invisible to a type checker and to every render test in this suite, which is
@@ -44,7 +44,6 @@ describe("the app's own stylesheets", () => {
   it('finds the sheets it is meant to be checking', () => {
     const names = SHEETS.map((path) => relative(SRC, path))
     expect(names).toContain('styles.css')
-    expect(names).toContain('components/panels.css')
     expect(names).toContain('components/run/run.css')
     expect(names).toContain('components/shell/shell.css')
     expect(names).toContain('components/shell/sidebar.css')
