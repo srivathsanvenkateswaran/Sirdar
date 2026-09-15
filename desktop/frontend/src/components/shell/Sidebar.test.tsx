@@ -236,7 +236,9 @@ describe('the sidebar footer', () => {
 
     const { onNavigate } = mount()
     expect(screen.queryByRole('button', { name: /Run eval/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    const filled = screen.getByRole('button', { name: 'New session' })
+    expect(filled).toHaveAttribute('data-variant', 'primary')
+    fireEvent.click(filled)
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 

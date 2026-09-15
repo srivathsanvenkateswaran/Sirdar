@@ -4,7 +4,11 @@
 
 The block pinned to the bottom of the app's sidebar: a title row ("Plan
 usage"), one quota chip per budgeted provider, and the one button that starts
-a session — or the screen's own primary action, when a screen publishes one.
+a session — or the screen's own primary action, when a screen publishes one
+with the default `footer` placement. A screen that publishes with
+`placement: 'screen'` draws its filled button itself, in the place its mock
+puts it, and New session steps down to the bordered style while that screen
+is up, so the window holds one filled button at a time.
 
 Built. `desktop/frontend/src/ui/sidebar-footer-card/`. It takes over from the
 right-hand half of `styles.css` `.header` — the workspace `select`, the
@@ -24,7 +28,9 @@ bar when `docs/design/03-desktop-app.md` section 5 replaced it with a sidebar.
 - `div.sd-sidebar-foot__quotas` — a column of quota chips, scrolling past
   32vh so a workspace with six budgeted providers cannot push the action off
   the window.
-- `div.sd-sidebar-foot__action` — the screen's primary button, full width.
+- `div.sd-sidebar-foot__action` — one button, full width: the screen's
+  published primary (`footer` placement), or New session — filled when no
+  screen publishes, bordered while one publishes with `screen` placement.
 
 ## States
 
@@ -57,8 +63,9 @@ bar when `docs/design/03-desktop-app.md` section 5 replaced it with a sidebar.
 - **Do** let the quota column scroll. **Don't** let it grow: the primary
   action is the one thing in the sidebar that must always be reachable.
 - **Don't** put a second button beside the primary one. One filled commit
-  action per screen is the rule the app shell is built on, and the card is
-  where the Board's lives.
+  action per screen is the rule the app shell is built on; a screen that
+  draws its own (New session's Start, Eval's Run suite) says so with
+  `placement: 'screen'` rather than leaving two filled buttons in the window.
 - **Do** give the card a `role="group"` with a name. Pinned chrome with no
   name is a run of unrelated controls to a screen reader.
 
@@ -73,6 +80,11 @@ clear **15.70 / 12.51** and **7.37 / 6.60**. Reduced motion: nothing here
 moves.
 
 ## Changelog
+
+### 2026-09-15 (screens)
+The published action gained a `placement`. With `screen`, the footer stops
+drawing the action and demotes New session to the bordered style instead; New
+session's Start and Eval's Run suite are the first two screens to use it.
 
 ### 2026-09-15 (v2 register)
 Gains a `title` slot ("Plan usage" in the app, with a chevron), drawn above the
