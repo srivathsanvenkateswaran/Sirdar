@@ -73,6 +73,7 @@ nav:
       - Dogfood findings: research/07-dogfood-findings.md
       - httpx extraction: research/08-httpx-extraction.md
       - Qwen Code wire formats: research/09-qwen-wire-formats.md
+      - Kimi Code wire formats: research/12-kimi-wire-formats.md
       - Adapters:
           - Azure DevOps: research/adapters/azure-devops.md
           - Front: research/adapters/front.md
