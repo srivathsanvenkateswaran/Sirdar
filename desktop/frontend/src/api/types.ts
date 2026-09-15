@@ -12,7 +12,8 @@ export type Provider = (typeof PROVIDERS)[number];
 export type NoteKind = ''|'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: Provider; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
-export interface RunSummary { runId: string; key: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+/** `title` is the ticket's, read off the run's bundle or note; empty when neither names one. */
+export interface RunSummary { runId: string; key: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[]; title?: string }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`

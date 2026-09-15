@@ -121,3 +121,12 @@ export function parseKeys(input: string): string[] {
   }
   return out
 }
+
+/**
+ * The one line a screen shows for a failure. An `Error` is its message; a
+ * transport that rejected with anything else is shown as that thing's text,
+ * so a bare string or a number thrown somewhere still says something.
+ */
+export function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
