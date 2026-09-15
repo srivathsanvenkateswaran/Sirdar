@@ -199,7 +199,17 @@ function Shell(): JSX.Element {
       break
     case 'review':
       screen = (
-        <Review runId={shown.runId} onBack={() => navigate({ name: 'run', runId: shown.runId })} />
+        <Review
+          transport={state.transport}
+          workspaceId={workspaceId}
+          runId={shown.runId}
+          tickets={tickets}
+          onBack={() => navigate({ name: 'run', runId: shown.runId })}
+          // The session opens on its note. Its route carries no tab yet, so
+          // this is the session itself; the tab is the session screen's to
+          // take from the address once it has one.
+          onOpenNote={() => navigate({ name: 'run', runId: shown.runId })}
+        />
       )
       break
     case 'register':
