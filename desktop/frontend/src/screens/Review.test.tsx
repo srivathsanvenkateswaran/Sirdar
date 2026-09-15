@@ -1,6 +1,8 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { RunDetail as RunDetailData, RunEvent } from '../api/types'
+import { stubMatchMedia } from '../lib/mediaStub'
+import { BELOW_COMPACT } from '../lib/useMediaQuery'
 import { createFakeTransport, diff, ticket, type FakeTransport } from '../store/fakeTransport'
 import Review from './Review'
 
@@ -86,6 +88,38 @@ afterEach(() => {
 })
 
 describe('the Change review screen', () => {
+  it('turns the file rail into a select under 1024', async () => {
+    const media = stubMatchMedia([BELOW_COMPACT])
+    try {
+      renderReview(fake())
+      await screen.findByRole('heading', { name: 'OMNI-1' })
+      const rail = screen.getByRole('navigation', { name: 'Files' })
+      const pick = await within(rail).findByRole('combobox', { name: 'File' })
+      expect(within(rail).queryByRole('button')).toBeNull()
+      const options = within(pick).getAllByRole('option')
+      expect(options.map((o) => o.textContent)).toEqual([
+        'internal/export/statement.go  +9 −2  modified',
+        'internal/export/statement_test.go  +9 −0  new',
+      ])
+      expect(pick).toHaveValue('internal/export/statement.go')
+
+      fireEvent.change(pick, { target: { value: 'internal/export/statement_test.go' } })
+      expect(pick).toHaveValue('internal/export/statement_test.go')
+      expect(screen.getByRole('region', { name: 'Change' })).toHaveTextContent(
+        'internal/export/statement_test.go',
+      )
+      // The checks stay with the rail whatever its shape.
+      expect(within(rail).getByRole('list', { name: 'Checks' })).toBeInTheDocument()
+
+      // The window widens and the rows come back.
+      act(() => media.set(BELOW_COMPACT, false))
+      expect(within(rail).queryByRole('combobox')).toBeNull()
+      expect(within(rail).getAllByRole('button')).toHaveLength(2)
+    } finally {
+      media.restore()
+    }
+  })
+
   it('renders the run, the fake diff, the checks and the footer', async () => {
     renderReview(fake())
     expect(await screen.findByRole('heading', { name: 'OMNI-1' })).toBeInTheDocument()

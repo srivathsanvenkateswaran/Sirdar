@@ -4,6 +4,7 @@ import { elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand, rekeyAfterDrop } from '../lib/review'
 import { LIVE, useRunFeed } from '../components/run/useRunFeed'
+import { BELOW_COMPACT, useMediaQuery } from '../lib/useMediaQuery'
 import Button from '../ui/button'
 import DiffView, { hunkKey, parsePatch, type DiffMode, type HunkDecision } from '../ui/diff-view'
 import KindChip from '../ui/kind-chip'
@@ -76,6 +77,9 @@ export default function Review({
   const [copyError, setCopyError] = useState('')
   const [now, setNow] = useState(() => Date.now())
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Under 1024 the rail runs across the top of the change and the file list
+  // is a select rather than a column of rows.
+  const narrow = useMediaQuery(BELOW_COMPACT)
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
@@ -283,20 +287,37 @@ export default function Review({
               'No files'
             )}
           </div>
-          {diff?.files.map((file) => (
-            <button
-              key={file.path}
-              type="button"
-              className="review-file"
-              aria-current={file.path === activePath ? 'true' : undefined}
-              onClick={() => setActivePath(file.path)}
-            >
-              <span className="review-file__path">{file.path}</span>
-              <span className="review-add">+{file.additions}</span>
-              <span className="review-del">−{file.deletions}</span>
-              <span className="review-file__word">{fileWord(file.status, keptAll(file.path))}</span>
-            </button>
-          ))}
+          {narrow && diff && diff.files.length > 0 ? (
+            <label className="review-pick">
+              <span className="visually-hidden">File</span>
+              <select
+                className="review-pick__select"
+                value={activePath}
+                onChange={(e) => setActivePath(e.target.value)}
+              >
+                {diff.files.map((file) => (
+                  <option key={file.path} value={file.path}>
+                    {`${file.path}  +${file.additions} −${file.deletions}  ${fileWord(file.status, keptAll(file.path))}`}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            diff?.files.map((file) => (
+              <button
+                key={file.path}
+                type="button"
+                className="review-file"
+                aria-current={file.path === activePath ? 'true' : undefined}
+                onClick={() => setActivePath(file.path)}
+              >
+                <span className="review-file__path">{file.path}</span>
+                <span className="review-add">+{file.additions}</span>
+                <span className="review-del">−{file.deletions}</span>
+                <span className="review-file__word">{fileWord(file.status, keptAll(file.path))}</span>
+              </button>
+            ))
+          )}
           <h3 className="review-railsec">Checks</h3>
           {checks.length === 0 ? (
             <p className="review-checks review-checks--empty">

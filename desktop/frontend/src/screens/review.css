@@ -410,22 +410,80 @@
   user-select: all;
 }
 
-/* Under 1100px the three columns stack: rail, change, pane. */
-@media (max-width: 1100px) {
+/* ---------- the file picker the rail becomes under 1024 ---------- */
+
+.review-pick {
+  display: block;
+  padding-block: 0 var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+}
+
+.review-pick__select {
+  inline-size: 100%;
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+}
+
+/* ---------- narrower windows ---------- */
+
+/* The breakpoints are the ones styles/tokens.css names: 1440, 1200, 1024. */
+
+/* Standard: the rail comes in to 240 and the pane to 320. */
+@media (max-width: 1439px) {
+  .review-body {
+    grid-template-columns: 240px minmax(0, 1fr) 320px;
+  }
+
+  .review-pane {
+    padding: var(--sd-space-4);
+  }
+}
+
+/* Compact: the pane drops under the diff, and the rail keeps the height. */
+@media (max-width: 1199px) {
+  .review-body {
+    grid-template-columns: 240px minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .review-rail {
+    grid-row: 1 / -1;
+  }
+
+  .review-diffcol {
+    border-inline-end: 0;
+  }
+
+  .review-pane {
+    max-block-size: 32vh;
+    border-block-start: 1px solid var(--sd-rule);
+  }
+}
+
+/* Narrow: one column — the rail, with its files as a select, across the
+   top; the change; the pane under it. */
+@media (max-width: 1023px) {
   .review-body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
     overflow-y: auto;
   }
 
-  .review-rail,
-  .review-diffcol {
+  .review-rail {
+    grid-row: auto;
+    max-block-size: 40vh;
     border-inline-end: 0;
     border-block-end: 1px solid var(--sd-rule);
   }
 
-  .review-rail,
-  .review-pane {
-    overflow: visible;
+  .review-railsec {
+    margin-block-start: 0;
   }
 
   .review-diff {
