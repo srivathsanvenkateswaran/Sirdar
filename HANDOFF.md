@@ -142,24 +142,22 @@ or `sirdar fix`. Each has only been exercised against a scripted fake server or 
 real model or a real destination. `provider: qwen`'s fail-closed loopback permission hook has
 never been run against a real Qwen login — only against the scripted fake CLI in tests. Help
 Scout's `threadsPageSize` (50) is inferred from the vendor's documented default for list
-endpoints, not observed against a real paginated account. `permissions.fetch` has been exercised against the fake CLIs and the tool
-set, never against a real agent's fetch: the argument shape a live Qwen `web_fetch` or a given
-ACP agent's fetch request actually uses is read off the protocol and the tool schemas, and a
-shape carrying the URL under none of `url`, `urls` or `prompt` would be denied as "named no
-URL" rather than judged. Codex's fix-mode sandbox is a
-`workspace-write` config Sirdar sets but does not implement or verify; the snapshot guard
-(`internal/fix/guard.go`) is the actual backstop if that sandbox lets a write through, including
-onto `.git`.
+endpoints, not observed against a real paginated account. `permissions.fetch` has been exercised
+against the fake CLIs and the tool set, never against a real agent's fetch: the argument shape a
+live Qwen `web_fetch` or a given ACP agent's fetch request actually uses is read off the protocol
+and the tool schemas, and a shape carrying the URL under none of `url`, `urls` or `prompt` would
+be denied as "named no URL" rather than judged.
 
-## What is unverified
-
-- **`item/fileChange/requestApproval` firing under Codex's `sandbox: workspace-write` +
-  `approvalPolicy: untrusted`.** `docs/research/06-wire-formats.md` confirms the
-  command-approval and MCP-elicitation paths against a live `codex app-server` turn; the
-  file-change path was built the same way, off the app-server's declared `ServerRequest`
-  schema, but has not itself been watched fire — no turn that actually has Codex write a file
-  has been run against it. One dogfood fix turn where the agent writes through a hook would
-  confirm it; none has been run, to keep this round free of paid Codex turns.
+Codex's fix-mode sandbox is a `workspace-write` config Sirdar sets but does not implement or
+verify; the snapshot guard (`internal/fix/guard.go`) is the actual backstop if that sandbox lets
+a write through, including onto `.git`. Within that sandbox, whether
+`item/fileChange/requestApproval` actually fires under `sandbox: workspace-write` +
+`approvalPolicy: untrusted` is itself unverified: `docs/research/06-wire-formats.md` confirms
+the command-approval and MCP-elicitation paths against a live `codex app-server` turn, and the
+file-change path was built the same way, off the app-server's declared `ServerRequest` schema,
+but has not itself been watched fire — no turn that actually has Codex write a file has been run
+against it. One dogfood fix turn where the agent writes through a hook would confirm it; none has
+been run, to keep this round free of paid Codex turns.
 
 ## Known gaps (deliberate)
 
