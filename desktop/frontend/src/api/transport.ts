@@ -4,12 +4,17 @@ import type {
   ConfigSummary,
   EvalReport,
   GoldenEntry,
+  MCPCallResult,
+  MCPInventory,
+  MCPToolList,
   RetroReport,
   Quota,
   RegisterRow,
   RunDetail,
+  RunDiff,
   RunEvent,
   RunSummary,
+  SteerStarted,
   Ticket,
   Transport,
   Workspace,
@@ -83,6 +88,33 @@ async function postJSON<T>(path: string, body?: unknown): Promise<T> {
   return (text ? JSON.parse(text) : undefined) as T
 }
 
+/**
+ * A hand-run MCP call is the one route whose refusal is an answer rather than
+ * an error: a denied tool comes back 403 with the same `MCPCallResult` body an
+ * allowed one gets, verdict and reason filled in. The tool tester shows that
+ * verdict; it is the point of the screen. Anything else that is not 2xx is
+ * the usual error envelope.
+ */
+async function postMCPCall(path: string, body: unknown): Promise<MCPCallResult> {
+  const res = await fetch(`${API}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  })
+  if (res.ok) return (await res.json()) as MCPCallResult
+  if (res.status === 403) {
+    const text = await res.text()
+    try {
+      const parsed = JSON.parse(text) as MCPCallResult | ApiError
+      if ('verdict' in parsed && parsed.verdict === 'denied') return parsed
+    } catch {
+      // Not the call result; fall through to the error envelope.
+    }
+    return fail(new Response(text, { status: res.status, statusText: res.statusText }))
+  }
+  return fail(res)
+}
+
 /** HTTP + SSE transport, used by `sirdar serve` and by `npm run dev`. */
 export function createHTTPTransport(): Transport {
   return {
@@ -151,6 +183,33 @@ export function createHTTPTransport(): Transport {
       postJSON<{ jobId: string }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/resume`,
         { answer },
+      ),
+    steer: (ws, runId, text) =>
+      postJSON<SteerStarted>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/steer`,
+        { text },
+      ),
+    runDiff: (ws, runId) =>
+      getJSON<RunDiff>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/diff`,
+      ),
+    dropHunk: (ws, runId, req) =>
+      postJSON<RunDiff>(
+        `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/diff/drop`,
+        { path: req.path, hunk: req.hunk, etag: req.etag },
+      ),
+    mcpServers: (ws, connect) =>
+      getJSON<MCPInventory>(
+        `/workspaces/${encodeURIComponent(ws)}/mcp${query({ connect: connect ? 1 : undefined })}`,
+      ),
+    mcpTools: (ws, server) =>
+      getJSON<MCPToolList>(
+        `/workspaces/${encodeURIComponent(ws)}/mcp/${encodeURIComponent(server)}/tools`,
+      ),
+    mcpCall: (ws, server, tool, args) =>
+      postMCPCall(
+        `/workspaces/${encodeURIComponent(ws)}/mcp/${encodeURIComponent(server)}/call`,
+        { tool, args: args ?? {} },
       ),
     cancel: async (jobId) => {
       await postJSON<void>(`/jobs/${encodeURIComponent(jobId)}/cancel`)
@@ -242,6 +301,13 @@ interface BridgeBindings {
   AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
   ConfigSummary(ws: string): Promise<ConfigSummary>
   Resume(ws: string, runId: string, answer: string): Promise<string>
+  Steer(ws: string, runId: string, text: string): Promise<string>
+  RunDiff(ws: string, runId: string): Promise<RunDiff>
+  DropHunk(ws: string, runId: string, path: string, hunk: number, etag: string): Promise<RunDiff>
+  MCPServers(ws: string, connect: boolean): Promise<MCPInventory>
+  MCPTools(ws: string, server: string): Promise<MCPToolList>
+  /** A denied tool answers normally with `verdict: 'denied'`; only a call that could not be made rejects. */
+  MCPCall(ws: string, server: string, tool: string, args: Record<string, unknown>): Promise<MCPCallResult>
   Cancel(jobId: string): Promise<void>
   Version(): Promise<string>
 }
@@ -329,6 +395,33 @@ export function createWailsTransport(): Transport {
     resume: async (ws, runId, answer) => ({
       jobId: await bridge().Resume(ws, runId, answer ?? ''),
     }),
+    steer: async (ws, runId, text) => ({
+      jobId: await bridge().Steer(ws, runId, text),
+      runId,
+    }),
+    runDiff: async (ws, runId) => {
+      const d = await bridge().RunDiff(ws, runId)
+      return { ...d, files: list(d.files) }
+    },
+    dropHunk: async (ws, runId, req) => {
+      const d = await bridge().DropHunk(ws, runId, req.path, req.hunk, req.etag)
+      return { ...d, files: list(d.files) }
+    },
+    mcpServers: async (ws, connect) => {
+      const inv = await bridge().MCPServers(ws, connect ?? false)
+      return {
+        ...inv,
+        servers: list(inv.servers),
+        warnings: list(inv.warnings),
+        permissions: list(inv.permissions),
+      }
+    },
+    mcpTools: async (ws, server) => {
+      const l = await bridge().MCPTools(ws, server)
+      return { ...l, tools: list(l.tools), permissions: list(l.permissions) }
+    },
+    mcpCall: (ws, server, tool, args) =>
+      bridge().MCPCall(ws, server, tool, (args ?? {}) as Record<string, unknown>),
     cancel: async (jobId) => {
       await bridge().Cancel(jobId)
     },
