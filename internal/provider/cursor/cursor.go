@@ -377,6 +377,26 @@ func (p *Provider) SupportsFix() bool { return false }
 // FixRefusal is the reason, the same one Start gives.
 func (p *Provider) FixRefusal() error { return ErrFixUnsupported }
 
+// ErrSteerUnsupported is why `sirdar steer` refuses to continue a run on
+// this provider. The CLI does have --resume, so the refusal is not about
+// the handle: it is that print mode approves its own tool calls, and the
+// read-only guarantee on a triage run rests on the tool set excluded at
+// the start plus a breach noticed after the fact. A follow-up instruction
+// is open-ended in a way the triage prompt is not — "fix it", "run the
+// migration" — and there is nothing here that would refuse the call it
+// leads to before it runs.
+var ErrSteerUnsupported = errors.New(
+	"provider cursor cannot continue a run: the Cursor CLI approves its own tool calls in " +
+		"print mode, so a follow-up instruction cannot be held to the read-only guarantee " +
+		"before a tool runs; re-run the triage, or use provider claude, codex, openai, qwen " +
+		"or acp for `sirdar steer`")
+
+// Continuation is ContinueNone: see ErrSteerUnsupported.
+func (p *Provider) Continuation() provider.Continuation { return provider.ContinueNone }
+
+// SteerRefusal is the reason `sirdar steer` is refused.
+func (p *Provider) SteerRefusal() error { return ErrSteerUnsupported }
+
 // Start launches the CLI with the prompt as its positional argument.
 func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
 	if spec.Mode.IsFix() {

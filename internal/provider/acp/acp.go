@@ -115,6 +115,18 @@ func New(cfg Config) provider.Provider { return &Provider{cfg: cfg} }
 // and in the doctor row.
 func (p *Provider) Name() string { return "acp" }
 
+// Continuation is ContinuePrimed. An ACP session lives in the agent
+// process, which ends with the run; session/load would bring one back,
+// but only an agent that advertises loadSession offers it and that is
+// known only after initialize, once the process exists. A steer therefore
+// opens a fresh session and hands it the run's own note and prompt, and
+// the transcript says so, rather than depending on a capability the run
+// cannot check before it starts.
+func (p *Provider) Continuation() provider.Continuation { return provider.ContinuePrimed }
+
+// SteerRefusal is nil: a primed continuation is always available.
+func (p *Provider) SteerRefusal() error { return nil }
+
 // agentCapabilities is the part of the initialize result this adapter acts
 // on: whether a session can be resumed, and whether images may be sent.
 type agentCapabilities struct {

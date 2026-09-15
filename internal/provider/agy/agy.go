@@ -356,6 +356,25 @@ func (p *Provider) SupportsFix() bool { return false }
 // FixRefusal is the reason, the same one Start gives.
 func (p *Provider) FixRefusal() error { return ErrFixUnsupported }
 
+// ErrSteerUnsupported is why `sirdar steer` refuses to continue a run on
+// this provider. --conversation would resume the CLI's own session; what
+// is missing is any way to judge the tool calls a follow-up instruction
+// leads to before they run. A triage prompt is bounded and the adapter
+// reports a completed write as a breach after the fact; an open-ended
+// instruction is not bounded, and a breach noticed afterwards is not a
+// guarantee.
+var ErrSteerUnsupported = errors.New(
+	"provider agy cannot continue a run: the Antigravity CLI gives a parent process no way " +
+		"to see or refuse a tool call before it runs, so a follow-up instruction cannot be " +
+		"held to the read-only guarantee; re-run the triage, or use provider claude, codex, " +
+		"openai, qwen or acp for `sirdar steer`")
+
+// Continuation is ContinueNone: see ErrSteerUnsupported.
+func (p *Provider) Continuation() provider.Continuation { return provider.ContinueNone }
+
+// SteerRefusal is the reason `sirdar steer` is refused.
+func (p *Provider) SteerRefusal() error { return ErrSteerUnsupported }
+
 // Start launches the CLI and sends the prompt as the first user line.
 func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
 	if spec.Mode.IsFix() {
