@@ -4,9 +4,9 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
 <title>Sirdar walkthrough · Library</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
-:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Figtree,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
 /* v2 scale: the reference app's register. 16px base, 44px nav rows, 24px card padding, 40px controls. */
 body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:16px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
 a{color:#3B3AA6}a:hover{color:#2B2A80}
@@ -34,7 +34,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .switcher svg{width:16px;height:16px;color:var(--sd-ink-3)}
 .quotas{display:flex;flex-direction:column;gap:6px}
 .quota{display:flex;align-items:center;gap:10px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-2)}
-.quota .p{font-weight:600;color:var(--sd-ink);width:64px}
+.quota .p{font-weight:600;color:var(--sd-ink);width:80px;white-space:nowrap}
 .quota .bar{display:block;flex:1;height:6px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
 .quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
 .quota .pct{min-width:3.5ch;text-align:right}
@@ -68,7 +68,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
 .fact{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:6px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:13px;font-weight:500;line-height:26px;white-space:nowrap}
 .mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
-.kbd{padding:0 5px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.5;opacity:.6}
+.kbd{padding:0 5px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:12px;line-height:1.5;opacity:.6}
 .icon{width:20px;height:20px;flex:0 0 auto}
 /* ---------- sheet ---------- */
 .sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:12px 12px 12px 0;border:1px solid var(--sd-rule);border-radius:16px;background:var(--sd-sheet);overflow:hidden}
@@ -131,6 +131,19 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .btn.wide{min-width:160px;min-height:48px;font-size:16px}
 .note-prose{font-size:16.5px;line-height:1.7;color:var(--sd-ink)}
 .note-prose b{font-weight:600}
+/* ---------- provider marks ---------- */
+/* The vendors' own marks (their trademarks, used to say which provider is running), each in its own colour on a
+   neutral tile. Never recoloured: a mark whose brand colour is black takes the ink, which is what black is here. */
+.pv{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);color:var(--sd-ink)}
+.pv svg{width:16px;height:16px}
+.pv.lg{width:40px;height:40px;border-radius:10px}.pv.lg svg{width:22px;height:22px}
+.pv.sm{width:22px;height:22px;border-radius:6px}.pv.sm svg{width:13px;height:13px}
+.pv[data-p="claude"]{color:#D97757}
+.pv[data-p="qwen"]{color:#6950EF}
+.pv[data-p="gemini"]{color:#8E75B2}
+.pvrow{display:inline-flex;align-items:center;gap:10px}
+.pvrow .pn{font-weight:500}
+.pvrow .pm{color:var(--sd-ink-3);font-family:var(--sd-font-mono);font-size:13px}
 /* Library: v2 scale. Sticky bar on the sheet, gallery on the shell ground. */
 .lbar{display:flex;align-items:flex-end;gap:32px;padding:32px 48px 24px;border-bottom:1px solid var(--sd-rule);background:var(--sd-surface)}
 .ltxt{display:flex;flex-direction:column;min-width:0}

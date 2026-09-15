@@ -38,3 +38,12 @@ screen to the reference app's register and borrows these elements from it:
   the settings modal scales from 0.98 and fades over 300ms behind a 200ms scrim; both freeze
   under reduced motion. In the app the same two motions answer navigation and opening
   settings, and nothing else moves except the live-run pulse.
+
+## Provider marks
+
+`marks/` holds the vendors' own marks (Claude, Codex, OpenAI, GitHub Copilot, Antigravity, Gemini,
+Qwen, Cursor, OpenCode, Kimi), as distributed by the Simple Icons and lobehub icon sets. They are
+the vendors' trademarks, used only to say which provider is running a session: each is shown in
+its own colour on a neutral tile and never recoloured or altered. The user chose the official
+marks over original glyphs on 2026-09-15; if a vendor's brand guidelines ever object, the tile
+falls back to the provider's name.
