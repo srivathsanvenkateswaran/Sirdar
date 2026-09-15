@@ -1078,6 +1078,61 @@ Once the list is non-empty it is the whole rule: a tool that matches no pattern 
 heuristic or not. That is the setting to use for a run you want to be read-only by
 construction rather than by naming convention.
 
+### Checking it
+
+Both settings can be read without starting a run, from the CLI or from `sirdar serve`. The
+verdicts come out of the same function the policy calls (`provider.DecideMCPTool`), so what you
+are shown here is what a session gets.
+
+```
+$ sirdar mcp list
+oxo-mysql-stg	workspace	stdio	/usr/local/bin/mysql-mcp --dsn $OXO_DSN
+	env: OXO_DSN
+grafana	workspace	http	https://grafana.example/mcp
+	headers: Authorization
+	note: http transport: Sirdar's own agent loop (provider: openai) starts stdio servers only, …
+permissions.mcp is empty, so each tool is judged by its name
+```
+
+Only names cross, never values: the command line is printed as configured rather than expanded,
+and `env` and `headers` are reduced to their key names. `--connect` starts each server, runs the
+initialize handshake, counts its tools and times it — or prints the error, with the entry's own
+credentials taken back out of whatever the server said. An HTTP 401 or 403 is reported as
+`401 from the token, check its scope`, never with the token.
+
+```
+$ sirdar mcp tools oxo-mysql-stg
+mcp__oxo-mysql-stg__read_query	allowed	read word "read", with no write word beside it
+mcp__oxo-mysql-stg__run_select	denied	write word "run" in the name
+mcp__oxo-mysql-stg__sql_execute	denied	write word "execute" in the name
+4 tool(s) in 612ms; permissions.mcp is empty, so each tool is judged by its name
+```
+
+`sirdar mcp call <server> <tool> [--args '<json>']` runs one by hand. A denied tool is refused
+with the same reason and exit status 2, and its server is never started — the verdict is taken
+before anything is spawned. An allowed one prints the tool's output, capped at 64 KiB with a
+`truncated at 65536 bytes` line when the cap bites.
+
+`sirdar serve` exposes the same three, loopback-only and behind the same cross-site guard as
+every other route:
+
+| Route | What it answers |
+|---|---|
+| `GET /api/workspaces/{id}/mcp` | the servers, with no connection attempted |
+| `GET /api/workspaces/{id}/mcp?connect=1` | the same, each started and its tools counted |
+| `GET /api/workspaces/{id}/mcp/{server}/tools` | every tool with `verdict`, `rule` and `reason` |
+| `POST /api/workspaces/{id}/mcp/{server}/call` | `{"tool":…,"args":{…}}` → `{verdict, reason, result\|error, tookMs, truncated}` |
+
+A denied tool is `403` on the call route, with the verdict and the reason in the body.
+
+Two things differ from a run, both deliberate. `${VAR}` in `.mcp.json` expands here from the
+environment `sirdar` itself runs with, where a run's child environment has had the workspace's
+configured credentials stripped out of it first — so a server whose command line names one may
+start here and not in a session. And with `mcp.workspaceOnly: false` the list includes the
+operator's own global servers, scoped `global`, read from `~/.claude.json`, `~/.mcp.json` and
+`~/.gemini/config/mcp_config.json`; Codex's TOML config is not among them, so a `provider: codex`
+workspace with the setting off will see fewer servers listed than its sessions get.
+
 ### How the permissions reach each provider
 
 `permissions.bash`, `permissions.mcp` and `permissions.fetch` are one policy, applied at

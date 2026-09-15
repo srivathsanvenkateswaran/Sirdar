@@ -665,3 +665,64 @@ func TestMCPAllowListBeatsTheHeuristic(t *testing.T) {
 		t.Error("a tool matching no pattern should be denied")
 	}
 }
+
+// DecideMCPTool is the one function behind both the policy a run applies
+// and the verdict `sirdar mcp tools` prints, so every case has to name the
+// rule that settled it as well as the decision.
+func TestDecideMCPToolNamesTheRule(t *testing.T) {
+	cases := []struct {
+		tool   string
+		allow  []string
+		want   MCPVerdict
+		reason string
+	}{
+		{
+			tool:   "mcp__grafana__query_loki_logs",
+			want:   MCPVerdict{Allow: true, Rule: MCPRuleReadWord, Detail: "query"},
+			reason: `read word "query", with no write word beside it`,
+		},
+		{
+			tool:   "mcp__janus__create_ticket",
+			want:   MCPVerdict{Rule: MCPRuleWriteWord, Detail: "create"},
+			reason: `write word "create" in the name`,
+		},
+		{
+			tool:   "mcp__grafana__grafana_api_request",
+			want:   MCPVerdict{Rule: MCPRulePassthrough, Detail: "request"},
+			reason: `generic passthrough: "request" names a transport, so the arguments decide what the call does`,
+		},
+		{
+			tool:   "mcp__chrome__javascript_tool",
+			want:   MCPVerdict{Rule: MCPRuleUnrecognised},
+			reason: "no read word in the name, so nothing in it says the call only reads",
+		},
+		{
+			tool:   "mcp__metabase__run_query",
+			allow:  []string{"mcp__metabase__run_*", "mcp__x__*"},
+			want:   MCPVerdict{Allow: true, Rule: MCPRulePattern, Detail: "mcp__metabase__run_*"},
+			reason: `matched permissions.mcp pattern "mcp__metabase__run_*"`,
+		},
+		{
+			tool:   "mcp__grafana__list_incidents",
+			allow:  []string{"mcp__metabase__run_*", "mcp__x__*"},
+			want:   MCPVerdict{Rule: MCPRuleNotListed, Detail: "mcp__metabase__run_*, mcp__x__*"},
+			reason: "not in permissions.mcp (mcp__metabase__run_*, mcp__x__*)",
+		},
+	}
+
+	for _, c := range cases {
+		got := DecideMCPTool(c.tool, c.allow)
+		if got != c.want {
+			t.Errorf("DecideMCPTool(%q, %v) = %+v, want %+v", c.tool, c.allow, got, c.want)
+		}
+		if r := got.Reason(); r != c.reason {
+			t.Errorf("DecideMCPTool(%q).Reason() = %q, want %q", c.tool, r, c.reason)
+		}
+		// The policy a run applies has to agree with the verdict, on the
+		// decision if not on the wording.
+		p := &PermissionPolicy{MCPAllow: c.allow}
+		if d := p.Decide(c.tool, nil); d.Allow != got.Allow {
+			t.Errorf("Decide(%q) allow=%v, DecideMCPTool allow=%v", c.tool, d.Allow, got.Allow)
+		}
+	}
+}

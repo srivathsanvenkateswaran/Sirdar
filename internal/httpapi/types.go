@@ -40,4 +40,9 @@ type (
 	WebhookMatchSummary  = app.WebhookMatchSummary
 	WebhookSourceSummary = app.WebhookSourceSummary
 	JobID                = app.JobID
+	MCPInventory         = app.MCPInventory
+	MCPServer            = app.MCPServer
+	MCPTool              = app.MCPTool
+	MCPToolList          = app.MCPToolList
+	MCPCallResult        = app.MCPCallResult
 )
