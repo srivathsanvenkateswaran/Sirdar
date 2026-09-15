@@ -211,6 +211,43 @@ func TestBasicSession(t *testing.T) {
 	}
 }
 
+// TestBashDenialHintReachesTheToolResult: a denied Bash call's message goes
+// out verbatim as the control_response Claude Code shows the model and as
+// the EvPermission event's Text, so the hint that names permissions.bash
+// and echoes what it allows has to survive that whole path, not just
+// policy.Decide's return value.
+func TestBashDenialHintReachesTheToolResult(t *testing.T) {
+	p := New()
+	spec := fakeSpec(t, "testdata/script-bash-hint.jsonl")
+	spec.Policy = &provider.PermissionPolicy{BashAllow: []string{
+		"git log*", "git show*", "git grep*", "rg *", "ls *", "cat *", "head *", "tail *", "wc *", "file *",
+	}}
+
+	s, err := p.Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var denyText string
+	for ev := range s.Events() {
+		if ev.Kind == provider.EvPermission && ev.Decision == "deny" {
+			denyText = ev.Text
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"not permitted by permissions.bash",
+		"allowed here:",
+		"git log*, git show*, git grep*, rg *, ls *, cat *, head *, tail *",
+		"see .sirdar/config.yaml",
+	} {
+		if !strings.Contains(denyText, want) {
+			t.Errorf("deny event Text %q missing %q", denyText, want)
+		}
+	}
+}
+
 func TestArgsAndEnv(t *testing.T) {
 	spec := provider.SessionSpec{Model: "m1", Budget: provider.Budget{MaxTurns: 9}, Resume: "s9", OutputSchema: []byte(`{}`),
 		Env: []string{"A=1", "ANTHROPIC_API_KEY=k", "B=2"}}
