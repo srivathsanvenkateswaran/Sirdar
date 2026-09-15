@@ -1,4 +1,13 @@
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+  type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
+} from 'react'
 import type { FixStart, NoteKind, RunDiff, Transport } from '../api/types'
 import { askedQuestion, elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
@@ -33,6 +42,13 @@ function useRunJob(runId: string): string | undefined {
 }
 
 type Tab = 'changes' | 'note' | 'bundle' | 'tools'
+
+/** The reading direction the tabs are laid out in, from the nearest `dir`. */
+function directionOf(node: HTMLElement | null): 'ltr' | 'rtl' {
+  const dir = node?.closest('[dir]')?.getAttribute('dir')
+  if (dir === 'rtl' || dir === 'ltr') return dir
+  return typeof document !== 'undefined' && document.dir === 'rtl' ? 'rtl' : 'ltr'
+}
 
 /** Keys typed into a field belong to that field, not to the window. */
 function isTyping(target: EventTarget | null): boolean {
@@ -81,6 +97,7 @@ export default function Session(props: {
   const [changed, setChanged] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
   const jobId = useRunJob(runId)
+  const tabsId = useId()
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
@@ -287,6 +304,42 @@ export default function Session(props: {
     { id: 'tools', label: 'Tools', count: tools },
   ]
 
+  const shownIndex = Math.max(
+    tabs.findIndex((t) => t.id === shownTab),
+    0,
+  )
+
+  /**
+   * The tab list is one stop; the arrows move between tabs and select as
+   * they go, the way a tab list is expected to. The arrows are read in the
+   * reader's own direction, so in an Arabic pane the right arrow moves to
+   * the tab on the right.
+   */
+  const onTabKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const rtl = directionOf(e.currentTarget) === 'rtl'
+    let to: number
+    switch (e.key) {
+      case 'ArrowRight':
+        to = rtl ? shownIndex - 1 : shownIndex + 1
+        break
+      case 'ArrowLeft':
+        to = rtl ? shownIndex + 1 : shownIndex - 1
+        break
+      case 'Home':
+        to = 0
+        break
+      case 'End':
+        to = tabs.length - 1
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+    const next = tabs[((to % tabs.length) + tabs.length) % tabs.length]
+    setTab(next.id)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('.session-tab')[tabs.indexOf(next)]?.focus()
+  }
+
   let banner: JSX.Element | null = null
   if (step?.kind === 'tests') {
     banner = step.ok ? (
@@ -394,14 +447,17 @@ export default function Session(props: {
           />
         </div>
         <div className="session-right">
-          <div className="session-tabs" role="tablist" aria-label="Run artefacts">
-            {tabs.map((t) => (
+          <div className="session-tabs" role="tablist" aria-label="Run artefacts" onKeyDown={onTabKey}>
+            {tabs.map((t, i) => (
               <button
                 key={t.id}
                 type="button"
                 role="tab"
+                id={`${tabsId}-tab-${t.id}`}
                 className="session-tab"
                 aria-selected={shownTab === t.id}
+                aria-controls={`${tabsId}-panel`}
+                tabIndex={i === shownIndex ? 0 : -1}
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
@@ -409,40 +465,47 @@ export default function Session(props: {
               </button>
             ))}
           </div>
-          {shownTab === 'changes' && isFix ? (
-            <ChangesPane
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              checks={checks}
-              fix={detail.fix}
-              reload={finished}
-              onLoaded={onDiffLoaded}
-              onOpenReview={onOpenReview}
-              onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
-              acceptPending={pending === 'accept'}
-              acceptError={pending === 'accept' ? '' : actionError}
-            />
-          ) : null}
-          {shownTab === 'note' ? (
-            <NoteView
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              kinds={noteKinds}
-              reload={finished}
-            />
-          ) : null}
-          {shownTab === 'bundle' ? (
-            <BundleView
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              bundleDir={detail.bundleDir}
-              promptPath={detail.promptPath}
-            />
-          ) : null}
-          {shownTab === 'tools' ? <ToolsPane events={events} startedAt={detail.startedAt} /> : null}
+          <div
+            className="session-panel"
+            role="tabpanel"
+            id={`${tabsId}-panel`}
+            aria-labelledby={`${tabsId}-tab-${shownTab}`}
+          >
+            {shownTab === 'changes' && isFix ? (
+              <ChangesPane
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                checks={checks}
+                fix={detail.fix}
+                reload={finished}
+                onLoaded={onDiffLoaded}
+                onOpenReview={onOpenReview}
+                onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
+                acceptPending={pending === 'accept'}
+                acceptError={pending === 'accept' ? '' : actionError}
+              />
+            ) : null}
+            {shownTab === 'note' ? (
+              <NoteView
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                kinds={noteKinds}
+                reload={finished}
+              />
+            ) : null}
+            {shownTab === 'bundle' ? (
+              <BundleView
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                bundleDir={detail.bundleDir}
+                promptPath={detail.promptPath}
+              />
+            ) : null}
+            {shownTab === 'tools' ? <ToolsPane events={events} startedAt={detail.startedAt} /> : null}
+          </div>
         </div>
       </div>
     </div>

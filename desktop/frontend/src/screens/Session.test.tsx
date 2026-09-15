@@ -513,6 +513,31 @@ describe('Session', () => {
   })
 
   describe('the other tabs', () => {
+    it('is one tab stop, moved by the arrows, and names its panel', async () => {
+      const f = fake({ detail: FIX })
+      renderSession(f)
+      const changes = await screen.findByRole('tab', { name: /Changes/ })
+      const note = screen.getByRole('tab', { name: 'Note' })
+      const panel = screen.getByRole('tabpanel')
+      expect(changes).toHaveAttribute('tabindex', '0')
+      expect(note).toHaveAttribute('tabindex', '-1')
+      expect(changes).toHaveAttribute('aria-controls', panel.id)
+      expect(panel).toHaveAttribute('aria-labelledby', changes.id)
+
+      changes.focus()
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+      expect(note).toHaveAttribute('aria-selected', 'true')
+      expect(note).toHaveAttribute('tabindex', '0')
+      expect(document.activeElement).toBe(note)
+      expect(panel).toHaveAttribute('aria-labelledby', note.id)
+
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'End' })
+      expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+      expect(changes).toHaveAttribute('aria-selected', 'true')
+    })
+
+
     it('renders the note markdown with its frontmatter as a table', async () => {
       const note = ['---', 'key: OMNI-2510', 'service: payments-api', '---', '', '## Summary', '', 'The 500 comes from an unchecked nil in the ledger handler.', ''].join('\n')
       const f = fake({ note })
