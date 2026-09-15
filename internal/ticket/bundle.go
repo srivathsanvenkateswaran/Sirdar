@@ -13,7 +13,14 @@ import (
 func ThreadMarkdown(t Thread, atts []Attachment) string {
 	pathByID := make(map[string]string, len(atts))
 	for _, a := range atts {
-		pathByID[a.ID] = a.Path
+		// An audio attachment reads as its transcript: the path in the
+		// conversation has to be the file the session can open, or it
+		// spends a turn discovering that the voice note is bytes.
+		label := a.Path
+		if a.Transcribed() {
+			label += " (audio; transcript: " + a.Transcript + ")"
+		}
+		pathByID[a.ID] = label
 	}
 
 	var b strings.Builder

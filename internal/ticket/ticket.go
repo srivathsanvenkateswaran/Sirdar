@@ -66,12 +66,29 @@ type Attachment struct {
 	Name string
 	MIME string
 	Path string
+
+	// Transcript is the bundle-relative path of the text transcription of
+	// an audio attachment, written beside the file itself. Empty when the
+	// attachment is not audio, or when the workspace configured no
+	// transcription command, or when the command could not read it.
+	Transcript string `json:",omitempty"`
+
+	// TranscriptLanguage is the language the transcription tool reported
+	// or was told to use, when it said; empty otherwise.
+	TranscriptLanguage string `json:",omitempty"`
 }
+
+// Transcribed reports whether this attachment has a transcript in the
+// bundle — which, for an audio file, is the difference between evidence
+// the session can read and evidence it cannot.
+func (a Attachment) Transcribed() bool { return a.Transcript != "" }
 
 // SkippedAttachment is an attachment the bundle's manifest listed but could
 // not make available to a session — over the size cap, or a type it cannot
 // open — recorded so a note can tell a reader what evidence went unread
-// rather than only surfacing it as a run warning.
+// rather than only surfacing it as a run warning. An attachment that was
+// transcribed instead is not one of these: its contents did reach the
+// session, as text.
 type SkippedAttachment struct {
 	Name   string
 	Type   string // MIME type, best effort
@@ -87,7 +104,7 @@ type Bundle struct {
 	Helpdesk           *HelpdeskTicket // nil when fetch failed or absent
 	Thread             Thread
 	Attachments        []Attachment
-	SkippedAttachments []SkippedAttachment // from the manifest, but dropped: too large or unreadable
+	SkippedAttachments []SkippedAttachment // from the manifest, but dropped: too large, unreadable, or unrecoverably untranscribed
 	Warnings           []string            // e.g. attachment download failures, surfaced to the prompt
 
 	// Cutoff is set when this bundle was assembled as of an instant
