@@ -233,6 +233,98 @@ func (m *sessionModes) ids() []string {
 	return out
 }
 
+// configOption is one entry of the session config-options block ACP added
+// alongside session modes and means to replace them with: a typed choice
+// the agent advertises on session/new and the client changes with
+// session/set_config_option. OpenCode puts its session mode here and
+// advertises no availableModes at all, so this is the only way to get one
+// of its sessions out of `build` and into `plan`.
+//
+// An option's own values carry `value`; `id` is read as well because the
+// two spellings appear in different write-ups of the same block and
+// nothing is lost by accepting either.
+type configOption struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Category     string `json:"category"`
+	Type         string `json:"type"`
+	CurrentValue string `json:"currentValue"`
+	Options      []struct {
+		Value string `json:"value"`
+		ID    string `json:"id"`
+		Name  string `json:"name"`
+	} `json:"options"`
+}
+
+// value returns this option's own spelling of want, or "" when it offers
+// nothing of the kind. It matches the way sessionModes.match does, down to
+// modeKey, since an agent free to name a mode with a URL is just as free
+// to name a config value with one.
+func (o *configOption) value(want string) string {
+	if o == nil {
+		return ""
+	}
+	for _, opt := range o.Options {
+		if v := optionValue(opt.Value, opt.ID); v == want {
+			return v
+		}
+	}
+	for _, opt := range o.Options {
+		v := optionValue(opt.Value, opt.ID)
+		if v != "" && strings.EqualFold(modeKey(v), want) {
+			return v
+		}
+	}
+	return ""
+}
+
+// values lists what this option offers, for a notice that has to say so.
+func (o *configOption) values() []string {
+	if o == nil {
+		return nil
+	}
+	out := make([]string, 0, len(o.Options))
+	for _, opt := range o.Options {
+		if v := optionValue(opt.Value, opt.ID); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+func optionValue(value, id string) string {
+	if value != "" {
+		return value
+	}
+	return id
+}
+
+// configOptionsOf reads the config-options block out of a session/new or
+// session/load result. Nothing falls back to initialize here: unlike
+// modes, config options exist only once a session does.
+func configOptionsOf(result json.RawMessage) []configOption {
+	var opened struct {
+		ConfigOptions []configOption `json:"configOptions"`
+	}
+	if err := json.Unmarshal(result, &opened); err != nil {
+		return nil
+	}
+	return opened.ConfigOptions
+}
+
+// modeOption picks the config option that is the session mode, by the id
+// OpenCode uses and by the category the protocol defines for it. A config
+// option that is neither is the model, the thinking tier, or whatever else
+// the agent exposes, and none of Sirdar's business.
+func modeOption(options []configOption) *configOption {
+	for i := range options {
+		if options[i].ID == "mode" || options[i].Category == "mode" {
+			return &options[i]
+		}
+	}
+	return nil
+}
+
 // Start launches the agent, initializes it, opens (or loads) a session and
 // puts the first session/prompt on the wire. It returns once the session
 // exists; the turn's activity arrives on the event channel.
@@ -409,7 +501,7 @@ func (s *session) handshake(ctx context.Context) error {
 		// A resumed session carries the mode it was left in, which is the
 		// previous run's, not this one's: it is selected again here for
 		// the same reason it was selected the first time.
-		s.selectMode(modesOf(loaded, init), loaded)
+		s.selectMode(modesOf(loaded, init), configOptionsOf(loaded), loaded)
 		return nil
 	}
 
@@ -432,7 +524,7 @@ func (s *session) handshake(ctx context.Context) error {
 	s.mu.Lock()
 	s.sessionID = created.SessionID
 	s.mu.Unlock()
-	s.selectMode(modesOf(raw, init), raw)
+	s.selectMode(modesOf(raw, init), configOptionsOf(raw), raw)
 	return nil
 }
 
@@ -458,10 +550,11 @@ func modesOf(result json.RawMessage, init initializeResult) *sessionModes {
 // not only whole, so Copilot's URL ids resolve too.
 var readOnlyModeIDs = []string{"plan", "read-only", "readonly", "read_only", "ask"}
 
-// editModeIDs are the ids for the mode a `sirdar fix` session needs: one
+// editModeIDs are the words for the mode a `sirdar fix` session needs: one
 // that may actually write, with Sirdar's permission policy still deciding
-// each call.
-var editModeIDs = []string{"default", "edit"}
+// each call. OpenCode's is `build`, and it is last because an agent that
+// offers `default` or `edit` as well means one of those.
+var editModeIDs = []string{"default", "edit", "build"}
 
 // selectMode puts the session into the mode the run needs, before the
 // first session/prompt goes out.
@@ -479,13 +572,14 @@ var editModeIDs = []string{"default", "edit"}
 // The chosen id is sent even when the agent says it is already current: it
 // costs one round trip and it means the mode the run ran under was set by
 // this client rather than inferred from the agent's own report.
-func (s *session) selectMode(modes *sessionModes, raw json.RawMessage) {
+func (s *session) selectMode(modes *sessionModes, options []configOption, raw json.RawMessage) {
 	s.mu.Lock()
 	sessionID, served := s.sessionID, s.setModeServed
 	s.mu.Unlock()
 
 	offered := len(modes.ids()) > 0
-	if !offered && !served {
+	option := modeOption(options)
+	if !offered && option == nil && !served {
 		s.emit(provider.Event{
 			Kind: provider.EvSystem,
 			Text: "acp: this agent offers no session modes, so there is no read-only mode to select; " +
@@ -502,6 +596,15 @@ func (s *session) selectMode(modes *sessionModes, raw json.RawMessage) {
 	if fix {
 		want = editModeIDs
 		posture = "fix"
+	}
+
+	// An agent that exposes its mode both ways is taken at session/set_mode,
+	// which is the older call and the one every capture has confirmed. The
+	// config option is what an agent like OpenCode leaves instead of a mode
+	// list, not a second opinion about one.
+	if !offered && option != nil {
+		s.selectModeOption(sessionID, option, want, posture, raw)
+		return
 	}
 
 	chosen := ""
@@ -562,6 +665,69 @@ func (s *session) selectMode(modes *sessionModes, raw json.RawMessage) {
 		Kind: provider.EvSystem,
 		Text: fmt.Sprintf("acp mode %s selected for this %s session", chosen, posture),
 		Raw:  rawOf(map[string]any{"modeId": chosen, "mode": posture, "available": modes.ids()}),
+	})
+}
+
+// selectModeOption is selectMode for an agent whose session mode is a
+// config option rather than a mode list — OpenCode is the one that has
+// been captured doing it. The call is session/set_config_option, which
+// takes `configId` (not `optionId`: the kimi capture has the agent
+// refusing that spelling by name) and the option's own value.
+func (s *session) selectModeOption(sessionID string, option *configOption, want []string, posture string, raw json.RawMessage) {
+	chosen := ""
+	switch {
+	case s.modeWanted != "":
+		chosen = option.value(s.modeWanted)
+		if chosen == "" {
+			s.emit(provider.Event{
+				Kind: provider.EvError,
+				Text: fmt.Sprintf("acp: acp.mode is %q, which this agent's %q config option does not offer "+
+					"(it offers %s); no mode was selected and the session runs in %q",
+					s.modeWanted, option.ID, strings.Join(option.values(), ", "), option.CurrentValue),
+				Raw: raw,
+			})
+			return
+		}
+	default:
+		for _, id := range want {
+			if v := option.value(id); v != "" {
+				chosen = v
+				break
+			}
+		}
+	}
+
+	if chosen == "" {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: fmt.Sprintf("acp: none of this agent's %q config option values (%s) is a %s mode Sirdar "+
+				"recognises; the session runs in %q — set acp.mode if one of them is the right one",
+				option.ID, strings.Join(option.values(), ", "), posture, option.CurrentValue),
+			Raw: raw,
+		})
+		return
+	}
+
+	if _, err := s.conn.call("session/set_config_option", map[string]any{
+		"sessionId": sessionID,
+		"configId":  option.ID,
+		"value":     chosen,
+	}); err != nil {
+		s.emit(provider.Event{
+			Kind: provider.EvError,
+			Text: fmt.Sprintf("acp: session/set_config_option %s=%q was refused: %v; the session runs in "+
+				"whatever mode it opened in", option.ID, chosen, err),
+			Raw: raw,
+		})
+		return
+	}
+
+	s.emit(provider.Event{
+		Kind: provider.EvSystem,
+		Text: fmt.Sprintf("acp mode %s selected for this %s session", chosen, posture),
+		Raw: rawOf(map[string]any{
+			"configId": option.ID, "value": chosen, "mode": posture, "available": option.values(),
+		}),
 	})
 }
 

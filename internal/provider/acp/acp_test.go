@@ -1190,6 +1190,102 @@ func TestConfiguredModeOverridesTheChoice(t *testing.T) {
 	}
 }
 
+// configOptionSet returns the configId and value the provider asked for on
+// session/set_config_option, or two empty strings when it sent none.
+func configOptionSet(t *testing.T, res provider.Result) (string, string) {
+	t.Helper()
+	for _, line := range stderrLines(t, res) {
+		rest, ok := strings.CutPrefix(line, "STDIN: ")
+		if !ok {
+			continue
+		}
+		var msg inbound
+		if err := json.Unmarshal([]byte(rest), &msg); err != nil || msg.Method != "session/set_config_option" {
+			continue
+		}
+		var params struct {
+			ConfigID string `json:"configId"`
+			Value    string `json:"value"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil {
+			t.Fatalf("session/set_config_option params: %v", err)
+		}
+		return params.ConfigID, params.Value
+	}
+	return "", ""
+}
+
+// TestReadOnlyRunSelectsPlanThroughAConfigOption: OpenCode advertises no
+// availableModes at all — its session mode is one entry of the
+// session/new reply's configOptions, set with session/set_config_option
+// rather than session/set_mode. A read-only run has to find `plan` there
+// too, or it runs in `build`, which executes tools.
+func TestReadOnlyRunSelectsPlanThroughAConfigOption(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-config-option-mode.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	id, value := configOptionSet(t, res)
+	if id != "mode" || value != "plan" {
+		t.Errorf("session/set_config_option configId=%q value=%q, want mode/plan", id, value)
+	}
+	if got := modeSent(t, res); got != "" {
+		t.Errorf("session/set_mode was sent (%q) to an agent that advertised no modes", got)
+	}
+	methods := sentMethods(t, res)
+	set, prompt := indexOf(methods, "session/set_config_option"), indexOf(methods, "session/prompt")
+	if set < 0 || prompt < 0 || set > prompt {
+		t.Errorf("methods = %v, want session/set_config_option before session/prompt", methods)
+	}
+	if !systemText(evs, "acp mode plan selected for this read-only session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+	if systemText(evs, "offers no session modes") {
+		t.Errorf("the no-modes notice was emitted for an agent whose modes are a config option")
+	}
+}
+
+// TestFixRunSelectsBuildThroughAConfigOption is the other half: the mode a
+// fix session needs is OpenCode's `build`, the one that may execute tools.
+func TestFixRunSelectsBuildThroughAConfigOption(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{}, "script-config-option-mode.jsonl", cwd, fixPolicy(cwd))
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	id, value := configOptionSet(t, res)
+	if id != "mode" || value != "build" {
+		t.Errorf("session/set_config_option configId=%q value=%q, want mode/build", id, value)
+	}
+	if !systemText(evs, "acp mode build selected for this fix session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestConfiguredModeOverridesAConfigOptionValue: acp.mode is the escape
+// hatch on this path too.
+func TestConfiguredModeOverridesAConfigOptionValue(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{Mode: "build"}, "script-config-option-mode.jsonl", cwd, nil)
+
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if _, value := configOptionSet(t, res); value != "build" {
+		t.Errorf("session/set_config_option value = %q, want the configured build", value)
+	}
+}
+
 // TestAgentWithNoModesIsSaidOnce: most ACP agents expose no modes at all,
 // and the run should say so rather than pretending a mode was set.
 func TestAgentWithNoModesIsSaidOnce(t *testing.T) {
