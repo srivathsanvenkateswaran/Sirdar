@@ -182,7 +182,9 @@ export default function ProvidersPage({
         <div className="settings-table" role="table" aria-label="Providers">
           <div className="settings-table__row settings-table__head" role="row">
             <span role="columnheader">Provider</span>
-            <span role="columnheader">Driven by</span>
+            <span role="columnheader" className="settings-table__driven">
+              Driven by
+            </span>
             <span role="columnheader">Sign-in</span>
             <span role="columnheader">Fix</span>
             <span role="columnheader">Read-only guard</span>
@@ -194,12 +196,21 @@ export default function ProvidersPage({
             const facts = PROVIDER_FACTS[id]
             const signIn = signInOf(id, provider, doctor)
             return (
-              <div className="settings-table__row" role="row" key={id}>
+              // Under 1200 the stylesheet drops the Driven by column and the
+              // row's title carries it instead.
+              <div
+                className="settings-table__row"
+                role="row"
+                key={id}
+                title={`Driven by ${facts.drivenBy}`}
+              >
                 <span role="cell" className="settings-provider">
                   <ProviderMark provider={id} size="sm" label={providerName(id)} />
                   <span className="settings-provider__name">{id}</span>
                 </span>
-                <span role="cell">{facts.drivenBy}</span>
+                <span role="cell" className="settings-table__driven">
+                  {facts.drivenBy}
+                </span>
                 <span role="cell" className="settings-status" data-level={signIn.level} title={signIn.detail}>
                   {checking ? 'checking…' : signIn.word}
                 </span>
