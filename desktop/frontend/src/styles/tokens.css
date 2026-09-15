@@ -39,6 +39,55 @@
    */
   --sd-band-fg: var(--sd-paper);
 
+  /* ---------- app shell ---------- */
+  /*
+   * The desktop app is a window ground with one content sheet on it, not a
+   * page with colour bands. `--sd-paper` keeps the landing page and the docs
+   * site and stops being the app's background; the app's background is
+   * `--sd-shell`. See `docs/design/03-desktop-app.md` sections 3 and 4.
+   */
+  --sd-shell: #F2EEE0; /* --sd-ink-3 on it: 4.60 */
+  --sd-sheet: #FFFDF7; /* 1.14 off the shell; --sd-ink on it: 17.44 */
+  --sd-card-row: #F5F1E4; /* 1.11 off the sheet; ink 15.70 / ink-2 7.37 / ink-3 4.73 */
+  --sd-rule-faint: #EAE6D6; /* the hairline inside a card row: 1.11 on it. Not a text colour. */
+  --sd-scrim: rgba(23, 24, 28, 0.32); /* behind a dialog or the settings modal */
+
+  /* ---------- navigation and the primary action ---------- */
+  /*
+   * No accent anywhere in navigation. In Sirdar the accent means a live run,
+   * and a nav row wearing it competes with the one card on the board that has
+   * earned it.
+   */
+  --sd-nav-hover: #EDE8D8; /* --sd-ink-2 on it: 6.79 */
+  --sd-nav-active: #E7E2D1; /* --sd-ink 13.68, --sd-ink-2 6.42; --sd-ink-3 is 4.12 here and is not allowed on a nav pill */
+  --sd-primary: #17181C; /* the one filled commit button per screen: the ink, inverted per theme */
+  --sd-primary-ink: #FFFDF7; /* 17.44 on the fill */
+  --sd-primary-hover: #2B2D33; /* label on it: 13.53 */
+
+  /* ---------- badge ---------- */
+  /*
+   * A badge carries a fact about the account or the workspace. Run state stays
+   * on --sd-st-* with its word, and anything that could be either is a status
+   * badge. The pair points at the highlight rather than introducing a ninth
+   * near-identical tint; the names exist because a badge and a primary button
+   * are different roles that happen to share a fill today.
+   */
+  --sd-badge-bg: var(--sd-highlight);
+  --sd-badge-ink: var(--sd-highlight-ink); /* 13.86 light, 9.72 dark */
+
+  /* ---------- heatmap ---------- */
+  /*
+   * Five steps of the accent for the runs-per-day grid on the Register. A
+   * sequential ramp, so neighbouring pairs are not held to 3:1; the floor
+   * applies to the text, and the count is carried by each cell's accessible
+   * name, its tooltip and a legend that prints bucket boundaries as numbers.
+   */
+  --sd-heat-0: #EEEADB; /* no runs; 1.18 off the sheet */
+  --sd-heat-1: #CFCBEE; /* 1 */
+  --sd-heat-2: #A7A2DE; /* 2 to 4 */
+  --sd-heat-3: #6E69C4; /* 5 to 9 */
+  --sd-heat-4: var(--sd-accent); /* 10 or more */
+
   /* ---------- ink ramp ---------- */
   /* on paper: 16.54 / 7.76 / 4.98. --sd-ink-3 on --sd-sunk is 4.56, the
      tightest pair the file ships and the reason --sd-sunk is no darker. */
@@ -160,6 +209,25 @@
     --sd-band-ink: #0C0D10;
     --sd-band-fg: var(--sd-ink); /* 10.48 on band-deep, 15.69 on band-ink */
 
+    --sd-shell: #0C0D11;
+    --sd-sheet: #191A20;
+    --sd-card-row: #22242B;
+    /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+       The measured value is the one styles.contrast.test.ts records. */
+    --sd-rule-faint: #24262C;
+    --sd-scrim: rgba(7, 8, 10, 0.56);
+
+    --sd-nav-hover: #1B1D24;
+    --sd-nav-active: #24262E;
+    --sd-primary: #E9E7DF;
+    --sd-primary-ink: #0C0D11;
+    --sd-primary-hover: #D5D2C6;
+
+    --sd-heat-0: #232630;
+    --sd-heat-1: #34315F;
+    --sd-heat-2: #4C4894;
+    --sd-heat-3: #736ECF;
+
     --sd-ink: #E9E7DF;
     --sd-ink-2: #A6A9B2;
     --sd-ink-3: #8C919B;
@@ -193,6 +261,25 @@
   --sd-band-deep: #232F58;
   --sd-band-ink: #0C0D10;
   --sd-band-fg: var(--sd-ink);
+
+  --sd-shell: #0C0D11;
+  --sd-sheet: #191A20;
+  --sd-card-row: #22242B;
+  /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+     The measured value is the one styles.contrast.test.ts records. */
+  --sd-rule-faint: #24262C;
+  --sd-scrim: rgba(7, 8, 10, 0.56);
+
+  --sd-nav-hover: #1B1D24;
+  --sd-nav-active: #24262E;
+  --sd-primary: #E9E7DF;
+  --sd-primary-ink: #0C0D11;
+  --sd-primary-hover: #D5D2C6;
+
+  --sd-heat-0: #232630;
+  --sd-heat-1: #34315F;
+  --sd-heat-2: #4C4894;
+  --sd-heat-3: #736ECF;
 
   --sd-ink: #E9E7DF;
   --sd-ink-2: #A6A9B2;
@@ -230,6 +317,24 @@
   --sd-band-deep: #1F2B52;
   --sd-band-ink: #17181C;
   --sd-band-fg: var(--sd-paper);
+
+  --sd-shell: #F2EEE0;
+  --sd-sheet: #FFFDF7;
+  --sd-card-row: #F5F1E4;
+  --sd-rule-faint: #EAE6D6;
+  --sd-scrim: rgba(23, 24, 28, 0.32);
+  --sd-nav-hover: #EDE8D8;
+  --sd-nav-active: #E7E2D1;
+  --sd-primary: #17181C;
+  --sd-primary-ink: #FFFDF7;
+  --sd-primary-hover: #2B2D33;
+  --sd-badge-bg: var(--sd-highlight);
+  --sd-badge-ink: var(--sd-highlight-ink);
+  --sd-heat-0: #EEEADB;
+  --sd-heat-1: #CFCBEE;
+  --sd-heat-2: #A7A2DE;
+  --sd-heat-3: #6E69C4;
+  --sd-heat-4: var(--sd-accent);
   --sd-ink: #17181C;
   --sd-ink-2: #4A4E58;
   --sd-ink-3: #676B74;
@@ -256,6 +361,25 @@
   --sd-band-deep: #232F58;
   --sd-band-ink: #0C0D10;
   --sd-band-fg: var(--sd-ink);
+
+  --sd-shell: #0C0D11;
+  --sd-sheet: #191A20;
+  --sd-card-row: #22242B;
+  /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+     The measured value is the one styles.contrast.test.ts records. */
+  --sd-rule-faint: #24262C;
+  --sd-scrim: rgba(7, 8, 10, 0.56);
+
+  --sd-nav-hover: #1B1D24;
+  --sd-nav-active: #24262E;
+  --sd-primary: #E9E7DF;
+  --sd-primary-ink: #0C0D11;
+  --sd-primary-hover: #D5D2C6;
+
+  --sd-heat-0: #232630;
+  --sd-heat-1: #34315F;
+  --sd-heat-2: #4C4894;
+  --sd-heat-3: #736ECF;
   --sd-ink: #E9E7DF;
   --sd-ink-2: #A6A9B2;
   --sd-ink-3: #8C919B;
@@ -284,61 +408,4 @@
 [dir="rtl"] {
   --sd-shadow-hard: -2px 2px 0 0 var(--sd-shadow-hard-color);
   --sd-shadow-hard-pressed: -1px 1px 0 0 var(--sd-shadow-hard-color);
-}
-
-/*
- * ---------- legacy aliases ----------
- *
- * The app's pre-token variable names, kept for one release.
- *
- * `styles.css`, `components/panels.css` and `components/run/run.css` between
- * them read these names about three hundred times. Renaming them in place
- * would mean rewriting every one of those rules on the same commit as the
- * palette change, which is how a restyle turns into a bisect. Instead the new
- * names land first, the old ones become one-line references, and the second
- * pass deletes this block once `grep -rn 'var(--paper' desktop/frontend/src`
- * comes back empty — which is the restyle branch's job, not this one's.
- *
- * Each alias is a reference rather than a literal, so it follows the palette
- * into whichever theme is active. That is the whole point: the bug this
- * replaces was a set of light-theme literals written as fallbacks, which
- * painted #16181d text on a #131418 paper in the dark theme.
- *
- * `--radius` is the one alias that cannot be faithful. It was a single 3px
- * value serving a badge, a card and a dialog alike; 01-tokens.md splits it
- * into three. It points at --sd-radius-xs here so nothing loses its corner,
- * and every selector that reads it gets a per-component decision when the
- * restyle branch reaches it.
- */
-:root {
-  --paper: var(--sd-paper);
-  --surface: var(--sd-surface);
-  --lane: var(--sd-sunk);
-  --ink: var(--sd-ink);
-  --ink-2: var(--sd-ink-2);
-  --ink-3: var(--sd-ink-3);
-  --rule: var(--sd-rule);
-  --rule-strong: var(--sd-rule-strong);
-  --accent: var(--sd-accent);
-  --accent-ink: var(--sd-accent-ink);
-  --accent-soft: var(--sd-accent-soft);
-
-  --st-queue: var(--sd-st-queue);
-  --st-live: var(--sd-st-live);
-  --st-blocked: var(--sd-st-blocked);
-  --st-triaged: var(--sd-st-triaged);
-  --st-done: var(--sd-st-done);
-  --st-failed: var(--sd-st-failed);
-
-  --sans: var(--sd-font-ui);
-  --mono: var(--sd-font-mono);
-
-  --bg: var(--sd-surface);
-  --fg: var(--sd-ink);
-  --muted: var(--sd-ink-3);
-  --border: var(--sd-rule);
-  --line: var(--sd-rule);
-
-  --radius: var(--sd-radius-xs);
-  --gutter: var(--sd-gutter);
 }

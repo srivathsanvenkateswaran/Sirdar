@@ -8,6 +8,9 @@ import type {
   Transport,
 } from '../api/types'
 import ProviderFields from '../components/run/ProviderFields'
+import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import Button from '../ui/button'
+import DataTable, { type DataColumn } from '../ui/data-table'
 import '../components/panels.css'
 
 /** A fraction rendered the way the CLI's table renders it, or a dash. */
@@ -38,79 +41,79 @@ function when(at: string): string {
   return Number.isNaN(ms) ? at : new Date(ms).toLocaleString()
 }
 
-function ResultRow({ result }: { result: EvalResult }): JSX.Element {
+/** The state cell carries its own hue, which is the lane hue the board uses. */
+function StateCell({ state }: { state: string }): JSX.Element {
+  return (
+    <span className="eval-state" data-state={state}>
+      {state.replace('_', ' ')}
+    </span>
+  )
+}
+
+const EVAL_COLUMNS: DataColumn<EvalResult>[] = [
+  { id: 'key', header: 'Key', cell: (r) => r.key, numeric: true },
+  { id: 'state', header: 'State', cell: (r) => <StateCell state={r.state} /> },
+  { id: 'turns', header: 'Turns', cell: (r) => r.turns, numeric: true },
+  { id: 'cost', header: 'Cost', cell: (r) => `$${r.costUsd.toFixed(2)}`, numeric: true },
+  { id: 'minutes', header: 'Mins', cell: (r) => r.minutes.toFixed(1), numeric: true },
+  { id: 'valid', header: 'Valid', cell: (r) => (r.schemaValid ? 'yes' : 'no') },
+  { id: 'assertions', header: 'Assertions', cell: (r) => `${r.passed}/${r.total}`, numeric: true },
+  { id: 'refs', header: 'Refs', cell: (r) => pct(r.overlap?.refs), numeric: true },
+  { id: 'headings', header: 'Headings', cell: (r) => pct(r.overlap?.headings), numeric: true },
+]
+
+/** Why a key scored what it did: the run's own reason, then each failed check. */
+function evalDetail(result: EvalResult): JSX.Element | null {
   const failed = result.checks.filter((c) => !c.pass)
+  if (failed.length === 0 && !result.reason) return null
   return (
     <>
-      <tr className="eval-row" data-state={result.state}>
-        <th scope="row" className="mono">
-          {result.key}
-        </th>
-        <td>{result.state.replace('_', ' ')}</td>
-        <td>{result.turns}</td>
-        <td>${result.costUsd.toFixed(2)}</td>
-        <td>{result.minutes.toFixed(1)}</td>
-        <td>{result.schemaValid ? 'yes' : 'no'}</td>
-        <td>
-          {result.passed}/{result.total}
-        </td>
-        <td>{pct(result.overlap?.refs)}</td>
-        <td>{pct(result.overlap?.headings)}</td>
-      </tr>
-      {failed.length > 0 || result.reason ? (
-        <tr className="eval-row eval-row--why">
-          <td colSpan={9}>
-            {result.reason && result.state !== 'completed' ? (
-              <p className="eval-why">{result.reason}</p>
-            ) : null}
-            {failed.map((c) => (
-              <p className="eval-why" key={c.key}>
-                <span className="mono">{c.key}</span> — {c.detail || 'did not hold'}
-              </p>
-            ))}
-          </td>
-        </tr>
+      {result.reason && result.state !== 'completed' ? (
+        <p className="eval-why">{result.reason}</p>
       ) : null}
+      {failed.map((c) => (
+        <p className="eval-why" key={c.key}>
+          <span className="mono">{c.key}</span> — {c.detail || 'did not hold'}
+        </p>
+      ))}
     </>
   )
 }
 
-function RetroRow({ result }: { result: RetroResult }): JSX.Element {
-  const triage = result.triageScore
-  const fix = result.fixScore
-  const missed = triage?.missedFiles ?? []
+const RETRO_COLUMNS: DataColumn<RetroResult>[] = [
+  { id: 'key', header: 'Key', cell: (r) => r.key, numeric: true },
+  { id: 'class', header: 'Class', cell: (r) => r.triageScore?.classification || '—' },
+  { id: 'confidence', header: 'Confidence', cell: (r) => r.triageScore?.confidence || '—' },
+  {
+    id: 'refs',
+    header: 'Refs',
+    cell: (r) => pct(r.triageScore?.codeRefsPathOverlap),
+    numeric: true,
+  },
+  { id: 'prFiles', header: 'PR files', cell: (r) => pct(r.triageScore?.prFilesHit), numeric: true },
+  { id: 'files', header: 'Files', cell: (r) => jaccard(r.fixScore?.filesJaccard), numeric: true },
+  { id: 'hunks', header: 'Hunks', cell: (r) => pct(r.fixScore?.hunkOverlap), numeric: true },
+  { id: 'build', header: 'Build', cell: (r) => yesNo(r.fixScore?.buildPassed) },
+  { id: 'rubric', header: 'Rubric', cell: (r) => r.rubric?.verdict ?? '—' },
+  { id: 'cost', header: 'Cost', cell: (r) => `$${r.costUsd.toFixed(2)}`, numeric: true },
+]
+
+/** What the agent missed, and what the rubric said about it. */
+function retroDetail(result: RetroResult): JSX.Element | null {
+  const missed = result.triageScore?.missedFiles ?? []
+  if (!result.reason && missed.length === 0 && !result.rubric?.reasoning) return null
   return (
     <>
-      <tr className="eval-row" data-state={result.triage?.state ?? 'failed'}>
-        <th scope="row" className="mono">
-          {result.key}
-        </th>
-        <td>{triage?.classification || '—'}</td>
-        <td>{triage?.confidence || '—'}</td>
-        <td>{pct(triage?.codeRefsPathOverlap)}</td>
-        <td>{pct(triage?.prFilesHit)}</td>
-        <td>{jaccard(fix?.filesJaccard)}</td>
-        <td>{pct(fix?.hunkOverlap)}</td>
-        <td>{yesNo(fix?.buildPassed)}</td>
-        <td>{result.rubric?.verdict ?? '—'}</td>
-        <td>${result.costUsd.toFixed(2)}</td>
-      </tr>
-      {result.reason || missed.length > 0 || result.rubric?.reasoning ? (
-        <tr className="eval-row eval-row--why">
-          <td colSpan={10}>
-            {result.reason ? <p className="eval-why">{result.reason}</p> : null}
-            {missed.length > 0 ? (
-              <p className="eval-why">
-                the note never named <span className="mono">{missed.join(', ')}</span>
-              </p>
-            ) : null}
-            {result.rubric?.reasoning ? (
-              <p className="eval-why">
-                rubric {result.rubric.verdict} — {result.rubric.reasoning}
-              </p>
-            ) : null}
-          </td>
-        </tr>
+      {result.reason ? <p className="eval-why">{result.reason}</p> : null}
+      {missed.length > 0 ? (
+        <p className="eval-why">
+          the note never named <span className="mono">{missed.join(', ')}</span>
+        </p>
+      ) : null}
+      {result.rubric?.reasoning ? (
+        <p className="eval-why">
+          rubric {result.rubric.verdict} — {result.rubric.reasoning}
+        </p>
       ) : null}
     </>
   )
@@ -219,6 +222,24 @@ export default function Eval(props: {
   const latest = reports[0]
   const entries = golden ?? []
 
+  /*
+   * Eval's one commit action, published to the sidebar footer. It is the
+   * screen's only filled button and the only thing on it that spends the
+   * provider; what it says depends on the selection, which is why the screen
+   * publishes it rather than the shell guessing.
+   */
+  useProvidePrimaryAction({
+    label: pending
+      ? 'Starting…'
+      : selected.size > 0
+        ? `Run eval on ${selected.size} ${selected.size === 1 ? 'key' : 'keys'}`
+        : 'Run eval on the whole set',
+    onRun: () => void start(),
+    disabled: pending || entries.length === 0,
+    busy: pending,
+    title: 'An eval replays each bundle through a real triage run',
+  })
+
   return (
     <div className="panel eval">
       <section className="eval-golden">
@@ -262,35 +283,26 @@ export default function Eval(props: {
           onProvider={setProvider}
           onModel={setModel}
         />
+        {/*
+          The button that starts the suite lives in the sidebar footer, where
+          the app-shell language puts every screen's one commit action. What is
+          left here is the reload, which changes nothing.
+        */}
         <div className="form-row" style={{ marginTop: 8 }}>
-          <button
-            type="button"
-            className="run-btn run-btn--primary"
-            onClick={() => void start()}
-            disabled={pending || entries.length === 0}
-          >
-            {pending
-              ? 'Starting…'
-              : selected.size > 0
-                ? `Run eval on ${selected.size} ${selected.size === 1 ? 'key' : 'keys'}`
-                : 'Run eval on the whole set'}
-          </button>
-          <button type="button" className="run-btn" onClick={() => void load()} disabled={pending}>
+          <Button onClick={() => void load()} disabled={pending}>
             Refresh
-          </button>
+          </Button>
         </div>
         {running.length > 0 && onCancelJob ? (
           <div className="form-row" style={{ marginTop: 8 }}>
             {running.map((job) => (
-              <button
+              <Button
                 key={job.jobId}
-                type="button"
-                className="run-btn"
                 onClick={() => void cancel(job.jobId)}
                 title="Stop the eval this window started"
               >
                 Cancel {job.label.toLowerCase()}
-              </button>
+              </Button>
             ))}
           </div>
         ) : null}
@@ -316,27 +328,14 @@ export default function Eval(props: {
               {latest.model ? ` ${latest.model}` : ''} ·{' '}
               <span className="mono">{latest.path}</span>
             </p>
-            <table className="eval-table">
-              <caption className="visually-hidden">Score per key</caption>
-              <thead>
-                <tr>
-                  <th scope="col">Key</th>
-                  <th scope="col">State</th>
-                  <th scope="col">Turns</th>
-                  <th scope="col">Cost</th>
-                  <th scope="col">Mins</th>
-                  <th scope="col">Valid</th>
-                  <th scope="col">Assertions</th>
-                  <th scope="col">Refs</th>
-                  <th scope="col">Headings</th>
-                </tr>
-              </thead>
-              <tbody>
-                {latest.results.map((r) => (
-                  <ResultRow key={r.key} result={r} />
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              caption="Score per key"
+              columns={EVAL_COLUMNS}
+              rows={latest.results}
+              rowKey={(r) => r.key}
+              detail={evalDetail}
+              empty="This report scored no keys."
+            />
           </>
         )}
       </section>
@@ -357,30 +356,14 @@ export default function Eval(props: {
               {retro.rubric ? ' · rubric' : ''}
               {retro.withRca ? ' · with rca' : ''} · <span className="mono">{retro.path}</span>
             </p>
-            <table className="eval-table">
-              <caption className="visually-hidden">
-                Each key against the change a human merged
-              </caption>
-              <thead>
-                <tr>
-                  <th scope="col">Key</th>
-                  <th scope="col">Class</th>
-                  <th scope="col">Confidence</th>
-                  <th scope="col">Refs</th>
-                  <th scope="col">PR files</th>
-                  <th scope="col">Files</th>
-                  <th scope="col">Hunks</th>
-                  <th scope="col">Build</th>
-                  <th scope="col">Rubric</th>
-                  <th scope="col">Cost</th>
-                </tr>
-              </thead>
-              <tbody>
-                {retro.results.map((r) => (
-                  <RetroRow key={r.key} result={r} />
-                ))}
-              </tbody>
-            </table>
+            <DataTable
+              caption="Each key against the change a human merged"
+              columns={RETRO_COLUMNS}
+              rows={retro.results}
+              rowKey={(r) => r.key}
+              detail={retroDetail}
+              empty="This retro scored no keys."
+            />
             <p className="about-note">
               A retro is a measurement, not a gate: there is no threshold it passes. Refs is how
               much of what the note pointed at the change touched, PR files how much of the change

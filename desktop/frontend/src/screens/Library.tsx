@@ -1,17 +1,23 @@
 import { useRef, useState } from 'react'
+import Badge from '../ui/badge'
 import Button from '../ui/button'
 import Card from '../ui/card'
 import DataTable, { type DataColumn } from '../ui/data-table'
 import Dialog from '../ui/dialog'
 import EventRow, { EVENT_GLYPHS, type EventVariant } from '../ui/event-row'
+import Heatmap from '../ui/heatmap'
 import HeroBand from '../ui/hero-band'
 import KanbanColumn, { type LaneId } from '../ui/kanban-column'
+import ModalSheet from '../ui/modal-sheet'
 import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
 import NotePane from '../ui/note-pane'
 import PillNav from '../ui/pill-nav'
 import QuotaChip from '../ui/quota-chip'
 import RunCard from '../ui/run-card'
 import SegmentedControl from '../ui/segmented-control'
+import SettingRow, { SettingCard } from '../ui/setting-row'
+import SidebarFooterCard from '../ui/sidebar-footer-card'
+import SidebarNavItem from '../ui/sidebar-nav-item'
 import StatusBadge, { PriorityBadge, STATUS_WORDS, type SdStatus } from '../ui/status-badge'
 import Toasts from '../ui/toast'
 import './library.css'
@@ -109,6 +115,8 @@ export default function Library(): JSX.Element {
   const [dir, setDir] = useState<'ltr' | 'rtl'>('ltr')
   const [segment, setSegment] = useState('all')
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [modalOpen, setModalOpen] = useState(false)
+  const [modalPage, setModalPage] = useState('general')
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
     columnId: 'key',
     direction: 'asc',
@@ -131,6 +139,12 @@ export default function Library(): JSX.Element {
     { id: 'quota-chip', label: 'Quota chip' },
     { id: 'hero-band', label: 'Hero band' },
     { id: 'ambient', label: 'Ambient' },
+    { id: 'sidebar-nav-item', label: 'Sidebar row' },
+    { id: 'sidebar-footer-card', label: 'Sidebar footer' },
+    { id: 'modal-sheet', label: 'Modal sheet' },
+    { id: 'setting-row', label: 'Setting row' },
+    { id: 'heatmap', label: 'Heatmap' },
+    { id: 'badge', label: 'Badge' },
   ]
 
   return (
@@ -139,8 +153,8 @@ export default function Library(): JSX.Element {
         <div className="lib__bar-row">
           <h1 className="lib__title">Asset library</h1>
           <p className="lib__lede">
-            Fifteen components, every state, both themes, both directions. The switches paint the
-            specimens, not this page.
+            Twenty-one components, every state, both themes, both directions. The switches
+            paint the specimens, not this page.
           </p>
         </div>
         <div className="lib__controls">
@@ -636,6 +650,173 @@ export default function Library(): JSX.Element {
                 <MarqueeItem>Jira</MarqueeItem>
                 <MarqueeItem>مكتب زوهو</MarqueeItem>
               </Marquee>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="sidebar-nav-item"
+          name="Sidebar nav item"
+          note="The current row is neutral: in Sirdar the accent means a live run."
+        >
+          <div className="lib-col lib-col--sidebar">
+            <State label="Rest, current, and a count">
+              <div className="sd-sidebar">
+                <nav className="sd-sidebar__nav" aria-label="Screens specimen">
+                  <SidebarNavItem label="Board" current count={3} onSelect={() => {}} />
+                  <SidebarNavItem label="Register" onSelect={() => {}} />
+                  <SidebarNavItem label="Eval" onSelect={() => {}} />
+                </nav>
+              </div>
+            </State>
+            <State label="Arabic labels">
+              <div className="sd-sidebar">
+                <nav className="sd-sidebar__nav" aria-label="الشاشات">
+                  <SidebarNavItem label="اللوحة" current count={2} onSelect={() => {}} />
+                  <SidebarNavItem label="السجل" onSelect={() => {}} />
+                </nav>
+              </div>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="sidebar-footer-card"
+          name="Sidebar footer card"
+          note="The two facts a person needs pinned, and the one action this screen commits."
+        >
+          <div className="lib-col lib-col--sidebar">
+            <State label="Switcher, quotas, primary action">
+              <SidebarFooterCard
+                switcher={<Button variant="ghost">acme-support</Button>}
+                quotas={
+                  <>
+                    <QuotaChip provider="claude" window="5h" percent={62} />
+                    <QuotaChip provider="openai" window="used" percent={9} />
+                  </>
+                }
+                action={<Button variant="primary">New triage</Button>}
+              />
+            </State>
+            <State label="No budget, no action">
+              <SidebarFooterCard switcher={<Button variant="ghost">ledger</Button>} />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="modal-sheet"
+          name="Modal sheet with secondary nav"
+          note="Settings is a place you leave; the board stays painted behind the scrim."
+        >
+          <div className="lib-row">
+            <State label="Closed, with its opener">
+              <Button variant="primary" onClick={() => setModalOpen(true)}>
+                Open the settings modal
+              </Button>
+            </State>
+          </div>
+          <ModalSheet
+            open={modalOpen}
+            title={modalPage === 'general' ? 'General' : 'الهوية'}
+            groups={[
+              { label: 'Workspace', items: [{ id: 'general', label: 'General' }] },
+              { label: 'Account', items: [{ id: 'identity', label: 'الهوية' }] },
+            ]}
+            current={modalPage}
+            onSelect={setModalPage}
+            onClose={() => setModalOpen(false)}
+            navFooter={<>Sirdar desktop v0.0.0</>}
+            footer={<Button onClick={() => setModalOpen(false)}>Close</Button>}
+          >
+            <SettingCard heading="Workspace">
+              <SettingRow
+                label="Repository"
+                value="/repos/omni"
+                control={
+                  <button type="button" className="sd-setting-button">
+                    Change
+                  </button>
+                }
+              />
+              <SettingRow label="Provider" value="claude / sonnet" />
+            </SettingCard>
+          </ModalSheet>
+        </Section>
+
+        <Section
+          id="setting-row"
+          name="Setting row"
+          note="One setting, one control. A setting that needs two is two rows."
+        >
+          <div className="lib-col">
+            <State label="A card of rows, with the pale control">
+              <SettingCard heading="Workspace">
+                <SettingRow
+                  label="Repository"
+                  value="/repos/omni"
+                  control={
+                    <button type="button" className="sd-setting-button">
+                      Change workspace
+                    </button>
+                  }
+                />
+                <SettingRow label="Provider" value="claude / sonnet" />
+                <SettingRow
+                  label="مجلد الملاحظات"
+                  value="ملاحظات/الدعم"
+                  help="يُكتب كل تقرير جذري هنا، داخل المستودع نفسه."
+                  control={
+                    <button type="button" className="sd-setting-button" disabled>
+                      تغيير
+                    </button>
+                  }
+                />
+              </SettingCard>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="heatmap"
+          name="Heatmap"
+          note="Runs per day. No streak, no flame: a good week is a quiet week."
+        >
+          <div className="lib-col">
+            <State label="Twelve weeks, with the bucket boundaries">
+              <Heatmap
+                weeks={12}
+                endDate="2026-09-15"
+                days={[
+                  { date: '2026-09-15', count: 12 },
+                  { date: '2026-09-14', count: 6 },
+                  { date: '2026-09-11', count: 3 },
+                  { date: '2026-09-09', count: 1 },
+                  { date: '2026-08-28', count: 8 },
+                  { date: '2026-08-12', count: 2 },
+                ]}
+              />
+            </State>
+            <State label="A workspace that has run nothing">
+              <Heatmap weeks={6} endDate="2026-09-15" days={[]} />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="badge"
+          name="Badge"
+          note="A fact about the account. Run state is the status badge, with its word."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="Plan">
+              <Badge>pro</Badge>
+            </State>
+            <State label="Billing mode">
+              <Badge title="Billing mode">api key</Badge>
+            </State>
+            <State label="Arabic">
+              <Badge>اشتراك</Badge>
             </State>
           </div>
         </Section>

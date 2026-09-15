@@ -3,6 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import type { NoteKind, Transport } from '../../api/types'
 import { splitFrontmatter } from '../../lib/events'
 import { noteDir, stripRTLBlocks, subscribePreferRTL } from '../../lib/rtl'
+import NotePane from '../../ui/note-pane'
 
 
 
@@ -72,16 +73,15 @@ export default function NoteView({
     }
   }, [transport, workspaceId, runId, wanted, reload])
 
-  if (notes === null) return <div className="pane pane-empty">Loading note…</div>
-  if (notes.length === 0) return <div className="pane pane-empty">{error}</div>
+  if (notes === null) return <div className="pane-empty">Loading note…</div>
+  if (notes.length === 0) return <div className="pane-empty">{error}</div>
 
   return (
-    <div className="pane" dir={dir} data-testid="note-pane">
+    <NotePane dir={dir}>
       {notes.map((note) => {
-
         const { fields, body } = splitFrontmatter(note.text)
         return (
-          <article key={note.kind} className="pane-section">
+          <section key={note.kind} className="pane-section">
             {notes.length > 1 ? <div className="pane-label">{note.kind}</div> : null}
             {fields.length > 0 ? (
               <table className="fm">
@@ -90,7 +90,6 @@ export default function NoteView({
                     <tr key={f.key}>
                       <td>{f.key}</td>
                       <td dir="auto">{f.value}</td>
-
                     </tr>
                   ))}
                 </tbody>
@@ -98,12 +97,10 @@ export default function NoteView({
             ) : null}
             <div className="md" dir={dir} data-testid="note-markdown">
               <ReactMarkdown>{stripRTLBlocks(body)}</ReactMarkdown>
-
             </div>
-
-          </article>
+          </section>
         )
       })}
-    </div>
+    </NotePane>
   )
 }

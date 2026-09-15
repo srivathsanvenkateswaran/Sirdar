@@ -11,8 +11,14 @@ export interface DialogProps {
   actions?: ReactNode
 }
 
-/** Everything inside the dialog that can take focus, in DOM order. */
-function focusable(root: HTMLElement): HTMLElement[] {
+/**
+ * Everything inside a modal that can take focus, in DOM order.
+ *
+ * Exported because the Modal sheet is this component with a secondary nav down
+ * its leading edge, and a second copy of this selector is a second chance to
+ * forget `:not(:disabled)`.
+ */
+export function focusable(root: HTMLElement): HTMLElement[] {
   return [
     ...root.querySelectorAll<HTMLElement>(
       'a[href], button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex]:not([tabindex="-1"])',

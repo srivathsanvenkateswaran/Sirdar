@@ -1,0 +1,28 @@
+/*
+ * The Register screen's own three blocks: the activity grid above the table,
+ * the day filter it writes, and the panel padding. Everything else on this
+ * screen is the library's Data table and Heatmap.
+ */
+
+.register-activity {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin-block-end: var(--sd-space-4);
+}
+
+.register-day {
+  margin: 0;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.register-day__clear {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sd-accent);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}

@@ -1,0 +1,19 @@
+/*
+ * Badge. The account or workspace chip, on the existing highlight pair rather
+ * than on a ninth near-identical tint.
+ */
+
+.sd-fact-badge {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 20px;
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-badge-bg);
+  color: var(--sd-badge-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}

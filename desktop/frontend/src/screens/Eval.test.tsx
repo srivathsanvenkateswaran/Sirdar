@@ -1,7 +1,40 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { AppEvent, EvalReport, GoldenEntry, RetroReport, Transport } from '../api/types'
+import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import Eval, { jaccard, pct } from './Eval'
+
+/**
+ * The sidebar footer, as far as these cases are concerned.
+ *
+ * Eval's one commit action is published to the shell rather than drawn on the
+ * screen, because `03-desktop-app.md` section 8 puts every screen's filled
+ * button in the sidebar footer. The screen is still what decides what it says
+ * and what it does, so this stands in for the footer and draws it.
+ */
+/**
+ * The published action, once the footer has caught up.
+ *
+ * Publishing is an effect, so the footer's button lands one commit after the
+ * screen that published it — which is true in the app as well, and is why
+ * every case that presses it waits for it rather than reading it the moment
+ * the golden set appears.
+ */
+async function primary(name: string | RegExp): Promise<HTMLElement> {
+  const button = await screen.findByRole('button', { name })
+  await waitFor(() => expect(button).not.toBeDisabled())
+  return button
+}
+
+function PrimaryActionSlot(): JSX.Element | null {
+  const action = usePrimaryAction()
+  if (!action) return null
+  return (
+    <button type="button" disabled={action.disabled} onClick={action.onRun}>
+      {action.label}
+    </button>
+  )
+}
 
 const GOLDEN: GoldenEntry[] = [
   {
@@ -123,14 +156,17 @@ function mount(
   const onStartEval = vi.fn()
   const { transport, emit } = fakeTransport(over)
   render(
-    <Eval
-      transport={transport}
-      workspaceId="ws1"
-      defaultProvider={defaultProvider}
-      jobs={extra.jobs}
-      onStartEval={onStartEval}
-      onCancelJob={extra.onCancelJob}
-    />,
+    <PrimaryActionProvider>
+      <Eval
+        transport={transport}
+        workspaceId="ws1"
+        defaultProvider={defaultProvider}
+        jobs={extra.jobs}
+        onStartEval={onStartEval}
+        onCancelJob={extra.onCancelJob}
+      />
+      <PrimaryActionSlot />
+    </PrimaryActionProvider>,
   )
   return { transport, emit, onStartEval }
 }
@@ -165,6 +201,8 @@ describe('Eval retro section', () => {
     const row = within(table).getByRole('row', { name: /OMNI-2510/ })
     const cells = within(row).getAllByRole('cell')
     expect(cells.map((c) => c.textContent)).toEqual([
+      // As above: the Data table draws the key as a cell, not a row header.
+      'OMNI-2510',
       'code',
       'high',
       '1/2 50%',
@@ -214,6 +252,9 @@ describe('Eval', () => {
     const row = within(table).getByRole('row', { name: /OMNI-2510/ })
     const cells = within(row).getAllByRole('cell')
     expect(cells.map((c) => c.textContent)).toEqual([
+      // The key is a cell of its own now: the Data table draws every column
+      // the same way, rather than making the first one a row header.
+      'OMNI-2510',
       'completed',
       '7',
       '$0.42',
@@ -234,7 +275,7 @@ describe('Eval', () => {
 
   it('runs the whole set when nothing is picked', async () => {
     const { onStartEval } = mount()
-    fireEvent.click(await screen.findByRole('button', { name: 'Run eval on the whole set' }))
+    fireEvent.click(await primary('Run eval on the whole set'))
     await waitFor(() => expect(onStartEval).toHaveBeenCalledWith(undefined, {
       provider: undefined,
       model: undefined,
@@ -249,8 +290,7 @@ describe('Eval', () => {
     fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'qwen' } })
     fireEvent.change(screen.getByLabelText('Model'), { target: { value: ' qwen3-coder ' } })
 
-    const start = screen.getByRole('button', { name: 'Run eval on 1 key' })
-    fireEvent.click(start)
+    fireEvent.click(await primary('Run eval on 1 key'))
     await waitFor(() =>
       expect(onStartEval).toHaveBeenCalledWith(['OMNI-2511'], {
         provider: 'qwen',
@@ -332,11 +372,14 @@ describe('Eval', () => {
       throw new Error('the golden set holds no bundles')
     })
     render(
-      <Eval transport={transport} workspaceId="ws1" onStartEval={onStartEval} />,
+      <PrimaryActionProvider>
+        <Eval transport={transport} workspaceId="ws1" onStartEval={onStartEval} />
+        <PrimaryActionSlot />
+      </PrimaryActionProvider>,
     )
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Run eval on the whole set' }))
+    fireEvent.click(await primary('Run eval on the whole set'))
     expect(await screen.findByText('the golden set holds no bundles')).toBeInTheDocument()
   })
 })

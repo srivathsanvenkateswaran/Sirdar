@@ -1,0 +1,197 @@
+/*
+ * The board, on the sheet.
+ *
+ * The lanes themselves are the library's Kanban column and the cards are its
+ * Run card and Card; what is left here is the frame around them — the filter
+ * bar, the horizontally scrolling row of lanes, and the inbound strip.
+ *
+ * No shadow and no gradient. A lane separates from its neighbour with a 1px
+ * hairline, which is why the board reads at a glance.
+ */
+
+.board {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-block-size: 0;
+}
+
+.board-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-gutter);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.filter {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+.filter-input {
+  inline-size: 240px;
+  max-inline-size: 46vw;
+  min-block-size: 28px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink);
+  font: inherit;
+}
+
+.board-status {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-3);
+}
+
+.lanes {
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+  gap: 1px;
+  overflow-x: auto;
+  background: var(--sd-rule);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+/* ---------- inbound deliveries ---------- */
+
+/*
+ * A tracker fires on every field change, so most deliveries do nothing. The
+ * strip exists for the case that is otherwise invisible: telling a hook that
+ * never arrives apart from one that arrives and is filtered out.
+ */
+.inbound {
+  flex: 0 0 auto;
+  max-block-size: 27vh;
+  overflow-y: auto;
+  padding-block: var(--sd-space-2) var(--sd-space-3);
+  padding-inline: var(--sd-gutter);
+  border-block-start: 1px solid var(--sd-rule);
+  background: var(--sd-sheet);
+}
+
+.inbound-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  margin: 0 0 var(--sd-space-1);
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+}
+
+.inbound-count {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+}
+
+.inbound-empty {
+  margin: 0;
+  max-inline-size: 72ch;
+  font-size: var(--sd-text-meta);
+  line-height: 1.45;
+  color: var(--sd-ink-3);
+}
+
+.inbound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbound-row {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(78px, auto) minmax(56px, auto) 1fr auto;
+  gap: var(--sd-space-2);
+  align-items: baseline;
+  padding-block: 3px;
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: var(--sd-text-meta);
+}
+
+.inbound-row:last-child {
+  border-block-end: 0;
+}
+
+.inbound-source {
+  font-weight: 600;
+}
+
+.inbound-key {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+/* The outcome is the only coloured thing in the row, so it reads first. */
+.inbound-outcome {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--sd-st-queue);
+}
+
+.inbound-row[data-outcome='started'] .inbound-outcome { color: var(--sd-st-live); }
+.inbound-row[data-outcome='skipped'] .inbound-outcome { color: var(--sd-st-blocked); }
+.inbound-row[data-outcome='rejected'] .inbound-outcome { color: var(--sd-st-failed); }
+
+.inbound-why {
+  color: var(--sd-ink-2);
+}
+
+.inbound-at {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+}
+
+/* ---------- the ticket card's own three strings ---------- */
+
+.ticket-key {
+  font-family: var(--sd-font-mono);
+  font-weight: 600;
+}
+
+.ticket-status {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+}
+
+.ticket-at {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+  color: var(--sd-ink-2);
+}
+
+/* ---------- narrow windows ---------- */
+
+@media (max-width: 720px) {
+  .lanes {
+    flex-direction: column;
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .inbound-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .inbound-why {
+    grid-column: 1 / -1;
+  }
+}

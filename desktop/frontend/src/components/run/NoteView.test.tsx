@@ -51,6 +51,17 @@ function fakeTransport(text: string): Transport {
   } as unknown as Transport
 }
 
+/**
+ * The pane is the library's Note pane, so it is found by its class rather than
+ * by a test id: the component carries the reader's direction on its own
+ * article element, which is the thing every case here is about.
+ */
+function pane(): HTMLElement {
+  const el = document.querySelector('.sd-note')
+  if (!el) throw new Error('the note pane is not rendered')
+  return el as HTMLElement
+}
+
 function renderNote(text = NOTE) {
   return render(
     <NoteView transport={fakeTransport(text)} workspaceId="ws1" runId="run-1" kinds={['triage']} />,
@@ -73,7 +84,7 @@ describe('NoteView', () => {
     renderNote()
     await waitFor(() => expect(screen.getByTestId('note-markdown')).toBeInTheDocument())
 
-    expect(screen.getByTestId('note-pane')).toHaveAttribute('dir', 'auto')
+    expect(pane()).toHaveAttribute('dir', 'auto')
     expect(screen.getByTestId('note-markdown')).toHaveAttribute('dir', 'auto')
   })
 
@@ -88,19 +99,19 @@ describe('NoteView', () => {
     renderNote()
     await waitFor(() => expect(screen.getByTestId('note-markdown')).toBeInTheDocument())
 
-    expect(screen.getByTestId('note-pane')).toHaveAttribute('dir', 'rtl')
+    expect(pane()).toHaveAttribute('dir', 'rtl')
     expect(screen.getByTestId('note-markdown')).toHaveAttribute('dir', 'rtl')
   })
 
   it('follows the preference as it changes, without a remount', async () => {
     renderNote()
-    await waitFor(() => expect(screen.getByTestId('note-pane')).toHaveAttribute('dir', 'auto'))
+    await waitFor(() => expect(pane()).toHaveAttribute('dir', 'auto'))
 
     act(() => setPreferRTL(true))
-    expect(screen.getByTestId('note-pane')).toHaveAttribute('dir', 'rtl')
+    expect(pane()).toHaveAttribute('dir', 'rtl')
 
     act(() => setPreferRTL(false))
-    expect(screen.getByTestId('note-pane')).toHaveAttribute('dir', 'auto')
+    expect(pane()).toHaveAttribute('dir', 'auto')
   })
 
   /*

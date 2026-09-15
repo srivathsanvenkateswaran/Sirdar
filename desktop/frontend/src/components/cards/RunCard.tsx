@@ -1,16 +1,21 @@
+import { useEffect, useState } from 'react'
 import type { RunSummary } from '../../api/types'
-import CostChip from './CostChip'
-import ElapsedTime from './ElapsedTime'
-import StatusBadge, { PriorityBadge } from './StatusBadge'
+import { costOrUnknown, elapsedSince, relativeTime, tokenFlow } from '../../lib/format'
+import SdRunCard from '../../ui/run-card'
+import type { SdStatus } from '../../ui/status-badge'
+
+const LIVE = new Set(['preparing', 'running'])
+const NEEDS_REASON = new Set(['blocked', 'failed', 'over_budget'])
 
 /**
- * A run in any lane past the queue. The whole card opens Run detail.
+ * A run in any lane past the queue, drawn by the library's run card.
  *
- * The heading is the tracker's ticket title and the reason is whatever the run
- * stopped on, which can be a question quoting the customer, so both carry
- * `dir="auto"` and lay themselves out from their own first strong character.
+ * What stays here is the arithmetic the library component refuses to do: a
+ * live run's clock counts up once a second — the only thing on the board that
+ * moves on its own, because it is the only thing still happening — and a
+ * finished one shows when it last changed instead. The card is handed two
+ * strings and lays them out.
  */
-
 export default function RunCard(props: {
   run: RunSummary
   title?: string
@@ -18,39 +23,42 @@ export default function RunCard(props: {
   onOpen: (runId: string) => void
 }): JSX.Element {
   const { run, title, priority, onOpen } = props
-  const live = run.status === 'preparing' || run.status === 'running'
-  const needsReason = run.status === 'blocked' || run.status === 'failed' || run.status === 'over_budget'
-  const heading = title || run.key
+  const live = LIVE.has(run.status)
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    if (!live) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [live])
+
+  const stamp = run.updatedAt || run.startedAt
+  const clock = live ? elapsedSince(run.startedAt, now) : relativeTime(stamp, now)
+
+  const usage = run.usage
+  const cost = usage?.costUsd ?? 0
+  const turns = usage?.turns ?? 0
+  const spent = usage && (cost !== 0 || turns !== 0) ? costOrUnknown(cost, live) : ''
 
   return (
-    <button
-      type="button"
-      className="card card--run"
-      data-status={run.status}
-      onClick={() => onOpen(run.runId)}
-      aria-label={`${run.key}: ${heading}`}
-    >
-      <span className="card-top">
-        <span className="key">{run.key}</span>
-        <span className="card-kind">{run.kind}</span>
-        <PriorityBadge priority={priority ?? ''} />
-      </span>
-      {heading !== run.key && (
-        <span className="card-title" dir="auto">
-          {heading}
-        </span>
-      )}
-      {needsReason && run.reason && (
-        <span className="card-reason" dir="auto">
-          {run.reason}
-        </span>
-      )}
-
-      <span className="card-foot">
-        <StatusBadge status={run.status} />
-        <ElapsedTime startedAt={run.startedAt} updatedAt={run.updatedAt} live={live} />
-        <CostChip usage={run.usage} live={live} />
-      </span>
-    </button>
+    <SdRunCard
+      runKey={run.key}
+      kind={run.kind}
+      status={run.status as SdStatus}
+      title={title}
+      reason={NEEDS_REASON.has(run.status) ? run.reason : undefined}
+      priority={priority}
+      elapsed={clock || undefined}
+      elapsedTitle={live ? 'Running for' : stamp}
+      cost={spent || undefined}
+      costTitle={
+        usage
+          ? `${turns} ${turns === 1 ? 'turn' : 'turns'}, ${tokenFlow(usage.inputTokens, usage.outputTokens)}${
+              live && cost === 0 ? '; cost is reported when the session ends' : ''
+            }`
+          : undefined
+      }
+      onOpen={() => onOpen(run.runId)}
+    />
   )
 }
