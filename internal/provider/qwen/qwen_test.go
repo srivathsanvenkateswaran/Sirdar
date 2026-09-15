@@ -2460,6 +2460,34 @@ func TestTriageModeWriteIsRefusedByThePolicyToo(t *testing.T) {
 	}
 }
 
+// TestInitLineReportsModel: an endpoint the workspace configured no model
+// for still answers with one, and the init line is the only place it is
+// named. It travels as a field on the system event so the run layer can
+// record it without reading the notice text.
+func TestInitLineReportsModel(t *testing.T) {
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := drain(t, s)
+
+	var reported []string
+	for _, ev := range events {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	// script-basic.jsonl's init line says "model":"stub-model".
+	if len(reported) != 1 || reported[0] != "stub-model" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "stub-model")
+	}
+}
+
 // allows reports whether argv allow-lists tool.
 func allows(argv []string, tool string) bool {
 	for i, a := range argv {
