@@ -8,7 +8,7 @@ function frame(): HTMLElement {
 }
 
 describe('the asset library', () => {
-  it('shows every one of the fifteen components', () => {
+  it('shows every one of the twenty-one components', () => {
     const { container } = render(<Library />)
     // Section headings only: the note pane specimen has headings of its own,
     // and so does the dialog.
@@ -31,6 +31,12 @@ describe('the asset library', () => {
       'Quota chip',
       'Hero band',
       'Ring text and marquee',
+      'Sidebar nav item',
+      'Sidebar footer card',
+      'Modal sheet with secondary nav',
+      'Setting row',
+      'Heatmap',
+      'Badge',
     ])
   })
 

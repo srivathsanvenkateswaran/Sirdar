@@ -1,0 +1,188 @@
+/*
+ * Modal sheet with a secondary nav. The large Dialog variant, and the only one
+ * in the app: settings is a place you leave, and the board stays painted
+ * behind the scrim to say so.
+ */
+
+.sd-modal-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--sd-space-4);
+  background: var(--sd-scrim);
+  animation: sd-modal-scrim-in var(--sd-dur-2) ease;
+}
+
+.sd-modal {
+  display: flex;
+  inline-size: min(900px, 92vw);
+  block-size: min(640px, 88vh);
+  min-block-size: 0;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-sheet);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  /* No shadow. The scrim is the elevation. */
+  overflow: hidden;
+  animation: sd-modal-in var(--sd-dur-3) var(--sd-ease);
+}
+
+/* ---------- secondary nav ---------- */
+
+.sd-modal__nav {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 200px;
+  min-block-size: 0;
+  background: var(--sd-card-row);
+  overflow-y: auto;
+}
+
+.sd-modal__nav-list {
+  flex: 1 1 auto;
+  padding-block: var(--sd-space-3);
+}
+
+.sd-modal__nav-group + .sd-modal__nav-group {
+  margin-block-start: var(--sd-space-3);
+  padding-block-start: var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.sd-modal__nav-label {
+  margin: 0;
+  padding-block: 0 var(--sd-space-1);
+  padding-inline: var(--sd-space-4);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  letter-spacing: 0.06em;
+}
+
+.sd-modal__nav-row {
+  display: block;
+  inline-size: calc(100% - var(--sd-space-4));
+  min-block-size: 28px;
+  margin-block: 2px;
+  margin-inline: var(--sd-space-2);
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--sd-dur-1) ease, color var(--sd-dur-1) ease;
+}
+
+.sd-modal__nav-row:hover {
+  background: var(--sd-nav-hover);
+}
+
+.sd-modal__nav-row[aria-current='page'] {
+  background: var(--sd-nav-active);
+  color: var(--sd-ink);
+  font-weight: 500;
+}
+
+/* Where the reference prints a 2.11:1 version string. This one is 4.60:1. */
+.sd-modal__nav-foot {
+  padding-block: var(--sd-space-2) var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  line-height: 1.5;
+}
+
+/* ---------- content panel ---------- */
+
+.sd-modal__panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 0;
+  background: var(--sd-sheet);
+}
+
+.sd-modal__title {
+  margin: 0;
+  padding-block: var(--sd-space-5) var(--sd-space-3);
+  padding-inline: var(--sd-space-6);
+  /* The app's one serif, as the design language allows for the note pane. */
+  font-family: var(--sd-font-display);
+  font-size: var(--sd-text-display-m);
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.sd-modal__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding-block: 0 var(--sd-space-6);
+  padding-inline: var(--sd-space-6);
+  overflow-y: auto;
+}
+
+.sd-modal__footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-6);
+  border-block-start: 1px solid var(--sd-rule);
+}
+
+@keyframes sd-modal-scrim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes sd-modal-in {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+/* Under 720px the nav column stacks above the panel rather than eating half
+   the window. */
+@media (max-width: 720px) {
+  .sd-modal {
+    flex-direction: column;
+    block-size: min(720px, 92vh);
+  }
+
+  .sd-modal__nav {
+    flex: 0 0 auto;
+    max-block-size: 34vh;
+  }
+
+  .sd-modal__title,
+  .sd-modal__body,
+  .sd-modal__footer {
+    padding-inline: var(--sd-space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-modal-scrim,
+  .sd-modal {
+    animation-duration: 1ms;
+  }
+
+  /* The modal cross-fades with no scale, which is the stated answer. */
+  .sd-modal {
+    animation-name: sd-modal-scrim-in;
+  }
+
+  .sd-modal__nav-row {
+    transition-duration: 1ms;
+  }
+}

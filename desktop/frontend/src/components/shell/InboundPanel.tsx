@@ -31,7 +31,7 @@ export default function InboundPanel({
     <section className="inbound" aria-label="Inbound">
       <h2 className="inbound-head">
         <span className="inbound-name">Inbound</span>
-        <span className="lane-count">{deliveries.length}</span>
+        <span className="inbound-count">{deliveries.length}</span>
       </h2>
       {deliveries.length === 0 ? (
         <p className="inbound-empty">

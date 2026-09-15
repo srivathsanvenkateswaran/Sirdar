@@ -8,6 +8,14 @@ import Settings, { CONFIG_DOCS_URL } from './Settings'
 
 const RTL_LABEL = 'Prefer right-to-left layout for Arabic content'
 
+/**
+ * Settings is a modal sheet with its own secondary nav now, so a case that
+ * wants a page says which one. Workspaces is the page it opens on.
+ */
+function go(page: string): void {
+  fireEvent.click(screen.getByRole('button', { name: page }))
+}
+
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
@@ -63,7 +71,7 @@ describe('Settings', () => {
     const onWorkspacesChanged = vi.fn()
     const transport = fakeTransport({ addWorkspace })
 
-    render(<Settings transport={transport} workspaces={[]} onWorkspacesChanged={onWorkspacesChanged} />)
+    render(<Settings open onClose={() => {}} transport={transport} workspaces={[]} onWorkspacesChanged={onWorkspacesChanged} />)
 
     fireEvent.change(screen.getByLabelText('Workspace path'), {
       target: { value: '/repos/sirdar' },
@@ -78,7 +86,7 @@ describe('Settings', () => {
     const addWorkspace = vi.fn().mockRejectedValue(new Error('bad path'))
     const transport = fakeTransport({ addWorkspace })
 
-    render(<Settings transport={transport} workspaces={[]} onWorkspacesChanged={vi.fn()} />)
+    render(<Settings open onClose={() => {}} transport={transport} workspaces={[]} onWorkspacesChanged={vi.fn()} />)
 
     fireEvent.change(screen.getByLabelText('Workspace path'), { target: { value: '/nope' } })
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace' }))
@@ -95,7 +103,7 @@ describe('Settings', () => {
     const doctor = vi.fn().mockResolvedValue(checks)
     const transport = fakeTransport({ doctor })
 
-    render(<Settings transport={transport} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+    render(<Settings open onClose={() => {}} transport={transport} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
 
     fireEvent.click(screen.getByRole('button', { name: 'Run doctor' }))
 
@@ -109,12 +117,19 @@ describe('Settings', () => {
 
   // A relative docs path resolves against the asset server, which answers
   // with the app's own index.html, so the link has to be the absolute one.
-  it('links the configuration reference at GitHub and shows the billing mode', () => {
-    render(<Settings transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+  it('links the configuration reference at GitHub, on the About page', () => {
+    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
 
+    go('About')
     const link = screen.getByRole('link', { name: 'docs/config.md' })
     expect(link).toHaveAttribute('href', CONFIG_DOCS_URL)
-    expect(screen.getByText('billing: subscription')).toBeInTheDocument()
+  })
+
+  it("shows the workspace's billing mode as a badge", () => {
+    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+
+    expect(screen.getByText('Billing')).toBeInTheDocument()
+    expect(screen.getByText('subscription')).toBeInTheDocument()
   })
 
   // window.confirm blocks the whole webview, run stream included, so the
@@ -126,6 +141,8 @@ describe('Settings', () => {
 
     render(
       <Settings
+        open
+        onClose={() => {}}
         transport={transport}
         workspaces={[workspace]}
         onWorkspacesChanged={onWorkspacesChanged}
@@ -146,6 +163,8 @@ describe('Settings', () => {
     const removeWorkspace = vi.fn().mockResolvedValue(undefined)
     const { unmount } = render(
       <Settings
+        open
+        onClose={() => {}}
         transport={fakeTransport({ removeWorkspace })}
         workspaces={[workspace]}
         onWorkspacesChanged={vi.fn()}
@@ -172,8 +191,9 @@ describe('Settings', () => {
 
 describe('the reading-direction toggle', () => {
   it('starts off and turns the preference on when pressed', () => {
-    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
 
+    go('Reading')
     const toggle = screen.getByLabelText(RTL_LABEL)
     expect(toggle).not.toBeChecked()
 
@@ -184,14 +204,16 @@ describe('the reading-direction toggle', () => {
 
   it('comes back checked for an engineer who set it last time', () => {
     setPreferRTL(true)
-    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+    go('Reading')
     expect(screen.getByLabelText(RTL_LABEL)).toBeChecked()
   })
 
   it('turns the preference off again', () => {
     setPreferRTL(true)
-    render(<Settings transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
 
+    go('Reading')
     fireEvent.click(screen.getByLabelText(RTL_LABEL))
     expect(prefersRTL()).toBe(false)
   })
@@ -217,6 +239,8 @@ describe('the notify and webhooks summary', () => {
     const configSummary = vi.fn().mockResolvedValue(summary)
     render(
       <Settings
+        open
+        onClose={() => {}}
         transport={fakeTransport({ configSummary })}
         workspaces={[workspace]}
         currentWorkspaceId="ws1"
@@ -224,6 +248,7 @@ describe('the notify and webhooks summary', () => {
       />,
     )
 
+    go('Notifications')
     await screen.findByRole('region', { name: 'Notifications and webhooks' })
     expect(configSummary).toHaveBeenCalledWith('ws1')
     expect(await screen.findByText('env: reference')).toBeInTheDocument()
@@ -236,12 +261,15 @@ describe('the notify and webhooks summary', () => {
     const configSummary = vi.fn()
     render(
       <Settings
+        open
+        onClose={() => {}}
         transport={fakeTransport({ configSummary })}
         workspaces={[]}
         onWorkspacesChanged={() => {}}
       />,
     )
     expect(configSummary).not.toHaveBeenCalled()
+    go('Notifications')
     expect(screen.queryByRole('region', { name: 'Notifications and webhooks' })).toBeNull()
   })
 
@@ -249,12 +277,15 @@ describe('the notify and webhooks summary', () => {
     const configSummary = vi.fn().mockRejectedValue(new Error('no such workspace'))
     render(
       <Settings
+        open
+        onClose={() => {}}
         transport={fakeTransport({ configSummary })}
         workspaces={[workspace]}
         currentWorkspaceId="ws1"
         onWorkspacesChanged={() => {}}
       />,
     )
+    go('Notifications')
     expect(await screen.findByText('no such workspace')).toBeInTheDocument()
   })
 })

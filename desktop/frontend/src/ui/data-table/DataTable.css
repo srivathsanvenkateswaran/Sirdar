@@ -95,3 +95,15 @@
   line-height: 1.5;
   color: var(--sd-ink-3);
 }
+
+/*
+ * A row's own prose, full width underneath it: why an assertion did not hold,
+ * what a run stopped on. It is a second row rather than a taller cell so the
+ * columns above it keep their alignment down the whole table.
+ */
+.sd-table__detail > td {
+  padding-block: var(--sd-space-1) var(--sd-space-2);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  line-height: 1.45;
+}

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import ProviderFields from './ProviderFields'
+import Button from '../../ui/button'
 
 /**
  * Starts a root-cause run on the same key. Both fields are optional: the PR and
@@ -73,12 +74,12 @@ export default function RCAForm({
         onModel={setModel}
       />
       <div className="form-row" style={{ marginTop: 8 }}>
-        <button type="submit" className="run-btn run-btn--primary" disabled={pending}>
+        <Button type="submit" variant="primary" disabled={pending}>
           {pending ? 'Starting…' : 'Start RCA'}
-        </button>
-        <button type="button" className="run-btn" onClick={onCancel} disabled={pending}>
+        </Button>
+        <Button onClick={onCancel} disabled={pending}>
           Cancel
-        </button>
+        </Button>
       </div>
       {error ? <div className="form-error">{error}</div> : null}
     </form>

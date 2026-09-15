@@ -1,0 +1,41 @@
+/*
+ * Sidebar footer card. Pinned under a hairline at the foot of the sidebar.
+ */
+
+.sd-sidebar-foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin-block-start: auto;
+  padding: var(--sd-space-2);
+  border-block-start: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-card-row);
+}
+
+.sd-sidebar-foot__quotas {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  /* A workspace with several budgeted providers must not push the primary
+     action off the bottom of the sidebar. */
+  max-block-size: 32vh;
+  overflow-y: auto;
+}
+
+/* The action is the full content width of the card, as the app-shell language
+   states: one filled commit button per screen, and this is where the Board's
+   lives. */
+.sd-sidebar-foot__action > * {
+  inline-size: 100%;
+}
+
+.sd-sidebar-foot__switcher > * {
+  inline-size: 100%;
+}
+
+/* Collapsed to the rail, the card keeps only what fits in 56px. */
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__switcher,
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__quotas {
+  display: none;
+}
