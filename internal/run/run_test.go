@@ -1656,12 +1656,11 @@ func TestHelpdeskRefFallback(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{}
 			cfg.Sources.Tracker = zohoURLRule()
-			r := &Runner{Deps: Deps{Config: cfg}}
+			f := &Fetcher{Config: cfg}
 
 			tt := ticket.TrackerTicket{Key: "OMNI-1", Description: tc.description}
-			p := &prepared{}
 			var b ticket.Bundle
-			r.applyHelpdeskRefFallback(p, &b, &tt)
+			f.applyHelpdeskRefFallback(&b, &tt)
 
 			if tt.HelpdeskRef != tc.want {
 				t.Errorf("HelpdeskRef = %q, want %q", tt.HelpdeskRef, tc.want)
@@ -1669,8 +1668,8 @@ func TestHelpdeskRefFallback(t *testing.T) {
 			if got := len(b.Warnings) > 0; got != tc.wantWarning {
 				t.Errorf("warnings = %v, want a warning: %v", b.Warnings, tc.wantWarning)
 			}
-			if len(b.Warnings) != len(p.state.Warnings) {
-				t.Errorf("the run state and the prompt disagree: %v vs %v", p.state.Warnings, b.Warnings)
+			if len(b.Warnings) != len(f.warnings) {
+				t.Errorf("the run state and the prompt disagree: %v vs %v", f.warnings, b.Warnings)
 			}
 		})
 	}
@@ -1691,12 +1690,12 @@ func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
 			IDPattern: `(\d+)$`,
 		},
 	}
-	r := &Runner{Deps: Deps{Config: cfg}}
+	f := &Fetcher{Config: cfg}
 
 	long := strings.Repeat("x", 500)
 	tt := ticket.TrackerTicket{Key: "OMNI-1", Description: "Zoho Ticket URL: " + long}
 	var b ticket.Bundle
-	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	f.applyHelpdeskRefFallback(&b, &tt)
 
 	if len(b.Warnings) != 1 {
 		t.Fatalf("warnings = %v, want exactly one", b.Warnings)
@@ -1717,11 +1716,11 @@ func TestHelpdeskRefWarningTruncatesTheCapturedValue(t *testing.T) {
 func TestHelpdeskRefFallbackWithoutARule(t *testing.T) {
 	cfg := &config.Config{}
 	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear", APIKey: "env:LINEAR_KEY"}
-	r := &Runner{Deps: Deps{Config: cfg}}
+	f := &Fetcher{Config: cfg}
 
 	tt := ticket.TrackerTicket{Description: "Zoho Ticket URL: https://desk.zoho.com/agent/a/support/tickets/details/42"}
 	var b ticket.Bundle
-	r.applyHelpdeskRefFallback(&prepared{}, &b, &tt)
+	f.applyHelpdeskRefFallback(&b, &tt)
 	if tt.HelpdeskRef != "" {
 		t.Fatalf("HelpdeskRef = %q, want it left empty", tt.HelpdeskRef)
 	}
@@ -1758,11 +1757,11 @@ func TestFetchBundleAppliesAndDefersToTheAdapter(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := &config.Config{}
 			cfg.Sources.Tracker = zohoURLRule()
-			r := &Runner{Deps: Deps{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}}
+			f := &Fetcher{Config: cfg, Tracker: descTracker{description: desc, helpdeskRef: tc.native}}
 
-			b, err := r.fetchBundle(context.Background(), "OMNI-1", &prepared{})
+			b, _, err := f.Fetch(context.Background(), "OMNI-1", t.TempDir())
 			if err != nil {
-				t.Fatalf("fetchBundle: %v", err)
+				t.Fatalf("Fetch: %v", err)
 			}
 			if b.Tracker.HelpdeskRef != tc.want {
 				t.Fatalf("HelpdeskRef = %q, want %q", b.Tracker.HelpdeskRef, tc.want)
