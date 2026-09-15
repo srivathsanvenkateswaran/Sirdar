@@ -1074,3 +1074,33 @@ func TestFixModeDropsDisallowedTools(t *testing.T) {
 		}
 	}
 }
+
+// TestInitLineReportsModel: the run layer cannot ask the CLI which model it
+// used, so the init line's model has to reach it as a field on the event
+// rather than as a word inside the notice text. Only the init line carries
+// one; a status line or a hook line is the same shape and says nothing
+// about the model.
+func TestInitLineReportsModel(t *testing.T) {
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var reported []string
+	for ev := range s.Events() {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	// script-basic.jsonl's init line says "model":"m".
+	if len(reported) != 1 || reported[0] != "m" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "m")
+	}
+}
