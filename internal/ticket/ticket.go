@@ -89,6 +89,11 @@ type Bundle struct {
 	Attachments        []Attachment
 	SkippedAttachments []SkippedAttachment // from the manifest, but dropped: too large or unreadable
 	Warnings           []string            // e.g. attachment download failures, surfaced to the prompt
+
+	// Cutoff is set when this bundle was assembled as of an instant
+	// rather than as the ticket stands today: it says what ApplyAsOf
+	// removed. Nil on an ordinary live bundle.
+	Cutoff *Cutoff `json:",omitempty"`
 }
 
 // Key returns Tracker.Key if present else Helpdesk.ID.
