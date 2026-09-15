@@ -2579,6 +2579,74 @@ func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 	}
 }
 
+// TestSchemaRetryNamesTheRequiredTopLevelKeys covers the failure the live
+// OpenCode rca run hit: the agent wrote a perfectly good root-cause
+// analysis with the rca object's own fields at the root, so the validator
+// said "(root): missing properties 'rca', 'resolution'" and the retry
+// repeated the same shape. A model that has just written an rca does not
+// read that message as being about itself, so the retry names the keys —
+// off the schema's own root `required` list, so it cannot drift from the
+// schema — and says the substance belongs inside them.
+func TestSchemaRetryNamesTheRequiredTopLevelKeys(t *testing.T) {
+	cfg := newWorkspace(t)
+
+	// The triage note the rca run reviews.
+	p := &stubProvider{name: "acp", script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The rca answer with the rca object's fields flattened to the root,
+	// exactly as the live run produced it.
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rcaDoc), &full); err != nil {
+		t.Fatal(err)
+	}
+	flattened, err := json.Marshal(json.RawMessage(full["rca"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p.script = func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(string(flattened))) {
+			return
+		}
+		select {
+		case <-s.sendCh:
+		case <-s.cancelled:
+			return
+		}
+		s.emit(finalEvent(rcaDoc))
+	}
+
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	sends := p.session(1).sentTexts()
+	if len(sends) != 1 {
+		t.Fatalf("sends: %v", sends)
+	}
+	retry := sends[0]
+	for _, want := range []string{
+		// The validator's own message, so the retry says what failed.
+		"missing properties 'rca', 'resolution'",
+		// The keys the answer has to carry, named.
+		"The object must have these top-level keys: rca, resolution.",
+		"Everything else belongs inside them, not at the root.",
+	} {
+		if !strings.Contains(retry, want) {
+			t.Errorf("the retry message does not carry %q:\n%s", want, retry)
+		}
+	}
+}
+
 // TestSchemaItselfFailsWithAClearerReason covers a session that answers
 // with its own JSON Schema — a root "properties" object — rather than a
 // document shaped by it. There is nothing to reconstruct there, so the run
@@ -3025,6 +3093,80 @@ func TestBreachAfterTheNoteStillFailsTheRun(t *testing.T) {
 	}
 }
 
+// --- sessions that read nothing ---------------------------------------
+
+// blindEvent is what provider agy raises when a session produced an answer
+// without completing a single read: the first line is the run's terminal
+// reason, the rest is the explanation the event log keeps.
+func blindEvent(reason string) provider.Event {
+	return provider.Event{
+		Kind: provider.EvBlind,
+		Text: reason + "\nthis session completed no read of a file",
+		Raw:  json.RawMessage(`{"event":"result"}`),
+	}
+}
+
+// TestBlindSessionFailsInsteadOfFilingANote is round 1 of provider agy, as
+// a run-layer test. Every read that session tried was auto-denied, the
+// agent answered out of the ticket text, and the note that reached the
+// register claimed high confidence about code nobody had opened. A note
+// like that is indistinguishable downstream from one built on evidence, so
+// the run fails and files nothing.
+func TestBlindSessionFailsInsteadOfFilingANote(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		blindEvent("the agent could read nothing (2 reads denied)"),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", out.State.Status, out.State.Reason)
+	}
+	if out.State.Reason != "the agent could read nothing (2 reads denied)" {
+		t.Errorf("reason %q: the blind verdict's first line is the run's reason", out.State.Reason)
+	}
+	if entries, err := os.ReadDir(filepath.Join(cfg.Root, "notes")); err == nil && len(entries) > 0 {
+		t.Errorf("a blind run filed %d note(s)", len(entries))
+	}
+	if rows, _ := store.ReadRegister(cfg.Root); len(rows) > 0 {
+		t.Errorf("a blind run wrote %d register row(s)", len(rows))
+	}
+	// The answer is kept where it can be read without being believed.
+	runs, _ := filepath.Glob(filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-1", "*", "result.raw.txt"))
+	if len(runs) != 1 {
+		t.Errorf("result.raw.txt files %v, want the one unfiled answer", runs)
+	}
+}
+
+// TestBreachOutranksBlind: a session that both read nothing and completed a
+// write is reported as the breach. They are different facts about the same
+// run and the breach is the worse one.
+func TestBreachOutranksBlind(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		blindEvent("the agent could read nothing (1 reads denied)"),
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := outs[0].State.Reason; got != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("reason %q, want the breach", got)
+	}
+}
+
 // TestEmptyFinalFailsWithoutCallingItASchemaError covers a fix session that
 // ends its turn with nothing in it — the ACP failure the Copilot sandbox
 // run hit. Nothing was ever validated, so neither the retry nor the run's
@@ -3069,5 +3211,107 @@ func TestEmptyFinalFailsWithoutCallingItASchemaError(t *testing.T) {
 	}
 	if !strings.Contains(sends[0], "deviationFromNote") {
 		t.Errorf("the nudge does not restate the fix report shape: %q", sends[0])
+	}
+}
+
+// qwenPlainTextFailure is the error sentence Qwen Code 0.23.3 puts on its
+// result line when it fails a --json-schema run whose model answered in
+// prose. It is copied from the first live `provider: qwen` rca run
+// (SBX-1, run 20260915T110536Z-3c18), whose result line carried
+// subtype "error_during_execution", is_error true, no result string, no
+// structured_result, and this under error.message.
+const qwenPlainTextFailure = "Model produced plain text instead of calling the structured_output " +
+	"tool as required by --json-schema after 1 turn(s)."
+
+// TestProviderNarrationIsNotTheAnswer is that run. The adapter keeps the
+// CLI's sentence as the final event's text, because it is the only account
+// of how the session ended — and the run used to hand it to the note
+// validator, which reported `parse document: invalid character 'M'` (the
+// 'M' of "Model") and then quoted that back at the agent as its own
+// mistake. The text is a candidate answer only when it carries a JSON
+// document; otherwise it is the reason the run failed.
+func TestProviderNarrationIsNotTheAnswer(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "qwen", script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+
+	p.script = func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		for i := 0; i <= maxEmptyTurns; i++ {
+			if i > 0 {
+				select {
+				case <-s.sendCh:
+				case <-s.cancelled:
+					return
+				}
+			}
+			if !s.emit(provider.Event{
+				Kind: provider.EvFinal,
+				Text: qwenPlainTextFailure,
+				Raw:  json.RawMessage(`{"type":"result","subtype":"error_during_execution","is_error":true}`),
+			}) {
+				return
+			}
+		}
+	}
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if strings.Contains(out.State.Reason, "invalid character 'M'") {
+		t.Fatalf("the CLI's error sentence reached the validator: %q", out.State.Reason)
+	}
+	if !strings.Contains(out.State.Reason, "Model produced plain text") {
+		t.Fatalf("the reason does not say what the CLI reported: %q", out.State.Reason)
+	}
+	// And the retry says what the agent got wrong, not what the CLI said
+	// about itself.
+	sends := p.session(1).sentTexts()
+	if len(sends) == 0 {
+		t.Fatal("no retry was sent")
+	}
+	if strings.Contains(sends[0], "invalid character 'M'") {
+		t.Fatalf("the retry quoted the CLI's own error back at the agent: %q", sends[0])
+	}
+}
+
+// TestPlainTextAnswerOnTheResultLineIsRead is the other side of the same
+// judgement, and the case the recovery exists for: the model wrote the
+// note as prose because nothing on the wire made it call the
+// structured-output tool. The document is in the text, behind a sentence
+// and a code fence, and this is an rca run — the recovery is not a triage
+// feature.
+func TestPlainTextAnswerOnTheResultLineIsRead(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "qwen", script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+
+	prose := "Here is the RCA and resolution note:\n\n```json\n" + rcaDoc + "\n```\n"
+	p.script = replay(provider.Event{
+		Kind: provider.EvFinal,
+		Text: prose,
+		Raw:  json.RawMessage(`{"type":"result","subtype":"success"}`),
+	})
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if sends := p.session(1).sentTexts(); len(sends) != 0 {
+		t.Fatalf("the answer was there; no retry should have been spent: %v", sends)
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, "notes", "OMNI-1 RCA export-times-out-on-large-orders.md")); err != nil {
+		t.Fatal(err)
 	}
 }

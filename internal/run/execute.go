@@ -84,6 +84,13 @@ type execution struct {
 	schemaError string
 	malformed   int
 
+	// finalNarration is the last thing a terminal provider line said in
+	// prose rather than in JSON: a CLI's account of why it failed the run,
+	// or an agent's closing sentence. It is not an answer — answerDoc
+	// keeps it out of the validator — so it is held here and becomes the
+	// reason a run that never produced a document ended.
+	finalNarration string
+
 	// retrySession is set when the schema retry could not be sent on the
 	// running session and a fresh one was started to carry it; consume
 	// switches to it and keeps going. live is the session being read from
@@ -109,6 +116,14 @@ type execution struct {
 	// that saw one files nothing and ends failed, however far along it
 	// was. See provider.EvBreach.
 	breach string
+
+	// blind is set when the provider reported that the session read
+	// nothing: every read it tried was refused, or it tried none. Like
+	// breach it outranks the note, because the note is a claim about a
+	// codebase the session never opened. Unlike breach nothing was
+	// violated, so the session is left to finish on its own rather than
+	// cancelled — the answer is simply not filed. See provider.EvBlind.
+	blind string
 }
 
 // liveSession holds the session the run is currently reading from. The
@@ -373,6 +388,12 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// guarantee failed. handleFinal refuses to file after a breach,
 		// so on the ordinary path there is no note to disown here.
 		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
+	case ex.blind != "":
+		// Ahead of the note for the same reason as the breach above, and
+		// behind it because a breach is the worse fact about the same
+		// run. handleFinal refuses to file after a blind verdict, so
+		// there is no note to disown here either.
+		return r.finish(ctx, p, store.StatusFailed, ex.blind, note.DigestRow{})
 	case len(ex.final) > 0:
 		// The note validated and was filed the moment it arrived. What
 		// happened to the session afterwards — a bad exit, an interrupt,
@@ -564,6 +585,19 @@ func schemaFor(kind store.Kind) []byte {
 	}
 }
 
+// requiredRootKeys is the schema's own root `required` list: the top-level
+// keys an answer must carry. It is read off the schema rather than written
+// out here so that a schema change reaches the retry wording with it.
+func requiredRootKeys(schema []byte) []string {
+	var root struct {
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(schema, &root); err != nil {
+		return nil
+	}
+	return root.Required
+}
+
 func noteKind(kind store.Kind) note.Kind {
 	switch kind {
 	case store.KindRCA:
@@ -687,7 +721,7 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 		fmt.Fprintf(w, "[%s] final\n", key)
 	case provider.EvError:
 		fmt.Fprintf(w, "[%s] error %s\n", key, firstLine(ev.Text))
-	case provider.EvBreach:
+	case provider.EvBreach, provider.EvBlind:
 		fmt.Fprintf(w, "[%s] failed %s\n", key, firstLine(ev.Text))
 	case provider.EvQuestion:
 		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
@@ -817,6 +851,17 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.stall.stop()
 		sess.Cancel()
 
+	case provider.EvBlind:
+		// No cancel and no counter: the session is about to produce its
+		// final line — the provider emits this immediately ahead of one —
+		// and killing it here would only replace a clear reason with
+		// "the session ended without a JSON note". handleFinal reads
+		// ex.blind and declines to file; the outcome switch turns it into
+		// the run's terminal reason.
+		if ex.blind == "" {
+			ex.blind = firstLine(ev.Text)
+		}
+
 	case provider.EvFinal:
 		r.handleFinal(ctx, p, sess, ex, ev)
 	}
@@ -861,9 +906,27 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
-	doc := []byte(ev.Final)
-	if len(doc) == 0 {
-		doc = []byte(strings.TrimSpace(ev.Text))
+	// A session that read nothing has an answer about a codebase it never
+	// opened. Filing it would put a note on disk, a row in the register
+	// and a line in the digest at whatever confidence the agent claimed,
+	// with nothing downstream able to tell it from a note built on
+	// evidence. The run fails instead; the raw answer is still written to
+	// result.raw.txt, where it can be read without being believed.
+	if ex.blind != "" {
+		raw := strings.TrimSpace(string(ev.Final))
+		if raw == "" {
+			raw = strings.TrimSpace(ev.Text)
+		}
+		ex.rawFinal = raw
+		return
+	}
+
+	doc, narration := answerDoc(ev)
+	if narration != "" {
+		// Kept for the failure reason below. It is the provider's own
+		// account of how the session ended, and it is the only account
+		// there is once the document turns out not to exist.
+		ex.finalNarration = narration
 	}
 
 	// An empty document is a turn that ended with nothing in it — all tool
@@ -931,9 +994,15 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	switch {
 	case empty && ex.emptyTurns >= maxEmptyTurns:
 		// Nothing was ever validated, so calling this a schema failure
-		// would name the wrong problem.
+		// would name the wrong problem. The provider's own last words go
+		// in the reason when it had any: "the agent ended the turn
+		// without an answer" is true of a CLI that failed the run for
+		// answering in prose, and says nothing an operator can act on.
 		ex.schemaError = firstProblem(err)
 		ex.failure = errEmptyAnswer.Error()
+		if ex.finalNarration != "" {
+			ex.failure += ": " + firstLine(ex.finalNarration)
+		}
 		sess.Cancel()
 		return
 	case !empty && ex.retried:
@@ -971,6 +1040,20 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// repeat: quoting the schema's own header back instead of the
 		// answer it describes.
 		msg += " Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+		// The other repeated mistake, and the one the OpenCode rca run
+		// failed twice on: writing the contents of the required top-level
+		// objects at the root instead of inside them, so the document is
+		// full of the right prose under none of the right keys. The
+		// validator says "(root): missing properties 'rca', 'resolution'"
+		// and the model, having written an rca, does not read that as
+		// being about it. Naming the keys is cheap and it is the whole of
+		// what went wrong. They come off the schema's own root `required`
+		// list so this sentence cannot drift from the schema it is
+		// describing.
+		if keys := requiredRootKeys(schemaFor(p.kind)); len(keys) > 0 {
+			msg += " The object must have these top-level keys: " + strings.Join(keys, ", ") +
+				". Everything else belongs inside them, not at the root."
+		}
 	}
 	sendErr := sess.Send(ctx, msg)
 	if sendErr == nil {

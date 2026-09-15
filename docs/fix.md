@@ -201,6 +201,80 @@ branch has moved on, been deleted, or was never recorded (an older run, or one t
 recording a commit), the ordinary flow runs from scratch instead: a fresh branch, a fresh session,
 a fresh commit.
 
+## Reviewing the change
+
+A fix that has run has a commit on a branch, and the step before you push it is reading that
+commit. Two surfaces do that, and both read the same thing through the same code: nothing here
+starts a session, asks a model anything, or pushes.
+
+```
+sirdar runs diff <run-id>                            # the unified patch
+sirdar runs diff <run-id> --files                    # the file list
+sirdar runs diff <run-id> --drop export/csv.go:1     # revert one hunk
+```
+
+and over HTTP:
+
+```
+GET  /api/workspaces/{id}/runs/{runId}/diff
+POST /api/workspaces/{id}/runs/{runId}/diff/drop     {"path":…, "hunk":…, "etag":…}
+```
+
+### What is read
+
+The change is `base..head`, where **head** is the commit the run made and **base** is the point
+the branch was cut from. Base is the *fork point* (`git merge-base`) rather than the tip of
+`origin/<base>`: the base branch has usually moved on since the fix ran, and diffing against its
+tip would report everything somebody else landed in the meantime as this fix having deleted it.
+
+Where it is read from depends on what is still there:
+
+- the run's own worktree, `<root>/.sirdar/worktrees/<run-id>`, while it exists — that is where
+  the branch is checked out and where a drop would apply;
+- otherwise the workspace's repository and the commit the run recorded, since the branch and the
+  commit live in the shared git directory whether or not the directory is still on disk;
+- otherwise a 404 naming which of the two is missing. A run that is not a fix run gets the same
+  answer for the same reason.
+
+The JSON body carries `base`, `head`, `branch`, `worktree`, `worktreePresent`, `pushed`, a
+`files` array (`path`, `status` of `added`/`modified`/`deleted`/`renamed`, `additions`,
+`deletions`), and `patch`. The patch is capped at 2 MiB — cut on a line boundary, with
+`truncated: true` beside it; the file list is whole either way, since it is counts rather than
+text. `etag` hashes the patch.
+
+### Dropping a hunk
+
+`--drop PATH:N`, or the `drop` route, reverts hunk `N` (0-based, within that file's hunks in the
+patch you were just served) out of the commit and **amends** the commit in place. The original
+commit message is kept — `git commit --amend --no-edit` — because a hunk a reviewer rejected is
+not a change worth recording as a change. Nothing is re-run: the agent is long gone, and this is
+a person editing the result of its session. A `review` event is appended to the run's
+`events.jsonl` (`{"kind":"review","payload":{"action":"drop","path":…,"hunk":…}}`), the run's
+`state.json` is updated to name the amended commit, and the new diff is returned.
+
+Dropping the last hunk of the last file leaves an empty commit rather than failing, which is a
+truthful record of a fix that was rejected outright.
+
+It is refused, with the reason, when:
+
+| Refusal | Why |
+| --- | --- |
+| the run is still `preparing` or `running` | the session is writing into that tree right now |
+| the worktree is gone | there is nothing to revert the hunk in; the diff is still readable |
+| the branch is pushed (`Fix.Pushed`) | Sirdar does not rewrite a branch that has left the machine |
+| the `etag` does not match | the patch has moved since it was served, so the hunk index means something else now |
+| there is no such file, or no such hunk index, in the diff | the same staleness, seen from the other side |
+| the worktree is no longer on the run's branch | this is not the run's commit to amend |
+
+The etag is how a stale index is caught: the CLI passes the etag of the patch it just printed,
+and a UI passes the etag of the diff it is showing. Reverting hunk 2 of a patch that is no longer
+the patch hunk 2 was counted in is exactly the mistake worth failing over.
+
+Over HTTP the drop carries one more gate, the one `POST /fix` carries: it is refused outright on
+a listener other machines can reach (`sirdar serve --allow-remote`, which has no authentication
+of any kind), because it rewrites a commit in the operator's repository. Reading the diff is not
+refused there — it is a read.
+
 ## Confinement, per provider
 
 A fix session gets more than a triage session: the read-only tools, plus `Edit`, `Write` and

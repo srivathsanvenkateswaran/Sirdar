@@ -83,6 +83,23 @@ func (b *Bridge) Note(ws, runId, kind string) (string, error) { return b.svc.Not
 // Prompt returns the prompt the run sent the agent.
 func (b *Bridge) Prompt(ws, runId string) (string, error) { return b.svc.Prompt(ws, runId) }
 
+// RunDiff returns a fix run's change: the file list and the unified patch,
+// read out of the run's own worktree or, once that is gone, out of the
+// repository. It starts nothing.
+func (b *Bridge) RunDiff(ws, runId string) (app.RunDiff, error) { return b.svc.RunDiff(ws, runId) }
+
+// DropHunk reverts one hunk out of a fix run's commit and amends it, then
+// answers with the change as it stands afterwards. etag is the etag of the
+// diff the hunk index was read from; a mismatch is refused rather than
+// applied to whatever patch is there now.
+//
+// The loopback gate `sirdar serve` puts on this is not needed here: the
+// desktop shell calls the service in process, so there is no listener for
+// anybody else to reach it through.
+func (b *Bridge) DropHunk(ws, runId, path string, hunk int, etag string) (app.RunDiff, error) {
+	return b.svc.DropHunk(context.Background(), ws, runId, path, hunk, etag)
+}
+
 // Register returns the workspace's run register.
 func (b *Bridge) Register(ws string) ([]app.RegisterRow, error) { return b.svc.Register(ws) }
 

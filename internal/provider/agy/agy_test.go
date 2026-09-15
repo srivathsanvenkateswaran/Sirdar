@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
@@ -143,6 +144,10 @@ func fakeSpec(t *testing.T, script string) provider.SessionSpec {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Start writes the session's project file under $HOME/.gemini, and a
+	// test has no business touching the operator's own copy of that
+	// directory even though the file is removed again on Wait.
+	fakeHome(t)
 	return provider.SessionSpec{
 		Cwd:          t.TempDir(),
 		Prompt:       "hello",
@@ -154,6 +159,26 @@ func fakeSpec(t *testing.T, script string) provider.SessionSpec {
 			"GEMINI_API_KEY=should-be-stripped",
 			"ANTIGRAVITY_SIDECAR_UI_TOKEN=should-be-stripped"),
 	}
+}
+
+// fakeHome points os.UserHomeDir at a temporary directory for the length
+// of one test, so the ~/.gemini tree a session reads and writes — the
+// project file above all, which Start creates and Wait deletes — is the
+// test's own and never the operator's.
+//
+// It is idempotent: a test that has already called it, directly or
+// through fakeSpec, gets the same directory back rather than a second one
+// that would strand the paths it has already built.
+func fakeHome(t *testing.T) string {
+	t.Helper()
+	if home := os.Getenv("SIRDAR_TEST_HOME"); home != "" {
+		return home
+	}
+	home := t.TempDir()
+	t.Setenv("SIRDAR_TEST_HOME", home)
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
+	return home
 }
 
 func writeScript(t *testing.T, lines ...string) string {
@@ -173,6 +198,7 @@ type drained struct {
 	permissions []provider.Event
 	errs        []provider.Event
 	breaches    []provider.Event
+	blind       []provider.Event
 	systems     []string
 	final       *provider.Event
 	usage       []provider.Event
@@ -194,6 +220,8 @@ func drain(t *testing.T, s provider.Session) drained {
 			d.errs = append(d.errs, ev)
 		case provider.EvBreach:
 			d.breaches = append(d.breaches, ev)
+		case provider.EvBlind:
+			d.blind = append(d.blind, ev)
 		case provider.EvSystem:
 			d.systems = append(d.systems, ev.Text)
 		case provider.EvUsage:
@@ -269,14 +297,14 @@ func TestArgsCarryThePlanModeGuarantee(t *testing.T) {
 		Budget:       provider.Budget{MaxMinutes: 25},
 		Resume:       "conv-7",
 	}
-	args := p.(*Provider).args(spec)
+	args := p.(*Provider).args(spec, "sirdar-abc123")
 	joined := strings.Join(args, " ")
 
 	for _, want := range []string{
 		"--output-format stream-json",
 		"--input-format stream-json",
 		"--mode plan",
-		"--disable-slash-commands",
+		"--project sirdar-abc123",
 		"--model gemini-3.8-flash-low",
 		"--effort low",
 		"--print-timeout 25m",
@@ -285,6 +313,18 @@ func TestArgsCarryThePlanModeGuarantee(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Errorf("args missing %q: %v", want, args)
 		}
+	}
+	// --disable-slash-commands is what made round 1's plan mode a no-op:
+	// the CLI answered every run with "--mode plan has no effect while
+	// slash command expansion is disabled". Plan mode is the only
+	// read-only lever this provider has, so the flag stays off.
+	if strings.Contains(joined, "--disable-slash-commands") {
+		t.Errorf("args carry --disable-slash-commands, which disables --mode plan: %v", args)
+	}
+	// A session whose project file could not be written runs without the
+	// flag rather than with an empty one.
+	if bare := strings.Join(p.(*Provider).args(spec, ""), " "); strings.Contains(bare, "--project") {
+		t.Errorf("args carry --project with no project id: %v", bare)
 	}
 	// The prompt goes on stdin, so --print takes an empty value rather
 	// than swallowing the next argument.
@@ -297,14 +337,14 @@ func TestArgsCarryThePlanModeGuarantee(t *testing.T) {
 }
 
 func TestArgsDefaultToTheCheapestModel(t *testing.T) {
-	args := New().(*Provider).args(provider.SessionSpec{OutputSchema: []byte(`{}`)})
+	args := New().(*Provider).args(provider.SessionSpec{OutputSchema: []byte(`{}`)}, "")
 	if !strings.Contains(strings.Join(args, " "), "--model "+defaultModel) {
 		t.Errorf("args %v: a workspace naming no model should get the cheapest tier", args)
 	}
 	// A per-run --model beats the block's.
 	args = NewConfig(Config{Model: "a"}).(*Provider).args(provider.SessionSpec{
 		OutputSchema: []byte(`{}`), Model: "b",
-	})
+	}, "")
 	if !strings.Contains(strings.Join(args, " "), "--model b") {
 		t.Errorf("args %v: spec.Model should win", args)
 	}
@@ -516,9 +556,7 @@ func TestBreachNamesThePathFromTheActiveLine(t *testing.T) {
 // still be recognised as the artifact rather than reported as a breach on
 // a path nobody can see.
 func TestRememberedPathExemptsThePlanArtifact(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
+	home := fakeHome(t)
 	artifact := filepath.Join(home, stateDirParent, stateDirChild, planDirName, "c1", "implementation_plan.md")
 	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
 		t.Fatal(err)
@@ -550,9 +588,7 @@ func TestRememberedPathExemptsThePlanArtifact(t *testing.T) {
 // written into <state dir>/brain/<conversation id>/ on every plan-mode
 // run.
 func TestPlanDirWriteIsNotABreach(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home) // os.UserHomeDir on Windows
+	home := fakeHome(t)
 	artifact := filepath.Join(home, stateDirParent, stateDirChild, planDirName, "c1", "implementation_plan.md")
 	if err := os.MkdirAll(filepath.Dir(artifact), 0o755); err != nil {
 		t.Fatal(err)
@@ -587,8 +623,7 @@ func TestPlanDirWriteIsNotABreach(t *testing.T) {
 // is. A write into another conversation's brain/ directory is a breach for
 // the same reason: it is not this session's artifact.
 func TestStateDirOutsideThePlanDirIsABreach(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := fakeHome(t)
 	t.Setenv("USERPROFILE", home)
 	stateRoot := filepath.Join(home, stateDirParent, stateDirChild)
 
@@ -834,7 +869,7 @@ func TestCancelStopsTheSession(t *testing.T) {
 func TestDoctorRows(t *testing.T) {
 	p := NewConfig(Config{Binary: os.Args[0], Model: "gemini-3.6-flash-low"})
 	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
-	t.Setenv("HOME", t.TempDir())
+	fakeHome(t)
 
 	checks := p.(*Provider).DoctorWithConfig(context.Background(), "", provider.DoctorConfig{MCPWorkspaceOnly: true})
 	byName := map[string]provider.Check{}
@@ -872,8 +907,7 @@ func TestDoctorRows(t *testing.T) {
 // it out is the only warning an operator gets before a permissions.allow
 // rule turns a refusal into a completed write.
 func TestDoctorReadsTheCLIsSettingsFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := fakeHome(t)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
 
@@ -913,8 +947,7 @@ func TestDoctorReadsTheCLIsSettingsFile(t *testing.T) {
 // A workspace the operator never trusted, and a settings file with no
 // permission rules at all, is the common case and has to read plainly.
 func TestDoctorSettingsRowWithNoRules(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := fakeHome(t)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
 
@@ -942,8 +975,7 @@ func TestDoctorSettingsRowWithNoRules(t *testing.T) {
 // A missing settings file is not an error: the CLI runs on its defaults.
 // The row says so rather than reading as a broken installation.
 func TestDoctorSettingsRowWithNoFile(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
+	home := fakeHome(t)
 	t.Setenv("USERPROFILE", home)
 	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
 
@@ -971,7 +1003,7 @@ func doctorRow(t *testing.T, p provider.Provider, cfg provider.DoctorConfig, nam
 func TestDoctorWarnsOnAModelTheAccountLacks(t *testing.T) {
 	p := NewConfig(Config{Binary: os.Args[0], Model: "gemini-9-ultra"})
 	t.Setenv("SIRDAR_FAKE_AGY", "unused-but-selects-the-fake")
-	t.Setenv("HOME", t.TempDir())
+	fakeHome(t)
 
 	for _, c := range p.(*Provider).Doctor(context.Background(), "") {
 		if c.Name != "agy model" {
@@ -987,13 +1019,6 @@ func TestDoctorWarnsOnAModelTheAccountLacks(t *testing.T) {
 
 // firstLineOf is the run layer's view of an event's text: the terminal
 // reason a run is finished with.
-func firstLineOf(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
-	}
-	return s
-}
-
 func errTexts(events []provider.Event) []string {
 	out := make([]string, 0, len(events))
 	for _, e := range events {
@@ -1009,4 +1034,271 @@ func containsSubstring(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// TestSessionWritesAndRemovesItsProjectFile is the lever that lets a
+// triage read at all. The CLI takes no flag that grants a permission, and
+// Sirdar will not edit the operator's settings.json, so the read rule goes
+// in a project file of Sirdar's own, named on the command line and deleted
+// when the session ends.
+func TestSessionWritesAndRemovesItsProjectFile(t *testing.T) {
+	home := fakeHome(t)
+	spec := fakeSpec(t, "testdata/script-basic.jsonl")
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	dir := filepath.Join(home, stateDirParent, configDirName, projectsDirName)
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatalf("no projects directory: %v", err)
+	}
+	var path string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), projectIDPrefix) {
+			path = filepath.Join(dir, e.Name())
+		}
+	}
+	if path == "" {
+		t.Fatalf("no Sirdar project file was written into %s: %v", dir, entries)
+	}
+
+	var got projectFile
+	body, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(body, &got); err != nil {
+		t.Fatalf("the project file is not valid JSON: %v", err)
+	}
+	if got.ID+".json" != filepath.Base(path) {
+		t.Errorf("project id %q does not match the file name %q; the CLI looks a project up by id", got.ID, filepath.Base(path))
+	}
+	if len(got.PermissionGrants.PermissionGrants.Allow) != 1 || got.PermissionGrants.PermissionGrants.Allow[0] != "read_file(*)" {
+		t.Errorf("allow rules %v, want exactly read_file(*)", got.PermissionGrants.PermissionGrants.Allow)
+	}
+	for _, want := range []string{"write_file(*)", "command(*)", "execute_url(*)"} {
+		if !containsString(got.PermissionGrants.PermissionGrants.Deny, want) {
+			t.Errorf("deny rules %v are missing %q", got.PermissionGrants.PermissionGrants.Deny, want)
+		}
+	}
+	if got.ProjectResources == nil || len(got.ProjectResources.Resources) != 1 ||
+		got.ProjectResources.Resources[0].FolderURI != "file://"+spec.Cwd {
+		t.Errorf("project resources %+v, want the session's own workspace", got.ProjectResources)
+	}
+
+	d := drain(t, s)
+	if !containsSubstring(d.systems, "granted this session read_file") {
+		t.Errorf("the grant was not reported on the event stream: %v", d.systems)
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("the project file outlived the session: %v", err)
+	}
+}
+
+// TestCancelRemovesTheProjectFile covers the path a breach and a budget
+// take, neither of which is guaranteed to reach a Wait that reaps the
+// child.
+func TestCancelRemovesTheProjectFile(t *testing.T) {
+	home := fakeHome(t)
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(home, stateDirParent, configDirName, projectsDirName)
+	s.Cancel()
+	drain(t, s)
+	_, _ = s.Wait()
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), projectIDPrefix) {
+			t.Errorf("a cancelled session left its project file behind: %s", e.Name())
+		}
+	}
+}
+
+// TestSweepStaleProjectsLeavesTheOperatorsOwn is the other half of owning
+// a file in somebody else's directory: a run killed between writing it and
+// reaping the child leaves one behind, and nothing but the next run will
+// clear it. Only files carrying Sirdar's own prefix are candidates, and
+// only once they are old enough to belong to no running session.
+func TestSweepStaleProjectsLeavesTheOperatorsOwn(t *testing.T) {
+	home := fakeHome(t)
+	dir := filepath.Join(home, stateDirParent, configDirName, projectsDirName)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	write := func(name string, age time.Duration) string {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte(`{"id":"x"}`), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		stamp := now.Add(-age)
+		if err := os.Chtimes(path, stamp, stamp); err != nil {
+			t.Fatal(err)
+		}
+		return path
+	}
+	stale := write(projectIDPrefix+"deadbeef.json", 48*time.Hour)
+	fresh := write(projectIDPrefix+"cafebabe.json", time.Minute)
+	theirs := write("default-cli-project.json", 30*24*time.Hour)
+
+	if n := sweepStaleProjects(now, staleProjectAge); n != 1 {
+		t.Errorf("swept %d files, want 1", n)
+	}
+	if _, err := os.Stat(stale); !os.IsNotExist(err) {
+		t.Errorf("the stale Sirdar project survived the sweep: %v", err)
+	}
+	for _, keep := range []string{fresh, theirs} {
+		if _, err := os.Stat(keep); err != nil {
+			t.Errorf("the sweep removed %s, which it must not touch: %v", keep, err)
+		}
+	}
+}
+
+// TestSessionThatReadsNothingIsBlind is round 1's failure, as a test. Every
+// view_file was auto-denied because a headless agy cannot prompt for a
+// permission, the agent answered out of the ticket text, and the run filed
+// a high-confidence note. The answer still arrives; what changes is that
+// the session says, ahead of it, that nothing was read.
+func TestSessionThatReadsNothingIsBlind(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"find_by_name","tool_info":{"name":"find_by_name","parameters":{}}}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"ERROR","step_type":"tool","tool_name":"view_file","tool_info":{"name":"view_file","parameters":{"AbsolutePath":"/w/ledger.go"},"error":{"type":"TOOL_ERROR","message":"permission check failed for read_file \"/w/ledger.go\": user denied permission for read_file(/w/ledger.go)"}}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{"confidence":"high"}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.blind) != 1 {
+		t.Fatalf("blind events %+v, want exactly one", d.blind)
+	}
+	if got := firstLineOf(d.blind[0].Text); got != "the agent could read nothing (1 reads denied)" {
+		t.Errorf("reason %q", got)
+	}
+	// Ahead of the final, because that is where the run layer files.
+	blindAt, finalAt := -1, -1
+	for i, ev := range d.all {
+		switch ev.Kind {
+		case provider.EvBlind:
+			blindAt = i
+		case provider.EvFinal:
+			finalAt = i
+		}
+	}
+	if blindAt < 0 || finalAt < 0 || blindAt > finalAt {
+		t.Errorf("blind at %d, final at %d: the verdict must reach the runner before the answer", blindAt, finalAt)
+	}
+}
+
+// TestACompletedReadIsNotBlind is the case the check must not fire on.
+func TestACompletedReadIsNotBlind(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"view_file","tool_info":{"name":"view_file","parameters":{"AbsolutePath":"/w/ledger.go"}}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.blind) != 0 {
+		t.Errorf("a session that read a file was called blind: %+v", d.blind)
+	}
+}
+
+// TestListingFilesIsNotReadingThem is the distinction round 1 turned on:
+// that run's find_by_name completed while its view_file was refused, so a
+// check that counted any completed tool would have passed a session which
+// had seen a list of filenames and not one line of code.
+func TestListingFilesIsNotReadingThem(t *testing.T) {
+	script := writeScript(t,
+		`{"event":"init","conversation_id":"c1","init":{"model":"m"}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":1,"state":"DONE","step_type":"tool","tool_name":"find_by_name","tool_info":{"name":"find_by_name","parameters":{}}}}`,
+		`{"event":"step_update","step_update":{"conversation_id":"c1","step_index":2,"state":"DONE","step_type":"tool","tool_name":"list_dir","tool_info":{"name":"list_dir","parameters":{}}}}`,
+		`{"event":"result","result":{"conversation_id":"c1","status":"SUCCESS","response":"{}","num_turns":1,"structured_output":{}}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(d.blind) != 1 {
+		t.Fatalf("blind events %+v, want one: listing filenames is not reading a file", d.blind)
+	}
+	if got := firstLineOf(d.blind[0].Text); got != "the agent could read nothing (no read tool was called)" {
+		t.Errorf("reason %q", got)
+	}
+}
+
+// TestReadAccessRowFailsWhenNothingCanGrantAread is why this row is a
+// failure and not another warning. Every other gap this adapter reports is
+// a property of the CLI an operator can read and decide about; a session
+// that cannot read is an agent answering a ticket from its description.
+func TestReadAccessRowFailsWhenNothingCanGrantARead(t *testing.T) {
+	home := fakeHome(t)
+	// A plain file where the projects directory belongs is the one
+	// failure a test can arrange without depending on file modes, which
+	// root ignores.
+	blocked := filepath.Join(home, stateDirParent, configDirName, projectsDirName)
+	if err := os.MkdirAll(filepath.Dir(blocked), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(blocked, []byte("x"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got := readAccessCheck()
+	if got.Severity() != provider.LevelFail {
+		t.Errorf("severity %s, want fail: a triage that cannot read files is not a degraded triage", got.Severity())
+	}
+	if !strings.Contains(got.Detail, "read_file(*)") {
+		t.Errorf("the row does not name the rule an operator would have to add: %s", got.Detail)
+	}
+
+	// And it passes once the directory Sirdar writes its project file
+	// into is a directory it can write to.
+	if err := os.Remove(blocked); err != nil {
+		t.Fatal(err)
+	}
+	if ok := readAccessCheck(); !ok.OK {
+		t.Errorf("read access should be available under a writable home: %s", ok.Detail)
+	}
+}
+
+func containsString(list []string, want string) bool {
+	for _, s := range list {
+		if s == want {
+			return true
+		}
+	}
+	return false
+}
+
+func firstLineOf(s string) string {
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		return s[:i]
+	}
+	return s
 }

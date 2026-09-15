@@ -55,7 +55,7 @@ commands:
   golden      manage the golden set (add, list)
   mcp         list MCP servers, judge their tools, call one by hand
   resume      continue a blocked or interrupted run
-  runs        list runs and states
+  runs        list runs and states; 'runs diff RUN_ID' reviews a fix run's change
   register    print the register
   serve       serve the web UI and API on loopback
   version     print version`)
