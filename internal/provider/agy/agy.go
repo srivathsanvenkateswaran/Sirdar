@@ -1,0 +1,885 @@
+// Package agy adapts Google's Antigravity CLI (`agy --print` with
+// stream-json on both stdin and stdout) to the provider.Session contract.
+//
+// It is modelled on the Claude adapter — NDJSON in, NDJSON out, a schema on
+// the command line, follow-up user messages for the schema retry — but one
+// difference runs through the whole file and is worth stating before the
+// code: **`agy` offers no way for a parent process to mediate a tool
+// call.** There is no control_request channel, no HTTP permission hook, and
+// nothing on stdin that answers a prompt. A headless run auto-denies
+// anything that would need approval, and everything else is decided by
+// files Sirdar does not own — the operator's own
+// ~/.gemini/antigravity-cli/settings.json, a project file under
+// ~/.gemini/config/projects/, or a .agents/hooks.json inside the customer's
+// repository. See docs/research/10-antigravity-wire-formats.md.
+//
+// Three consequences shape this adapter:
+//
+//   - The read-only guarantee is `--mode plan` plus the absence of any
+//     allow rule, not a tool exclusion list. Plan mode was the only mode
+//     observed to refuse a write to an absolute path outside the
+//     workspace; the default mode performed one. PermissionPolicy is never
+//     consulted, because by the time a tool call is visible on the stream
+//     the CLI has already decided it. What the session does instead is
+//     watch: a write that actually completes in a triage session is
+//     reported as an error rather than passed over in silence.
+//   - Fix mode is refused outright. Letting `agy` write needs
+//     --dangerously-skip-permissions, which approves every tool including
+//     a write into .git/hooks, and provider.FixPolicy's path confinement
+//     has nothing to attach to.
+//   - mcp.workspaceOnly cannot be enforced: the CLI reads one global
+//     mcp_config.json and takes no flag that narrows or replaces it.
+//     Doctor warns and the session emits a system event saying so.
+package agy
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"sort"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+)
+
+const (
+	defaultBinary   = "agy"
+	maxLineBytes    = 16 << 20 // a single stream-json line can carry a big tool result
+	eventBuffer     = 64
+	stderrTailLines = 50
+	doctorTimeout   = 20 * time.Second // `agy models` is a network round trip
+	interruptGrace  = 10 * time.Second
+
+	// planMode is the execution mode every Sirdar session runs in. It is
+	// the strongest read-only lever the CLI has: `--mode plan` refused a
+	// write_to_file naming an absolute path outside the workspace, where
+	// the default mode performed the same write into the CLI's own
+	// scratch directory without asking anyone.
+	planMode = "plan"
+
+	// defaultModel is the cheapest tier `agy models` offers: the smallest
+	// Flash model at the lowest reasoning effort. A workspace that names
+	// no model gets it rather than whatever the account's default is,
+	// because the account default is a Pro model on an unknown quota.
+	defaultModel = "gemini-3.6-flash-low"
+
+	// stateDirName is the CLI's own state directory under the operator's
+	// home. Plan mode writes its implementation-plan artifact there and
+	// the CLI keeps a scratch directory beside it, so a write landing
+	// inside it is the CLI's own bookkeeping rather than a breach of the
+	// read-only guarantee — see observeWrite.
+	stateDirParent = ".gemini"
+	stateDirChild  = "antigravity-cli"
+)
+
+// writeTools are the tool names that change a file. A triage session must
+// reach none of them outside the CLI's own state directory; one that
+// completes anywhere else is reported as an error, because the read-only
+// guarantee here rests on the CLI's own refusal and nothing Sirdar can
+// impose, so a refusal that did not happen has to be visible.
+var writeTools = map[string]bool{
+	"write_to_file":              true,
+	"replace_file_content":       true,
+	"multi_replace_file_content": true,
+	"sed_file":                   true,
+	"notebook_edit":              true,
+}
+
+// execTools are the tool names that run a program. The same reasoning
+// applies: a triage session should see every one of these refused.
+var execTools = map[string]bool{
+	"run_command":                true,
+	"send_command_input":         true,
+	"notebook_execution":         true,
+	"browser_subagent":           true,
+	"execute_browser_javascript": true,
+}
+
+// pathArgs is every argument name an `agy` tool names its target file
+// with. The keys are Cascade's PascalCase, not the snake_case the other
+// adapters read, which is why this cannot reuse the policy's writeArgs.
+type pathArgs struct {
+	TargetFile   string `json:"TargetFile"`
+	FilePath     string `json:"FilePath"`
+	NotebookPath string `json:"NotebookPath"`
+	AbsolutePath string `json:"AbsolutePath"`
+}
+
+func (a pathArgs) target() string {
+	for _, p := range []string{a.TargetFile, a.FilePath, a.NotebookPath, a.AbsolutePath} {
+		if strings.TrimSpace(p) != "" {
+			return p
+		}
+	}
+	return ""
+}
+
+// Config is what a workspace configures under `agy:`. Every field is
+// optional: with none of them set the session runs against whatever Google
+// account the operator's own `agy` binary is signed in to, the way
+// provider: claude runs against their Claude Code login.
+type Config struct {
+	Binary string
+	Model  string
+	Effort string
+}
+
+// Provider starts Antigravity CLI sessions.
+type Provider struct{ cfg Config }
+
+// New returns the Antigravity provider with no configuration: the child
+// runs against the login the operator's `agy` binary already holds and the
+// cheapest model on the account.
+func New() provider.Provider { return &Provider{} }
+
+// NewConfig returns the provider with the workspace's `agy:` block applied.
+func NewConfig(c Config) provider.Provider { return &Provider{cfg: c} }
+
+// Name identifies this provider in config and run records.
+func (p *Provider) Name() string { return "agy" }
+
+// model is the model a session runs, preferring the per-run override.
+func (p *Provider) model(spec provider.SessionSpec) string {
+	for _, m := range []string{spec.Model, p.cfg.Model} {
+		if strings.TrimSpace(m) != "" {
+			return m
+		}
+	}
+	return defaultModel
+}
+
+// args builds the command line.
+//
+// --print= is load-bearing and the empty value is not a typo: -p, --print
+// and --prompt all take the prompt as the flag's own value, so the bare
+// `agy -p --output-format stream-json` form is rejected with "-p took
+// \"--output-format\" as its prompt". With --input-format stream-json the
+// prompt arrives on stdin instead, so the flag is given an empty value to
+// select print mode without swallowing the next argument.
+func (p *Provider) args(spec provider.SessionSpec) []string {
+	out := []string{
+		"--output-format", "stream-json",
+		"--input-format", "stream-json",
+		// The prompt carries ticket text written by whoever opened the
+		// ticket. Slash-command and skill expansion in print mode would
+		// let a line of that text name a command, so it is off.
+		"--disable-slash-commands",
+		// The read-only guarantee, such as the CLI allows one to be
+		// made. See planMode.
+		"--mode", planMode,
+	}
+	// The runner always supplies a schema; an empty one is a caller bug,
+	// so it is passed through rather than silently dropped.
+	out = append(out, "--json-schema", compactJSON(spec.OutputSchema))
+	out = append(out, "--model", p.model(spec))
+	if e := strings.TrimSpace(p.cfg.Effort); e != "" {
+		out = append(out, "--effort", e)
+	}
+	// The CLI has no turn or tool-call ceiling — no --max-turns, no
+	// --max-tool-calls, no --max-wall-time — so the wall clock is the one
+	// budget it can enforce itself and the turn budget is left to the
+	// runner counting result events.
+	if spec.Budget.MaxMinutes > 0 {
+		out = append(out, "--print-timeout", fmt.Sprintf("%dm", spec.Budget.MaxMinutes))
+	}
+	// Flags are not carried across a resume: a session resumed without
+	// --mode plan runs in the default mode. The whole set is therefore
+	// passed on every start, resume included, and --conversation only
+	// adds to it.
+	if spec.Resume != "" {
+		out = append(out, "--conversation", spec.Resume)
+	}
+	return append(out, "--print=")
+}
+
+// strippedEnvKeys are the variables that can point the child at a
+// different backend, hand it a different credential, or make it believe it
+// is running as an Antigravity sidecar. None has a legitimate role in a
+// Sirdar run, and GEMINI_API_KEY in particular is this CLI's equivalent of
+// ANTHROPIC_BASE_URL: with it set and modelProvider: "gemini" configured,
+// the session stops billing against the operator's Antigravity login and
+// starts billing an API key, against a base URL another variable chooses.
+//
+// The OAuth login itself is not in the environment and not under
+// ~/.gemini: it lives in the OS keyring. That is why this list strips
+// rather than relocates — moving HOME to isolate the CLI's configuration
+// would risk the keyring lookup, and a failed lookup is a dead run.
+var strippedEnvKeys = []string{
+	// backend and credentials
+	"GEMINI_API_KEY",
+	"GOOGLE_GEMINI_BASE_URL",
+	"GOOGLE_API_KEY",
+	"GOOGLE_APPLICATION_CREDENTIALS",
+	"GOOGLE_CLOUD_QUOTA_PROJECT",
+	"GOOGLE_CLOUD_PROJECT",
+	// the sidecar/extension protocol the server injects into its own
+	// children; a stray export makes a Sirdar session look like one
+	"ANTIGRAVITY_LS_ADDRESS",
+	"ANTIGRAVITY_CSRF_TOKEN",
+	"ANTIGRAVITY_SIDECAR_WEB_PORT",
+	"ANTIGRAVITY_SIDECAR_UI_TOKEN",
+	"ANTIGRAVITY_AGENTAPI_EXE",
+	"ANTIGRAVITY_EXECUTABLE_DATA_DIR",
+	"ANTIGRAVITY_CONVERSATION_ID",
+	"ANTIGRAVITY_PROJECT_ID",
+	"ANTIGRAVITY_AGENT",
+	// internal state and browser-tool wiring
+	"JETSKI_APP_DATA_DIR",
+	"JETSKI_BROWSER_PORT",
+}
+
+// childEnv returns the environment for the child process, plus the
+// EvSystem events the caller should see about what was removed.
+func childEnv(spec provider.SessionSpec) ([]string, []provider.Event) {
+	base := spec.Env
+	if len(base) == 0 {
+		base = os.Environ()
+	}
+	out := make([]string, 0, len(base))
+	var events []provider.Event
+	for _, e := range base {
+		if name, ok := strippedName(e); ok {
+			events = append(events, systemNotice("removed "+name+
+				" from the agent environment: an agy session runs against the operator's own Antigravity login and nothing else"))
+			continue
+		}
+		out = append(out, e)
+	}
+	return out, events
+}
+
+func strippedName(entry string) (string, bool) {
+	name, _, ok := strings.Cut(entry, "=")
+	if !ok {
+		return "", false
+	}
+	for _, k := range strippedEnvKeys {
+		if name == k {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+func systemNotice(text string) provider.Event {
+	raw, _ := json.Marshal(map[string]string{"event": "system", "source": "sirdar", "text": text})
+	ev := newEvent(provider.EvSystem, raw)
+	ev.Text = text
+	return ev
+}
+
+func compactJSON(raw []byte) string {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, raw); err != nil {
+		return string(raw)
+	}
+	return buf.String()
+}
+
+// ErrFixUnsupported is why `sirdar fix` cannot run on this provider. It is
+// returned from Start rather than checked somewhere earlier so that every
+// path into a fix session — the CLI, the desktop app, `sirdar serve` —
+// hits the same refusal.
+var ErrFixUnsupported = errors.New(
+	"provider agy: fix mode is refused. The Antigravity CLI gives a parent process no way to " +
+		"mediate or even see a tool call before it runs: headless runs auto-deny whatever needs " +
+		"approval, and the only way to let the agent write is --dangerously-skip-permissions, " +
+		"which approves every tool including a write into .git/hooks. Sirdar's fix policy " +
+		"confines a write to the workspace by judging each call, and there is nothing here to " +
+		"judge. Run `sirdar fix` under provider: claude, codex or openai")
+
+// Start launches the CLI and sends the prompt as the first user line.
+func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	if spec.Mode.IsFix() {
+		return nil, ErrFixUnsupported
+	}
+	binary := spec.Binary
+	if binary == "" {
+		binary = p.cfg.Binary
+	}
+	if binary == "" {
+		binary = defaultBinary
+	}
+	// runCtx is the one cancellation path: Cancel() cancels it, and so
+	// does the caller's ctx. The CLI starts a language-server sidecar of
+	// its own, so the whole process group is signalled rather than just
+	// the immediate child.
+	runCtx, cancelRun := context.WithCancel(ctx)
+	cmd := exec.CommandContext(runCtx, binary, p.args(spec)...)
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
+	cmd.WaitDelay = interruptGrace
+	cmd.Dir = spec.Cwd
+	env, notices := childEnv(spec)
+	cmd.Env = env
+
+	// mcp.workspaceOnly asked for a restriction this CLI cannot express.
+	// It is said once per session rather than left to doctor alone,
+	// because a run's own event log is where an operator looks afterwards
+	// to find out what the session could reach.
+	if spec.MCPStrict {
+		notices = append(notices, systemNotice("mcp.workspaceOnly is not enforceable on provider agy: "+
+			"the CLI loads ~/.gemini/config/mcp_config.json for every session and takes no flag that "+
+			"narrows or replaces it, so this session sees whatever MCP servers the operator has configured globally"))
+	}
+
+	stdin, err := cmd.StdinPipe()
+	if err != nil {
+		cancelRun()
+		return nil, fmt.Errorf("agy stdin: %w", err)
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		cancelRun()
+		return nil, fmt.Errorf("agy stdout: %w", err)
+	}
+	tail := &tailWriter{max: stderrTailLines}
+	cmd.Stderr = tail
+
+	s := &session{
+		binary:    binary,
+		cmd:       cmd,
+		cancelRun: cancelRun,
+		stdin:     stdin,
+		stderr:    tail,
+		stateDir:  stateDir(),
+		events:    make(chan provider.Event, eventBuffer),
+		readDone:  make(chan struct{}),
+		done:      make(chan struct{}),
+	}
+	if err := cmd.Start(); err != nil {
+		cancelRun()
+		return nil, fmt.Errorf("start %s: %w", binary, err)
+	}
+	// Sent before the read goroutine starts, so there is no chance of a
+	// send racing its close(s.events) on an already-buffered channel.
+	for _, ev := range notices {
+		s.events <- ev
+	}
+	go s.read(stdout)
+	if err := s.writeUser(spec.Prompt); err != nil {
+		cancelRun()
+		go func() {
+			<-s.readDone
+			_ = cmd.Wait()
+		}()
+		return nil, fmt.Errorf("agy prompt: %w", err)
+	}
+	return s, nil
+}
+
+// stateDir is the CLI's own state directory, or "" when the home
+// directory cannot be found — in which case observeWrite exempts nothing
+// and reports every write, which is the safe direction.
+func stateDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	dir := filepath.Join(home, stateDirParent, stateDirChild)
+	if resolved, err := filepath.EvalSymlinks(dir); err == nil {
+		return resolved
+	}
+	return dir
+}
+
+// Doctor checks that the binary runs and that the account is signed in.
+func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
+	return p.DoctorWithConfig(ctx, binary, provider.DoctorConfig{})
+}
+
+// DoctorWithConfig reports on the binary, the login, the model, and the
+// two guarantees this provider cannot make.
+func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg provider.DoctorConfig) []provider.Check {
+	if binary == "" {
+		binary = p.cfg.Binary
+	}
+	if binary == "" {
+		binary = defaultBinary
+	}
+
+	version := provider.Check{Name: "agy --version"}
+	out, err := runWithTimeout(ctx, binary, "--version")
+	switch {
+	case err != nil:
+		version.Detail = strings.TrimSpace(firstLine(out) + " " + err.Error())
+	case !startsWithDigit(firstLine(out)):
+		version.Detail = "unexpected version output: " + firstLine(out)
+	default:
+		version.OK = true
+		version.Detail = firstLine(out)
+	}
+
+	// There is no `agy auth status`. `agy models` is the cheapest probe
+	// that proves a login: it is one authenticated request, it starts no
+	// conversation, and it spends no model tokens. Its output is also the
+	// only way to tell whether the configured model is one this account
+	// may use.
+	login := provider.Check{Name: "agy models"}
+	models, listErr := listModels(ctx, binary)
+	switch {
+	case listErr != nil:
+		login.Detail = listErr.Error()
+	case len(models) == 0:
+		login.Detail = "the account lists no models; `agy` may not be signed in"
+	default:
+		login.OK = true
+		login.Detail = fmt.Sprintf("signed in, %d models available", len(models))
+	}
+
+	wanted := p.cfg.Model
+	if wanted == "" {
+		wanted = defaultModel
+	}
+	model := provider.Check{Name: "agy model", OK: true, Detail: wanted}
+	switch {
+	case listErr != nil || len(models) == 0:
+		model = provider.Warn("agy model", wanted+": cannot be checked until `agy models` answers")
+	case !models[wanted]:
+		model = provider.Warn("agy model", wanted+" is not on this account's model list; "+
+			"run `agy models` and set agy.model to one that is")
+	}
+
+	checks := []provider.Check{version, login, model, mcpCheck(cfg), fixCheck()}
+	return checks
+}
+
+// mcpCheck reports what MCP servers the session will actually see, which
+// is never the workspace's .mcp.json: the CLI reads one global file and
+// takes no flag that narrows it. The row is a warning whatever the
+// workspace configured, because the gap is the same either way — it just
+// matters more to a workspace that asked for the restriction.
+func mcpCheck(cfg provider.DoctorConfig) provider.Check {
+	servers := globalMCPServers()
+	detail := "the CLI loads ~/.gemini/config/mcp_config.json for every session and takes no " +
+		"flag that narrows or replaces it"
+	switch {
+	case len(servers) == 0:
+		detail += "; it declares no servers, so this session sees none"
+	default:
+		detail += "; this session will see " + strings.Join(servers, ", ")
+	}
+	if cfg.MCPWorkspaceOnly {
+		return provider.Warn("agy mcp scope", "mcp.workspaceOnly cannot be enforced: "+detail+
+			". Remove servers from that file, or drive this workspace with provider: claude or codex")
+	}
+	return provider.Warn("agy mcp scope", detail)
+}
+
+// globalMCPServers reads the one MCP file the CLI consults, sorted so the
+// row is stable. A missing or unparseable file means no servers, which is
+// what the CLI itself does with it.
+func globalMCPServers() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil
+	}
+	b, err := os.ReadFile(filepath.Join(home, stateDirParent, "config", "mcp_config.json"))
+	if err != nil {
+		return nil
+	}
+	var f struct {
+		MCPServers map[string]json.RawMessage `json:"mcpServers"`
+	}
+	if err := json.Unmarshal(b, &f); err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(f.MCPServers))
+	for name := range f.MCPServers {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
+// fixCheck states the refusal up front, so an operator reads it in
+// `sirdar doctor` rather than discovering it when a fix run dies.
+func fixCheck() provider.Check {
+	return provider.Warn("agy fix mode", "`sirdar fix` is refused on provider agy: the CLI gives Sirdar "+
+		"no way to mediate a tool call, so a write session could only be started with "+
+		"--dangerously-skip-permissions, which approves every tool including a write into .git/hooks. "+
+		"Triage and rca are unaffected")
+}
+
+// listModels runs `agy models` and returns the model ids it names. The
+// output is two tab-separated columns, id then display name.
+func listModels(ctx context.Context, binary string) (map[string]bool, error) {
+	out, err := runWithTimeout(ctx, binary, "models")
+	if err != nil {
+		return nil, fmt.Errorf("%s: %s", err, firstLine(out))
+	}
+	models := map[string]bool{}
+	for _, line := range strings.Split(string(out), "\n") {
+		// A real row is "<id>\t<display name>". The progress line
+		// ("Fetching available models...") and any stray output carry no
+		// tab, which is the only thing that separates them reliably: a
+		// model id has dots in it too (gemini-3.6-flash-low).
+		id, _, found := strings.Cut(strings.TrimSpace(line), "\t")
+		if !found || id == "" {
+			continue
+		}
+		models[id] = true
+	}
+	return models, nil
+}
+
+func runWithTimeout(ctx context.Context, name string, arg ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(ctx, doctorTimeout)
+	defer cancel()
+	return exec.CommandContext(ctx, name, arg...).CombinedOutput()
+}
+
+func firstLine(b []byte) string {
+	s := strings.TrimSpace(string(b))
+	if i := strings.IndexByte(s, '\n'); i >= 0 {
+		s = s[:i]
+	}
+	return strings.TrimSpace(s)
+}
+
+func startsWithDigit(s string) bool {
+	return s != "" && s[0] >= '0' && s[0] <= '9'
+}
+
+// session is one running agy process.
+type session struct {
+	binary    string
+	cmd       *exec.Cmd
+	cancelRun context.CancelFunc
+	stdin     io.WriteCloser
+	stderr    *tailWriter
+	stateDir  string
+
+	events   chan provider.Event
+	readDone chan struct{}
+	done     chan struct{}
+
+	writeMu   sync.Mutex
+	stdinShut bool
+
+	mu      sync.Mutex
+	handle  string
+	res     provider.Result
+	waitErr error
+	meter   usageMeter
+
+	waitOnce sync.Once
+}
+
+// usageMeter accumulates what the session has spent. Step lines carry one
+// step's tokens and result lines carry the conversation's own totals, so
+// the running count is added to by the first and replaced by the second.
+// There is no cost figure on this wire at all, so CostUSD stays zero and
+// budget.maxUsd never bites.
+type usageMeter struct {
+	turns  int
+	inTok  int64
+	outTok int64
+}
+
+func (s *session) Events() <-chan provider.Event { return s.events }
+
+func (s *session) Handle() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.handle
+}
+
+// Send delivers a follow-up user message. Unlike Qwen Code, this CLI
+// accepts --json-schema and --input-format stream-json together, so the
+// schema retry is one more line on stdin rather than a fresh --resume.
+func (s *session) Send(ctx context.Context, userText string) error {
+	select {
+	case <-s.done:
+		return errors.New("agy session has exited")
+	default:
+	}
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	return s.writeUser(userText)
+}
+
+// CloseInput closes the CLI's stdin. Under --input-format stream-json the
+// process runs one turn per line and then waits for the next, holding
+// stdout open, so EOF is what lets a run that has its answer finish.
+func (s *session) CloseInput() error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.stdinShut {
+		return nil
+	}
+	s.stdinShut = true
+	if err := s.stdin.Close(); err != nil && !errors.Is(err, os.ErrClosed) {
+		return err
+	}
+	return nil
+}
+
+// Wait reaps the process and returns the session's Result.
+func (s *session) Wait() (provider.Result, error) {
+	s.waitOnce.Do(func() {
+		_ = s.CloseInput()
+		<-s.readDone
+		err := s.cmd.Wait()
+		tail := s.stderr.snapshot()
+
+		s.mu.Lock()
+		s.res.Handle = s.handle
+		s.res.StderrTail = tail
+		if err != nil {
+			var exitErr *exec.ExitError
+			switch {
+			case errors.As(err, &exitErr):
+				s.res.ExitErr = fmt.Errorf("%s exited with code %d%s", s.binary, exitErr.ExitCode(), formatTail(tail))
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				s.res.ExitErr = fmt.Errorf("%s cancelled: %w%s", s.binary, err, formatTail(tail))
+			default:
+				s.res.ExitErr = err
+				s.waitErr = err
+			}
+		}
+		s.mu.Unlock()
+		s.cancelRun()
+		close(s.done)
+	})
+	<-s.done
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.res, s.waitErr
+}
+
+// Cancel stops the session through the same path as a cancelled context.
+// stdin is marked shut without being closed, so the Wait that follows does
+// not hand a process being interrupted an EOF it would exit cleanly on.
+func (s *session) Cancel() {
+	s.writeMu.Lock()
+	s.stdinShut = true
+	s.writeMu.Unlock()
+	s.cancelRun()
+}
+
+// read consumes stdout until EOF, emitting one or more events per line.
+// There is no control channel to answer: every line is output.
+func (s *session) read(stdout io.Reader) {
+	defer close(s.readDone)
+	defer close(s.events)
+
+	sc := bufio.NewScanner(stdout)
+	sc.Buffer(make([]byte, 0, 64*1024), maxLineBytes)
+	for sc.Scan() {
+		raw := bytes.TrimSpace(sc.Bytes())
+		if len(raw) == 0 {
+			continue
+		}
+		line := append([]byte(nil), raw...)
+		for _, ev := range decode(line) {
+			s.measure(&ev)
+			s.absorb(ev)
+			s.events <- ev
+			if breach := s.observeWrite(ev); breach != nil {
+				s.events <- *breach
+			}
+		}
+	}
+	if err := sc.Err(); err != nil {
+		ev := newEvent(provider.EvError, nil)
+		ev.Text = "read agy output: " + err.Error()
+		s.events <- ev
+	}
+}
+
+// observeWrite is this adapter's substitute for a permission policy.
+//
+// Sirdar cannot judge an `agy` tool call: by the time one is on the
+// stream, the CLI has already allowed or refused it. What Sirdar can do is
+// notice that a triage session, which is supposed to write nothing,
+// finished a write or ran a command — and say so, so the run's event log
+// records a guarantee that did not hold rather than passing over it.
+//
+// Plan mode's own implementation-plan artifact is the one exemption: it is
+// written into the CLI's state directory under the operator's home, not
+// into the workspace, and it is written on every plan-mode run. A write
+// there is bookkeeping and is reported as a system event instead.
+func (s *session) observeWrite(ev provider.Event) *provider.Event {
+	if ev.Kind != provider.EvToolFinished {
+		return nil
+	}
+	isWrite := writeTools[ev.Tool]
+	if !isWrite && !execTools[ev.Tool] {
+		return nil
+	}
+	if isWrite && s.withinStateDir(ev.Input) {
+		note := systemNotice("agy wrote " + targetOf(ev.Input) + " inside its own state directory; " +
+			"plan mode keeps its implementation-plan artifact there, outside the workspace")
+		return &note
+	}
+	breach := newEvent(provider.EvError, ev.Raw)
+	breach.Tool = ev.Tool
+	breach.Input = ev.Input
+	breach.Text = "read-only guarantee: a triage session completed " + ev.Tool +
+		", which agy should have refused. Check ~/.gemini/antigravity-cli/settings.json for a " +
+		"permissions.allow rule that approves it — Sirdar cannot see or override that file"
+	return &breach
+}
+
+// withinStateDir reports whether a tool call's target path resolves inside
+// the CLI's own state directory. With no state directory known, nothing is
+// exempt.
+func (s *session) withinStateDir(input json.RawMessage) bool {
+	if s.stateDir == "" {
+		return false
+	}
+	target := targetOf(input)
+	if target == "" || !filepath.IsAbs(target) {
+		return false
+	}
+	real, err := provider.EvalNearest(target)
+	if err != nil {
+		real = filepath.Clean(target)
+	}
+	rel, err := filepath.Rel(s.stateDir, real)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func targetOf(input json.RawMessage) string {
+	var args pathArgs
+	_ = json.Unmarshal(input, &args)
+	return args.target()
+}
+
+// measure turns a usage event into running session totals.
+func (s *session) measure(ev *provider.Event) {
+	if ev.Kind != provider.EvUsage {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if isResultLine(ev.Raw) {
+		// The result line's figures are the conversation's own totals, so
+		// they replace the running count rather than adding to it.
+		s.meter.turns = ev.Turns
+		s.meter.inTok = ev.InputTok
+		s.meter.outTok = ev.OutputTok
+		return
+	}
+	s.meter.inTok += ev.InputTok
+	s.meter.outTok += ev.OutputTok
+	ev.Turns = s.meter.turns
+	ev.InputTok = s.meter.inTok
+	ev.OutputTok = s.meter.outTok
+}
+
+// absorb records the parts of an event that belong to the terminal Result.
+func (s *session) absorb(ev provider.Event) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if id := conversationID(ev.Raw); id != "" {
+		s.handle = id
+	}
+	if ev.Kind != provider.EvFinal {
+		return
+	}
+	s.res.Final = ev.Final
+	s.res.Text = ev.Text
+	s.res.Usage.Turns = ev.Turns
+	s.res.Usage.InputTok = ev.InputTok
+	s.res.Usage.OutputTok = ev.OutputTok
+}
+
+// writeUser sends one user turn. The shape is the CLI's own, not Claude
+// Code's: a top-level "event" discriminator, and a message object whose
+// content is an array of blocks. A line missing either is rejected before
+// any model turn runs.
+func (s *session) writeUser(text string) error {
+	payload := map[string]any{
+		"event": "user",
+		"message": map[string]any{
+			"role":    "user",
+			"content": []any{map[string]any{"type": "text", "text": text}},
+		},
+	}
+	line, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+	return s.writeLine(line)
+}
+
+func (s *session) writeLine(line []byte) error {
+	s.writeMu.Lock()
+	defer s.writeMu.Unlock()
+	if s.stdinShut {
+		return errors.New("agy session input is closed")
+	}
+	if _, err := s.stdin.Write(append(line, '\n')); err != nil {
+		return err
+	}
+	return nil
+}
+
+func formatTail(tail []string) string {
+	if len(tail) == 0 {
+		return ""
+	}
+	return ": " + strings.Join(tail, " | ")
+}
+
+// tailWriter keeps the last max complete lines written to it, so a failed
+// session can report why without holding the whole stderr stream.
+type tailWriter struct {
+	mu      sync.Mutex
+	max     int
+	partial []byte
+	lines   []string
+}
+
+func (w *tailWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.partial = append(w.partial, p...)
+	for {
+		i := bytes.IndexByte(w.partial, '\n')
+		if i < 0 {
+			break
+		}
+		w.push(string(bytes.TrimRight(w.partial[:i], "\r")))
+		w.partial = append([]byte(nil), w.partial[i+1:]...)
+	}
+	return len(p), nil
+}
+
+func (w *tailWriter) push(line string) {
+	w.lines = append(w.lines, line)
+	if len(w.lines) > w.max {
+		w.lines = append([]string(nil), w.lines[len(w.lines)-w.max:]...)
+	}
+}
+
+func (w *tailWriter) snapshot() []string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	out := append([]string(nil), w.lines...)
+	if len(w.partial) > 0 {
+		out = append(out, string(w.partial))
+	}
+	if len(out) > w.max {
+		out = out[len(out)-w.max:]
+	}
+	return out
+}

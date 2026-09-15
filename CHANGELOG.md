@@ -17,14 +17,17 @@ human has made and merged the actual fix, `sirdar rca` writes the RCA and Resolu
 notes that record what changed and why — Sirdar never opens a PR or writes to a
 tracker or helpdesk itself.
 
-Five ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
+Six ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
 Code or Codex CLI already installed and signed in, so a run counts against the plan
 already being paid for; `provider: openai` runs Sirdar's own agent loop against any
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
 `provider: acp` drives any Agent Client Protocol agent (Gemini CLI, Goose, OpenCode);
 `provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
-hook.
+hook; `provider: agy` drives Google's Antigravity CLI against the operator's own Google
+account, triage and rca only — that CLI gives a parent process no way to mediate a tool
+call, so the read-only guarantee is its own plan mode rather than anything Sirdar
+imposes, `mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is refused.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,

@@ -220,6 +220,30 @@ type QwenConfig struct {
 	APIKey  string `yaml:"apiKey,omitempty"`
 }
 
+// AgyConfig configures `provider: agy`, where Google's Antigravity CLI
+// drives the session. Every field is optional: with none of them set the
+// session runs against whatever Google account the operator's own `agy`
+// binary is signed in to, on the cheapest model that account lists.
+//
+// There is no endpoint block here and there will not be one. The CLI can
+// be pointed at the Gemini API instead, with GEMINI_API_KEY and a
+// settings-file switch, but that swaps the operator's Antigravity login
+// for an API key mid-run and routes it at whatever GOOGLE_GEMINI_BASE_URL
+// names, so the adapter strips those variables rather than offering them
+// (internal/provider/agy, strippedEnvKeys).
+//
+// Effort is the CLI's reasoning tier: low, medium or high. The model ids
+// carry a tier of their own (gemini-3.6-flash-low) and naming both is
+// accepted.
+type AgyConfig struct {
+	Path   string `yaml:"path,omitempty"`
+	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
+}
+
+// agyEfforts are the values `agy --effort` accepts.
+var agyEfforts = map[string]bool{"low": true, "medium": true, "high": true}
+
 // DefaultMaxContextTokens is the context window assumed for an
 // openai-compatible endpoint that does not name one. The loop starts
 // dropping old tool results as the prompt approaches it.
@@ -480,6 +504,7 @@ type Config struct {
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 	Qwen   *QwenConfig   `yaml:"qwen,omitempty"`
+	Agy    *AgyConfig    `yaml:"agy,omitempty"`
 	ACP    *ACPConfig    `yaml:"acp,omitempty"`
 
 	// Webhooks configures the inbound trigger endpoints `sirdar serve`
@@ -632,14 +657,17 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai", "acp", "qwen":
+	case "claude", "codex", "openai", "acp", "qwen", "agy":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex, openai, acp or qwen, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai, acp, qwen or agy, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
 		return err
 	}
 	if err := validateQwen(c); err != nil {
+		return err
+	}
+	if err := validateAgy(c); err != nil {
 		return err
 	}
 	if err := validateACP(c); err != nil {
@@ -945,6 +973,22 @@ func validateQwen(c *Config) error {
 	}
 	if q.Model == "" {
 		return fmt.Errorf("config: qwen.model: is required when qwen.baseUrl is set")
+	}
+	return nil
+}
+
+// validateAgy checks the agy block. Every field is optional — a workspace
+// that names none runs the CLI against the operator's own Antigravity
+// login on the cheapest model — but an effort the CLI does not accept is
+// worth catching at load time rather than as an argument-parse failure
+// halfway through a triage sweep.
+func validateAgy(c *Config) error {
+	a := c.Agy
+	if a == nil {
+		return nil
+	}
+	if e := strings.TrimSpace(a.Effort); e != "" && !agyEfforts[e] {
+		return fmt.Errorf("config: agy.effort: must be low, medium or high, got %q", a.Effort)
 	}
 	return nil
 }

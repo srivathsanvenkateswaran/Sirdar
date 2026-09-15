@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `agy` (Google's Antigravity CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -102,6 +102,9 @@ rather than being silently ignored.
 | `qwen.baseUrl` | string, optional | unset | OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login |
 | `qwen.model` | string, optional | unset | Model the endpoint serves; required alongside `qwen.baseUrl`. `--model` and `model` override it |
 | `qwen.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; required alongside `qwen.baseUrl` |
+| `agy.path` | string, optional | `""` (look up `agy` on `PATH`) | Path to the Antigravity CLI binary |
+| `agy.model` | string, optional | `gemini-3.6-flash-low` | Model the session asks for; `agy models` lists what the account may use. `--model` and `model` override it |
+| `agy.effort` | string, optional | unset (the CLI's own default) | Reasoning tier: `low`, `medium` or `high` |
 | `webhooks.enabled` | bool | `false` | Whether `sirdar serve` registers the inbound trigger endpoints at all; with it off every path under `/hooks/` is a 404 |
 | `webhooks.sources.<name>` | object | unset | One per enabled source: `jira`, `linear`, `azdo`, `rally`, `zendesk`, `freshdesk`, `intercom`, `hubspot`, `generic`. An unknown name fails config load |
 | `webhooks.sources.<name>.secret` | string | none (required, except `azdo`) | Credential ref for the signing secret or shared secret |
@@ -865,7 +868,11 @@ Two settings, and they do different jobs. `mcp.workspaceOnly` decides which serv
 session can see at all; `permissions.mcp` decides which of their tools it may call.
 
 The setting applies to `provider: claude` and `provider: codex`. Each CLI takes a different
-route to the same place.
+route to the same place. It does **not** apply to `provider: agy`: that CLI reads one global
+`~/.gemini/config/mcp_config.json` for every session and takes no flag that narrows or replaces
+it, so `mcp.workspaceOnly` is unenforceable there. `sirdar doctor` warns and names the servers
+the session will actually see, and a session started with the setting on says on its own event
+stream that it did not take.
 
 With `mcp.workspaceOnly: true` (the default) and a `.mcp.json` in the workspace root, Sirdar
 starts the Claude session with `--strict-mcp-config --mcp-config <workspace>/.mcp.json`, so
@@ -1018,6 +1025,14 @@ whatever point the provider offers to be asked.
 - **qwen** — `web_fetch` goes through the same fail-closed `PreToolUse` hook as every other
   tool, under the name `WebFetch`, so `permissions.fetch` decides it. `web_search` is left
   registered and allowed (no destination to judge).
+- **agy** — none of the three lists reaches this provider at all, and that is not an oversight.
+  Google's Antigravity CLI offers no point at which a host can be asked: a headless run
+  auto-denies whatever needs approval and decides everything else from files Sirdar does not
+  own. What Sirdar does instead is start every session in `--mode plan`, report the CLI's own
+  refusals as `EvPermission` lines with a `deny` decision, and raise an `EvError` when a write
+  or a shell command *completes* in a triage session — which is the only way a guarantee that
+  did not hold can become visible. `sirdar fix` is refused on this provider for the same
+  reason. See `provider: agy` below.
 - **acp** — a permission request whose `kind` is `fetch` is judged as `WebFetch` against
   `permissions.fetch`, and the kind wins over the agent's own title, so an agent cannot route
   a fetch through the MCP rules by naming it `mcp__browser__get_page`. The URL is read out of
@@ -1223,9 +1238,9 @@ real run rather than after.
 
 ## Providers
 
-`provider: claude` (default), `provider: codex`, `provider: openai`, `provider: acp`, or
-`provider: qwen` selects what drives runs; `--provider` on `triage` and `rca` overrides it per
-invocation.
+`provider: claude` (default), `provider: codex`, `provider: openai`, `provider: acp`,
+`provider: qwen`, or `provider: agy` selects what drives runs; `--provider` on `triage` and
+`rca` overrides it per invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
@@ -1234,6 +1249,7 @@ invocation.
 - `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in
   the `qwen:` block rather than under `providers:` because the rest of that block — the
   endpoint — belongs with it.
+- `agy.path`: path to the `agy` binary, in the `agy:` block for the same reason.
 - `billing: subscription` (default) removes `ANTHROPIC_API_KEY` from the agent's child
   environment so the run authenticates with the CLI's own login and draws on your subscription.
   `billing: api` leaves the key in place, so the run is billed per token against that key
@@ -1445,6 +1461,126 @@ which is the path it already had for Codex.
 
 Not exercised against a live model: the wire capture was driven by a stub OpenAI-compatible
 server, so the shapes are the CLI's own but no vendor model has run through this adapter yet.
+
+### `provider: agy`
+
+[Antigravity](https://antigravity.google) is Google's agent product, and `agy` is its CLI. It
+runs against the Google account it is already signed in to — a Google AI Pro or Ultra
+subscription, or a Workspace plan — so a run costs nothing per token the way `provider: claude`
+and `provider: codex` do not.
+
+```yaml
+provider: agy
+agy:
+  path: agy                      # optional; empty looks it up on PATH
+  model: gemini-3.6-flash-low    # optional; this is also the default
+  effort: low                    # optional: low | medium | high
+```
+
+`agy models` lists what the account may use. At the time of writing that is three tiers of
+Gemini Flash, two of Gemini Pro, Claude Sonnet 4.6, Claude Opus 4.6 and GPT-OSS 120B. The tier
+is part of the model id (`gemini-3.6-flash-low`) and is *also* a separate `--effort` flag;
+naming both is accepted. Sirdar defaults to the cheapest tier rather than the account's own
+default, which is a Pro model.
+
+Sirdar runs:
+
+```
+agy --output-format stream-json --input-format stream-json \
+    --disable-slash-commands --mode plan \
+    --json-schema '<schema>' --model <model> [--effort <tier>] \
+    [--print-timeout <budget.maxMinutes>m] [--conversation <id>] --print=
+```
+
+`docs/research/10-antigravity-wire-formats.md` is the capture this is built on, and it marks
+every claim verified or inferred.
+
+#### What this provider cannot do
+
+Read this before choosing it. The Antigravity CLI is the only runtime Sirdar drives that gives
+a parent process **no way to mediate a tool call**. There is no control-request channel the way
+Claude Code has one, no HTTP permission hook the way Qwen Code has one, and nothing on stdin
+that answers a prompt. A headless run auto-denies whatever would need approval, and everything
+else is decided by files Sirdar does not own: the operator's own
+`~/.gemini/antigravity-cli/settings.json`, a project file under `~/.gemini/config/projects/`,
+or a `.agents/hooks.json` inside the repository being triaged. Four consequences:
+
+- **The read-only guarantee is `--mode plan`, not a tool list.** Every Sirdar session passes it.
+  In the capture, plan mode refused a `write_to_file` naming an absolute path outside the
+  workspace; the CLI's default mode performed the same write without asking anyone. That is the
+  whole of the difference Sirdar can make. `permissions.bash`, `permissions.mcp` and
+  `permissions.fetch` are **not** consulted on this provider — by the time a tool call is
+  visible on the stream the CLI has already decided it, and there is no earlier point to stand
+  at. A `permissions.allow` rule in the operator's own settings file still applies to a headless
+  run, and Sirdar can neither see it nor override it.
+- **Sirdar watches instead.** A refusal the CLI makes is reported as a permission event with a
+  `deny` decision, so a run's event log reads the way it does for a mediated provider. A write
+  or a shell command that *completes* in a triage session is reported as an `error` event naming
+  the tool — because the guarantee rests on the CLI's own refusal, a refusal that did not happen
+  has to be visible rather than passed over. Plan mode's own implementation-plan artifact, which
+  it writes into `~/.gemini/antigravity-cli/brain/<conversation>/`, is the one exemption: it
+  lands in the CLI's state directory, outside the workspace, on every plan-mode run.
+- **`mcp.workspaceOnly` cannot be enforced.** The CLI reads one global
+  `~/.gemini/config/mcp_config.json` for every session and takes no flag that narrows or
+  replaces it — no `--mcp-config`, no `--strict-mcp-config`, no allow-list by server name. A
+  session sees whatever MCP servers the operator has configured globally, and a call through
+  `call_mcp_tool` is judged by no Sirdar policy. `sirdar doctor` warns and names the servers the
+  session will actually see; a session started with `mcp.workspaceOnly: true` also emits a
+  system event saying the setting did not take. A workspace that needs that restriction should
+  be driven by `provider: claude` or `provider: codex`, or the global file should be emptied.
+- **`sirdar fix` is refused outright.** Letting `agy` write needs
+  `--dangerously-skip-permissions`, which approves every tool including a write into
+  `.git/hooks/pre-commit`, and `provider.FixPolicy`'s per-call path confinement — the thing that
+  keeps a fix inside the workspace — has nothing to attach to. A fix run under `provider: agy`
+  fails at start with an error saying so, and `doctor` says it before you try. Triage and rca
+  are unaffected.
+
+`budget.maxUsd` does not bite either: there is no cost field anywhere on this wire, so a run's
+cost is reported as `0`. `budget.maxTurns` is counted by Sirdar off the stream's `result`
+events, since the CLI has no turn or tool-call ceiling of its own; `budget.maxMinutes` becomes
+`--print-timeout`, which the CLI does enforce.
+
+#### Environment
+
+The child's environment is stripped of everything that could point it at a different backend or
+hand it a different credential — `GEMINI_API_KEY`, `GOOGLE_GEMINI_BASE_URL`, `GOOGLE_API_KEY`,
+`GOOGLE_APPLICATION_CREDENTIALS`, `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_QUOTA_PROJECT` — plus
+the `ANTIGRAVITY_*` sidecar protocol variables and `JETSKI_APP_DATA_DIR` /
+`JETSKI_BROWSER_PORT`, one `EvSystem` event per variable removed. `GEMINI_API_KEY` is this
+CLI's `ANTHROPIC_BASE_URL`: with it set and `modelProvider: "gemini"` configured, the session
+stops billing against the operator's Antigravity login and starts billing an API key against
+whatever base URL another variable names.
+
+The OAuth login itself is in the OS keyring, not under `~/.gemini` and not in the environment,
+which is why the adapter strips rather than relocating `HOME` to isolate the CLI's
+configuration: a relocated `HOME` might break the keyring lookup, and a failed lookup is a dead
+run.
+
+#### Doctor rows
+
+```
+[OK] agy --version — 1.2.3
+[OK] agy models — signed in, 15 models available
+[OK] agy model — gemini-3.6-flash-low
+[!!] agy mcp scope — the CLI loads ~/.gemini/config/mcp_config.json for every session and takes
+     no flag that narrows or replaces it; it declares no servers, so this session sees none
+[!!] agy fix mode — `sirdar fix` is refused on provider agy: …
+```
+
+The last two are warnings, not failures: they never change an exit code, and they are there
+because both gaps are permanent properties of the CLI rather than something an operator can
+misconfigure.
+
+#### What has and has not been verified
+
+The wire format, the stdin message shape, the schema-plus-follow-up combination, plan mode's
+refusal of an out-of-workspace write, the headless auto-deny, `--conversation` resume and the
+exit codes were all watched on live runs against a real account
+(`docs/research/10-antigravity-wire-formats.md`). What has **not** been established: what
+`--sandbox` refuses that the permission layer would not; why one plan-mode `run_command`
+reported `DONE` with no side effect rather than a denial; and how a workspace the operator has
+already trusted interactively behaves in the CLI's default mode — every write test ran in an
+untrusted temporary repository. No Sirdar triage has yet run end to end on this provider.
 
 ### `provider: openai`
 

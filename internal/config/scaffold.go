@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai | acp | qwen
+provider: claude            # claude | codex | openai | acp | qwen | agy
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -32,6 +32,16 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 #   model: qwen3-coder-plus
 #   apiKey: keychain:dashscope-api-key        # a local server still needs one named
+# provider: agy drives Google's Antigravity CLI against the Google account it
+# is already signed in to. Read it before choosing it: the CLI gives Sirdar no
+# way to mediate a tool call, so the read-only guarantee is its own plan mode
+# rather than anything Sirdar imposes, mcp.workspaceOnly cannot be enforced,
+# there is no cost on the wire so budget.maxUsd never bites, and sirdar fix
+# is refused. docs/config.md has the whole list.
+# agy:
+#   path: agy                                 # optional: where the CLI lives
+#   model: gemini-3.6-flash-low               # agy models lists what the account has
+#   effort: low                               # low | medium | high
 # provider: acp drives any agent that speaks the Agent Client Protocol —
 # Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
 # more — over one adapter. There is no cost signal, and a whole prompt turn
