@@ -750,6 +750,15 @@ func TestApprovalsGoThroughThePolicy(t *testing.T) {
 			if !strings.Contains(ev.Text, "allow-list") {
 				t.Errorf("the command denial does not name the allow-list: %q", ev.Text)
 			}
+			// The hint that names permissions.bash and echoes what it
+			// allows has to reach this same event: it is built once, in
+			// policy.go, and the codex adapter forwards Decision.Message
+			// straight through to s.denied without rewording it.
+			for _, want := range []string{"not permitted by permissions.bash", "allowed here: rg *", "see .sirdar/config.yaml"} {
+				if !strings.Contains(ev.Text, want) {
+					t.Errorf("the command denial %q is missing %q", ev.Text, want)
+				}
+			}
 		}
 	}
 	if !commandDenied {
