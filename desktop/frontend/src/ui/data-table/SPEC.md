@@ -18,6 +18,9 @@ Built. `desktop/frontend/src/ui/data-table/`. It replaces `.register-table`,
 - `button.sd-table__sort` + `span.sd-table__arrow` — a sortable header.
 - `td[data-numeric]` — mono, tabular, `text-align: end`, contents wrapped
   `dir="ltr"`.
+- `th[data-col]` / `td[data-col]` — every cell carries its column's `id`, so a
+  screen's own stylesheet can narrow or drop one column at a width. The table
+  neither reads the attribute nor knows the widths.
 
 ## States
 
@@ -72,6 +75,11 @@ scrolled by keyboard. Contrast: cells **17.44:1**, headers `--sd-ink-2`
 nothing moves.
 
 ## Changelog
+
+### 2026-09-16 (assignee round)
+Every header and body cell now carries `data-col` with its column's id. It is
+the hook a screen needs to drop a column at a narrow width — the register's
+Assignee is the first — without the table taking on a media query of its own.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: 48-tall rows with 16px cell padding and

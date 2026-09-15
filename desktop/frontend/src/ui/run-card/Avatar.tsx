@@ -39,3 +39,18 @@ export default function Avatar({ name }: { name: string }): JSX.Element | null {
     </span>
   )
 }
+
+/**
+ * The same fact in words, for a place with room for it: the session topbar,
+ * where there is one ticket and initials would be a riddle. Nothing is drawn
+ * for a ticket nobody owns.
+ */
+export function AssignedTo({ name }: { name: string }): JSX.Element | null {
+  const who = name.trim()
+  if (!who) return null
+  return (
+    <span className="sd-assigned" title={who}>
+      assigned to <span dir="auto">{who}</span>
+    </span>
+  )
+}

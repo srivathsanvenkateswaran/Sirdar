@@ -25,6 +25,7 @@ import Banner from '../ui/banner'
 import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
 import ProviderMark from '../ui/provider-mark'
+import { AssignedTo } from '../ui/run-card/Avatar'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
@@ -384,6 +385,9 @@ export default function Session(props: {
         <span className="session-title" title={title} dir="auto">
           {title ?? ''}
         </span>
+        {/* Who the ticket belongs to. It follows the title rather than sitting
+            with the run's own figures, because it is a fact about the ticket. */}
+        <AssignedTo name={detail.assignee ?? ''} />
         <div className="session-stats">
           <span className="session-stat session-provider">
             <ProviderMark provider={detail.provider} size="sm" />
