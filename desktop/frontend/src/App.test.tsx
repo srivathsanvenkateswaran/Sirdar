@@ -106,9 +106,7 @@ describe('Board', () => {
     const { container } = mount(transport)
     await waitFor(() => expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument())
 
-    fireEvent.click(
-      within(lane(container, 'queue')).getByRole('button', { name: /Start triage of OMNI-9/ }),
-    )
+    fireEvent.click(within(lane(container, 'queue')).getByRole('button', { name: 'Triage OMNI-9' }))
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
         { ws: 'ws1', keys: ['OMNI-9'], opts: undefined },
@@ -509,7 +507,7 @@ describe('Inbound deliveries', () => {
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
 
-    const panel = screen.getByRole('region', { name: 'Landed today' })
+    const panel = screen.getByRole('region', { name: 'Deliveries today' })
     expect(within(panel).getByText(/No webhook delivery has arrived/)).toBeInTheDocument()
 
     transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-9', outcome: 'started' })
