@@ -6,6 +6,9 @@ helpdesk_id: {{yq .meta.HelpdeskID}}
 helpdesk_url: {{yq .meta.HelpdeskURL}}
 customer: {{yq .meta.Customer}}
 customer_id: {{yq .meta.CustomerID}}
+{{- if .meta.CustomerIDs}}
+customer_ids: {{yq .meta.CustomerIDs}}
+{{- end}}
 date_reported: {{yq .meta.DateReported}}
 date_rca: {{yq .meta.Date}}
 service: {{yq .meta.Service}}
@@ -112,6 +115,15 @@ Reasoning: {{.doc.rca.blastRadius.reasoning}}
 ## Open Questions
 {{range .doc.rca.openQuestions}}
 - {{.}}
+{{- end}}
+{{- if .meta.SkippedAttachments}}
+
+## Attachments not reviewed
+
+This run could not open these; their contents were never read:
+{{range .meta.SkippedAttachments}}
+- **{{.Name}}** ({{.Type}}, {{.Size}}): {{.Reason}}
+{{- end}}
 {{- end}}
 
 ## Triage Review

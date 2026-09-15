@@ -68,15 +68,27 @@ type Attachment struct {
 	Path string
 }
 
+// SkippedAttachment is an attachment the bundle's manifest listed but could
+// not make available to a session — over the size cap, or a type it cannot
+// open — recorded so a note can tell a reader what evidence went unread
+// rather than only surfacing it as a run warning.
+type SkippedAttachment struct {
+	Name   string
+	Type   string // MIME type, best effort
+	Size   string // human-readable, e.g. "17.0 MiB"; "size unknown" when unknown
+	Reason string // e.g. "over the 15.0 MiB limit", "cannot be opened in this session"
+}
+
 // Bundle is everything gathered for a ticket: the tracker record, the helpdesk
 // record, the conversation thread, its attachments, and any warnings surfaced
 // while assembling them.
 type Bundle struct {
-	Tracker     *TrackerTicket  // nil when the workspace has no tracker
-	Helpdesk    *HelpdeskTicket // nil when fetch failed or absent
-	Thread      Thread
-	Attachments []Attachment
-	Warnings    []string // e.g. attachment download failures, surfaced to the prompt
+	Tracker            *TrackerTicket  // nil when the workspace has no tracker
+	Helpdesk           *HelpdeskTicket // nil when fetch failed or absent
+	Thread             Thread
+	Attachments        []Attachment
+	SkippedAttachments []SkippedAttachment // from the manifest, but dropped: too large or unreadable
+	Warnings           []string            // e.g. attachment download failures, surfaced to the prompt
 }
 
 // Key returns Tracker.Key if present else Helpdesk.ID.

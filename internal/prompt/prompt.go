@@ -72,7 +72,7 @@ const auditRuleLine = "Audit rule: fill only what the PR or the resolution text 
 // triageFieldGuidance gives one sentence of guidance per top-level field of
 // the triage schema, drawn from the spec's field descriptions.
 var triageFieldGuidance = []string{
-	"ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer.",
+	"ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead.",
 	"title is a one-line summary of the issue.",
 	"complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.",
 	"complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.",
@@ -207,7 +207,10 @@ func ticketSection(bundle ticket.Bundle, bundleDir string) string {
 	b.WriteString("Priority: " + ticketPriority(bundle) + "\n")
 	b.WriteString("Tracker URL: " + trackerURL(bundle) + "\n")
 	b.WriteString("Helpdesk URL: " + helpdeskURL(bundle) + "\n")
-	b.WriteString("Customer: " + customerLine(bundle) + "\n")
+	b.WriteString("Customer: " + customerName(bundle) + "\n")
+	if id := customerID(bundle); id != "" {
+		b.WriteString("Customer ID: " + id + "\n")
+	}
 	b.WriteString("Bundle directory: " + bundleDir + "\n")
 	b.WriteString("\nFiles:")
 	if len(bundle.Attachments) == 0 {
@@ -257,14 +260,23 @@ func helpdeskURL(bundle ticket.Bundle) string {
 	return ""
 }
 
-func customerLine(bundle ticket.Bundle) string {
+// customerName and customerID are reported on separate lines in the
+// prompt — not concatenated as "Name (ID)" — so the agent has no combined
+// example to imitate when it fills ticket.customer: a session shown
+// "Customer: Acme Corp (3521)" tended to copy that whole string, domain or
+// company code included, into the note's customer field.
+func customerName(bundle ticket.Bundle) string {
 	if bundle.Helpdesk == nil {
 		return ""
 	}
-	if bundle.Helpdesk.CustomerID == "" {
-		return bundle.Helpdesk.Customer
+	return bundle.Helpdesk.Customer
+}
+
+func customerID(bundle ticket.Bundle) string {
+	if bundle.Helpdesk == nil {
+		return ""
 	}
-	return bundle.Helpdesk.Customer + " (" + bundle.Helpdesk.CustomerID + ")"
+	return bundle.Helpdesk.CustomerID
 }
 
 func conversationSection(threadHead string, truncated bool) string {

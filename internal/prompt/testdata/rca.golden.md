@@ -54,7 +54,8 @@ Title: Refund stuck in pending
 Priority: P2
 Tracker URL: https://tracker.example.com/browse/OMNI-2510
 Helpdesk URL: https://desk.example.com/tickets/88213
-Customer: Acme Corp (CUST-77)
+Customer: Acme Corp
+Customer ID: CUST-77
 Bundle directory: /bundles/OMNI-2510
 
 Files:
