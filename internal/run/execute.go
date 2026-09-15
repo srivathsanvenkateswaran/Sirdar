@@ -91,6 +91,14 @@ type execution struct {
 	// that saw one files nothing and ends failed, however far along it
 	// was. See provider.EvBreach.
 	breach string
+
+	// blind is set when the provider reported that the session read
+	// nothing: every read it tried was refused, or it tried none. Like
+	// breach it outranks the note, because the note is a claim about a
+	// codebase the session never opened. Unlike breach nothing was
+	// violated, so the session is left to finish on its own rather than
+	// cancelled — the answer is simply not filed. See provider.EvBlind.
+	blind string
 }
 
 // liveSession holds the session the run is currently reading from. The
@@ -355,6 +363,12 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		// guarantee failed. handleFinal refuses to file after a breach,
 		// so on the ordinary path there is no note to disown here.
 		return r.finish(ctx, p, store.StatusFailed, ex.breach, note.DigestRow{})
+	case ex.blind != "":
+		// Ahead of the note for the same reason as the breach above, and
+		// behind it because a breach is the worse fact about the same
+		// run. handleFinal refuses to file after a blind verdict, so
+		// there is no note to disown here either.
+		return r.finish(ctx, p, store.StatusFailed, ex.blind, note.DigestRow{})
 	case len(ex.final) > 0:
 		// The note validated and was filed the moment it arrived. What
 		// happened to the session afterwards — a bad exit, an interrupt,
@@ -659,7 +673,7 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 		fmt.Fprintf(w, "[%s] final\n", key)
 	case provider.EvError:
 		fmt.Fprintf(w, "[%s] error %s\n", key, firstLine(ev.Text))
-	case provider.EvBreach:
+	case provider.EvBreach, provider.EvBlind:
 		fmt.Fprintf(w, "[%s] failed %s\n", key, firstLine(ev.Text))
 	case provider.EvQuestion:
 		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
@@ -775,6 +789,17 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.stall.stop()
 		sess.Cancel()
 
+	case provider.EvBlind:
+		// No cancel and no counter: the session is about to produce its
+		// final line — the provider emits this immediately ahead of one —
+		// and killing it here would only replace a clear reason with
+		// "the session ended without a JSON note". handleFinal reads
+		// ex.blind and declines to file; the outcome switch turns it into
+		// the run's terminal reason.
+		if ex.blind == "" {
+			ex.blind = firstLine(ev.Text)
+		}
+
 	case provider.EvFinal:
 		r.handleFinal(ctx, p, sess, ex, ev)
 	}
@@ -816,6 +841,21 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// register asserting a read-only run, which is exactly what did not
 	// happen. complete() is never reached.
 	if ex.breach != "" {
+		return
+	}
+
+	// A session that read nothing has an answer about a codebase it never
+	// opened. Filing it would put a note on disk, a row in the register
+	// and a line in the digest at whatever confidence the agent claimed,
+	// with nothing downstream able to tell it from a note built on
+	// evidence. The run fails instead; the raw answer is still written to
+	// result.raw.txt, where it can be read without being believed.
+	if ex.blind != "" {
+		raw := strings.TrimSpace(string(ev.Final))
+		if raw == "" {
+			raw = strings.TrimSpace(ev.Text)
+		}
+		ex.rawFinal = raw
 		return
 	}
 

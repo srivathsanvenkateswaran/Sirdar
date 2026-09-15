@@ -107,6 +107,28 @@ const (
 	// Text is the operator-facing reason, whose first line is the run's
 	// terminal reason and reads "read-only breach: <tool> <path|command>".
 	EvBreach EventKind = "breach"
+
+	// EvBlind says the session produced an answer without having read
+	// anything: every read tool it called was refused, or it called none
+	// at all.
+	//
+	// A triage note is a claim about a codebase, and the run layer files
+	// it, adds a register row and prints it in the digest at whatever
+	// confidence the agent asserted. A session that read nothing wrote
+	// that claim out of the ticket text alone, and nothing downstream can
+	// tell the difference: the note looks exactly like one built on
+	// evidence. So the run fails instead of filing, with a reason naming
+	// what was refused.
+	//
+	// Like EvBreach this exists for the provider whose permissions are
+	// decided by files Sirdar does not own, where a refused read is
+	// reported after the fact rather than negotiated. On a provider Sirdar
+	// mediates, a read is allowed by its own policy or the run never had
+	// the permission to begin with.
+	//
+	// Text is the operator-facing reason, whose first line becomes the
+	// run's terminal reason.
+	EvBlind EventKind = "blind"
 )
 
 // Event is one line of a Session's activity stream.

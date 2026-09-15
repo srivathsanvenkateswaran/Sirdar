@@ -26,10 +26,12 @@ a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
 `provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
 hook; `provider: agy` drives Google's Antigravity CLI against the operator's own Google
 account, triage and rca only — that CLI gives a parent process no way to mediate a tool
-call, so the read-only guarantee is its own plan mode plus a watch that fails the run:
-a write or a command that completes ends the session and files nothing.
-`mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is refused before it cuts
-a branch.
+call, so permissions are set for the session in a project file Sirdar writes under
+`~/.gemini/config/projects` and deletes when the run ends (a read allowed, every write,
+command and URL fetch denied), on top of the CLI's own plan mode, plus a watch that
+fails the run: a write or a command that completes ends the session and files nothing,
+and so does a session that completed no read at all. `mcp.workspaceOnly` is
+unenforceable there, and `sirdar fix` is refused before it cuts a branch.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
