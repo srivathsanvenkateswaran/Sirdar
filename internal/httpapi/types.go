@@ -13,6 +13,8 @@ type (
 	Budget               = app.Budget
 	RunSummary           = app.RunSummary
 	RunDetail            = app.RunDetail
+	RunDiff              = app.RunDiff
+	DiffFile             = app.DiffFile
 	EventPayload         = app.EventPayload
 	RunEvent             = app.RunEvent
 	Ticket               = app.Ticket

@@ -498,6 +498,34 @@ func TestStaticFallsBackToIndex(t *testing.T) {
 	}
 }
 
+// An upgraded `sirdar serve` must not be shadowed by an index.html the
+// browser kept from the build before it, so the page carries no-store. The
+// hashed assets beside it are content-addressed and keep whatever caching
+// http.ServeFileFS gives them.
+func TestStaticHTMLIsNeverCached(t *testing.T) {
+	h := New(newFake(), uiFS())
+	for _, path := range []string{"/", "/runs/" + knownRun} {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest("GET", path, nil))
+		if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+			t.Errorf("%s: Cache-Control %q, want no-store", path, cc)
+		}
+	}
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, httptest.NewRequest("GET", "/assets/app.js", nil))
+	if cc := w.Header().Get("Cache-Control"); cc == "no-store" {
+		t.Errorf("a hashed asset is cacheable; got %q", cc)
+	}
+
+	// The not-built page is HTML too, and the build it tells you to run is
+	// exactly what would otherwise be shadowed by a cached copy of it.
+	w = httptest.NewRecorder()
+	New(newFake(), fstest.MapFS{}).ServeHTTP(w, httptest.NewRequest("GET", "/", nil))
+	if cc := w.Header().Get("Cache-Control"); cc != "no-store" {
+		t.Errorf("not-built page: Cache-Control %q, want no-store", cc)
+	}
+}
+
 func TestStaticNotBuiltPage(t *testing.T) {
 	// A binary built without `make ui` has an empty dist tree.
 	h := New(newFake(), fstest.MapFS{})

@@ -54,7 +54,7 @@ commands:
   eval        replay the golden bundles and score the notes they produce
   golden      manage the golden set (add, list)
   resume      continue a blocked or interrupted run
-  runs        list runs and states
+  runs        list runs and states; 'runs diff RUN_ID' reviews a fix run's change
   register    print the register
   serve       serve the web UI and API on loopback
   version     print version`)

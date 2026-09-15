@@ -15,6 +15,13 @@ const (
 	knownJob = "job-1"
 )
 
+// dropCall is what the drop route passed the service.
+type dropCall struct {
+	Path string
+	Hunk int
+	ETag string
+}
+
 // fake is a Service that answers from canned data and records what it was
 // asked, so the handlers can be tested without internal/app.
 type fake struct {
@@ -35,12 +42,15 @@ type fake struct {
 	golden  []GoldenEntry
 	reports []EvalReport
 	summary ConfigSummary
+	diff    RunDiff
 
 	// Failures to inject.
 	queueUnsupported bool
 	queueErr         error
 	noteMissing      bool
 	addErr           error
+	diffErr          error
+	dropErr          error
 
 	// What the handlers passed in.
 	gotRoot      string
@@ -61,6 +71,7 @@ type fake struct {
 	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
 	gotCancelled JobID
+	gotDrop      dropCall
 
 	// Webhook plumbing: the reason TriageIfIdle gives for starting
 	// nothing, the error it fails with, and what the hook route asked it
@@ -230,6 +241,29 @@ func (f *fake) Prompt(wsID, runID string) (string, error) {
 		return "", err
 	}
 	return f.prompt, nil
+}
+
+func (f *fake) RunDiff(wsID, runID string) (RunDiff, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return RunDiff{}, err
+	}
+	if f.diffErr != nil {
+		return RunDiff{}, f.diffErr
+	}
+	return f.diff, nil
+}
+
+func (f *fake) DropHunk(_ context.Context, wsID, runID, path string, hunk int, etag string) (RunDiff, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return RunDiff{}, err
+	}
+	f.mu.Lock()
+	f.gotDrop = dropCall{Path: path, Hunk: hunk, ETag: etag}
+	f.mu.Unlock()
+	if f.dropErr != nil {
+		return RunDiff{}, f.dropErr
+	}
+	return f.diff, nil
 }
 
 func (f *fake) StartTriage(_ context.Context, wsID string, keys []string, o TriageOptions) (JobID, error) {

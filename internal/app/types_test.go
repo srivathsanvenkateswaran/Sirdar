@@ -73,6 +73,16 @@ func TestWireFieldNames(t *testing.T) {
 	wantKeys(t, "RunEvent payload", EventPayload{
 		Tool: "Bash", Decision: "deny", Text: "x", Turns: 1, CostUSD: 0.1, Raw: json.RawMessage(`{}`),
 	}, "tool", "decision", "text", "turns", "costUsd", "raw")
+	// A review event carries its own three fields and none of the agent's.
+	// Hunk 0 is a real index, so it must survive the round trip.
+	hunk := 0
+	wantKeys(t, "review payload", EventPayload{Action: "drop", Path: "export/csv.go", Hunk: &hunk},
+		"action", "path", "hunk")
+
+	wantKeys(t, "RunDiff", RunDiff{Truncated: true},
+		"base", "head", "branch", "worktree", "worktreePresent", "pushed",
+		"files", "patch", "truncated", "etag")
+	wantKeys(t, "DiffFile", DiffFile{}, "path", "status", "additions", "deletions")
 
 	wantKeys(t, "Ticket", Ticket{LatestRun: &summary},
 		"key", "title", "priority", "status", "assignee", "url", "helpdeskRef", "updatedAt", "latestRun")

@@ -80,6 +80,19 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `provider: acp`, an Agent Client Protocol client that can drive any ACP-speaking coding
   agent (Gemini CLI, Goose, OpenCode, and others) the same way Sirdar already drives Claude Code
   and Codex.
+- Added a review pass over a finished fix run, with no agent in it: `sirdar runs diff <run-id>`
+  prints the commit as a unified patch (`--files` for the file list), and
+  `GET /api/workspaces/{id}/runs/{runId}/diff` serves the same reading as JSON — the base and
+  head commits, the branch, whether the worktree is still there, whether the branch is pushed, a
+  per-file list with line counts, and the patch capped at 2 MiB. `sirdar runs diff <run-id>
+  --drop <path>:<n>`, and `POST .../diff/drop`, revert one hunk out of the commit and amend it in
+  place, keeping the original commit message and appending a `review` event to the run log. The
+  drop is refused while the run is live, once the worktree is gone, once the branch is pushed, and
+  whenever the `etag` says the patch the hunk index was counted in is not the patch that is there
+  now (`docs/fix.md`, "Reviewing the change").
+- `sirdar serve` now sends `Cache-Control: no-store` on the UI's HTML, so an upgraded binary is
+  not shadowed by an `index.html` the browser kept from the build before it. The hashed assets
+  beside it are content-addressed and stay cacheable.
 - Added inbound webhooks: `sirdar serve` can now be triggered directly by a tracker or helpdesk
   when a ticket is assigned, with per-source signature verification (`docs/webhooks.md`).
 - Added run-completion notifications to Slack, Microsoft Teams, or any HTTP endpoint you run

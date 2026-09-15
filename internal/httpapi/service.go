@@ -21,6 +21,8 @@ type Service interface {
 	Events(wsID, runID string, after int) ([]RunEvent, int, error)
 	Note(wsID, runID string, kind string) (string, error)
 	Prompt(wsID, runID string) (string, error)
+	RunDiff(wsID, runID string) (RunDiff, error)
+	DropHunk(ctx context.Context, wsID, runID, path string, hunk int, etag string) (RunDiff, error)
 	StartTriage(ctx context.Context, wsID string, keys []string, o TriageOptions) (JobID, error)
 	TriageIfIdle(ctx context.Context, wsID, key string, o TriageOptions) (JobID, string, error)
 	HookReceived(source, key, outcome string)
@@ -53,6 +55,12 @@ var (
 	// ErrNotFound stands for every id nobody knows. internal/app reports a
 	// separate sentinel per kind of id; they all become 404.
 	ErrNotFound = app.ErrNoSuchWorkspace
+	// ErrNoDiff is a run with no change to review. It becomes 404 with the
+	// reason, which is what the screen shows instead of a diff.
+	ErrNoDiff = app.ErrNoDiff
+	// ErrRefused is a change that exists and must not be edited right now.
+	// It becomes 409: the caller can read the diff again and try again.
+	ErrRefused = app.ErrRefused
 )
 
 // classify maps a Service error onto an HTTP status and an error code.
@@ -63,6 +71,10 @@ func classify(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrUnsupported):
 		return 501, "unsupported"
+	case errors.Is(err, ErrRefused):
+		return 409, "conflict"
+	case errors.Is(err, ErrNoDiff):
+		return 404, "no_diff"
 	case errors.Is(err, app.ErrNoSuchWorkspace),
 		errors.Is(err, app.ErrNoSuchRun),
 		errors.Is(err, app.ErrNoSuchJob):
