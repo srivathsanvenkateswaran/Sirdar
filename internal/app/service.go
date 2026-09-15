@@ -627,6 +627,13 @@ func (s *Service) startJob(
 	work func(context.Context, runner.Deps) []JobOutcome,
 	onBuildError func(error) []JobOutcome,
 ) (JobID, error) {
+	// Every start funnels through here, so this is where a provider name
+	// nobody drives is refused — over HTTP and over the Wails bridge alike,
+	// since the bridge binds this Service and never passes through
+	// internal/httpapi.
+	if err := CheckProvider(providerName); err != nil {
+		return "", err
+	}
 	ws, cfg, err := s.load(wsID)
 	if err != nil {
 		return "", err

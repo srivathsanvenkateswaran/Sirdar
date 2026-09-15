@@ -39,7 +39,7 @@ describe('FixPanel', () => {
   it('a pushed fix links the pull request and asks for nothing more', () => {
     render(
       <FixPanel
-        fix={{ ...COMMITTED, prUrl: 'https://github.com/acme/api/pull/42' }}
+        fix={{ ...COMMITTED, pushed: true, prUrl: 'https://github.com/acme/api/pull/42' }}
         pending={false}
         error=""
         onAccept={() => {}}
@@ -48,6 +48,40 @@ describe('FixPanel', () => {
 
     const link = screen.getByRole('link', { name: 'https://github.com/acme/api/pull/42' })
     expect(link).toHaveAttribute('href', 'https://github.com/acme/api/pull/42')
+    expect(screen.queryByRole('button', { name: 'Accept and publish' })).toBeNull()
+  })
+
+  /*
+   * The case the panel used to get wrong. `--no-pr`, and a `gh` call that
+   * failed after the push went through, both leave a deviation on the record
+   * and no pull request URL. Reading the URL alone asked the reader to accept
+   * a commit that was already on the remote — and accepting it would then be
+   * refused, since the branch is no longer where the review left it.
+   */
+  it('a pushed fix with no pull request asks for no review', () => {
+    render(
+      <FixPanel fix={{ ...COMMITTED, pushed: true }} pending={false} error="" onAccept={() => {}} />,
+    )
+
+    expect(screen.queryByRole('button', { name: 'Accept and publish' })).toBeNull()
+    expect(screen.getByText(/is on the remote, with no pull request/)).toBeInTheDocument()
+    // The deviation is still on the record, said in the past tense.
+    expect(screen.getByText(/the generator template was changed instead/)).toBeInTheDocument()
+  })
+
+  /*
+   * A run recorded before the push was written into state.json has a URL and
+   * no `pushed`. It is plainly published, and must not read as waiting.
+   */
+  it('a pull request URL alone still counts as published', () => {
+    render(
+      <FixPanel
+        fix={{ ...COMMITTED, prUrl: 'https://github.com/acme/api/pull/42' }}
+        pending={false}
+        error=""
+        onAccept={() => {}}
+      />,
+    )
     expect(screen.queryByRole('button', { name: 'Accept and publish' })).toBeNull()
   })
 

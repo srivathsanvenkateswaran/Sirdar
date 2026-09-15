@@ -9,6 +9,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -148,7 +149,10 @@ func TestServeEndToEnd(t *testing.T) {
 	// test learns which port the kernel picked.
 	pr, pw := io.Pipe()
 	exited := make(chan int, 1)
-	go func() { exited <- serveHTTP(ctx, httpapi.New(svc, ui.FS()), "127.0.0.1:0", false, pw, io.Discard) }()
+	go func() {
+		exited <- serveHTTP(ctx, httpapi.New(svc, ui.FS(), httpapi.LoopbackOnly(true)),
+			"127.0.0.1:0", false, pw, io.Discard)
+	}()
 	t.Cleanup(func() {
 		cancel()
 		svc.Stop()
@@ -250,6 +254,250 @@ func TestServeEndToEnd(t *testing.T) {
 	case <-time.After(30 * time.Second):
 		t.Error("the event stream never delivered job.finished")
 	}
+}
+
+// TestServeWriteFlowsEndToEnd drives the three routes the browser surface
+// added over the read-only one — add a run to the golden set, score the
+// golden set, and start a fix — against a real workspace, a real git
+// repository and the fake provider. Between them they are everything the
+// UI can make this machine do that is not a triage.
+//
+// The fix is a dry run: it cuts the branch and writes the prompt and starts
+// no agent, which is the whole of the flow that can be asserted without a
+// model and a remote to push to.
+func TestServeWriteFlowsEndToEnd(t *testing.T) {
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "triage-doc.json"))
+	initRepo(t, root)
+
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	registryPath, err := app.DefaultRegistryPath()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := &app.Registry{Path: registryPath}
+	wsID, err := ensureRegistered(reg, root)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// The golden set is the shell's, named once and never by a request.
+	golden := t.TempDir()
+	ctx, cancel := context.WithCancel(context.Background())
+	svc := app.New(reg, app.BuildDeps, app.Options{
+		Interval:  20 * time.Millisecond,
+		Stderr:    io.Discard,
+		GoldenDir: golden,
+	})
+	svc.Start(ctx)
+
+	pr, pw := io.Pipe()
+	exited := make(chan int, 1)
+	go func() {
+		exited <- serveHTTP(ctx, httpapi.New(svc, ui.FS(), httpapi.LoopbackOnly(true)),
+			"127.0.0.1:0", false, pw, io.Discard)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		svc.Stop()
+		select {
+		case code := <-exited:
+			if code != 0 {
+				t.Errorf("serve exited %d", code)
+			}
+		case <-time.After(10 * time.Second):
+			t.Error("serve did not return after its context was cancelled")
+		}
+	})
+
+	line, err := bufio.NewReader(pr).ReadString('\n')
+	if err != nil {
+		t.Fatalf("reading the address line: %v", err)
+	}
+	base := strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "Sirdar UI:"))
+	ws := base + "/api/workspaces/" + wsID
+
+	// A triage first: everything else here reads what it leaves behind.
+	postJSON(t, ws+"/triage", `{"keys":["OMNI-1"]}`, http.StatusAccepted, nil)
+	triage := waitForRun(t, base, wsID, "OMNI-1", "triage")
+
+	// --- the golden set ---------------------------------------------
+	var entry app.GoldenEntry
+	postJSON(t, ws+"/golden", `{"runId":"`+triage.RunID+`"}`, http.StatusOK, &entry)
+	if entry.Key != "OMNI-1" {
+		t.Fatalf("golden entry %+v", entry)
+	}
+	if _, err := os.Stat(filepath.Join(golden, "OMNI-1", "bundle", "ticket.json")); err != nil {
+		t.Fatalf("the run's bundle did not reach the golden set: %v", err)
+	}
+	var listed []app.GoldenEntry
+	getJSON(t, ws+"/golden", &listed)
+	if len(listed) != 1 || listed[0].Key != "OMNI-1" {
+		t.Fatalf("golden list %+v", listed)
+	}
+
+	// --- the eval ----------------------------------------------------
+	postJSON(t, ws+"/eval", `{"keys":["OMNI-1"]}`, http.StatusAccepted, nil)
+	var reports []app.EvalReport
+	waitFor(t, "an eval report", func() bool {
+		reports = nil
+		getJSON(t, ws+"/eval", &reports)
+		return len(reports) > 0
+	})
+	report := reports[0]
+	if report.Path == "" || len(report.Results) != 1 {
+		t.Fatalf("eval report %+v", report)
+	}
+	if got := report.Results[0]; got.Key != "OMNI-1" || got.State != "completed" {
+		t.Fatalf("eval result %+v", got)
+	}
+	// An eval run is a measurement, not a record of the ticket: it must
+	// not have filed a note or reached the register.
+	var rows []app.RegisterRow
+	getJSON(t, ws+"/register", &rows)
+	for _, row := range rows {
+		if row.RunID == report.Results[0].RunID {
+			t.Errorf("the eval run reached the register: %+v", row)
+		}
+	}
+
+	// --- the fix -----------------------------------------------------
+	postJSON(t, ws+"/fix", `{"key":"OMNI-1","dryRun":true}`, http.StatusAccepted, nil)
+	fixRun := waitForRun(t, base, wsID, "OMNI-1", "fix")
+
+	var detail app.RunDetail
+	getJSON(t, ws+"/runs/"+fixRun.RunID, &detail)
+	if detail.Fix == nil || detail.Fix.Branch == "" {
+		t.Fatalf("the fix run recorded no branch: %+v", detail.Fix)
+	}
+	if detail.Fix.Pushed || detail.Fix.PRURL != "" {
+		t.Errorf("a dry run pushed something: %+v", detail.Fix)
+	}
+	if out := git(t, root, "rev-parse", "--verify", "--quiet", "refs/heads/"+detail.Fix.Branch); out == "" {
+		t.Errorf("the fix branch %s was not cut", detail.Fix.Branch)
+	}
+	// The prompt is the other half of what a dry run is for.
+	if prompt := getText(t, ws+"/runs/"+fixRun.RunID+"/prompt"); !strings.Contains(prompt, "OMNI-1") {
+		t.Errorf("the fix prompt does not name the ticket:\n%s", prompt)
+	}
+	// A fix run has no triage note of its own, so the run screen asks for
+	// its own note.md with no kind. A dry run wrote none, so this is a 404
+	// — the empty tab the UI shows — and not the 400 a kindless read used
+	// to be. Asking a fix run for a *triage* note is the mismatch.
+	if code := status(t, ws+"/runs/"+fixRun.RunID+"/note"); code != http.StatusNotFound {
+		t.Errorf("the fix run's own note answered %d, want 404", code)
+	}
+	if code := status(t, ws+"/runs/"+fixRun.RunID+"/note?kind=triage"); code != http.StatusNotFound {
+		t.Errorf("a fix run's \"triage\" note answered %d, want 404", code)
+	}
+	// On the triage run, the two are the same document.
+	if own, named := getText(t, ws+"/runs/"+triage.RunID+"/note"),
+		getText(t, ws+"/runs/"+triage.RunID+"/note?kind=triage"); own != named {
+		t.Error("the run's own note and its triage note are different documents")
+	}
+}
+
+// status is the response code of a GET, for the routes whose absence is
+// the thing being asserted.
+func status(t *testing.T, url string) int {
+	t.Helper()
+	resp, err := http.Get(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.StatusCode
+}
+
+// initRepo turns a test workspace into the git checkout a fix needs: one
+// commit, a bare origin, and Sirdar's own run records excluded the way
+// `sirdar init` excludes them.
+func initRepo(t *testing.T, root string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+	git(t, root, "init", "-q", "-b", "main", ".")
+	// The commits are throwaway but still need an identity to be made at
+	// all. The machine's own is used as it stands; a checkout with none
+	// skips rather than inventing one.
+	if err := exec.Command("git", "-C", root, "var", "GIT_AUTHOR_IDENT").Run(); err != nil {
+		t.Skip("git has no author identity configured in this environment")
+	}
+	if err := os.MkdirAll(filepath.Join(root, ".git", "info"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".git", "info", "exclude"),
+		[]byte(strings.Join(gitExcludes, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "README.md"), []byte("# fixture\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, root, "add", "-A")
+	git(t, root, "commit", "-q", "-m", "init")
+
+	origin := filepath.Join(t.TempDir(), "origin.git")
+	git(t, root, "init", "-q", "--bare", "-b", "main", origin)
+	git(t, root, "remote", "add", "origin", origin)
+	git(t, root, "push", "-q", "-u", "origin", "main")
+	git(t, root, "remote", "set-head", "origin", "main")
+}
+
+// git runs a git command in dir, failing the test on anything but success.
+func git(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// serveDeadline is how long the polling helpers give a real agent run.
+const serveDeadline = 60 * time.Second
+
+// waitFor polls until done answers true, the way the board polls.
+func waitFor(t *testing.T, what string, done func() bool) {
+	t.Helper()
+	deadline := time.Now().Add(serveDeadline)
+	for !done() {
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %s", what)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+}
+
+// waitForRun polls the run list until a run of this kind for this key has
+// finished, and fails if it finished as anything but completed.
+func waitForRun(t *testing.T, base, wsID, key, kind string) app.RunSummary {
+	t.Helper()
+	var found app.RunSummary
+	waitFor(t, kind+" run for "+key, func() bool {
+		var runs []app.RunSummary
+		getJSON(t, base+"/api/workspaces/"+wsID+"/runs", &runs)
+		for _, r := range runs {
+			if r.Key != key || r.Kind != kind {
+				continue
+			}
+			switch r.Status {
+			case "completed", "failed", "over_budget", "blocked":
+				found = r
+				return true
+			}
+		}
+		return false
+	})
+	if found.Status != "completed" {
+		t.Fatalf("the %s run ended %s: %s", kind, found.Status, found.Reason)
+	}
+	return found
 }
 
 // watchEvents opens the SSE stream and returns a channel carrying the first

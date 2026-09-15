@@ -598,6 +598,68 @@ func TestNoPRSkipsTheGitHubCLI(t *testing.T) {
 	if !res.Pushed || res.PRURL != "" {
 		t.Fatalf("result %+v", res)
 	}
+	// This is exactly the shape a screen would misread if it took "no pull
+	// request URL" for "not pushed yet": the branch is on the remote and
+	// there is nothing left for a person to accept.
+	_, state, err := store.Open(w.root, res.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Fix.Pushed {
+		t.Errorf("the run state does not record the push: %+v", state.Fix)
+	}
+	if state.Fix.Deviation != "" {
+		t.Errorf("a clean run recorded a deviation: %q", state.Fix.Deviation)
+	}
+}
+
+// The same again for a push whose `gh` call failed: the operator was told
+// to open the request by hand, and the branch is still on the remote.
+func TestAFailedPullRequestStillRecordsThePush(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t) // no gh at all is the same shape as a gh that failed
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Pushed || res.PRURL != "" {
+		t.Fatalf("result %+v", res)
+	}
+	_, state, err := store.Open(w.root, res.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !state.Fix.Pushed {
+		t.Errorf("the run state does not record the push: %+v", state.Fix)
+	}
+	if state.Fix.Commit == "" || state.Fix.Branch == "" {
+		t.Errorf("the run state lost the commit or the branch: %+v", state.Fix)
+	}
+}
+
+// A blocked run is the other side of it: a commit, no push, and the
+// deviation that says why.
+func TestABlockedRunRecordsNoPush(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "touched a different file"`, 1)
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	_, state, err := store.Open(w.root, res.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Fix.Pushed {
+		t.Error("a blocked run recorded a push")
+	}
+	if state.Fix.Commit == "" || state.Fix.Deviation == "" {
+		t.Errorf("the blocked run's state is incomplete: %+v", state.Fix)
+	}
 }
 
 // --- unit tests -------------------------------------------------------
@@ -754,9 +816,10 @@ func TestAcceptDeviationRerunPushesTheReviewedCommit(t *testing.T) {
 }
 
 // TestAcceptDeviationRerunFallsBackWhenTheBranchMoved: the shortcut is only
-// for the commit that was reviewed. A branch that has moved on since is a
-// different change, so the ordinary flow runs.
-func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
+// for the commit that was reviewed. A branch that has moved on since holds
+// a different change, and the rerun is refused rather than quietly spending
+// a second agent session: "accept what I read" is not "do it again".
+func TestAcceptDeviationRerunIsRefusedWhenTheBranchMoved(t *testing.T) {
 	w := newWorkspace(t, "triaged")
 	noGH(t)
 	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
@@ -781,16 +844,65 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	second, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1",
+	second, err := Run(t.Context(), newDeps(w, &refusingProvider{t: t}), "OMNI-1",
+		Options{AcceptDeviation: true})
+	if err == nil {
+		t.Fatalf("the rerun started a fresh session over a moved branch: %+v", second)
+	}
+	// The message has to say both what happened and what to do next; the
+	// desktop panel shows it verbatim.
+	for _, want := range []string{"branch moved", "without --accept-deviation", first.Branch} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the refusal does not mention %q: %v", want, err)
+		}
+	}
+	if second.RunID != "" {
+		t.Errorf("the refused rerun still made run %s", second.RunID)
+	}
+	if second.Pushed {
+		t.Error("the refused rerun pushed")
+	}
+}
+
+// A branch that was deleted after the review is refused the same way: the
+// commit is not on it, whatever the reason.
+func TestAcceptDeviationRerunIsRefusedWhenTheBranchIsGone(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "different file"`, 1)
+
+	first, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	run(t, w.root, "git", "checkout", "-q", first.Base)
+	run(t, w.root, "git", "branch", "-q", "-D", first.Branch)
+
+	if _, err := Run(t.Context(), newDeps(w, &refusingProvider{t: t}), "OMNI-1",
+		Options{AcceptDeviation: true}); err == nil {
+		t.Fatal("a rerun against a deleted branch was not refused")
+	} else if !strings.Contains(err.Error(), "branch moved") {
+		t.Errorf("the refusal does not say the branch moved: %v", err)
+	}
+}
+
+// --accept-deviation on a key that has no reviewed commit is not a rerun at
+// all: it is the ordinary first fix, asking not to stop if the agent
+// deviates. That must still run.
+func TestAcceptDeviationOnAFirstFixRunsTheOrdinaryFlow(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "different file"`, 1)
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1",
 		Options{AcceptDeviation: true})
 	if err != nil {
-		t.Fatalf("rerun: %v", err)
+		t.Fatalf("Run: %v", err)
 	}
-	if second.RunID == first.RunID {
-		t.Error("the rerun reused a run whose branch had moved on")
-	}
-	if !second.Pushed {
-		t.Errorf("the ordinary flow did not complete: %+v", second)
+	if !res.Pushed || res.Blocked != "" {
+		t.Fatalf("the first fix did not push through the deviation: %+v", res)
 	}
 }
 

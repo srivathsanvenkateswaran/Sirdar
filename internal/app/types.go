@@ -83,6 +83,10 @@ type FixInfo struct {
 	Base   string `json:"base,omitempty"`
 	Commit string `json:"commit,omitempty"`
 	PRURL  string `json:"prUrl,omitempty"`
+	// Pushed says the branch reached the remote. It is what tells work that
+	// has left the machine from work still waiting on a person: a `--no-pr`
+	// run and one whose `gh` call failed are both pushed with no PRURL.
+	Pushed bool `json:"pushed,omitempty"`
 	// Deviation is non-empty when the agent reported doing something other
 	// than the triage note's Proposed Fix. The commit is on the branch and
 	// has not been pushed; a rerun with acceptDeviation pushes the commit
@@ -309,6 +313,7 @@ func DetailOf(root string, s store.State) RunDetail {
 		Base:      s.Fix.Base,
 		Commit:    s.Fix.Commit,
 		PRURL:     s.Fix.PRURL,
+		Pushed:    s.Fix.Pushed,
 		Deviation: s.Fix.Deviation,
 	}); f != (FixInfo{}) {
 		d.Fix = &f

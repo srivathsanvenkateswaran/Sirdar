@@ -73,7 +73,11 @@ function fakeTransport(over: Partial<Transport> = {}) {
   return { transport, emit: (e: AppEvent) => act(() => handler?.(e)) }
 }
 
-function mount(over: Partial<Transport> = {}, defaultProvider?: string) {
+function mount(
+  over: Partial<Transport> = {},
+  defaultProvider?: string,
+  extra: { jobs?: { jobId: string; label: string }[]; onCancelJob?: (id: string) => Promise<void> } = {},
+) {
   const onStartEval = vi.fn()
   const { transport, emit } = fakeTransport(over)
   render(
@@ -81,7 +85,9 @@ function mount(over: Partial<Transport> = {}, defaultProvider?: string) {
       transport={transport}
       workspaceId="ws1"
       defaultProvider={defaultProvider}
+      jobs={extra.jobs}
       onStartEval={onStartEval}
+      onCancelJob={extra.onCancelJob}
     />,
   )
   return { transport, emit, onStartEval }
@@ -181,5 +187,58 @@ describe('Eval', () => {
   it('shows the reason the golden set could not be read', async () => {
     mount({ golden: vi.fn(async () => Promise.reject(new Error('no such workspace'))) })
     await screen.findByText('no such workspace')
+  })
+
+  /*
+   * An eval over the whole set names no key, so no run ever claims its job and
+   * Run detail's Cancel can never reach it. Without a button here, the only
+   * way to stop one was to quit the app and let the jobs be cancelled on
+   * shutdown — after it had spent a session per bundle.
+   */
+  it('offers Cancel for a whole-set eval this window started', async () => {
+    const onCancelJob = vi.fn(async () => {})
+    mount({}, undefined, {
+      jobs: [{ jobId: 'job-4', label: 'Eval of the whole golden set' }],
+      onCancelJob,
+    })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel eval of the whole golden set/i }))
+    await waitFor(() => expect(onCancelJob).toHaveBeenCalledWith('job-4'))
+  })
+
+  it('offers no Cancel when this window has no eval running', async () => {
+    mount()
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(screen.queryByRole('button', { name: /^Cancel/i })).toBeNull()
+  })
+
+  it('shows the reason a cancel was refused', async () => {
+    const onCancelJob = vi.fn(async () => {
+      throw new Error('no such job')
+    })
+    mount({}, undefined, { jobs: [{ jobId: 'job-4', label: 'Eval of the whole golden set' }], onCancelJob })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+
+    fireEvent.click(screen.getByRole('button', { name: /Cancel eval/i }))
+    expect(await screen.findByText('no such job')).toBeInTheDocument()
+  })
+
+  /*
+   * The store toasts a failed start and rethrows it; this is the half the
+   * reader sees without leaving the screen.
+   */
+  it('shows the reason an eval did not start beside the button', async () => {
+    const { transport } = fakeTransport()
+    const onStartEval = vi.fn(async () => {
+      throw new Error('the golden set holds no bundles')
+    })
+    render(
+      <Eval transport={transport} workspaceId="ws1" onStartEval={onStartEval} />,
+    )
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Run eval on the whole set' }))
+    expect(await screen.findByText('the golden set holds no bundles')).toBeInTheDocument()
   })
 })

@@ -76,15 +76,22 @@ type State struct {
 	//
 	// Deviation is what the agent reported doing instead of the note's
 	// Proposed Fix, when it reported anything: the run stops before the
-	// push and a person decides. PRURL is filled in once the branch has
-	// been pushed and a pull request opened for it. Both are recorded
-	// here rather than only in the command's return value because a
-	// desktop shell reads the run directory, not the CLI's stdout.
+	// push and a person decides. Pushed says the branch reached the
+	// remote, and PRURL is filled in when a pull request was opened for
+	// it. These are recorded here rather than only in the command's return
+	// value because a desktop shell reads the run directory, not the CLI's
+	// stdout.
+	//
+	// Pushed is what says the work has left the machine. PRURL cannot: a
+	// `--no-pr` run and one whose `gh` call failed both push the branch and
+	// record no URL, and a screen reading the URL alone would show them as
+	// work still waiting for a person.
 	Fix struct {
 		Branch    string `json:",omitempty"`
 		Base      string `json:",omitempty"`
 		Commit    string `json:",omitempty"`
 		Deviation string `json:",omitempty"`
+		Pushed    bool   `json:",omitempty"`
 		PRURL     string `json:",omitempty"`
 	} `json:",omitempty"`
 }

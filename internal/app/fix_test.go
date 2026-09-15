@@ -66,10 +66,36 @@ func TestRunDetailCarriesFixState(t *testing.T) {
 	if detail.Fix.PRURL != "" {
 		t.Fatalf("a blocked fix has no pull request, got %q", detail.Fix.PRURL)
 	}
+	if detail.Fix.Pushed {
+		t.Fatal("a blocked fix reports itself pushed")
+	}
+
+	// A push with no pull request — `--no-pr`, or a `gh` call that failed —
+	// is work that has left the machine, and the panel keys on that rather
+	// than on the URL.
+	pushed := writeFixRun(t, root, "OMNI-2", func(s *store.State) {
+		s.Fix.Branch, s.Fix.Commit, s.Fix.Pushed = "fix/OMNI-2", "def456", true
+		s.Fix.Deviation = "the note asked for streaming; I raised the timeout instead"
+	})
+	pushedDetail, err := svc.Run(WorkspaceID(root), pushed)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pushedDetail.Fix == nil || !pushedDetail.Fix.Pushed {
+		t.Fatalf("the push did not reach the detail: %+v", pushedDetail.Fix)
+	}
+	data, err := json.Marshal(pushedDetail)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The frontend reads camelCase; this is the field FixPanel keys on.
+	if !strings.Contains(string(data), `"pushed":true`) {
+		t.Fatalf("the detail JSON does not carry pushed: %s", data)
+	}
 
 	// The JSON is what the frontend reads; `fix` is absent for a run that
 	// recorded nothing, so a triage run is not given an empty object.
-	data, err := json.Marshal(DetailOf(root, store.State{RunID: "r", Key: "OMNI-1", Kind: store.KindTriage}))
+	data, err = json.Marshal(DetailOf(root, store.State{RunID: "r", Key: "OMNI-1", Kind: store.KindTriage}))
 	if err != nil {
 		t.Fatal(err)
 	}

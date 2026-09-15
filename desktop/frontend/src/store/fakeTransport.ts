@@ -22,6 +22,7 @@ export interface TransportCalls {
   startFix: { ws: string; key: string; opts?: unknown }[]
   startEval: { ws: string; keys?: string[]; opts?: unknown }[]
   addGolden: { ws: string; key?: string; runId?: string }[]
+  cancel: string[]
   runs: string[]
   queue: string[]
 }
@@ -114,6 +115,7 @@ export function createFakeTransport(seed: {
     startFix: [],
     startEval: [],
     addGolden: [],
+    cancel: [],
     runs: [],
     queue: [],
   }
@@ -182,7 +184,9 @@ export function createFakeTransport(seed: {
     },
     configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
     resume: async () => ({ jobId: 'job-resume' }),
-    cancel: async () => {},
+    cancel: async (jobId) => {
+      calls.cancel.push(jobId)
+    },
     register: async () => [] as RegisterRow[],
     doctor: async () => [] as Check[],
     quota: async () => seed.quota ?? [],

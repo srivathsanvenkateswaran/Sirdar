@@ -278,6 +278,30 @@ describe('RunDetail', () => {
     expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'triage')
   })
 
+  /*
+   * Which note each kind of run is asked for. A fix run has no triage note —
+   * the service refuses the mismatch with a 404 — so the tab asks for the
+   * empty kind, which is whatever note.md the run itself wrote. It used to
+   * ask for 'triage' and show every fix run an empty tab.
+   */
+  it('asks a fix run for its own note, not for a triage note', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, kind: 'fix', status: 'completed' } })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, ''))
+    expect(fake.transport.note).not.toHaveBeenCalledWith('ws1', RUN.runId, 'triage')
+  })
+
+  it('asks an RCA run for both its notes', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, kind: 'rca', status: 'completed' } })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'rca'))
+    expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'resolution')
+  })
+
   it('disables Cancel until the shell knows the job, and unsubscribes on unmount', async () => {
     const fake = fakeTransport()
     const { unmount } = renderRun(fake)

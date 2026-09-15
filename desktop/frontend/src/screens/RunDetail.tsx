@@ -180,10 +180,16 @@ export default function RunDetail(props: {
     return () => window.removeEventListener('keydown', onKey)
   }, [onBack, rcaOpen, fixOpen])
 
-  const noteKinds = useMemo<NoteKind[]>(
-    () => (detail?.kind === 'rca' ? ['rca', 'resolution'] : ['triage']),
-    [detail?.kind],
-  )
+  /*
+   * Which notes the Note tab asks for. A fix run has no triage note of its
+   * own — asking for one is a mismatch the service refuses with a 404 — so it
+   * asks for the empty kind, which is whatever note.md the run itself wrote.
+   */
+  const noteKinds = useMemo<NoteKind[]>(() => {
+    if (detail?.kind === 'rca') return ['rca', 'resolution']
+    if (detail?.kind === 'fix') return ['']
+    return ['triage']
+  }, [detail?.kind])
 
   const notePath = detail?.notes?.[0] ?? ''
 

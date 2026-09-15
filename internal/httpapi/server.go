@@ -45,6 +45,11 @@ type server struct {
 	// the operator, so the reason a delivery failed is written here and
 	// only a generic message goes back over the wire.
 	logf func(format string, v ...any)
+
+	// loopbackOnly is whether the listener this handler was built for can
+	// be reached only from this machine. See LoopbackOnly: the fix route is
+	// refused when it cannot.
+	loopbackOnly bool
 }
 
 func newServer(svc Service, ui fs.FS, opts ...Option) *server {
@@ -56,6 +61,10 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 		keepalive: 15 * time.Second,
 		logf:      log.Printf,
 	}
+	// loopbackOnly stays false unless a caller passes LoopbackOnly: a
+	// handler built by a shell that never thought about its listener
+	// refuses the one route that writes code, rather than offering it to
+	// whoever turns out to be able to reach the port.
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -99,7 +108,15 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	return s
 }
 
-func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+// ServeHTTP runs the cross-site guard before the router, so every mutating
+// route is covered by construction rather than by each handler remembering
+// to ask. See guard.go.
+func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !s.guard(w, r) {
+		return
+	}
+	s.mux.ServeHTTP(w, r)
+}
 
 // --- workspaces ---
 
@@ -199,13 +216,17 @@ func (s *server) runEvents(w http.ResponseWriter, r *http.Request) {
 	}{nonNil(events), next})
 }
 
-// noteKinds are the note kinds the spec allows on the note route.
-var noteKinds = map[string]bool{"triage": true, "rca": true, "resolution": true}
+// noteKinds are the note kinds the note route allows. The empty kind is one
+// of them: it means whichever primary note this run's own kind produced,
+// which is the only way to reach a fix run's note.md — asking a fix run for
+// its "triage" note is a mismatch the service refuses.
+var noteKinds = map[string]bool{"": true, "triage": true, "rca": true, "resolution": true}
 
 func (s *server) note(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	if !noteKinds[kind] {
-		writeError(w, http.StatusBadRequest, "bad_request", "kind must be one of triage, rca, resolution")
+		writeError(w, http.StatusBadRequest, "bad_request",
+			"kind must be one of triage, rca, resolution, or absent for the run's own note")
 		return
 	}
 	md, err := s.svc.Note(r.PathValue("id"), r.PathValue("runId"), kind)

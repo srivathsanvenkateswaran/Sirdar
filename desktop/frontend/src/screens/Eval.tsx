@@ -64,9 +64,17 @@ export default function Eval(props: {
   transport: Transport
   workspaceId: string
   defaultProvider?: string
+  /**
+   * Whole-set eval jobs this window started. An eval over selected keys makes
+   * runs that carry those keys, and Run detail cancels it from there; one over
+   * the whole set names no key, so no run claims it and this screen is the only
+   * place its Cancel can live.
+   */
+  jobs?: { jobId: string; label: string }[]
   onStartEval: (keys?: string[], opts?: { provider?: string; model?: string }) => Promise<void> | void
+  onCancelJob?: (jobId: string) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, defaultProvider, onStartEval } = props
+  const { transport, workspaceId, defaultProvider, jobs, onStartEval, onCancelJob } = props
   const [golden, setGolden] = useState<GoldenEntry[] | null>(null)
   const [reports, setReports] = useState<EvalReport[]>([])
   const [selected, setSelected] = useState<Set<string>>(new Set())
@@ -110,6 +118,18 @@ export default function Eval(props: {
       else next.add(key)
       return next
     })
+  }
+
+  const running = jobs ?? []
+
+  async function cancel(jobId: string): Promise<void> {
+    if (!onCancelJob) return
+    setError('')
+    try {
+      await onCancelJob(jobId)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    }
   }
 
   async function start(): Promise<void> {
@@ -191,6 +211,21 @@ export default function Eval(props: {
             Refresh
           </button>
         </div>
+        {running.length > 0 && onCancelJob ? (
+          <div className="form-row" style={{ marginTop: 8 }}>
+            {running.map((job) => (
+              <button
+                key={job.jobId}
+                type="button"
+                className="run-btn"
+                onClick={() => void cancel(job.jobId)}
+                title="Stop the eval this window started"
+              >
+                Cancel {job.label.toLowerCase()}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <p className="about-note">
           An eval replays each bundle through a real triage run, so it spends the provider the
           way a triage does. Its runs are marked eval: they never file a note and never reach the

@@ -3,7 +3,13 @@ export type RunKind = 'triage'|'rca'|'fix';
 /** The providers a one-off override may name; '' is the workspace's own. */
 export const PROVIDERS = ['claude', 'codex', 'openai', 'acp', 'qwen'] as const;
 export type Provider = (typeof PROVIDERS)[number];
-export type NoteKind = 'triage'|'rca'|'resolution';
+/**
+ * Which of a run's notes to read. The empty kind is the run's own note.md,
+ * whatever the run's kind produced: it is how a fix run's note is reached,
+ * since a fix run has no 'triage' note and asking it for one is a mismatch
+ * the service refuses.
+ */
+export type NoteKind = ''|'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: Provider; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
 export interface RunSummary { runId: string; key: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
@@ -13,8 +19,12 @@ export interface RunDetail extends RunSummary { promptPath: string; bundleDir: s
  * is set when the agent reported doing something other than the note's
  * Proposed Fix: the commit is on the branch and has not been pushed until a
  * person reruns the fix with acceptDeviation.
+ *
+ * `pushed` is what says the work has left the machine, and is what the review
+ * panel keys on. `prUrl` cannot do that job: a run started with `noPr`, and one
+ * whose `gh` call failed, both push the branch and record no URL.
  */
-export interface FixInfo { branch?: string; base?: string; commit?: string; prUrl?: string; deviation?: string }
+export interface FixInfo { branch?: string; base?: string; commit?: string; prUrl?: string; pushed?: boolean; deviation?: string }
 export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown } }
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }

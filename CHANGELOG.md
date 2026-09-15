@@ -96,3 +96,11 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   qwen, in Sirdar's own agent loop, and for an ACP `fetch` request. The list is empty by
   default, which denies every fetch; Codex's built-in web search stays governed by Codex's own
   `config.toml` and sandbox, which is documented rather than fixed.
+- Closed two paths by which something other than the operator could start an agent session that
+  writes code through `sirdar serve`. Every mutating route now requires `Content-Type:
+  application/json`, refuses an `Origin` that is neither the listener's own nor the Wails shell's,
+  and refuses `Sec-Fetch-Site: cross-site` or `same-site` — so a page the operator has open can no
+  longer cross-site-post to `/api/workspaces/<id>/fix`; the `/hooks/` routes, which authenticate
+  by signature, are exempt. And the fix route itself now answers 403 on a listener bound with
+  `--allow-remote`: a remote caller may read notes and start a triage, but not write code and open
+  a pull request under the operator's GitHub login (`docs/config.md`).

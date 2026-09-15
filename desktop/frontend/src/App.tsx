@@ -10,6 +10,13 @@ import Settings from './screens/Settings'
 import type { EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
 
+/**
+ * A rejection the store has already toasted. The forms show the reason beside
+ * their own button; a start with no form behind it has nothing else to do with
+ * it, and an unhandled rejection would only reach the console.
+ */
+function reported(): void {}
+
 /** Keys typed into a field belong to that field, not to the window. */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -67,7 +74,10 @@ export default function App(): JSX.Element {
   }, [openTriage, state.screen.name, triageOpen])
 
   // Every start goes through the store, which keeps the job id the run detail
-  // screen's Cancel button needs.
+  // screen's Cancel button needs. A start that fails rejects as well as
+  // toasting, so the form that asked can show the reason beside its button;
+  // the two call sites with no form behind them swallow it here instead, and
+  // the toast is what the reader sees.
   const startRCA = useCallback((key: string, opts?: RCAOptions) => store.startRCA(key, opts), [
     store,
   ])
@@ -78,6 +88,7 @@ export default function App(): JSX.Element {
     (keys?: string[], opts?: EvalOptions) => store.startEval(keys, opts),
     [store],
   )
+  const cancelJob = useCallback((jobId: string) => store.cancelJob(jobId), [store])
 
   let screen
   switch (state.screen.name) {
@@ -103,7 +114,9 @@ export default function App(): JSX.Element {
           transport={state.transport}
           workspaceId={workspaceId}
           defaultProvider={currentWorkspace?.provider}
+          jobs={state.keylessJobs.filter((j) => j.workspaceId === workspaceId)}
           onStartEval={startEval}
+          onCancelJob={cancelJob}
         />
       )
       break
@@ -127,7 +140,7 @@ export default function App(): JSX.Element {
           inbound={state.inbound}
           filterRef={filterRef}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
-          onTriage={(keys) => void store.startTriage(keys)}
+          onTriage={(keys) => void store.startTriage(keys).catch(reported)}
         />
       )
   }
@@ -158,7 +171,7 @@ export default function App(): JSX.Element {
         open={triageOpen}
         defaultProvider={currentWorkspace?.provider}
         onClose={() => setTriageOpen(false)}
-        onSubmit={(keys, opts) => void store.startTriage(keys, opts)}
+        onSubmit={(keys, opts) => void store.startTriage(keys, opts).catch(reported)}
       />
       <Toasts toasts={state.toasts} onDismiss={dismissToast} />
     </div>

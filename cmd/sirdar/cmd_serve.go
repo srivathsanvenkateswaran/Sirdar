@@ -47,13 +47,17 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 
 	// The API starts runs and reads notes with the operator's own agent
 	// login, so an address anyone can reach is a decision, not a default.
-	if !isLoopback(*addr) {
+	loopback := isLoopback(*addr)
+	if !loopback {
 		if !*allowRemote {
 			fmt.Fprintf(stderr, "sirdar serve: %s is not a loopback address; pass --allow-remote to bind it anyway\n", *addr)
 			return exitUsage
 		}
 		fmt.Fprintf(stderr, "sirdar serve: warning: %s is reachable from other machines and there is no authentication;"+
-			" anyone who can reach it can start runs and read your notes\n", *addr)
+			" anyone who can reach it can start runs and read your notes."+
+			" The fix route is refused on this listener: a remote caller must not be able to write code"+
+			" and open pull requests under your GitHub login. Run fixes with `sirdar fix`,"+
+			" or from a server bound to loopback\n", *addr)
 	}
 
 	root, ok := serveRoot(*workspace, stderr)
@@ -73,10 +77,13 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	hooks, ok := serveHooks(root, wsID, *allowRemote, stderr)
+	opts, ok := serveHooks(root, wsID, *allowRemote, stderr)
 	if !ok {
 		return 1
 	}
+	// The bind decision, handed to the handler rather than re-derived there:
+	// it is what the fix route is gated on.
+	opts = append(opts, httpapi.LoopbackOnly(loopback))
 
 	ctx, stop := interruptible()
 	defer stop()
@@ -85,7 +92,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	svc.Start(ctx)
 	defer svc.Stop()
 
-	return serveHTTP(ctx, httpapi.New(svc, ui.FS(), hooks...), *addr, *openBrowser, stdout, stderr)
+	return serveHTTP(ctx, httpapi.New(svc, ui.FS(), opts...), *addr, *openBrowser, stdout, stderr)
 }
 
 // serveHooks builds the workspace's webhook receiver, if it configured

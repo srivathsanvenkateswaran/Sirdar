@@ -12,6 +12,12 @@ function short(commit: string): string {
  * fix. The commit exists, on the branch, and has not been pushed. Accepting it
  * does not start another session: the rerun pushes the commit shown here, which
  * is the one the reader just read.
+ *
+ * What says the work is done is `pushed`, not the pull request URL. A run
+ * started with "open no pull request", and one whose `gh` call failed after the
+ * push went through, both record a deviation and no URL — and reading the URL
+ * alone put this panel back into "waiting for you" for work that had already
+ * left the machine.
  */
 export default function FixPanel({
   fix,
@@ -24,7 +30,10 @@ export default function FixPanel({
   error: string
   onAccept: () => void
 }) {
-  const blocked = Boolean(fix.deviation) && !fix.prUrl
+  // Published is the push, or a pull request URL for the runs recorded
+  // before the push itself was written down.
+  const published = Boolean(fix.pushed) || Boolean(fix.prUrl)
+  const blocked = Boolean(fix.deviation) && !published
 
   return (
     <section className="form form--fix-review" aria-label="Fix result">
@@ -54,6 +63,16 @@ export default function FixPanel({
             </dd>
           </>
         ) : null}
+        {published && !fix.prUrl ? (
+          <>
+            <dt>Pushed</dt>
+            <dd>
+              {fix.branch || 'The branch'} is on the remote, with no pull request opened for it.
+              Either this run was started with “open no pull request”, or the GitHub
+              CLI could not open one and said why in the activity pane. Open it from the branch.
+            </dd>
+          </>
+        ) : null}
       </dl>
 
       {blocked ? (
@@ -65,7 +84,9 @@ export default function FixPanel({
           <p className="form-note">
             The commit is on {fix.branch || 'the fix branch'} and has not been pushed. Read the
             diff. Accepting pushes that same commit and opens the pull request for it; no second
-            agent session is started.
+            agent session is started. If the branch has moved on since — somebody committed on
+            top of it, or deleted it — accepting is refused rather than quietly starting a fresh
+            session, and you start that yourself from Start fix.
           </p>
           <div className="form-row">
             <button
@@ -79,6 +100,13 @@ export default function FixPanel({
           </div>
           {error ? <div className="form-error">{error}</div> : null}
         </div>
+      ) : null}
+
+      {fix.deviation && published ? (
+        <p className="form-note">
+          The agent reported deviating from the note, and the commit was published after a person
+          accepted it: {fix.deviation}
+        </p>
       ) : null}
     </section>
   )

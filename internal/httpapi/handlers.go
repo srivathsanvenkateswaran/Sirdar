@@ -1,24 +1,25 @@
 package httpapi
 
-import "net/http"
+import (
+	"net/http"
 
-// providers are the values a one-off `provider` override may take. The set
-// is checked here rather than left to the job, so a typo from a UI is a 400
-// with the list in it instead of a job that starts and fails.
-var providers = map[string]bool{
-	"claude": true, "codex": true, "openai": true, "acp": true, "qwen": true,
-}
-
-const providerList = "claude, codex, openai, acp or qwen"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
+)
 
 // validProvider reports whether name is one Sirdar drives, writing the 400
 // itself when it is not. An empty name is the workspace's own provider and
 // is always allowed.
+//
+// The set itself is internal/app's. The Wails bridge calls the Service with
+// no HTTP layer in front of it, so a set kept here would let the desktop
+// shell start a job over a typo the browser one refuses. This is only the
+// early 400 with the list in it; app.Service checks the same name again
+// before it starts anything.
 func validProvider(w http.ResponseWriter, name string) bool {
-	if name == "" || providers[name] {
+	if app.ValidProvider(name) {
 		return true
 	}
-	writeError(w, http.StatusBadRequest, "bad_request", "provider must be "+providerList)
+	writeError(w, http.StatusBadRequest, "bad_request", "provider must be "+app.ProviderList)
 	return false
 }
 
@@ -30,7 +31,21 @@ func validProvider(w http.ResponseWriter, name string) bool {
 // the second half of that gate: a run whose agent reported deviating from
 // the note commits locally and stops, and a rerun with it set pushes the
 // commit that was reviewed rather than starting another session.
+//
+// The one gate that is here is the listener's: every other route reads or
+// starts a session that writes a note, but this one writes code to the
+// operator's repository and opens a pull request under their GitHub login.
+// On a listener other machines can reach — `sirdar serve --allow-remote`,
+// which has no authentication of any kind — that is refused outright. A
+// remote reader of somebody's triage notes is bad; a remote author of their
+// commits is a different category.
 func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
+	if !s.loopbackOnly {
+		writeError(w, http.StatusForbidden, "forbidden",
+			"a fix writes code and opens a pull request, so it is refused on a listener other machines can reach;"+
+				" start it from `sirdar fix` or from a server bound to loopback")
+		return
+	}
 	var body struct {
 		Key             string `json:"key"`
 		DryRun          bool   `json:"dryRun"`

@@ -129,6 +129,56 @@ mistyped source name or a secret written out literally fails the first time the 
 rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
 signing schemes, and the `--allow-remote` warning.
 
+## `sirdar serve`
+
+`sirdar serve` puts the desktop UI in a browser: the same frontend the Wails app embeds, served
+from the CLI binary over HTTP. It takes no configuration from `config.yaml` — every decision is a
+flag — but two of those decisions are about who may reach it, and they are worth spelling out.
+
+The API has **no authentication**. It answers to whoever can open the port, which on the default
+`127.0.0.1:7777` is every program running as you, and every page your browser has open. Two gates
+narrow that.
+
+### Where a mutating request may come from
+
+Every route that changes something — starting a triage, an RCA, a fix or an eval, adding a
+workspace or a golden bundle, resuming a run, cancelling a job — is refused unless the request
+looks like one the UI itself made:
+
+- `Content-Type` must be `application/json`. A cross-site HTML form can only send
+  `application/x-www-form-urlencoded`, `multipart/form-data` or `text/plain`, so this alone stops
+  a page you have open from posting to the listener. A request with no body at all and no
+  declared type is allowed, which is what Cancel, the workspace delete and a bodiless resume send.
+- If the browser sends an `Origin`, it must be one of:
+
+    | Origin | Where it comes from |
+    | --- | --- |
+    | the listener's own host and port | the UI served by `sirdar serve`, over `http` or `https` |
+    | `wails://wails` | the Wails shell on macOS and Linux |
+    | `http://wails.localhost`, `https://wails.localhost` | the Wails shell on Windows |
+
+    The host and port must match the listener's exactly; the scheme may be either `http` or
+    `https`, so a listener behind a TLS-terminating reverse proxy still works. The Wails origins
+    are allowed for completeness — the desktop app calls the Go side in process through its bound
+    bridge and does not reach this server at all.
+
+- `Sec-Fetch-Site: cross-site` and `Sec-Fetch-Site: same-site` are refused outright.
+
+A caller with no browser in the way — `curl`, a script of your own — sends neither header and is
+unaffected. This is a cross-site defence, not authentication: nothing here stops a program already
+running as you.
+
+The `/hooks/` routes are exempt. A tracker's delivery is not a browser's request, it carries the
+tracker's own content type, and it authenticates by signature or shared secret.
+
+### The fix route and the bind address
+
+A non-loopback `--addr` needs `--allow-remote`, and prints a warning. On such a listener
+`POST /api/workspaces/<id>/fix` answers **403**, whatever else is allowed: every other route
+reads, or starts a session that writes a note, but a fix writes code to your repository and opens
+a pull request under your GitHub login. Run those with `sirdar fix`, or from a server bound to
+loopback.
+
 ## Built-in trackers
 
 `jira`, `linear`, `azdo` and `rally` are compiled into Sirdar, so they need no adapter process.

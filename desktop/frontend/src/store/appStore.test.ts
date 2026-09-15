@@ -133,7 +133,10 @@ describe('createAppStore', () => {
     expect(store.getState().toasts[0]?.text).toBe('Triage started for 2 keys.')
   })
 
-  it('toasts when triage cannot start', async () => {
+  // A failed start toasts *and* rejects: the toast is for the window, the
+  // rejection for the form that asked, whose error line was dead while the
+  // store swallowed it.
+  it('toasts and rethrows when triage cannot start', async () => {
     const transport = createFakeTransport()
     transport.startTriage = async () => {
       throw new Error('provider not configured')
@@ -142,7 +145,7 @@ describe('createAppStore', () => {
     await store.init()
     await settle()
 
-    await store.startTriage(['OMNI-1'])
+    await expect(store.startTriage(['OMNI-1'])).rejects.toThrow('provider not configured')
     const toast = store.getState().toasts[0]
     expect(toast?.tone).toBe('error')
     expect(toast?.text).toContain('provider not configured')
@@ -239,7 +242,7 @@ describe('createAppStore', () => {
     expect(getRunJob('r-rca')).toBe('job-rca')
   })
 
-  it('toasts when an RCA cannot start', async () => {
+  it('toasts and rethrows when an RCA cannot start', async () => {
     const transport = createFakeTransport()
     transport.startRCA = async () => {
       throw new Error('no rca playbook')
@@ -248,7 +251,7 @@ describe('createAppStore', () => {
     await store.init()
     await settle()
 
-    await store.startRCA('OMNI-1')
+    await expect(store.startRCA('OMNI-1')).rejects.toThrow('no rca playbook')
     const toast = store.getState().toasts[0]
     expect(toast?.tone).toBe('error')
     expect(toast?.text).toContain('no rca playbook')
@@ -314,7 +317,7 @@ describe('createAppStore', () => {
     expect(store.getState().toasts.at(-1)?.text).toBe('Publishing the reviewed commit for OMNI-1.')
   })
 
-  it('toasts when a fix cannot start, and refuses an empty key', async () => {
+  it('toasts and rethrows when a fix cannot start, and refuses an empty key', async () => {
     const transport = createFakeTransport()
     transport.startFix = async () => {
       throw new Error('the triage note for OMNI-1 is not approved')
@@ -323,10 +326,13 @@ describe('createAppStore', () => {
     await store.init()
     await settle()
 
+    // An empty key never reaches the transport, so it is refused rather
+    // than rejected: there is nothing for the form to report that the toast
+    // does not already say.
     await store.startFix('')
     expect(store.getState().toasts.at(-1)?.text).toBe('Enter a ticket key.')
 
-    await store.startFix('OMNI-1')
+    await expect(store.startFix('OMNI-1')).rejects.toThrow('is not approved')
     expect(store.getState().toasts.at(-1)?.text).toBe(
       'Fix did not start. the triage note for OMNI-1 is not approved',
     )
@@ -349,7 +355,67 @@ describe('createAppStore', () => {
     expect(store.getState().toasts.at(-1)?.text).toBe('Eval started for 2 keys.')
   })
 
-  it('toasts when an eval cannot start', async () => {
+  /*
+   * An eval over the whole set names no key, so `claim` can never pair it
+   * with a run and Run detail's Cancel can never reach it. It is kept on the
+   * state instead, and the Eval screen offers the button.
+   */
+  it('keeps a whole-set eval job cancellable, and forgets it when it ends', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startEval()
+    const [job] = store.getState().keylessJobs
+    expect(job?.workspaceId).toBe('ws1')
+    expect(job?.label).toContain('golden set')
+
+    await store.cancelJob(job.jobId)
+    expect(transport.calls.cancel).toEqual([job.jobId])
+    expect(store.getState().keylessJobs).toEqual([])
+  })
+
+  it('an eval over named keys is paired with its runs, not held as keyless', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startEval(['OMNI-1'])
+    expect(store.getState().keylessJobs).toEqual([])
+
+    transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: run({ runId: 'r9', key: 'OMNI-1', startedAt: nowISO() }) })
+    expect(getRunJob('r9')).toBeTruthy()
+  })
+
+  it('job.finished releases a keyless job', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startEval()
+    const { jobId } = store.getState().keylessJobs[0]
+
+    transport.emit({ kind: 'job.finished', jobId, workspaceId: 'ws1', outcomes: [] })
+    expect(store.getState().keylessJobs).toEqual([])
+  })
+
+  it('toasts and rethrows when a cancel is refused', async () => {
+    const transport = createFakeTransport()
+    transport.cancel = async () => {
+      throw new Error('no such job')
+    }
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await expect(store.cancelJob('job-9')).rejects.toThrow('no such job')
+    expect(store.getState().toasts.at(-1)?.text).toContain('no such job')
+  })
+
+  it('toasts and rethrows when an eval cannot start', async () => {
     const transport = createFakeTransport()
     transport.startEval = async () => {
       throw new Error('no golden bundles')
@@ -358,7 +424,7 @@ describe('createAppStore', () => {
     await store.init()
     await settle()
 
-    await store.startEval()
+    await expect(store.startEval()).rejects.toThrow('no golden bundles')
     expect(store.getState().toasts.at(-1)?.text).toBe('Eval did not start. no golden bundles')
   })
 

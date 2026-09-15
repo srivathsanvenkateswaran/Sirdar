@@ -53,6 +53,26 @@ describe('http transport', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs')
   })
 
+  /*
+   * The empty note kind is the run's own note.md, which is how a fix run's
+   * note is reached. It has to travel as *no* query parameter: `?kind=` and an
+   * absent `kind` both mean the same thing to the server, and the query
+   * builder drops empty values, so this is the shape that actually goes out.
+   */
+  it('asks for the run\'s own note with no kind parameter', async () => {
+    const spy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('# note', { headers: { 'Content-Type': 'text/markdown' } }),
+    )
+    vi.stubGlobal('fetch', spy)
+
+    await createTransport().note('ws1', 'r1', '')
+    expect(spy.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/note')
+
+    await createTransport().note('ws1', 'r1', 'triage')
+    expect(spy.mock.calls[1]![0]).toBe('/api/workspaces/ws1/runs/r1/note?kind=triage')
+  })
+
   it('posts a fix to the workspace fix route, flags and all', async () => {
     const fetchMock = mockFetch({ jobId: 'job-1' })
 
