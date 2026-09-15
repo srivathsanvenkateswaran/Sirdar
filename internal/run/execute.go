@@ -564,6 +564,19 @@ func schemaFor(kind store.Kind) []byte {
 	}
 }
 
+// requiredRootKeys is the schema's own root `required` list: the top-level
+// keys an answer must carry. It is read off the schema rather than written
+// out here so that a schema change reaches the retry wording with it.
+func requiredRootKeys(schema []byte) []string {
+	var root struct {
+		Required []string `json:"required"`
+	}
+	if err := json.Unmarshal(schema, &root); err != nil {
+		return nil
+	}
+	return root.Required
+}
+
 func noteKind(kind store.Kind) note.Kind {
 	switch kind {
 	case store.KindRCA:
@@ -971,6 +984,20 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// repeat: quoting the schema's own header back instead of the
 		// answer it describes.
 		msg += " Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+		// The other repeated mistake, and the one the OpenCode rca run
+		// failed twice on: writing the contents of the required top-level
+		// objects at the root instead of inside them, so the document is
+		// full of the right prose under none of the right keys. The
+		// validator says "(root): missing properties 'rca', 'resolution'"
+		// and the model, having written an rca, does not read that as
+		// being about it. Naming the keys is cheap and it is the whole of
+		// what went wrong. They come off the schema's own root `required`
+		// list so this sentence cannot drift from the schema it is
+		// describing.
+		if keys := requiredRootKeys(schemaFor(p.kind)); len(keys) > 0 {
+			msg += " The object must have these top-level keys: " + strings.Join(keys, ", ") +
+				". Everything else belongs inside them, not at the root."
+		}
 	}
 	sendErr := sess.Send(ctx, msg)
 	if sendErr == nil {

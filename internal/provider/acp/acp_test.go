@@ -230,11 +230,18 @@ func workspace(t *testing.T) string {
 
 func spawn(t *testing.T, script, cwd string, mutate func(*provider.SessionSpec)) provider.Session {
 	t.Helper()
+	return spawnWith(t, Config{}, script, cwd, mutate)
+}
+
+// spawnWith is spawn for a test that needs the acp block itself — acp.mode
+// is the only setting the adapter reads out of it at runtime.
+func spawnWith(t *testing.T, cfg Config, script, cwd string, mutate func(*provider.SessionSpec)) provider.Session {
+	t.Helper()
 	spec := specFor(t, script, cwd)
 	if mutate != nil {
 		mutate(&spec)
 	}
-	sess, err := New(Config{}).Start(context.Background(), spec)
+	sess, err := New(cfg).Start(context.Background(), spec)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -720,15 +727,17 @@ func TestGuardsHoldAgainstAMisbehavingAgent(t *testing.T) {
 		t.Fatalf("the symlink under test does not lead to the file it is meant to: %v", err)
 	}
 
-	// The unannounced write is reported, since it cannot be prevented.
-	warned := false
-	for _, ev := range only(evs, provider.EvError) {
-		if strings.Contains(ev.Text, "without asking permission") && ev.Tool == "edit" {
-			warned = true
+	// The unannounced write cannot be prevented, so it ends the run: a
+	// triage session that wrote a file having asked nobody is the
+	// read-only guarantee failing, not a warning to file a note under.
+	breached := false
+	for _, ev := range only(evs, provider.EvBreach) {
+		if strings.HasPrefix(ev.Text, "read-only breach: edit") && ev.Tool == "edit" {
+			breached = true
 		}
 	}
-	if !warned {
-		t.Errorf("a completed edit tool call raised no warning; errors = %+v", only(evs, provider.EvError))
+	if !breached {
+		t.Errorf("a completed edit tool call raised no breach; breaches = %+v", only(evs, provider.EvBreach))
 	}
 }
 
@@ -1016,5 +1025,289 @@ func TestEmptyFinalSaysTheTurnEndedWithoutAnAnswer(t *testing.T) {
 	finals := only(evs, provider.EvFinal)
 	if len(finals) != 1 || strings.TrimSpace(finals[0].Text) != "" || len(finals[0].Final) != 0 {
 		t.Fatalf("final events: %+v", finals)
+	}
+}
+
+// --- session modes ---
+
+// modeSent returns the modeId the provider asked for, or "" when it sent
+// no session/set_mode at all.
+func modeSent(t *testing.T, res provider.Result) string {
+	t.Helper()
+	for _, line := range stderrLines(t, res) {
+		rest, ok := strings.CutPrefix(line, "STDIN: ")
+		if !ok {
+			continue
+		}
+		var msg inbound
+		if err := json.Unmarshal([]byte(rest), &msg); err != nil || msg.Method != "session/set_mode" {
+			continue
+		}
+		var params struct {
+			ModeID string `json:"modeId"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil {
+			t.Fatalf("session/set_mode params: %v", err)
+		}
+		return params.ModeID
+	}
+	return ""
+}
+
+// sentMethods lists the client-to-agent methods in the order they went out,
+// which is what "before the prompt" has to be asserted against.
+func sentMethods(t *testing.T, res provider.Result) []string {
+	t.Helper()
+	var out []string
+	for _, line := range stderrLines(t, res) {
+		rest, ok := strings.CutPrefix(line, "STDIN: ")
+		if !ok {
+			continue
+		}
+		var msg inbound
+		if err := json.Unmarshal([]byte(rest), &msg); err != nil || msg.Method == "" {
+			continue
+		}
+		out = append(out, msg.Method)
+	}
+	return out
+}
+
+func systemText(evs []provider.Event, substr string) bool {
+	for _, ev := range only(evs, provider.EvSystem) {
+		if strings.Contains(ev.Text, substr) {
+			return true
+		}
+	}
+	return false
+}
+
+// TestReadOnlyRunSelectsThePlanMode: an agent that advertises modes is put
+// into its read-only one, and it is put there before the prompt that would
+// otherwise run in whatever mode the session opened in. kimi's capture is
+// the reason this matters — its `default` mode approves an in-workspace
+// write before a permission request is even built, so a triage run that
+// never sets a mode is asked about nothing it cares about.
+func TestReadOnlyRunSelectsThePlanMode(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-modes.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if got := modeSent(t, res); got != "plan" {
+		t.Errorf("session/set_mode modeId = %q, want plan", got)
+	}
+	methods := sentMethods(t, res)
+	set, prompt := indexOf(methods, "session/set_mode"), indexOf(methods, "session/prompt")
+	if set < 0 || prompt < 0 || set > prompt {
+		t.Errorf("methods = %v, want session/set_mode before session/prompt", methods)
+	}
+	if !systemText(evs, "acp mode plan selected for this read-only session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestFixRunSelectsAnEditMode is the other half: a fix session may write,
+// so it must not be put in the mode that refuses to.
+func TestFixRunSelectsAnEditMode(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{}, "script-modes.jsonl", cwd, fixPolicy(cwd))
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := modeSent(t, res); got != "edit" {
+		t.Errorf("session/set_mode modeId = %q, want edit", got)
+	}
+	if !systemText(evs, "acp mode edit selected for this fix session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestConfiguredModeOverridesTheChoice: acp.mode is the escape hatch for an
+// agent whose read-only mode is spelled something this adapter does not
+// know, so it wins over the adapter's own pick.
+func TestConfiguredModeOverridesTheChoice(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{Mode: "ask"}, "script-modes.jsonl", cwd, nil)
+
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := modeSent(t, res); got != "ask" {
+		t.Errorf("session/set_mode modeId = %q, want the configured ask", got)
+	}
+}
+
+// TestAgentWithNoModesIsSaidOnce: most ACP agents expose no modes at all,
+// and the run should say so rather than pretending a mode was set.
+func TestAgentWithNoModesIsSaidOnce(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-basic.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if got := modeSent(t, res); got != "" {
+		t.Errorf("session/set_mode was sent (%q) to an agent that advertised no modes", got)
+	}
+	said := 0
+	for _, ev := range only(evs, provider.EvSystem) {
+		if strings.Contains(ev.Text, "offers no session modes") {
+			said++
+		}
+	}
+	if said != 1 {
+		t.Errorf("the no-modes notice was emitted %d times, want 1", said)
+	}
+}
+
+func indexOf(values []string, want string) int {
+	for i, v := range values {
+		if v == want {
+			return i
+		}
+	}
+	return -1
+}
+
+// --- tool calls nobody approved ---
+
+// unmediated pairs each tool call in script-unmediated.jsonl with the kind
+// of event it produced: "breach", "error", or "" for nothing at all.
+func unmediated(evs []provider.Event) map[string]string {
+	out := map[string]string{}
+	for _, ev := range evs {
+		var kind string
+		switch ev.Kind {
+		case provider.EvBreach:
+			kind = "breach"
+		case provider.EvError:
+			kind = "error"
+		default:
+			continue
+		}
+		switch {
+		case strings.Contains(ev.Text, "ledger.go") && strings.Contains(ev.Text, "escape"):
+			out["out"] = kind
+		case strings.Contains(ev.Text, "secret.txt"):
+			out["out"] = kind
+		case strings.Contains(ev.Text, "ledger.go"):
+			out["in"] = kind
+		case strings.Contains(ev.Text, "sirdar-acp-probe"):
+			out["exec"] = kind
+		case strings.Contains(ev.Text, "sub-agent"):
+			out["spawn"] = kind
+		case strings.Contains(ev.Text, `"fetch"`):
+			out["fetch"] = kind
+		}
+	}
+	return out
+}
+
+// TestUnmediatedCallsBreachAReadOnlyRun. A triage or rca session that
+// completes a write, a command or a sub-agent spawn having asked nobody has
+// had its read-only guarantee fail, and the run layer answers an EvBreach
+// by cancelling the session and filing nothing. A fetch stays a warning: it
+// is neither, and what it cost is that permissions.fetch never saw the
+// destination.
+func TestUnmediatedCallsBreachAReadOnlyRun(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-unmediated.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	got := unmediated(evs)
+	want := map[string]string{
+		"in":    "breach",
+		"out":   "breach",
+		"exec":  "breach",
+		"spawn": "breach",
+		"fetch": "error",
+	}
+	for name, kind := range want {
+		if got[name] != kind {
+			t.Errorf("%s produced %q, want %q (all: %v)", name, got[name], kind, got)
+		}
+	}
+
+	// The call that did go through session/request_permission, and the
+	// think call whose title merely contains the word "task", produce
+	// nothing: there is one breach per unapproved call and no more.
+	if n := len(only(evs, provider.EvBreach)); n != 4 {
+		t.Errorf("breaches = %d, want 4: %+v", n, only(evs, provider.EvBreach))
+	}
+	for _, ev := range only(evs, provider.EvBreach) {
+		if !strings.HasPrefix(ev.Text, "read-only breach: ") {
+			t.Errorf("a breach's first line must be the run's reason: %q", ev.Text)
+		}
+	}
+}
+
+// TestUnmediatedWritesInAFixRunWarnOnlyInsideTheRoot. A fix session may
+// write, so an unannounced write it made inside its own worktree is a
+// warning. One that landed outside is not: staying inside the worktree is
+// the whole guarantee `sirdar fix` makes, and a sub-agent spawn is a breach
+// in a fix run too, because a sub-agent's own permission state is nothing
+// Sirdar configured.
+func TestUnmediatedWritesInAFixRunWarnOnlyInsideTheRoot(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{}, "script-unmediated.jsonl", cwd, fixPolicy(cwd))
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	got := unmediated(evs)
+	want := map[string]string{
+		"in":    "error",
+		"out":   "breach",
+		"exec":  "error",
+		"spawn": "breach",
+		"fetch": "error",
+	}
+	for name, kind := range want {
+		if got[name] != kind {
+			t.Errorf("%s produced %q, want %q (all: %v)", name, got[name], kind, got)
+		}
+	}
+}
+
+// TestSubagentTitlesAreMatchedOnTheLeadingIdentifier guards the one thing
+// that would make this check worse than useless: failing a run over a
+// title that happens to contain the word "task".
+func TestSubagentTitlesAreMatchedOnTheLeadingIdentifier(t *testing.T) {
+	for _, tc := range []struct {
+		kind, title string
+		want        bool
+	}{
+		{"other", "Task", true},
+		{"other", "Task(subagent_type=explore)", true},
+		{"other", "Agent(subagent_type=explore)", true},
+		{"other", "AgentSwarm", true},
+		{"execute", "spawn_worker", true},
+		{"other", "mcp__orchestrator__task", true},
+		{"think", "Update the task list", false},
+		{"read", "Read the agent registry", false},
+		{"edit", "Write src/agent.go", false},
+		{"", "", false},
+	} {
+		if got := indicatesSubagent(tc.kind, tc.title); got != tc.want {
+			t.Errorf("indicatesSubagent(%q, %q) = %v, want %v", tc.kind, tc.title, got, tc.want)
+		}
 	}
 }

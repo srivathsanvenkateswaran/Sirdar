@@ -2579,6 +2579,74 @@ func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 	}
 }
 
+// TestSchemaRetryNamesTheRequiredTopLevelKeys covers the failure the live
+// OpenCode rca run hit: the agent wrote a perfectly good root-cause
+// analysis with the rca object's own fields at the root, so the validator
+// said "(root): missing properties 'rca', 'resolution'" and the retry
+// repeated the same shape. A model that has just written an rca does not
+// read that message as being about itself, so the retry names the keys —
+// off the schema's own root `required` list, so it cannot drift from the
+// schema — and says the substance belongs inside them.
+func TestSchemaRetryNamesTheRequiredTopLevelKeys(t *testing.T) {
+	cfg := newWorkspace(t)
+
+	// The triage note the rca run reviews.
+	p := &stubProvider{name: "acp", script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	if _, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{}); err != nil {
+		t.Fatal(err)
+	}
+
+	// The rca answer with the rca object's fields flattened to the root,
+	// exactly as the live run produced it.
+	var full map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(rcaDoc), &full); err != nil {
+		t.Fatal(err)
+	}
+	flattened, err := json.Marshal(json.RawMessage(full["rca"]))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	p.script = func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(string(flattened))) {
+			return
+		}
+		select {
+		case <-s.sendCh:
+		case <-s.cancelled:
+			return
+		}
+		s.emit(finalEvent(rcaDoc))
+	}
+
+	out, err := r.RCA(context.Background(), "OMNI-1", RCAOptions{Resolution: "Streamed the export."})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	sends := p.session(1).sentTexts()
+	if len(sends) != 1 {
+		t.Fatalf("sends: %v", sends)
+	}
+	retry := sends[0]
+	for _, want := range []string{
+		// The validator's own message, so the retry says what failed.
+		"missing properties 'rca', 'resolution'",
+		// The keys the answer has to carry, named.
+		"The object must have these top-level keys: rca, resolution.",
+		"Everything else belongs inside them, not at the root.",
+	} {
+		if !strings.Contains(retry, want) {
+			t.Errorf("the retry message does not carry %q:\n%s", want, retry)
+		}
+	}
+}
+
 // TestSchemaItselfFailsWithAClearerReason covers a session that answers
 // with its own JSON Schema — a root "properties" object — rather than a
 // document shaped by it. There is nothing to reconstruct there, so the run

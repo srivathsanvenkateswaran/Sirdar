@@ -246,7 +246,7 @@ func acpProvider(cfg *config.Config) (provider.Provider, error) {
 	if strings.TrimSpace(a.Command) == "" {
 		return nil, fmt.Errorf("provider acp: acp.command is not set")
 	}
-	return acp.New(acp.Config{Command: a.Command, Args: a.Args, Env: a.Env}), nil
+	return acp.New(acp.Config{Command: a.Command, Args: a.Args, Env: a.Env, Mode: a.Mode}), nil
 }
 
 // openAIProvider builds the provider that runs Sirdar's own loop against
