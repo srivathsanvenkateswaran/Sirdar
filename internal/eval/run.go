@@ -78,6 +78,13 @@ func Run(ctx context.Context, deps runner.Deps, keys []string, o Options) (Repor
 			return Report{}, err
 		}
 		if len(found) == 0 {
+			if legacy, lerr := LegacyKeys(root); lerr == nil && len(legacy) > 0 {
+				return Report{}, fmt.Errorf(
+					"eval: %s holds no golden bundles `sirdar eval` can read; %d in the pre-eval layout "+
+						"(files directly under the key, not under bundle/): %s — run `sirdar golden migrate` "+
+						"to fix them, or `sirdar golden migrate KEY` for one at a time",
+					root, len(legacy), strings.Join(legacy, ", "))
+			}
 			return Report{}, fmt.Errorf("eval: %s holds no golden bundles; add one with `sirdar golden add KEY`", root)
 		}
 		keys = found
