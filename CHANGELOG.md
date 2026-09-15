@@ -25,7 +25,9 @@ a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
 `provider: acp` drives any Agent Client Protocol agent (Gemini CLI, Goose, OpenCode);
 `provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
 hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
-execution mode rather than by a policy Sirdar enforces; `provider: agy` drives Google's
+execution mode rather than by a policy Sirdar enforces — a write or a command that
+completes anyway ends the session and fails the run, and `sirdar fix` is refused
+before it cuts a branch; `provider: agy` drives Google's
 Antigravity CLI against the operator's own Google account, triage and rca only — that CLI
 gives a parent process no way to mediate a tool call, so the read-only guarantee is its own
 plan mode plus a watch that fails the run: a write or a command that completes ends the

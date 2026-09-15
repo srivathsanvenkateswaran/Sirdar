@@ -1188,7 +1188,9 @@ whatever point the provider offers to be asked.
   Cursor's backend, plus `--sandbox enabled` for shell commands. `permissions.fetch` is
   honoured only in its empty state, by excluding `web_fetch_tool_call` and `fetch_tool_call`
   from the session; with hosts named the tools come back and no per-call check follows them.
-  `sirdar fix` is refused outright. See `provider: cursor` below.
+  What Sirdar does enforce is the consequence: a completed edit or shell call is a read-only
+  breach that fails the run and files nothing. `sirdar fix` is refused outright, before the
+  command touches git. See `provider: cursor` below.
 
 ## Attachment filtering
 
@@ -1942,14 +1944,30 @@ What holds instead, on every triage and rca session:
 - **`--disable-project-configs`,** so a checkout's own `.cursor/cli.json`, sandbox policies and
   rules cannot widen what its triage run may do.
 - **`--trust`,** because a directory you have never opened Cursor in interactively otherwise
-  fails before any API call, exit 1, with nothing on stdout.
+  fails before any API call, exit 1, with nothing on stdout. Cursor persists trust per
+  directory, in your own `~/.cursor` state, so passing the flag records the workspace path
+  there as trusted — the one change a triage run makes to anything outside the run directory.
 
 Take that together and the honest summary is: a cursor triage run is read-only because Cursor
 says so, not because Sirdar can stop it. If your workspace needs the guarantee enforced on your
 own machine, use `provider: claude`, `provider: codex`, `provider: qwen` or `provider: openai`.
 
-**`sirdar fix` is refused.** `Start` returns an error and `sirdar doctor` carries a `cursor fix`
-warning row saying why: the sandbox confines a shell command to the workspace but not the edit
+**A completed write ends the run.** Sirdar cannot refuse a Cursor tool call — print mode is its
+own approver and the first Sirdar hears of an edit is the line saying it finished — so what it
+does instead is watch for one. A `tool_call` / `completed` line for any of the six excluded
+tools, with anything other than a `rejected` result, means both the exclusion and the execution
+mode failed. The run is failed on the spot with the reason `read-only breach: Edit <path>`: the
+session is cancelled, its process group killed, and **no triage note is written and no register
+row recorded**, even if the answer was already in flight. A triage note asserts that the run
+read and wrote nothing, and this is the run that cannot assert it. A *rejected* tool call is the
+ordinary outcome and is not a breach — it is logged as `rejected: <reason>` and the session
+carries on. `provider: agy` fails a run the same way and for the same reason.
+
+**`sirdar fix` is refused,** before `sirdar fix` touches git at all — the provider answers
+`SupportsFix() == false`, which is asked ahead of fetching the default branch, cutting a branch
+or adding a worktree, so a refused run leaves the workspace exactly as it was. `Start` refuses
+the same spec as well, so every other route into a fix session hits it too, and `sirdar doctor`
+carries a `cursor fix` warning row saying why: the sandbox confines a shell command to the workspace but not the edit
 tool, which takes an absolute path from the model, and nothing local judges it — so a fix
 session's writes could not be confined to Sirdar's fix worktree.
 
@@ -1974,11 +1992,16 @@ turns it saw. `budget.maxMinutes` is the bound that actually works here, the sam
 `provider: acp`. Set it as if it were the only one.
 
 **Structured output.** There is no `--json-schema` flag and no `structured_output` field. The
-schema is appended to the prompt and the answer is read out of the result line's text —
-leniently, stripping a code fence and taking the outermost balanced JSON object out of any prose
-around it. An answer carrying no JSON object is what triggers the runner's schema retry, and
-because the CLI reads nothing from stdin, that retry goes into a fresh process with
-`--resume <chatId>` rather than a second message on the same session.
+schema is appended to the prompt and the answer is read out of the result line's text,
+leniently: fenced blocks are searched first and the **last** one wins, then the last balanced
+top-level object in the text as a whole. Last, because a model answering a prompt-carried schema
+often restates the schema or works an example before giving the answer. An object whose only
+top-level keys are `$schema` and `title` is the schema's own header quoted back, and is refused
+rather than filed. An answer carrying no usable JSON object is what triggers the runner's schema
+retry — which on this provider is worded to say "no `$schema`, no `title`, no surrounding text
+or code fence", as it is for `provider: acp` — and because the CLI reads nothing from stdin,
+that retry goes into a fresh process with `--resume <chatId>` rather than a second message on
+the same session.
 
 **Environment.** `CURSOR_API_KEY`, `CURSOR_AUTH_TOKEN`, `CURSOR_API_ENDPOINT`, `CURSOR_API_URL`,
 `CURSOR_DATA_DIR` and `CURSOR_STATSIG_OVERRIDES` are stripped from the agent's environment, one
@@ -1989,15 +2012,24 @@ leaving it set would send your Cursor login to whatever host it names — the sa
 `HOME` in particular is left alone, because on macOS the login lives in the login keychain and
 moving `HOME` would take it with it.
 
+`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NODE_EXTRA_CA_CERTS` (and their lowercase
+spellings) are **passed through**, as they are for every other adapter: behind a corporate proxy
+they are the only way the CLI reaches `api2.cursor.sh` at all. They are reported rather than
+removed — one `EvSystem` notice naming them at session start, and a `cursor proxy` warning row
+in `sirdar doctor` when any is set — because what they mean is that whatever terminates the TLS
+can read the ticket in the prompt and the answer that comes back. Neither the notice nor the row
+carries the value, since a proxy URL routinely carries credentials.
+
 **Models.** `cursor-agent --list-models` lists 200-odd ids, and a **Free plan may only use
 `auto`** — a named model is refused with an `ActionRequiredError` before the first token, and the
 session dies at exit 1 with no result line. `sirdar doctor`'s `cursor model` row reads your
 account tier from `cursor-agent about` and fails when the configured model and the plan cannot
 work together, which is cheaper than finding out mid-run.
 
-`sirdar doctor` reports five rows for this provider: `cursor-agent --version`,
-`cursor-agent status` (logged in or not — never the account email, which would otherwise end up
-pasted into a ticket), `cursor model`, the `cursor fix` refusal, and `cursor mcp`.
+`sirdar doctor` reports five rows for this provider — `cursor-agent --version`,
+`cursor-agent status` (logged in or not, and on failure the error alone: the account email would
+otherwise end up pasted into a ticket), `cursor model`, the `cursor fix` refusal, and
+`cursor mcp` — plus a sixth, `cursor proxy`, when a proxy variable is set.
 
 `docs/research/11-cursor-wire-formats.md` has the captured wire shapes, the exit codes, the tool
 name list, and one finding this adapter does not yet use: Cursor supports `preToolUse` hooks,

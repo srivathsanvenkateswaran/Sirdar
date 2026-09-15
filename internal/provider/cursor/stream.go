@@ -177,8 +177,11 @@ func resultEvents(l streamLine, raw []byte) []provider.Event {
 // toolCallEvents renders one tool_call line. The tool's identity is the
 // single key of the tool_call object — "editToolCall", "shellToolCall" —
 // rather than a name field, so the key is what names the event.
+//
+// A completed line for an excluded tool is also where a read-only breach
+// is noticed; see breachOf.
 func toolCallEvents(l streamLine, raw []byte) []provider.Event {
-	name, body := toolOf(l.ToolCall)
+	name, key, body := toolOf(l.ToolCall)
 	switch l.Subtype {
 	case "started":
 		ev := newEvent(provider.EvToolStarted, raw)
@@ -190,13 +193,142 @@ func toolCallEvents(l streamLine, raw []byte) []provider.Event {
 		ev.Tool = name
 		ev.Input = body.Result
 		ev.Text = resultSummary(body.Result)
-		return []provider.Event{ev}
+		events := []provider.Event{ev}
+		if breach := breachOf(name, key, body, raw); breach != nil {
+			events = append(events, *breach)
+		}
+		return events
 	default:
 		ev := newEvent(provider.EvSystem, raw)
 		ev.Tool = name
 		ev.Text = "tool_call " + l.Subtype
 		return []provider.Event{ev}
 	}
+}
+
+// excludedToolCalls is the set of tool-call names a read-only session
+// passed to --exclude-tools, keyed the way the wire spells them once
+// normalised. It is derived from writeTools rather than restated, so the
+// tools the session refuses and the tools whose completion is a breach
+// cannot drift apart.
+var excludedToolCalls = func() map[string]bool {
+	m := make(map[string]bool, len(writeTools))
+	for _, name := range writeTools {
+		m[name] = true
+	}
+	return m
+}()
+
+// breachOf is this adapter's substitute for a permission policy, and the
+// counterpart of what the agy adapter does with a completed write.
+//
+// Sirdar cannot judge a Cursor tool call: print mode is its own approver,
+// there is no control channel to answer, and the first Sirdar hears of an
+// edit or a shell command is the line saying it finished. Every one of
+// these tools was named on --exclude-tools and the session was started in
+// a read-only --mode, so a completed one means both of those failed —
+// which is the read-only guarantee the run was started under, gone. That
+// is not something a run can note and carry on from, so it becomes an
+// EvBreach: the run layer cancels the session, kills the process group,
+// and fails the run without filing a note or a register row.
+//
+// A rejected result is the opposite outcome and the ordinary one: the tool
+// call was refused, nothing happened, and the session goes on. An errored
+// or successful one both mean the call reached the tool.
+func breachOf(name, key string, body toolBody, raw []byte) *provider.Event {
+	if !excludedToolCalls[toolCallName(key)] {
+		return nil
+	}
+	outcome, ok := parseOutcome(body.Result)
+	if ok && outcome.Rejected != nil {
+		return nil
+	}
+
+	headline := "read-only breach: " + name
+	if subject := subjectOf(body); subject != "" {
+		headline += " " + oneLine(subject)
+	}
+	ev := newEvent(provider.EvBreach, raw)
+	ev.Tool = name
+	ev.Input = body.Result
+	ev.Text = headline + "\na triage session completed " + name + ", which this session excluded: " +
+		toolCallName(key) + " is passed to --exclude-tools on every read-only run and --mode " +
+		"ask|plan is supposed to decline it as well. Sirdar cannot mediate a Cursor tool call — " +
+		"`cursor-agent -p` approves its own — so this run is ended rather than filed. Check " +
+		"whether the account's plan honours --exclude-tools, and whether ~/.cursor holds a rule " +
+		"that widened the session; Sirdar can neither see nor override that file"
+	return &ev
+}
+
+// toolCallName turns a wire key into the --exclude-tools spelling of the
+// same tool: "editToolCall" becomes "edit_tool_call", "switchModeToolCall"
+// becomes "switch_mode_tool_call". A key already written in snake case is
+// left as it is, so both spellings of switch_mode land on one name.
+func toolCallName(key string) string {
+	base := strings.TrimSuffix(key, "ToolCall")
+	if base == "" || base == key {
+		return ""
+	}
+	var out strings.Builder
+	for i, r := range base {
+		if unicode.IsUpper(r) {
+			if i > 0 && out.Len() > 0 && !strings.HasSuffix(out.String(), "_") {
+				out.WriteByte('_')
+			}
+			out.WriteRune(unicode.ToLower(r))
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String() + "_tool_call"
+}
+
+// subjectOf is what the tool call acted on, for the breach to name: the
+// path an edit wrote or the command a shell ran. The arguments carry it on
+// the started line and usually on the completed one too, but a completed
+// line can elide them (the capture in
+// docs/research/11-cursor-wire-formats.md shows a rejected shell call
+// carrying only its result), so the result is read as well.
+func subjectOf(body toolBody) string {
+	if s := argsSubject(body.Args); s != "" {
+		return s
+	}
+	outcome, ok := parseOutcome(body.Result)
+	if !ok {
+		return ""
+	}
+	if outcome.Rejected != nil {
+		return firstNonEmpty(outcome.Rejected.Path, outcome.Rejected.Command)
+	}
+	return argsSubject(outcome.Success)
+}
+
+// argsSubject reads a path or a command out of a tool call's arguments.
+func argsSubject(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var args struct {
+		Path       string `json:"path"`
+		TargetFile string `json:"targetFile"`
+		Command    string `json:"command"`
+		ToModeID   string `json:"toModeId"`
+	}
+	if err := json.Unmarshal(raw, &args); err != nil {
+		return ""
+	}
+	return firstNonEmpty(args.Path, args.TargetFile, args.Command, args.ToModeID)
+}
+
+// oneLine flattens a multi-line command into something a run's terminal
+// reason can carry on one line.
+func oneLine(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	const max = 120
+	if len(s) > max {
+		s = s[:max] + "…"
+	}
+	return s
 }
 
 // toolBody is the part of a tool_call's payload the adapter reads.
@@ -206,16 +338,18 @@ type toolBody struct {
 }
 
 // toolOf finds the one "<name>ToolCall" key in a tool_call object and
-// returns a display name for it plus its body. An object carrying no such
-// key — a shape a later CLI adds — yields the name "tool" rather than an
-// error, because a tool Sirdar cannot name is still a tool it must report.
-func toolOf(rawCall json.RawMessage) (string, toolBody) {
+// returns a display name for it, the key itself, and its body. An object
+// carrying no such key — a shape a later CLI adds — yields the name "tool"
+// rather than an error, because a tool Sirdar cannot name is still a tool
+// it must report. The raw key comes back too because the breach check
+// matches on the --exclude-tools spelling, not on the display name.
+func toolOf(rawCall json.RawMessage) (string, string, toolBody) {
 	if len(rawCall) == 0 {
-		return "tool", toolBody{}
+		return "tool", "", toolBody{}
 	}
 	var fields map[string]json.RawMessage
 	if err := json.Unmarshal(rawCall, &fields); err != nil {
-		return "tool", toolBody{}
+		return "tool", "", toolBody{}
 	}
 	for key, value := range fields {
 		if !strings.HasSuffix(key, "ToolCall") {
@@ -223,42 +357,70 @@ func toolOf(rawCall json.RawMessage) (string, toolBody) {
 		}
 		var body toolBody
 		_ = json.Unmarshal(value, &body)
-		return displayName(strings.TrimSuffix(key, "ToolCall")), body
+		return displayName(strings.TrimSuffix(key, "ToolCall")), key, body
 	}
-	return "tool", toolBody{}
+	return "tool", "", toolBody{}
 }
 
 // displayName turns "edit" into "Edit" and "webFetch" into "WebFetch", so a
 // tool reads the way the other providers' tools do in a run's event log.
+// Snake-cased keys are folded the same way — "switch_mode" reads
+// "SwitchMode" — so one tool does not appear under two names depending on
+// how the CLI spelled it.
 func displayName(name string) string {
 	if name == "" {
 		return "tool"
 	}
-	r := []rune(name)
-	r[0] = unicode.ToUpper(r[0])
-	return string(r)
+	var out strings.Builder
+	for _, part := range strings.Split(name, "_") {
+		if part == "" {
+			continue
+		}
+		r := []rune(part)
+		r[0] = unicode.ToUpper(r[0])
+		out.WriteString(string(r))
+	}
+	if out.Len() == 0 {
+		return "tool"
+	}
+	return out.String()
+}
+
+// toolOutcome is how a finished tool call ended: refused before it ran,
+// attempted and failed, or done.
+type toolOutcome struct {
+	Rejected *struct {
+		Reason  string `json:"reason"`
+		Command string `json:"command"`
+		Path    string `json:"path"`
+	} `json:"rejected"`
+	Error *struct {
+		Message string `json:"message"`
+		Error   string `json:"error"`
+	} `json:"error"`
+	Success json.RawMessage `json:"success"`
+}
+
+// parseOutcome reads a completed tool call's result. The second return is
+// false when there is nothing to read, which the breach check treats as
+// "not a refusal" rather than as "refused".
+func parseOutcome(rawResult json.RawMessage) (toolOutcome, bool) {
+	var outcome toolOutcome
+	if len(rawResult) == 0 {
+		return outcome, false
+	}
+	if err := json.Unmarshal(rawResult, &outcome); err != nil {
+		return toolOutcome{}, false
+	}
+	return outcome, true
 }
 
 // resultSummary says how a finished tool call ended. A refused call is the
 // one outcome worth a sentence: the reason the CLI reports is the reason
 // the model was given, so it is what an operator reading the log needs.
 func resultSummary(rawResult json.RawMessage) string {
-	if len(rawResult) == 0 {
-		return ""
-	}
-	var outcome struct {
-		Rejected *struct {
-			Reason  string `json:"reason"`
-			Command string `json:"command"`
-			Path    string `json:"path"`
-		} `json:"rejected"`
-		Error *struct {
-			Message string `json:"message"`
-			Error   string `json:"error"`
-		} `json:"error"`
-		Success json.RawMessage `json:"success"`
-	}
-	if err := json.Unmarshal(rawResult, &outcome); err != nil {
+	outcome, ok := parseOutcome(rawResult)
+	if !ok {
 		return ""
 	}
 	switch {
@@ -304,42 +466,109 @@ func messageText(content json.RawMessage) string {
 //
 // The CLI has no --json-schema flag and no structured-output field: the
 // schema goes in the prompt and the answer comes back as prose-or-JSON. So
-// the answer is read leniently — a ```json fence is stripped, and the
-// outermost balanced {...} is taken out of whatever surrounds it — and a
-// text that carries no JSON object yields nothing, which is what makes the
-// runner's schema retry fire.
+// the answer is read leniently, and a text that carries no JSON object
+// yields nothing, which is what makes the runner's schema retry fire.
+//
+// Which object, when a text carries several, is decided by what a model
+// answering a prompt-carried schema actually does. It restates the schema,
+// or shows a worked example, and then gives the answer — so the LAST
+// candidate is the answer and the earlier ones are working. Fenced blocks
+// are searched before bare text for the same reason: a model that fences
+// anything fences its answer.
+//
+// A candidate whose only top-level keys are $schema and title is the
+// schema's own header quoted back rather than an answer, and is refused so
+// the retry fires instead of a run filing a note that says nothing.
 func extractJSON(text string) json.RawMessage {
-	s := strings.TrimSpace(stripFence(text))
-	start := strings.IndexByte(s, '{')
-	if start < 0 {
-		return nil
+	for _, candidate := range jsonCandidates(text) {
+		if !json.Valid(candidate) || isSchemaEcho(candidate) {
+			continue
+		}
+		return json.RawMessage(candidate)
 	}
-	end := matchingBrace(s, start)
-	if end < 0 {
-		return nil
-	}
-	candidate := s[start : end+1]
-	if !json.Valid([]byte(candidate)) {
-		return nil
-	}
-	return json.RawMessage(candidate)
+	return nil
 }
 
-// stripFence removes a leading ```/```json fence and its closing partner.
-func stripFence(text string) string {
-	s := strings.TrimSpace(text)
-	if !strings.HasPrefix(s, "```") {
-		return s
+// jsonCandidates lists the objects a text offers, best first: every
+// top-level object inside a fenced block, last fence first and last object
+// within it first, and then every top-level object in the text as a whole,
+// last first.
+func jsonCandidates(text string) [][]byte {
+	var out [][]byte
+	blocks := fencedBlocks(text)
+	for i := len(blocks) - 1; i >= 0; i-- {
+		out = append(out, topLevelObjects(blocks[i])...)
 	}
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		s = s[i+1:]
-	} else {
-		return s
+	return append(out, topLevelObjects(text)...)
+}
+
+// topLevelObjects returns the balanced {...} runs of s that are not nested
+// inside another, last first.
+func topLevelObjects(s string) [][]byte {
+	var found [][]byte
+	for i := 0; i < len(s); {
+		start := strings.IndexByte(s[i:], '{')
+		if start < 0 {
+			break
+		}
+		start += i
+		end := matchingBrace(s, start)
+		if end < 0 {
+			break
+		}
+		found = append(found, []byte(s[start:end+1]))
+		i = end + 1
 	}
-	if i := strings.LastIndex(s, "```"); i >= 0 {
-		s = s[:i]
+	for l, r := 0, len(found)-1; l < r; l, r = l+1, r-1 {
+		found[l], found[r] = found[r], found[l]
 	}
-	return strings.TrimSpace(s)
+	return found
+}
+
+// fencedBlocks returns the bodies of the ```…``` blocks in text, in the
+// order they appear. An unterminated fence yields the rest of the text,
+// because a truncated answer is still worth reading.
+func fencedBlocks(text string) []string {
+	var out []string
+	rest := text
+	for {
+		open := strings.Index(rest, "```")
+		if open < 0 {
+			return out
+		}
+		rest = rest[open+3:]
+		// The rest of the opening line is the info string ("json"), not
+		// content.
+		nl := strings.IndexByte(rest, '\n')
+		if nl < 0 {
+			return append(out, rest)
+		}
+		rest = rest[nl+1:]
+		shut := strings.Index(rest, "```")
+		if shut < 0 {
+			return append(out, rest)
+		}
+		out = append(out, rest[:shut])
+		rest = rest[shut+3:]
+	}
+}
+
+// isSchemaEcho reports whether doc is the prompt's own JSON Schema header
+// quoted back instead of an answer. Only the degenerate case is refused —
+// an object whose entire top level is $schema and/or title — because
+// anything richer may be a real answer whose fields happen to include one
+// of those names.
+func isSchemaEcho(doc []byte) bool {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(doc, &fields); err != nil || len(fields) == 0 {
+		return false
+	}
+	for key := range fields {
+		if key != "$schema" && key != "title" {
+			return false
+		}
+	}
+	return true
 }
 
 // matchingBrace returns the index of the '}' closing the '{' at start,

@@ -14,6 +14,9 @@
 //     into the operator's repository, so PermissionPolicy is never
 //     consulted: the read-only guarantee is the tool set and the execution
 //     mode instead, both enforced by Cursor's backend rather than here.
+//     What Sirdar can still do is notice that the guarantee failed — a
+//     completed edit or shell call becomes provider.EvBreach, which ends
+//     the run without a note (see breachOf in stream.go).
 //   - There is no --json-schema and no structured_output on the result
 //     line. The schema goes in the prompt and the answer is read out of the
 //     result text, leniently; a text carrying no JSON object is what makes
@@ -43,6 +46,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
@@ -134,6 +138,25 @@ var cursorEnvKeys = []string{
 	"CURSOR_API_URL",
 	"CURSOR_DATA_DIR",
 	"CURSOR_STATSIG_OVERRIDES",
+}
+
+// proxyEnvKeys are the variables that decide how the CLI's HTTPS traffic
+// leaves the machine and which certificates it will trust. They are NOT
+// stripped: on a corporate network they are the only way the CLI reaches
+// api2.cursor.sh at all, and removing them would turn a working workspace
+// into a session that fails before its first token.
+//
+// They are said out loud instead, once per session and once in `sirdar
+// doctor`, because what they mean is that a proxy the operator configured
+// terminates the session's TLS: the prompt Sirdar built out of a ticket,
+// and the agent's answer, are both readable there. That is a reasonable
+// thing to have set up and an unreasonable thing to discover afterwards.
+// The value is never reported — a proxy URL routinely carries credentials.
+var proxyEnvKeys = []string{
+	"HTTPS_PROXY",
+	"HTTP_PROXY",
+	"ALL_PROXY",
+	"NODE_EXTRA_CA_CERTS",
 }
 
 // Config is what a workspace configured under `cursor:`. Every field is
@@ -280,15 +303,50 @@ func childEnv(spec provider.SessionSpec) ([]string, []provider.Event) {
 	}
 	out := make([]string, 0, len(base))
 	var events []provider.Event
+	var proxied []string
 	for _, e := range base {
 		if name, ok := cursorEnvName(e); ok {
 			events = append(events, systemNotice("removed "+name+" from the agent environment: "+
 				"a Cursor session runs against the login the CLI already holds"))
 			continue
 		}
+		if name, ok := proxyEnvName(e); ok {
+			proxied = append(proxied, name)
+		}
 		out = append(out, e)
 	}
+	if len(proxied) > 0 {
+		events = append(events, systemNotice(proxyNotice(proxied)))
+	}
 	return out, events
+}
+
+// proxyNotice is what the operator is told about the proxy variables that
+// survived into the child. It names them and not their values.
+func proxyNotice(names []string) string {
+	return strings.Join(names, ", ") + " reached the agent unchanged: the Cursor CLI sends this " +
+		"session through that proxy and trusts those certificates, so whatever terminates the " +
+		"connection can read the prompt built from the ticket and the answer that comes back. " +
+		"Sirdar does not strip them, because on a network that needs them the session would " +
+		"otherwise not reach Cursor at all"
+}
+
+// proxyEnvName reports whether env entry e sets one of proxyEnvKeys,
+// returning the name as it was spelled. The lower-case spellings are
+// matched too: Node and the fetch stack inside the CLI read both, so
+// `https_proxy` is the same configuration under a different name.
+func proxyEnvName(e string) (string, bool) {
+	i := strings.IndexByte(e, '=')
+	if i <= 0 {
+		return "", false
+	}
+	name := e[:i]
+	for _, want := range proxyEnvKeys {
+		if strings.EqualFold(name, want) {
+			return name, true
+		}
+	}
+	return "", false
 }
 
 // cursorEnvName reports whether env entry e sets one of cursorEnvKeys,
@@ -311,6 +369,14 @@ func systemNotice(text string) provider.Event {
 	return ev
 }
 
+// SupportsFix is false, and is asked before `sirdar fix` does anything at
+// all. Start refuses a fix spec too, but by then the branch has been cut
+// and a worktree added for a session that was never going to run.
+func (p *Provider) SupportsFix() bool { return false }
+
+// FixRefusal is the reason, the same one Start gives.
+func (p *Provider) FixRefusal() error { return ErrFixUnsupported }
+
 // Start launches the CLI with the prompt as its positional argument.
 func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
 	if spec.Mode.IsFix() {
@@ -324,12 +390,17 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		binary = defaultBinary
 	}
 	// runCtx is the one cancellation path: Cancel() cancels it, and so
-	// does the caller's ctx. cmd.Cancel turns either into SIGINT, and
-	// WaitDelay escalates to SIGKILL if the process has not exited by
-	// then.
+	// does the caller's ctx.
+	//
+	// The whole process group is killed rather than the immediate child
+	// interrupted, because of what Cancel is now used for: a breach is a
+	// read-only guarantee that has already failed, and the session has to
+	// stop before the next tool call, not after a grace period the shell
+	// commands `cursor-agent` spawned would go on running through.
 	runCtx, cancelRun := context.WithCancel(ctx)
 	cmd := exec.CommandContext(runCtx, binary, p.args(spec, schemaPrompt(spec))...)
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
 	env, envNotices := childEnv(spec)
@@ -403,6 +474,9 @@ func (p *Provider) doctor(ctx context.Context, binary string, cfg provider.Docto
 	}
 
 	checks := []provider.Check{version, p.authCheck(ctx, binary), p.modelCheck(ctx, binary)}
+	if row, ok := proxyCheck(os.Environ()); ok {
+		checks = append(checks, row)
+	}
 	checks = append(checks, provider.Warn("cursor fix",
 		"`sirdar fix` is refused on this provider: "+shortFixReason()))
 	if withConfig {
@@ -420,7 +494,12 @@ func (p *Provider) authCheck(ctx context.Context, binary string) provider.Check 
 	text := firstLine(out)
 	switch {
 	case err != nil:
-		check.Detail = strings.TrimSpace(text + " " + err.Error())
+		// The error only. `cursor-agent status` prints the account's
+		// email address on its success path, and a failing invocation is
+		// no guarantee it printed nothing before failing — so the
+		// combined output never reaches a report that gets pasted into a
+		// ticket.
+		check.Detail = err.Error()
 	case strings.Contains(strings.ToLower(text), "logged in as"):
 		check.OK = true
 		check.Detail = "logged in"
@@ -475,6 +554,30 @@ func mcpCheck(cfg provider.DoctorConfig) provider.Check {
 		"CLI always merges ~/.cursor/mcp.json with the workspace's .cursor/mcp.json and has no "+
 		"flag that narrows the set; a workspace that declares no servers gets the MCP tools "+
 		"excluded instead")
+}
+
+// proxyCheck warns when the environment `sirdar doctor` runs in routes the
+// CLI's HTTPS traffic through a proxy or widens the certificates it
+// trusts. There is no row when none is set: a warning about a proxy that
+// is not there would be noise on every report.
+func proxyCheck(environ []string) (provider.Check, bool) {
+	var names []string
+	seen := map[string]bool{}
+	for _, e := range environ {
+		name, ok := proxyEnvName(e)
+		if !ok || seen[strings.ToUpper(name)] {
+			continue
+		}
+		seen[strings.ToUpper(name)] = true
+		names = append(names, name)
+	}
+	if len(names) == 0 {
+		return provider.Check{}, false
+	}
+	return provider.Warn("cursor proxy", strings.Join(names, ", ")+" is set and is passed through "+
+		"to the agent: the session's traffic to Cursor goes through that proxy, which can read "+
+		"the ticket in the prompt and the answer. Sirdar leaves them alone because removing them "+
+		"would break a workspace that needs them"), true
 }
 
 // shortFixReason is the one-line form of ErrFixUnsupported, for a doctor
@@ -611,9 +714,10 @@ func (s *session) Wait() (provider.Result, error) {
 }
 
 // Cancel stops the session through the same path as a cancelled context:
-// cmd.Cancel delivers SIGINT and cmd.WaitDelay escalates to SIGKILL if the
-// process is still alive after interruptGrace. It does not block; the
-// outcome shows up in Wait's Result.
+// cmd.Cancel kills the process group, so the shell commands the CLI
+// spawned go with it, and cmd.WaitDelay releases Wait from the pipes if
+// anything is still holding them after interruptGrace. It does not block;
+// the outcome shows up in Wait's Result.
 func (s *session) Cancel() { s.cancelRun() }
 
 // read consumes stdout until EOF, emitting one or more events per line.

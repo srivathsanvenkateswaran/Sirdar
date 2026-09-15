@@ -24,6 +24,45 @@ func TestExtractJSON(t *testing.T) {
 		{"unbalanced", `{"a":1`, ""},
 		{"invalid json", `{"a": undefined}`, ""},
 		{"empty", "", ""},
+
+		// A model answering a prompt-carried schema restates the schema,
+		// or works an example, and then answers. The answer is the last
+		// thing it says, so the last candidate is the one taken.
+		{
+			"two fences, the answer last",
+			"Here is the schema:\n```json\n{\"type\":\"object\"}\n```\nAnd my answer:\n```json\n{\"summary\":\"x\"}\n```",
+			`{"summary":"x"}`,
+		},
+		{
+			"two bare objects, the answer last",
+			"Example: {\"summary\":\"like this\"}\nActual: {\"summary\":\"the real one\"}",
+			`{"summary":"the real one"}`,
+		},
+		{
+			"a fence beats prose that follows it",
+			"```json\n{\"summary\":\"x\"}\n```\nLet me know if {\"this\":\"helps\"}.",
+			`{"summary":"x"}`,
+		},
+
+		// The schema's own header quoted back is not an answer. Refusing
+		// it is what makes the runner's schema retry fire instead of a
+		// note being filed over an empty document.
+		{"schema echo", `{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"TriageNote"}`, ""},
+		{"schema echo, $schema alone", `{"$schema":"https://json-schema.org/draft/2020-12/schema"}`, ""},
+		{
+			"schema echo then the answer",
+			"```json\n{\"$schema\":\"x\",\"title\":\"TriageNote\"}\n```\n```json\n{\"summary\":\"x\"}\n```",
+			`{"summary":"x"}`,
+		},
+		// Not an echo: a real answer may carry a title of its own, and
+		// only the degenerate all-header object is refused.
+		{"title with real fields", `{"title":"TriageNote","summary":"x"}`, `{"title":"TriageNote","summary":"x"}`},
+		// Nothing but the echo leaves the runner with no document, which
+		// is the retry, not a filed note.
+		{"schema echo only, in a fence", "```json\n{\"title\":\"TriageNote\"}\n```", ""},
+		// An invalid last candidate falls back to the valid earlier one
+		// rather than throwing the answer away.
+		{"invalid last, valid first", "{\"summary\":\"x\"}\nthen {\"a\": undefined}", `{"summary":"x"}`},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := string(extractJSON(tc.in))
@@ -46,7 +85,7 @@ func TestToolOfNamesTheToolByItsKey(t *testing.T) {
 		{`{"toolCallId":"x","startedAtMs":"1"}`, "tool"},
 		{`not json`, "tool"},
 	} {
-		if got, _ := toolOf([]byte(tc.in)); got != tc.want {
+		if got, _, _ := toolOf([]byte(tc.in)); got != tc.want {
 			t.Errorf("toolOf(%s) = %q, want %q", tc.in, got, tc.want)
 		}
 	}

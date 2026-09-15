@@ -53,6 +53,13 @@ func fakeCLI(script string) int {
 			fmt.Fprintln(os.Stderr, "ENV:"+name+"="+v)
 		}
 	}
+	// Proxy variables are reported by name only: the point is that they
+	// survived into the child, and a proxy URL carries credentials.
+	for _, name := range proxyEnvKeys {
+		if _, ok := os.LookupEnv(name); ok {
+			fmt.Fprintln(os.Stderr, "PROXY:"+name)
+		}
+	}
 
 	f, err := os.Open(script)
 	if err != nil {
@@ -679,4 +686,280 @@ func writeStub(t *testing.T, answers map[string]string) string {
 
 func shellQuote(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// --- read-only breaches ------------------------------------------------
+
+// collect sorts a session's events into the buckets the breach tests ask
+// about.
+func collect(events []provider.Event) (breaches, errs, finals []provider.Event) {
+	for _, ev := range events {
+		switch ev.Kind {
+		case provider.EvBreach:
+			breaches = append(breaches, ev)
+		case provider.EvError:
+			errs = append(errs, ev)
+		case provider.EvFinal:
+			finals = append(finals, ev)
+		}
+	}
+	return breaches, errs, finals
+}
+
+// TestCompletedEditIsABreach is the whole of what this adapter can do
+// about a write. Sirdar cannot refuse a Cursor tool call — print mode
+// approves its own — so the first it hears of an edit is the line saying
+// it finished, and the only honest response is to end the run over it.
+//
+// The run layer's half of this is pinned by
+// internal/run TestBreachEndsTheRunAndFilesNothing: an EvBreach cancels
+// the session and fails the run with the event's first line as the
+// reason, filing no note and no register row. So what is asserted here is
+// the contract that test depends on — the kind, the first line, the tool
+// — and that it is raised even though the session went on to produce a
+// perfectly good answer.
+func TestCompletedEditIsABreach(t *testing.T) {
+	script := writeScript(t, `{"type":"system","subtype":"init","session_id":"s-edit","model":"Auto"}
+{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"editToolCall":{"args":{"path":"/work/a.txt","streamContent":"hello\n"}},"toolCallId":"c1"},"model_call_id":"mc-1","session_id":"s-edit"}
+{"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"editToolCall":{"args":{"path":"/work/a.txt"},"result":{"success":{"path":"/work/a.txt","linesAdded":1,"message":"Wrote contents to /work/a.txt"}}},"toolCallId":"c1"},"model_call_id":"mc-1","session_id":"s-edit"}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"summary\":\"done\"}","session_id":"s-edit","usage":{"inputTokens":10,"outputTokens":2}}
+`)
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, script, nil))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, _ := drain(t, s)
+	breaches, errs, finals := collect(events)
+
+	if len(breaches) != 1 {
+		t.Fatalf("a completed edit was not raised as a breach: %+v", events)
+	}
+	breach := breaches[0]
+	if got := firstLine([]byte(breach.Text)); got != "read-only breach: Edit /work/a.txt" {
+		t.Errorf("breach reason %q", got)
+	}
+	if breach.Tool != "Edit" {
+		t.Errorf("breach tool %q", breach.Tool)
+	}
+	// A breach is not an error: the run layer counts errors towards a
+	// malformed-line threshold a run is meant to survive, and this is not
+	// something a run survives.
+	if len(errs) != 0 {
+		t.Errorf("a breach was also raised as an error: %+v", errs)
+	}
+	// The session had already answered. That answer is worth less than
+	// the fact that the guarantee failed, and the run layer refuses to
+	// file it — but the event still has to reach it for the reasons in
+	// handleFinal, so this only pins that the breach is not suppressed by
+	// a successful-looking session.
+	if len(finals) != 1 {
+		t.Errorf("final events %+v", finals)
+	}
+	// The breach must say where to look, since the widening is in a file
+	// Sirdar cannot read.
+	if !strings.Contains(breach.Text, "--exclude-tools") {
+		t.Errorf("the breach does not name what failed: %q", breach.Text)
+	}
+}
+
+// TestRejectedEditIsNotABreach is the ordinary outcome and the one the
+// whole read-only guarantee rests on: the tool was refused, nothing was
+// written, and the session carries on to answer.
+func TestRejectedEditIsNotABreach(t *testing.T) {
+	script := writeScript(t, `{"type":"system","subtype":"init","session_id":"s-rej","model":"Auto"}
+{"type":"tool_call","subtype":"started","call_id":"c1","tool_call":{"editToolCall":{"args":{"path":"/work/a.txt"}},"toolCallId":"c1"},"model_call_id":"mc-1","session_id":"s-rej"}
+{"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"editToolCall":{"result":{"rejected":{"path":"/work/a.txt","reason":"tool not available in ask mode","isReadonly":false}}},"toolCallId":"c1"},"model_call_id":"mc-1","session_id":"s-rej"}
+{"type":"result","subtype":"success","is_error":false,"result":"{\"summary\":\"done\"}","session_id":"s-rej","usage":{"inputTokens":10,"outputTokens":2}}
+`)
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, script, nil))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, res := drain(t, s)
+	breaches, _, finals := collect(events)
+
+	if len(breaches) != 0 {
+		t.Fatalf("a refused edit was reported as a breach: %+v", breaches)
+	}
+	if len(finals) != 1 {
+		t.Fatalf("the session did not answer: %+v", events)
+	}
+	if string(res.Final) != `{"summary":"done"}` {
+		t.Errorf("final %q", res.Final)
+	}
+	// The refusal still reaches the operator, because it is the only
+	// evidence on this provider that the read-only mode did its job.
+	var summary string
+	for _, ev := range events {
+		if ev.Kind == provider.EvToolFinished {
+			summary = ev.Text
+		}
+	}
+	if summary != "rejected: tool not available in ask mode" {
+		t.Errorf("tool summary %q", summary)
+	}
+}
+
+// TestCompletedSwitchModeIsABreach covers the tool that would end the
+// read-only guarantee without writing anything: the model has a tool for
+// changing its own execution mode, and an ask-mode session that completed
+// one is no longer an ask-mode session.
+func TestCompletedSwitchModeIsABreach(t *testing.T) {
+	for _, key := range []string{"switchModeToolCall", "switch_modeToolCall"} {
+		t.Run(key, func(t *testing.T) {
+			script := writeScript(t, `{"type":"system","subtype":"init","session_id":"s-mode"}
+{"type":"tool_call","subtype":"completed","call_id":"c1","tool_call":{"`+key+`":{"args":{"fromModeId":"ask","toModeId":"agent"},"result":{"success":{"autoApproved":true}}},"toolCallId":"c1"},"model_call_id":"mc-1","session_id":"s-mode"}
+{"type":"result","subtype":"success","is_error":false,"result":"{}","session_id":"s-mode","usage":{"inputTokens":1,"outputTokens":1}}
+`)
+			p := New()
+			s, err := p.Start(context.Background(), fakeSpec(t, script, nil))
+			if err != nil {
+				t.Fatalf("start: %v", err)
+			}
+			events, _ := drain(t, s)
+			breaches, _, _ := collect(events)
+			if len(breaches) != 1 {
+				t.Fatalf("a completed switch_mode was not raised as a breach: %+v", events)
+			}
+			if got := firstLine([]byte(breaches[0].Text)); !strings.HasPrefix(got, "read-only breach: SwitchMode") {
+				t.Errorf("breach reason %q", got)
+			}
+			if !strings.Contains(breaches[0].Text, "switch_mode_tool_call") {
+				t.Errorf("the breach does not name the excluded tool: %q", breaches[0].Text)
+			}
+		})
+	}
+}
+
+// TestCompletedReadIsNotABreach keeps the watch off the tools a triage
+// session is there to use.
+func TestCompletedReadIsNotABreach(t *testing.T) {
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl", nil))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, _ := drain(t, s)
+	if breaches, _, _ := collect(events); len(breaches) != 0 {
+		t.Errorf("the baseline script raised a breach: %+v", breaches)
+	}
+}
+
+// TestFixIsRefusedBeforeGit pins the early half of the refusal.
+// provider.RefuseFix is asked by `sirdar fix` before it fetches the
+// default branch, cuts a branch or adds a worktree, so a workspace that
+// names this provider is left exactly as the operator had it.
+func TestFixIsRefusedBeforeGit(t *testing.T) {
+	p := New()
+	fs, ok := p.(provider.FixSupport)
+	if !ok {
+		t.Fatal("the provider does not implement FixSupport, so `sirdar fix` would cut a branch first")
+	}
+	if fs.SupportsFix() {
+		t.Error("SupportsFix is true")
+	}
+	err := provider.RefuseFix(p)
+	if !errors.Is(err, ErrFixUnsupported) {
+		t.Errorf("RefuseFix = %v, want ErrFixUnsupported", err)
+	}
+}
+
+// --- proxy variables ---------------------------------------------------
+
+// TestProxyVariablesPassThroughAndAreReported covers the environment
+// Sirdar deliberately does not touch: on a network that needs a proxy,
+// stripping these would leave a session that never reaches Cursor. What
+// they cost is that whatever terminates the TLS can read the ticket, so
+// they are said out loud instead — by name, never by value.
+func TestProxyVariablesPassThroughAndAreReported(t *testing.T) {
+	p := New()
+	spec := fakeSpec(t, "testdata/script-basic.jsonl", func(s *provider.SessionSpec) {
+		s.Env = append(s.Env,
+			"HTTPS_PROXY=http://user:hunter2@proxy.corp:3128",
+			"NODE_EXTRA_CA_CERTS=/etc/ssl/corp.pem",
+		)
+	})
+	s, err := p.Start(context.Background(), spec)
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, res := drain(t, s)
+
+	var reached []string
+	for _, line := range res.StderrTail {
+		if strings.HasPrefix(line, "PROXY:") {
+			reached = append(reached, strings.TrimPrefix(line, "PROXY:"))
+		}
+	}
+	if fmt.Sprint(reached) != "[HTTPS_PROXY NODE_EXTRA_CA_CERTS]" {
+		t.Errorf("the proxy variables did not reach the child: %v", reached)
+	}
+
+	var notice string
+	for _, ev := range events {
+		if ev.Kind == provider.EvSystem && strings.Contains(ev.Text, "HTTPS_PROXY") {
+			notice = ev.Text
+		}
+	}
+	if notice == "" {
+		t.Fatalf("no notice that a proxy is in the path: %+v", events)
+	}
+	if !strings.Contains(notice, "NODE_EXTRA_CA_CERTS") {
+		t.Errorf("the notice does not name every variable: %q", notice)
+	}
+	if strings.Contains(notice, "hunter2") || strings.Contains(notice, "proxy.corp") {
+		t.Errorf("the notice carried the proxy URL: %q", notice)
+	}
+	// And they are not stripped as the CURSOR_* variables are.
+	if strings.Contains(notice, "removed ") {
+		t.Errorf("a proxy variable was reported as removed: %q", notice)
+	}
+}
+
+// TestProxyDoctorRow covers the same finding on the report an operator
+// reads before a run rather than during one, and its absence when there is
+// nothing to warn about.
+func TestProxyDoctorRow(t *testing.T) {
+	row, ok := proxyCheck([]string{"PATH=/usr/bin", "https_proxy=http://user:hunter2@proxy.corp:3128"})
+	if !ok {
+		t.Fatal("no proxy row although https_proxy is set")
+	}
+	if row.Severity() != provider.LevelWarn {
+		t.Errorf("proxy row %+v: a proxy is a warning, not a failure", row)
+	}
+	if !strings.Contains(row.Detail, "https_proxy") {
+		t.Errorf("proxy row %+v does not name the variable", row)
+	}
+	if strings.Contains(row.Detail, "hunter2") {
+		t.Errorf("proxy row %+v carries the value", row)
+	}
+	if _, ok := proxyCheck([]string{"PATH=/usr/bin"}); ok {
+		t.Error("a proxy row appeared with no proxy set")
+	}
+}
+
+// TestDoctorStatusFailureReportsTheErrorOnly keeps `cursor-agent status`
+// output out of a failing row. Its success path prints the account's email
+// address, doctor reports get pasted into tickets, and a non-zero exit is
+// no promise that nothing was printed first.
+func TestDoctorStatusFailureReportsTheErrorOnly(t *testing.T) {
+	binary := writeStub(t, map[string]string{"--version": "2026.09.10-fd3934a"})
+	for _, c := range New().Doctor(context.Background(), binary) {
+		if c.Name != "cursor-agent status" {
+			continue
+		}
+		if c.OK {
+			t.Fatalf("status row %+v: the stub exits 9 on `status`", c)
+		}
+		if strings.Contains(c.Detail, "@") || strings.Contains(c.Detail, "Logged in") {
+			t.Errorf("status row %+v carries the command's output", c)
+		}
+		if !strings.Contains(c.Detail, "exit status") {
+			t.Errorf("status row %+v does not carry the error", c)
+		}
+		return
+	}
+	t.Error("no status row")
 }

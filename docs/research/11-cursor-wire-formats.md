@@ -46,9 +46,10 @@ call**, exit 1, nothing on stdout:
     • Pass --trust, --yolo, or -f if you trust this directory
 ```
 
-Trust is persisted per directory, so a machine where the operator has already used Cursor in
-that repository will not show this — which is exactly why the flag has to be passed
-unconditionally rather than relied on being unnecessary.
+Trust is persisted per directory, in the operator's own `~/.cursor` state, so a machine where
+the operator has already used Cursor in that repository will not show this — which is exactly
+why the flag has to be passed unconditionally rather than relied on being unnecessary. Passing
+it records the workspace path as trusted there.
 
 ### The free plan can only use Auto
 
@@ -193,8 +194,7 @@ answer and nothing to refuse: in print mode the CLI is its own approver.
 
 So `--force` / `--yolo` ("Force allow commands unless explicitly denied") changes nothing that
 matters for a print-mode session's writes; read off the bundle it sets a `force` flag consulted
-by the interactive approval UI and by deny-rule matching. Sirdar passes it only in fix mode, and
-only to say plainly that the session is meant to write.
+by the interactive approval UI and by deny-rule matching. Sirdar never passes it.
 
 ### `--sandbox enabled`
 
@@ -361,7 +361,7 @@ is the opposite of what a read-only run wants; Sirdar never passes it.
 
 | Variable | What it does | Sirdar |
 |---|---|---|
-| `CURSOR_API_KEY` | API-key auth instead of the login | **stripped** unless the workspace configured a key; `apiKeySource` on the `init` line reports which was used |
+| `CURSOR_API_KEY` | API-key auth instead of the login | **stripped**; `apiKeySource` on the `init` line reports which credential was used |
 | `CURSOR_API_ENDPOINT` | equivalent to `-e/--endpoint`, default `https://api2.cursor.sh` | **stripped**; a workspace cannot configure an endpoint override, for the reason `ANTHROPIC_BASE_URL` is stripped under subscription billing — a login credential would be sent to whatever host it names |
 | `CURSOR_AUTH_TOKEN` | raw auth token | **stripped** |
 | `CURSOR_DATA_DIR` | relocates `~/.cursor` state | **stripped**, so a session reads the login the operator's CLI actually holds |

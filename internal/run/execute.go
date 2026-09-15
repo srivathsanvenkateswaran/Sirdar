@@ -28,10 +28,12 @@ const maxMalformed = 10
 // as prompt text, so nothing stops it from echoing the schema's own header
 // back, or answering with the schema itself. Claude and Qwen pass it as a
 // CLI flag their own process enforces, Codex as a protocol param its agent
-// enforces, and the openai loop as a tool-call parameter schema; ACP has
-// none of those, so it alone gets the sharpened retry and prompt wording.
+// enforces, and the openai loop as a tool-call parameter schema; ACP and
+// cursor have none of those, so they get the sharpened retry and prompt
+// wording.
 var noWireSchemaEnforcement = map[string]bool{
-	"acp": true,
+	"acp":    true,
+	"cursor": true,
 }
 
 // maxEmptyTurns is how many turns may end with no answer before the run is
@@ -649,6 +651,16 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 	switch ev.Kind {
 	case provider.EvToolStarted:
 		fmt.Fprintf(w, "[%s] tool %s%s\n", key, ev.Tool, toolDetail(ev.Input))
+	case provider.EvToolFinished:
+		// How a tool call ended, where the provider said something worth
+		// repeating. On cursor that is the only place a refusal shows up
+		// — there is no permission event to print, so without this line
+		// an operator watching a run cannot tell a tool that was refused
+		// from one that ran. The summary is cut to one short line
+		// because other adapters put the tool's whole output in Text.
+		if summary := toolSummary(ev.Text); summary != "" {
+			fmt.Fprintf(w, "[%s] tool %s %s\n", key, ev.Tool, summary)
+		}
 	case provider.EvPermission:
 		verb := "allow"
 		if ev.Decision == "deny" {
@@ -672,6 +684,20 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 			fmt.Fprintf(w, "[%s] %s\n", key, ev.Text)
 		}
 	}
+}
+
+// toolSummary is a finished tool call's outcome, in a form a progress line
+// can carry: one line, cut short, and nothing at all for the ordinary
+// success every read tool reports.
+func toolSummary(text string) string {
+	s := firstLine(text)
+	if s == "" || s == "ok" {
+		return ""
+	}
+	if len(s) > toolDetailMax {
+		s = s[:toolDetailMax] + "…"
+	}
+	return s
 }
 
 const toolDetailMax = 60
