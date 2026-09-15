@@ -29,12 +29,15 @@ binary);
 hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
 execution mode rather than by a policy Sirdar enforces — a write or a command that
 completes anyway ends the session and fails the run, and `sirdar fix` is refused
-before it cuts a branch; `provider: agy` drives Google's
-Antigravity CLI against the operator's own Google account, triage and rca only — that CLI
-gives a parent process no way to mediate a tool call, so the read-only guarantee is its own
-plan mode plus a watch that fails the run: a write or a command that completes ends the
-session and files nothing. `mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is
-refused before it cuts a branch.
+before it cuts a branch; `provider: agy` drives Google's Antigravity CLI against the
+operator's own Google account, triage and rca only — that CLI gives a parent process no
+way to mediate a tool call, so permissions are set for the session in a project file
+Sirdar writes under `~/.gemini/config/projects` and deletes when the run ends (a read
+allowed, every write, command and URL fetch denied), on top of the CLI's own plan mode,
+plus a watch that fails the run: a write or a command that completes ends the session
+and files nothing, and so does a session that completed no read at all.
+`mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is refused before it cuts
+a branch.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,

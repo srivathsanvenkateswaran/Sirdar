@@ -1107,13 +1107,15 @@ whatever point the provider offers to be asked.
   registered and allowed (no destination to judge).
 - **agy** — none of the three lists reaches this provider at all, and that is not an oversight.
   Google's Antigravity CLI offers no point at which a host can be asked: a headless run
-  auto-denies whatever needs approval and decides everything else from files Sirdar does not
-  own. What Sirdar does instead is start every session in `--mode plan`, report the CLI's own
-  refusals as `EvPermission` lines with a `deny` decision, and raise an `EvBreach` when a write
-  or a shell command *completes* in a triage session — which ends the run `failed` and files
-  nothing, because a guarantee that did not hold cannot be carried as a warning on a note that
-  claims it did. `sirdar fix` is refused on this provider for the same reason, before it cuts a
-  branch. See `provider: agy` below.
+  auto-denies whatever needs approval and decides everything else from files. What Sirdar does
+  instead is set the rules before the session starts — `--mode plan`, plus a project file of its
+  own allowing `read_file` and denying `write_file`, `command` and `execute_url`, which outranks
+  the operator's `settings.json` for the length of the run — then report the CLI's own refusals
+  as `EvPermission` lines with a `deny` decision, and raise an `EvBreach` when a write or a
+  shell command *completes* in a triage session, which ends the run `failed` and files nothing,
+  because a guarantee that did not hold cannot be carried as a warning on a note that claims it
+  did. A session that completed no read at all ends the run the same way. `sirdar fix` is
+  refused on this provider, before it cuts a branch. See `provider: agy` below.
 - **acp** — a permission request whose `kind` is `fetch` is judged as `WebFetch` against
   `permissions.fetch`, and the kind wins over the agent's own title, so an agent cannot route
   a fetch through the MCP rules by naming it `mcp__browser__get_page`. The URL is read out of
@@ -1597,13 +1599,78 @@ Sirdar runs:
 
 ```
 agy --output-format stream-json --input-format stream-json \
-    --disable-slash-commands --mode plan \
+    --mode plan --project sirdar-<16 hex> \
     --json-schema '<schema>' --model <model> [--effort <tier>] \
     [--print-timeout <budget.maxMinutes>m] [--conversation <id>] --print=
 ```
 
 `docs/research/10-antigravity-wire-formats.md` is the capture this is built on, and it marks
 every claim verified or inferred.
+
+#### How a session is allowed to read, and nothing else
+
+The Antigravity CLI grants permissions from files, not from a channel a parent process can
+answer. In a headless run anything needing approval is **auto-denied** — including reading a
+file — so a triage started with no rule anywhere reads nothing and answers the ticket from its
+description. The first live run on this provider did exactly that and filed a high-confidence
+note off a codebase it had never opened.
+
+Sirdar does not fix that by editing the operator's `~/.gemini/antigravity-cli/settings.json`:
+that file is shared with the Antigravity IDE and every other `agy` session, and a rule left
+there would outlive the run that needed it. It writes **its own project file** instead, which
+the CLI's own changelog says outranks `settings.json`:
+
+```
+~/.gemini/config/projects/sirdar-<16 hex>.json
+  permissionGrants.allow  read_file(*)
+  permissionGrants.deny   write_file(*), command(*), execute_url(*)
+  settings.autoExecutionPolicy  CASCADE_COMMANDS_AUTO_EXECUTION_OFF
+  settings.permissionPreset     AGENT_PERMISSION_PRESET_REQUEST_REVIEW
+```
+
+passed as `--project <id>`, and deleted when the run ends — on `Wait`, on `Cancel`, and on every
+failed start. A run killed hard enough to skip all three leaves the file behind, and the next
+session sweeps any `sirdar-*.json` older than 12 hours. Nothing of the operator's is ever a
+candidate: only files carrying that prefix are looked at.
+
+Three things about those rules are deliberate, and each costs something:
+
+- **The rule vocabulary has four verbs, not one per tool** — `read_file`, `write_file`,
+  `command`, `execute_url` — so "allow the read tools" is one rule covering `view_file`,
+  `grep_search`, `list_dir` and `find_by_name` together.
+- **The read allow is `read_file(*)`, not the workspace path.** Prefix matching is documented
+  for `command` and for nothing else, and a path-scoped rule read as a literal filename would
+  deny every read and put the run back where it started. So the session can read a file outside
+  the workspace. It can do nothing with one: every write, every command and every URL fetch is
+  denied, so a read that wanders has nowhere to go but the triage note.
+- **`run_command` stays denied**, and `permissions.bash` is not consulted. Sirdar cannot judge
+  an `agy` tool call, so a command allowed here would be a command judged by nobody. A triage
+  that needs to run something belongs on `provider: claude` or `provider: codex`.
+
+Verified live: under this file a `view_file` completes, and a `write_to_file` is refused with
+`Permission denied for write_file(…). Matches user-configured deny rule` — Sirdar's own rule,
+by name.
+
+#### Plan mode and slash commands
+
+Sirdar does **not** pass `--disable-slash-commands`, and the reason is worth knowing before
+adding it back. Plan mode in print mode is implemented as an expansion, so the two flags cancel
+each other; the CLI says so —
+
+```
+warning: --mode plan has no effect while slash command expansion is disabled.
+```
+
+— and a session carrying both runs in the CLI's **default** mode, which the research capture
+watched perform a write. Read-only mode off is a worse trade than expansion on, so expansion
+stays on.
+
+What that leaves reachable from ticket text is narrower than it sounds. The CLI's own slash
+commands are not available at all on this command line ("`/x` is answered by the CLI itself and
+is unavailable with `--input-format stream-json`"), so nothing in a ticket can change the
+session's model, log it out or enable a plugin. A user or workspace *skill* can still expand,
+and a skill that expanded into a write or a command is refused by the project rules above — and
+ends the run if it completes anyway.
 
 #### What this provider cannot do
 
@@ -1615,14 +1682,15 @@ else is decided by files Sirdar does not own: the operator's own
 `~/.gemini/antigravity-cli/settings.json`, a project file under `~/.gemini/config/projects/`,
 or a `.agents/hooks.json` inside the repository being triaged. Four consequences:
 
-- **The read-only guarantee is `--mode plan`, not a tool list.** Every Sirdar session passes it.
-  In the capture, plan mode refused a `write_to_file` naming an absolute path outside the
-  workspace; the CLI's default mode performed the same write without asking anyone. That is the
-  whole of the difference Sirdar can make. `permissions.bash`, `permissions.mcp` and
-  `permissions.fetch` are **not** consulted on this provider — by the time a tool call is
-  visible on the stream the CLI has already decided it, and there is no earlier point to stand
-  at. A `permissions.allow` rule in the operator's own settings file still applies to a headless
-  run, and Sirdar can neither see it nor override it.
+- **The read-only guarantee is `--mode plan` plus the session's project file, not a tool list.**
+  Every Sirdar session passes both. In the capture, plan mode refused a `write_to_file` naming
+  an absolute path outside the workspace; the CLI's default mode performed the same write
+  without asking anyone. The project file adds the part plan mode cannot: rules Sirdar chooses,
+  that outrank the operator's own `settings.json` for the length of the session.
+  `permissions.bash`, `permissions.mcp` and `permissions.fetch` are **not** consulted on this
+  provider — by the time a tool call is visible on the stream the CLI has already decided it,
+  and there is no earlier point to stand at. What Sirdar sets is a policy before the session
+  starts, not a judgement per call, which is why the watch below still exists.
 - **Sirdar watches instead, and a completed write fails the run.** A refusal the CLI makes is
   reported as a permission event with a `deny` decision, so a run's event log reads the way it
   does for a mediated provider. A write or a shell command that *completes* in a triage session
@@ -1652,6 +1720,16 @@ or a `.agents/hooks.json` inside the repository being triaged. Four consequences
   session will actually see; a session started with `mcp.workspaceOnly: true` also emits a
   system event saying the setting did not take. A workspace that needs that restriction should
   be driven by `provider: claude` or `provider: codex`, or the global file should be emptied.
+- **A session that read nothing does not file a note.** The failure this guards against is not
+  a write but a plausible answer: a run whose every read was refused still produces a note, and
+  a note written out of a ticket description is indistinguishable downstream from one built on
+  evidence. So a session that completed **no** read raises a verdict immediately ahead of its
+  answer, and the run ends `failed` with the reason
+  `the agent could read nothing (N reads denied)` — no note, no register row, the unfiled answer
+  kept in the run directory as `result.raw.txt`. A completed `find_by_name` or `list_dir` does
+  not count: listing filenames is not reading a file, and the first live run on this provider
+  had exactly that combination. What counts is `view_file`, `read_file`, `grep_search`,
+  `read_resource`, `read_url_content` and `read_browser_page`.
 - **`sirdar fix` is refused outright.** Letting `agy` write needs
   `--dangerously-skip-permissions`, which approves every tool including a write into
   `.git/hooks/pre-commit`, and `provider.FixPolicy`'s per-call path confinement — the thing that
@@ -1695,6 +1773,10 @@ run.
 [OK] agy --version — 1.2.3
 [OK] agy models — signed in, 15 models available
 [OK] agy model — gemini-3.6-flash-low
+[OK] agy read access — Sirdar writes one project file per session under
+     /Users/you/.gemini/config/projects granting read_file and denying write_file, command and
+     execute_url, passes it as --project, and deletes it when the run ends. Project rules
+     outrank ~/.gemini/antigravity-cli/settings.json
 [!!] agy settings — /Users/you/.gemini/antigravity-cli/settings.json — permissions.allow: none;
      permissions.deny: none; this workspace is in trustedWorkspaces
 [!!] agy mcp scope — the CLI loads ~/.gemini/config/mcp_config.json for every session and takes
@@ -1702,31 +1784,55 @@ run.
 [!!] agy fix mode — `sirdar fix` is refused on provider agy: …
 ```
 
-The last three are warnings, not failures: they never change an exit code, and they are there
-because the gaps are permanent properties of the CLI rather than something an operator can
-misconfigure.
+`agy mcp scope` and `agy fix mode` are warnings, not failures: they never change an exit code,
+and they are there because the gaps are permanent properties of the CLI rather than something
+an operator can misconfigure.
 
-The `agy settings` row is the one to read before a first run. It reads the CLI's own
-`settings.json` and lists `permissions.allow`, `permissions.deny` and `permissions.ask`, plus
-whether this workspace is in `trustedWorkspaces`. That file is where the read-only guarantee
-really rests: an `allow` rule added months ago for interactive use turns plan mode's refusal
-into a completed write, which Sirdar can only notice afterwards and fail the run over. Sirdar
-never writes to this file — reporting it is the whole of what it can do.
+**`agy read access` is a failure when it fails**, and it is the one row that stops a run. It
+tests the only thing Sirdar controls here: whether it can write its project file into
+`~/.gemini/config/projects`. If it cannot — no home directory, the path taken by a plain file,
+a directory it has no permission on — then nothing grants a read, and a triage on this provider
+is not a degraded triage but an agent answering a ticket from its description. The row names the
+rule an operator would have to add by hand to get one anyway:
+
+```
+# ~/.gemini/antigravity-cli/settings.json
+{
+  "permissions": {
+    "allow": ["read_file(*)"]
+  }
+}
+```
+
+`agy settings` reads the CLI's own `settings.json` and lists `permissions.allow`,
+`permissions.deny` and `permissions.ask`, plus whether this workspace is in
+`trustedWorkspaces`. It is normally a warning: an `allow` rule added months ago for interactive
+use is outranked by the session's project file, but it is still worth seeing, because a rule
+Sirdar's deny does not cover turns a refusal into a completed write that the run can only notice
+afterwards and fail over. It becomes a **failure** in one case: when Sirdar could not write its
+project file *and* this file allows no read either, so nothing at all grants the session a read.
+Sirdar never writes to this file — reporting it is the whole of what it can do.
 
 #### What has and has not been verified
 
 The wire format, the stdin message shape, the schema-plus-follow-up combination, plan mode's
 refusal of an out-of-workspace write, the headless auto-deny, `--conversation` resume and the
 exit codes were all watched on live runs against a real account
-(`docs/research/10-antigravity-wire-formats.md`). What has **not** been established: what
-`--sandbox` refuses that the permission layer would not; why one plan-mode `run_command`
-reported `DONE` with no side effect rather than a denial (the adapter fails closed on it, and
-the research note says what that costs); whether a `fileAccessPolicy: FILE_ACCESS_POLICY_DENY`
-written into a project file under `~/.gemini/config/projects/` is honoured in a headless run —
-the schema and its precedence are verified, the enforcement is not, and Sirdar does not write
-to that directory in any case; and how a workspace the operator has already trusted
-interactively behaves in the CLI's default mode — every write test ran in an untrusted
-temporary repository. No Sirdar triage has yet run end to end on this provider.
+(`docs/research/10-antigravity-wire-formats.md`). A second round added the two that matter most
+here: a project file's permission rules **are** honoured in a headless plan-mode run — a
+`view_file` completed under one and a `write_to_file` was refused by its own deny rule, by name
+— and a full `sirdar triage` has now run end to end on this provider, reading four files and
+being refused `go test ./...`, with no plan-mode warning on stderr and the project file gone
+when the run ended.
+
+What has **not** been established: what `--sandbox` refuses that the permission layer would not;
+why one plan-mode `run_command` reported `DONE` with no side effect rather than a denial (the
+adapter fails closed on it, and the research note says what that costs); what
+`ProjectSettings.fileAccessPolicy` and `internetPolicy` actually govern, which is why Sirdar's
+project file sets neither; whether a path-scoped `read_file(<dir>)` rule matches by prefix the
+way `command` does, which is why the read allow is unscoped; and how a workspace the operator
+has already trusted interactively behaves in the CLI's default mode — every write test ran in
+an untrusted temporary repository.
 
 ### `provider: openai`
 

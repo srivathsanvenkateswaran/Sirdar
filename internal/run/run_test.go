@@ -3093,6 +3093,80 @@ func TestBreachAfterTheNoteStillFailsTheRun(t *testing.T) {
 	}
 }
 
+// --- sessions that read nothing ---------------------------------------
+
+// blindEvent is what provider agy raises when a session produced an answer
+// without completing a single read: the first line is the run's terminal
+// reason, the rest is the explanation the event log keeps.
+func blindEvent(reason string) provider.Event {
+	return provider.Event{
+		Kind: provider.EvBlind,
+		Text: reason + "\nthis session completed no read of a file",
+		Raw:  json.RawMessage(`{"event":"result"}`),
+	}
+}
+
+// TestBlindSessionFailsInsteadOfFilingANote is round 1 of provider agy, as
+// a run-layer test. Every read that session tried was auto-denied, the
+// agent answered out of the ticket text, and the note that reached the
+// register claimed high confidence about code nobody had opened. A note
+// like that is indistinguishable downstream from one built on evidence, so
+// the run fails and files nothing.
+func TestBlindSessionFailsInsteadOfFilingANote(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		blindEvent("the agent could read nothing (2 reads denied)"),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", out.State.Status, out.State.Reason)
+	}
+	if out.State.Reason != "the agent could read nothing (2 reads denied)" {
+		t.Errorf("reason %q: the blind verdict's first line is the run's reason", out.State.Reason)
+	}
+	if entries, err := os.ReadDir(filepath.Join(cfg.Root, "notes")); err == nil && len(entries) > 0 {
+		t.Errorf("a blind run filed %d note(s)", len(entries))
+	}
+	if rows, _ := store.ReadRegister(cfg.Root); len(rows) > 0 {
+		t.Errorf("a blind run wrote %d register row(s)", len(rows))
+	}
+	// The answer is kept where it can be read without being believed.
+	runs, _ := filepath.Glob(filepath.Join(cfg.Root, ".sirdar", "runs", "OMNI-1", "*", "result.raw.txt"))
+	if len(runs) != 1 {
+		t.Errorf("result.raw.txt files %v, want the one unfiled answer", runs)
+	}
+}
+
+// TestBreachOutranksBlind: a session that both read nothing and completed a
+// write is reported as the breach. They are different facts about the same
+// run and the breach is the worse one.
+func TestBreachOutranksBlind(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		blindEvent("the agent could read nothing (1 reads denied)"),
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := outs[0].State.Reason; got != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("reason %q, want the breach", got)
+	}
+}
+
 // TestEmptyFinalFailsWithoutCallingItASchemaError covers a fix session that
 // ends its turn with nothing in it — the ACP failure the Copilot sandbox
 // run hit. Nothing was ever validated, so neither the retry nor the run's
