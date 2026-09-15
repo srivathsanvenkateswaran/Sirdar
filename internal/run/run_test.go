@@ -2530,9 +2530,11 @@ func TestSchemaEchoIsStrippedWithoutARetry(t *testing.T) {
 
 // TestSchemaRetrySharpensForProvidersWithoutWireEnforcement covers a first
 // answer the echo strip cannot fully recover (it is short two required
-// fields as well as carrying $schema/title): provider: acp gets the
-// sharpened retry wording, since ACP has no --json-schema equivalent to
-// fall back on, and a provider that does gets the plain one.
+// fields as well as carrying $schema/title): the providers that cannot
+// hold a model to the schema — acp, which only ever shows it as prompt
+// text, and qwen, whose --json-schema fails the run rather than shaping
+// the answer — get the sharpened retry wording, and one that does gets the
+// plain one.
 func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 	const incomplete = `{"$schema":"http://json-schema.org/draft-07/schema#","title":"Sirdar Fix Report","summary":"x","filesChanged":[]}`
 	const complete = `{"summary":"x","filesChanged":[],"testsRun":[],"risks":"none","deviationFromNote":""}`
@@ -2542,6 +2544,10 @@ func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 		sharpened bool
 	}{
 		{"acp", true},
+		// qwen's --json-schema only fails the run after the fact when the
+		// model answers in prose; it constrains nothing the model writes,
+		// so the retry has to spell the mistake out the same way.
+		{"qwen", true},
 		{"claude", false},
 	} {
 		t.Run(tc.provider, func(t *testing.T) {
@@ -2925,5 +2931,45 @@ func TestStallReasonNamesTheWindowInMinutes(t *testing.T) {
 	}
 	if got := stallReason(90 * time.Second); got != "stalled: no activity for 1m30s" {
 		t.Errorf("stallReason(90s) = %q", got)
+	}
+}
+
+// TestNullForARequiredStringIsReadAsEmpty is the second half of the first
+// live `provider: qwen` run (SBX-1): with the answer recovered from the
+// model's text, what failed twice was `proposedFix.remediationSql: got
+// null, want string`. qwen-plus-character wrote null there on both the
+// first answer and the retry that named the field, having learned the
+// idiom from the schema's own optional fields. It means the same as "",
+// so the note is filed and the field is named in a warning.
+func TestNullForARequiredStringIsReadAsEmpty(t *testing.T) {
+	cfg := newWorkspace(t)
+	doc := strings.Replace(triageDoc, `"remediationSql":""`, `"remediationSql":null`, 1)
+	if doc == triageDoc {
+		t.Fatal("the fixture's remediationSql did not change")
+	}
+	p := &stubProvider{script: replay(finalEvent(doc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	// One answer, no retry: the coercion happens before the retry does.
+	if sends := p.session(0).sentTexts(); len(sends) != 0 {
+		t.Fatalf("sends %v, want none", sends)
+	}
+	warnings := strings.Join(out.State.Warnings, "\n")
+	if !strings.Contains(warnings, "proposedFix.remediationSql") {
+		t.Fatalf("warnings %q", warnings)
+	}
+
+	// The filed note has an empty SQL block, not a literal null.
+	filed := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
+	if strings.Contains(filed, "null") || strings.Contains(filed, "<nil>") {
+		t.Fatalf("the note rendered the null:\n%s", filed)
 	}
 }

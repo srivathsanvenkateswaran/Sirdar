@@ -1976,3 +1976,186 @@ func countFlag(argv []string, name string) int {
 	}
 	return n
 }
+
+// TestPlainTextAnswerIsRecovered replays the first live `provider: qwen`
+// run (SBX-1, Qwen Code 0.23.3 on a Qwen OAuth login, model
+// qwen-plus-character): the model wrote the whole note as a text block and
+// never called structured_output, so the CLI failed the run on its own
+// --json-schema check and exited 1. Its result line carries no
+// structured_result, no result string, and an English sentence under
+// error.message — which the adapter used to hand the note validator,
+// producing `parse document: invalid character 'M'`.
+//
+// The answer was in the text block all along, and that is what the final
+// event must carry.
+func TestPlainTextAnswerIsRecovered(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-plain-text-answer.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, res := drain(t, s)
+
+	want := compactAnswer(t, "testdata/script-plain-text-answer.jsonl")
+	final := kinds(events, provider.EvFinal)
+	if len(final) != 1 {
+		t.Fatalf("final events %d", len(final))
+	}
+	if string(final[0].Final) != want {
+		t.Fatalf("final = %s\nwant %s", final[0].Final, want)
+	}
+	if string(res.Final) != want {
+		t.Fatalf("result final = %s", res.Final)
+	}
+	// The CLI's own account of the failure is not thrown away: it is the
+	// reason the exit code has to be explained to the operator.
+	if !strings.HasPrefix(final[0].Text, "Model produced plain text instead of calling the structured_output tool") {
+		t.Fatalf("final text %q", final[0].Text)
+	}
+	if res.Usage.Turns != 2 || res.Usage.InputTok != 43483 || res.Usage.OutputTok != 1924 {
+		t.Fatalf("usage %+v", res.Usage)
+	}
+	if res.ExitErr == nil || !strings.Contains(res.ExitErr.Error(), "code 1") {
+		t.Fatalf("exit err %v", res.ExitErr)
+	}
+
+	var recovered bool
+	for _, ev := range kinds(events, provider.EvSystem) {
+		if strings.Contains(ev.Text, "never called structured_output") {
+			recovered = true
+		}
+	}
+	if !recovered {
+		t.Fatal("the recovery must be reported as a warning event")
+	}
+}
+
+// compactAnswer reads the text block the scripted model wrote, so the
+// expectation and the fixture cannot drift apart.
+func compactAnswer(t *testing.T, script string) string {
+	t.Helper()
+	b, err := os.ReadFile(script)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range strings.Split(string(b), "\n") {
+		var l streamLine
+		if json.Unmarshal([]byte(line), &l) != nil || l.Type != "assistant" {
+			continue
+		}
+		for _, blk := range blocksOf(l.Message.Content) {
+			if blk.Type == "text" {
+				var compact bytes.Buffer
+				if err := json.Compact(&compact, []byte(blk.Text)); err != nil {
+					t.Fatal(err)
+				}
+				return compact.String()
+			}
+		}
+	}
+	t.Fatalf("no assistant text block in %s", script)
+	return ""
+}
+
+// TestStructuredResultWinsOverPlainText guards the recovery against
+// overreach: a model that talks its way to the answer and then calls
+// structured_output properly must be read from the tool call, not from
+// whatever JSON it happened to write on the way.
+func TestStructuredResultWinsOverPlainText(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","uuid":"sess-1","session_id":"sess-1"}`,
+		`{"type":"assistant","uuid":"m1","session_id":"sess-1","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"A draft: {\"greeting\":\"draft\"}"}],"usage":{"input_tokens":10,"output_tokens":5}}}`,
+		`{"type":"result","subtype":"success","uuid":"r1","session_id":"sess-1","is_error":false,"num_turns":1,"result":"{\"greeting\":\"hello\"}","structured_result":{"greeting":"hello"},"usage":{"input_tokens":10,"output_tokens":5}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, res := drain(t, s)
+	final := kinds(events, provider.EvFinal)
+	if len(final) != 1 || string(final[0].Final) != `{"greeting":"hello"}` {
+		t.Fatalf("final %+v", final)
+	}
+	if string(res.Final) != `{"greeting":"hello"}` {
+		t.Fatalf("result final %s", res.Final)
+	}
+	for _, ev := range kinds(events, provider.EvSystem) {
+		if strings.Contains(ev.Text, "never called structured_output") {
+			t.Fatal("nothing was recovered; there must be no recovery warning")
+		}
+	}
+}
+
+// TestResultStringWithoutStructuredResult covers a success line that
+// stringified the answer but echoed no object: the string is the answer.
+func TestResultStringWithoutStructuredResult(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","uuid":"sess-1","session_id":"sess-1"}`,
+		`{"type":"result","subtype":"success","uuid":"r1","session_id":"sess-1","is_error":false,"num_turns":1,"result":"{\"greeting\":\"hello\"}","usage":{"input_tokens":10,"output_tokens":5}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := drain(t, s)
+	final := kinds(events, provider.EvFinal)
+	if len(final) != 1 || string(final[0].Final) != `{"greeting":"hello"}` {
+		t.Fatalf("final %+v", final)
+	}
+}
+
+// TestFailedResultWithNoAnswerKeepsItsReason is the other half of the
+// recovery: a session that really did end without an answer — a loop
+// detector trip, here — must still report the CLI's reason rather than
+// invent a note out of nothing.
+func TestFailedResultWithNoAnswerKeepsItsReason(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","uuid":"sess-1","session_id":"sess-1"}`,
+		`{"type":"assistant","uuid":"m1","session_id":"sess-1","message":{"id":"m1","role":"assistant","content":[{"type":"text","text":"I will look at the ledger next."}],"usage":{"input_tokens":10,"output_tokens":5}}}`,
+		`{"type":"result","subtype":"error_during_execution","uuid":"r1","session_id":"sess-1","is_error":true,"num_turns":1,"usage":{"input_tokens":10,"output_tokens":5},"error":{"message":"Loop detection halted the run (global_tool_call_duplicate: read_file)"}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, res := drain(t, s)
+	final := kinds(events, provider.EvFinal)
+	if len(final) != 1 {
+		t.Fatalf("final events %d", len(final))
+	}
+	if len(final[0].Final) != 0 {
+		t.Fatalf("final answer %s, want none", final[0].Final)
+	}
+	if !strings.HasPrefix(final[0].Text, "Loop detection halted the run") {
+		t.Fatalf("final text %q", final[0].Text)
+	}
+	if len(res.Final) != 0 {
+		t.Fatalf("result final %s, want none", res.Final)
+	}
+}
+
+func TestJSONObject(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"bare", `{"a":1}`, `{"a":1}`},
+		{"indented", "{\n  \"a\": 1\n}", `{"a":1}`},
+		{"fenced", "```json\n{\"a\":1}\n```", `{"a":1}`},
+		{"prose before and after", "Here it is:\n{\"a\":1}\nHope that helps.", `{"a":1}`},
+		{"braces inside strings", `{"a":"} not the end {"}`, `{"a":"} not the end {"}`},
+		{"escaped quote before a brace", `{"a":"x\"}","b":2}`, `{"a":"x\"}","b":2}`},
+		{"nested", `{"a":{"b":{"c":1}}}`, `{"a":{"b":{"c":1}}}`},
+		{"skips an unparseable first candidate", `{not json} then {"a":1}`, `{"a":1}`},
+		{"unterminated", `{"a":1`, ``},
+		{"no object at all", "sorry, I could not find the bug", ``},
+		{"array is not an object", `[1,2,3]`, ``},
+		{"empty", "", ``},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := string(jsonObject(tc.in)); got != tc.want {
+				t.Fatalf("jsonObject(%q) = %q, want %q", tc.in, got, tc.want)
+			}
+		})
+	}
+}
