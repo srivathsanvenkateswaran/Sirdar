@@ -9,6 +9,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -94,6 +95,14 @@ type execution struct {
 	// stall watches for a provider that has gone silent. It is nil when
 	// the workspace turned the check off.
 	stall *stallGuard
+
+	// base is what the run had already spent before this execute started
+	// — the earlier sessions a `sirdar steer` is continuing — and seen is
+	// the highest figure any session of this execute has reported. The
+	// run's usage is their sum: a steer's session starts its counters at
+	// zero, and taking the maximum alone would hand the run back the
+	// budget it spent the first time.
+	base, seen store.Usage
 
 	question    string
 	rateLimited bool
@@ -282,12 +291,14 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
 	}
 
+	started := r.now()
 	sess, err := r.Provider.Start(ctx, r.sessionSpec(p, resume))
 	if err != nil {
 		return r.finish(ctx, p, store.StatusFailed, fmt.Sprintf("provider: %v", err), note.DigestRow{})
 	}
 
 	p.state.Status = store.StatusRunning
+	p.state.Reason = ""
 	p.state.UpdatedAt = r.now()
 	if err := p.run.WriteState(p.state); err != nil {
 		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
@@ -302,12 +313,25 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 	}
 	defer log.Close()
 
-	ex := &execution{}
+	ex := &execution{base: p.usageBase, seen: usageMinus(p.state.Usage, p.usageBase)}
 	ex.live.set(sess)
+
+	// A steer's instruction goes into the transcript ahead of the session
+	// it started, with who is answering it: the session that wrote the
+	// note, or a fresh one primed with it.
+	if s := p.steer; s != nil {
+		if err := log.Append("steer", eventPayload{Text: s.Text, Continuation: s.Continuation}); err != nil {
+			fmt.Fprintf(r.stderr(), "[%s] event log: %v\n", p.state.Key, err)
+		}
+		fmt.Fprintf(r.stderr(), "[%s] steer (%s): %s\n", p.state.Key, s.Continuation, firstLine(s.Text))
+		if s.Continuation == string(provider.ContinuePrimed) {
+			r.record(p, log, provider.Event{Kind: provider.EvSystem, At: started, Text: continuedInNewSession})
+		}
+	}
 
 	var timedOut atomic.Bool
 	if mins := r.Config.Budget.MaxMinutes; mins > 0 {
-		timer := time.AfterFunc(time.Duration(mins)*time.Minute, func() {
+		timer := time.AfterFunc(remainingWallClock(mins, ex.base.ElapsedSeconds), func() {
 			timedOut.Store(true)
 			ex.live.cancel()
 		})
@@ -345,18 +369,22 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		} else if h := s.Handle(); h != "" {
 			p.state.Handle = h
 		}
-		if got.Usage.Turns > p.state.Usage.Turns {
-			p.state.Usage.Turns = got.Usage.Turns
-			p.state.Usage.InputTokens = got.Usage.InputTok
-			p.state.Usage.OutputTokens = got.Usage.OutputTok
+		if got.Usage.Turns > ex.seen.Turns {
+			ex.seen.Turns = got.Usage.Turns
+			ex.seen.InputTokens = got.Usage.InputTok
+			ex.seen.OutputTokens = got.Usage.OutputTok
 		}
-		if got.Usage.CostUSD > p.state.Usage.CostUSD {
-			p.state.Usage.CostUSD = got.Usage.CostUSD
+		if got.Usage.CostUSD > ex.seen.CostUSD {
+			ex.seen.CostUSD = got.Usage.CostUSD
 		}
 		if len(got.StderrTail) > 0 {
 			p.state.StderrTail = got.StderrTail
 		}
 	}
+	p.state.Usage = usagePlus(ex.base, ex.seen)
+	// The wall clock this execute spent joins what the run had already
+	// spent, so a later steer's minute budget counts against the total.
+	p.state.Usage.ElapsedSeconds = ex.base.ElapsedSeconds + r.now().Sub(started).Seconds()
 
 	if len(ex.final) == 0 && ex.rawFinal != "" {
 		if err := os.WriteFile(filepath.Join(p.run.Dir, "result.raw.txt"), []byte(ex.rawFinal), 0o644); err != nil {
@@ -464,11 +492,10 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// and nothing else.
 		MCPConfig: cfg.MCPConfigPath(),
 		MCPStrict: cfg.WorkspaceOnlyMCP(),
-		Budget: provider.Budget{
-			MaxTurns:   cfg.Budget.MaxTurns,
-			MaxMinutes: cfg.Budget.MaxMinutes,
-			MaxUSD:     cfg.Budget.MaxUSD,
-		},
+		// What the provider may spend is what the run has left, not the
+		// whole cap: a steered run's earlier sessions already used some of
+		// it, and the caps apply to the run as a whole.
+		Budget: remainingBudget(cfg.Budget.MaxTurns, cfg.Budget.MaxMinutes, cfg.Budget.MaxUSD, p.usageBase),
 		Resume: resume,
 		RunDir: p.run.Dir,
 		Env:    r.childEnv(),
@@ -640,6 +667,11 @@ type eventPayload struct {
 	Turns    int             `json:"turns,omitempty"`
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
+
+	// Continuation is set on a `steer` line only: "resume" or "primed",
+	// saying whether the session that answers the instruction is the one
+	// that wrote the note or a fresh one handed it.
+	Continuation string `json:"continuation,omitempty"`
 }
 
 func (r *Runner) record(p *prepared, log *store.EventLog, ev provider.Event) {
@@ -754,11 +786,18 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		// unit the CLI reports and never runs ahead of it, and the
 		// provider reconciles its meter to the result line's num_turns,
 		// so taking the maximum lands on the provider's own total.
+		//
+		// On top of that sits whatever the run had spent before this
+		// execute began: a steered run's earlier sessions, whose figures
+		// a fresh session's counters know nothing about.
+		ex.seen.Turns = max(ex.seen.Turns, ev.Turns)
+		ex.seen.InputTokens = max(ex.seen.InputTokens, ev.InputTok)
+		ex.seen.OutputTokens = max(ex.seen.OutputTokens, ev.OutputTok)
+		ex.seen.CostUSD = max(ex.seen.CostUSD, ev.CostUSD)
+		elapsed := p.state.Usage.ElapsedSeconds
+		p.state.Usage = usagePlus(ex.base, ex.seen)
+		p.state.Usage.ElapsedSeconds = elapsed
 		u := &p.state.Usage
-		u.Turns = max(u.Turns, ev.Turns)
-		u.InputTokens = max(u.InputTokens, ev.InputTok)
-		u.OutputTokens = max(u.OutputTokens, ev.OutputTok)
-		u.CostUSD = max(u.CostUSD, ev.CostUSD)
 		p.state.UpdatedAt = r.now()
 		if err := p.run.WriteState(p.state); err != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
@@ -917,7 +956,23 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// endSession's business, and a provider that takes its time
 		// exiting is not a stalled run.
 		ex.stall.stop()
-		ex.row, ex.completeErr = r.complete(p, ex.final)
+		switch {
+		case p.steer != nil && len(p.previousFinal) > 0 && jsonEqual(p.previousFinal, ex.final):
+			// A steer whose answer is the same document leaves the
+			// note, the filed copy and the register as they are: there
+			// is nothing new to render and nothing new to index. The
+			// steer itself is still on the record, in the state and in
+			// the transcript.
+			ex.row, ex.completeErr = digestOf(p.kind, ex.final)
+			fmt.Fprintf(r.stderr(), "[%s] the answer is unchanged; the note stands\n", p.state.Key)
+		default:
+			if p.steer != nil {
+				// The notes are written afresh, so the list starts
+				// clean rather than naming the same paths twice.
+				p.state.Notes = nil
+			}
+			ex.row, ex.completeErr = r.complete(p, ex.final)
+		}
 		p.state.UpdatedAt = r.now()
 		if werr := p.run.WriteState(p.state); werr != nil {
 			fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, werr)
@@ -1613,6 +1668,109 @@ func (r *Runner) grace() time.Duration {
 // the provider reported a final with neither JSON nor text, which is what a
 // session spent entirely on tool calls and thinking looks like from here.
 var errEmptyAnswer = errors.New("the agent ended the turn without an answer")
+
+// continuedInNewSession is the transcript line a primed steer records: the
+// session answering the instruction is not the one that wrote the note.
+const continuedInNewSession = "continued in a new session"
+
+// usagePlus adds two usage records, elapsed time excluded: that is tracked
+// per execute rather than per session.
+func usagePlus(a, b store.Usage) store.Usage {
+	return store.Usage{
+		Turns:          a.Turns + b.Turns,
+		InputTokens:    a.InputTokens + b.InputTokens,
+		OutputTokens:   a.OutputTokens + b.OutputTokens,
+		CostUSD:        a.CostUSD + b.CostUSD,
+		ElapsedSeconds: a.ElapsedSeconds,
+	}
+}
+
+// usageMinus is what total has above base, floored at zero: the figures
+// this execute's own sessions have reported so far.
+func usageMinus(total, base store.Usage) store.Usage {
+	return store.Usage{
+		Turns:        max(total.Turns-base.Turns, 0),
+		InputTokens:  max(total.InputTokens-base.InputTokens, 0),
+		OutputTokens: max(total.OutputTokens-base.OutputTokens, 0),
+		CostUSD:      max(total.CostUSD-base.CostUSD, 0),
+	}
+}
+
+// remainingWallClock is how long this execute may run before the minute
+// budget is spent: the cap less what the run's earlier sessions used. It
+// never goes below a second — a run that had none left is refused before
+// it gets here, and a timer of zero would fire before the session's first
+// event arrived.
+func remainingWallClock(maxMinutes int, elapsedSeconds float64) time.Duration {
+	d := time.Duration(maxMinutes)*time.Minute - time.Duration(elapsedSeconds*float64(time.Second))
+	if d < time.Second {
+		return time.Second
+	}
+	return d
+}
+
+// remainingBudget is the provider-facing budget for a session: each cap
+// less what the run had already spent before this execute, so a steered
+// run's session is held to the run's total and not to a fresh cap of its
+// own. A cap of zero stays zero, which means unlimited to a provider. A cap
+// that is already spent becomes the smallest positive value rather than
+// zero, since zero would lift it.
+func remainingBudget(maxTurns, maxMinutes int, maxUSD float64, base store.Usage) provider.Budget {
+	b := provider.Budget{MaxTurns: maxTurns, MaxMinutes: maxMinutes, MaxUSD: maxUSD}
+	if maxTurns > 0 {
+		b.MaxTurns = max(maxTurns-base.Turns, 1)
+	}
+	if maxMinutes > 0 {
+		mins := int((remainingWallClock(maxMinutes, base.ElapsedSeconds) + time.Minute - 1) / time.Minute)
+		b.MaxMinutes = max(mins, 1)
+	}
+	if maxUSD > 0 {
+		b.MaxUSD = maxUSD - base.CostUSD
+		if b.MaxUSD <= 0 {
+			b.MaxUSD = 0.01
+		}
+	}
+	return b
+}
+
+// jsonEqual reports whether two JSON documents carry the same value,
+// whatever their formatting. Either failing to parse compares unequal.
+func jsonEqual(a, b []byte) bool {
+	var av, bv any
+	if err := json.Unmarshal(a, &av); err != nil {
+		return false
+	}
+	if err := json.Unmarshal(b, &bv); err != nil {
+		return false
+	}
+	return reflect.DeepEqual(av, bv)
+}
+
+// digestOf is the digest row for a validated document that is not being
+// filed again: the same fields complete would have reported, read off the
+// document alone.
+func digestOf(kind store.Kind, doc []byte) (note.DigestRow, error) {
+	switch kind {
+	case store.KindRCA:
+		var f rcaFields
+		if err := json.Unmarshal(doc, &f); err != nil {
+			return note.DigestRow{}, fmt.Errorf("run: parse rca note: %w", err)
+		}
+		return note.DigestRow{Issue: firstSentence(f.RCA.Summary), Confidence: f.RCA.Confidence, Classification: f.RCA.Classification}, nil
+	case store.KindFix:
+		var f fixFields
+		if err := json.Unmarshal(doc, &f); err != nil {
+			return note.DigestRow{}, fmt.Errorf("run: parse fix report: %w", err)
+		}
+		return note.DigestRow{Issue: firstSentence(f.Summary), Classification: "fix"}, nil
+	default:
+		var f triageFields
+		if err := json.Unmarshal(doc, &f); err != nil {
+			return note.DigestRow{}, fmt.Errorf("run: parse triage note: %w", err)
+		}
+		return note.DigestRow{Issue: firstSentence(f.Complaint), Confidence: f.RootCause.Confidence, Classification: f.Classification}, nil
+	}
+}
 
 // compactJSON strips the whitespace out of a schema before it goes into a
 // retry message, and hands back what it was given when that fails — the
