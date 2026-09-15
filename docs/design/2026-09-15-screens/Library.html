@@ -132,15 +132,17 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .note-prose{font-size:16.5px;line-height:1.7;color:var(--sd-ink)}
 .note-prose b{font-weight:600}
 /* ---------- provider marks ---------- */
-/* The vendors' own marks (their trademarks, used to say which provider is running), each in its own colour on a
-   neutral tile. Never recoloured: a mark whose brand colour is black takes the ink, which is what black is here. */
-.pv{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);color:var(--sd-ink)}
+/* The vendors' own marks (their trademarks, used to say which provider is running), in the inverted form each
+   vendor ships: the mark in white on a tile of its brand colour. Black-branded marks sit on the ink. */
+.pv{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:var(--sd-ink);color:#FFFDF7}
 .pv svg{width:16px;height:16px}
 .pv.lg{width:40px;height:40px;border-radius:10px}.pv.lg svg{width:22px;height:22px}
 .pv.sm{width:22px;height:22px;border-radius:6px}.pv.sm svg{width:13px;height:13px}
-.pv[data-p="claude"]{color:#D97757}
-.pv[data-p="qwen"]{color:#6950EF}
-.pv[data-p="gemini"]{color:#8E75B2}
+.pv[data-p="claude"]{background:#D97757}
+.pv[data-p="qwen"]{background:#6950EF}
+.pv[data-p="gemini"]{background:#8E75B2}
+.pv[data-p="antigravity"]{background:#1A73E8}
+.pv[data-p="copilot"]{background:#24292F}
 .pvrow{display:inline-flex;align-items:center;gap:10px}
 .pvrow .pn{font-weight:500}
 .pvrow .pm{color:var(--sd-ink-3);font-family:var(--sd-font-mono);font-size:13px}
