@@ -17,6 +17,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/agy"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/cursor"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/openai"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/qwen"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
@@ -148,8 +149,10 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 		return agyProvider(cfg), nil
 	case "acp":
 		return acpProvider(cfg)
+	case "cursor":
+		return cursorProvider(cfg), nil
 	default:
-		return nil, fmt.Errorf("unknown provider %q: use claude, codex, openai, acp, qwen or agy", cfg.Provider)
+		return nil, fmt.Errorf("unknown provider %q: use %s", cfg.Provider, ProviderList)
 	}
 }
 
@@ -207,6 +210,26 @@ func qwenProvider(cfg *config.Config, creds config.Resolver) (provider.Provider,
 		e.APIKey = key
 	}
 	return qwen.NewEndpoint(e), nil
+}
+
+// cursorProvider builds the adapter that drives the Cursor Agent CLI.
+// Nothing is resolved here: the CLI authenticates with the login the
+// operator already gave it — a macOS keychain entry, or an auth.json under
+// their home directory — and Sirdar deliberately offers no way to
+// configure a key or an endpoint, so there is no credential for this
+// function to hold. The `cursor:` block is optional; with none of it set
+// the session runs `cursor-agent` off PATH in ask mode on the Auto model.
+func cursorProvider(cfg *config.Config) provider.Provider {
+	c := cursor.Config{}
+	if cu := cfg.Cursor; cu != nil {
+		c.Binary = cfg.ExpandPath(cu.Path)
+		c.Model = cu.Model
+		c.Mode = cu.Mode
+	}
+	if cfg.Model != "" {
+		c.Model = cfg.Model
+	}
+	return cursor.NewConfig(c)
 }
 
 // acpProvider builds the client for whichever Agent Client Protocol agent

@@ -74,6 +74,7 @@ nav:
       - httpx extraction: research/08-httpx-extraction.md
       - Qwen Code wire formats: research/09-qwen-wire-formats.md
       - Antigravity wire formats: research/10-antigravity-wire-formats.md
+      - Cursor CLI wire formats: research/11-cursor-wire-formats.md
       - Kimi Code wire formats: research/12-kimi-wire-formats.md
       - Adapters:
           - Azure DevOps: research/adapters/azure-devops.md

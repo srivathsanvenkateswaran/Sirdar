@@ -17,7 +17,7 @@ human has made and merged the actual fix, `sirdar rca` writes the RCA and Resolu
 notes that record what changed and why — Sirdar never opens a PR or writes to a
 tracker or helpdesk itself.
 
-Six ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
+Seven ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
 Code or Codex CLI already installed and signed in, so a run counts against the plan
 already being paid for; `provider: openai` runs Sirdar's own agent loop against any
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
@@ -26,12 +26,15 @@ a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
 and Moonshot's Kimi Code CLI via `kimi acp`, the one of those verified against a real
 binary);
 `provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
-hook; `provider: agy` drives Google's Antigravity CLI against the operator's own Google
-account, triage and rca only — that CLI gives a parent process no way to mediate a tool
-call, so the read-only guarantee is its own plan mode plus a watch that fails the run:
-a write or a command that completes ends the session and files nothing.
-`mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is refused before it cuts
-a branch.
+hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
+execution mode rather than by a policy Sirdar enforces — a write or a command that
+completes anyway ends the session and fails the run, and `sirdar fix` is refused
+before it cuts a branch; `provider: agy` drives Google's
+Antigravity CLI against the operator's own Google account, triage and rca only — that CLI
+gives a parent process no way to mediate a tool call, so the read-only guarantee is its own
+plan mode plus a watch that fails the run: a write or a command that completes ends the
+session and files nothing. `mcp.workspaceOnly` is unenforceable there, and `sirdar fix` is
+refused before it cuts a branch.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
@@ -126,6 +129,19 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
   (`docs/fix.md`).
+- Added `provider: cursor`, an adapter for the Cursor Agent CLI (`cursor-agent -p`, stream-json),
+  with the honest caveat attached to it: print mode approves its own tool calls, so Sirdar's
+  permission policy is never consulted and the read-only guarantee is Cursor's `--mode ask`/`plan`
+  plus an excluded tool list sent as a request header, plus `--sandbox enabled` for shell
+  commands and `--disable-project-configs` so a checkout cannot widen its own run. `sirdar fix`
+  is refused on this provider — the sandbox does not cover the edit tool, which takes an absolute
+  path — and `sirdar doctor` carries a row saying so. There is no `--json-schema` flag, so the
+  schema rides in the prompt and the answer is parsed out of the result text with the retry
+  going through `--resume`; there is no cost or turn count on the wire, so `budget.maxMinutes`
+  is the bound that works; and `mcp.workspaceOnly` cannot be honoured, because the CLI always
+  merges the operator's own `~/.cursor/mcp.json` in. `CURSOR_API_ENDPOINT` and the credential
+  variables are stripped from the agent's environment with no way to configure them back
+  (`docs/research/11-cursor-wire-formats.md`, `docs/config.md`).
 - Added `provider: qwen`, a native Qwen Code adapter: every non-read tool is excluded, and an
   authenticated loopback PreToolUse hook fails closed, so the workspace stays read-only even
   though the run is untrusted.

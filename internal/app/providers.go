@@ -8,11 +8,12 @@ import "fmt"
 // arrives over HTTP or through the Wails bridge — the bridge binds the
 // Service directly and never passes through internal/httpapi.
 var providers = map[string]bool{
-	"claude": true, "codex": true, "openai": true, "acp": true, "qwen": true, "agy": true,
+	"claude": true, "codex": true, "openai": true, "acp": true, "qwen": true,
+	"cursor": true, "agy": true,
 }
 
 // ProviderList names the set the way an error message should.
-const ProviderList = "claude, codex, openai, acp, qwen or agy"
+const ProviderList = "claude, codex, openai, acp, qwen, cursor or agy"
 
 // ValidProvider reports whether name is a provider Sirdar drives. An empty
 // name is the workspace's own provider and is always valid.

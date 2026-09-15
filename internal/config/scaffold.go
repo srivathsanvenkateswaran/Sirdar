@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai | acp | qwen | agy
+provider: claude            # claude | codex | openai | acp | qwen | cursor | agy
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -51,6 +51,16 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   command: gemini                         # or goose, opencode, qwen, npx
 #   args: ["--experimental-acp"]            # goose: ["acp"]; qwen: ["--acp"]
 #   env: {}                                 # added to the agent's environment
+# provider: cursor drives the Cursor Agent CLI against the login the
+# cursor-agent binary already holds. It is the one provider whose read-only
+# guarantee is enforced by the vendor's backend rather than by Sirdar: the
+# CLI approves its own tool calls in print mode, so mode and the excluded
+# tool list are what hold, and sirdar fix is refused outright. Read the
+# cursor section of docs/config.md before choosing it.
+# cursor:
+#   path: cursor-agent                      # optional: where the CLI lives
+#   model: auto                             # a Free plan may only use auto
+#   mode: ask                               # ask | plan, both read-only
 sources:
   tracker:
     adapter: exec

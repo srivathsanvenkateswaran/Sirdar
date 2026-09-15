@@ -99,8 +99,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates. Each row is `[OK]`, `[!!]` for an advisory warning, or `[XX]` for a failure; exits 1 only on a failure |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|agy`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|agy`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
@@ -282,22 +282,33 @@ its own MCP configuration, the permission policy covers what the agent chooses t
 (`command: kimi`, `args: ["acp"]`) is the one agent on that list driven against a real binary;
 `docs/research/12-kimi-wire-formats.md` records what its session modes do and do not guarantee.
 
+`provider: cursor` drives the Cursor Agent CLI against the login `cursor-agent` already holds.
+It is the one provider whose read-only guarantee Sirdar does not enforce itself: `cursor-agent
+-p` approves its own tool calls, so the permission policy is never consulted and what holds is
+Cursor's own read-only execution mode (`--mode ask` or `plan`), an excluded tool list sent as a
+request header, and `--sandbox enabled` for shell commands. `sirdar fix` is refused on it, the
+CLI reports no cost and no turn count so `budget.maxMinutes` is the bound that works, and
+`mcp.workspaceOnly` cannot be honoured because Cursor always merges your user-level
+`~/.cursor/mcp.json` in. Read the `provider: cursor` section of `docs/config.md` before
+choosing it.
+
 `provider: claude` also works against an Anthropic-compatible endpoint — Ollama, llama.cpp,
 DeepSeek, GLM, Kimi, OpenRouter — by setting `billing: api` and pointing `ANTHROPIC_BASE_URL` at
 it in the environment; Anthropic documents the gateway variables that make this work but does not
 support routing non-Claude models through them, and reported cost is unreliable there, so see
 `docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
 
-See `docs/config.md` for the `openai:`, `qwen:`, `agy:` and `acp:` blocks,
-`docs/research/09-qwen-wire-formats.md` and `docs/research/10-antigravity-wire-formats.md` for
-the Qwen Code and Antigravity captures those adapters are built on,
+See `docs/config.md` for the `openai:`, `qwen:`, `acp:`, `cursor:` and `agy:` blocks,
+`docs/research/09-qwen-wire-formats.md`, `docs/research/10-antigravity-wire-formats.md` and
+`docs/research/11-cursor-wire-formats.md` for the Qwen Code, Antigravity and Cursor captures
+those adapters are built on, and
 `docs/research/providers/acp-agents.md` for the ACP agents and their launch commands, and
 `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after them.
 
 ## Bring your own agent login
 
-Sirdar spawns the `claude`, `codex`, `qwen` or `agy` binary already installed on your machine and
-signed in with your own account; it never stores or proxies your credentials. Usage counts against your
+Sirdar spawns the `claude`, `codex`, `qwen`, `cursor-agent` or `agy` binary already installed on
+your machine and signed in with your own account; it never stores or proxies your credentials. Usage counts against your
 existing Claude or ChatGPT plan the same way an interactive session would. If you'd rather pay
 per token instead, set `billing: api` in config and put an API key in the provider's environment.
 See `docs/research/03-licensing-byo-subscription.md` for the licensing research behind this.
@@ -366,7 +377,7 @@ make vet     # go vet ./...
 Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
 is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
 override is available to you in config as `providers.claude.path`, `providers.codex.path`,
-`qwen.path` and `agy.path`.
+`qwen.path`, `cursor.path` and `agy.path`.
 The tests therefore run offline and deterministically.
 
 Release builds via `.goreleaser.yaml` stamp the version, commit, and date with
