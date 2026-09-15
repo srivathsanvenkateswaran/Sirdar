@@ -9,6 +9,12 @@ import (
 )
 
 // RegisterRow is one line of the append-only run register.
+//
+// Title and Company are what the markdown export needs and the rest of the
+// row never carried: the note's own title, and who the ticket is for. Both
+// are omitted from the JSON when empty, so a register written before they
+// existed reads back unchanged and a run that recorded neither writes the
+// same line it always did.
 type RegisterRow struct {
 	Key, Kind, RunID, Date               string
 	Provider, Model, Service             string
@@ -16,6 +22,9 @@ type RegisterRow struct {
 	Turns                                int
 	CostUSD                              float64
 	TriageVerdict, NotePath              string
+
+	Title   string `json:",omitempty"`
+	Company string `json:",omitempty"`
 }
 
 func registerPath(root string) string {

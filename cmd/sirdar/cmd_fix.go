@@ -74,6 +74,9 @@ func printFix(res fix.Result, stdout io.Writer) int {
 		fmt.Fprintf(stdout, "\n%s\nThe agent did not implement the note's Proposed Fix as written:\n\n  %s\n\n%s\n",
 			strings.Repeat("!", 60), res.Blocked, strings.Repeat("!", 60))
 		fmt.Fprintf(stdout, "\nThe commit is on %s and has NOT been pushed. Read the diff, and if you accept it,\nrerun with --accept-deviation, or push the branch yourself.\n", res.Branch)
+		if res.Worktree != "" {
+			fmt.Fprintf(stdout, "The session's worktree is kept for you to read:\n  %s\n", res.Worktree)
+		}
 		return 1
 	}
 

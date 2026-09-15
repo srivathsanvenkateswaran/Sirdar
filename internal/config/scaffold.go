@@ -129,6 +129,25 @@ sources:
     #
     # adapter: front
     # token: keychain:front-api-token                 # API token, Settings -> Developers
+    #
+    # adapter: gorgias
+    # account: acme                           # acme.gorgias.com
+    # baseUrl: ""                             # optional override, e.g. a proxy
+    # email: you@acme.com                     # basic auth username; the login email
+    # apiKey: keychain:gorgias-api-key        # basic auth password
+    #
+    # adapter: servicenow
+    # instance: acme                          # acme.service-now.com
+    # table: incident                         # or sc_task, sn_customerservice_case
+    # username: sirdar.integration            # literal login name, not a secret
+    # password: keychain:servicenow-password  # basic auth, instead of oauthToken
+    # oauthToken: keychain:servicenow-oauth-token  # instead of username + password
+    # dateFormat: mdy                         # or dmy; only if the instance serves dashed dates
+    #
+    # ServiceNow is the one built-in that serves either role: the same
+    # incident is the customer's ticket and the work item, so the same
+    # block works under sources.tracker when ServiceNow is where the work
+    # is tracked too.
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides
@@ -158,6 +177,14 @@ budget:
   # check: it records an overspend, it cannot stop one. maxTurns and
   # maxMinutes are the budgets that bite while a run is going.
   maxUsd: 5
+  # Minutes of complete silence from the provider — no tool call, no
+  # assistant text, no usage line — before the run is cancelled and marked
+  # failed with "stalled: no activity for Nm". The timer restarts on every
+  # event, so a long tool call is not a stall; a provider that died without
+  # closing its stream is. A run waiting on you (the agent asked a question,
+  # or a rate limit parked it) is never counted as stalled. 0 turns the
+  # check off and leaves maxMinutes as the only thing that ends a hung run.
+  stallMinutes: 6
 concurrency: 1
 attachments:
   maxBytes: 10485760       # 10 MiB. Anything larger, and anything the session
@@ -182,12 +209,15 @@ permissions:
     - "which *"
     - "echo *"
   # Globs matched against an MCP tool's full name. While this list is empty,
-  # a tool is allowed unless a word of its name is a write verb (create,
-  # update, delete, send, deploy, buy, save, log, …). A name that also
-  # carries a read word (query, select, read, search, list, get, find,
-  # describe, show) is a read whatever else it says, so run_query and
-  # run_select go through. Naming patterns here replaces that heuristic
-  # outright: anything unlisted is then denied.
+  # a tool is denied when any word of its name is a write verb (create,
+  # update, delete, send, deploy, buy, save, log, run, execute, trigger, …)
+  # or when the name is a generic passthrough whose arguments decide what it
+  # does (api_request, graphql, sql_execute, a bare query). A name with
+  # neither, carrying a read word (query, select, read, search, list, get,
+  # find, describe, show), goes through: read_query, list_tables,
+  # query_loki_logs. Naming patterns here replaces that heuristic outright:
+  # anything unlisted is then denied, which is how a workspace gets a
+  # run_query it needs.
   mcp: []
     # - "mcp__grafana__query_*"
     # - "mcp__grafana__list_*"

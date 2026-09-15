@@ -85,10 +85,11 @@ describe('Settings', () => {
     expect(await screen.findByText('bad path')).toBeInTheDocument()
   })
 
-  it('renders doctor rows as OK/!! with detail', async () => {
+  it('renders doctor rows as OK/!!/XX with detail', async () => {
     const checks: Check[] = [
-      { name: 'config', ok: true, detail: 'valid' },
-      { name: 'git', ok: false, detail: 'not a repo' },
+      { name: 'config', ok: true, level: 'ok', detail: 'valid' },
+      { name: 'mcp', ok: true, level: 'warn', detail: 'no MCP tools' },
+      { name: 'git', ok: false, level: 'fail', detail: 'not a repo' },
     ]
     const doctor = vi.fn().mockResolvedValue(checks)
     const transport = fakeTransport({ doctor })
@@ -99,6 +100,8 @@ describe('Settings', () => {
 
     expect(await screen.findByText('OK')).toBeInTheDocument()
     expect(screen.getByText('!!')).toBeInTheDocument()
+    expect(screen.getByText('XX')).toBeInTheDocument()
+    expect(screen.getByText('no MCP tools')).toBeInTheDocument()
     expect(screen.getByText('not a repo')).toBeInTheDocument()
     expect(doctor).toHaveBeenCalledWith('ws1')
   })

@@ -23,10 +23,10 @@ already being paid for; `provider: openai` runs Sirdar's own agent loop against 
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
 
-Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, and
-Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
-Freshdesk, Help Scout, Intercom, HubSpot Service Hub, and Front. Anything else — an internal
-tracker, a different helpdesk — is a separate executable speaking a small
+Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
+and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
+Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, and ServiceNow. Anything
+else — an internal tracker, a different helpdesk — is a separate executable speaking a small
 line-delimited JSON protocol over stdin/stdout, so its credentials and vendor-specific
 code never touch Sirdar's core.
 
@@ -75,6 +75,16 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   from the customer, and `comments`, the teammate notes Front keeps internal — into one ordered
   thread, follows each feed's `_pagination.next` under a page cap, and downloads attachments from
   Front's own authenticated `/download/{id}` endpoint.
+- Added a built-in Gorgias helpdesk adapter (`adapter: gorgias`): per-account host from
+  `account` or `baseUrl`, HTTP Basic with the login `email` and an `apiKey` credential
+  reference, the cursor-paginated `/api/messages` feed as the thread, and attachment
+  downloads that send the key only to the configured account host.
+- Added a built-in ServiceNow adapter, the first that serves either role: one incident is both
+  the customer's ticket and the work item, so the same block works under `sources.tracker` or
+  `sources.helpdesk`. It reads the Table API for the record, `sys_journal_field` for the
+  conversation (work notes internal, comments customer-visible) and the Attachment API for the
+  files, authenticating with a basic username/password pair or an OAuth bearer token
+  (`docs/adapters.md`, `docs/research/adapters/servicenow.md`).
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
@@ -104,3 +114,42 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   by signature, are exempt. And the fix route itself now answers 403 on a listener bound with
   `--allow-remote`: a remote caller may read notes and start a triage, but not write code and open
   a pull request under the operator's GitHub login (`docs/config.md`).
+- Added `budget.stallMinutes`, a stall watch on the provider's stream. A session that says
+  nothing at all — no tool call, no assistant text, no usage line — for six minutes (the default;
+  `0` turns the check off) is cancelled, marked `failed` with `stalled: no activity for 6m`, and
+  given an `error` event in its own log. A provider that died mid-stream used to hold the run
+  until `budget.maxMinutes` expired, 25 minutes after it had stopped existing. The timer restarts
+  on every event, so a slow tool call is not a stall, and it is suspended for a run waiting on a
+  person — the agent asked a question, or a rate limit parked it — which stays `blocked` and
+  keeps its resume handle.
+- `sirdar fix` now runs its session in a linked git worktree under `.sirdar/worktrees/<run-id>`
+  instead of in the tree you are standing in. Your uncommitted work is neither in the way nor
+  swept into the fix's commit, your HEAD does not move, and the dirty-tree preflight that used to
+  refuse the run now applies only to `fix.inPlace: true`, which restores the old
+  `git checkout -B` behaviour. The agent's root, the reserved paths, the snapshot guard's hooks
+  directory and the reservation handed to the session all follow the worktree, while the
+  workspace's configuration and playbooks are still read from the main tree. The commit, push and
+  pull request are made from the worktree; it is removed on success and kept when a run is
+  blocked on a deviation, so `--accept-deviation` publishes the commit you reviewed out of the
+  tree it was made in (`docs/fix.md`).
+- `sirdar doctor` now reports a third level: `[!!]` for a warning, alongside `[OK]` and `[XX]`
+  for a failure. Only a failure exits non-zero, so an advisory row — every user-level MCP
+  server visible to the agent, a Codex session that will see none, a custom Anthropic base URL
+  under `billing: api`, a qwen session that keeps folder trust and loads the repository's own
+  `.qwen/settings.json` — no longer trips a CI gate. The desktop Settings screen reads the same
+  `level` field.
+- Rewrote the `permissions.mcp` write-verb heuristic: it now tokenises the whole tool name
+  rather than reading only the leading word, denies a generically named passthrough
+  (`*_api_request`, `graphql`, `sql_execute`, a bare `query`) whose arguments decide what it
+  does, and no longer lets a read word beside a write word win — `run_query` and `run_select`
+  are denied by the default heuristic now, and go in `permissions.mcp` for a workspace that
+  needs them. `read_query`, `list_tables` and similar names with no write word still go
+  through.
+- `sirdar register --markdown` now fills the Title and Company cells from the note's own title
+  and its `company`/`customer` frontmatter, instead of leaving them for a human to fill in by
+  hand. `RegisterRow` gained `Title` and `Company`, both omitted from the JSON line when empty,
+  so an existing `register.jsonl` reads back unchanged.
+- `provider: openai` can now resume a blocked or interrupted run: the loop writes its message
+  transcript to `transcript.json` (mode `0600`) in the run directory after every turn, and
+  `sirdar resume` and the runner's schema retry both continue from it instead of starting the
+  triage over.

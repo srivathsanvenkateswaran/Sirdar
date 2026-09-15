@@ -23,7 +23,7 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "gorgias" | "servicenow" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
@@ -59,6 +59,14 @@ type SourceConfig struct {
 	// Freshdesk.
 	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
 
+	// Gorgias. Every account has its own host, so exactly one of account
+	// (the identifier alone, "acme" for acme.gorgias.com) or baseUrl (a
+	// bare https origin, for an account reached through a proxy) is
+	// required. Auth is HTTP Basic with the login email as the username —
+	// an identifier, not a secret, so it is written literally — and
+	// apiKey as the password.
+	Account string `yaml:"account,omitempty"`
+
 	// Help Scout. Its Mailbox API has no API-key mode: every call carries
 	// an OAuth2 token the adapter mints for itself from this pair, so both
 	// are credential references and there is nothing else to configure.
@@ -69,6 +77,22 @@ type SourceConfig struct {
 	// (private-app access token). Both are a single bearer credential
 	// against a single fixed API host, so neither needs a base URL.
 	AccessToken string `yaml:"accessToken,omitempty"` // credential ref
+
+	// ServiceNow. One instance is one tenant on one host, and the same
+	// incident is both the customer's ticket and the work item, so this
+	// adapter is configurable under either role. Username is a literal —
+	// it is the half of basic auth that is not a secret, and naming it is
+	// what lets doctor say who the connection authenticates as — while
+	// Password and OAuthToken are credential references.
+	Instance string `yaml:"instance,omitempty"` // "acme" or "acme.service-now.com"
+	Table    string `yaml:"table,omitempty"`    // default "incident"
+	Username string `yaml:"username,omitempty"` // literal login name, not a credential ref
+	Password string `yaml:"password,omitempty"` // credential ref
+	// DateFormat resolves a dashed display-value timestamp's month/day
+	// ambiguity: "mdy" or "dmy". Empty (the default) parses only the
+	// unambiguous layouts, so a dashed date simply will not parse until
+	// this names one.
+	DateFormat string `yaml:"dateFormat,omitempty"`
 
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
@@ -337,6 +361,13 @@ type Config struct {
 		MaxTurns   int     `yaml:"maxTurns"`
 		MaxMinutes int     `yaml:"maxMinutes"`
 		MaxUSD     float64 `yaml:"maxUsd"`
+		// StallMinutes is how long a run waits for the provider to say
+		// anything at all — a tool call, a line of assistant text, a
+		// usage line — before it is cancelled as stalled. It is a
+		// pointer because 0 is a meaningful value here and not an
+		// absent one: 0 turns the check off, while an unset key takes
+		// the default. Read it through Config.StallMinutes.
+		StallMinutes *int `yaml:"stallMinutes"`
 	} `yaml:"budget"`
 	// Language says which language the engineer's note is written in and
 	// which language anything shown to a customer is written in. They are
@@ -388,8 +419,13 @@ type Config struct {
 	// the customer's own words in the pull request body; it is off by
 	// default because a pull request is often public and the complaint is
 	// a quotation from a support ticket.
+	// InPlace runs the fix session in the operator's own working tree,
+	// the way the flow worked before linked worktrees: `git checkout -B`
+	// on the tree they are standing in, which needs that tree clean and
+	// leaves it on the fix branch afterwards.
 	Fix struct {
 		PRIncludesComplaint bool `yaml:"prIncludesComplaint"`
+		InPlace             bool `yaml:"inPlace"`
 	} `yaml:"fix"`
 	Playbooks string `yaml:"playbooks"`
 	Providers struct {
@@ -459,6 +495,15 @@ func applyDefaults(c *Config) {
 	}
 	if c.Budget.MaxUSD == 0 {
 		c.Budget.MaxUSD = 5
+	}
+	if c.Budget.StallMinutes == nil {
+		// Six minutes of complete silence. A real session talks
+		// constantly — a tool call, a token, a usage line — so this is
+		// long enough to sit through the slowest single tool call seen
+		// in a dogfood run and short enough that a hung provider is
+		// caught inside the wall-clock budget rather than at it.
+		d := defaultStallMinutes
+		c.Budget.StallMinutes = &d
 	}
 	if c.Notes.Dir == "" {
 		c.Notes.Dir = ".sirdar/notes"
@@ -567,6 +612,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Budget.MaxUSD <= 0 {
 		return fmt.Errorf("config: budget.maxUsd: must be > 0, got %v", c.Budget.MaxUSD)
+	}
+	if c.Budget.StallMinutes != nil && *c.Budget.StallMinutes < 0 {
+		return fmt.Errorf("config: budget.stallMinutes: must be >= 0 (0 disables the check), got %d", *c.Budget.StallMinutes)
 	}
 	if c.Attachments.MaxBytes < 0 {
 		return fmt.Errorf("config: attachments.maxBytes: must be >= 0, got %d", c.Attachments.MaxBytes)
@@ -824,6 +872,9 @@ var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": 
 // conversations and have no issue list to sweep, so naming one under
 // sources.tracker leaves a workspace that loads and then fails on its first
 // run — worth catching at load time instead.
+// servicenow is deliberately in neither list: one ServiceNow incident is
+// both the customer's ticket and the work item, so the adapter serves
+// whichever role the workspace names it under.
 var helpdeskOnlyAdapters = map[string]bool{
 	"zendesk":   true,
 	"freshdesk": true,
@@ -832,6 +883,7 @@ var helpdeskOnlyAdapters = map[string]bool{
 	"intercom":  true,
 	"hubspot":   true,
 	"front":     true,
+	"gorgias":   true,
 }
 
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
@@ -915,6 +967,38 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		if s.Token == "" {
 			return fmt.Errorf("config: %s.token: is required for adapter front", prefix)
 		}
+	case "gorgias":
+		switch {
+		case s.Account == "" && s.BaseURL == "":
+			return fmt.Errorf("config: %s: one of account or baseUrl is required for adapter gorgias", prefix)
+		case s.Account != "" && s.BaseURL != "":
+			return fmt.Errorf("config: %s: set account or baseUrl, not both", prefix)
+		}
+		if s.Email == "" {
+			return fmt.Errorf("config: %s.email: is required for adapter gorgias", prefix)
+		}
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter gorgias", prefix)
+		}
+	case "servicenow":
+		if s.Instance == "" && s.BaseURL == "" {
+			return fmt.Errorf("config: %s.instance: is required for adapter servicenow", prefix)
+		}
+		basic := s.Username != "" || s.Password != ""
+		bearer := s.OAuthToken != ""
+		switch {
+		case basic && bearer:
+			return fmt.Errorf("config: %s: set username and password, or oauthToken, not both", prefix)
+		case basic && (s.Username == "" || s.Password == ""):
+			return fmt.Errorf("config: %s: both username and password are required for basic auth", prefix)
+		case !basic && !bearer:
+			return fmt.Errorf("config: %s: one of username + password or oauthToken is required for adapter servicenow", prefix)
+		}
+		switch strings.ToLower(strings.TrimSpace(s.DateFormat)) {
+		case "", "mdy", "dmy":
+		default:
+			return fmt.Errorf("config: %s.dateFormat: must be mdy or dmy, got %q", prefix, s.DateFormat)
+		}
 	case "jira":
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
@@ -963,6 +1047,7 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		{"clientId", s.ClientID},
 		{"clientSecret", s.ClientSecret},
 		{"accessToken", s.AccessToken},
+		{"password", s.Password},
 	} {
 		if f.ref == "" {
 			continue
@@ -1046,6 +1131,20 @@ func credentialRef(key, ref string) error {
 // (in a test, say) reads as the default rather than as "off".
 func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
+}
+
+// defaultStallMinutes is how long a run tolerates complete silence from
+// the provider before it gives up on the session.
+const defaultStallMinutes = 6
+
+// StallMinutes is the configured stall timeout in minutes: 0 means the
+// check is off, and a Config built by hand (in a test, say) reads as the
+// default rather than as "off".
+func (c *Config) StallMinutes() int {
+	if c.Budget.StallMinutes == nil {
+		return defaultStallMinutes
+	}
+	return *c.Budget.StallMinutes
 }
 
 // RTLMarkup reports whether the embedded note templates should wrap a

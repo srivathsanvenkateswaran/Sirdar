@@ -35,14 +35,20 @@ import (
 
 // snapshotExcluded are the entries under .sirdar/ that this run legitimately
 // writes to while it is running: its own run directory, the register row it
-// appends, and the eval store. Everything else under .sirdar/ — the
-// configuration whose permission lists judge the session, the playbooks and
-// templates that shape it, the filed notes — must come out of the session
-// byte for byte as it went in.
+// appends, the eval store, and the linked worktrees a fix session works in.
+// Everything else under .sirdar/ — the configuration whose permission lists
+// judge the session, the playbooks and templates that shape it, the filed
+// notes — must come out of the session byte for byte as it went in.
+//
+// worktrees/ is the tree the session is *supposed* to change: a checkout of
+// the repository, every file of it fair game. Digesting it would make the
+// guard hash the whole repository twice per run and then fail every fix for
+// having made one.
 var snapshotExcluded = map[string]bool{
 	"runs":           true,
 	"register.jsonl": true,
 	"eval":           true,
+	"worktrees":      true,
 }
 
 // snapshot maps a path to a digest of what was there: the sha256 of a
@@ -53,10 +59,17 @@ type snapshot map[string]string
 // guardedPaths are the directories a fix run watches: the workspace's
 // .sirdar/ and the directory git would run this repository's hooks from —
 // core.hooksPath when the repository sets one (husky, lefthook, a
-// checked-in .githooks/), and .git/hooks when it does not.
-func guardedPaths(ctx context.Context, root string) []string {
-	paths := []string{filepath.Join(root, provider.SirdarDir)}
-	if hooks := provider.HooksDir(ctx, root); hooks != "" {
+// checked-in .githooks/), and the shared .git/hooks when it does not.
+//
+// The two arguments are not the same directory when the session runs in a
+// linked worktree. .sirdar/ is the workspace's: the configuration and
+// playbooks that shape the session live in the main tree and are what must
+// come out unchanged. The hooks directory is resolved from the tree the
+// session ran in, because that is the tree the commit is made from and so
+// the tree whose core.hooksPath git would consult.
+func guardedPaths(ctx context.Context, workspace, tree string) []string {
+	paths := []string{filepath.Join(workspace, provider.SirdarDir)}
+	if hooks := provider.HooksDir(ctx, tree); hooks != "" {
 		paths = append(paths, hooks)
 	}
 	return paths
@@ -65,10 +78,10 @@ func guardedPaths(ctx context.Context, root string) []string {
 // takeSnapshot digests every file under the guarded paths. A path that does
 // not exist contributes nothing, which is how a hook file created during
 // the session shows up as a difference rather than as an error.
-func takeSnapshot(ctx context.Context, root string) (snapshot, error) {
+func takeSnapshot(ctx context.Context, workspace, tree string) (snapshot, error) {
 	snap := snapshot{}
-	for _, base := range guardedPaths(ctx, root) {
-		if err := walkGuarded(root, base, snap); err != nil {
+	for _, base := range guardedPaths(ctx, workspace, tree) {
+		if err := walkGuarded(workspace, base, snap); err != nil {
 			return nil, err
 		}
 	}

@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
@@ -377,5 +378,55 @@ func TestNotifyFinishedIgnoresAnAlreadyDoneContext(t *testing.T) {
 	}
 	if hook.count() != 1 {
 		t.Fatalf("%d posts, want 1: the done context cut the notification short", hook.count())
+	}
+}
+
+// TestStalledReasonReachesTheChannelWhole: the stall reason is Sirdar's own
+// words and names no ticket text, so unlike the agent's question it goes
+// out as written — and it is far inside the 200-character cap that exists
+// for reasons Sirdar did not write, such as a provider's exit error.
+func TestStalledReasonReachesTheChannelWhole(t *testing.T) {
+	hook := newWebhook(t, http.StatusOK)
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		<-s.cancelled
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 60 * time.Millisecond
+	r.Notifier = &notify.Router{Notifier: &notify.Generic{URL: hook.srv.URL + "/hook"}}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+	if hook.count() != 1 {
+		t.Fatalf("%d posts, want 1", hook.count())
+	}
+	var ev notify.Event
+	if err := json.Unmarshal([]byte(hook.payload(t, 0)), &ev); err != nil {
+		t.Fatal(err)
+	}
+	if ev.Reason != outs[0].State.Reason {
+		t.Errorf("the channel was told %q, the run recorded %q", ev.Reason, outs[0].State.Reason)
+	}
+	if !strings.HasPrefix(ev.Reason, "stalled: no activity for ") {
+		t.Errorf("reason %q", ev.Reason)
+	}
+}
+
+// TestNotifyReasonCapIsUntouchedByTheStallText: the cap is a rune count on
+// anything long, and the stall reason at its longest is nowhere near it.
+func TestNotifyReasonCapIsUntouchedByTheStallText(t *testing.T) {
+	reason := stallReason(6 * time.Minute)
+	if got := notifyReason(reason); got != reason {
+		t.Errorf("notifyReason(%q) = %q", reason, got)
+	}
+	long := strings.Repeat("é", maxNotifyReason+10)
+	if got := notifyReason(long); len([]rune(got)) != maxNotifyReason+1 {
+		t.Errorf("a long reason was capped to %d runes", len([]rune(got)))
 	}
 }

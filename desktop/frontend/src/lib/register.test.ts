@@ -5,6 +5,7 @@ import {
   formatHeld,
   groupDate,
   groupRegisterRows,
+  groupStatus,
   sumUsage,
   toMarkdownTable,
 } from './register'
@@ -25,6 +26,8 @@ function row(overrides: Partial<RegisterRow>): RegisterRow {
     costUsd: 0.5,
     triageVerdict: '',
     notePath: '',
+    title: '',
+    company: '',
     ...overrides,
   }
 }
@@ -53,6 +56,17 @@ describe('groupRegisterRows', () => {
     const rows = [row({ key: 'OMNI-1', service: '' }), row({ key: 'OMNI-1', service: 'oxo-api' })]
     const [group] = groupRegisterRows(rows)
     expect(group.service).toBe('oxo-api')
+  })
+
+  it('keeps the newest non-empty title and company for a key', () => {
+    const rows = [
+      row({ key: 'OMNI-1', kind: 'triage', title: 'Export job times out', company: 'NEQSA SWEET' }),
+      row({ key: 'OMNI-1', kind: 'rca', title: '', company: '' }),
+      row({ key: 'OMNI-1', kind: 'resolution', title: 'Export job times out on large orders', company: '' }),
+    ]
+    const [group] = groupRegisterRows(rows)
+    expect(group.title).toBe('Export job times out on large orders')
+    expect(group.company).toBe('NEQSA SWEET')
   })
 })
 
@@ -109,8 +123,37 @@ describe('sumUsage', () => {
   })
 })
 
+describe('groupStatus', () => {
+  it('is triaged when only a triage row exists', () => {
+    const [group] = groupRegisterRows([row({ key: 'OMNI-1', kind: 'triage', notePath: 'triage.md' })])
+    expect(groupStatus(group)).toBe('triaged')
+  })
+
+  it('is fix-pushed once a fix row landed but no rca or resolution note was written', () => {
+    const [group] = groupRegisterRows([
+      row({ key: 'OMNI-1', kind: 'triage', notePath: 'triage.md' }),
+      row({ key: 'OMNI-1', kind: 'fix', date: '2026-09-02', notePath: '' }),
+    ])
+    expect(groupStatus(group)).toBe('fix-pushed')
+  })
+
+  it('is resolved once an rca or resolution note exists, even without a fix row', () => {
+    const rcaOnly = groupRegisterRows([
+      row({ key: 'OMNI-1', kind: 'triage', notePath: 'triage.md' }),
+      row({ key: 'OMNI-1', kind: 'rca', notePath: 'rca.md' }),
+    ])[0]
+    expect(groupStatus(rcaOnly)).toBe('resolved')
+
+    const resolutionOnly = groupRegisterRows([
+      row({ key: 'OMNI-2', kind: 'triage', notePath: 'triage.md' }),
+      row({ key: 'OMNI-2', kind: 'resolution', notePath: 'res.md' }),
+    ])[0]
+    expect(groupStatus(resolutionOnly)).toBe('resolved')
+  })
+})
+
 describe('toMarkdownTable', () => {
-  it('produces the fixed header and blanks unknown columns', () => {
+  it('matches printRegisterMarkdown column for column: key in Issue, blank Helpdesk/Tracker, status in Status', () => {
     const groups = groupRegisterRows([
       row({
         key: 'OMNI-1',
@@ -124,8 +167,54 @@ describe('toMarkdownTable', () => {
     const lines = table.split('\n')
 
     expect(lines[0]).toBe(
-      '| # | Issue | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |',
+      '| # | Issue | Title | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |',
     )
-    expect(lines[2]).toBe('| 1 |  |  |  | OMNI-1 | 2026-09-01 |  |  | confirmed |')
+    expect(lines[2]).toBe('| 1 | OMNI-1 |  |  |  |  |  |  |  | triaged |')
+  })
+
+  it('fills Title and Company from the group, the two cells a human used to type in', () => {
+    const groups = groupRegisterRows([
+      row({
+        key: 'OMNI-1',
+        kind: 'triage',
+        date: '2026-09-01',
+        triageVerdict: 'confirmed',
+        title: 'Export job times out on large orders',
+        company: 'NEQSA SWEET',
+      }),
+    ])
+
+    const table = toMarkdownTable(groups)
+    const lines = table.split('\n')
+
+    expect(lines[2]).toBe(
+      '| 1 | OMNI-1 | Export job times out on large orders | NEQSA SWEET |  |  |  |  |  | triaged |',
+    )
+  })
+
+  it('renders the stage cells as wiki links to the notes that were written', () => {
+    const groups = groupRegisterRows([
+      row({ key: 'OMNI-1', kind: 'triage', notePath: '/vault/notes/OMNI-1-triage.md' }),
+      row({ key: 'OMNI-1', kind: 'rca', notePath: '/vault/notes/OMNI-1-rca.md' }),
+      row({ key: 'OMNI-1', kind: 'resolution', notePath: '/vault/notes/OMNI-1-res.md' }),
+    ])
+
+    const table = toMarkdownTable(groups)
+    const lines = table.split('\n')
+
+    expect(lines[2]).toBe(
+      '| 1 | OMNI-1 |  |  |  |  | [[OMNI-1-triage]] | [[OMNI-1-rca]] | [[OMNI-1-res]] | resolved |',
+    )
+  })
+
+  it('escapes a pipe in the key, title or company so it cannot break the table row', () => {
+    const groups = groupRegisterRows([
+      row({ key: 'OMNI|1', kind: 'triage', title: 'Times out | fails', company: 'A | B' }),
+    ])
+
+    const table = toMarkdownTable(groups)
+    const lines = table.split('\n')
+
+    expect(lines[2]).toBe('| 1 | OMNI\\|1 | Times out \\| fails | A \\| B |  |  |  |  |  | triaged |')
   })
 })

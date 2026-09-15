@@ -100,6 +100,12 @@ type Runner struct {
 	// closeGrace default.
 	CloseGrace time.Duration
 
+	// StallTimeout overrides budget.stallMinutes, so a test can assert
+	// the stall check without sitting through six minutes of silence.
+	// Zero means the configured value; a negative value turns the check
+	// off whatever the workspace configured.
+	StallTimeout time.Duration
+
 	// onPause, when set, is called every time a rate-limit pause is
 	// recorded, so a test can synchronise on it. Production leaves it nil.
 	onPause func(time.Time)
@@ -192,7 +198,7 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 			continue
 		}
 		refs = append(refs, s.Token, s.APIToken, s.PAT, s.APIKey, s.OAuthToken,
-			s.ClientID, s.ClientSecret, s.AccessToken)
+			s.ClientID, s.ClientSecret, s.AccessToken, s.Password)
 		if s.Auth != nil {
 			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
 		}

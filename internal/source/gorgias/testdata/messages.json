@@ -1,0 +1,102 @@
+{
+  "object": "list",
+  "uri": "/api/messages",
+  "data": [
+    {
+      "id": 5001,
+      "ticket_id": 921,
+      "public": true,
+      "from_agent": false,
+      "channel": "email",
+      "via": "email",
+      "rule_id": null,
+      "subject": "تصدير التقرير لا يعمل",
+      "body_text": "",
+      "body_html": "<p>The export button does <b>nothing</b>.</p>",
+      "stripped_text": "The export button does nothing.",
+      "sender": {"id": 4561, "email": "rania@example.com", "name": "Rania Haddad"},
+      "attachments": [
+        {
+          "name": "screenshot.png",
+          "content_type": "image/png",
+          "size": 11,
+          "url": "https://acme.gorgias.com/api/attachments/download/h4sh/screenshot.png"
+        }
+      ],
+      "created_datetime": "2026-09-10T08:30:00+00:00",
+      "sent_datetime": "2026-09-10T08:30:00+00:00"
+    },
+    {
+      "id": 5002,
+      "ticket_id": 921,
+      "public": true,
+      "from_agent": true,
+      "channel": "email",
+      "via": "api",
+      "rule_id": 12,
+      "subject": "Re: export",
+      "body_text": "Thanks for writing in, we are on it.",
+      "body_html": "<p>Thanks for writing in, we are on it.</p>",
+      "sender": {"id": 0, "email": "support@acme.com", "name": ""},
+      "attachments": [],
+      "created_datetime": "2026-09-10T08:31:00+00:00"
+    },
+    {
+      "id": 5003,
+      "ticket_id": 921,
+      "public": false,
+      "from_agent": true,
+      "channel": "internal-note",
+      "via": "api",
+      "rule_id": null,
+      "body_text": "Looks like the CSV worker is down again.",
+      "body_html": "",
+      "sender": {"id": 77, "firstname": "Sami", "lastname": "Nasr", "email": "l1@acme.com"},
+      "attachments": [
+        {
+          "name": "",
+          "content_type": "text/plain",
+          "size": 11,
+          "url": "https://files.gorgias.com/attachments/h4sh/worker-log.txt?sig=abc123"
+        }
+      ],
+      "created_datetime": "2026-09-10T09:00:00+00:00"
+    },
+    {
+      "id": 5004,
+      "ticket_id": 921,
+      "public": true,
+      "from_agent": true,
+      "channel": "email",
+      "via": "helpdesk",
+      "rule_id": null,
+      "body_text": "We shipped a fix.",
+      "body_html": "",
+      "sender": {"id": 77, "name": "Sami Nasr"},
+      "attachments": [
+        {
+          "name": "evil.png",
+          "content_type": "image/png",
+          "size": 11,
+          "url": "https://attacker.example/evil.png?token=leak-me"
+        }
+      ],
+      "created_datetime": "2026-09-10T11:05:00+00:00"
+    },
+    {
+      "id": 5005,
+      "ticket_id": 921,
+      "public": true,
+      "from_agent": true,
+      "channel": "email",
+      "via": "helpdesk",
+      "rule_id": null,
+      "body_text": "",
+      "body_html": "",
+      "sender": {"id": 77, "name": "Sami Nasr"},
+      "attachments": [],
+      "created_datetime": "2026-09-10T11:06:00+00:00"
+    }
+  ],
+  "meta": {"prev_cursor": null, "next_cursor": null}
+}

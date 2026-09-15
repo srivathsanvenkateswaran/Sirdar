@@ -225,8 +225,9 @@ collection, following each entry's `Content` reference to an
 
 ## Built-in helpdesk adapters
 
-Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub and
-Front implement the `helpdesk` role only — `Get`, `Threads`, `Attachments`, no
+Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub,
+Front and Gorgias implement the `helpdesk` role only — `Get`, `Threads`,
+`Attachments`, no
 `List` — and are compiled into Sirdar the same way the four trackers above
 are, no separate process required.
 Credentials are `env:NAME` or `keychain:SERVICE` references, same as
@@ -630,6 +631,230 @@ is skipped with a warning naming the host alone. Files land as
   not what happened to the conversation around it.
 - `Customer` and `CustomerID` are left empty. A Front conversation has a
   contact handle but no company object to attribute it to.
+
+### Gorgias
+
+```yaml
+sources:
+  helpdesk:
+    adapter: gorgias
+    account: acme                 # acme.gorgias.com
+    email: ops@acme.com           # HTTP Basic username; not a secret
+    apiKey: env:GORGIAS_API_KEY   # HTTP Basic password
+```
+
+`baseUrl: https://acme.gorgias.com` can be given instead of `account`, for an
+account reached through a proxy; one of the two is required.
+
+**Getting credentials.** Generate an API key under Settings → REST API in the
+Gorgias UI. It is sent as HTTP Basic auth with your Gorgias login email as
+the username and the key as the password — the documented mechanism for a
+private integration. Gorgias also has an OAuth2 flow, but it is for public
+apps distributed through its app store and its access tokens expire after 24
+hours, so a single-tenant read-only integration has no use for either half of
+it. The key carries whatever the owning account can already see; Gorgias has
+no per-key scope picker.
+
+**Get.** Fetches `GET /api/tickets/{id}`, which answers with the bare ticket
+object. `Status` is `status`, `Channel` is `channel`. `Customer` is the
+Gorgias customer's display name and `Contact` their email address — Gorgias's
+customer is a person, and a ticket carries no organisation object, so that is
+the most either field can honestly say. `tags`, `via`, `language`, the
+assignee's name and a `closedAt` go into `Fields`. The web URL is
+`{baseUrl}/app/ticket/{id}`, built here: the ticket's own `uri` is an API
+URI, not a browser link.
+
+**Threads and attachments.** The thread comes from
+`GET /api/messages?ticket_id={id}` — a top-level collection, not a
+ticket-scoped sub-path — asked for oldest first (`order_by=created_datetime:asc`)
+in pages of 100, following `meta.next_cursor`. Gorgias has two booleans
+rather than an author-type enum, and they mean different things: `public` is
+the customer-facing split (an internal note is not public) and `from_agent`
+is the direction. A non-public message, or one on the `internal-note`
+channel, is agent-to-agent and gets the ` (internal)` author suffix; a
+public message with `from_agent: false` is the customer; a public message a
+rule sent (`rule_id`) is automation and maps to `system`; anything else is an
+agent. A message body is `body_text` where Gorgias sent one and `body_html`
+through the Markdown converter otherwise. `Attachments` downloads each
+message's `attachments[]`; the API key is sent only to the configured account
+host, and Gorgias's other hosts are fetched from without it, since those URLs
+carry their own signature.
+
+**Known limitations.**
+- The Gorgias Ticket object has **no priority field** — priority lives in
+  tags or a custom field, whose names are per-account. `Priority` is
+  therefore left empty and the tags are passed through as they are, rather
+  than one of them being guessed at.
+- A Gorgias File object has no id of its own; the URL is the identifier. The
+  attachment ids Sirdar uses are `"<message id>-<1-based index>"`, stable for
+  as long as the message is.
+- A download from the account host answers `307` with a signed URL. If that
+  redirect points outside `*.gorgias.com`, it is refused before the request
+  is made and the file is reported as a per-ticket warning naming the host
+  and nothing else — a redirect `Location` arrives inside a server response,
+  which makes it input rather than configuration. Trusting a storage host
+  found on a live account is a one-line change to `gorgiasHosts`, and is
+  deliberately not guessed at here.
+- Message pagination is capped at 100 pages; a ticket past that is truncated
+  with a run warning rather than swept indefinitely. The feed is asked for
+  oldest first so a truncated thread keeps the customer's opening complaint.
+- Attachment MIME comes from the File object's declared `content_type`;
+  downloads do not sniff the response's own `Content-Type`.
+- The message feed is a filtered collection rather than a ticket
+  sub-resource, so `Threads` on a ticket id that does not exist yields an
+  empty thread rather than a not-found error. `Get`, which a bundle calls
+  first, does answer not-found.
+- `stripped_text` is not preferred over `body_text`: it drops quoted history
+  and signatures, and a triage note is read by someone who wants the thread
+  as the customer wrote it.
+
+### ServiceNow
+
+```yaml
+sources:
+  helpdesk:
+    adapter: servicenow
+    instance: acme                     # acme.service-now.com
+    username: sirdar.integration       # literal, not a credential ref
+    password: env:SERVICENOW_PASSWORD
+    # dateFormat: mdy                  # only if the instance serves dashed dates
+```
+
+ServiceNow is the one built-in that serves either role. The same incident
+is the customer's ticket and the work item, so the block above works
+unchanged under `sources.tracker`, and a workspace that configures it there
+and names no `sources.helpdesk` still gets the conversation — the wiring
+layer picks up the same client's helpdesk view.
+
+**Getting credentials.** Either a local integration user (`username` plus
+`password`, sent as HTTP basic, which is what ServiceNow's own REST
+examples use) or an OAuth 2.0 access token (`oauthToken`, sent as a bearer
+header) — one or the other, never both. The user needs read access to the
+configured table, to `sys_journal_field` for the conversation, and the
+attachment read role. `username` is a literal rather than a credential ref
+on purpose: it is the half of basic auth that is not a secret, and naming
+it is what lets `sirdar doctor` say who the connection authenticates as.
+Give the integration user a **UTC timezone** — see the timestamp
+limitation below.
+
+`instance` is the instance name (`acme`) or its host
+(`acme.service-now.com`); `baseUrl` overrides the request target for a
+vanity domain or a proxy. `table` defaults to `incident` and can name
+`sc_task` or `sn_customerservice_case` instead, though the field set this
+adapter asks for is the ITSM one.
+
+Every credentialed request goes to exactly the host this resolves to, so
+it is validated rather than used as typed: a bare `instance` may only be
+letters, digits and hyphens (`acme/x` or `acme.service-now.com@evil.com`
+are both refused rather than turned into a request against `acme` or
+`evil.com`), and a host or a full URL — from either `instance` or
+`baseUrl` — must be plain `https://host` with no userinfo, path, query or
+fragment. A workspace that fails this check gets the error at load time,
+not a credential sent to a host nobody named.
+
+**Get.** Reads `GET /api/now/table/{table}/{sys_id}` when the id is a
+sys_id (32 hex characters) and
+`GET /api/now/table/{table}?sysparm_query=number={id}` when it is a record
+number, so `INC0010023` and the sys_id behind it both work. A record
+number carrying the encoded-query separator `^` or the IN-list separator
+`,` is refused, naming the character, rather than looked up with the
+character silently dropped — querying under a *different* id than the one
+the caller typed would return the wrong ticket's data as if it were the
+right one. Every record request carries `sysparm_display_value=true` and
+`sysparm_exclude_reference_link=true`, so `caller_id` arrives as
+"Abel Tuter" rather than as the sys_id it stores. `Subject` is
+`short_description`, `Status` is `state`, `Channel` is `contact_type`,
+`Contact` is the caller and `Customer` the company; `number`, `category`,
+`urgency`, `impact`, `assignment_group`, `close_notes` and the caller's
+email travel in `Fields`. The URL is
+`{base}/nav_to.do?uri={table}.do?sys_id={sys_id}` — the record's own API
+link is not what an operator wants to click. The fetched record is cached
+per id for the client's lifetime, so Get, Threads and Attachments called
+one after another for the same ticket cost one Table API call, not three.
+
+**Threads.** The record's own `description` comes first, as the caller's
+words when there is a caller and as staff content when there is not — an
+incident opened without one is an engineer's own, not a customer's.
+Everything after it is the journal: `GET /api/now/table/sys_journal_field`
+filtered to `element_id={sys_id}^elementINcomments,work_notes` and ordered
+by `sys_created_on`, paged with `sysparm_offset`/`sysparm_limit` a hundred
+at a time. Roles follow ServiceNow's own visibility split rather than a
+guess: a **work note** never reaches the caller, so it is `agent` with the
+` (internal)` author suffix; a **comment** is customer-visible, and is
+`customer` when the entry's `sys_created_by` is the caller (matched against
+the dot-walked `caller_id.user_name`, then the display name). An
+unrecognised author is `agent`, which is the safer default — a message
+wrongly attributed to the customer reads as the customer's own words. A
+work note with no `sys_created_by` at all (a scripted entry, or a field
+the instance will not serve) is authored `agent (internal)` rather than
+just ` (internal)`.
+
+**Attachments.** `GET /api/now/attachment` filtered to
+`table_name={table}^table_sys_id={sys_id}`, then each row's `download_link`
+(or `/api/now/attachment/{sys_id}/file` derived from the row's own sys_id
+when the instance omits one). ServiceNow serves attachment bytes from the
+instance itself rather than from a CDN, so this adapter has no fetch-only
+host tier: the one trusted host is the instance, it is the one that gets
+the credential, and a `download_link` pointing anywhere else is refused
+with a warning naming the host alone. A redirect off the instance stops
+the download rather than being followed — an instance behind SSO answers
+an unaccepted credential with the sign-in form, and an HTML body where a
+binary was expected is refused too, so a login page is never written to
+disk under an attachment's name.
+
+**List (tracker role).** `sysparm_query` built from the filter:
+`assigned_to.user_name={assignee}` (or `assigned_to=javascript:gs.getUserID()`
+for `me`), `state={status}` or `active=true` when no status was named, and
+`ORDERBYDESCsys_updated_on`. Paged with `sysparm_offset` a hundred at a
+time, default 100 records and a hard 200.
+
+**Known limitations.**
+- **Timestamps carry no offset, and a dashed date needs `dateFormat`.**
+  With `sysparm_display_value=true` the instance renders timestamps in the
+  integration user's display timezone and names no zone, and this adapter
+  reads a naive timestamp as UTC — hence the UTC integration user above.
+  It recognises `yyyy-MM-dd HH:mm:ss`, the RFC 3339 forms, `yyyy/MM/dd` and
+  `dd.MM.yyyy HH:mm:ss` on its own, but a dashed `MM-dd-yyyy` vs
+  `dd-MM-yyyy` is genuinely ambiguous ("03-04-2024" is the 3rd of April
+  read one way and the 4th of March the other) and is resolved by the
+  optional `dateFormat: mdy` or `dateFormat: dmy` config field — left
+  unset (the default), a dashed date simply will not parse. A timestamp
+  that fails every layout is left unset and warned about once per call,
+  however many timestamps on the record or the page failed, naming the
+  value that did not parse.
+- **`CustomerID` is dot-walked or empty.** A reference field in display
+  mode carries no id, so the company's sys_id comes from
+  `company.sys_id`; an instance that will not serve the dot-walk leaves
+  `CustomerID` empty rather than repeating the company name as if it were
+  an identifier.
+- **`sys_journal_field` is ACL-restricted on many instances.** An
+  integration user who can read `incident` cannot always read the journal.
+  That is a warning on the bundle, not a failed fetch: the record's own
+  description still reaches the agent, and the warning says the
+  conversation is missing.
+- **A filter value cannot carry `^`.** The encoded-query syntax has no
+  escape sequence, so a value containing the separator would start a
+  condition of its own; it is stripped and the run gets a warning rather
+  than a silently different working set. A record id looked up by number
+  is held to a stricter rule — see Get above — because there the caller
+  meant one specific ticket.
+- Journal, attachment and list pagination stop at 20 pages each, with a
+  warning naming the cap — offset pagination has no end-of-results signal
+  beyond a short page, and a miscounting instance should cost a warning
+  rather than an endless sweep. A page that runs into a 429 partway
+  through a sweep keeps whatever earlier pages already returned and warns,
+  rather than discarding it.
+- Rate limits are set per instance by the customer's own admin, so there is
+  no published number to code against: each page's own 429 is retried once
+  after honouring `Retry-After` up to 30 seconds, and one paginated sweep
+  (a journal, an attachment list, or a tracker list) spends at most 90
+  seconds total waiting out 429s across every page it reads — a later
+  page whose wait would overspend that budget is not retried, and the
+  sweep truncates with a warning instead of running unbounded.
+- The field names, the journal-table shape and the dot-walks are standard
+  ServiceNow platform behaviour but were not all confirmable against a live
+  documentation page; `docs/research/adapters/servicenow.md` records which
+  is which.
 
 ## helpdeskRef fallback
 

@@ -12,6 +12,7 @@ via the includeIf rule; never set `user.email` by hand):
 | `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
 | `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
 | `~/Documents/Personal/Sirdar-qwen`, `~/Documents/Personal/Sirdar-codexmcp` | `qwen`, `codexmcp` | Merged into `main` (a411cfa, 38104a8); worktrees removed. |
+| `~/Documents/Personal/Sirdar-stallwt` | `stallwt` | Two features, complete and green, not yet committed: `budget.stallMinutes` (stall detection on the provider's stream) and `sirdar fix` in a linked worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback. Based on `e3b7e32`, which predates `main`'s `docs/fix.md`; that page is re-added here with a Worktree mode section, so merging `main` raises one add/add conflict on `docs/fix.md` whose resolution is to keep this branch's copy. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -83,7 +84,7 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
   gets its own `workspace-write` sandbox + the snapshot guard (`decideWrite` is never consulted
   — Codex approves its own tool calls with `approvalPolicy: never`); ACP gets whatever the
   agent implements + the snapshot guard. The guard (`internal/fix/guard.go`) sha256s `.sirdar/`
-  (bar `runs/`, `register.jsonl`, `eval/`) and `provider.HooksDir` before the session and again
+  (bar `runs/`, `register.jsonl`, `eval/`, `worktrees/`) and `provider.HooksDir` before the session and again
   the moment it ends, before any git command; a difference fails the run, restores nothing, and
   commits and pushes nothing.
 - `sirdar fix` is the one session that writes, and it flips all three layers at
@@ -113,6 +114,18 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
   non-empty `deviationFromNote` in the agent's report stops the push until
   `--accept-deviation`, which on a rerun pushes the commit that was reviewed rather than
   starting a second session.
+- A fix session stands in a linked worktree, `<root>/.sirdar/worktrees/<run-id>`, not in the
+  operator's tree (`fix.inPlace: true` restores `git checkout -B` in place). Everything that
+  names a root follows the worktree — the session's cwd, the write policy's root, the reserved
+  paths, the hooks directory — while the workspace's `.sirdar/` is still read from, and guarded
+  in, the main tree. `provider.HooksDir` therefore asks git for `--git-common-dir` rather than
+  joining `.git/hooks` onto root, since a worktree's `.git` is a file. The worktree is removed on
+  success and kept on a deviation block, which is the tree `--accept-deviation` publishes from.
+  The dirty-tree preflight applies to in-place mode alone (`docs/fix.md`).
+- `budget.stallMinutes` (default 6, `0` off) cancels a run whose provider has said nothing at
+  all for that long, marking it `failed` with `stalled: no activity for Nm` and recording an
+  `EvError` in its event log. The timer restarts on every event and is suspended once a run is
+  waiting on a person (a question, a rate limit), which stays `blocked` with its resume handle.
 
 ## Next steps, in order
 
@@ -164,10 +177,20 @@ been run, to keep this round free of paid Codex turns.
 No writes to any helpdesk or tracker (`sirdar fix` writes to git and GitHub and
 to nothing else). No auth on `sirdar serve` (loopback only unless `--allow-remote`); the `/hooks/`
 webhook routes rely on the operator's own TLS termination plus each source's shared-secret
-signature. Register markdown
-export lacks title/company columns (`RegisterRow` has none). `provider: openai` has no resume
-handle (a blocked run must be re-run). Two concurrent runs of the same key can mis-pair the UI's
-Cancel button within a 2 s window.
+signature. Two concurrent runs of the same key can mis-pair the UI's Cancel button within a 2 s
+window.
+
+Four dogfood-deferred items from `docs/research/07-dogfood-findings.md` are now fixed (`quality`
+branch): `doctor` has a third level, `[!!]` for a warning, so the MCP-visibility and no-`.mcp.json`
+rows no longer print `[OK]` with a "warning:" detail and only a real failure exits non-zero
+(`provider.Check.Level`, `cmd/sirdar/cmd_doctor.go`, desktop Settings). `MCPLooksLikeWrite` now
+tokenises the whole tool name and denies a generically named passthrough
+(`*_api_request`, `graphql`, `sql_execute`) instead of letting a read word beside a write word
+win — `run_query` and `run_select` are denied by the default heuristic now and need
+`permissions.mcp`. `sirdar register --markdown` fills Title and Company from the note's own
+title and its `company`/`customer` frontmatter. `provider: openai` writes its message transcript
+to `transcript.json` (0600) in the run directory after every turn, which is now its resume
+handle for `sirdar resume` and the schema retry.
 
 ## Standing constraints
 

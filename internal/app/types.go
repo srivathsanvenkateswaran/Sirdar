@@ -141,10 +141,14 @@ type Quota struct {
 	ResetsAt    string       `json:"resetsAt,omitempty"`
 }
 
-// Check is one Doctor diagnostic result.
+// Check is one Doctor diagnostic result. Level is "ok", "warn" or "fail";
+// OK stays what it always was — false only for "fail" — so an older client
+// reading the bool alone sees a warning as a passing check, which is what
+// it is.
 type Check struct {
 	Name   string `json:"name"`
 	OK     bool   `json:"ok"`
+	Level  string `json:"level"`
 	Detail string `json:"detail"`
 }
 
@@ -165,6 +169,8 @@ type RegisterRow struct {
 	CostUSD        float64 `json:"costUsd"`
 	TriageVerdict  string  `json:"triageVerdict"`
 	NotePath       string  `json:"notePath"`
+	Title          string  `json:"title"`
+	Company        string  `json:"company"`
 }
 
 // JobID identifies a run this process started, so it can be cancelled.
@@ -337,6 +343,8 @@ func RegisterRowOf(r store.RegisterRow) RegisterRow {
 		Turns:          r.Turns,
 		CostUSD:        r.CostUSD,
 		TriageVerdict:  r.TriageVerdict,
+		Title:          r.Title,
+		Company:        r.Company,
 		NotePath:       r.NotePath,
 	}
 }

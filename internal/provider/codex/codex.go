@@ -1531,7 +1531,10 @@ func mcpCheck(ctx context.Context, binary string, cfg *provider.DoctorConfig) pr
 	}
 	names := mcpServerNames(raw)
 	if len(names) == 0 {
-		return provider.Check{Name: name, OK: true, Detail: prefix + "none"}
+		// No servers is not a broken install, and it is not fine either:
+		// every datasource the playbooks name is missing from the session.
+		// A warning says so without failing a CI gate.
+		return provider.Warn(name, prefix+"none")
 	}
 	return provider.Check{Name: name, OK: true, Detail: prefix + strings.Join(names, ", ")}
 }

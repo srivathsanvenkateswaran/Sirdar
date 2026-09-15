@@ -31,6 +31,12 @@ type prepared struct {
 	// noNotify silences this run's completion notification.
 	noNotify bool
 
+	// root is the tree the session runs in and is confined to, when it is
+	// not the workspace root: a fix run's linked worktree. Everything
+	// else — the run directory, the configuration, the playbooks — still
+	// comes from the workspace root.
+	root string
+
 	// service and notePath are what the first register row recorded: the
 	// service the note filed under and the path a human opens. The
 	// notification needs both, and only the note-writing path knows them.
@@ -42,6 +48,15 @@ type prepared struct {
 	triageNotePath string
 	triageNoteCopy string
 	triageLink     string
+}
+
+// sessionRoot is the directory this run's session stands in: its own root
+// when it has one, else the workspace root.
+func (p *prepared) sessionRoot(workspace string) string {
+	if p.root != "" {
+		return p.root
+	}
+	return workspace
 }
 
 // threadHeadLines is how much of the conversation the prompt quotes inline;

@@ -14,10 +14,12 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/front"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/servicenow"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zendesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
@@ -254,6 +256,14 @@ func builtinTrackerSources() map[string]*config.SourceConfig {
 			APIKey:    "env:RALLY_KEY",
 			Workspace: "12345",
 		},
+		// ServiceNow is the one built-in configurable under either role:
+		// the same incident is the work item and the customer's ticket.
+		"servicenow": {
+			Adapter:  "servicenow",
+			Instance: "acme",
+			Username: "sirdar.integration",
+			Password: "env:SNOW_PASSWORD",
+		},
 	}
 }
 
@@ -262,6 +272,9 @@ var builtinCreds = map[string]string{
 	"LINEAR_KEY": "lin_api_secret",
 	"AZDO_PAT":   "azdo-secret",
 	"RALLY_KEY":  "rally-secret",
+
+	"SNOW_PASSWORD": "snow-secret",
+	"SNOW_TOKEN":    "snow-oauth-secret",
 }
 
 // TestNewBuiltinTracker covers what the wiring owes each adapter: a client
@@ -321,13 +334,110 @@ func TestNewBuiltinTrackerMissingCredentialNamesTheKey(t *testing.T) {
 	}
 }
 
+// --- ServiceNow, the built-in that serves either role ---
+
+// serviceNowSource points a ServiceNow source at a test server, which is
+// what its baseUrl override exists for.
+func serviceNowSource(baseURL string, bearer bool) *config.SourceConfig {
+	sc := &config.SourceConfig{Adapter: "servicenow", Instance: "acme", BaseURL: baseURL}
+	if bearer {
+		sc.OAuthToken = "env:SNOW_TOKEN"
+		return sc
+	}
+	sc.Username = "sirdar.integration"
+	sc.Password = "env:SNOW_PASSWORD"
+	return sc
+}
+
+// TestNewBuiltinServiceNowBothAuthModes proves the resolved secret — not
+// the env: ref — is what reaches the wire, in each of the two auth modes,
+// and that the username travels as the literal it is.
+func TestNewBuiltinServiceNowBothAuthModes(t *testing.T) {
+	for _, tt := range []struct {
+		name   string
+		bearer bool
+		want   string
+	}{
+		{"basic", false, "Basic " + base64.StdEncoding.EncodeToString([]byte("sirdar.integration:snow-secret"))},
+		{"bearer", true, "Bearer snow-oauth-secret"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			var mu sync.Mutex
+			var gotAuth, gotPath string
+			// servicenow.New refuses a non-https base URL, so the double
+			// is a TLS server; the built-in client trusts it through
+			// http.DefaultTransport, which newBuiltinHelpdesk's own
+			// *http.Client picks up implicitly.
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				mu.Lock()
+				gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.Path
+				mu.Unlock()
+				w.Write([]byte(`{"result":[]}`))
+			}))
+			defer srv.Close()
+			withDefaultTransport(t, srv.Client().Transport)
+
+			sc := serviceNowSource(srv.URL, tt.bearer)
+			hd, err := newBuiltinHelpdesk(sc, envResolver(builtinCreds))
+			if err != nil {
+				t.Fatalf("newBuiltinHelpdesk: %v", err)
+			}
+			if _, ok := hd.(*servicenow.Client); !ok {
+				t.Fatalf("helpdesk is %T, want *servicenow.Client", hd)
+			}
+			p, ok := hd.(pinger)
+			if !ok {
+				t.Fatal("servicenow.Client does not implement Ping, so doctor has no probe")
+			}
+			if err := p.Ping(context.Background()); err != nil {
+				t.Fatalf("Ping: %v", err)
+			}
+			mu.Lock()
+			defer mu.Unlock()
+			if gotAuth != tt.want {
+				t.Errorf("Authorization = %q, want the resolved credential", gotAuth)
+			}
+			if gotPath != "/api/now/table/incident" {
+				t.Errorf("Ping hit %q, want the configured table", gotPath)
+			}
+		})
+	}
+}
+
+// TestNewBuiltinServiceNowTracker proves the same client fills the tracker
+// role, with its conversation view carried alongside so a workspace with
+// ServiceNow under sources.tracker still gets the thread.
+func TestNewBuiltinServiceNowTracker(t *testing.T) {
+	tracker, helpdesk, err := newBuiltinTracker(serviceNowSource("", false), envResolver(builtinCreds))
+	if err != nil {
+		t.Fatalf("newBuiltinTracker: %v", err)
+	}
+	if tracker == nil || helpdesk == nil {
+		t.Fatal("ServiceNow must serve both roles from one client")
+	}
+	if _, ok := helpdesk.(*servicenow.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *servicenow.Client", helpdesk)
+	}
+}
+
+func TestNewBuiltinServiceNowMissingCredentialNamesTheKey(t *testing.T) {
+	_, err := newBuiltinHelpdesk(serviceNowSource("", false), envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "password") || !strings.Contains(err.Error(), "env:SNOW_PASSWORD") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
 func TestBuiltinEndpoint(t *testing.T) {
 	srcs := builtinTrackerSources()
 	for adapter, want := range map[string]string{
-		"jira":   "https://acme.atlassian.net",
-		"linear": linear.DefaultEndpoint,
-		"azdo":   "https://dev.azure.com/acme/Payments",
-		"rally":  config.RallyDefaultBaseURL,
+		"jira":       "https://acme.atlassian.net",
+		"linear":     linear.DefaultEndpoint,
+		"azdo":       "https://dev.azure.com/acme/Payments",
+		"rally":      config.RallyDefaultBaseURL,
+		"servicenow": "https://acme.service-now.com",
 	} {
 		if got := builtinEndpoint(srcs[adapter]); got != want {
 			t.Errorf("builtinEndpoint(%s) = %q, want %q", adapter, got, want)
@@ -530,6 +640,118 @@ func TestNewBuiltinHelpdeskFreshdeskMissingCredentialNamesTheKey(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:FRESHDESK_KEY") {
 		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// --- Gorgias ---
+
+// TestNewBuiltinHelpdeskGorgias proves the resolved apiKey reaches the wire
+// as the HTTP Basic password, with the configured login email as the
+// username, and that the client is pointed at the configured account host.
+func TestNewBuiltinHelpdeskGorgias(t *testing.T) {
+	var mu sync.Mutex
+	var gotAuth, gotPath string
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		gotAuth = r.Header.Get("Authorization")
+		gotPath = r.URL.Path
+		mu.Unlock()
+		w.Write([]byte(`{"id":31,"domain":"acme.gorgias.com"}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	hd, err := newBuiltinHelpdesk(sc, envResolver(map[string]string{"GORGIAS_KEY": "key-1"}))
+	if err != nil {
+		t.Fatalf("newBuiltinHelpdesk: %v", err)
+	}
+	if _, ok := hd.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", hd)
+	}
+	if err := hd.(pinger).Ping(context.Background()); err != nil {
+		t.Fatalf("Ping: %v", err)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	want := "Basic " + base64.StdEncoding.EncodeToString([]byte("ops@acme.com:key-1"))
+	if gotAuth != want {
+		t.Fatalf("Authorization = %q, want the email as username and the resolved key as password", gotAuth)
+	}
+	if gotPath != "/api/account" {
+		t.Fatalf("Ping path = %q, want the account endpoint", gotPath)
+	}
+}
+
+func TestNewBuiltinHelpdeskGorgiasMissingCredentialNamesTheKey(t *testing.T) {
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	_, err := newBuiltinHelpdesk(sc, envResolver(nil))
+	if err == nil {
+		t.Fatal("want an error when the credential cannot be resolved")
+	}
+	if !strings.Contains(err.Error(), "apiKey") || !strings.Contains(err.Error(), "env:GORGIAS_KEY") {
+		t.Fatalf("the error must name the key and the ref, got %v", err)
+	}
+}
+
+// TestBuildDepsGorgiasHelpdesk covers sources.helpdesk wiring end to end
+// through BuildDeps, the same path a real command takes, in the account
+// form an operator actually writes.
+func TestBuildDepsGorgiasHelpdesk(t *testing.T) {
+	t.Setenv("GORGIAS_KEY", "key-1")
+	cfg := &config.Config{Provider: "claude", Root: t.TempDir()}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+
+	deps, cleanup, err := BuildDeps(cfg, "", "", io.Discard)
+	defer cleanup()
+	if err != nil {
+		t.Fatalf("BuildDeps: %v", err)
+	}
+	if _, ok := deps.Helpdesk.(*gorgias.Client); !ok {
+		t.Fatalf("helpdesk is %T, want *gorgias.Client", deps.Helpdesk)
+	}
+}
+
+// TestBuiltinHelpdeskProbeGorgias covers the doctor row: it names the login
+// email the connection authenticates as and never the API key.
+func TestBuiltinHelpdeskProbeGorgias(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"id":31}`))
+	}))
+	t.Cleanup(srv.Close)
+	withDefaultTransport(t, srv.Client().Transport)
+	t.Setenv("GORGIAS_KEY", "key-1")
+
+	sc := &config.SourceConfig{
+		Adapter: "gorgias",
+		BaseURL: "https://" + srv.Listener.Addr().String(),
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	check := builtinHelpdeskProbe(context.Background(), "sources.helpdesk (gorgias)", sc)
+	if !check.OK {
+		t.Fatalf("check: %+v", check)
+	}
+	if check.Detail != "reachable as ops@acme.com" {
+		t.Fatalf("detail = %q, want it to name the login email", check.Detail)
+	}
+	if strings.Contains(check.Detail, "key-1") {
+		t.Fatalf("doctor printed the secret: %q", check.Detail)
 	}
 }
 

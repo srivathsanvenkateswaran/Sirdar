@@ -28,8 +28,10 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
 export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown } }
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
-export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string }
-export interface Check { name: string; ok: boolean; detail: string }
+export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
+/** A doctor row. 'warn' is advisory: ok stays true and no exit code moves. */
+export type CheckLevel = 'ok'|'warn'|'fail'
+export interface Check { name: string; ok: boolean; level?: CheckLevel; detail: string }
 
 // --- eval and the golden set ---
 /** One key in the golden set. The bundle itself never crosses to the UI. */

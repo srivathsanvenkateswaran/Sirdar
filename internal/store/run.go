@@ -87,9 +87,15 @@ type State struct {
 	// record no URL, and a screen reading the URL alone would show them as
 	// work still waiting for a person.
 	Fix struct {
-		Branch    string `json:",omitempty"`
-		Base      string `json:",omitempty"`
-		Commit    string `json:",omitempty"`
+		Branch string `json:",omitempty"`
+		Base   string `json:",omitempty"`
+		Commit string `json:",omitempty"`
+		// Worktree is the linked worktree the session ran in, when the
+		// run used one. It is kept when a run is blocked on a deviation,
+		// so a `--accept-deviation` rerun publishes from the tree the
+		// reviewed commit was made in, and removed once the branch is
+		// pushed.
+		Worktree  string `json:",omitempty"`
 		Deviation string `json:",omitempty"`
 		Pushed    bool   `json:",omitempty"`
 		PRURL     string `json:",omitempty"`
@@ -136,10 +142,20 @@ func ValidKey(key string) bool {
 // Create makes a new run directory (including its bundle and
 // bundle/attachments subdirectories) for key and returns the Run.
 func Create(root, key string, now time.Time) (Run, error) {
+	return CreateID(root, key, NewRunID(now))
+}
+
+// CreateID is Create for a run id the caller minted earlier. `sirdar fix`
+// needs one: it names the run's linked worktree after the run id, and the
+// worktree has to exist before the session that writes into it, which is
+// before the run directory would otherwise be created.
+func CreateID(root, key, runID string) (Run, error) {
 	if !ValidKey(key) {
 		return Run{}, fmt.Errorf("store: invalid run key %q", key)
 	}
-	runID := NewRunID(now)
+	if !ValidKey(runID) {
+		return Run{}, fmt.Errorf("store: invalid run id %q", runID)
+	}
 	dir := filepath.Join(runsDir(root), key, runID)
 	if err := os.MkdirAll(filepath.Join(dir, "bundle", "attachments"), 0o755); err != nil {
 		return Run{}, fmt.Errorf("store: create run dir: %w", err)

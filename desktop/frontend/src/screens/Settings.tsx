@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import type { Check, ConfigSummary, Transport, Workspace } from '../api/types'
+import type { Check, CheckLevel, ConfigSummary, Transport, Workspace } from '../api/types'
 import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
 import ConfigSummaryPanel from '../components/shell/ConfigSummaryPanel'
 import '../components/panels.css'
@@ -16,6 +16,18 @@ type DoctorState =
  * own index.html for it — so the link led back to Sirdar rather than to the
  * documentation.
  */
+/** The mark each doctor level prints, matching `sirdar doctor`'s own. */
+const MARKS: Record<CheckLevel, string> = { ok: 'OK', warn: '!!', fail: 'XX' }
+
+/**
+ * A row's level. Older payloads carry only `ok`, so a check with no level
+ * is read off the bool — and a warning, which has `ok` true, is never
+ * mistaken for a failure.
+ */
+function levelOf(c: Check): CheckLevel {
+  return c.level ?? (c.ok ? 'ok' : 'fail')
+}
+
 export const CONFIG_DOCS_URL =
   'https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/config.md'
 
@@ -181,11 +193,8 @@ export default function Settings(props: {
                   {d?.status === 'done' && (
                     <ul className="doctor-list">
                       {d.checks.map((c) => (
-                        <li
-                          key={c.name}
-                          className={c.ok ? 'doctor-check doctor-check--ok' : 'doctor-check doctor-check--fail'}
-                        >
-                          <span className="doctor-check__mark mono">{c.ok ? 'OK' : '!!'}</span>
+                        <li key={c.name} className={`doctor-check doctor-check--${levelOf(c)}`}>
+                          <span className="doctor-check__mark mono">{MARKS[levelOf(c)]}</span>
                           <span className="doctor-check__name">{c.name}</span>
                           <span className="doctor-check__detail">{c.detail}</span>
                         </li>
