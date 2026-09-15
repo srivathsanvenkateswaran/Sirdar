@@ -957,6 +957,33 @@ func (p *Provider) Doctor(ctx context.Context, binary string) []provider.Check {
 	return []provider.Check{version, p.endpointCheck()}
 }
 
+// DoctorWithConfig adds the row that depends on the workspace rather than
+// on the binary: what a session that kept folder trust would load out of
+// the repository under triage. It is the same residue the run itself warns
+// about at startup (see trustedResidueWarnings), reported before the run
+// instead of during it, and it is a warning — the files are read, the
+// session still goes ahead, and Sirdar's own hook still mediates it.
+func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg provider.DoctorConfig) []provider.Check {
+	checks := p.Doctor(ctx, binary)
+	if cfg.Root == "" || !doctorTrustNeeded(cfg) {
+		return checks
+	}
+	if warnings := trustedResidueWarnings(cfg.Root); len(warnings) > 0 {
+		checks = append(checks, provider.Warn("qwen workspace settings", strings.Join(warnings, "; ")))
+	}
+	return checks
+}
+
+// doctorTrustNeeded mirrors trustNeededForMCP for the two settings Doctor
+// is handed: a workspace that keeps its own MCP servers keeps folder trust
+// to load them, and so does one that has not restricted MCP at all.
+func doctorTrustNeeded(cfg provider.DoctorConfig) bool {
+	if !cfg.MCPWorkspaceOnly {
+		return true
+	}
+	return pathExists(filepath.Join(cfg.Root, ".mcp.json"))
+}
+
 // endpointCheck reports what the session will talk to. A workspace that
 // configured nothing is not an error: the child then uses the login the
 // operator's own qwen binary holds.

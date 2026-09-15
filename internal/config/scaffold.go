@@ -188,12 +188,15 @@ permissions:
     - "which *"
     - "echo *"
   # Globs matched against an MCP tool's full name. While this list is empty,
-  # a tool is allowed unless a word of its name is a write verb (create,
-  # update, delete, send, deploy, buy, save, log, …). A name that also
-  # carries a read word (query, select, read, search, list, get, find,
-  # describe, show) is a read whatever else it says, so run_query and
-  # run_select go through. Naming patterns here replaces that heuristic
-  # outright: anything unlisted is then denied.
+  # a tool is denied when any word of its name is a write verb (create,
+  # update, delete, send, deploy, buy, save, log, run, execute, trigger, …)
+  # or when the name is a generic passthrough whose arguments decide what it
+  # does (api_request, graphql, sql_execute, a bare query). A name with
+  # neither, carrying a read word (query, select, read, search, list, get,
+  # find, describe, show), goes through: read_query, list_tables,
+  # query_loki_logs. Naming patterns here replaces that heuristic outright:
+  # anything unlisted is then denied, which is how a workspace gets a
+  # run_query it needs.
   mcp: []
     # - "mcp__grafana__query_*"
     # - "mcp__grafana__list_*"

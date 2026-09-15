@@ -132,6 +132,49 @@ mistyped source name or a secret written out literally fails the first time the 
 rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
 signing schemes, and the `--allow-remote` warning.
 
+## `sirdar doctor` levels
+
+Every row of the report carries one of three levels, and the mark says which:
+
+| Mark | Level | Means | Exit code |
+|---|---|---|---|
+| `[OK]` | ok | The thing checked works | — |
+| `[!!]` | warn | Worth knowing, not a broken workspace | 0 |
+| `[XX]` | fail | A run would not work, or would not work the way the config says | 1 |
+
+`sirdar doctor` exits non-zero only on a failure, so a warning does not trip a CI gate. What
+warns today: the `mcp` row when `mcp.workspaceOnly` is off (the agent sees every user-level
+server the operator has) and when it is on with no workspace `.mcp.json` (the agent gets no MCP
+tools at all); the Codex `mcp servers` row when the session would see none; the
+`claude environment` row under `billing: api` with a custom `ANTHROPIC_BASE_URL`, where
+`budget.maxUsd` cannot be trusted; and the qwen `workspace settings` row when a session that
+keeps folder trust for MCP would load the repository's own `.qwen/settings.json` or
+`.qwen/agents`.
+
+The desktop Settings screen reads the same list and marks the rows the same way. On the wire
+each check carries `level` (`"ok"`, `"warn"`, `"fail"`) alongside the older `ok` boolean, which
+stays true for a warning.
+
+## `sirdar register` columns
+
+`sirdar register --markdown` fills two cells that used to be left blank for a human to type in:
+Title and Company. Both come from the notes themselves, not from a tracker call — the triage
+note's own title (refined by the RCA note's title where one exists) and the note's
+`company`/`customer` frontmatter, falling back to the customer the run resolved. A resolution
+note carries no title of its own, since it is titled after the fix rather than the issue, so its
+register line keeps the company only.
+
+`RegisterRow` (`internal/store/register.go`) gained `Title` and `Company` fields, both omitted
+from a line's JSON when empty, so `register.jsonl` — append-only and long-lived — reads back
+unchanged for every line written before these columns existed. The wire shape the desktop app
+reads (`internal/app.RegisterRow`) carries `title` and `company` too, and the Register screen's
+own markdown export mirrors the CLI's table shape column for column: Issue holds the tracker
+key, Helpdesk and Tracker stay blank, Triage/RCA/Resolution are `[[wiki links]]` to whichever
+note was written (blank where none was), and Status is resolved once an RCA or resolution note
+exists, fix-pushed once a fix ran with neither, triaged before any of that — the same rule
+`registerEntry.status()` (`cmd/sirdar/cmd_register.go`) and `groupStatus()`
+(`desktop/frontend/src/lib/register.ts`) both apply.
+
 ## Built-in trackers
 
 `jira`, `linear`, `azdo` and `rally` are compiled into Sirdar, so they need no adapter process.
@@ -744,19 +787,46 @@ give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is 
 it reads.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
-`mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless a word
-of its own name segment is a verb that describes a write — `create`, `update`, `edit`,
-`delete`, `remove`, `write`, `save`, `log`, `send`, `post`, `put`, `patch`, `deploy`,
-`pause`, `unpause`, `buy`, `purchase`, `add`, `set`, `upload`, `transition`, `assign`,
-`close`, `archive`, `cancel`, `install`, `reset`, `revoke` — in which case it is denied with
-`MCP tool <name> looks like a write and is not in permissions.mcp`. Every word is tested, not
-just the first, so `mcp__athena__wiki_save` is denied on its second word.
+`mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is judged by its name alone,
+in four steps.
 
-A name that also carries a read word — `query`, `select`, `read`, `search`, `list`, `get`,
-`find`, `describe`, `show` — is treated as a read whatever else it says. That is what keeps
-`mcp__metabase__run_query` and `mcp__oxo-mysql-stg__run_select` usable; `run`, `exec`,
-`start`, `stop`, `schedule` and `trigger` are not write verbs at all, because query tools are
-routinely named that way.
+1. **A write word anywhere in the name denies it.** The name's own segment — everything after
+   the last `__` — is split on `_`, `-`, `.` and camelCase boundaries, and every word is tested
+   against `create`, `update`, `delete`, `remove`, `set`, `write`, `post`, `put`, `patch`,
+   `send`, `add`, `insert`, `upsert`, `trigger`, `run`, `exec`, `execute`, `apply`,
+   `transition`, `assign`, `log`, `upload`, `publish`, `install`, `restart`, `kill`, `pause`,
+   `unpause`, `buy`, `purchase`, `reply`, `resolve`, `schedule`, `deploy`, `edit`, `change`,
+   `modify`, `merge`, `push`, `commit`, `save`, `revoke`, `reset`, `archive`, `cancel`, `close`,
+   `manage`, `generate`, `enable`, `disable`, `start`, `stop`, `grant`, `import`, `restore`,
+   `rename`, `move`, `drop`, `truncate`, `submit`, `approve`, `invite`, `share`, `sync`,
+   `promote`, `scale`, `use`, `input` and `eval`. The verb is wherever the server put it, so
+   `mcp__athena__wiki_save` is denied on its second word, `mcp__github__createPullRequest` on
+   its camelCase first, and `mcp__grafana__alerting_manage_rules` on `manage` in the middle.
+2. **A generically named passthrough is denied too**, because its arguments decide what it does
+   and its name cannot say: a word of `request`, `raw`, `graphql`, `sql`, `proxy` or
+   `passthrough`, or a tool called nothing but `query`. `mcp__grafana__grafana_api_request` is
+   the example that prompted this — it leads with no verb at all and takes a method and a path.
+3. **A read word makes it a read**: `query`, `select`, `read`, `search`, `list`, `get`, `find`,
+   `describe`, `show`, `fetch`, `view`, `lookup`, `count`, `check`, `status`, `health`,
+   `summary`, `metadata`, `label`, `labels`, `names`, `values`, `history`, `analyze`, `analyse`,
+   `suggest`, `explain`, `diff`, `log`, `blame`, `grep`, `cat`, `head`, `tail`, `ls`, `tree`,
+   `peek`, `watch` and `inspect`. So `read_query`, `list_tables` and `describe_table` on a MySQL
+   MCP server, and `mcp__grafana__query_loki_logs`, all go through. (`log` is also a write word
+   above, and a write word wins beside a read one — see below — so `tail_log` is still denied.)
+4. **A name with none of the above is denied too.** A tool whose words match neither list —
+   `mcp__claude-in-chrome__javascript_tool`, `mcp__claude_ai_Figma__use_figma` before `use` was
+   added, a server's own invented noun — used to fall through and be approved for want of a
+   recognised verb. It is now denied the same as a write, which is also why a noun-form read
+   like `get_commit` or `get_log` is denied: `commit` and `log` are write words, and a write
+   word wins over the `get` beside it. A workspace that needs one of these names it in
+   `permissions.mcp`.
+
+A denial reads `MCP tool <name> looks like a write and is not in permissions.mcp`.
+
+The read word no longer wins over a write word beside it, which is a change: `run_query` and
+`run_select` are denied by the heuristic now. Sirdar is read-only by construction, so the side
+to err on is refusing a query tool whose name says `run` — and a workspace that needs one names
+it in `permissions.mcp`, which is the whole rule the moment it is non-empty.
 
 The server part of the name is never what is tested, so
 `mcp__plugin_vercel_vercel__buy_domain` is judged on `buy_domain`.
@@ -1216,9 +1286,18 @@ no other path in a run passes a credential to a child process.
 [OK] openai model — qwen/qwen3-coder
 ```
 
-Not in v1: streaming, image content parts, `response_format: json_schema`, and resuming a
-session in a later process (`sirdar resume` starts a fresh session instead, because the
-transcript lives in the Sirdar process that ran it).
+**Resuming.** The loop writes its message transcript — the system message, every user turn,
+every assistant turn and every tool result — to `transcript.json` in the run's own directory
+(`.sirdar/runs/<run id>/`), mode `0600`, rewritten after each turn. That file is this provider's
+resume handle: `sirdar resume RUN_ID` and the runner's schema retry both start a new session
+against it, and the conversation continues with the new message on the end of it rather than
+starting the triage again. No credential is in the file — the API key travels in an
+Authorization header and is never a message — but everything the session read is, which is why
+it is `0600` and why it lives under `.sirdar/runs/`, which `sirdar init` adds to the repository's
+git excludes. A run directory that cannot be written costs the session its resume handle and
+nothing else: the run carries on, and the loop says so once as a warning.
+
+Not in v1: streaming, image content parts, and `response_format: json_schema`.
 
 ### `provider: acp`
 

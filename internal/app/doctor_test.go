@@ -196,6 +196,55 @@ func clearClaudeGatewayEnvVars(t *testing.T) {
 	}
 }
 
+// TestAdvisoryChecksWarnRatherThanFail is the tri-state itself: a row that
+// is worth reading and is not a broken workspace reports "warn", which
+// leaves OK true so no exit code moves. The mcp row of a default workspace
+// (workspaceOnly on, no .mcp.json) and the api-billing base URL note are
+// the two the dogfood run asked for.
+func TestAdvisoryChecksWarnRatherThanFail(t *testing.T) {
+	root := newWorkspace(t)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcp := mcpCheck(cfg)
+	if mcp.Level != string(provider.LevelWarn) || !mcp.OK {
+		t.Errorf("mcp row = %+v, want a warning that is still OK", mcp)
+	}
+
+	cfg.MCP.WorkspaceOnly = new(bool) // off: the agent sees every user-level server
+	if off := mcpCheck(cfg); off.Level != string(provider.LevelWarn) || !off.OK {
+		t.Errorf("mcp row with workspaceOnly off = %+v, want a warning that is still OK", off)
+	}
+
+	clearClaudeGatewayEnvVars(t)
+	t.Setenv("ANTHROPIC_BASE_URL", "https://gateway.example.com")
+	env := claudeEnvironmentCheck(&config.Config{Billing: "api"})
+	if env.Level != string(provider.LevelWarn) || !env.OK {
+		t.Errorf("claude environment row = %+v, want a warning that is still OK", env)
+	}
+}
+
+// A check that named no level is levelled off its bool, so every row of
+// the report carries one and no caller has to derive it twice.
+func TestEveryDoctorRowCarriesALevel(t *testing.T) {
+	root := newWorkspace(t)
+	cfg, err := config.Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range RunDoctor(context.Background(), cfg) {
+		switch c.Level {
+		case string(provider.LevelOK), string(provider.LevelWarn), string(provider.LevelFail):
+		default:
+			t.Errorf("%s: level %q", c.Name, c.Level)
+		}
+		if c.OK != (c.Level != string(provider.LevelFail)) {
+			t.Errorf("%s: ok=%v disagrees with level %q", c.Name, c.OK, c.Level)
+		}
+	}
+}
+
 // TestDoctorReportsTheMCPRow proves the row reaches the report both shells
 // print, not just the helper.
 func TestDoctorReportsTheMCPRow(t *testing.T) {

@@ -100,3 +100,24 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   qwen, in Sirdar's own agent loop, and for an ACP `fetch` request. The list is empty by
   default, which denies every fetch; Codex's built-in web search stays governed by Codex's own
   `config.toml` and sandbox, which is documented rather than fixed.
+- `sirdar doctor` now reports a third level: `[!!]` for a warning, alongside `[OK]` and `[XX]`
+  for a failure. Only a failure exits non-zero, so an advisory row — every user-level MCP
+  server visible to the agent, a Codex session that will see none, a custom Anthropic base URL
+  under `billing: api`, a qwen session that keeps folder trust and loads the repository's own
+  `.qwen/settings.json` — no longer trips a CI gate. The desktop Settings screen reads the same
+  `level` field.
+- Rewrote the `permissions.mcp` write-verb heuristic: it now tokenises the whole tool name
+  rather than reading only the leading word, denies a generically named passthrough
+  (`*_api_request`, `graphql`, `sql_execute`, a bare `query`) whose arguments decide what it
+  does, and no longer lets a read word beside a write word win — `run_query` and `run_select`
+  are denied by the default heuristic now, and go in `permissions.mcp` for a workspace that
+  needs them. `read_query`, `list_tables` and similar names with no write word still go
+  through.
+- `sirdar register --markdown` now fills the Title and Company cells from the note's own title
+  and its `company`/`customer` frontmatter, instead of leaving them for a human to fill in by
+  hand. `RegisterRow` gained `Title` and `Company`, both omitted from the JSON line when empty,
+  so an existing `register.jsonl` reads back unchanged.
+- `provider: openai` can now resume a blocked or interrupted run: the loop writes its message
+  transcript to `transcript.json` (mode `0600`) in the run directory after every turn, and
+  `sirdar resume` and the runner's schema retry both continue from it instead of starting the
+  triage over.

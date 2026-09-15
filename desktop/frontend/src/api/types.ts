@@ -2,13 +2,15 @@ export type RunState = 'preparing'|'running'|'completed'|'failed'|'blocked'|'ove
 export type NoteKind = 'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: 'claude'|'codex'|'openai'|'acp'|'qwen'; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
-export interface RunSummary { runId: string; key: string; kind: 'triage'|'rca'; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+export interface RunSummary { runId: string; key: string; kind: 'triage'|'rca'|'fix'; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number } }
 export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown } }
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
-export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string }
-export interface Check { name: string; ok: boolean; detail: string }
+export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
+/** A doctor row. 'warn' is advisory: ok stays true and no exit code moves. */
+export type CheckLevel = 'ok'|'warn'|'fail'
+export interface Check { name: string; ok: boolean; level?: CheckLevel; detail: string }
 // What an inbound webhook delivery did. 'key' is absent when the delivery named no ticket.
 export type HookOutcome = 'started'|'skipped'|'filtered'|'ignored'|'rejected';
 export type AppEvent =

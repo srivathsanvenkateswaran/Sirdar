@@ -98,7 +98,7 @@ triage note resolved.
 | Command | Flags | What it does |
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
-| `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates; exits 1 if any check fails |
+| `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates. Each row is `[OK]`, `[!!]` for an advisory warning, or `[XX]` for a failure; exits 1 only on a failure |
 | `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
 | `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
@@ -106,7 +106,7 @@ triage note resolved.
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
-| `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, fix date, RCA date, verdict, severity, resolution, and which notes exist |
+| `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, fix date, RCA date, verdict, severity, resolution, and which notes exist. `--markdown` also fills the Title and Company cells from the notes' own titles and frontmatter |
 | `sirdar version` | none | Prints the binary version |
 
 Exit code is non-zero if any run ended in `failed` or `over_budget`.

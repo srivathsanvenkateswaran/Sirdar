@@ -87,9 +87,9 @@ func TestWireFieldNames(t *testing.T) {
 	wantKeys(t, "RegisterRow", RegisterRow{},
 		"key", "kind", "runId", "date", "provider", "model", "service",
 		"classification", "confidence", "severity", "turns", "costUsd",
-		"triageVerdict", "notePath")
+		"triageVerdict", "notePath", "title", "company")
 
-	wantKeys(t, "Check", Check{}, "name", "ok", "detail")
+	wantKeys(t, "Check", Check{}, "name", "ok", "level", "detail")
 
 	// Each event kind carries only its own fields on the wire.
 	wantKeys(t, "run.updated", Event{Kind: KindRunUpdated, WorkspaceID: "w", Run: &summary},
@@ -130,9 +130,15 @@ func TestConversionsCarryTheState(t *testing.T) {
 		t.Fatalf("nil slices in %+v", detail)
 	}
 
-	row := RegisterRowOf(store.RegisterRow{Key: "OMNI-1", Kind: "rca", TriageVerdict: "confirmed", CostUSD: 1.5})
+	row := RegisterRowOf(store.RegisterRow{
+		Key: "OMNI-1", Kind: "rca", TriageVerdict: "confirmed", CostUSD: 1.5,
+		Title: "Export job times out", Company: "NEQSA SWEET",
+	})
 	if row.Key != "OMNI-1" || row.TriageVerdict != "confirmed" || row.CostUSD != 1.5 {
 		t.Fatalf("row %+v", row)
+	}
+	if row.Title != "Export job times out" || row.Company != "NEQSA SWEET" {
+		t.Fatalf("row title/company %+v", row)
 	}
 }
 
