@@ -210,7 +210,7 @@ func TestInitScaffoldsWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/"} {
+	for _, want := range []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/", ".sirdar/worktrees/"} {
 		if !strings.Contains(string(exclude), want) {
 			t.Errorf("exclude is missing %q:\n%s", want, exclude)
 		}
@@ -229,6 +229,61 @@ func TestInitScaffoldsWorkspace(t *testing.T) {
 	if strings.Count(string(after), ".sirdar/runs/") != 1 {
 		t.Errorf("exclude line was appended twice:\n%s", after)
 	}
+}
+
+// TestInitInLinkedWorktreeExcludesInMainTree proves `sirdar init` run inside
+// a linked worktree finds the exclude file to write: <root>/.git is a file
+// there, not a directory, and the file it names belongs to the main tree's
+// .git/info, not to anything under the worktree itself.
+func TestInitInLinkedWorktreeExcludesInMainTree(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not on PATH")
+	}
+
+	main := t.TempDir()
+	runGit(t, main, "init", "-b", "main", ".")
+	if err := exec.Command("git", "-C", main, "var", "GIT_AUTHOR_IDENT").Run(); err != nil {
+		t.Skip("git has no author identity configured in this environment")
+	}
+	if err := os.WriteFile(filepath.Join(main, "README.md"), []byte("# test\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, main, "add", "-A")
+	runGit(t, main, "commit", "-q", "-m", "init")
+
+	worktree := filepath.Join(t.TempDir(), "linked")
+	runGit(t, main, "worktree", "add", "-b", "wt", worktree)
+
+	if info, err := os.Lstat(filepath.Join(worktree, ".git")); err != nil || info.IsDir() {
+		t.Fatalf("expected %s/.git to be a file (a linked worktree), got err=%v isDir=%v", worktree, err, info != nil && info.IsDir())
+	}
+
+	chdir(t, worktree)
+	mustRun(t, 0, "init")
+
+	exclude, err := os.ReadFile(filepath.Join(main, ".git", "info", "exclude"))
+	if err != nil {
+		t.Fatalf("the main tree's exclude file was not written: %v", err)
+	}
+	for _, want := range []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/", ".sirdar/worktrees/"} {
+		if !strings.Contains(string(exclude), want) {
+			t.Errorf("main tree's exclude is missing %q:\n%s", want, exclude)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(worktree, ".git", "info", "exclude")); err == nil {
+		t.Errorf("exclude should not be written under the worktree's own .git")
+	}
+}
+
+func runGit(t *testing.T, dir string, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %s: %v\n%s", strings.Join(args, " "), err, out)
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func TestDoctorReportsBrokenWorkspace(t *testing.T) {

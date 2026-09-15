@@ -177,6 +177,14 @@ budget:
   # check: it records an overspend, it cannot stop one. maxTurns and
   # maxMinutes are the budgets that bite while a run is going.
   maxUsd: 5
+  # Minutes of complete silence from the provider — no tool call, no
+  # assistant text, no usage line — before the run is cancelled and marked
+  # failed with "stalled: no activity for Nm". The timer restarts on every
+  # event, so a long tool call is not a stall; a provider that died without
+  # closing its stream is. A run waiting on you (the agent asked a question,
+  # or a rate limit parked it) is never counted as stalled. 0 turns the
+  # check off and leaves maxMinutes as the only thing that ends a hung run.
+  stallMinutes: 6
 concurrency: 1
 attachments:
   maxBytes: 10485760       # 10 MiB. Anything larger, and anything the session

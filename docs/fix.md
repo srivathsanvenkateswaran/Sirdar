@@ -19,40 +19,52 @@ replay from `sirdar eval` can never be mistaken for a real triage.
 
 ## What the run does
 
-1. **Preflight.** The working tree must be clean — a fix stages and commits everything in it, so
-   it must not sweep up uncommitted work. A tree whose only uncommitted entries sit under
-   `.sirdar/` gets a specific message pointing at `.git/info/exclude`, since that is what
-   `sirdar init` writes and an older workspace may be missing. Then `git fetch origin`, and the
-   default branch is read from `origin/HEAD` (falling back to `main` or `master` if that symbolic
-   ref is not set).
-2. **Branch.** `git checkout -B fix-<key>-<title-slug> origin/<default>`. `--base BRANCH`
-   overrides both the branch cut from and the branch targeted. The fix branch is refused if it
-   would equal the base branch; the default branch is never committed to and never force-pushed,
-   and neither is anything else.
+1. **Preflight.** `git fetch origin`, and the default branch is read from `origin/HEAD` (falling
+   back to `main` or `master` if that symbolic ref is not set). Under `fix.inPlace` the working
+   tree must also be clean, because that mode stages and commits everything in the tree you are
+   standing in; a tree whose only uncommitted entries sit under `.sirdar/` gets a specific message
+   pointing at `.git/info/exclude`, since that is what `sirdar init` writes and an older workspace
+   may be missing. The default mode has nothing to refuse: the session works in a tree of its own.
+2. **Branch and worktree.** `git worktree add -B fix-<key>-<title-slug>
+   <root>/.sirdar/worktrees/<run-id> origin/<default>`, so the branch is checked out in a
+   directory of this run's own and your HEAD does not move. Under `fix.inPlace` it is
+   `git checkout -B fix-<key>-<title-slug> origin/<default>` in your own tree instead. `--base
+   BRANCH` overrides both the branch cut from and the branch targeted. The fix branch is refused
+   if it would equal the base branch; the default branch is never committed to and never
+   force-pushed, and neither is anything else. See Worktree mode below.
 3. **Snapshot.** Before the session starts, `sirdar fix` sha256s every file under the workspace's
-   `.sirdar/` (excluding its own `runs/`, `register.jsonl` and `eval/`) and under the directory
-   git runs this repository's hooks from. See Confinement below.
+   `.sirdar/` (excluding its own `runs/`, `register.jsonl`, `eval/` and `worktrees/`) and under
+   the directory git runs this repository's hooks from. See Confinement below.
 4. **One session**, with write permission, given the triage note, the RCA note if one exists, and
-   the workspace's playbooks. It is told to implement the note's Proposed Fix and nothing else,
-   to run the workspace's build and tests, and to make no commits of its own. It answers with
-   JSON: `summary`, `filesChanged`, `testsRun`, `risks`, and `deviationFromNote`.
+   the workspace's playbooks. It stands in the worktree and its writes are confined to it. It is
+   told to implement the note's Proposed Fix and nothing else, to run the workspace's build and
+   tests, and to make no commits of its own. It answers with JSON: `summary`, `filesChanged`,
+   `testsRun`, `risks`, and `deviationFromNote`.
 5. **Snapshot again**, before the report is read and before any git command. A difference from
    the first snapshot fails the run outright: nothing is committed, nothing is pushed, and the
    run is marked `failed`. See Confinement below.
-6. **Commit.** Everything but `.sirdar/` is staged (`git add -A -- . :(exclude).sirdar`) and
-   committed with `git commit --no-verify`. The subject is `fix: <summary>`; the body carries the
-   note's root cause and the files changed. The commit carries no AI attribution trailer of any
-   kind — the engineer who approved the note is the author of the change.
-7. **Push and pull request.** `git push --no-verify -u origin <branch>`. Then, if `gh` is on
-   `PATH` and authenticated, `gh pr create` with title `[KEY] fix: <summary>` and a body carrying
-   the symptom, the root cause, the fix, the checks run, and the tracker and helpdesk links from
-   the note. Without `gh` — or if `gh pr create` fails — the branch is still pushed, and the
-   compare-page URL (built from the remote's GitHub or GitLab URL) plus the ready-to-paste title
-   and body are printed instead. `--no-pr` pushes and stops there without attempting `gh`.
+6. **Commit**, in the worktree. Everything but `.sirdar/` is staged
+   (`git add -A -- . :(exclude).sirdar`) and committed with `git commit --no-verify`. The subject
+   is `fix: <summary>`; the body carries the note's root cause and the files changed. The commit
+   carries no AI attribution trailer of any kind — the engineer who approved the note is the
+   author of the change.
+7. **Push and pull request**, from the same worktree. `git push --no-verify -u origin <branch>`.
+   Then, if `gh` is on `PATH` and authenticated, `gh pr create` with title `[KEY] fix: <summary>`
+   and a body carrying the symptom, the root cause, the fix, the checks run, and the tracker and
+   helpdesk links from the note. Without `gh` — or if `gh pr create` fails — the branch is still
+   pushed, and the compare-page URL (built from the remote's GitHub or GitLab URL) plus the
+   ready-to-paste title and body are printed instead. `--no-pr` pushes and stops there without
+   attempting `gh`.
 8. **Record.** Both copies of the triage note (the run copy and the filed copy) get their
    frontmatter set to `status: fix-pushed`, plus `pr:` and `commit:` when those exist. A
    `kind: fix` row is appended to `.sirdar/register.jsonl`. A note or a row that fails to write is
    reported and skipped rather than failing the command — the branch is already pushed by then.
+9. **Remove the worktree.** `git worktree remove --force` followed by `git worktree prune`, run
+   from the main tree. `--force` is deliberate: what is left in the tree after the commit is
+   build output the session's `make test` produced, and refusing to clean up over it would strand
+   a directory for every fix that ever ran. A removal that fails is reported, not fatal — the
+   commit is pushed by then, and a leftover directory is untidy rather than wrong. The branch
+   itself stays: it is on the remote and in the pull request.
 
 Both the commit and the push run with `--no-verify`. A repository's hooks are code, and the
 commit and push happen moments after an agent session had write access to the tree; `--no-verify`
@@ -61,7 +73,58 @@ running their own hooks over the branch afterwards — the pull request is where
 belongs.
 
 `--dry-run` stops after the branch and the prompt: no session, no commit, no push. It writes the
-prompt to `.sirdar/runs/<KEY>/<run-id>/prompt.md` so you can read exactly what would be sent.
+prompt to `.sirdar/runs/<KEY>/<run-id>/prompt.md` so you can read exactly what would be sent. The
+worktree it made is taken away again, since nothing ran in it; the branch stays, because reading
+the prompt is usually the step before running the fix for real.
+
+## Worktree mode
+
+By default the session runs in a linked git worktree at `<root>/.sirdar/worktrees/<run-id>`, not
+in the tree you are standing in. That is what makes `sirdar fix` safe to run on a machine
+somebody is using:
+
+- Your uncommitted work is not in the tree the agent edits, is not swept into its commit, and is
+  still there when the run ends.
+- Your HEAD does not move. The fix branch is checked out somewhere else, and you stay on whatever
+  you were on.
+- The agent's root, the paths reserved from its writes, and the hooks directory reserved for the
+  session all follow the worktree. The workspace's configuration and playbooks are still read
+  from the main tree's `.sirdar/`, which is exactly what the snapshot guard watches: those files
+  shape the session and must come out of it byte for byte as they went in.
+- The commit, the push and the pull request are made from the worktree, because that is where the
+  branch is checked out.
+
+The directory is named after the run id, so `sirdar runs` and what is on disk say the same thing.
+`sirdar init` adds `.sirdar/worktrees/` to `.git/info/exclude`; that file lives in the
+repository's common git directory, so the one exclusion covers every linked worktree as well as
+the main tree.
+
+**A worktree is removed when the run succeeds and kept when it does not.** A run blocked on a
+deviation keeps its worktree, and the blocked output prints the path: the commit sitting in it is
+what you are being asked to read, and `sirdar fix KEY --accept-deviation` pushes from it. A run
+that failed its guard check or errored keeps it too, for the same reason — the evidence is in it.
+A rerun for the same ticket clears any worktree of Sirdar's own that still holds the branch
+before making its own, since git checks a branch out in one worktree at a time. A worktree
+elsewhere — one of yours, holding that branch — is left alone, and git's refusal is the right
+answer there.
+
+You can delete a kept worktree yourself at any time (`git worktree remove --force <path>`);
+`--accept-deviation` falls back to publishing the recorded commit from the main tree, because the
+branch lives in the shared repository rather than in the directory.
+
+### `fix.inPlace`
+
+```yaml
+fix:
+  inPlace: true
+```
+
+restores the behaviour the flow had before linked worktrees: `git checkout -B` on the tree you
+are standing in, which needs that tree clean and leaves it on the fix branch when the run ends.
+Use it for a repository where a fresh checkout is not usable on its own — an untracked `.env`, a
+`node_modules/` or a build cache the tests need and nothing rebuilds cheaply — and be aware of
+what you are giving up: the dirty-tree preflight is your only protection against a fix sweeping
+up uncommitted work, and it is the reason that preflight exists.
 
 ## The deviation gate and `--accept-deviation`
 
@@ -100,10 +163,12 @@ layer:
 **The policy path check (`decideWrite`).** For Claude and `openai`, every write-shaped tool call
 carries a target path (`file_path`, `notebook_path`, or `path`). `decideWrite` resolves it with
 `provider.ResolveWithin`, the same symlink-resolving confinement every path-taking surface in
-Sirdar goes through, and refuses anything that does not land inside the workspace root. A target
-that does resolve inside the root is checked again with `provider.ReservedWrite`, which refuses
-`.git` at any depth, the workspace's own `.sirdar`, and the repository's `core.hooksPath` when it
-sets one (carried on `PermissionPolicy.ExtraReserved`).
+Sirdar goes through, and refuses anything that does not land inside the session's root — the
+worktree, or the workspace itself under `fix.inPlace`. A target that does resolve inside the root
+is checked again with `provider.ReservedWrite`, which refuses `.git` at any depth, the root's own
+`.sirdar`, and the repository's `core.hooksPath` when it sets one (carried on
+`PermissionPolicy.ExtraReserved`). The workspace's `.sirdar/` is outside the worktree altogether,
+so the path check refuses a write to it before the reserved-name rule is even reached.
 
 **The agenttools confinement.** Sirdar's own agent loop (`provider: openai`) checks the same two
 rules a second time, inside the tool implementation itself
@@ -118,16 +183,27 @@ case-insensitive filesystems exactly as `.git/hooks/pre-commit` is refused on Li
 `provider.HooksDir` names the directory git actually runs this repository's hooks from:
 `core.hooksPath` (read once per run with `git config --get core.hooksPath`, with a leading `~` or
 `~user` expanded to a home directory the way git itself expands it) when the repository sets one,
-and `<root>/.git/hooks` otherwise. That path is carried as an extra reserved directory on top of
-the two built-in ones, so a repository using husky, lefthook, or a checked-in `.githooks/` is
-covered the same as one using the default `.git/hooks`.
+and the `hooks/` directory of the repository's **common** git directory otherwise. That path is
+carried as an extra reserved directory on top of the two built-in ones, so a repository using
+husky, lefthook, or a checked-in `.githooks/` is covered the same as one using the default
+`.git/hooks`.
+
+The common directory is what makes this right in a worktree. There, `<root>/.git` is a *file*
+pointing at `<main>/.git/worktrees/<name>`, and the hooks git would run on a commit made from
+that worktree are the main repository's, in `<main>/.git/hooks`. Joining `.git/hooks` onto the
+worktree would reserve and watch a path that cannot exist while leaving the hooks that actually
+run unwatched, so `provider.HooksDir` asks git (`git rev-parse --git-common-dir`) instead of
+assuming.
 
 **The snapshot guard (`internal/fix/guard.go`).** This is the only layer that does not depend on
 a provider honouring anything. Before the session starts, and again the instant it ends, before
 the first git command, `sirdar fix` takes a sha256 of every file (mode included, so making a file
 executable counts as a change) under the workspace's `.sirdar/` — excluding `runs/`,
-`register.jsonl`, and `eval/`, which the run legitimately writes to itself — and under whatever
-`provider.HooksDir` names for that repository. A file created, modified, or deleted between the
+`register.jsonl`, `eval/`, and `worktrees/`, which the run legitimately writes to itself — and
+under whatever `provider.HooksDir` names for the tree the session ran in. `worktrees/` is
+excluded because it is the tree the session is *supposed* to change: digesting it would hash the
+whole repository twice per run and then fail every fix for having made one. A file created,
+modified, or deleted between the
 two snapshots fails the run: nothing is restored, nothing is committed, and nothing is pushed. The
 run's `state.json` is marked `failed`. Nothing is restored deliberately — the operator's own copy
 of what changed is treated as better evidence than an automatic revert, and the point of the

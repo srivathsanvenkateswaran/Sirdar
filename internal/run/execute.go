@@ -53,6 +53,10 @@ type execution struct {
 	retrySession provider.Session
 	live         liveSession
 
+	// stall watches for a provider that has gone silent. It is nil when
+	// the workspace turned the check off.
+	stall *stallGuard
+
 	question    string
 	rateLimited bool
 	resetsAt    time.Time
@@ -84,6 +88,139 @@ func (l *liveSession) cancel() {
 	if s != nil {
 		s.Cancel()
 	}
+}
+
+// stallGuard cancels a session whose provider has stopped saying anything.
+//
+// A live agent session is never quiet for long: a tool starts, a tool
+// finishes, a line of assistant text arrives, a usage line lands. Silence
+// means the process died without closing its stream, or is waiting on
+// something that will never arrive. The wall-clock budget catches that
+// eventually, but "eventually" is 25 minutes of a run that has been dead
+// since its first one.
+//
+// The countdown restarts on every event, so a tool call that takes longer
+// than the timeout is not a stall. It is suspended outright once the run
+// is waiting on a person rather than on the agent — the agent asked a
+// question nobody is there to answer, or a rate limit parked the run —
+// because that is a blocked run, not a hung one, and cancelling it would
+// throw away a handle the operator can resume from.
+//
+// Every method is safe on a nil guard, which is what a workspace that set
+// budget.stallMinutes to 0 gets.
+type stallGuard struct {
+	d time.Duration
+
+	mu    sync.Mutex
+	timer *time.Timer
+	held  bool // the run is waiting on a person; do not count the silence
+	done  bool // fired, or the session is over
+
+	stalled atomic.Bool
+}
+
+// newStallGuard starts the countdown. onStall runs on the timer's own
+// goroutine when the silence runs out, once at most; d <= 0 returns nil,
+// which every method below tolerates.
+func newStallGuard(d time.Duration, onStall func()) *stallGuard {
+	if d <= 0 {
+		return nil
+	}
+	g := &stallGuard{d: d}
+	g.timer = time.AfterFunc(d, func() {
+		g.mu.Lock()
+		if g.done || g.held {
+			g.mu.Unlock()
+			return
+		}
+		g.done = true
+		g.mu.Unlock()
+		g.stalled.Store(true)
+		onStall()
+	})
+	return g
+}
+
+// reset restarts the countdown. Every event the run reads does this.
+func (g *stallGuard) reset() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.done || g.held {
+		return
+	}
+	g.timer.Reset(g.d)
+}
+
+// hold suspends the countdown: what is being waited on right now is not the
+// model. A caller that means this for the rest of the run — the session
+// asked a question, or a rate limit parked it — simply never calls rearm;
+// one that means it for one specific wait, such as the time a fresh
+// process takes to start, calls rearm once that wait is over.
+func (g *stallGuard) hold() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.done {
+		return
+	}
+	g.held = true
+	g.timer.Stop()
+}
+
+// rearm resumes the countdown after a hold that was only ever meant to
+// cover one wait — Provider.Start for a resumed session, say — as opposed
+// to a hold that means the run is now blocked on a person or a clock for
+// good. reset would not do this: it leaves a held guard held, on purpose,
+// so that the ordinary per-event reset during that same wait cannot
+// accidentally undo a hold meant to last the rest of the run.
+func (g *stallGuard) rearm() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.done {
+		return
+	}
+	g.held = false
+	g.timer.Reset(g.d)
+}
+
+// stop ends the watch, for a session that has produced its answer or is
+// being reaped.
+func (g *stallGuard) stop() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	g.done = true
+	g.mu.Unlock()
+	g.timer.Stop()
+}
+
+// fired reports whether this run was cancelled for going quiet.
+func (g *stallGuard) fired() bool { return g != nil && g.stalled.Load() }
+
+// stallReason is the run's Reason and the text of the error event that
+// records the cancellation. It is Sirdar's own words, short enough to pass
+// notifyReason's cap whole.
+func stallReason(d time.Duration) string {
+	return "stalled: no activity for " + stallWindow(d)
+}
+
+// stallWindow renders the timeout the way the setting names it — whole
+// minutes, because budget.stallMinutes is in minutes — and falls back to
+// the duration's own form for the sub-minute values a test uses.
+func stallWindow(d time.Duration) string {
+	if d >= time.Minute && d%time.Minute == 0 {
+		return fmt.Sprintf("%dm", int(d/time.Minute))
+	}
+	return d.String()
 }
 
 // execute starts one agent session for a prepared run, streams its events
@@ -132,7 +269,24 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		defer timer.Stop()
 	}
 
+	// The stall watch is the shorter of the two clocks: it measures
+	// silence rather than elapsed time, so it catches a provider that
+	// died in its first minute instead of waiting out the wall-clock
+	// budget on a session that stopped existing.
+	stallFor := r.stallTimeout()
+	ex.stall = newStallGuard(stallFor, ex.live.cancel)
+	defer ex.stall.stop()
+
 	sessions := r.consume(ctx, p, sess, log, pl, ex)
+
+	// The cancellation happened on the timer's goroutine, so the event
+	// log is written here, once the stream has drained and nothing else
+	// is appending to it.
+	if ex.stall.fired() {
+		stalled := provider.Event{Kind: provider.EvError, At: r.now(), Text: stallReason(stallFor)}
+		r.record(p, log, stalled)
+		r.progress(p, stalled)
+	}
 
 	// Every session started for this run is reaped, and the last one's
 	// result is the run's: a schema retry that had to open a fresh session
@@ -194,6 +348,9 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		if ex.overBudget != "" {
 			p.state.Warnings = append(p.state.Warnings, ex.overBudget+", after the note was written")
 		}
+		if ex.stall.fired() {
+			p.state.Warnings = append(p.state.Warnings, stallReason(stallFor)+", after the note was written")
+		}
 		return r.finish(ctx, p, store.StatusCompleted, "", ex.row)
 	case timedOut.Load():
 		return r.finish(ctx, p, store.StatusOverBudget,
@@ -212,6 +369,11 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 			reason += ", resets at " + ex.resetsAt.Format(time.RFC3339)
 		}
 		return r.finish(ctx, p, store.StatusBlocked, reason, note.DigestRow{})
+	case ex.stall.fired():
+		// Last of the verdicts, because every other one names something
+		// that actually happened: an interrupt, a budget, a malformed
+		// stream. Silence is what is left when none of them did.
+		return r.finish(ctx, p, store.StatusFailed, stallReason(stallFor), note.DigestRow{})
 	default:
 		reason := "the session ended without a JSON note"
 		if res.ExitErr != nil {
@@ -225,8 +387,13 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 // the session the provider should start.
 func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	cfg := r.Config
+	// Where the session stands, and the root every write is confined to.
+	// It is the workspace root for everything but a fix run in a linked
+	// worktree, whose tree is the worktree and whose .sirdar/ is still
+	// the workspace's.
+	root := p.sessionRoot(cfg.Root)
 	spec := provider.SessionSpec{
-		Cwd:          cfg.Root,
+		Cwd:          root,
 		Prompt:       p.promptText,
 		Model:        p.state.Model,
 		OutputSchema: schemaFor(p.kind),
@@ -234,7 +401,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			BashAllow:  cfg.Permissions.Bash,
 			MCPAllow:   cfg.Permissions.MCP,
 			FetchAllow: cfg.Permissions.Fetch,
-			Root:       cfg.Root,
+			Root:       root,
 		},
 		Mode: provider.ModeTriage,
 		// mcp.workspaceOnly travels as these two fields for every
@@ -265,8 +432,8 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// checked-in .githooks/) keeps the code git runs on commit and
 		// push in an ordinary source directory, which the .git rule does
 		// not cover. It is read once, here, and reserved for this session.
-		spec.Policy = provider.FixPolicy(cfg.Root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
-			extraReserved(cfg.Root))
+		spec.Policy = provider.FixPolicy(root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
+			extraReserved(root))
 		// Where a fix may fetch from is the same list a triage may: the
 		// destination question does not change because the session is
 		// allowed to edit files.
@@ -369,6 +536,11 @@ func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session
 		}
 		sess, ex.retrySession = ex.retrySession, nil
 		ex.live.set(sess)
+		// The retry session is live: the hold handleFinal put on for
+		// Provider.Start is over, and the countdown resumes rather than
+		// staying suspended. reset would not do this — the guard is
+		// still held at this point — so this is rearm, not reset.
+		ex.stall.rearm()
 		sessions = append(sessions, sess)
 	}
 }
@@ -383,12 +555,22 @@ func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.
 		case <-done:
 			done = nil // an interrupt is handled once; the stream still drains
 			ex.interrupted = true
+			// Stopped before the cancel, not after: an interrupt is why
+			// this session is ending, and the stall guard's own timer
+			// racing to the same conclusion a moment later must not also
+			// mark the run stalled and put a misleading error next to the
+			// real one in events.jsonl.
+			ex.stall.stop()
 			sess.Cancel()
 		case ev, ok := <-events:
 			if !ok {
 				events = nil
 				continue
 			}
+			// Every event is proof the provider is alive, whatever it
+			// says, so the stall countdown starts again here rather
+			// than in the handler for any particular kind.
+			ex.stall.reset()
 			r.record(p, log, ev)
 			r.progress(p, ev)
 			r.handleEvent(ctx, p, sess, pl, ex, ev)
@@ -506,9 +688,15 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		switch {
 		case b.MaxUSD > 0 && u.CostUSD > b.MaxUSD:
 			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", u.CostUSD, b.MaxUSD)
+			// Stopped beside the cancel it decided, for the same reason
+			// as the interrupt branch: the budget is why this session is
+			// ending, and the stall guard's own timer must not also fire
+			// and misname the reason in events.jsonl.
+			ex.stall.stop()
 			sess.Cancel()
 		case b.MaxTurns > 0 && u.Turns > b.MaxTurns:
 			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
+			ex.stall.stop()
 			sess.Cancel()
 		}
 
@@ -516,9 +704,17 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		ex.rateLimited = true
 		ex.resetsAt = ev.ResetsAt
 		pl.pause(ev.ResetsAt)
+		// A run parked behind a rate limit is waiting on a clock the
+		// provider owns. The silence after this is the block, not a
+		// stall, and the run keeps the handle it can resume from.
+		ex.stall.hold()
 
 	case provider.EvQuestion:
 		ex.question = ev.Text
+		// The agent is waiting on an operator who is not here — the
+		// blocked state `sirdar resume` exists for. Counting that
+		// silence as a stall would turn every question into a failure.
+		ex.stall.hold()
 
 	case provider.EvError:
 		ex.malformed++
@@ -555,6 +751,10 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		// Write everything the run exists to produce before waiting on
 		// anything else, then end the session on purpose instead of
 		// hoping it ends by itself.
+		// The answer is in; what happens to the process now is
+		// endSession's business, and a provider that takes its time
+		// exiting is not a stalled run.
+		ex.stall.stop()
 		ex.row, ex.completeErr = r.complete(p, ex.final)
 		p.state.UpdatedAt = r.now()
 		if werr := p.run.WriteState(p.state); werr != nil {
@@ -588,6 +788,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// note fails validation there is often no session left to answer on.
 	// Carry the retry into a fresh session against the same provider
 	// handle instead of throwing the run away over it.
+	//
+	// The guard is held across Provider.Start: starting a fresh process is
+	// not silence from a live session, and a start slow enough to cross
+	// the stall window must not fail a run that is about to carry on
+	// normally. consume rearms it once the retry session is live; on
+	// failure here the run is ending anyway; held is where it stays.
+	ex.stall.hold()
 	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
 	if startErr != nil {
 		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)
@@ -1147,6 +1354,19 @@ func firstSentence(s string) string {
 		return strings.TrimSpace(s[:i+1])
 	}
 	return s
+}
+
+// stallTimeout is how long this run tolerates silence from the provider:
+// the Runner's override when it has one, else budget.stallMinutes. Zero,
+// from either, turns the check off.
+func (r *Runner) stallTimeout() time.Duration {
+	if r.StallTimeout != 0 {
+		return r.StallTimeout
+	}
+	if r.Config == nil {
+		return 0
+	}
+	return time.Duration(r.Config.StallMinutes()) * time.Minute
 }
 
 // grace is how long endSession waits before cancelling, taking the

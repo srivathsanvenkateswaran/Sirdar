@@ -27,6 +27,18 @@ type FixOptions struct {
 	// the commit this run produced.
 	Branch string
 	Base   string
+
+	// Root is the tree the session runs in and is confined to: the linked
+	// worktree internal/fix created for this run. Empty means the
+	// workspace root, which is what fix.inPlace asks for. The workspace's
+	// own .sirdar/ — the configuration, the playbooks, the run directory
+	// this run writes into — is read from the workspace root either way.
+	Root string
+
+	// RunID names the run directory. internal/fix mints it before the
+	// session so the worktree can be named after it; empty means the run
+	// mints its own.
+	RunID string
 }
 
 // Fix runs one write-enabled agent session against the workspace and files
@@ -65,7 +77,11 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 		return nil, fmt.Errorf("run: a fix run needs a prompt")
 	}
 
-	rn, err := store.Create(cfg.Root, key, now)
+	runID := o.RunID
+	if runID == "" {
+		runID = store.NewRunID(now)
+	}
+	rn, err := store.CreateID(cfg.Root, key, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +90,7 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 		model = cfg.Model
 	}
 
-	p := &prepared{run: rn, kind: store.KindFix, promptText: o.Prompt}
+	p := &prepared{run: rn, kind: store.KindFix, promptText: o.Prompt, root: o.Root}
 	p.state = store.State{
 		RunID:     filepath.Base(rn.Dir),
 		Key:       key,
@@ -90,6 +106,9 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 	p.state.Budget.MaxUSD = cfg.Budget.MaxUSD
 	p.state.Fix.Branch = o.Branch
 	p.state.Fix.Base = o.Base
+	if o.Root != "" && o.Root != cfg.Root {
+		p.state.Fix.Worktree = o.Root
+	}
 	if o.Branch != "" {
 		p.state.Warnings = append(p.state.Warnings, "fix branch: "+o.Branch)
 	}

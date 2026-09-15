@@ -492,7 +492,11 @@ func TestHooksPathReadsTheRepositoryConfiguration(t *testing.T) {
 	if p := HooksPath(t.Context(), root); p != "" {
 		t.Errorf("HooksPath on a repository that sets none = %q, want \"\"", p)
 	}
-	if got, want := HooksDir(t.Context(), root), filepath.Join(root, ".git", "hooks"); got != want {
+	// Compared through EvalSymlinks on both sides: with no core.hooksPath
+	// set, HooksDir asks git for the repository's common directory, and
+	// git answers with the resolved path (/private/var/... on macOS) while
+	// t.TempDir hands out the symlinked one (/var/...).
+	if got, want := HooksDir(t.Context(), root), filepath.Join(root, ".git", "hooks"); !sameDir(got, want) {
 		t.Errorf("HooksDir = %q, want %q", got, want)
 	}
 
@@ -570,6 +574,24 @@ func TestExpandHomeHandlesTildeUser(t *testing.T) {
 	if got, ok := expandHome("~sirdar-nonexistent-user-12345"); ok {
 		t.Errorf("expandHome expanded an unknown user to %q", got)
 	}
+}
+
+// sameDir reports whether two paths name the same directory once symlinks
+// are resolved on both sides. A path that does not exist is compared as it
+// stands, which is what the hooks directory of a fresh repository is.
+func sameDir(a, b string) bool {
+	resolve := func(p string) string {
+		if r, err := filepath.EvalSymlinks(p); err == nil {
+			return r
+		}
+		// The leaf may not exist yet; resolving the parent is enough to
+		// get past a symlinked temp root.
+		if r, err := filepath.EvalSymlinks(filepath.Dir(p)); err == nil {
+			return filepath.Join(r, filepath.Base(p))
+		}
+		return filepath.Clean(p)
+	}
+	return resolve(a) == resolve(b)
 }
 
 func gitInit(t *testing.T, dir string) {

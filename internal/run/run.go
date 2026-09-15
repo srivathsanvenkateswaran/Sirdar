@@ -100,6 +100,12 @@ type Runner struct {
 	// closeGrace default.
 	CloseGrace time.Duration
 
+	// StallTimeout overrides budget.stallMinutes, so a test can assert
+	// the stall check without sitting through six minutes of silence.
+	// Zero means the configured value; a negative value turns the check
+	// off whatever the workspace configured.
+	StallTimeout time.Duration
+
 	// onPause, when set, is called every time a rate-limit pause is
 	// recorded, so a test can synchronise on it. Production leaves it nil.
 	onPause func(time.Time)

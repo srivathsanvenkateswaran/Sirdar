@@ -64,6 +64,7 @@ rather than being silently ignored.
  Model round-trips before a run is marked `over_budget`; see Budgets below |
 | `budget.maxMinutes` | int | `25` | Wall-clock minutes before a run is cancelled and marked `over_budget` |
 | `budget.maxUsd` | float | `5` | Cost, from provider usage events, before a run is marked `over_budget`; with Claude this is checked only once the session ends (see Budgets) |
+| `budget.stallMinutes` | int | `6` | Minutes of complete silence from the provider before the run is cancelled and marked `failed` with `stalled: no activity for Nm`; `0` turns the check off. See Budgets below |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
 | `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
@@ -80,6 +81,7 @@ rather than being silently ignored.
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
 | `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
+| `fix.inPlace` | bool | `false` | Run the fix session in the operator's own working tree (`git checkout -B`) instead of a linked worktree under `.sirdar/worktrees/<run-id>`; see Fix worktrees below |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
 | `providers.claude.path` | string | `""` (look up `claude` on `PATH`) | Path to the Claude Code binary |
 | `providers.codex.path` | string | `""` (look up `codex` on `PATH`) | Path to the Codex binary |
@@ -450,7 +452,7 @@ the HMAC signature — is in `docs/notifications.md`.
 
 ## Budgets
 
-Three budgets end a run early, and they do not all see the same thing.
+Four budgets end a run early, and they do not all see the same thing.
 
 **`budget.maxTurns` counts model round-trips.** One turn is one assistant message that calls a
 tool or gives the final answer — the same unit the Claude CLI reports as `num_turns` in its
@@ -473,6 +475,18 @@ message's usage, and the input count includes cache-creation and cache-read toke
 
 **`budget.maxMinutes` is wall-clock**, measured from the moment the session starts, and
 cancels the session when it expires.
+
+**`budget.stallMinutes` measures silence, not work.** A live session talks constantly: a tool
+call, a line of assistant text, a usage line. When nothing at all arrives from the provider for
+`stallMinutes`, the session is cancelled and the run is marked `failed` with the reason
+`stalled: no activity for 6m`, and an `error` event carrying the same text goes into the run's
+`events.jsonl`. The timer restarts on **every** event, so a tool call that takes eight minutes
+is not a stall — a provider that died mid-stream, or one waiting on a prompt nothing will ever
+answer, is. Two states do not count: a run blocked on a question the agent asked the operator,
+and a run parked behind a rate limit. Both are waiting on a person or a clock rather than on the
+agent, so the timer is suspended and the run keeps its `blocked` status. `0` turns the check off
+and leaves `maxMinutes` as the only thing that ends a hung run — 25 minutes of a session that
+died in its first one.
 
 A budget that expires *after* the note has been written and filed does not throw the note away:
 the run completes and the overrun is recorded as a warning on it.
@@ -648,6 +662,39 @@ Turn it on for a private repository where the ticket text is already in front of
 people. Leave it off anywhere the pull request is public, or read by anyone who has no business
 with that customer's conversation. The triage note is always linked either way, through the
 tracker and helpdesk URLs in the body.
+
+## Fix worktrees
+
+`sirdar fix` runs its session in a linked git worktree at `<root>/.sirdar/worktrees/<run-id>`,
+made with `git worktree add` and taken away with `git worktree remove` once the branch is
+pushed. The tree you are standing in is not touched: your uncommitted work is neither in the way
+nor swept into the fix's commit, and your HEAD does not move.
+
+Everything that names a root follows the worktree — where the agent stands, the root its writes
+are confined to, the paths reserved from it, and the hooks directory reserved for the session.
+The workspace's own `.sirdar/` is still read from the main tree, because the configuration and
+playbooks that shape the session live there; they are also what the snapshot guard watches, and
+they must come out of a run byte for byte as they went in. The commit, the push and the pull
+request are made from the worktree, since that is where the branch is checked out.
+
+A worktree is removed when the run succeeds and kept when it does not: a run blocked on a
+deviation leaves it in place, and `sirdar fix KEY --accept-deviation` publishes the recorded
+commit out of it. `sirdar init` excludes `.sirdar/worktrees/` in `.git/info/exclude`, which lives
+in the repository's common git directory and so covers every linked worktree too.
+
+```yaml
+fix:
+  inPlace: true
+```
+
+restores the behaviour the flow had before linked worktrees: `git checkout -B` on the tree you
+are standing in, which requires that tree to be clean and leaves it on the fix branch when the
+run ends. Set it for a repository whose fresh checkout is not usable on its own — an untracked
+`.env`, a build cache or a `node_modules/` the tests need and nothing rebuilds cheaply. The
+dirty-tree preflight applies in that mode alone, because it is that mode's only protection
+against a fix committing work you had not finished.
+
+`docs/fix.md` has the whole flow.
 
 ## Web fetch
 

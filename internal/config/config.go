@@ -361,6 +361,13 @@ type Config struct {
 		MaxTurns   int     `yaml:"maxTurns"`
 		MaxMinutes int     `yaml:"maxMinutes"`
 		MaxUSD     float64 `yaml:"maxUsd"`
+		// StallMinutes is how long a run waits for the provider to say
+		// anything at all — a tool call, a line of assistant text, a
+		// usage line — before it is cancelled as stalled. It is a
+		// pointer because 0 is a meaningful value here and not an
+		// absent one: 0 turns the check off, while an unset key takes
+		// the default. Read it through Config.StallMinutes.
+		StallMinutes *int `yaml:"stallMinutes"`
 	} `yaml:"budget"`
 	// Language says which language the engineer's note is written in and
 	// which language anything shown to a customer is written in. They are
@@ -412,8 +419,13 @@ type Config struct {
 	// the customer's own words in the pull request body; it is off by
 	// default because a pull request is often public and the complaint is
 	// a quotation from a support ticket.
+	// InPlace runs the fix session in the operator's own working tree,
+	// the way the flow worked before linked worktrees: `git checkout -B`
+	// on the tree they are standing in, which needs that tree clean and
+	// leaves it on the fix branch afterwards.
 	Fix struct {
 		PRIncludesComplaint bool `yaml:"prIncludesComplaint"`
+		InPlace             bool `yaml:"inPlace"`
 	} `yaml:"fix"`
 	Playbooks string `yaml:"playbooks"`
 	Providers struct {
@@ -483,6 +495,15 @@ func applyDefaults(c *Config) {
 	}
 	if c.Budget.MaxUSD == 0 {
 		c.Budget.MaxUSD = 5
+	}
+	if c.Budget.StallMinutes == nil {
+		// Six minutes of complete silence. A real session talks
+		// constantly — a tool call, a token, a usage line — so this is
+		// long enough to sit through the slowest single tool call seen
+		// in a dogfood run and short enough that a hung provider is
+		// caught inside the wall-clock budget rather than at it.
+		d := defaultStallMinutes
+		c.Budget.StallMinutes = &d
 	}
 	if c.Notes.Dir == "" {
 		c.Notes.Dir = ".sirdar/notes"
@@ -591,6 +612,9 @@ func (c *Config) Validate() error {
 	}
 	if c.Budget.MaxUSD <= 0 {
 		return fmt.Errorf("config: budget.maxUsd: must be > 0, got %v", c.Budget.MaxUSD)
+	}
+	if c.Budget.StallMinutes != nil && *c.Budget.StallMinutes < 0 {
+		return fmt.Errorf("config: budget.stallMinutes: must be >= 0 (0 disables the check), got %d", *c.Budget.StallMinutes)
 	}
 	if c.Attachments.MaxBytes < 0 {
 		return fmt.Errorf("config: attachments.maxBytes: must be >= 0, got %d", c.Attachments.MaxBytes)
@@ -1107,6 +1131,20 @@ func credentialRef(key, ref string) error {
 // (in a test, say) reads as the default rather than as "off".
 func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
+}
+
+// defaultStallMinutes is how long a run tolerates complete silence from
+// the provider before it gives up on the session.
+const defaultStallMinutes = 6
+
+// StallMinutes is the configured stall timeout in minutes: 0 means the
+// check is off, and a Config built by hand (in a test, say) reads as the
+// default rather than as "off".
+func (c *Config) StallMinutes() int {
+	if c.Budget.StallMinutes == nil {
+		return defaultStallMinutes
+	}
+	return *c.Budget.StallMinutes
 }
 
 // RTLMarkup reports whether the embedded note templates should wrap a

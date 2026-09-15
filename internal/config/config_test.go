@@ -38,6 +38,9 @@ func TestLoadAppliesDefaults(t *testing.T) {
 	if c.Budget.MaxTurns != 120 || c.Budget.MaxMinutes != 25 || c.Budget.MaxUSD != 5 {
 		t.Fatalf("budget defaults: %+v", c.Budget)
 	}
+	if c.StallMinutes() != 6 {
+		t.Fatalf("stallMinutes default %d", c.StallMinutes())
+	}
 	if c.Notes.Filenames.RCA != "{key} RCA {slug}.md" {
 		t.Fatalf("filename default %q", c.Notes.Filenames.RCA)
 	}
@@ -1304,5 +1307,37 @@ permissions:
 		if !strings.Contains(err.Error(), "permissions.fetch[0]") || !strings.Contains(err.Error(), want) {
 			t.Errorf("error for %q = %v, want one naming the key and %q", body, err, want)
 		}
+	}
+}
+
+// TestStallMinutesZeroIsKept: 0 means "do not watch for a stall", which a
+// plain int would have made indistinguishable from an unset key and so
+// silently turned back into the six-minute default.
+func TestStallMinutesZeroIsKept(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal+"\nbudget:\n  stallMinutes: 0\n"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.StallMinutes() != 0 {
+		t.Fatalf("stallMinutes %d, want the check off", c.StallMinutes())
+	}
+	// The rest of the budget block still gets its defaults.
+	if c.Budget.MaxMinutes != 25 {
+		t.Fatalf("maxMinutes %d", c.Budget.MaxMinutes)
+	}
+}
+
+func TestValidateNegativeStallMinutes(t *testing.T) {
+	_, err := Load(writeCfg(t, minimal+"\nbudget:\n  stallMinutes: -1\n"))
+	if err == nil || !strings.Contains(err.Error(), "budget.stallMinutes") {
+		t.Fatalf("want a stallMinutes error, got %v", err)
+	}
+}
+
+// TestStallMinutesOnAHandBuiltConfig: a Config assembled in code, not
+// loaded from YAML, reads as the default rather than as "off".
+func TestStallMinutesOnAHandBuiltConfig(t *testing.T) {
+	if got := (&Config{}).StallMinutes(); got != 6 {
+		t.Fatalf("StallMinutes() = %d on a zero Config", got)
 	}
 }

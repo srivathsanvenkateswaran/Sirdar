@@ -345,6 +345,11 @@ type stubProvider struct {
 	sendErr    error    // handed to every session this provider starts
 	stderrTail []string // reported in every session's Result
 	script     func(spec provider.SessionSpec, s *stubSession)
+	// resumeDelay, when set, is how long Start blocks before returning for
+	// a resumed session (one whose spec carries a Resume handle) — standing
+	// in for how long spawning a fresh agent process can actually take, so
+	// a test can put that delay on the far side of a short stall window.
+	resumeDelay time.Duration
 
 	mu       sync.Mutex
 	specs    []provider.SessionSpec
@@ -362,6 +367,9 @@ func (p *stubProvider) Name() string {
 func (p *stubProvider) Doctor(ctx context.Context, binary string) []provider.Check { return nil }
 
 func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	if spec.Resume != "" && p.resumeDelay > 0 {
+		time.Sleep(p.resumeDelay)
+	}
 	s := &stubSession{
 		events:    make(chan provider.Event),
 		cancelled: make(chan struct{}),
@@ -699,6 +707,55 @@ func TestSchemaRetryResumesAfterSendFails(t *testing.T) {
 	}
 	if ExitCode(outs) != 0 {
 		t.Fatalf("exit code %d", ExitCode(outs))
+	}
+}
+
+// TestStallGuardIsHeldWhileTheSchemaRetrySessionStarts: resumeForRetry's
+// Provider.Start blocks on starting a fresh agent process, which is not
+// silence from a live session. Make that start slower than the stall
+// window and, without the guard held across it, the timer fires on its own
+// goroutine while nothing is there to reset it — misreporting a run that
+// is about to finish normally as stalled: a warning on the state, and a
+// stray error line in events.jsonl beside the true account of what
+// happened. Held and rearmed around the call, the guard never gets the
+// chance.
+func TestStallGuardIsHeldWhileTheSchemaRetrySessionStarts(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{
+		sendErr:     errors.New("claude session has exited"),
+		resumeDelay: 150 * time.Millisecond,
+	}
+	p.script = func(spec provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if spec.Resume == "" {
+			s.emit(provider.Event{Kind: provider.EvFinal, Text: `{"title":"nope"}`})
+			return
+		}
+		s.emit(finalEvent(triageDoc))
+	}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 60 * time.Millisecond // well inside resumeDelay
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q; a slow retry start should not have been read as a stall", out.State.Status, out.State.Reason)
+	}
+	if p.startCount() != 2 {
+		t.Fatalf("sessions started: %d, want the original plus the resumed retry", p.startCount())
+	}
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "stalled") {
+			t.Errorf("a slow retry start left a stalled warning on a run that finished normally: %v", out.State.Warnings)
+		}
+	}
+	for _, line := range eventLogLines(t, runDir(t, cfg, out)) {
+		if strings.Contains(line, `"kind":"error"`) && strings.Contains(line, "stalled") {
+			t.Errorf("events.jsonl carries a misleading stalled error:\n%s", line)
+		}
 	}
 }
 
@@ -2289,5 +2346,278 @@ func TestDefaultWorkspaceStillStatesBothLanguages(t *testing.T) {
 	promptText := readFile(t, filepath.Join(runDir(t, cfg, outs[0]), "prompt.md"))
 	if !strings.Contains(promptText, "language.notes: en") || !strings.Contains(promptText, "language.customer: auto") {
 		t.Fatalf("default prompt does not state both languages:\n%s", promptText)
+	}
+}
+
+// --- stall detection --------------------------------------------------
+
+// eventLogLines returns every non-empty line of a run's events.jsonl, so a
+// test can assert what the run recorded rather than only what it returned.
+func eventLogLines(t *testing.T, dir string) []string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "events.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		if line != "" {
+			out = append(out, line)
+		}
+	}
+	return out
+}
+
+// TestInterruptStopsTheStallGuardBeforeTheStreamDrains: an interrupt
+// cancels the session and then waits for its stream to drain, which can
+// take a while — a real process is not required to exit the instant it is
+// asked to. The stall guard is stopped the moment the interrupt is seen,
+// not only once the drain finishes, so a slow-to-exit process cancelled by
+// an interrupt does not also get logged as though it had gone silent.
+func TestInterruptStopsTheStallGuardBeforeTheStreamDrains(t *testing.T) {
+	cfg := newWorkspace(t)
+	started := make(chan struct{})
+	var once sync.Once
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(provider.Event{Kind: provider.EvToolStarted, Tool: "Bash"}) {
+			return
+		}
+		once.Do(func() { close(started) })
+		// The stream takes several stall windows to actually drain after
+		// the interrupt cancels it — the case that used to let the stall
+		// timer win the race and misname the reason.
+		<-s.cancelled
+		time.Sleep(150 * time.Millisecond)
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 20 * time.Millisecond
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-started
+		cancel()
+	}()
+	defer cancel()
+
+	outs, err := r.Triage(ctx, []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusBlocked || out.State.Reason != "interrupted" {
+		t.Fatalf("status %q reason %q, want blocked/interrupted", out.State.Status, out.State.Reason)
+	}
+	for _, line := range eventLogLines(t, runDir(t, cfg, out)) {
+		if strings.Contains(line, `"kind":"error"`) && strings.Contains(line, "stalled") {
+			t.Errorf("events.jsonl carries a misleading stalled error beside the interrupt:\n%s", line)
+		}
+	}
+}
+
+// TestOverBudgetStopsTheStallGuardBeforeTheStreamDrains is the same race
+// on the other cancel that can lose it: the session is cancelled for
+// having gone over budget, but is slow to actually exit, and that must not
+// read as a stall either.
+func TestOverBudgetStopsTheStallGuardBeforeTheStreamDrains(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 6}) {
+			return
+		}
+		<-s.cancelled
+		time.Sleep(150 * time.Millisecond)
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 20 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusOverBudget {
+		t.Fatalf("status %q reason %q, want over_budget", out.State.Status, out.State.Reason)
+	}
+	for _, line := range eventLogLines(t, runDir(t, cfg, out)) {
+		if strings.Contains(line, `"kind":"error"`) && strings.Contains(line, "stalled") {
+			t.Errorf("events.jsonl carries a misleading stalled error beside the budget cancellation:\n%s", line)
+		}
+	}
+}
+
+// TestSilentProviderIsCancelledAsStalled: a provider that opens its stream
+// and then says nothing at all used to hold the run until the wall-clock
+// budget expired — 25 minutes of a session that had already died. The
+// stall watch ends it in stallMinutes and says so.
+func TestSilentProviderIsCancelledAsStalled(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(provider.Event{Kind: provider.EvToolStarted, Tool: "Bash"}) {
+			return
+		}
+		<-s.cancelled // and then nothing, ever
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 80 * time.Millisecond
+
+	start := time.Now()
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	elapsed := time.Since(start)
+	out := outs[0]
+
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !strings.HasPrefix(out.State.Reason, "stalled: no activity for ") {
+		t.Fatalf("reason %q", out.State.Reason)
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("the run took %s; a silent provider must be cancelled after %s", elapsed, r.StallTimeout)
+	}
+	if p.session(0).cancelCount() == 0 {
+		t.Error("the stalled session was not cancelled")
+	}
+
+	// The cancellation is in the run's own event log as an error, which
+	// is the only account of it for anyone reading the run afterwards.
+	var found bool
+	for _, line := range eventLogLines(t, runDir(t, cfg, out)) {
+		if strings.Contains(line, `"kind":"error"`) && strings.Contains(line, "stalled: no activity for") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("no error event recorded the stall:\n%s", strings.Join(eventLogLines(t, runDir(t, cfg, out)), "\n"))
+	}
+}
+
+// TestEveryEventResetsTheStallTimer: the timer measures silence, not
+// elapsed time. A session that keeps talking runs for as long as the
+// wall-clock budget allows, however far past stallMinutes that is.
+func TestEveryEventResetsTheStallTimer(t *testing.T) {
+	cfg := newWorkspace(t)
+	// Eight steps of chatter, each well inside a full-second stall window:
+	// the gap the timer actually has to judge is one step, ~120ms, against
+	// a full second of slack, so ordinary CI scheduling jitter between two
+	// sleeps cannot make an on-time event look like a stall. The old
+	// 20ms-step-against-100ms-window version left next to no margin, which
+	// is what made this test flake — never as a false pass, always as a
+	// good run failing.
+	const step = 120 * time.Millisecond
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		for i := 0; i < 8; i++ {
+			time.Sleep(step)
+			if !s.emit(provider.Event{Kind: provider.EvToolStarted, Tool: "Bash"}) {
+				return
+			}
+		}
+		s.emit(finalEvent(triageDoc))
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = time.Second
+	r.CloseGrace = 200 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+}
+
+// TestAQuestionIsNotAStall: a run blocked on a question is waiting on the
+// operator, who may be at lunch. Counting that silence would turn every
+// question into a failed run and throw away the handle `sirdar resume`
+// needs.
+func TestAQuestionIsNotAStall(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(provider.Event{Kind: provider.EvQuestion, Text: "Which database should I query?"}) {
+			return
+		}
+		// Silence for well past the stall window, as a session waiting
+		// on an answer is.
+		select {
+		case <-s.cancelled:
+		case <-time.After(300 * time.Millisecond):
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 40 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusBlocked {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if !strings.Contains(out.State.Reason, "agent asked: Which database") {
+		t.Errorf("reason %q", out.State.Reason)
+	}
+	if out.State.Handle != "handle-abc" {
+		t.Errorf("the resume handle was lost: %q", out.State.Handle)
+	}
+}
+
+// TestARateLimitIsNotAStall: the same rule for the other way a run parks.
+func TestARateLimitIsNotAStall(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(provider.Event{Kind: provider.EvRateLimited}) {
+			return
+		}
+		select {
+		case <-s.cancelled:
+		case <-time.After(300 * time.Millisecond):
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.StallTimeout = 40 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusBlocked {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+}
+
+// TestStallMinutesZeroTurnsTheCheckOff: the setting is a pointer because 0
+// means "off" and an absent key means the default.
+func TestStallMinutesZeroTurnsTheCheckOff(t *testing.T) {
+	off := newWorkspaceWith(t, strings.Replace(configYAML, "  maxUsd: 5\n", "  maxUsd: 5\n  stallMinutes: 0\n", 1))
+	r := &Runner{Deps: Deps{Config: off}}
+	if got := r.stallTimeout(); got != 0 {
+		t.Errorf("stallMinutes: 0 left a timeout of %s", got)
+	}
+
+	def := newWorkspace(t)
+	if got := (&Runner{Deps: Deps{Config: def}}).stallTimeout(); got != 6*time.Minute {
+		t.Errorf("the default stall timeout is %s, want 6m", got)
+	}
+}
+
+// TestStallReasonNamesTheWindowInMinutes pins the text a channel and a
+// state file carry: budget.stallMinutes is in minutes, so the reason says
+// minutes.
+func TestStallReasonNamesTheWindowInMinutes(t *testing.T) {
+	if got := stallReason(6 * time.Minute); got != "stalled: no activity for 6m" {
+		t.Errorf("stallReason(6m) = %q", got)
+	}
+	if got := stallReason(90 * time.Second); got != "stalled: no activity for 1m30s" {
+		t.Errorf("stallReason(90s) = %q", got)
 	}
 }

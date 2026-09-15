@@ -124,7 +124,10 @@ Exit code is non-zero if any run ended in `failed` or `over_budget`.
 A run moves through `preparing → running → completed`, or off to `failed`, `blocked`, or
 `over_budget`. Preparing fetches the ticket and writes the bundle; running streams the agent
 session and watches the turn, time, and USD budgets; a blocked run (the agent asked a question,
-or hit a rate limit) is continued with `sirdar resume RUN_ID`.
+or hit a rate limit) is continued with `sirdar resume RUN_ID`. A session that goes completely
+silent — no tool call, no text, no usage line — for `budget.stallMinutes` (6 by default, `0` to
+turn it off) is cancelled and marked `failed` with `stalled: no activity for 6m`, rather than
+being held to the end of the wall-clock budget. A blocked run is never counted as stalled.
 
 Each run gets its own directory, `.sirdar/runs/<KEY>/<run-id>/`:
 
@@ -198,14 +201,19 @@ about a note, change its status and the fix will not run.
 
 What happens, in order:
 
-1. **Preflight.** The working tree must be clean, or the run stops before anything else — a fix
-   commits everything in the tree, and it must not sweep up your uncommitted work. Then
-   `git fetch origin`, and the default branch is read from `origin/HEAD`.
-2. **Branch.** `git checkout -B fix-<key>-<slug> origin/<default>`. The default branch is never
-   committed to and never force-pushed; neither is anything else.
-3. **One session**, with write permission, told to implement the note's Proposed Fix and nothing
-   else, to run the workspace's build and tests, and to make no commits of its own. It answers
-   with JSON: summary, files changed, tests run, risks, and `deviationFromNote`.
+1. **Preflight.** `git fetch origin`, and the default branch is read from `origin/HEAD`. Under
+   `fix.inPlace` the working tree must also be clean, since that mode commits everything in the
+   tree you are standing in.
+2. **Branch and worktree.** The branch is cut from `origin/<default>` and checked out in a linked
+   worktree at `.sirdar/worktrees/<run-id>`, so your own tree and your uncommitted work are left
+   alone and your HEAD does not move. The worktree is removed once the branch is pushed and kept
+   when the run is blocked or fails, so the commit is there to read. `fix.inPlace: true` runs
+   `git checkout -B fix-<key>-<slug> origin/<default>` in your tree instead. The default branch is
+   never committed to and never force-pushed; neither is anything else.
+3. **One session**, with write permission, standing in the worktree and confined to it, told to
+   implement the note's Proposed Fix and nothing else, to run the workspace's build and tests,
+   and to make no commits of its own. It answers with JSON: summary, files changed, tests run,
+   risks, and `deviationFromNote`.
 4. **Commit.** Everything but `.sirdar/` is staged and committed as `fix: <summary>`, with the
    note's root cause in the body and **no AI attribution trailer of any kind**.
 5. **Push and PR.** `git push -u origin <branch>`, then `gh pr create` with the title

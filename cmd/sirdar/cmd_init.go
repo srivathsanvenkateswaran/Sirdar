@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -12,17 +13,23 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 func init() { commands["init"] = cmdInit }
 
 // gitExcludes are the paths a workspace should not commit by accident: the
-// run directories, the register, and the eval reports. The register is
-// excluded too, as the spec says, because committing it is the operator's
-// choice. The exclusion also matters to `sirdar fix`, which refuses to
-// start on a dirty working tree: without it, every earlier run's directory
-// would read as uncommitted work.
-var gitExcludes = []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/"}
+// run directories, the register, the eval reports, and the linked worktrees
+// `sirdar fix` works in. The register is excluded too, as the spec says,
+// because committing it is the operator's choice. The exclusion also
+// matters to `sirdar fix`: in-place mode refuses to start on a dirty
+// working tree, and without these every earlier run's directory — and every
+// fix worktree still on disk — would read as uncommitted work.
+//
+// .git/info/exclude lives in the repository's common directory, which every
+// linked worktree shares, so one workspace's list covers the worktrees a
+// fix run makes as well as the main tree.
+var gitExcludes = []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/", ".sirdar/worktrees/"}
 
 // cmdInit scaffolds a workspace in the working directory. Unlike every
 // other command it does not look for an existing workspace: it makes one.
@@ -105,16 +112,34 @@ func writeTemplates(dir string) error {
 	return nil
 }
 
-// addGitExcludes appends the run directory and register to
-// .git/info/exclude, skipping lines that are already there so a repeated
-// init does not pile them up. A directory that is not a git checkout is
-// not an error: there is simply nothing to exclude.
+// addGitExcludes appends the run directory and register to the repository's
+// info/exclude, skipping lines that are already there so a repeated init
+// does not pile them up. A directory that is not a git checkout is not an
+// error: there is simply nothing to exclude.
+//
+// <root>/.git is a directory in an ordinary checkout, but a *file* in a
+// linked worktree — one naming the main tree's .git/worktrees/<name>. Its
+// info/exclude belongs to the repository, not to any one worktree, so it is
+// found with `git rev-parse --git-common-dir` rather than assumed to be
+// alongside <root>/.git; a linked worktree run from a bare os.Stat check
+// would otherwise see a non-directory and return silently, excluding
+// nothing anywhere.
 func addGitExcludes(root string) ([]string, error) {
 	gitDir := filepath.Join(root, ".git")
-	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
+	info, err := os.Lstat(gitDir)
+	if err != nil {
 		return nil, nil
 	}
-	infoDir := filepath.Join(gitDir, "info")
+	var infoDir string
+	if info.IsDir() {
+		infoDir = filepath.Join(gitDir, "info")
+	} else {
+		common := provider.GitCommonDir(context.Background(), root)
+		if common == "" {
+			return nil, nil
+		}
+		infoDir = filepath.Join(common, "info")
+	}
 	if err := os.MkdirAll(infoDir, 0o755); err != nil {
 		return nil, err
 	}
