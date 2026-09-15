@@ -513,7 +513,9 @@ func (s *session) handshake(ctx context.Context) error {
 		// A resumed session carries the mode it was left in, which is the
 		// previous run's, not this one's: it is selected again here for
 		// the same reason it was selected the first time.
-		s.selectMode(modesOf(loaded, init), configOptionsOf(loaded), loaded)
+		loadedOptions := configOptionsOf(loaded)
+		s.reportModel(loadedOptions, loaded)
+		s.selectMode(modesOf(loaded, init), loadedOptions, loaded)
 		return nil
 	}
 
@@ -536,8 +538,41 @@ func (s *session) handshake(ctx context.Context) error {
 	s.mu.Lock()
 	s.sessionID = created.SessionID
 	s.mu.Unlock()
-	s.selectMode(modesOf(raw, init), configOptionsOf(raw), raw)
+	options := configOptionsOf(raw)
+	s.reportModel(options, raw)
+	s.selectMode(modesOf(raw, init), options, raw)
 	return nil
+}
+
+// modelOption picks the config option that names the model. It is the only
+// place an ACP agent ever says which model a session will answer with, and
+// most agents advertise nothing of the kind: the protocol does not ask them
+// to, and a run against one of those keeps whatever model the workspace
+// configured.
+func modelOption(options []configOption) *configOption {
+	for i := range options {
+		if options[i].ID == "model" || options[i].Category == "model" {
+			return &options[i]
+		}
+	}
+	return nil
+}
+
+// reportModel says which model the opened session is set to, when the agent
+// advertised one. The value travels as a field on the event, not only as
+// words in the notice, so the run layer can record the model that answered
+// against a run whose configuration named none.
+func (s *session) reportModel(options []configOption, raw json.RawMessage) {
+	option := modelOption(options)
+	if option == nil || option.CurrentValue == "" {
+		return
+	}
+	s.emit(provider.Event{
+		Kind:  provider.EvSystem,
+		Text:  "acp model " + option.CurrentValue,
+		Model: option.CurrentValue,
+		Raw:   raw,
+	})
 }
 
 // modesOf reads the session-modes block out of a session/new or

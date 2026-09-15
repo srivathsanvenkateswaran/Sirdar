@@ -1379,6 +1379,52 @@ func TestFixRunSelectsBuildThroughAConfigOption(t *testing.T) {
 	}
 }
 
+// TestConfigOptionModelIsReported: an ACP agent is under no obligation to
+// say which model it is using, and most say nothing. One that advertises a
+// `model` config option has told the client, and that is what the run
+// records — OpenCode's session/new reply names `opencode/big-pickle`.
+func TestConfigOptionModelIsReported(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-config-option-mode.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	var reported []string
+	for _, ev := range evs {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	if len(reported) != 1 || reported[0] != "opencode/big-pickle" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "opencode/big-pickle")
+	}
+}
+
+// TestAgentWithNoModelOptionReportsNoModel: the common case. Nothing on the
+// wire names a model, so no event claims one and the run keeps whatever the
+// workspace configured.
+func TestAgentWithNoModelOptionReportsNoModel(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-basic.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	for _, ev := range evs {
+		if ev.Model != "" {
+			t.Errorf("%s event claimed model %q from an agent that named none", ev.Kind, ev.Model)
+		}
+	}
+}
+
 // TestConfiguredModeOverridesAConfigOptionValue: acp.mode is the escape
 // hatch on this path too.
 func TestConfiguredModeOverridesAConfigOptionValue(t *testing.T) {
