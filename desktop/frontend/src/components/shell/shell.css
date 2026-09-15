@@ -26,14 +26,27 @@
   flex-direction: column;
   min-inline-size: 0;
   min-block-size: 0;
-  /* The sheet: inset from the window on three sides, flush against the
-     sidebar, as the reference has it. */
-  margin-block: var(--sd-space-2);
-  margin-inline-end: var(--sd-space-2);
+  /* The sheet: inset 12 from the window on three sides, flush against the
+     sidebar, with the 16px corner the 2026-09-15 mocks give it. */
+  margin-block: var(--sd-space-3);
+  margin-inline-end: var(--sd-space-3);
   border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-md);
+  border-radius: var(--sd-radius-sheet);
   background: var(--sd-sheet);
   overflow: hidden;
+}
+
+/*
+ * The element that changes with the route. It carries the page-enter motion
+ * from `src/ui/motion`, and a fresh key on every navigation is what re-runs
+ * it. It is the sheet's whole inside, so a screen that scrolls scrolls here.
+ */
+.sd-page {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
 }
 
 .app-empty {
@@ -44,11 +57,12 @@
   color: var(--sd-ink-2);
 }
 
+/* The wordmark: the UI face at 22px, as the mocks set it, not the ledger. */
 .brand {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-body);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-title);
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: -0.01em;
   color: var(--sd-ink);
 }
 
@@ -60,6 +74,6 @@
   }
 
   .main {
-    margin-inline: var(--sd-space-2);
+    margin-inline: var(--sd-space-3);
   }
 }

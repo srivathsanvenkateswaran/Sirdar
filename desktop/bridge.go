@@ -2,14 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 )
 
-// callTimeout caps the two Bridge methods that reach outside the process:
-// Queue talks to the workspace's tracker adapter, Doctor shells out to the
-// provider CLI. Everything else only touches the run directory.
+// callTimeout caps the Bridge methods that reach outside the process: Queue
+// talks to the workspace's tracker adapter, Doctor shells out to the provider
+// CLI, and the three MCP methods start or connect to a server. Everything
+// else only touches the run directory.
 const callTimeout = 60 * time.Second
 
 // EventsPage is what Events returns. internal/app returns the page and the
@@ -112,6 +116,76 @@ func (b *Bridge) Doctor(ws string) ([]app.Check, error) {
 
 // Quota returns the newest rate-limit reading per provider.
 func (b *Bridge) Quota() []app.Quota { return b.svc.Quota() }
+
+// --- MCP inspection ---------------------------------------------------
+
+// MCPServers lists the MCP servers a run in this workspace would be
+// offered. With connect set it reaches each one, counts its tools and
+// reports how long the handshake took, the way `sirdar mcp list --connect`
+// does; the settings page's Test button is that flag for one server at a
+// time. Nothing here carries a credential value: env and headers cross as
+// key names only.
+func (b *Bridge) MCPServers(ws string, connect bool) (app.MCPInventory, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	inv, err := b.svc.MCPServers(ctx, ws, connect)
+	if err != nil {
+		return app.MCPInventory{}, err
+	}
+	if inv.Servers == nil {
+		inv.Servers = []app.MCPServer{}
+	}
+	if inv.Warnings == nil {
+		inv.Warnings = []string{}
+	}
+	if inv.Permissions == nil {
+		inv.Permissions = []string{}
+	}
+	return inv, nil
+}
+
+// MCPTools lists every tool one server offers, with the verdict a run
+// would get for it and the rule that settled it.
+func (b *Bridge) MCPTools(ws, server string) (app.MCPToolList, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	list, err := b.svc.MCPTools(ctx, ws, server)
+	if err != nil {
+		return app.MCPToolList{}, err
+	}
+	if list.Tools == nil {
+		list.Tools = []app.MCPTool{}
+	}
+	if list.Permissions == nil {
+		list.Permissions = []string{}
+	}
+	return list, nil
+}
+
+// MCPCall runs one tool by hand. The arguments arrive as a JSON object
+// rather than raw bytes because that is what Wails can carry across the
+// bridge; they are re-encoded for the service. A tool the workspace's
+// permissions would refuse a run is refused here too, and that refusal is
+// an answer rather than an error: the result comes back with its verdict
+// and reason filled in and nothing started, which is the same body the
+// HTTP route answers 403 with. Only a call that could not be made at all
+// is an error.
+func (b *Bridge) MCPCall(ws, server, tool string, args map[string]any) (app.MCPCallResult, error) {
+	if args == nil {
+		args = map[string]any{}
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return app.MCPCallResult{}, fmt.Errorf("mcp call arguments: %w", err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	res, err := b.svc.MCPCall(ctx, ws, server, tool, json.RawMessage(raw))
+	if err != nil && !errors.Is(err, app.ErrMCPDenied) {
+		return app.MCPCallResult{}, err
+	}
+	return res, nil
+}
 
 // Golden lists the keys in the golden set the eval runs replay.
 func (b *Bridge) Golden(ws string) ([]app.GoldenEntry, error) { return b.svc.Golden(ws) }

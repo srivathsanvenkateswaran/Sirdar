@@ -1,18 +1,19 @@
 /*
- * Run card. The base card with a run in it: a key in the ledger face, a title
- * clamped to two lines, a quoted reason behind a rail, and a footer of badge,
- * clock and cost.
+ * Run card. The Jira-shaped card: sheet fill, a hairline, a 6px corner, the
+ * title first, a kind chip, and a footer of state and identity.
  */
 
 .sd-run-card {
-  display: grid;
-  gap: var(--sd-space-1);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
   width: 100%;
   margin: 0;
-  padding: var(--sd-space-2);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-md);
-  background: var(--sd-surface);
+  padding-block: 14px;
+  padding-inline: var(--sd-space-4);
+  border: 1px solid var(--sd-rule);
+  border-radius: 6px;
+  background: var(--sd-sheet);
   color: var(--sd-ink);
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-body);
@@ -22,31 +23,13 @@
 }
 
 .sd-run-card:hover {
-  border-color: var(--sd-accent);
+  border-color: var(--sd-rule-strong);
 }
 
-/* The one moving thing on the board wears the one accent. */
+/* The one moving thing on the board wears the one accent: the live run's
+   leading edge. */
 .sd-run-card[data-live='true'] {
   border-inline-start: 2px solid var(--sd-accent);
-}
-
-.sd-run-card__top {
-  display: flex;
-  align-items: center;
-  gap: var(--sd-space-2);
-  flex-wrap: wrap;
-}
-
-.sd-run-card__key {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-body);
-  font-weight: 600;
-}
-
-.sd-run-card__kind {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-micro);
-  color: var(--sd-ink-3);
 }
 
 .sd-run-card__title {
@@ -55,42 +38,43 @@
   -webkit-box-orient: vertical;
   overflow: hidden;
   font-size: var(--sd-text-body);
+  font-weight: 400;
   line-height: 1.35;
-  color: var(--sd-ink-2);
+  color: var(--sd-ink);
 }
 
-/* The quote rail is a logical border: on an Arabic reason it moves to the
-   right, where that reason's own leading edge is. */
-.sd-run-card__reason {
-  padding-inline-start: var(--sd-space-2);
-  border-inline-start: 2px solid var(--sd-rule-strong);
-  font-size: var(--sd-text-meta);
-  line-height: 1.4;
-  color: var(--sd-ink-2);
+.sd-run-card__kind {
+  margin-block-start: 10px;
 }
 
 .sd-run-card__foot {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: var(--sd-space-2);
-  flex-wrap: wrap;
+  inline-size: 100%;
+  margin-block-start: var(--sd-space-3);
 }
 
-.sd-run-card__elapsed,
-.sd-run-card__cost {
+.sd-run-card__who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+.sd-run-card__key {
   font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
+  font-size: var(--sd-text-ledger);
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
-  /* A clock and a cost are numbers in a bilingual pane: they stay left to
-     right whichever way the prose around them runs. */
-  unicode-bidi: isolate;
-  color: var(--sd-ink-2);
-}
-
-.sd-run-card__elapsed[data-live='true'] {
-  color: var(--sd-accent);
-}
-
-.sd-run-card__cost {
   color: var(--sd-ink-3);
+  /* A key is an identifier: it stays left to right whichever way the prose
+     around it runs. */
+  unicode-bidi: isolate;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-run-card {
+    transition-duration: 1ms;
+  }
 }

@@ -2,7 +2,15 @@ import { useSyncExternalStore } from 'react'
 import './motion.css'
 
 /**
- * The two ambient motions, and the one switch that turns them off.
+ * The app's motions, and the one switch that turns them off.
+ *
+ * Four things move: two ambient loops and two entrances. The entrances are
+ * the sheet's content on navigation (rises 8px and fades over 320ms) and the
+ * settings modal (scales from 0.98 over 300ms behind a 200ms scrim). They are
+ * class names, exported below, so a screen and the modal cannot disagree with
+ * the stylesheet about what an entrance is; under reduced motion both are
+ * simply not drawn, which is the stated answer: a shortened entrance is still
+ * motion.
  *
  * Ring text and the marquee are the only things in Sirdar that move without
  * being asked to. They are decorative by definition — neither carries a fact a
@@ -55,6 +63,13 @@ export function subscribeReducedMotion(listener: () => void): () => void {
 export function useReducedMotion(): boolean {
   return useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => true)
 }
+
+/** The sheet's content on navigation. Put it on the element that changes with the route. */
+export const PAGE_ENTER_CLASS = 'sd-motion-page'
+/** The settings modal's panel. */
+export const MODAL_ENTER_CLASS = 'sd-motion-modal'
+/** The scrim behind the modal. */
+export const SCRIM_ENTER_CLASS = 'sd-motion-scrim'
 
 /** The ambient durations, so a spec and a stylesheet cannot disagree. */
 export const RING_DURATION_TOKEN = 'var(--sd-dur-ring)'

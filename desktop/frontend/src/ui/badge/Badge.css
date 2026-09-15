@@ -6,14 +6,14 @@
 .sd-fact-badge {
   display: inline-flex;
   align-items: center;
-  min-block-size: 20px;
-  padding-inline: var(--sd-space-2);
-  border-radius: var(--sd-radius-xs);
+  min-block-size: 26px;
+  padding-inline: 10px;
+  border-radius: 6px;
   background: var(--sd-badge-bg);
   color: var(--sd-badge-ink);
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-micro);
+  font-size: var(--sd-text-ledger);
   font-weight: 500;
-  line-height: 20px;
+  line-height: 26px;
   white-space: nowrap;
 }

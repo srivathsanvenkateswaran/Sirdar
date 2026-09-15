@@ -62,17 +62,25 @@ describe('Board', () => {
     }
 
     await waitFor(() => expect(within(lane(container, 'gathering')).getByText('OMNI-1')).toBeInTheDocument())
-    expect(within(lane(container, 'triaged')).getByText('OMNI-2')).toBeInTheDocument()
-    expect(within(lane(container, 'blocked')).getByText('OMNI-3')).toBeInTheDocument()
-    expect(within(lane(container, 'done')).getByText('OMNI-4')).toBeInTheDocument()
-    expect(within(lane(container, 'failed')).getByText('OMNI-5')).toBeInTheDocument()
+    // A run with no tracker title shows its key as the title and again at the
+    // foot, so the card is found by its accessible name rather than by text.
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(within(lane(container, 'done')).getByRole('button', { name: /OMNI-4/ })).toBeInTheDocument()
+    expect(within(lane(container, 'failed')).getByRole('button', { name: /OMNI-5/ })).toBeInTheDocument()
 
     // OMNI-1 already has a run, so only the untouched ticket waits in Queue.
     expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument()
     expect(within(lane(container, 'queue')).queryByText('OMNI-1')).toBeNull()
 
-    // A blocked run says why it stopped.
-    expect(screen.getByText('Which tenant is affected?')).toBeInTheDocument()
+    // A blocked run says it is blocked and for how long; the question itself
+    // is the session's, not the card's.
+    const blockedCard = within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })
+    expect(within(blockedCard).getByText('blocked')).toBeInTheDocument()
+    expect(blockedCard.querySelector('.sd-state__clock')).not.toBeNull()
+    expect(screen.queryByText('Which tenant is affected?')).toBeNull()
+    // Done is the board's word for a completed RCA.
+    expect(within(lane(container, 'done')).getByText('done')).toBeInTheDocument()
   })
 
   it('opens run detail when a card is clicked', async () => {
@@ -188,7 +196,7 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
-    expect(s.getState().screen).toEqual({ name: 'settings' })
+    expect(s.getState().screen).toEqual({ name: 'settings', page: 'workspaces' })
   })
 })
 
@@ -339,6 +347,29 @@ describe('Deep links', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Board' }))
     await waitFor(() => expect(window.location.hash).toBe('#/'))
+  })
+
+  it('a settings link opens the modal on the page it names, and the page writes the address', async () => {
+    window.location.hash = '#/settings/notifications'
+    mount(seeded())
+    const dialog = await screen.findByRole('dialog', { name: 'Notifications' })
+    expect(dialog).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'About' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/settings/about'))
+    expect(screen.getByRole('dialog', { name: 'About' })).toBeInTheDocument()
+  })
+
+  it('New session in the footer opens #/new, and Sessions leads back to the newest run', async () => {
+    mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/new'))
+    expect(screen.getByRole('heading', { name: 'New session' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r1'))
   })
 
   it('opening a run card writes a link to that run', async () => {

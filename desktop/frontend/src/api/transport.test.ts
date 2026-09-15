@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createTransport } from './transport'
-import type { RunSummary } from './types'
+import { createTransport, createWailsTransport } from './transport'
+import type { MCPCallResult, RunDiff, RunSummary } from './types'
 
 const sample: RunSummary[] = [
   {
@@ -147,5 +147,191 @@ describe('http transport', () => {
     await expect(createTransport().queue('ws1')).rejects.toThrow(
       'unsupported: no tracker configured',
     )
+  })
+
+  // --- the review, steer and MCP routes, in the shapes internal/httpapi reads ---
+
+  it('posts a steer with its text and reads the job and run back', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-9', runId: 'r1' })
+
+    const got = await createTransport().steer('ws1', 'r1', 'also check the export worker')
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/steer')
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({ text: 'also check the export worker' })
+    expect(got).toEqual({ jobId: 'job-9', runId: 'r1' })
+  })
+
+  it('reads a run diff from its own route', async () => {
+    const d: RunDiff = {
+      base: 'main',
+      head: 'sirdar/OMNI-1-fix',
+      branch: 'sirdar/OMNI-1-fix',
+      worktree: '/wt',
+      worktreePresent: true,
+      pushed: false,
+      files: [],
+      patch: '',
+      etag: 'e1',
+    }
+    const fetchMock = mockFetch(d)
+
+    const got = await createTransport().runDiff('ws1', 'r/1')
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r%2F1/diff')
+    expect(got).toEqual(d)
+  })
+
+  it('drops a hunk by path, index and the etag it was read under', async () => {
+    const fetchMock = mockFetch({ etag: 'e2', files: [], patch: '' })
+
+    await createTransport().dropHunk('ws1', 'r1', { path: 'a/b.go', hunk: 2, etag: 'e1' })
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/diff/drop')
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({ path: 'a/b.go', hunk: 2, etag: 'e1' })
+  })
+
+  it('lists MCP servers, connecting only when asked', async () => {
+    const fetchMock = mockFetch({ servers: [], warnings: [], workspaceOnly: false, permissions: [] })
+    const t = createTransport()
+
+    await t.mcpServers('ws1')
+    await t.mcpServers('ws1', true)
+    await t.mcpTools('ws1', 'file system')
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      '/api/workspaces/ws1/mcp',
+      '/api/workspaces/ws1/mcp?connect=1',
+      '/api/workspaces/ws1/mcp/file%20system/tools',
+    ])
+  })
+
+  it('calls a tool with its arguments as a JSON object', async () => {
+    const fetchMock = mockFetch({ server: 'fs', tool: 'read_file', verdict: 'allowed', reason: '', tookMs: 1 })
+
+    await createTransport().mcpCall('ws1', 'fs', 'read_file', { path: 'README.md' })
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/mcp/fs/call')
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({ tool: 'read_file', args: { path: 'README.md' } })
+  })
+
+  it('sends an empty object when a tool takes no arguments', async () => {
+    const fetchMock = mockFetch({ server: 'fs', tool: 'list', verdict: 'allowed', reason: '', tookMs: 1 })
+    await createTransport().mcpCall('ws1', 'fs', 'list')
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      tool: 'list',
+      args: {},
+    })
+  })
+
+  // The route answers 403 with the call result itself when the workspace
+  // would refuse the tool. That is an answer the tool tester shows, not an
+  // error, so the transport resolves with it.
+  it('resolves a denied tool call with its verdict rather than rejecting', async () => {
+    const denied: MCPCallResult = {
+      server: 'fs',
+      tool: 'write_file',
+      verdict: 'denied',
+      reason: 'the tool name reads as a write',
+      tookMs: 0,
+    }
+    mockFetch(denied, { status: 403 })
+
+    await expect(createTransport().mcpCall('ws1', 'fs', 'write_file', {})).resolves.toEqual(denied)
+  })
+
+  it('still rejects a 403 that is not a verdict', async () => {
+    mockFetch({ error: { code: 'forbidden', message: 'not on loopback' } }, { status: 403 })
+    await expect(createTransport().mcpCall('ws1', 'fs', 'x', {})).rejects.toThrow(
+      'forbidden: not on loopback',
+    )
+  })
+})
+
+/*
+ * The Wails transport is the same surface over `window.go.main.Bridge`. The
+ * bound methods take positional arguments and answer Go values, where a nil
+ * slice arrives as null; these cases pin both halves for the six new methods,
+ * against a stub bridge.
+ */
+describe('wails transport', () => {
+  function stubBridge(methods: Record<string, (...args: unknown[]) => unknown>) {
+    const bound: Record<string, ReturnType<typeof vi.fn>> = {}
+    for (const [name, impl] of Object.entries(methods)) bound[name] = vi.fn(impl)
+    ;(window as unknown as { go: unknown }).go = { main: { Bridge: bound } }
+    return bound
+  }
+
+  afterEach(() => {
+    delete (window as unknown as { go?: unknown }).go
+  })
+
+  it('steers through Steer and says the run back', async () => {
+    const bridge = stubBridge({ Steer: async () => 'job-7' })
+    await expect(createWailsTransport().steer('ws1', 'r1', 'go on')).resolves.toEqual({
+      jobId: 'job-7',
+      runId: 'r1',
+    })
+    expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on')
+  })
+
+  it('reads the diff and drops a hunk with positional arguments, listing null files as none', async () => {
+    const bridge = stubBridge({
+      RunDiff: async () => ({ etag: 'e1', files: null, patch: '' }),
+      DropHunk: async () => ({ etag: 'e2', files: null, patch: '' }),
+    })
+    const t = createWailsTransport()
+
+    const before = await t.runDiff('ws1', 'r1')
+    expect(before.files).toEqual([])
+    expect(bridge.RunDiff).toHaveBeenCalledWith('ws1', 'r1')
+
+    const after = await t.dropHunk('ws1', 'r1', { path: 'a.go', hunk: 0, etag: 'e1' })
+    expect(after.etag).toBe('e2')
+    expect(bridge.DropHunk).toHaveBeenCalledWith('ws1', 'r1', 'a.go', 0, 'e1')
+  })
+
+  it('lists servers and tools, filling nil slices in', async () => {
+    const bridge = stubBridge({
+      MCPServers: async () => ({ servers: null, warnings: null, workspaceOnly: true, permissions: null }),
+      MCPTools: async () => ({ server: 'fs', tools: null, tookMs: 3, permissions: null }),
+    })
+    const t = createWailsTransport()
+
+    await expect(t.mcpServers('ws1')).resolves.toEqual({
+      servers: [],
+      warnings: [],
+      workspaceOnly: true,
+      permissions: [],
+    })
+    expect(bridge.MCPServers).toHaveBeenCalledWith('ws1', false)
+    await t.mcpServers('ws1', true)
+    expect(bridge.MCPServers).toHaveBeenLastCalledWith('ws1', true)
+
+    await expect(t.mcpTools('ws1', 'fs')).resolves.toEqual({
+      server: 'fs',
+      tools: [],
+      tookMs: 3,
+      permissions: [],
+    })
+    expect(bridge.MCPTools).toHaveBeenCalledWith('ws1', 'fs')
+  })
+
+  it('calls a tool with an object of arguments, and an empty one when there are none', async () => {
+    const bridge = stubBridge({
+      MCPCall: async () => ({ server: 'fs', tool: 'read_file', verdict: 'allowed', reason: '', tookMs: 1 }),
+    })
+    const t = createWailsTransport()
+
+    await t.mcpCall('ws1', 'fs', 'read_file', { path: 'x' })
+    expect(bridge.MCPCall).toHaveBeenCalledWith('ws1', 'fs', 'read_file', { path: 'x' })
+
+    await t.mcpCall('ws1', 'fs', 'list')
+    expect(bridge.MCPCall).toHaveBeenLastCalledWith('ws1', 'fs', 'list', {})
   })
 })

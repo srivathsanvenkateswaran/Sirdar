@@ -91,6 +91,16 @@ the answer `03-desktop-app.md` section 11 states.
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: `min(1160px, 92vw)` by `min(820px, 88vh)`
+at `--sd-radius-sheet` (16px), a 260-wide nav column with 24px above and 12
+at the sides, `--sd-nav-row-h` (44) rows at 10px radius, group labels as
+tracked small capitals with a dashed rule, the version line in `--sd-ink-2`
+at `--sd-text-meta`, the serif heading at 34px and 40px in from the edge,
+the body at 40px inline padding, and a 72-tall footer. The entrance and the
+scrim's fade now come from `src/ui/motion` (`.sd-motion-modal`,
+`.sd-motion-scrim`), which also freezes them under reduced motion.
+
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 6. Extends
 Dialog (12) and shares its `focusable` helper rather than restating the

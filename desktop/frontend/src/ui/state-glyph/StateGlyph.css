@@ -1,0 +1,52 @@
+/*
+ * State glyph. A 16px outline and its word, both in the state's hue. The
+ * queue hue at rest; the accent for a live run, since that is what the accent
+ * means in Sirdar.
+ */
+
+.sd-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--sd-st-queue);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.sd-state > svg {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-state[data-state='preparing'],
+.sd-state[data-state='running'] {
+  color: var(--sd-st-live);
+}
+
+.sd-state[data-state='blocked'] {
+  color: var(--sd-st-blocked);
+}
+
+.sd-state[data-state='completed'] {
+  color: var(--sd-st-triaged);
+}
+
+.sd-state[data-state='done'] {
+  color: var(--sd-st-done);
+}
+
+.sd-state[data-state='failed'],
+.sd-state[data-state='over_budget'] {
+  color: var(--sd-st-failed);
+}
+
+.sd-state__clock {
+  margin-inline-start: 2px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}

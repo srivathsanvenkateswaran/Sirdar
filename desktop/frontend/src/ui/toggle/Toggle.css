@@ -1,0 +1,50 @@
+/*
+ * Toggle. A 44 by 24 track with an 18px knob that travels 20px along the
+ * logical axis.
+ */
+
+.sd-toggle {
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  inline-size: 44px;
+  block-size: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-rule-strong);
+  cursor: pointer;
+  transition: background-color var(--sd-dur-1) ease;
+}
+
+.sd-toggle[aria-checked='true'] {
+  background: var(--sd-ink);
+}
+
+.sd-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.sd-toggle__knob {
+  position: absolute;
+  inset-block-start: 3px;
+  inset-inline-start: 3px;
+  inline-size: 18px;
+  block-size: 18px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  transition: inset-inline-start var(--sd-dur-2) var(--sd-ease);
+}
+
+.sd-toggle[aria-checked='true'] .sd-toggle__knob {
+  inset-inline-start: 23px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The knob jumps. Nothing waits for it. */
+  .sd-toggle,
+  .sd-toggle__knob {
+    transition: none;
+  }
+}

@@ -8,6 +8,7 @@ describe('parseRoute', () => {
     ['#', 'board'],
     ['#/', 'board'],
     ['#/board', 'board'],
+    ['#/new', 'new'],
     ['#/register', 'register'],
     ['#/eval', 'eval'],
     ['#/settings', 'settings'],
@@ -20,6 +21,19 @@ describe('parseRoute', () => {
     expect(parseRoute('#/runs/ws1/20260910-1000-omni-2510')).toEqual({
       screen: { name: 'run', runId: '20260910-1000-omni-2510' },
       workspaceId: 'ws1',
+    })
+  })
+
+  it('reads a review link as the same run, on its review screen', () => {
+    expect(parseRoute('#/runs/ws1/r1/review')).toEqual({
+      screen: { name: 'review', runId: 'r1' },
+      workspaceId: 'ws1',
+    })
+  })
+
+  it('reads a settings page out of the address', () => {
+    expect(parseRoute('#/settings/providers')).toEqual({
+      screen: { name: 'settings', page: 'providers' },
     })
   })
 
@@ -37,8 +51,10 @@ describe('parseRoute', () => {
     '#/runs',
     '#/runs/ws1',
     '#/runs/ws1/r1/extra',
-    '#/settings/danger',
+    '#/runs/ws1/r1/review/more',
+    '#/settings/providers/more',
     '#/library/button',
+    '#/new/session',
     '#/runs//r1',
   ])('answers null for %s', (hash) => {
     expect(parseRoute(hash)).toBeNull()
@@ -55,6 +71,8 @@ describe('routeHash', () => {
     [{ name: 'register' } as Screen, '#/register'],
     [{ name: 'eval' } as Screen, '#/eval'],
     [{ name: 'settings' } as Screen, '#/settings'],
+    [{ name: 'settings', page: 'providers' } as Screen, '#/settings/providers'],
+    [{ name: 'new' } as Screen, '#/new'],
     [{ name: 'library' } as Screen, '#/library'],
   ])('writes %o as %s', (screen, hash) => {
     expect(routeHash(screen, 'ws1')).toBe(hash)
@@ -62,6 +80,7 @@ describe('routeHash', () => {
 
   it('names the workspace a run belongs to', () => {
     expect(routeHash({ name: 'run', runId: 'r1' }, 'ws1')).toBe('#/runs/ws1/r1')
+    expect(routeHash({ name: 'review', runId: 'r1' }, 'ws1')).toBe('#/runs/ws1/r1/review')
   })
 
   it('escapes what would otherwise split the path', () => {
@@ -79,7 +98,10 @@ describe('routeHash', () => {
       { name: 'register' },
       { name: 'eval' },
       { name: 'settings' },
+      { name: 'settings', page: 'mcp' },
+      { name: 'new' },
       { name: 'run', runId: '20260910-1000-omni-2510' },
+      { name: 'review', runId: '20260910-1000-omni-2510' },
     ]
     for (const screen of screens) {
       const route = parseRoute(routeHash(screen, 'ws1'))
@@ -93,6 +115,14 @@ describe('sameScreen', () => {
   it('tells two runs apart', () => {
     expect(sameScreen({ name: 'run', runId: 'r1' }, { name: 'run', runId: 'r1' })).toBe(true)
     expect(sameScreen({ name: 'run', runId: 'r1' }, { name: 'run', runId: 'r2' })).toBe(false)
+  })
+
+  it('tells a run apart from its review, and one settings page from another', () => {
+    expect(sameScreen({ name: 'run', runId: 'r1' }, { name: 'review', runId: 'r1' })).toBe(false)
+    expect(sameScreen({ name: 'settings' }, { name: 'settings', page: 'mcp' })).toBe(false)
+    expect(sameScreen({ name: 'settings', page: 'mcp' }, { name: 'settings', page: 'mcp' })).toBe(
+      true,
+    )
   })
 
   it('ignores object identity for the screens that carry nothing', () => {

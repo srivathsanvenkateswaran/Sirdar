@@ -137,8 +137,15 @@ in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
 | Token | Value | Rationale |
 |---|---|---|
 | `--sd-font-display` | `Newsreader, Georgia, 'Noto Naskh Arabic', serif` | Variable weight with a true italic, drawn for screens. Arabic sits behind it as a fallback and carries no Latin glyphs, so Latin still renders in Newsreader. That fallback trick is already how `--sans` works today. |
-| `--sd-font-ui` | `Inter, -apple-system, 'IBM Plex Sans Arabic', system-ui, sans-serif` | Tabular figures, large x-height at 13px. |
+| `--sd-font-ui` | `Figtree, Inter, -apple-system, 'IBM Plex Sans Arabic', system-ui, sans-serif` | Figtree leads since the 2026-09-15 screens round, which re-based the app on the reference's 16px register; Inter stays as the fallback with the tabular figures and the Arabic companions behind it. |
 | `--sd-font-mono` | `'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace` | Unambiguous `0/O`, tabular by default. |
+| `--sd-text-display-m` | `2rem` | The screen title (Board, Register, Eval, Library) and the settings heading. Was 1.5rem before the 2026-09-15 re-base. |
+| `--sd-text-title` | `1.375rem` | Card titles. Was 1.125rem. |
+| `--sd-text-body-l` | `1.0625rem` | Item-row titles, the search bar. Was 0.9375rem. |
+| `--sd-text-body` | `1rem` | The UI face: nav rows, buttons, table cells, setting labels. Was 0.8125rem (13px); the reviewed mocks re-based the app to the reference app's 16px register. |
+| `--sd-text-meta` | `0.875rem` | Secondary lines, table headers, help text. Was 0.71875rem. |
+| `--sd-text-micro` | `0.75rem` | Kind chips, group labels, kbd hints. Was 0.65625rem. |
+| `--sd-text-ledger` | `0.84375rem` | The mono ledger: keys, clocks, costs, event rows, at 13.5px. New in the re-base; the mono face at the body size out-weighs the title beside it. |
 | `--sd-space-1` .. `--sd-space-10` | 4, 8, 12, 16, 24, 32, 48, 64, 96, 128px | 4px base. |
 | `--sd-radius-xs` | `4px` | badges, kbd, chips |
 | `--sd-radius-sm` | `8px` | inputs, buttons, board cards |
@@ -146,6 +153,7 @@ in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
 | `--sd-radius-lg` | `20px` | landing cards, media frames |
 | `--sd-radius-band` | `40px` / `64px` at `min-width: 768px` | full-bleed bands |
 | `--sd-radius-pill` | `999px` | nav pills, segmented control, status chips |
+| `--sd-radius-sheet` | `16px` | the content sheet and the settings modal, the one box the whole app sits in. Added 2026-09-15 |
 | `--sd-shadow-hard` | `2px 2px 0 0 var(--sd-ink)` (light), `2px 2px 0 0 var(--sd-rule-strong)` (dark) | Primary action only. Flips to `-2px 2px 0 0` under `[dir="rtl"]`. |
 | `--sd-shadow-soft` | `0 4px 20px rgba(23,24,28,.10)` | Dialogs, toasts, the floating nav bar. Nothing else. |
 | `--sd-dur-1` .. `--sd-dur-4` | `120ms`, `200ms`, `300ms`, `350ms` | |
@@ -153,6 +161,9 @@ in the inbound strip, where 4.5:1 is the applicable threshold, not 3:1.
 | `--sd-measure-wide` | `1200px` | landing section content |
 | `--sd-measure-prose` | `68ch` | docs body, note pane |
 | `--sd-gutter` | `12px` app, `24px` landing | today's app gutter is 12px and stays |
+| `--sd-control-h` | `40px` | every control's height: button, select, search well, segmented track. Added 2026-09-15 from the mocks; two components share it, which is what makes it a token |
+| `--sd-sidebar-w` | `248px` | the sidebar's width; the shell and the gallery's sidebar specimens both read it |
+| `--sd-nav-row-h` | `44px` | a sidebar row and a modal nav row, with 20px icons |
 
 ## 4. What a token is not
 

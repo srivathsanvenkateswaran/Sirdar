@@ -52,6 +52,51 @@ export interface RunDiff {
   worktree: string; worktreePresent: boolean; pushed: boolean;
   files: DiffFile[]; patch: string; truncated?: boolean; etag: string
 }
+/** What `dropHunk` needs: the file, the 0-based hunk index within it, and the etag of the diff the index was read from. */
+export interface DropHunkRequest { path: string; hunk: number; etag: string }
+/**
+ * What a steer answers with: the job that carries the session, and the run it
+ * continues — the same id the caller passed, said back so a client that fired
+ * the request off a list can tell which row to watch.
+ */
+export interface SteerStarted { jobId: string; runId: string }
+
+// --- MCP inspection, mirrored from internal/app/mcp.go ---
+/**
+ * One configured MCP server as an operator reads it. The configuration half
+ * is `internal/mcpclient.Entry`, which carries the rule that key names cross
+ * and values never do; `connected` and the three after it are set only when
+ * the listing was asked to connect.
+ */
+export interface MCPServer {
+  name: string; scope: string; transport: string;
+  command?: string; args?: string[]; url?: string;
+  /** Names only: an Authorization header's value is the credential. */
+  envKeys?: string[]; headerKeys?: string[];
+  /** The file this entry was read from. */
+  source: string;
+  /** What an operator should know before trusting the row; empty when nothing. */
+  note?: string;
+  connected?: boolean; tools?: number; tookMs?: number;
+  /** Why the connection failed, with the entry's own credentials taken out. */
+  error?: string
+}
+/** The answer to "which MCP servers would a run here get", with the rule their tools are judged by. */
+export interface MCPInventory { servers: MCPServer[]; warnings: string[]; workspaceOnly: boolean; permissions: string[] }
+export type MCPVerdict = 'allowed' | 'denied'
+/** One of a server's tools with the verdict a run would get for it. `fullName` is what permissions.mcp patterns are written against. */
+export interface MCPTool { name: string; fullName: string; description?: string; verdict: MCPVerdict; rule: string; reason: string }
+export interface MCPToolList { server: string; tools: MCPTool[]; tookMs: number; permissions: string[] }
+/**
+ * One hand-run tool call. `isError` is the server's own flag — the tool ran
+ * and reported a failure — which is not the same as `error`, a call that did
+ * not happen. `result` is the output flattened to text and capped at 64 KiB;
+ * `truncated` says whether the cap bit.
+ */
+export interface MCPCallResult {
+  server: string; tool: string; verdict: MCPVerdict; reason: string;
+  result?: string; truncated?: boolean; isError?: boolean; error?: string; tookMs: number
+}
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
@@ -157,6 +202,22 @@ export interface Transport {
   addGolden(ws: string, o: { key?: string; runId?: string }): Promise<GoldenEntry>;
   configSummary(ws: string): Promise<ConfigSummary>;
   resume(ws: string, runId: string, answer?: string): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
+  /** Continues a finished run with a follow-up instruction, on the same run. */
+  steer(ws: string, runId: string, text: string): Promise<SteerStarted>;
+  /** A fix run's change, file by file, with the unified patch. Starts nothing. */
+  runDiff(ws: string, runId: string): Promise<RunDiff>;
+  /** Reverts one hunk out of the fix commit and answers with the change as it stands after. */
+  dropHunk(ws: string, runId: string, req: DropHunkRequest): Promise<RunDiff>;
+  /** The MCP servers a run here would be offered; `connect` reaches each one and counts its tools. */
+  mcpServers(ws: string, connect?: boolean): Promise<MCPInventory>;
+  /** Every tool one server lists, with the verdict a run would get for it. */
+  mcpTools(ws: string, server: string): Promise<MCPToolList>;
+  /**
+   * Runs one tool by hand. A tool the workspace's permissions would refuse a
+   * run resolves (not rejects) with `verdict: 'denied'` and the reason, and
+   * nothing is started — the same body the HTTP route answers 403 with.
+   */
+  mcpCall(ws: string, server: string, tool: string, args?: unknown): Promise<MCPCallResult>;
   register(ws: string): Promise<RegisterRow[]>; doctor(ws: string): Promise<Check[]>; quota(): Promise<Quota[]>;
   subscribe(handler: (e: AppEvent) => void): () => void;
   /** Desktop build version, e.g. "1.2.3" or "dev". Only the Wails transport implements it. */

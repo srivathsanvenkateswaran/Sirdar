@@ -2,7 +2,16 @@ import type { ReactNode } from 'react'
 import './SidebarFooterCard.css'
 
 export interface SidebarFooterCardProps {
-  /** The workspace switcher row: a name and a chevron that opens a popover. */
+  /**
+   * The card's title row: "Plan usage" over the quota chips in the app. Any
+   * node, so the shell can put a chevron beside the words.
+   */
+  title?: ReactNode
+  /**
+   * The workspace switcher row: a name and a chevron that opens a popover.
+   * The app moved its switcher up beside the wordmark on 2026-09-15; the slot
+   * stays for a shell that wants it here.
+   */
   switcher?: ReactNode
   /** One quota chip per provider that has a budget. */
   quotas?: ReactNode
@@ -25,6 +34,7 @@ export interface SidebarFooterCardProps {
  * chrome, and the sheet beside it is the work.
  */
 export default function SidebarFooterCard({
+  title,
   switcher,
   quotas,
   action,
@@ -32,6 +42,7 @@ export default function SidebarFooterCard({
 }: SidebarFooterCardProps): JSX.Element {
   return (
     <div className="sd-sidebar-foot" aria-label={label} role="group">
+      {title && <div className="sd-sidebar-foot__title">{title}</div>}
       {switcher && <div className="sd-sidebar-foot__switcher">{switcher}</div>}
       {quotas && <div className="sd-sidebar-foot__quotas">{quotas}</div>}
       {action && <div className="sd-sidebar-foot__action">{action}</div>}

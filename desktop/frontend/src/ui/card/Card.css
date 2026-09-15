@@ -1,16 +1,18 @@
 /*
- * Card. A surface, a hairline, a 12px corner, and no shadow at all.
+ * Card. The pale card-row fill, 24px of padding, a 12px corner, and no
+ * shadow at all. The 2026-09-15 register: the fill is the separation, so
+ * there is no border at rest.
  */
 
 .sd-card {
   display: grid;
-  gap: var(--sd-space-1);
+  gap: var(--sd-space-2);
   width: 100%;
   margin: 0;
-  padding: var(--sd-space-2);
-  border: 1px solid var(--sd-rule-strong);
+  padding: var(--sd-space-5);
+  border: 1px solid transparent;
   border-radius: var(--sd-radius-md);
-  background: var(--sd-surface);
+  background: var(--sd-card-row);
   color: var(--sd-ink);
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-body);
@@ -58,21 +60,21 @@ button.sd-card:hover {
 }
 
 .sd-card__title {
-  font-size: var(--sd-text-body);
-  font-weight: 600;
-  line-height: 1.35;
+  font-size: var(--sd-text-title);
+  font-weight: 500;
+  line-height: 1.25;
 }
 
 .sd-card__meta {
   font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
+  font-size: var(--sd-text-ledger);
   font-variant-numeric: tabular-nums;
   color: var(--sd-ink-3);
 }
 
 .sd-card__body {
   font-size: var(--sd-text-body);
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--sd-ink-2);
 }
 

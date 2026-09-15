@@ -1,0 +1,24 @@
+/*
+ * Group label. Tracked small capitals in the second ink, and a dashed rule
+ * running out to the edge.
+ */
+
+.sd-group-label {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  margin: 0;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.sd-group-label[data-rule='true']::after {
+  content: '';
+  flex: 1;
+  border-block-start: 1px dashed var(--sd-rule-strong);
+}

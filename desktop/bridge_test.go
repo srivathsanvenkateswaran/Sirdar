@@ -38,6 +38,9 @@ var bridgeMethods = []string{
 	"Register",
 	"Doctor",
 	"Quota",
+	"MCPServers",
+	"MCPTools",
+	"MCPCall",
 }
 
 // notBridged is every other exported method of *app.Service, with the
@@ -59,12 +62,6 @@ var notBridged = map[string]string{
 	"HookReceived": "only the hook route reports a delivery",
 	// Diagnostics with no screen behind them.
 	"Jobs": "the frontend tracks the job ids it was given by each start",
-	// MCP inspection has two surfaces, `sirdar mcp` and the serve routes
-	// under /api/workspaces/{id}/mcp. The desktop app has no screen for
-	// it; bind these when it grows one.
-	"MCPServers": "no desktop screen inspects MCP servers yet",
-	"MCPTools":   "no desktop screen inspects MCP servers yet",
-	"MCPCall":    "no desktop screen inspects MCP servers yet",
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported
@@ -143,6 +140,26 @@ func TestBridgeMethodsAreBindable(t *testing.T) {
 // TestBridgeWorkspacesOnEmptyRegistry is the smoke test: a Bridge over a
 // Service pointed at a registry file that does not exist yet answers with an
 // empty list rather than failing.
+// TestBridgeMCPCallDeniedIsAnAnswer pins the one place the bridge reshapes
+// an error: a tool the workspace would refuse comes back as a result with
+// its verdict, the way the HTTP route answers 403 with a body, so the tool
+// tester can show the reason rather than a generic failure. A workspace
+// that does not exist is still an error.
+func TestBridgeMCPCallDeniedIsAnAnswer(t *testing.T) {
+	reg := &app.Registry{Path: filepath.Join(t.TempDir(), "workspaces.json")}
+	b := NewBridge(app.New(reg, app.BuildDeps, app.Options{}))
+
+	if _, err := b.MCPCall("no-such-workspace", "filesystem", "read_file", nil); err == nil {
+		t.Fatal("MCPCall on an unknown workspace: want an error")
+	}
+	if _, err := b.MCPServers("no-such-workspace", false); err == nil {
+		t.Fatal("MCPServers on an unknown workspace: want an error")
+	}
+	if _, err := b.MCPTools("no-such-workspace", "filesystem"); err == nil {
+		t.Fatal("MCPTools on an unknown workspace: want an error")
+	}
+}
+
 func TestBridgeWorkspacesOnEmptyRegistry(t *testing.T) {
 	reg := &app.Registry{Path: filepath.Join(t.TempDir(), "workspaces.json")}
 	b := NewBridge(app.New(reg, app.BuildDeps, app.Options{}))

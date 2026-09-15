@@ -275,7 +275,18 @@ for each and every session records the same on its own event log.
 
 ## Next steps, in order
 
-The UI is the next build, and it is now designed rather than guessed at:
+The UI is the next build, and it is now designed rather than guessed at. Its foundation landed
+on the `ui-foundation` branch on 2026-09-15: the tokens are re-based to the mocks' 16px register
+(Figtree first, `--sd-text-ledger` for the mono, `--sd-control-h`, `--sd-sidebar-w`,
+`--sd-nav-row-h`, `--sd-radius-sheet`), the shell is the 248px sidebar with Recent sessions and
+the Plan-usage footer, the routes `#/new`, `#/runs/<ws>/<id>/review` and `#/settings/<page>`
+resolve (the first two to placeholders), the page and modal entrances live in `src/ui/motion`,
+`src/ui` holds thirty-one components (ten new: ProviderMark, Banner, GroupLabel, ItemRow,
+SearchBar, StatCard, Toggle, PageHead, KindChip, StateGlyph; the rest at the v2 sizes, and the
+run card in its Jira shape), and `Transport` carries `runDiff`, `dropHunk`, `steer`,
+`mcpServers`, `mcpTools` and `mcpCall` on HTTP, Wails and the fake alike, with the three MCP
+methods bound in `desktop/bridge.go`. What comes next is the screens themselves, one agent per
+screen, each importing from `src/ui` and reading its data through the widened transport:
 
 1. Build the desktop screens from the reviewed mocks in `docs/design/2026-09-15-screens`, in
    round 2's register. The session surface is the piece with no equivalent in the shipped app —
@@ -284,10 +295,10 @@ The UI is the next build, and it is now designed rather than guessed at:
    settings and the tool tester (`sirdar mcp list/tools/call` given a face), and the provider
    marks: fix support and the read-only guard per provider, which the Providers artboard lays
    out and which the Providers table above is the content for.
-2. Widen the frontend `Transport` first. `runs diff`, `steer` and the `mcp` routes exist on the
-   HTTP API and the CLI but not in `desktop/frontend/src/api/types.ts`, so neither the desktop
-   app nor `sirdar serve` can reach them, and neither can the fake transport the screens are
-   tested against. Nothing in item 1 can be wired up until this lands.
+2. ~~Widen the frontend `Transport` first.~~ Done on `ui-foundation`: `runDiff`, `dropHunk`,
+   `steer`, `mcpServers`, `mcpTools` and `mcpCall` are on `Transport`, both real transports and
+   `store/fakeTransport.ts` (which answers a two-file sample diff and a filesystem MCP server
+   with three judged tools), so every screen in item 1 can be built and tested against them.
 3. `acp-r3` is in flight (5 commits off `main`): selecting a session mode through
    `configOptions` when an agent lists no modes, matching mode ids by the last segment of a URL
    id, one summary line per `available_commands_update` instead of the whole catalogue,

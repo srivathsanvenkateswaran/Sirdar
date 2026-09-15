@@ -67,6 +67,12 @@ rather than the message. Contrast: `--sd-badge-ink` on `--sd-badge-bg` is
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: 26 tall, `padding-inline: 10px`, radius
+6px, `--sd-text-ledger` (13.5px) in the UI face. Was 20 tall at 11px on
+`--sd-radius-xs`. The workspace badge beside the wordmark is this shape,
+drawn by the shell's switcher trigger.
+
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 9. The
 reference's 25-tall lavender chip becomes 20 tall at Sirdar's base, on the

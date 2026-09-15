@@ -1,25 +1,35 @@
 import { useRef, useState } from 'react'
 import Badge from '../ui/badge'
+import Banner from '../ui/banner'
 import Button from '../ui/button'
 import Card from '../ui/card'
 import DataTable, { type DataColumn } from '../ui/data-table'
 import Dialog from '../ui/dialog'
 import EventRow, { EVENT_GLYPHS, type EventVariant } from '../ui/event-row'
+import GroupLabel from '../ui/group-label'
 import Heatmap from '../ui/heatmap'
 import HeroBand from '../ui/hero-band'
+import ItemRow from '../ui/item-row'
 import KanbanColumn, { type LaneId } from '../ui/kanban-column'
+import KindChip from '../ui/kind-chip'
 import ModalSheet from '../ui/modal-sheet'
 import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
 import NotePane from '../ui/note-pane'
+import PageHead from '../ui/page-head'
 import PillNav from '../ui/pill-nav'
+import ProviderMark from '../ui/provider-mark'
 import QuotaChip from '../ui/quota-chip'
 import RunCard from '../ui/run-card'
+import SearchBar from '../ui/search-bar'
 import SegmentedControl from '../ui/segmented-control'
 import SettingRow, { SettingCard } from '../ui/setting-row'
 import SidebarFooterCard from '../ui/sidebar-footer-card'
 import SidebarNavItem from '../ui/sidebar-nav-item'
+import StatCard from '../ui/stat-card'
+import StateGlyph, { STATE_WORDS, type GlyphState } from '../ui/state-glyph'
 import StatusBadge, { PriorityBadge, STATUS_WORDS, type SdStatus } from '../ui/status-badge'
 import Toasts from '../ui/toast'
+import Toggle from '../ui/toggle'
 import './library.css'
 
 /**
@@ -54,6 +64,39 @@ const EVERY_STATUS: SdStatus[] = [
 ]
 
 const LANES: LaneId[] = ['queue', 'gathering', 'blocked', 'triaged', 'done', 'failed']
+
+/** The providers a session can name, in the order the Providers page lists them. */
+const PROVIDERS_SHOWN = [
+  'claude',
+  'codex',
+  'openai',
+  'copilot',
+  'agy',
+  'gemini',
+  'qwen',
+  'cursor',
+  'opencode',
+  'kimi',
+  'acp',
+]
+
+/** lucide `inbox` for the item-row specimens. */
+function InboxIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      <path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z" />
+      <path d="M13 5v14" />
+    </svg>
+  )
+}
 
 interface TableRow {
   key: string
@@ -117,6 +160,9 @@ export default function Library(): JSX.Element {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [modalPage, setModalPage] = useState('general')
+  const [search, setSearch] = useState('')
+  const [well, setWell] = useState('')
+  const [toggled, setToggled] = useState(true)
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
     columnId: 'key',
     direction: 'asc',
@@ -145,6 +191,16 @@ export default function Library(): JSX.Element {
     { id: 'setting-row', label: 'Setting row' },
     { id: 'heatmap', label: 'Heatmap' },
     { id: 'badge', label: 'Badge' },
+    { id: 'provider-mark', label: 'Provider mark' },
+    { id: 'banner', label: 'Banner' },
+    { id: 'group-label', label: 'Group label' },
+    { id: 'item-row', label: 'Item row' },
+    { id: 'search-bar', label: 'Search bar' },
+    { id: 'stat-card', label: 'Stat card' },
+    { id: 'toggle', label: 'Toggle' },
+    { id: 'page-head', label: 'Page head' },
+    { id: 'kind-chip', label: 'Kind chip' },
+    { id: 'state-glyph', label: 'State glyph' },
   ]
 
   return (
@@ -153,7 +209,7 @@ export default function Library(): JSX.Element {
         <div className="lib__bar-row">
           <h1 className="lib__title">Asset library</h1>
           <p className="lib__lede">
-            Twenty-one components, every state, both themes, both directions. The switches
+            Thirty-one components, every state, both themes, both directions. The switches
             paint the specimens, not this page.
           </p>
         </div>
@@ -381,8 +437,8 @@ export default function Library(): JSX.Element {
                     kind="triage"
                     status="running"
                     title="Statement export times out"
-                    elapsed="4m 12s"
-                    cost="$0.42"
+                    provider="claude"
+                    clock="4:12"
                     onOpen={() => {}}
                   />
                 ) : null}
@@ -394,47 +450,73 @@ export default function Library(): JSX.Element {
         <Section
           id="run-card"
           name="Run card"
-          note="A live run wears the accent on its leading edge and nothing else does."
+          note="The Jira-shaped card: title, kind chip, state glyph and clock, key and provider mark. No reason, no cost."
         >
           <div className="lib-row">
-            <State label="Running">
+            <State label="Queued">
               <RunCard
-                runKey="OMNI-2510"
+                runKey="SBX-8"
                 kind="triage"
-                status="running"
-                title="Statement export times out"
-                priority="P2"
-                elapsed="4m 12s"
-                cost="$0.42"
+                status="queued"
+                title="Supplier price import rounds to the nearest riyal"
+                provider="cursor"
                 onOpen={() => {}}
               />
             </State>
-            <State label="Needs input">
+            <State label="Running, with the clock">
               <RunCard
-                runKey="OMNI-2511"
+                runKey="SBX-4"
                 kind="triage"
+                status="running"
+                title="Reorder reminder fires twice for the same product"
+                provider="claude"
+                clock="1:47"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Blocked, with the clock">
+              <RunCard
+                runKey="SBX-1"
+                kind="fix"
                 status="blocked"
-                title="Login fails after the update"
-                reason="The agent asked which account to use."
-                elapsed="1m 30s"
+                title="Product 00219 stock shows 1 more than the movement report"
+                provider="claude"
+                clock="4:12"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Completed RCA">
+              <RunCard
+                runKey="SBX-3"
+                kind="rca"
+                status="completed"
+                title="Stock count export skips products with a zero price"
+                provider="copilot"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Done">
+              <RunCard
+                runKey="SBX-5"
+                kind="fix"
+                status="done"
+                title="Credit note lands on the wrong customer account"
+                provider="claude"
                 onOpen={() => {}}
               />
             </State>
             <State label="Failed">
               <RunCard
-                runKey="OMNI-2512"
-                kind="fix"
+                runKey="SBX-6"
+                kind="triage"
                 status="failed"
-                title="Retry storm on the export worker"
-                reason="The provider CLI exited with status 1."
-                priority="P1"
-                elapsed="9m 02s"
-                cost="$1.61"
+                title="Barcode lookup returns the discontinued variant"
+                provider="qwen"
                 onOpen={() => {}}
               />
             </State>
             <State label="No title from the tracker">
-              <RunCard runKey="OMNI-2513" kind="eval" status="queued" onOpen={() => {}} />
+              <RunCard runKey="OMNI-2513" kind="eval" status="queued" provider="acp" onOpen={() => {}} />
             </State>
             <State label="Arabic">
               <RunCard
@@ -442,9 +524,8 @@ export default function Library(): JSX.Element {
                 kind="triage"
                 status="blocked"
                 title={ARABIC_TITLE}
-                reason={ARABIC_REASON}
-                elapsed="2m 04s"
-                cost="$0.31"
+                provider="codex"
+                clock="2:04"
                 onOpen={() => {}}
               />
             </State>
@@ -817,6 +898,267 @@ export default function Library(): JSX.Element {
             </State>
             <State label="Arabic">
               <Badge>اشتراك</Badge>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="provider-mark"
+          name="Provider mark"
+          note="The vendors' own marks, white on the brand colour or on the ink; a provider with no mark gets its initials."
+        >
+          <div className="lib-row lib-row--tight">
+            {PROVIDERS_SHOWN.map((provider) => (
+              <State key={provider} label={provider}>
+                <ProviderMark provider={provider} />
+              </State>
+            ))}
+            <State label="Small, in a card footer">
+              <ProviderMark provider="claude" size="sm" />
+            </State>
+            <State label="Large, on the Providers page">
+              <ProviderMark provider="qwen" size="lg" />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="banner"
+          name="Banner"
+          note="What just finished, in the hue it finished in. One per transcript."
+        >
+          <div className="lib-col">
+            <State label="Tests passed">
+              <Banner title="Tests passed">go test ./... in 41s, 212 tests</Banner>
+            </State>
+            <State label="Note filed">
+              <Banner tone="done" title="Note filed">
+                notes/SBX-1-triage.md, 1.4k words
+              </Banner>
+            </State>
+            <State label="The agent asked, with an answer button">
+              <Banner
+                tone="blocked"
+                title="The agent asked"
+                action={
+                  <Button size="sm" variant="pale">
+                    Answer
+                  </Button>
+                }
+              >
+                Which account should the credit note land on?
+              </Banner>
+            </State>
+            <State label="Failed">
+              <Banner tone="failed" title="Build failed">
+                exit status 1 in internal/export
+              </Banner>
+            </State>
+            <State label="Arabic">
+              <Banner tone="blocked" title="طلب الوكيل" dir="auto">
+                {ARABIC_REASON}
+              </Banner>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="group-label"
+          name="Group label"
+          note="Tracked small capitals and a dashed rule. It names a group; it does not start a section."
+        >
+          <div className="lib-col">
+            <State label="With the rule">
+              <GroupLabel>Landed today</GroupLabel>
+            </State>
+            <State label="Without, inside a nav column">
+              <div style={{ inlineSize: 200 }}>
+                <GroupLabel rule={false}>Workspace</GroupLabel>
+              </div>
+            </State>
+            <State label="Arabic">
+              <GroupLabel>وصل اليوم</GroupLabel>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="item-row"
+          name="Item row"
+          note="A tone rail, an icon in a box, a title over its facts, and one control."
+        >
+          <div className="lib-col">
+            <State label="Started, with a Triage button">
+              <ItemRow
+                tone="live"
+                icon={<InboxIcon />}
+                title="Reorder reminder fires twice for the same product"
+                meta="SBX-4 · zendesk · started · 2 min ago"
+                action={<Button size="sm">Triage</Button>}
+              />
+            </State>
+            <State label="Skipped, opens the ticket">
+              <ItemRow
+                tone="blocked"
+                icon={<InboxIcon />}
+                title="Monthly statement shows a paid invoice as overdue"
+                meta="SBX-7 · jira · skipped · assignee is not you · 7 min ago"
+                openLabel="Open SBX-7"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Rejected">
+              <ItemRow
+                tone="failed"
+                icon={<InboxIcon />}
+                title="Barcode lookup returns the discontinued variant"
+                meta="SBX-6 · jira · rejected · cooldown 10m · 14 min ago"
+              />
+            </State>
+            <State label="Arabic, two lines">
+              <ItemRow
+                icon={<InboxIcon />}
+                title={ARABIC_TITLE}
+                meta="SBX-2 · zoho · started"
+                dir="auto"
+                wrap
+                action={<Button size="sm">Triage</Button>}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="search-bar"
+          name="Search bar"
+          note="The bar a session starts from, and the well the board filters with."
+        >
+          <div className="lib-col">
+            <State label="The bar">
+              <SearchBar
+                label="Ticket key or URL"
+                value={search}
+                onChange={setSearch}
+                placeholder="A ticket key, or paste its URL"
+                aside="Enter to start"
+              />
+            </State>
+            <State label="The well">
+              <SearchBar
+                variant="well"
+                label="Filter the board"
+                value={well}
+                onChange={setWell}
+                placeholder="Filter"
+              />
+            </State>
+            <State label="Arabic">
+              <SearchBar
+                label="مفتاح التذكرة"
+                value=""
+                onChange={() => {}}
+                placeholder="مفتاح التذكرة أو رابطها"
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="stat-card"
+          name="Stat card"
+          note="A big figure, a grey label over it, one line under it. The card does no arithmetic."
+        >
+          <div className="lib-row">
+            <State label="Runs this week">
+              <StatCard label="Runs this week" value="38" detail="12 more than last week" />
+            </State>
+            <State label="Spent">
+              <StatCard label="Spent" value="$12.40" valueTitle="$12.4031" detail="this week" />
+            </State>
+            <State label="Confirmed">
+              <StatCard label="Confirmed" value="71%" detail="of 24 triaged" />
+            </State>
+            <State label="Arabic">
+              <StatCard label="المصروف" value="$12.40" detail="هذا الأسبوع" />
+            </State>
+          </div>
+        </Section>
+
+        <Section id="toggle" name="Toggle" note="On or off. The knob travels the logical axis.">
+          <div className="lib-row lib-row--tight">
+            <State label="Drive it">
+              <Toggle label="Include the ticket title" checked={toggled} onChange={setToggled} />
+            </State>
+            <State label="Off">
+              <Toggle label="Notify on failure" checked={false} onChange={() => {}} />
+            </State>
+            <State label="Disabled">
+              <Toggle label="Webhooks" checked disabled onChange={() => {}} />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="page-head"
+          name="Page head"
+          note="The screen's name, a lede, and its actions. The serif on the settings heading only."
+        >
+          <div className="lib-col">
+            <State label="A screen">
+              <PageHead
+                title="Register"
+                lede="Every run, newest first."
+                actions={
+                  <>
+                    <Button variant="pale">Filters</Button>
+                    <Button variant="primary">Export CSV</Button>
+                  </>
+                }
+              />
+            </State>
+            <State label="The settings heading">
+              <PageHead title="MCP servers" level={2} serif />
+            </State>
+            <State label="Arabic">
+              <PageHead title="اللوحة" lede="كل تذكرة في مسارها." />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="kind-chip"
+          name="Kind chip"
+          note="What a run is. Three fills, and the word is always there."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="Triage">
+              <KindChip kind="triage" />
+            </State>
+            <State label="RCA">
+              <KindChip kind="rca" />
+            </State>
+            <State label="Fix">
+              <KindChip kind="fix" />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="state-glyph"
+          name="State glyph"
+          note="Five drawings for eight states, each with its word; the clock only where it means something."
+        >
+          <div className="lib-row lib-row--tight">
+            {(Object.keys(STATE_WORDS) as GlyphState[]).map((state) => (
+              <State key={state} label={STATE_WORDS[state]}>
+                <StateGlyph
+                  state={state}
+                  clock={state === 'running' ? '01:47' : state === 'blocked' ? '04:12' : undefined}
+                />
+              </State>
+            ))}
+            <State label="Arabic">
+              <StateGlyph state="blocked" word="بانتظار ردّك" clock="04:12" />
             </State>
           </div>
         </Section>

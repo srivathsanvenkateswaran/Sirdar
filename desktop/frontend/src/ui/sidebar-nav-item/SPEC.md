@@ -2,8 +2,8 @@
 
 ## What it is
 
-One row of the desktop app's left sidebar: a 16px icon, a 13px label, and an
-optional count at the inline end, inside a 28-tall pill.
+One row of the desktop app's left sidebar: a 20px icon, a 16px label, and an
+optional count at the inline end, inside a 44-tall pill.
 
 Built. `desktop/frontend/src/ui/sidebar-nav-item/`. It replaces `.nav-item` in
 `styles.css`, which was a pill in a horizontal header bar; the header is gone
@@ -11,23 +11,25 @@ and `docs/design/03-desktop-app.md` section 5 is where the sidebar comes from.
 
 ## Anatomy
 
-- `button.sd-nav-row` — the whole row is the control. `min-block-size: 28px`,
-  `margin-block: 2px` (which makes the 32 pitch), `padding-inline: 8px`,
-  `--sd-radius-sm`, no border.
-- `span.sd-nav-row__icon` — 16 by 16, `currentColor`, `aria-hidden`. Lucide
-  outlines at stroke 1.5 in the app; the component takes whatever node it is
+- `button.sd-nav-row` — the whole row is the control. `min-block-size:
+  var(--sd-nav-row-h)` (44px), `padding-inline: 14px`, `gap: 12px`, radius
+  10px, no border. The shell stacks rows at a 2px gap.
+- `span.sd-nav-row__icon` — 20 by 20, `currentColor`, `aria-hidden`. Lucide
+  outlines at stroke 1.6 in the app; the component takes whatever node it is
   given.
-- `span.sd-nav-row__label` — 13px weight 500, ellipsised rather than wrapped.
-- `span.sd-nav-row__count` — the pill count, `--sd-badge-bg` with
-  `--sd-badge-ink`, 11px mono tabular. Hidden when the count is zero.
+- `span.sd-nav-row__label` — `--sd-text-body` (16px) weight 500, ellipsised
+  rather than wrapped.
+- `span.sd-nav-row__count` — the pill count at the inline end, `--sd-badge-bg`
+  with `--sd-badge-ink`, `--sd-text-micro` mono tabular on a 20px line. Hidden
+  when the count is zero.
 - `span.sd-nav-row__count-name` — the count's name, read out and never drawn.
 
 ## States
 
 | State | What changes |
 |---|---|
-| rest | No fill. Label and icon `--sd-ink-2`. |
-| hover | Fill `--sd-nav-hover`, label still `--sd-ink-2` (6.79:1 light, 7.16:1 dark). |
+| rest | No fill. Label and icon `--sd-ink`. |
+| hover | Fill `--sd-nav-hover`, label still `--sd-ink` (13.68:1 light on the active fill, higher on hover). |
 | active / pressed | Nothing beyond the hover fill. The row navigates; there is nothing to hold down. |
 | focus-visible | The app's ring: `2px solid var(--sd-accent)` at `outline-offset: 2px`. |
 | disabled | n/a. A screen a person cannot reach is not listed. |
@@ -41,11 +43,10 @@ and `docs/design/03-desktop-app.md` section 5 is where the sidebar comes from.
 
 - `--sd-nav-hover` — the hover fill
 - `--sd-nav-active` — the current row's fill
-- `--sd-ink-2` — rest and hover label
-- `--sd-ink` — the current row's label
+- `--sd-ink` — the label, at rest and current
 - `--sd-badge-bg` / `--sd-badge-ink` — the count pill
-- `--sd-radius-sm` — the pill; `--sd-radius-pill` — the count
-- `--sd-space-1` / `--sd-space-2` — padding and the icon gap
+- `--sd-nav-row-h` — the row's height; `--sd-radius-pill` — the count
+- `--sd-space-3` — the icon gap
 - `--sd-text-body` / `--sd-text-micro` — label and count
 - `--sd-font-ui` / `--sd-font-mono` — label and count
 - `--sd-dur-1` — the fill change
@@ -79,6 +80,13 @@ pitch, with the sidebar's own inline padding taking the clickable box past the
 moves.
 
 ## Changelog
+
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: the pill goes from 28 tall at 32 pitch to
+`--sd-nav-row-h` (44px), the icon from 16 to 20, the label from 13px to
+`--sd-text-body` (16px), the padding from 8 to 14, the radius from
+`--sd-radius-sm` to 10px, and the label rests on `--sd-ink` rather than
+`--sd-ink-2`. Forced by the type-ladder re-base in `tokens.css`.
 
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 5. Replaces

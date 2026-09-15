@@ -144,14 +144,18 @@ Scale (rem, off a 16px root):
 |---|---|---|
 | display-xl | 4.5 | not used |
 | display-l | 3.5 | not used |
-| display-m | 2.5 | 1.5 (screen title) |
-| title | 2 | 1.125 |
-| body-l | 1.25 | 0.9375 |
-| body | 1 | 0.8125 (13px, today's app base) |
-| meta | 0.875 | 0.71875 (11.5px) |
-| micro | 0.75 | 0.65625 (10.5px) |
+| display-m | 2.5 | 2 (screen title) |
+| title | 2 | 1.375 |
+| body-l | 1.25 | 1.0625 |
+| body | 1 | 1 (16px) |
+| meta | 0.875 | 0.875 (14px) |
+| micro | 0.75 | 0.75 (12px) |
+| ledger | not used | 0.84375 (13.5px mono) |
 
-The app column is deliberately the small end of the same ladder rather than a second scale.
+The app column was the small end of the same ladder (13px base) until the 2026-09-15 screens
+round, whose review found the UI too dense; it is now re-based on the reference app's 16px
+register, and only the display sizes still separate the two columns. The exact values are in
+`01-tokens.md` section 3.
 
 ## 5. Spacing and radius
 

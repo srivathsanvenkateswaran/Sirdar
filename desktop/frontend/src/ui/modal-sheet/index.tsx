@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
 import { focusable } from '../dialog'
+import { MODAL_ENTER_CLASS, SCRIM_ENTER_CLASS } from '../motion'
 import './ModalSheet.css'
 
 export interface ModalNavItem {
@@ -119,14 +120,14 @@ export default function ModalSheet({
 
   return (
     <div
-      className="sd-modal-scrim"
+      className={`sd-modal-scrim ${SCRIM_ENTER_CLASS}`}
       onMouseDown={(event) => {
         if (event.target === event.currentTarget) onClose()
       }}
     >
       <div
         ref={panel}
-        className="sd-modal"
+        className={`sd-modal ${MODAL_ENTER_CLASS}`}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
