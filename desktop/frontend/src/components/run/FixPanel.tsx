@@ -1,4 +1,5 @@
 import type { FixInfo } from '../../api/types'
+import Button from '../../ui/button'
 
 /** The short sha a branch line shows; the full one is under State. */
 function short(commit: string): string {
@@ -89,14 +90,9 @@ export default function FixPanel({
             session, and you start that yourself from Start fix.
           </p>
           <div className="form-row">
-            <button
-              type="button"
-              className="run-btn run-btn--primary"
-              onClick={onAccept}
-              disabled={pending}
-            >
+            <Button variant="primary" onClick={onAccept} disabled={pending}>
               {pending ? 'Publishing…' : 'Accept and publish'}
-            </button>
+            </Button>
           </div>
           {error ? <div className="form-error">{error}</div> : null}
         </div>

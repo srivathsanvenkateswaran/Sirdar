@@ -9,7 +9,7 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP with fix/eval/golden routes, a provider picker, an inbound-delivery panel and a read-only config summary. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP with fix/eval/golden routes, a provider picker, an inbound-delivery panel and a read-only config summary. Six providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook), `agy` (Google's Antigravity CLI, `internal/provider/agy`, triage and rca only — no per-call mediation is possible, so the read-only guarantee is the CLI's own `--mode plan`, `mcp.workspaceOnly` is unenforceable, and `sirdar fix` is refused). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -37,6 +37,18 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
 - Models beyond Claude/Codex: `docs/superpowers/plans/2026-09-10-provider-roadmap.md`. Phase 1
   (`provider: openai`), Phase 2 (`provider: acp`), and Phase 3 (`provider: qwen`) are all landed
   on `main`. Codex custom providers are a dead end (Responses API only).
+- `provider: agy` is the one provider whose read-only guarantee Sirdar does not impose. The
+  Antigravity CLI gives a parent process no way to mediate or pre-empt a tool call — no
+  control_request, no HTTP hook, nothing answerable on stdin — and a headless run auto-denies
+  whatever needs approval while deciding everything else from files Sirdar does not own
+  (`~/.gemini/antigravity-cli/settings.json`, `~/.gemini/config/projects/`, a workspace
+  `.agents/hooks.json`). So every session runs in `--mode plan`, which was the only mode
+  observed to refuse a write outside the workspace; `permissions.bash`/`mcp`/`fetch` are never
+  consulted; the adapter reports the CLI's own refusals as deny permission events and raises an
+  `EvError` when a write or shell command actually completes in a triage session; and `sirdar
+  fix` is refused at `Start`. `mcp.workspaceOnly` cannot be enforced (one global
+  `mcp_config.json`, no narrowing flag) and there is no cost on the wire, so `budget.maxUsd`
+  never bites. Capture: `docs/research/10-antigravity-wire-formats.md`.
 - The read-only guarantee is enforced per provider: `--disallowedTools` + policy for Claude,
   `sandbox: read-only` for Codex, for `provider: openai` the tool set itself plus
   `provider.MatchCommand` (segment matching, no `$(`, backticks or redirection except `2>&1`
@@ -182,6 +194,15 @@ Then the not-built items:
     pending a design conversation; nothing here is built or even planned in detail.
 
 ## What is unverified
+
+No Sirdar triage has run end to end on `provider: agy`: the wire format, the stdin message
+shape, plan mode's refusal of an out-of-workspace write, the headless auto-deny, the
+schema-plus-follow-up combination, `--conversation` resume and the exit codes were each
+watched on a live `agy` turn against a real Google account, but the adapter itself has only
+been driven by a scripted fake. Three things that capture did not settle are written up at the
+end of `docs/research/10-antigravity-wire-formats.md`: what `--sandbox` refuses on its own, why
+one plan-mode `run_command` reported DONE with no side effect instead of a denial, and how a
+workspace the operator has already trusted behaves in the CLI's default mode.
 
 No live run yet for `provider: openai`, `provider: acp`, `provider: qwen`, `notify`, `webhooks`,
 `sirdar fix`, or `sirdar fix`'s worktree mode. Each has only been exercised against a scripted

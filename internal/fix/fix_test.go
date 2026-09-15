@@ -4,11 +4,13 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -1757,5 +1759,103 @@ func TestPruneStaleWorktreesLeavesRunningAndBlockedAlone(t *testing.T) {
 		if strings.Contains(stderr.String(), dontWant) {
 			t.Errorf("a worktree that should have been left alone was logged as pruned (%s):\n%s", dontWant, stderr.String())
 		}
+	}
+}
+
+// noFixProvider is a provider that cannot run a write session at all —
+// provider agy, whose CLI gives Sirdar no way to mediate a tool call. It
+// fails the test if a session is ever started on it.
+type noFixProvider struct{ t *testing.T }
+
+var errNoFix = errors.New("provider agy: fix mode is refused")
+
+func (p *noFixProvider) Name() string                                               { return "agy" }
+func (p *noFixProvider) Doctor(ctx context.Context, binary string) []provider.Check { return nil }
+func (p *noFixProvider) SupportsFix() bool                                          { return false }
+func (p *noFixProvider) FixRefusal() error                                          { return errNoFix }
+
+func (p *noFixProvider) Start(ctx context.Context, spec provider.SessionSpec) (provider.Session, error) {
+	p.t.Error("a session was started on a provider that cannot run a fix")
+	return nil, errNoFix
+}
+
+// TestFixIsRefusedBeforeAnyGitSideEffect: the refusal used to come from the
+// provider's own Start, by which point the flow had fetched the default
+// branch, cut a fix branch from it and checked that branch out into a
+// linked worktree — all left behind for a session that was never going to
+// run. The workspace has to be exactly as the operator left it.
+func TestFixIsRefusedBeforeAnyGitSideEffect(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+
+	branchesBefore := run(t, w.root, "git", "branch", "--list")
+	headBefore := w.head(t, "HEAD")
+	runDirsBefore := runDirNames(t, w.root)
+
+	res, err := Run(t.Context(), newDeps(w, &noFixProvider{t: t}), "OMNI-1", Options{})
+	if err == nil {
+		t.Fatal("fix ran on a provider that cannot run one")
+	}
+	if !errors.Is(err, errNoFix) {
+		t.Fatalf("error %v, want the provider's own refusal", err)
+	}
+	if res.Branch != "" || res.Worktree != "" || res.Commit != "" {
+		t.Errorf("the refused run reported work it should not have done: %+v", res)
+	}
+
+	if got := run(t, w.root, "git", "branch", "--list"); got != branchesBefore {
+		t.Errorf("branches changed:\nbefore %q\nafter  %q", branchesBefore, got)
+	}
+	if got := w.head(t, "HEAD"); got != headBefore {
+		t.Errorf("HEAD moved from %s to %s", headBefore, got)
+	}
+	if trees := w.worktrees(t); len(trees) != 0 {
+		t.Errorf("a linked worktree was added: %v", trees)
+	}
+	if _, err := os.Stat(filepath.Join(w.root, ".sirdar", "worktrees")); !os.IsNotExist(err) {
+		t.Errorf(".sirdar/worktrees was created: %v", err)
+	}
+	// The triage note the fixture wrote lives under .sirdar/runs/OMNI-1/,
+	// so what matters is that the refused fix added nothing beside it.
+	if got := runDirNames(t, w.root); got != runDirsBefore {
+		t.Errorf("run directories changed:\nbefore %v\nafter  %v", runDirsBefore, got)
+	}
+}
+
+// runDirNames lists every run directory in the workspace, as one string a
+// test can compare before and after.
+func runDirNames(t *testing.T, root string) string {
+	t.Helper()
+	var names []string
+	base := filepath.Join(root, ".sirdar", "runs")
+	keys, err := os.ReadDir(base)
+	if err != nil {
+		return ""
+	}
+	for _, key := range keys {
+		runs, err := os.ReadDir(filepath.Join(base, key.Name()))
+		if err != nil {
+			continue
+		}
+		for _, r := range runs {
+			names = append(names, key.Name()+"/"+r.Name())
+		}
+	}
+	sort.Strings(names)
+	return strings.Join(names, " ")
+}
+
+// --dry-run makes a branch and a prompt on purpose, so it is refused too:
+// a provider that cannot run a fix has no prompt worth reading.
+func TestDryRunIsRefusedOnAProviderThatCannotFix(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	branchesBefore := run(t, w.root, "git", "branch", "--list")
+
+	if _, err := Run(t.Context(), newDeps(w, &noFixProvider{t: t}), "OMNI-1", Options{DryRun: true}); err == nil {
+		t.Fatal("--dry-run ran on a provider that cannot run a fix")
+	}
+	if got := run(t, w.root, "git", "branch", "--list"); got != branchesBefore {
+		t.Errorf("branches changed:\nbefore %q\nafter  %q", branchesBefore, got)
 	}
 }

@@ -1076,6 +1076,11 @@ type session struct {
 	waitErr error
 	meter   usageMeter
 
+	// lastDoc is the most recent JSON object the model wrote as plain
+	// text. It is where the answer ends up when the model never calls
+	// structured_output, which is the whole of recoverFinal's business.
+	lastDoc json.RawMessage
+
 	// decided holds the ids of the tool calls the hook answered, and
 	// started the ids of the tool calls the stream announced but has not
 	// reported a result for yet. A result for a call that ran without a
@@ -1343,8 +1348,12 @@ func (s *session) read(stdout io.Reader) {
 		line := append([]byte(nil), raw...)
 		for _, ev := range decode(line) {
 			s.measure(&ev)
+			recovered := s.recoverFinal(&ev)
 			s.absorb(ev)
 			s.emit(ev)
+			if recovered != "" {
+				s.emit(warningEvent(recovered))
+			}
 		}
 		for _, ev := range s.reconcile(line) {
 			s.emit(ev)
@@ -1650,6 +1659,43 @@ func (s *session) measure(ev *provider.Event) {
 	ev.Turns = s.meter.turns
 	ev.InputTok = s.meter.inTok
 	ev.OutputTok = s.meter.outTok
+}
+
+// recoverFinal fills in a final event's structured answer from the
+// model's own text when the CLI produced none, and returns the warning
+// that recovery deserves (empty when nothing was recovered).
+//
+// Qwen Code 0.23.3 registers --json-schema as a synthetic
+// structured_output tool and enforces it by failing the run when the model
+// answers in prose instead: exit 1, a result line with
+// subtype "error_during_execution", is_error true, an empty result string,
+// and under error.message an English sentence beginning "Model produced
+// plain text instead of calling the structured_output tool". Feeding that
+// sentence to the note validator is what produced
+// `parse document: invalid character 'M' looking for beginning of value`
+// on the first live qwen run, and what made the schema retry quote a
+// meaningless error back at a model that had answered correctly.
+//
+// The answer itself is in the assistant's last text block, so it is taken
+// from there. Whether it is a note is still note.Validate's verdict, not
+// this function's: all that is claimed here is that a complete JSON object
+// was written, and that it is a better candidate than the CLI's prose
+// account of its own failure.
+func (s *session) recoverFinal(ev *provider.Event) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if ev.Kind == provider.EvAssistantText {
+		if doc := jsonObject(ev.Text); len(doc) > 0 {
+			s.lastDoc = doc
+		}
+		return ""
+	}
+	if ev.Kind != provider.EvFinal || len(ev.Final) > 0 || len(s.lastDoc) == 0 {
+		return ""
+	}
+	ev.Final = s.lastDoc
+	return "the model never called structured_output; the answer was read from its text instead"
 }
 
 // absorb records the parts of an event that belong to the terminal Result.

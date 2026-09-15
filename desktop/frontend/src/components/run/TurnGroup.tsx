@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { foldSystem, offsetLabel, type IndexedEvent, type Turn } from '../../lib/events'
+import SdEventRow from '../../ui/event-row'
 import EventRow from './EventRow'
 
 /**
@@ -20,25 +21,19 @@ function StreamFold({
 
   return (
     <>
-      <div className="ev ev--system">
-        <span className="ev-at">{offsetLabel(items[0].event.t, startedAt)}</span>
-        <span className="ev-mark" aria-hidden="true">
-          ·
-        </span>
-        <div className="ev-main">
-          <button
-            type="button"
-            className="ev-fold"
-            aria-expanded={open}
-            onClick={() => setOpen((v) => !v)}
-          >
-            <span className="ev-fold-caret" aria-hidden="true">
-              {open ? '▾' : '▸'}
-            </span>
-            {items.length} stream events
-          </button>
-        </div>
-      </div>
+      <SdEventRow at={offsetLabel(items[0].event.t, startedAt)} variant="state" glyph="·">
+        <button
+          type="button"
+          className="ev-fold"
+          aria-expanded={open}
+          onClick={() => setOpen((v) => !v)}
+        >
+          <span className="ev-fold-caret" aria-hidden="true">
+            {open ? '▾' : '▸'}
+          </span>
+          {items.length} stream events
+        </button>
+      </SdEventRow>
       {open
         ? items.map((item) => (
             <EventRow key={item.index} event={item.event} startedAt={startedAt} />

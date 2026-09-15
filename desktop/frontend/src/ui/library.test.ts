@@ -34,21 +34,27 @@ function css(component: string): string {
 }
 
 describe('the component library', () => {
-  it('holds the fifteen components the library README lists', () => {
+  it('holds the twenty-one components the library README lists', () => {
     expect(COMPONENTS).toEqual([
       'ambient',
+      'badge',
       'button',
       'card',
       'data-table',
       'dialog',
       'event-row',
+      'heatmap',
       'hero-band',
       'kanban-column',
+      'modal-sheet',
       'note-pane',
       'pill-nav',
       'quota-chip',
       'run-card',
       'segmented-control',
+      'setting-row',
+      'sidebar-footer-card',
+      'sidebar-nav-item',
       'status-badge',
       'toast',
     ])

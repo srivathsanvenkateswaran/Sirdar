@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useState } from 'react'
 import { parseKeys } from '../../lib/format'
 import type { TriageOptions } from '../../store/appStore'
+import Button from '../../ui/button'
+import Dialog from '../../ui/dialog'
 
 /**
  * Start triage on one or more ticket keys. Keys are typed the way they get
@@ -19,14 +21,9 @@ export default function NewTriageDialog(props: {
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
   const [dryRun, setDryRun] = useState(false)
-  const keysRef = useRef<HTMLTextAreaElement>(null)
 
-  useEffect(() => {
-    if (open) keysRef.current?.focus()
-  }, [open])
-
-  if (!open) return null
-
+  // The library Dialog moves focus to the first control when it opens, which
+  // is this form's keys box, so there is no focus call here any more.
   const keys = parseKeys(text)
 
   function submit(e: React.SyntheticEvent): void {
@@ -44,33 +41,14 @@ export default function NewTriageDialog(props: {
   }
 
   return (
-    <div
-      className="scrim"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose()
-      }}
-    >
-      <form
-        className="dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="triage-title"
-        onSubmit={submit}
-        onKeyDown={(e) => {
-          if (e.key === 'Escape') onClose()
-        }}
-      >
-        <h2 className="dialog-title" id="triage-title">
-          New triage
-        </h2>
-
+    <Dialog open={open} title="New triage" onClose={onClose}>
+      <form className="triage-form" onSubmit={submit}>
         <div className="field">
           <label className="field-label" htmlFor="triage-keys">
             Ticket keys
           </label>
           <textarea
             id="triage-keys"
-            ref={keysRef}
             className="field-input field-input--keys"
             rows={3}
             value={text}
@@ -107,6 +85,7 @@ export default function NewTriageDialog(props: {
               <option value="openai">openai</option>
               <option value="acp">acp</option>
               <option value="qwen">qwen</option>
+              <option value="agy">agy</option>
             </select>
           </div>
 
@@ -137,15 +116,17 @@ export default function NewTriageDialog(props: {
           </label>
         </div>
 
-        <div className="dialog-actions">
-          <button type="button" className="button button--quiet" onClick={onClose}>
+        <div className="sd-dialog__actions">
+          <Button variant="ghost" onClick={onClose}>
             Cancel
-          </button>
-          <button type="submit" className="button button--accent" disabled={keys.length === 0}>
+          </Button>
+          {/* The dialog's one commit action, and the only thing in it that
+              spends the provider. */}
+          <Button type="submit" variant="primary" disabled={keys.length === 0}>
             Start triage
-          </button>
+          </Button>
         </div>
       </form>
-    </div>
+    </Dialog>
   )
 }

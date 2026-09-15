@@ -461,6 +461,38 @@ Restrictions that matter: `--json-schema` is rejected with `-i/--prompt-interact
 `--input-format stream-json`, with `--acp`, and with no prompt at all. It is a per-run flag,
 so it has to be re-passed on every `--resume`.
 
+### When the model ignores the tool (observed live, 2026-09-15)
+
+The stub backend above always called `structured_output`, which hid the case a real model
+produces. On the first live run — `sirdar triage SBX-1` against a Qwen OAuth login, model
+`qwen-plus-character` — the model wrote the entire note as a **text block** and never called
+the tool. What the CLI does then is give up, not re-prompt:
+
+```json
+{"type":"assistant","message":{"content":[{"type":"text","text":"{\n  \"ticket\": { ... }"}],
+ "usage":{"input_tokens":43483,"output_tokens":1924,"total_tokens":45407}}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":2,
+ "usage":{"input_tokens":43483,"output_tokens":1924,"total_tokens":45407},
+ "permission_denials":[],
+ "error":{"message":"Model produced plain text instead of calling the structured_output tool as required by --json-schema after 2 turn(s). Output preview (200+ chars): \"{\\n  \\\"ticket\\\": ...\"."}}
+```
+
+The result line carries **no `structured_result` and no `result` string at all** — only that
+sentence — and the process exits 1. So `--json-schema` is enforcement after the fact, not a
+constraint on what the model writes: it can turn a good answer into a failed run, and the
+answer survives only in the last `assistant` text block. `permission_denials` is empty and the
+hook is never asked about `structured_output`, which is how a run that ignored the tool is told
+apart from one whose call was refused.
+
+Resuming to retry does not help by itself. The `--resume` session receives the retry message
+(it appears as a `real_user` turn in
+`~/.qwen/projects/<sanitized-cwd>/chats/<sessionId>.jsonl`) and answers it — with a fresh,
+also-correct JSON document, again as plain text, again exiting 1. Two turns, no note.
+
+The adapter therefore reads the answer out of the text block when the result line carries no
+structured one (`qwen.recoverFinal`, `qwen.jsonObject`), and `internal/run` counts qwen among
+the providers whose schema retry has to spell out "the JSON object only".
+
 ## Resume
 
 `--resume <sessionId>` (exercised live) and `--continue` for the most recent session in the

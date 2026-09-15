@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail as RunDetailData, RunEvent, Transport } from '../api/types'
 import { resetRunJobs, setRunJob } from '../lib/jobs'
 import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { STATUS_WORDS, type SdStatus } from '../ui/status-badge'
 import RunDetail from './RunDetail'
 
 const RUN: RunDetailData = {
@@ -152,7 +153,7 @@ describe('RunDetail', () => {
 
     expect(await screen.findByText('OMNI-2510')).toBeInTheDocument()
     expect(await screen.findByText('git log -1 --stat')).toBeInTheDocument()
-    expect(screen.getByText('running')).toBeInTheDocument()
+    expect(screen.getByText('Running')).toBeInTheDocument()
     expect(fake.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
   })
 
@@ -230,7 +231,7 @@ describe('RunDetail', () => {
   it('applies run.updated to the header', async () => {
     const fake = fakeTransport()
     renderRun(fake)
-    await screen.findByText('running')
+    await screen.findByText('Running')
 
     fake.emit({
       kind: 'run.updated',
@@ -238,7 +239,7 @@ describe('RunDetail', () => {
       run: { ...RUN, status: 'completed' },
     })
 
-    expect(await screen.findByText('completed')).toBeInTheDocument()
+    expect(await screen.findByText('Completed')).toBeInTheDocument()
   })
 
   it('offers the resume box with the question when the run is blocked', async () => {
@@ -293,7 +294,7 @@ describe('RunDetail', () => {
   it('asks a fix run for its own note, not for a triage note', async () => {
     const fake = fakeTransport({ detail: { ...RUN, kind: 'fix', status: 'completed' } })
     renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, ''))
     expect(fake.transport.note).not.toHaveBeenCalledWith('ws1', RUN.runId, 'triage')
@@ -302,7 +303,7 @@ describe('RunDetail', () => {
   it('asks an RCA run for both its notes', async () => {
     const fake = fakeTransport({ detail: { ...RUN, kind: 'rca', status: 'completed' } })
     renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'rca'))
     expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'resolution')
@@ -341,7 +342,7 @@ describe('RunDetail', () => {
   it('hands an RCA to the shell rather than starting it twice', async () => {
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     const { onStartRCA } = renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Start RCA' }))
     const form = await screen.findByRole('form', { name: 'Start RCA' })
@@ -362,13 +363,13 @@ describe('RunDetail', () => {
   it('offers a fix only on a completed triage run, and hands it to the shell', async () => {
     const running = fakeTransport()
     const { unmount } = renderRun(running)
-    await screen.findByText('running')
+    await screen.findByText('Running')
     expect(screen.queryByRole('button', { name: 'Start fix' })).toBeNull()
     unmount()
 
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     const { onStartFix } = renderRun(fake, vi.fn(), vi.fn(), vi.fn(), 'claude')
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Start fix' }))
     const form = await screen.findByRole('form', { name: 'Start fix' })
@@ -392,7 +393,7 @@ describe('RunDetail', () => {
   it('escape closes the fix form before it leaves the screen', async () => {
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     const { onBack } = renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Start fix' }))
     await screen.findByRole('form', { name: 'Start fix' })
@@ -413,7 +414,7 @@ describe('RunDetail', () => {
   it('shows a blocked fix and publishes the reviewed commit on accept', async () => {
     const fake = fakeTransport({ detail: BLOCKED_FIX })
     const { onStartFix } = renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     const panel = await screen.findByRole('region', { name: 'Fix result' })
     expect(within(panel).getByText('sirdar/OMNI-2510 (from origin/main)')).toBeInTheDocument()
@@ -433,7 +434,7 @@ describe('RunDetail', () => {
       },
     })
     renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     const panel = await screen.findByRole('region', { name: 'Fix result' })
     expect(
@@ -445,7 +446,7 @@ describe('RunDetail', () => {
   it('copies a completed run into the golden set and says what it was added as', async () => {
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Add to golden set' }))
     await waitFor(() =>
@@ -460,7 +461,7 @@ describe('RunDetail', () => {
       addGolden: vi.fn(async () => Promise.reject(new Error('the golden set is inside a git work tree'))),
     } as Partial<Transport>)
     renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     fireEvent.click(screen.getByRole('button', { name: 'Add to golden set' }))
     expect(
@@ -470,13 +471,13 @@ describe('RunDetail', () => {
 
   it('a running run offers no golden copy: only a finished bundle is worth replaying', async () => {
     renderRun(fakeTransport())
-    await screen.findByText('running')
+    await screen.findByText('Running')
     expect(screen.queryByRole('button', { name: 'Add to golden set' })).toBeNull()
   })
 
   it('a run with no fix state shows no fix panel at all', async () => {
     renderRun(fakeTransport({ detail: { ...RUN, status: 'completed' } }))
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
     expect(screen.queryByRole('region', { name: 'Fix result' })).toBeNull()
   })
 
@@ -520,14 +521,14 @@ describe('RunDetail', () => {
   it('does not re-ask while the run is only blocked', async () => {
     const fake = fakeTransport()
     renderRun(fake)
-    await screen.findByText('running')
+    await screen.findByText('Running')
 
     fake.emit({
       kind: 'run.updated',
       workspaceId: 'ws1',
       run: { ...RUN, status: 'blocked', reason: 'agent asked: which tenant?' },
     })
-    await screen.findByText('blocked')
+    await screen.findByText(STATUS_WORDS.blocked)
 
     expect(fake.transport.run).toHaveBeenCalledTimes(1)
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
@@ -538,7 +539,8 @@ describe('RunDetail', () => {
     async (status) => {
       const fake = fakeTransport({ detail: { ...RUN, status } })
       renderRun(fake)
-      await screen.findByText(status.replace('_', ' '))
+      // The library's status badge carries the word, not the raw state name.
+      await screen.findByText(STATUS_WORDS[status as SdStatus])
       expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
     },
   )
@@ -547,7 +549,7 @@ describe('RunDetail', () => {
     let current: RunDetailData = RUN
     const fake = fakeTransport({ run: vi.fn(async () => current) } as Partial<Transport>)
     renderRun(fake)
-    await screen.findByText('running')
+    await screen.findByText('Running')
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
 
     current = { ...RUN, status: 'completed' }
@@ -639,7 +641,7 @@ describe('RunDetail', () => {
     })
     const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
     const { unmount } = renderRun(fake)
-    await screen.findByText('completed')
+    await screen.findByText('Completed')
 
     vi.useFakeTimers()
     fireEvent.click(screen.getByRole('button', { name: 'Copy note path' }))
