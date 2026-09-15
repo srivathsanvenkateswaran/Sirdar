@@ -237,8 +237,11 @@ permissions:
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
+    - "npx tsc --noEmit*"
     - "go build*"
     - "go test*"
+    - "go vet*"
+    - "gofmt -l*"
     - "make *"
 ```
 
@@ -268,12 +271,14 @@ too, not only `Edit`/`Write`/`MultiEdit`: `go test -coverprofile=.git/hooks/pre-
 a `go test*` pattern and is refused anyway, because the path it names is a hook the next commit
 runs.
 
-What the allow-list does not confine: `make *`, `go test*`, `npm test*`, and `dotnet test*` run
-the workspace's own build system, which runs whatever the repository tells it to — a Makefile
-target, a `go:generate` directive, an npm `pretest` script. Sirdar does not read any of that, and
-no allow-list can. This is the accepted residual of fix mode: a fix has to build and test what it
-changed, and the trust extended is the trust you already give your own shell when you check out a
-branch and run `make test`. The pull request is the review gate for what the session actually
+What the allow-list does not confine: `make *`, `go test*`, `npm test*`, `npx tsc --noEmit*`, and
+`dotnet test*` run the workspace's own build system, which runs whatever the repository tells it
+to — a Makefile target, a `go:generate` directive, an npm `pretest` script. `go vet*` and
+`gofmt -l*` are read-only static checks and carry none of that reach. Sirdar does not read any of
+that, and no allow-list can. This is the accepted residual of fix mode: a fix has to build and
+test what it changed, and the trust extended is the trust you already give your own shell when
+you check out a branch and run `make test`. The pull request is the review gate for what the
+session actually
 did. A workspace that needs more than that should run `sirdar fix` in a container.
 
 ## `fix.prIncludesComplaint`

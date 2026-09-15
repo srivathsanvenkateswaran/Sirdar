@@ -774,17 +774,20 @@ func commitChanges(ctx context.Context, g git, tn triageNote, rep Report) (strin
 
 // CommitMessage renders the commit subject and body.
 func CommitMessage(tn triageNote, rep Report) (string, string) {
-	subject := "fix: " + firstLine(rep.Summary)
+	line, rest := summarySubject(rep.Summary)
+	subject := "fix: " + line
 
 	var b strings.Builder
+	if rest != "" {
+		b.WriteString(rest + "\n\n")
+	}
 	if cause := strings.TrimSpace(tn.doc.RootCause.Hypothesis); cause != "" {
 		b.WriteString("Root cause: " + oneLine(cause) + "\n\n")
 	}
-	b.WriteString(strings.TrimSpace(rep.Summary))
 	if len(rep.FilesChanged) > 0 {
-		b.WriteString("\n\nFiles: " + strings.Join(rep.FilesChanged, ", "))
+		b.WriteString("Files: " + strings.Join(rep.FilesChanged, ", "))
 	}
-	return subject, b.String()
+	return subject, collapseBlankLines(strings.TrimSpace(b.String()))
 }
 
 // pullRequestText renders the pull request's title and body: the symptom,
@@ -797,7 +800,8 @@ func CommitMessage(tn triageNote, rep Report) (string, string) {
 // who have no business with that ticket; the title says what broke without
 // quoting whoever reported it.
 func pullRequestText(key string, tn triageNote, rep Report, includeComplaint bool) (string, string) {
-	title := fmt.Sprintf("[%s] fix: %s", key, firstLine(rep.Summary))
+	line, rest := summarySubject(rep.Summary)
+	title := fmt.Sprintf("[%s] fix: %s", key, line)
 
 	symptom := fallback(tn.doc.Title, "See the triage note.")
 	if includeComplaint {
@@ -810,7 +814,11 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 	b.WriteString("## Root cause\n\n")
 	b.WriteString(fallback(tn.doc.RootCause.Hypothesis, "See the triage note.") + "\n\n")
 	b.WriteString("## Fix\n\n")
-	b.WriteString(strings.TrimSpace(rep.Summary) + "\n")
+	b.WriteString(line)
+	if rest != "" {
+		b.WriteString("\n\n" + rest)
+	}
+	b.WriteString("\n")
 	if len(rep.FilesChanged) > 0 {
 		b.WriteString("\nFiles changed:\n")
 		for _, f := range rep.FilesChanged {
@@ -823,10 +831,10 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 			b.WriteString("- `" + t.Command + "` — " + t.Result + "\n")
 		}
 	}
-	if risks := strings.TrimSpace(rep.Risks); risks != "" && !strings.EqualFold(risks, "none") {
+	if risks := cleanAgentText(rep.Risks); risks != "" && !strings.EqualFold(risks, "none") {
 		b.WriteString("\nRisks: " + risks + "\n")
 	}
-	if dev := strings.TrimSpace(rep.DeviationFromNote); dev != "" {
+	if dev := cleanAgentText(rep.DeviationFromNote); dev != "" {
 		b.WriteString("\n**Deviation from the triage note:** " + dev + "\n")
 	}
 
@@ -844,7 +852,7 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 	if !wrote {
 		b.WriteString("- Triage note: " + filepath.Base(tn.path()) + "\n")
 	}
-	return title, b.String()
+	return title, collapseBlankLines(b.String())
 }
 
 // openPR creates the pull request with `gh`, returning its URL. A missing
@@ -941,6 +949,97 @@ func firstLine(s string) string {
 
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// subjectMaxLen is the git convention for a commit subject line; the same
+// cap applies to the summary line a pull request title is built from.
+const subjectMaxLen = 72
+
+// summarySubject turns an agent's raw JSON summary into a subject line and
+// whatever body text follows it.
+//
+// An agent occasionally reports a multi-line summary as a JSON string with
+// a doubled backslash before the n (or r-n), which json.Unmarshal decodes
+// into the two literal characters \ and n rather than a line break;
+// unescapeNewlines turns both that and any real line break into the same
+// separator so the two cases are handled alike. The first non-empty line
+// becomes the subject, capped at subjectMaxLen characters on a word
+// boundary with nothing appended in its place. Every following line becomes
+// the returned body text, with any AI attribution trailer stripped and runs
+// of 3 or more blank lines collapsed to one.
+func summarySubject(s string) (subject, body string) {
+	lines := strings.Split(unescapeNewlines(s), "\n")
+
+	i := 0
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	if i >= len(lines) {
+		return "", ""
+	}
+	subject = capLine(strings.TrimSpace(lines[i]), subjectMaxLen)
+	body = collapseBlankLines(stripAIAttribution(strings.Join(lines[i+1:], "\n")))
+	return subject, strings.TrimSpace(body)
+}
+
+// cleanAgentText applies the same unescaping and attribution stripping as
+// summarySubject to a single free-text field the agent wrote, such as
+// Report.Risks or Report.DeviationFromNote.
+func cleanAgentText(s string) string {
+	return strings.TrimSpace(collapseBlankLines(stripAIAttribution(unescapeNewlines(s))))
+}
+
+// unescapeNewlines normalizes real CRLF/CR line endings to \n and turns the
+// literal two- and four-character escape sequences \r\n and \n — the shape
+// a doubled backslash survives json.Unmarshal as — into real line breaks
+// too.
+func unescapeNewlines(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, `\r\n`, "\n")
+	s = strings.ReplaceAll(s, `\n`, "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return s
+}
+
+// capLine cuts s to at most max characters at the last word boundary at or
+// before the limit, appending nothing. A line with no space to cut on is
+// hard-cut at max.
+func capLine(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	cut := s[:max]
+	if i := strings.LastIndexByte(cut, ' '); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ")
+}
+
+// stripAIAttribution removes any line that opens with an AI attribution
+// trailer — Co-Authored-By: or Generated with — from text the agent wrote;
+// the commit and the pull request it produces are the reviewing engineer's,
+// not the agent's.
+func stripAIAttribution(s string) string {
+	lines := strings.Split(s, "\n")
+	kept := lines[:0]
+	for _, l := range lines {
+		low := strings.ToLower(strings.TrimSpace(l))
+		if strings.HasPrefix(low, "co-authored-by:") || strings.HasPrefix(low, "generated with") {
+			continue
+		}
+		kept = append(kept, l)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// collapseBlankLines reduces any run of 3 or more consecutive newlines to
+// exactly 2, so a blank line between paragraphs survives but a longer gap
+// left by stripped or unescaped lines does not.
+func collapseBlankLines(s string) string {
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return s
 }
 
 func short(sha string) string {
