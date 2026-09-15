@@ -24,7 +24,10 @@ Built. `desktop/frontend/src/ui/quota-chip/`. It replaces `.quota-meter`,
 - `span.sd-quota__pct` — `min-inline-size: 3ch`, so the text beside it never
   moves as the number changes.
 - `span.sd-quota__word` — the words "over budget", present only when true.
-- `span.sd-quota__reset` — "resets in 2h 14m", `dir="ltr"`.
+- `span.sd-quota__reset` — the countdown alone, "2h 14m", `dir="ltr"`, after
+  a middot the stylesheet draws. The chip is one line (`white-space: nowrap`,
+  `overflow: hidden`) and this is the part that ellipsises; the chip's
+  `title` and the bar's name say "resets in 2h 14m" in full.
 
 ## States
 
@@ -75,6 +78,13 @@ that finishes. The percentage is also on screen as text. Contrast on surface:
 **17.44:1**. Reduced motion: the fill's width transition is dropped.
 
 ## Changelog
+
+### 2026-09-15 (responsive)
+One line at every width. `resetsIn` is now the bare countdown ("2h 14m"),
+drawn after a middot and cut with an ellipsis when the sidebar is too narrow
+for it; the chip's `title` and the bar's `aria-label` say "resets in 2h 14m"
+in full. Before this the chips wrapped "resets in / 0h 0m" onto a second
+line at 1470 wide.
 
 ### 2026-09-15
 Added. Initial spec from `components/panels.css` `.quota-meter` and
