@@ -290,6 +290,33 @@ func findSent(t *testing.T, res provider.Result, method string) string {
 
 // -------------------------------------------------------------------- tests
 
+// TestThreadStartReportsModel: Codex has no init line, so the thread/start
+// result is where the app-server says which model the thread resolved to.
+// It reaches the run layer as a system event carrying the model, which is
+// the only way a run started without one can record what answered.
+func TestThreadStartReportsModel(t *testing.T) {
+	sess := startSession(t, "script-basic.jsonl", nil)
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	var reported []string
+	for _, ev := range evs {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	// script-basic.jsonl replies to thread/start with "model":"gpt-5-codex".
+	if len(reported) != 1 || reported[0] != "gpt-5-codex" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "gpt-5-codex")
+	}
+}
+
 func TestBasicSession(t *testing.T) {
 	sess := startSession(t, "script-basic.jsonl", nil)
 
