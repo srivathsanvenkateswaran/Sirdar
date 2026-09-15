@@ -59,6 +59,40 @@ describe('QuotaChip', () => {
     expect(screen.getByText('1h 58m')).toHaveClass('sd-quota__reset')
   })
 
+  // The countdown is the only part of the chip that a narrow sidebar can
+  // drop, and it has to go whole: the middot lives on the countdown's own
+  // ::before, so hiding the countdown hides the separator with it, rather
+  // than leaving "57% · …" pointing at nothing. Everything that is always
+  // drawn is grouped so that it cannot be what wraps away.
+  it('puts everything but the countdown in one group, with the countdown beside it', () => {
+    const { container } = render(
+      <QuotaChip provider="claude" window="5h" percent={57} resetsIn="1h 58m" />,
+    )
+    const chip = container.querySelector('.sd-quota')!
+    const line = container.querySelector('.sd-quota__line')!
+    for (const part of ['__provider', '__window', '__bar', '__pct']) {
+      expect(line.querySelector(`.sd-quota${part}`)).not.toBeNull()
+    }
+    expect(line.querySelector('.sd-quota__reset')).toBeNull()
+    expect(chip.children).toHaveLength(2)
+    expect(chip.children[1]).toHaveClass('sd-quota__reset')
+  })
+
+  it('keeps the over-budget words out of the countdown group, so they are never what drops', () => {
+    const { container } = render(
+      <QuotaChip provider="codex" window="used" percent={100} resetsIn="4h 0m" />,
+    )
+    expect(container.querySelector('.sd-quota__line .sd-quota__word')).toHaveTextContent(
+      'over budget',
+    )
+  })
+
+  it('draws no countdown element at all when there is none to draw', () => {
+    const { container } = render(<QuotaChip provider="claude" window="5h" percent={12} />)
+    expect(container.querySelector('.sd-quota__reset')).toBeNull()
+    expect(container.querySelector('.sd-quota')!.children).toHaveLength(1)
+  })
+
   it('carries no title when there is no reset to say', () => {
     const { container } = render(<QuotaChip provider="codex" window="used" percent={55} />)
     expect(container.querySelector('.sd-quota')).not.toHaveAttribute('title')

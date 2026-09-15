@@ -16,7 +16,9 @@ Built. `desktop/frontend/src/ui/quota-chip/`. It replaces `.quota-meter`,
 ## Anatomy
 
 - `div.sd-quota[data-level]` — the chip. Mono throughout, tabular figures,
-  `--sd-radius-pill`.
+  `--sd-radius-pill`. Two children: the group and the countdown.
+- `span.sd-quota__line` — everything that is always drawn, in one group so
+  that the countdown is the only thing the chip can drop.
 - `span.sd-quota__provider` — the provider name, weight 600.
 - `span.sd-quota__window` — `5h`, `7d`, `used`.
 - `span.sd-quota__bar[role="img"]` > `span.sd-quota__fill` — 56×4px, the fill
@@ -25,9 +27,10 @@ Built. `desktop/frontend/src/ui/quota-chip/`. It replaces `.quota-meter`,
   moves as the number changes.
 - `span.sd-quota__word` — the words "over budget", present only when true.
 - `span.sd-quota__reset` — the countdown alone, "2h 14m", `dir="ltr"`, after
-  a middot the stylesheet draws. The chip is one line (`white-space: nowrap`,
-  `overflow: hidden`) and this is the part that ellipsises; the chip's
-  `title` and the bar's name say "resets in 2h 14m" in full.
+  a middot the stylesheet draws on its own `::before`. The chip is one line
+  tall and wraps rather than cutting, so a countdown with no room for it
+  lands on a second line that is never drawn and takes its middot with it;
+  the chip's `title` and the bar's name say "resets in 2h 14m" in full.
 
 ## States
 
@@ -68,6 +71,9 @@ Built. `desktop/frontend/src/ui/quota-chip/`. It replaces `.quota-meter`,
 - **Don't** put the chip on `--sd-sunk`. `--sd-st-blocked` is 4.43:1 there.
 - **Do** keep the percentage a fixed 3ch wide, so a bar that fills does not
   nudge the text beside it.
+- **Don't** ellipsise the countdown. A separator with nothing after it —
+  "57% · …" — reads as a broken chip; the whole countdown goes, and the
+  title still carries it.
 
 ## Accessibility
 
@@ -78,6 +84,17 @@ that finishes. The percentage is also on screen as text. Contrast on surface:
 **17.44:1**. Reduced motion: the fill's width transition is dropped.
 
 ## Changelog
+
+### 2026-09-16 (the countdown is all or nothing)
+A countdown the chip has no room for is dropped whole instead of ellipsised.
+At the 248px sidebar the chip often has room for the reading but not for
+"· 1h 58m" beside it, and the ellipsis left "57% · …" — a separator pointing
+at nothing. The chip now wraps (`flex-wrap: wrap`) and is one line tall
+(`max-block-size`, `align-content: flex-start`), so a countdown with no room
+lands on a second line that is never drawn and takes its `::before` middot
+with it. Everything else moved into `span.sd-quota__line`, which shrinks the
+bar and clips inside itself as before, so nothing but the countdown can be
+what wraps away.
 
 ### 2026-09-15 (responsive)
 One line at every width. `resetsIn` is now the bare countdown ("2h 14m"),
