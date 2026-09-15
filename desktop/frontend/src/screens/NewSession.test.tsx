@@ -185,6 +185,36 @@ describe('NewSession', () => {
     await waitFor(() => expect(onOpenRun).toHaveBeenCalledWith('r-new'))
   })
 
+  it('opens the run through the newest open callback, not the one it was mounted with', async () => {
+    const transport = createFakeTransport({ tickets: [] })
+    const onStart = vi.fn(async () => 'job-1')
+    const first = vi.fn()
+    const second = vi.fn()
+    const tree = (runs: RunSummary[], onOpenRun: (id: string) => void) => (
+      <PrimaryActionProvider>
+        <NewSession
+          transport={transport}
+          workspaceId="ws1"
+          workspace={workspace()}
+          runs={runs}
+          onStart={onStart}
+          onOpenRun={onOpenRun}
+        />
+      </PrimaryActionProvider>
+    )
+    const view = render(tree([], first))
+    fireEvent.change(bar(), { target: { value: 'OMNI-2510' } })
+    fireEvent.click(startButton())
+    await waitFor(() => expect(onStart).toHaveBeenCalled())
+
+    // App hands over a fresh callback every render; the pairing lands after.
+    view.rerender(tree([], second))
+    act(() => setRunJob('r-new', 'job-1'))
+    view.rerender(tree([run({ runId: 'r-new', key: 'OMNI-2510', status: 'preparing' })], second))
+    await waitFor(() => expect(second).toHaveBeenCalledWith('r-new'))
+    expect(first).not.toHaveBeenCalled()
+  })
+
   it('reads the key out of a tracker URL', async () => {
     const { onStart } = mount()
     fireEvent.change(bar(), { target: { value: 'https://acme.atlassian.net/browse/OMNI-77' } })
