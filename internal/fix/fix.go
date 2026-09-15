@@ -7,12 +7,26 @@
 // second artefact nobody reads would only look like one.
 //
 // What the command does around the agent is as much of the point as the
-// agent is. It refuses a dirty working tree, cuts a branch from a freshly
-// fetched default branch, never touches that branch itself, never
+// agent is. It cuts a branch from a freshly fetched default branch into a
+// linked worktree of its own, runs the session there rather than in the
+// tree the operator is working in, never touches the base branch, never
 // force-pushes, and stops before the push when the agent says it did
 // something other than what the note described. The commit it writes
 // carries no AI attribution: the engineer who reviewed the note is the
 // author of the change.
+//
+// The worktree is <workspace>/.sirdar/worktrees/<run-id>, made with
+// `git worktree add` and taken away with `git worktree remove` once the
+// branch is pushed. It is what makes the flow safe to run on a machine
+// somebody is using: the operator's uncommitted work is not in the way and
+// is not swept up, their HEAD does not move, and a session's edits land in
+// a directory nothing else is reading. A run blocked on a deviation keeps
+// its worktree, because the commit sitting in it is what the operator is
+// being asked to review and what `--accept-deviation` publishes.
+//
+// fix.inPlace: true restores the old behaviour — `git checkout -B` in the
+// operator's own tree, which needs that tree clean and leaves it on the fix
+// branch.
 package fix
 
 import (
@@ -107,6 +121,12 @@ type Result struct {
 	// and this says why.
 	Blocked string
 
+	// Worktree is the linked worktree the session ran in, empty in
+	// in-place mode. It is still on disk when the result carries a
+	// Blocked reason or an error; on the success path it has been removed
+	// by the time the caller sees this.
+	Worktree string
+
 	DryRun bool
 }
 
@@ -151,19 +171,41 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		}
 	}
 
-	base, branch, err := prepareBranch(ctx, g, key, tn, o)
+	inPlace := cfg.Fix.InPlace
+	base, branch, err := prepareBranch(ctx, g, key, tn, o, inPlace)
 	if err != nil {
 		return res, err
 	}
 	res.Base, res.Branch = base, branch
-	fmt.Fprintf(stderr, "[%s] branch %s from origin/%s\n", key, branch, base)
+
+	// Where the session will stand. In-place mode moves the operator's own
+	// HEAD onto the branch; otherwise the branch is checked out into a
+	// worktree of this run's own, named after the run id that has not been
+	// used yet.
+	runID := ""
+	work := g
+	if inPlace {
+		if err := g.run(ctx, "checkout", "-B", branch, "origin/"+base); err != nil {
+			return res, err
+		}
+		fmt.Fprintf(stderr, "[%s] branch %s from origin/%s\n", key, branch, base)
+	} else {
+		runID = store.NewRunID(time.Now())
+		res.Worktree = worktreePath(cfg.Root, runID)
+		if err := addWorktree(ctx, g, res.Worktree, branch, base); err != nil {
+			return res, err
+		}
+		work = git{dir: res.Worktree}
+		fmt.Fprintf(stderr, "[%s] branch %s from origin/%s in %s\n",
+			key, branch, base, relToRoot(cfg.Root, res.Worktree))
+	}
 
 	// The third confinement layer, and the only one that does not depend on
 	// a provider honouring a policy: what .sirdar/ and the hooks directory
 	// look like before the session, to compare with what they look like
 	// after it. Taken after the branch is cut, because checking out a
 	// branch is itself allowed to change a checked-in hooks directory.
-	before, err := takeSnapshot(ctx, cfg.Root)
+	before, err := takeSnapshot(ctx, cfg.Root, work.dir)
 	if err != nil {
 		return res, fmt.Errorf("fix: the reserved files could not be read before the session, so the run cannot be checked afterwards: %w", err)
 	}
@@ -182,19 +224,26 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		Prompt:  text,
 		Branch:  branch,
 		Base:    base,
+		Root:    res.Worktree,
+		RunID:   runID,
 	})
 	res.RunID, res.State = out.State.RunID, out.State
 	if err != nil {
 		return res, err
 	}
 	if o.DryRun {
+		// Nothing ran in it, so nothing is in it to read. The branch
+		// stays: reading the prompt is often the step before running
+		// the fix for real.
+		removeWorktree(ctx, g, res.Worktree, stderr, key)
+		res.Worktree = ""
 		return res, nil
 	}
 
 	// Before anything reads the report and before the first git command:
 	// a hook the session installed is only code the machine runs at the
 	// next commit or push, and this is the last moment before both.
-	after, snapErr := takeSnapshot(ctx, cfg.Root)
+	after, snapErr := takeSnapshot(ctx, cfg.Root, work.dir)
 	if snapErr != nil {
 		markRunFailed(cfg.Root, out.State.RunID, "the reserved files could not be re-read after the session", stderr, key)
 		return res, fmt.Errorf("fix: the reserved files could not be re-read after the session, so the run cannot be trusted; nothing was committed or pushed: %w", snapErr)
@@ -224,7 +273,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		return res, fmt.Errorf("fix: the agent's report has an empty summary")
 	}
 
-	commit, err := commitChanges(ctx, g, tn, res.Report)
+	commit, err := commitChanges(ctx, work, tn, res.Report)
 	if err != nil {
 		return res, err
 	}
@@ -240,14 +289,29 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	appendRegister(cfg.Root, key, out.State, tn)
 
 	if dev := strings.TrimSpace(res.Report.DeviationFromNote); dev != "" && !o.AcceptDeviation {
+		// The worktree stays. The commit in it is what the operator is
+		// being asked to read, and --accept-deviation publishes from it.
 		res.Blocked = dev
 		return res, nil
 	}
 
-	if err := publish(ctx, g, cfg, key, tn, o, &res, stderr); err != nil {
+	if err := publish(ctx, work, cfg, key, tn, o, &res, stderr); err != nil {
 		return res, err
 	}
+	// Pushed, so the worktree has done its job. It is removed from the
+	// main tree, never from inside itself.
+	removeWorktree(ctx, g, res.Worktree, stderr, key)
+	res.Worktree = ""
 	return res, nil
+}
+
+// relToRoot renders a path under the workspace for a progress line.
+func relToRoot(root, path string) string {
+	rel, err := filepath.Rel(root, path)
+	if err != nil || strings.HasPrefix(rel, "..") {
+		return path
+	}
+	return rel
 }
 
 // publish is everything after the commit: the push, the pull request, and
@@ -327,13 +391,14 @@ func reviewedCommit(ctx context.Context, g git, root, key string) (store.State, 
 // exists and was recorded when it was made.
 func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn triageNote, prior store.State, rep Report, o Options, stderr io.Writer) (Result, error) {
 	res := Result{
-		Key:    key,
-		Branch: prior.Fix.Branch,
-		Base:   prior.Fix.Base,
-		RunID:  prior.RunID,
-		State:  prior,
-		Report: rep,
-		Commit: prior.Fix.Commit,
+		Key:      key,
+		Branch:   prior.Fix.Branch,
+		Base:     prior.Fix.Base,
+		RunID:    prior.RunID,
+		State:    prior,
+		Report:   rep,
+		Commit:   prior.Fix.Commit,
+		Worktree: prior.Fix.Worktree,
 	}
 	if res.Base == "" {
 		base, err := g.defaultBranch(ctx)
@@ -348,9 +413,22 @@ func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn
 	fmt.Fprintf(stderr, "[%s] %s on %s is the commit run %s made; pushing it rather than starting another session\n",
 		key, short(res.Commit), res.Branch, prior.RunID)
 
-	if err := publish(ctx, g, cfg, key, tn, o, &res, stderr); err != nil {
+	// The commit was made in that run's worktree and the branch is still
+	// checked out there, so that is where it is published from. A worktree
+	// the operator has since deleted is no obstacle: the branch lives in
+	// the shared repository, and the main tree can push it.
+	work := g
+	if isWorktree(res.Worktree) {
+		work = git{dir: res.Worktree}
+	} else {
+		res.Worktree = ""
+	}
+
+	if err := publish(ctx, work, cfg, key, tn, o, &res, stderr); err != nil {
 		return res, err
 	}
+	removeWorktree(ctx, g, res.Worktree, stderr, key)
+	res.Worktree = ""
 	return res, nil
 }
 
@@ -477,24 +555,36 @@ func loadPlaybooks(dir string, stderr io.Writer) []prompt.Playbook {
 
 // --- git preflight ----------------------------------------------------
 
-// prepareBranch runs the preflight and puts the workspace on the fix
-// branch. Every refusal here happens before an agent process exists.
-func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Options) (string, string, error) {
+// prepareBranch runs the preflight and settles the base and branch names.
+// Every refusal here happens before an agent process exists. It does not
+// check anything out: the caller does that, into the operator's own tree or
+// into a worktree of the run's own.
+//
+// The dirty-tree refusal applies to in-place mode alone. It exists because
+// a fix commits everything in the tree it stands in, and in-place mode
+// stands in the operator's. A run in its own worktree commits only what the
+// session put there, so uncommitted work elsewhere in the repository is
+// neither swept up nor a reason to refuse — which is the point of the
+// worktree.
+func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Options, inPlace bool) (string, string, error) {
 	if err := g.run(ctx, "rev-parse", "--is-inside-work-tree"); err != nil {
 		return "", "", fmt.Errorf("fix: the workspace is not a git repository")
 	}
-	clean, status, err := g.clean(ctx)
-	if err != nil {
-		return "", "", err
-	}
-	if !clean {
-		return "", "", dirtyTreeError(status)
+	if inPlace {
+		clean, status, err := g.clean(ctx)
+		if err != nil {
+			return "", "", err
+		}
+		if !clean {
+			return "", "", dirtyTreeError(status)
+		}
 	}
 	if err := g.run(ctx, "fetch", "origin"); err != nil {
 		return "", "", err
 	}
 
 	base := o.Base
+	var err error
 	if base == "" {
 		base, err = g.defaultBranch(ctx)
 		if err != nil {
@@ -504,9 +594,6 @@ func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Opti
 	branch := BranchName(key, tn.doc.Title)
 	if branch == base {
 		return "", "", fmt.Errorf("fix: the fix branch would be %s, which is the base branch; a fix never commits to the default branch", base)
-	}
-	if err := g.run(ctx, "checkout", "-B", branch, "origin/"+base); err != nil {
-		return "", "", err
 	}
 	return base, branch, nil
 }
@@ -520,10 +607,11 @@ func dirtyTreeError(status string) error {
 	if sirdarOnly(status) {
 		return fmt.Errorf("fix: working tree not clean, but every uncommitted entry is under .sirdar/ — "+
 			"Sirdar's own run records and register, not your work. Exclude them from the repository:\n\n"+
-			"  printf '%%s\\n' .sirdar/runs/ .sirdar/register.jsonl .sirdar/eval/ >> .git/info/exclude\n\n"+
+			"  printf '%%s\\n' .sirdar/runs/ .sirdar/register.jsonl .sirdar/eval/ .sirdar/worktrees/ >> .git/info/exclude\n\n"+
 			"and run the fix again:\n%s", status)
 	}
-	return fmt.Errorf("fix: working tree not clean; commit or stash your changes first:\n%s", status)
+	return fmt.Errorf("fix: working tree not clean; commit or stash your changes first, "+
+		"or unset fix.inPlace so the fix runs in a worktree of its own and leaves this tree alone:\n%s", status)
 }
 
 // sirdarOnly reports whether every entry in a `git status --porcelain`

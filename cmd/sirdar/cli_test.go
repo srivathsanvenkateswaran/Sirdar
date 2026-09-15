@@ -198,7 +198,7 @@ func TestInitScaffoldsWorkspace(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/"} {
+	for _, want := range []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/", ".sirdar/worktrees/"} {
 		if !strings.Contains(string(exclude), want) {
 			t.Errorf("exclude is missing %q:\n%s", want, exclude)
 		}

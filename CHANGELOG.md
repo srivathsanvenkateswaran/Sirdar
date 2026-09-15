@@ -90,3 +90,21 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   qwen, in Sirdar's own agent loop, and for an ACP `fetch` request. The list is empty by
   default, which denies every fetch; Codex's built-in web search stays governed by Codex's own
   `config.toml` and sandbox, which is documented rather than fixed.
+- Added `budget.stallMinutes`, a stall watch on the provider's stream. A session that says
+  nothing at all — no tool call, no assistant text, no usage line — for six minutes (the default;
+  `0` turns the check off) is cancelled, marked `failed` with `stalled: no activity for 6m`, and
+  given an `error` event in its own log. A provider that died mid-stream used to hold the run
+  until `budget.maxMinutes` expired, 25 minutes after it had stopped existing. The timer restarts
+  on every event, so a slow tool call is not a stall, and it is suspended for a run waiting on a
+  person — the agent asked a question, or a rate limit parked it — which stays `blocked` and
+  keeps its resume handle.
+- `sirdar fix` now runs its session in a linked git worktree under `.sirdar/worktrees/<run-id>`
+  instead of in the tree you are standing in. Your uncommitted work is neither in the way nor
+  swept into the fix's commit, your HEAD does not move, and the dirty-tree preflight that used to
+  refuse the run now applies only to `fix.inPlace: true`, which restores the old
+  `git checkout -B` behaviour. The agent's root, the reserved paths, the snapshot guard's hooks
+  directory and the reservation handed to the session all follow the worktree, while the
+  workspace's configuration and playbooks are still read from the main tree. The commit, push and
+  pull request are made from the worktree; it is removed on success and kept when a run is
+  blocked on a deviation, so `--accept-deviation` publishes the commit you reviewed out of the
+  tree it was made in (`docs/fix.md`).

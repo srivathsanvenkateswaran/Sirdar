@@ -63,8 +63,8 @@ const fixReport = `{
   "deviationFromNote": ""
 }`
 
-func configYAML(notesDir string) string {
-	return `workspace: test
+func configYAML(notesDir string, inPlace bool) string {
+	body := `workspace: test
 provider: claude
 billing: subscription
 notes:
@@ -76,6 +76,10 @@ budget:
 concurrency: 1
 playbooks: .sirdar/playbooks
 `
+	if inPlace {
+		body += "fix:\n  inPlace: true\n"
+	}
+	return body
 }
 
 // workspace is a real git repository with a bare "origin", a committed
@@ -89,6 +93,34 @@ type workspace struct {
 	runNote   string
 	filedNote string
 	runID     string
+	inPlace   bool
+}
+
+// head is the sha a ref points at, read from the main tree. Refs are shared
+// with every linked worktree, so a branch a fix made in a worktree of its
+// own is readable here.
+func (w *workspace) head(t *testing.T, ref string) string {
+	t.Helper()
+	return run(t, w.root, "git", "rev-parse", ref)
+}
+
+// worktrees lists the linked worktrees the repository still has, main tree
+// excluded.
+func (w *workspace) worktrees(t *testing.T) []string {
+	t.Helper()
+	out := run(t, w.root, "git", "worktree", "list", "--porcelain")
+	main := realPath(w.root)
+	var paths []string
+	for _, line := range strings.Split(out, "\n") {
+		if p, ok := strings.CutPrefix(line, "worktree "); ok {
+			// git answers with the resolved path; the temp-directory
+			// root a test holds is usually the symlinked one.
+			if realPath(p) != main {
+				paths = append(paths, realPath(p))
+			}
+		}
+	}
+	return paths
 }
 
 func run(t *testing.T, dir string, name string, args ...string) string {
@@ -102,7 +134,22 @@ func run(t *testing.T, dir string, name string, args ...string) string {
 	return strings.TrimSpace(string(out))
 }
 
+// newWorkspace builds the workspace a fix runs against, in the default
+// mode: the session gets a linked worktree of its own.
 func newWorkspace(t *testing.T, status string) *workspace {
+	t.Helper()
+	return newWorkspaceIn(t, status, false)
+}
+
+// newInPlaceWorkspace is the same workspace with fix.inPlace set, which is
+// the behaviour the flow had before linked worktrees: `git checkout -B` in
+// the operator's own tree.
+func newInPlaceWorkspace(t *testing.T, status string) *workspace {
+	t.Helper()
+	return newWorkspaceIn(t, status, true)
+}
+
+func newWorkspaceIn(t *testing.T, status string, inPlace bool) *workspace {
 	t.Helper()
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not on PATH")
@@ -118,7 +165,7 @@ func newWorkspace(t *testing.T, status string) *workspace {
 	}
 
 	notesDir := t.TempDir()
-	mustWrite(t, filepath.Join(root, ".sirdar", "config.yaml"), configYAML(notesDir))
+	mustWrite(t, filepath.Join(root, ".sirdar", "config.yaml"), configYAML(notesDir, inPlace))
 	if err := os.MkdirAll(filepath.Join(root, ".sirdar", "playbooks"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -127,7 +174,8 @@ func newWorkspace(t *testing.T, status string) *workspace {
 
 	// The run directories and the register are records of the run, not
 	// part of the repository — the same exclusion `sirdar init` writes.
-	mustWrite(t, filepath.Join(root, ".git", "info", "exclude"), ".sirdar/runs/\n.sirdar/register.jsonl\n.sirdar/eval/\n")
+	mustWrite(t, filepath.Join(root, ".git", "info", "exclude"),
+		".sirdar/runs/\n.sirdar/register.jsonl\n.sirdar/eval/\n.sirdar/worktrees/\n")
 
 	run(t, root, "git", "add", "-A")
 	run(t, root, "git", "commit", "-q", "-m", "init")
@@ -143,7 +191,7 @@ func newWorkspace(t *testing.T, status string) *workspace {
 		t.Fatal(err)
 	}
 
-	w := &workspace{cfg: cfg, root: root, origin: origin, notesDir: notesDir}
+	w := &workspace{cfg: cfg, root: root, origin: origin, notesDir: notesDir, inPlace: inPlace}
 	w.seedTriageRun(t, status)
 	return w
 }
@@ -230,11 +278,16 @@ func (p *stubProvider) Start(ctx context.Context, spec provider.SessionSpec) (pr
 }
 
 // editCSV is the change the stub agent makes. It also drops a file under
-// .sirdar/runs/, which a real session does by existing: that file must not
-// reach the commit. It goes under runs/ and not beside it because a write
-// anywhere else in .sirdar/ is what the guard stops the run for.
+// .sirdar/runs/ in the tree it is standing in, which a real session does by
+// existing: that file must not reach the commit. It goes under runs/ and
+// not beside it because a write anywhere else in .sirdar/ is what the guard
+// stops the run for.
 func editCSV(root string) error {
-	if err := os.WriteFile(filepath.Join(root, ".sirdar", "runs", "scratch.txt"), []byte("run notes\n"), 0o644); err != nil {
+	scratch := filepath.Join(root, ".sirdar", "runs")
+	if err := os.MkdirAll(scratch, 0o755); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(scratch, "scratch.txt"), []byte("run notes\n"), 0o644); err != nil {
 		return err
 	}
 	return os.WriteFile(filepath.Join(root, "export", "csv.go"),
@@ -282,8 +335,20 @@ func TestDryRunStopsAfterTheBranchAndPrompt(t *testing.T) {
 	if res.Base != "main" {
 		t.Errorf("base %q", res.Base)
 	}
-	if got := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); got != res.Branch {
-		t.Errorf("the workspace is on %q, not the fix branch", got)
+	// The branch exists, cut from origin/main, and the operator's own tree
+	// never moved: the checkout happened in a worktree of the run's own.
+	if got := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Errorf("the operator's tree is on %q; a fix must not move it", got)
+	}
+	if w.head(t, res.Branch) != w.head(t, "origin/main") {
+		t.Errorf("%s was not cut from origin/main", res.Branch)
+	}
+	// Nothing ran in the worktree, so it is not left behind.
+	if wts := w.worktrees(t); len(wts) != 0 {
+		t.Errorf("a dry run left worktrees behind: %v", wts)
+	}
+	if res.Worktree != "" {
+		t.Errorf("the result still names a worktree: %s", res.Worktree)
 	}
 
 	prompt, err := os.ReadFile(filepath.Join(w.root, ".sirdar", "runs", "OMNI-1", res.RunID, "prompt.md"))
@@ -321,16 +386,17 @@ func TestFixCommitsPushesAndRecords(t *testing.T) {
 	}
 
 	// The commit is on the fix branch, says what it did, and carries no
-	// attribution of any kind.
-	subject := run(t, w.root, "git", "log", "-1", "--pretty=%s")
+	// attribution of any kind. It is read off the branch: the operator's
+	// own tree is still on main, which is the point of the worktree.
+	subject := run(t, w.root, "git", "log", "-1", "--pretty=%s", res.Branch)
 	if subject != "fix: Stream the CSV export instead of buffering every row" {
 		t.Errorf("commit subject %q", subject)
 	}
-	body := run(t, w.root, "git", "log", "-1", "--pretty=%b")
+	body := run(t, w.root, "git", "log", "-1", "--pretty=%b", res.Branch)
 	if !strings.Contains(body, "Root cause: The export handler buffers every row") {
 		t.Errorf("commit body has no root cause:\n%s", body)
 	}
-	full := run(t, w.root, "git", "log", "-1", "--pretty=%B%n%an <%ae>")
+	full := run(t, w.root, "git", "log", "-1", "--pretty=%B%n%an <%ae>", res.Branch)
 	for _, banned := range []string{"Co-Authored-By", "Co-authored-by", "Generated with", "Claude", "🤖"} {
 		if strings.Contains(full, banned) {
 			t.Errorf("the commit carries AI attribution (%q):\n%s", banned, full)
@@ -338,26 +404,35 @@ func TestFixCommitsPushesAndRecords(t *testing.T) {
 	}
 
 	// The change is in the commit and .sirdar is not.
-	files := run(t, w.root, "git", "show", "--name-only", "--pretty=format:", "HEAD")
+	files := run(t, w.root, "git", "show", "--name-only", "--pretty=format:", res.Commit)
 	if !strings.Contains(files, "export/csv.go") {
 		t.Errorf("the edit is not in the commit: %q", files)
 	}
 	if strings.Contains(files, ".sirdar") {
 		t.Errorf("the run directory was committed: %q", files)
 	}
-	if _, err := os.Stat(filepath.Join(w.root, ".sirdar", "runs", "scratch.txt")); err != nil {
-		t.Fatalf("the fixture file under .sirdar is missing: %v", err)
-	}
 
-	// main is untouched, and the branch is on the remote.
-	if head := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); head == "main" {
-		t.Error("the fix was made on main")
+	// main is untouched, the operator's tree never left it, and the branch
+	// is on the remote.
+	if head := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); head != "main" {
+		t.Errorf("the operator's tree is on %q", head)
 	}
 	if !remoteHas(t, w.origin, res.Branch) {
 		t.Errorf("%s did not reach the remote", res.Branch)
 	}
-	if mainSha := run(t, w.root, "git", "rev-parse", "main"); mainSha == res.Commit {
+	if mainSha := w.head(t, "main"); mainSha == res.Commit {
 		t.Error("main moved")
+	}
+
+	// The worktree is gone, and the workspace has no uncommitted entry to
+	// show for any of it: .sirdar/worktrees/ is excluded the same way the
+	// run directories are, and .git/info/exclude is shared by every linked
+	// worktree because it lives in the common git directory.
+	if wts := w.worktrees(t); len(wts) != 0 {
+		t.Errorf("the worktree was not removed: %v", wts)
+	}
+	if status := run(t, w.root, "git", "status", "--porcelain"); status != "" {
+		t.Errorf("the fix left the workspace dirty:\n%s", status)
 	}
 
 	// Both copies of the triage note record the outcome.
@@ -399,8 +474,15 @@ func TestFixCommitsPushesAndRecords(t *testing.T) {
 		t.Errorf("no fix row in the register: %+v", rows)
 	}
 
-	// The session was a fix session with the write policy.
+	// The session was a fix session with the write policy, and it stood in
+	// the worktree rather than in the operator's tree.
 	spec := <-specs
+	if !strings.Contains(spec.Cwd, filepath.Join(".sirdar", "worktrees")) {
+		t.Errorf("the session ran in %q, not in a linked worktree", spec.Cwd)
+	}
+	if spec.Policy != nil && spec.Policy.Root != spec.Cwd {
+		t.Errorf("the policy confines writes to %q, the session stands in %q", spec.Policy.Root, spec.Cwd)
+	}
 	if !spec.Mode.IsFix() {
 		t.Error("the session was not started in fix mode")
 	}
@@ -466,6 +548,22 @@ func TestDeviationBlocksThePush(t *testing.T) {
 		t.Error("the triage note was moved on despite the push being blocked")
 	}
 
+	// The worktree is kept: the commit in it is what the operator is being
+	// asked to read, and --accept-deviation publishes from it.
+	if res.Worktree == "" || !isWorktree(res.Worktree) {
+		t.Fatalf("the blocked run did not keep its worktree: %q", res.Worktree)
+	}
+	if wts := w.worktrees(t); len(wts) != 1 || wts[0] != realPath(res.Worktree) {
+		t.Errorf("worktrees %v, want just %s", wts, res.Worktree)
+	}
+	if got := run(t, res.Worktree, "git", "rev-parse", "HEAD"); got != res.Commit {
+		t.Errorf("the worktree is at %s, not the commit %s the operator is reading", got, res.Commit)
+	}
+	// And the state file names it, which is how a later rerun finds it.
+	if res.State.Fix.Worktree != res.Worktree {
+		t.Errorf("the run state recorded %q, the result says %q", res.State.Fix.Worktree, res.Worktree)
+	}
+
 	// With --accept-deviation the same run goes through.
 	w2 := newWorkspace(t, "triaged")
 	deps2 := newDeps(w2, &stubProvider{report: report, edit: editCSV, t: t})
@@ -481,10 +579,62 @@ func TestDeviationBlocksThePush(t *testing.T) {
 	}
 }
 
-// TestDirtyTreeIsRefused: a fix commits everything in the tree, so it may
-// not start on top of somebody's uncommitted work.
-func TestDirtyTreeIsRefused(t *testing.T) {
-	w := newWorkspace(t, "triaged")
+// TestInPlaceModeCommitsInTheOperatorsTree is the escape hatch working as
+// it did before linked worktrees: `git checkout -B` on the tree the
+// operator is standing in, the session run there, and the tree left on the
+// fix branch afterwards. No worktree is made and none is left behind.
+func TestInPlaceModeCommitsInTheOperatorsTree(t *testing.T) {
+	w := newInPlaceWorkspace(t, "triaged")
+	noGH(t)
+	specs := make(chan provider.SessionSpec, 1)
+	deps := newDeps(w, &stubProvider{report: fixReport, edit: editCSV, specs: specs, t: t})
+
+	res, err := Run(t.Context(), deps, "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if !res.Pushed || res.Commit == "" {
+		t.Fatalf("result %+v", res)
+	}
+	if res.Worktree != "" {
+		t.Errorf("in-place mode made a worktree: %s", res.Worktree)
+	}
+	if wts := w.worktrees(t); len(wts) != 0 {
+		t.Errorf("in-place mode left worktrees behind: %v", wts)
+	}
+	// The operator's own tree is what moved, and it is on the fix branch.
+	if got := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); got != res.Branch {
+		t.Errorf("the operator's tree is on %q, not the fix branch %s", got, res.Branch)
+	}
+	if head := run(t, w.root, "git", "rev-parse", "HEAD"); head != res.Commit {
+		t.Errorf("HEAD is %s, not the fix commit %s", head, res.Commit)
+	}
+	files := run(t, w.root, "git", "show", "--name-only", "--pretty=format:", res.Commit)
+	if !strings.Contains(files, "export/csv.go") {
+		t.Errorf("the edit is not in the commit: %q", files)
+	}
+	if strings.Contains(files, ".sirdar") {
+		t.Errorf("the run directory was committed: %q", files)
+	}
+	if !remoteHas(t, w.origin, res.Branch) {
+		t.Errorf("%s did not reach the remote", res.Branch)
+	}
+	// The session stood in the workspace itself, and the write policy is
+	// confined to it.
+	spec := <-specs
+	if realPath(spec.Cwd) != realPath(w.root) {
+		t.Errorf("the session ran in %q, not the workspace %q", spec.Cwd, w.root)
+	}
+	if spec.Policy == nil || spec.Policy.Root != spec.Cwd {
+		t.Errorf("the policy confines writes to %v, the session stands in %q", spec.Policy, spec.Cwd)
+	}
+}
+
+// TestDirtyTreeIsRefusedInPlace: fix.inPlace commits everything in the tree
+// it is standing in, so it may not start on top of somebody's uncommitted
+// work.
+func TestDirtyTreeIsRefusedInPlace(t *testing.T) {
+	w := newInPlaceWorkspace(t, "triaged")
 	noGH(t)
 	mustWrite(t, filepath.Join(w.root, "export", "scratch.go"), "package export\n")
 
@@ -498,6 +648,35 @@ func TestDirtyTreeIsRefused(t *testing.T) {
 	}
 	if got := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
 		t.Errorf("a branch was made anyway; HEAD is %q", got)
+	}
+}
+
+// TestADirtyTreeIsNoObstacleToAWorktreeRun is the reason the default
+// changed. The operator's uncommitted work is not in the tree the session
+// edits, is not swept into its commit, and is still there afterwards — so
+// the preflight that used to refuse the run has nothing to refuse.
+func TestADirtyTreeIsNoObstacleToAWorktreeRun(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	scratch := filepath.Join(w.root, "export", "scratch.go")
+	mustWrite(t, scratch, "package export\n\n// half-finished work\n")
+
+	res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run refused a dirty tree in worktree mode: %v", err)
+	}
+	if !res.Pushed {
+		t.Fatalf("result %+v", res)
+	}
+	files := run(t, w.root, "git", "show", "--name-only", "--pretty=format:", res.Commit)
+	if strings.Contains(files, "scratch.go") {
+		t.Errorf("the operator's uncommitted work was swept into the commit: %q", files)
+	}
+	if data, err := os.ReadFile(scratch); err != nil || !strings.Contains(string(data), "half-finished") {
+		t.Errorf("the operator's uncommitted work was disturbed: %v", err)
+	}
+	if got := run(t, w.root, "git", "rev-parse", "--abbrev-ref", "HEAD"); got != "main" {
+		t.Errorf("the operator's tree is on %q", got)
 	}
 }
 
@@ -651,11 +830,7 @@ func TestTheCommitDoesNotRunRepositoryHooks(t *testing.T) {
 	w := newWorkspace(t, "triaged")
 	noGH(t)
 
-	hook := filepath.Join(w.root, ".git", "hooks", "pre-commit")
-	mustWrite(t, hook, "#!/bin/sh\ntouch \"$(git rev-parse --show-toplevel)/hook-ran\"\nexit 1\n")
-	if err := os.Chmod(hook, 0o755); err != nil {
-		t.Fatal(err)
-	}
+	writeHook(t, filepath.Join(w.root, ".git", "hooks", "pre-commit"), "hook-ran")
 
 	deps := newDeps(w, &stubProvider{report: fixReport, edit: editCSV, t: t})
 	res, err := Run(t.Context(), deps, "OMNI-1", Options{})
@@ -665,7 +840,7 @@ func TestTheCommitDoesNotRunRepositoryHooks(t *testing.T) {
 	if res.Commit == "" || !res.Pushed {
 		t.Fatalf("the pre-commit hook stopped the flow: %+v", res)
 	}
-	if _, err := os.Stat(filepath.Join(w.root, "hook-ran")); err == nil {
+	if hookRan(w, "hook-ran") {
 		t.Error("the repository's pre-commit hook was executed by Sirdar's own commit")
 	}
 }
@@ -698,6 +873,11 @@ func TestAcceptDeviationRerunPushesTheReviewedCommit(t *testing.T) {
 	if first.Pushed || first.Commit == "" || first.Blocked == "" {
 		t.Fatalf("the first run did not block with a commit: %+v", first)
 	}
+	// The worktree the reviewed commit was made in is still there; the
+	// rerun publishes out of it rather than out of the operator's tree.
+	if first.Worktree == "" || !isWorktree(first.Worktree) {
+		t.Fatalf("the blocked run did not keep its worktree: %q", first.Worktree)
+	}
 
 	second, err := Run(t.Context(), newDeps(w, &refusingProvider{t: t}), "OMNI-1", Options{AcceptDeviation: true})
 	if err != nil {
@@ -720,6 +900,16 @@ func TestAcceptDeviationRerunPushesTheReviewedCommit(t *testing.T) {
 	}
 	if !remoteHas(t, w.origin, second.Branch) {
 		t.Errorf("%s did not reach the remote", second.Branch)
+	}
+	// Published, so the worktree has done its job and is taken away.
+	if second.Worktree != "" {
+		t.Errorf("the rerun's result still names a worktree: %s", second.Worktree)
+	}
+	if isWorktree(first.Worktree) {
+		t.Errorf("the worktree survived the push: %s", first.Worktree)
+	}
+	if wts := w.worktrees(t); len(wts) != 0 {
+		t.Errorf("the repository still has worktrees: %v", wts)
 	}
 	// The deviation is still in the pull request text, and the report is
 	// the one the session filed.
@@ -767,18 +957,18 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 		t.Fatalf("Run: %v", err)
 	}
 
-	// Somebody committed on top of the reviewed commit.
-	mustWrite(t, filepath.Join(w.root, "export", "extra.go"), "package export\n")
-	run(t, w.root, "git", "add", "-A", "--", ".", ":(exclude).sirdar")
-	run(t, w.root, "git", "commit", "-q", "--no-verify", "-m", "another change")
-	moved := run(t, w.root, "git", "rev-parse", "HEAD")
+	if first.Worktree == "" || !isWorktree(first.Worktree) {
+		t.Fatalf("the blocked run did not keep its worktree: %q", first.Worktree)
+	}
+
+	// Somebody committed on top of the reviewed commit, in the worktree
+	// the branch is checked out in.
+	mustWrite(t, filepath.Join(first.Worktree, "export", "extra.go"), "package export\n")
+	run(t, first.Worktree, "git", "add", "-A", "--", ".", ":(exclude).sirdar")
+	run(t, first.Worktree, "git", "commit", "-q", "--no-verify", "-m", "another change")
+	moved := w.head(t, first.Branch)
 	if moved == first.Commit {
 		t.Fatal("the branch did not move")
-	}
-	// The first session's scratch file under .sirdar/ is not part of the
-	// repository; the ordinary flow refuses a dirty tree, so clear it.
-	if err := os.Remove(filepath.Join(w.root, ".sirdar", "runs", "scratch.txt")); err != nil {
-		t.Fatal(err)
 	}
 
 	second, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1",
@@ -788,6 +978,11 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 	}
 	if second.RunID == first.RunID {
 		t.Error("the rerun reused a run whose branch had moved on")
+	}
+	// The stale worktree was in the way — git checks a branch out in one
+	// worktree at a time — and the rerun cleared it rather than refusing.
+	if isWorktree(first.Worktree) {
+		t.Errorf("the previous run's worktree is still registered: %s", first.Worktree)
 	}
 	if !second.Pushed {
 		t.Errorf("the ordinary flow did not complete: %+v", second)
@@ -799,7 +994,7 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 // error that just says "commit or stash" sends people to commit their own
 // run records.
 func TestDirtyTreeOfOnlySirdarFilesSaysSo(t *testing.T) {
-	w := newWorkspace(t, "triaged")
+	w := newInPlaceWorkspace(t, "triaged")
 	noGH(t)
 	mustWrite(t, filepath.Join(w.root, ".sirdar", "notes.md"), "scratch\n")
 
@@ -869,13 +1064,22 @@ func TestPullRequestTextKeepsTheComplaintOut(t *testing.T) {
 
 // --- round 2 review: hooks paths and the reserved-file guard -----------
 
-// writeHook installs an executable hook that leaves a marker and fails.
+// writeHook installs an executable hook that leaves a marker and fails. The
+// marker goes into the repository's common git directory rather than the
+// working tree's top level, because a fix run's tree is a linked worktree
+// that is taken away again when the run succeeds.
 func writeHook(t *testing.T, path, marker string) {
 	t.Helper()
-	mustWrite(t, path, "#!/bin/sh\ntouch \"$(git rev-parse --show-toplevel)/"+marker+"\"\nexit 1\n")
+	mustWrite(t, path, "#!/bin/sh\ntouch \"$(git rev-parse --path-format=absolute --git-common-dir)/"+marker+"\"\nexit 1\n")
 	if err := os.Chmod(path, 0o755); err != nil {
 		t.Fatal(err)
 	}
+}
+
+// hookRan reports whether a hook installed by writeHook left its marker.
+func hookRan(w *workspace, marker string) bool {
+	_, err := os.Stat(filepath.Join(w.root, ".git", marker))
+	return err == nil
 }
 
 // TestThePushDoesNotRunRepositoryHooks: --no-verify on the commit covered
@@ -896,7 +1100,7 @@ func TestThePushDoesNotRunRepositoryHooks(t *testing.T) {
 	if !res.Pushed {
 		t.Fatalf("the pre-push hook stopped the push: %+v", res)
 	}
-	if _, err := os.Stat(filepath.Join(w.root, "push-hook-ran")); err == nil {
+	if hookRan(w, "push-hook-ran") {
 		t.Error("the repository's pre-push hook was executed by Sirdar's own push")
 	}
 }
@@ -926,16 +1130,40 @@ func editThen(path, body string) func(root string) error {
 // case that matters for Codex, whose sandbox Sirdar configures but does
 // not implement, and for any ACP agent.
 func TestTheGuardStopsARunThatTouchedAReservedFile(t *testing.T) {
+	// Three of the four paths are named from the workspace, not from the
+	// tree the session stands in: the workspace's .sirdar/ and the shared
+	// .git/hooks are outside the worktree, which is exactly why the guard
+	// still has to watch them. The fourth is the checked-in hooks
+	// directory, which the worktree has a copy of.
 	cases := []struct {
 		name   string
-		path   string
+		path   func(w *workspace, root string) string
 		hooks  string // core.hooksPath to configure, if any
 		expect string
 	}{
-		{name: "a git hook", path: ".git/hooks/pre-commit", expect: ".git/hooks/pre-commit"},
-		{name: "the workspace configuration", path: ".sirdar/config.yaml", expect: ".sirdar/config.yaml"},
-		{name: "a playbook", path: ".sirdar/playbooks/50-code.md", expect: ".sirdar/playbooks/50-code.md"},
-		{name: "the configured hooks path", path: ".githooks/pre-commit", hooks: ".githooks", expect: ".githooks/pre-commit"},
+		{
+			name:   "a git hook in the shared git directory",
+			path:   func(w *workspace, _ string) string { return filepath.Join(w.root, ".git", "hooks", "pre-commit") },
+			expect: ".git/hooks/pre-commit",
+		},
+		{
+			name:   "the workspace configuration",
+			path:   func(w *workspace, _ string) string { return filepath.Join(w.root, ".sirdar", "config.yaml") },
+			expect: ".sirdar/config.yaml",
+		},
+		{
+			name: "a playbook",
+			path: func(w *workspace, _ string) string {
+				return filepath.Join(w.root, ".sirdar", "playbooks", "50-code.md")
+			},
+			expect: ".sirdar/playbooks/50-code.md",
+		},
+		{
+			name:   "the configured hooks path",
+			path:   func(_ *workspace, root string) string { return filepath.Join(root, ".githooks", "pre-commit") },
+			hooks:  ".githooks",
+			expect: ".githooks/pre-commit",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -945,9 +1173,12 @@ func TestTheGuardStopsARunThatTouchedAReservedFile(t *testing.T) {
 				run(t, w.root, "git", "config", "core.hooksPath", c.hooks)
 			}
 
-			res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editThen(c.path, "#!/bin/sh\nowned\n"), t: t}), "OMNI-1", Options{})
+			edit := func(root string) error {
+				return editThen(c.path(w, root), "#!/bin/sh\nowned\n")(root)
+			}
+			res, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: edit, t: t}), "OMNI-1", Options{})
 			if err == nil {
-				t.Fatalf("Run accepted a session that wrote %s: %+v", c.path, res)
+				t.Fatalf("Run accepted a session that wrote %s: %+v", c.expect, res)
 			}
 			for _, want := range []string{c.expect, "nothing was committed and nothing was pushed"} {
 				if !strings.Contains(err.Error(), want) {
@@ -1016,12 +1247,57 @@ func TestTheFixSessionReservesTheConfiguredHooksPath(t *testing.T) {
 	if spec.Policy == nil {
 		t.Fatal("the fix session started with no policy")
 	}
-	want := filepath.Join(w.root, ".githooks")
+	// The hooks path is resolved against the tree the session stands in,
+	// which is the worktree: that is the tree the commit is made from, and
+	// so the tree whose core.hooksPath git would consult.
+	want := filepath.Join(spec.Cwd, ".githooks")
 	if len(spec.Policy.ExtraReserved) != 1 || spec.Policy.ExtraReserved[0] != want {
 		t.Fatalf("the session reserved %v, want [%s]", spec.Policy.ExtraReserved, want)
 	}
 	in, _ := json.Marshal(map[string]string{"file_path": ".githooks/pre-commit"})
 	if d := spec.Policy.Decide("Write", in); d.Allow {
 		t.Error("the session's policy allowed a write to the configured hooks path")
+	}
+}
+
+// TestTheWorktreeSessionReservesItsOwnGitAndSirdar: the reserved names are
+// relative to the tree the session stands in, so `.git/` and `.sirdar/`
+// inside the worktree are refused exactly as they are in an ordinary
+// checkout — and the workspace's `.sirdar/`, which is outside the session's
+// root altogether, is refused before the reserved-name rule is reached.
+func TestTheWorktreeSessionReservesItsOwnGitAndSirdar(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+
+	specs := make(chan provider.SessionSpec, 1)
+	if _, err := Run(t.Context(), newDeps(w, &stubProvider{report: fixReport, edit: editCSV, specs: specs, t: t}), "OMNI-1", Options{}); err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	spec := <-specs
+	if spec.Policy == nil {
+		t.Fatal("the fix session started with no policy")
+	}
+	if !strings.Contains(spec.Cwd, filepath.Join(".sirdar", "worktrees")) {
+		t.Fatalf("the session ran in %q, not in a linked worktree", spec.Cwd)
+	}
+
+	refused := []string{
+		filepath.Join(spec.Cwd, ".git", "hooks", "pre-commit"),
+		filepath.Join(spec.Cwd, ".git", "config"),
+		filepath.Join(spec.Cwd, ".sirdar", "config.yaml"),
+		filepath.Join(w.root, ".sirdar", "config.yaml"),
+		filepath.Join(w.root, ".sirdar", "playbooks", "50-code.md"),
+		filepath.Join(w.root, "export", "csv.go"), // outside the session's root
+	}
+	for _, path := range refused {
+		in, _ := json.Marshal(map[string]string{"file_path": path})
+		if d := spec.Policy.Decide("Write", in); d.Allow {
+			t.Errorf("the session's policy allowed a write to %s", path)
+		}
+	}
+	// An ordinary source file in the worktree is what the session is for.
+	in, _ := json.Marshal(map[string]string{"file_path": filepath.Join(spec.Cwd, "export", "csv.go")})
+	if d := spec.Policy.Decide("Write", in); !d.Allow {
+		t.Errorf("the session may not edit its own tree: %s", d.Message)
 	}
 }

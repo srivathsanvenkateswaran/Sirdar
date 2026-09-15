@@ -278,9 +278,17 @@ func expandHome(value string) (string, bool) {
 }
 
 // HooksDir is the directory git would run this repository's hooks from:
-// HooksPath when the repository sets one, and <root>/.git/hooks otherwise.
-// It is what the fix flow snapshots, so a repository that configures no
-// hooksPath is still watched over the directory git would actually use.
+// HooksPath when the repository sets one, and the hooks directory of the
+// repository's common git directory otherwise. It is what the fix flow
+// snapshots, so a repository that configures no hooksPath is still watched
+// over the directory git would actually use.
+//
+// The common directory matters because `sirdar fix` runs its session in a
+// linked worktree. There, <root>/.git is a *file* pointing at
+// <main>/.git/worktrees/<name>, and the hooks git runs on a commit made
+// from that worktree are the main repository's, in <main>/.git/hooks.
+// Joining ".git/hooks" onto the worktree would watch a path that cannot
+// exist and leave the hooks that actually run unwatched.
 func HooksDir(ctx context.Context, root string) string {
 	if p := HooksPath(ctx, root); p != "" {
 		return p
@@ -288,5 +296,39 @@ func HooksDir(ctx context.Context, root string) string {
 	if strings.TrimSpace(root) == "" {
 		return ""
 	}
+	if common := gitCommonDir(ctx, root); common != "" {
+		return filepath.Join(common, "hooks")
+	}
 	return filepath.Join(root, GitDir, "hooks")
+}
+
+// gitCommonDir is the git directory this working tree shares with every
+// other worktree of the same repository — the main tree's .git. It is
+// "<root>/.git" in an ordinary checkout and "<main>/.git" in a linked
+// worktree, and "" when root is not a repository or there is no git to ask.
+//
+// The value is asked for as an absolute path, which git has understood
+// since 2.31; an older git answers the plain form, relative to root, and
+// that is joined on here instead.
+func gitCommonDir(ctx context.Context, root string) string {
+	for _, args := range [][]string{
+		{"rev-parse", "--path-format=absolute", "--git-common-dir"},
+		{"rev-parse", "--git-common-dir"},
+	} {
+		cmd := exec.CommandContext(ctx, "git", args...)
+		cmd.Dir = root
+		out, err := cmd.Output()
+		if err != nil {
+			continue
+		}
+		value := strings.TrimSpace(string(out))
+		if value == "" {
+			continue
+		}
+		if !filepath.IsAbs(value) {
+			value = filepath.Join(root, value)
+		}
+		return filepath.Clean(value)
+	}
+	return ""
 }

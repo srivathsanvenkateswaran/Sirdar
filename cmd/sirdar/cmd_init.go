@@ -17,12 +17,17 @@ import (
 func init() { commands["init"] = cmdInit }
 
 // gitExcludes are the paths a workspace should not commit by accident: the
-// run directories, the register, and the eval reports. The register is
-// excluded too, as the spec says, because committing it is the operator's
-// choice. The exclusion also matters to `sirdar fix`, which refuses to
-// start on a dirty working tree: without it, every earlier run's directory
-// would read as uncommitted work.
-var gitExcludes = []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/"}
+// run directories, the register, the eval reports, and the linked worktrees
+// `sirdar fix` works in. The register is excluded too, as the spec says,
+// because committing it is the operator's choice. The exclusion also
+// matters to `sirdar fix`: in-place mode refuses to start on a dirty
+// working tree, and without these every earlier run's directory — and every
+// fix worktree still on disk — would read as uncommitted work.
+//
+// .git/info/exclude lives in the repository's common directory, which every
+// linked worktree shares, so one workspace's list covers the worktrees a
+// fix run makes as well as the main tree.
+var gitExcludes = []string{".sirdar/runs/", ".sirdar/register.jsonl", ".sirdar/eval/", ".sirdar/worktrees/"}
 
 // cmdInit scaffolds a workspace in the working directory. Unlike every
 // other command it does not look for an existing workspace: it makes one.
