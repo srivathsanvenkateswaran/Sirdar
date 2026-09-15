@@ -50,6 +50,11 @@ type server struct {
 	// be reached only from this machine. See LoopbackOnly: the fix route is
 	// refused when it cannot.
 	loopbackOnly bool
+
+	// listenAddr is the host:port `sirdar serve` bound to, if the caller
+	// said. See ListenAddr: it is what the guard pins the Host header to
+	// on a listener that is not loopback-only.
+	listenAddr string
 }
 
 func newServer(svc Service, ui fs.FS, opts ...Option) *server {

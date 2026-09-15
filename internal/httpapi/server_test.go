@@ -16,7 +16,9 @@ import (
 // recorded response. A nil body sends no body at all.
 //
 // The handler is built as a loopback one, which is what `sirdar serve`
-// builds on its default address; guard_test.go covers the other bind.
+// builds on its default address; guard_test.go covers the other bind. Host
+// is set to match: the guard now checks it (see validHost in guard.go),
+// and httptest.NewRequest's default of "example.com" is not loopback.
 func do(t *testing.T, f *fake, method, target string, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	var r *http.Request
@@ -26,6 +28,7 @@ func do(t *testing.T, f *fake, method, target string, body string) *httptest.Res
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
+	r.Host = "127.0.0.1:7777"
 	w := httptest.NewRecorder()
 	New(f, emptyFS{}, LoopbackOnly(true)).ServeHTTP(w, r)
 	return w

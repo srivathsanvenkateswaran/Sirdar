@@ -154,6 +154,15 @@ looks like one the UI itself made:
   `application/x-www-form-urlencoded`, `multipart/form-data` or `text/plain`, so this alone stops
   a page you have open from posting to the listener. A request with no body at all and no
   declared type is allowed, which is what Cancel, the workspace delete and a bodiless resume send.
+
+  This also catches a plain `curl -d`: curl sends `application/x-www-form-urlencoded` by default
+  when a body is given no other type, so it gets refused with **415** the same as the form it
+  resembles. Scripting a route needs the header spelled out:
+
+  ```
+  curl -d '{"key":"OMNI-2510"}' -H 'Content-Type: application/json' \
+    http://127.0.0.1:7777/api/workspaces/<id>/fix
+  ```
 - If the browser sends an `Origin`, it must be one of:
 
     | Origin | Where it comes from |

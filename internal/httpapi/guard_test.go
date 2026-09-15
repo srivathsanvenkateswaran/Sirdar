@@ -14,6 +14,13 @@ func loopback(f *fake) http.Handler { return New(f, nil, LoopbackOnly(true)) }
 
 // send issues one request with the headers a browser would attach, so a
 // case reads as the situation it stands for rather than as plumbing.
+//
+// Host defaults to the address `sirdar serve` binds by default: real
+// traffic always carries some Host, and since the guard now checks it
+// (see validHost in guard.go), a case that is not itself about Host wants
+// a realistic one rather than httptest.NewRequest's "example.com". A
+// "Host" entry in headers overrides it; it is not sent as a header, since
+// Host is not one.
 func send(t *testing.T, s http.Handler, method, target, body string, headers map[string]string) *httptest.ResponseRecorder {
 	t.Helper()
 	var r *http.Request
@@ -22,7 +29,12 @@ func send(t *testing.T, s http.Handler, method, target, body string, headers map
 	} else {
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 	}
+	r.Host = "127.0.0.1:7777"
 	for k, v := range headers {
+		if k == "Host" {
+			r.Host = v
+			continue
+		}
 		r.Header.Set(k, v)
 	}
 	w := httptest.NewRecorder()
@@ -106,11 +118,11 @@ func TestCrossSiteFetchMetadataIsRefused(t *testing.T) {
 func TestSameOriginJSONPostIsAccepted(t *testing.T) {
 	for name, route := range mutatingRoutes {
 		t.Run(name, func(t *testing.T) {
-			// httptest.NewRequest sets Host to example.com, which stands
-			// for whatever the listener was reached on.
+			// send defaults Host to 127.0.0.1:7777, which stands for
+			// whatever the listener was reached on.
 			w := send(t, loopback(newFake()), route.method, route.target, route.body, map[string]string{
 				"Content-Type":   "application/json",
-				"Origin":         "http://example.com",
+				"Origin":         "http://127.0.0.1:7777",
 				"Sec-Fetch-Site": "same-origin",
 			})
 			if w.Code >= 400 {
@@ -197,6 +209,151 @@ func TestHookRoutesAreExemptFromTheGuard(t *testing.T) {
 	// No receiver was configured, so this is the hooks' own 404 rather
 	// than the guard's 403 or 415.
 	assertError(t, w, http.StatusNotFound, "not_found")
+}
+
+// The hooks exemption is a prefix match on the path, and it must not be
+// foolable by a path that only starts with "/hooks/" before normalization.
+// Sent with no Origin or Sec-Fetch-Site at all — the case a form post would
+// not even need — the only thing that can refuse it is the guard declining
+// the exemption and falling through to the ordinary checks, which then
+// refuse the bare, content-type-less body.
+func TestHookPathTraversalDoesNotClaimTheExemption(t *testing.T) {
+	f := newFake()
+	w := send(t, loopback(f), "POST", "/hooks/../api/workspaces/"+knownWS+"/fix",
+		`{"key":"OMNI-2510"}`, nil)
+	if w.Code != http.StatusForbidden && w.Code != http.StatusUnsupportedMediaType {
+		t.Fatalf("status %d, want 403 or 415: %s", w.Code, w.Body.String())
+	}
+	if f.gotFixKey != "" {
+		t.Fatal("a path traversal through /hooks/ reached the fix route")
+	}
+}
+
+// The percent-encoded form of the same traversal is refused outright,
+// rather than relying on it decoding to the same thing.
+func TestHookPathTraversalEncodedDotsAreRefused(t *testing.T) {
+	f := newFake()
+	w := send(t, loopback(f), "POST", "/hooks/%2e%2e/api/workspaces/"+knownWS+"/fix",
+		`{"key":"OMNI-2510"}`, nil)
+	assertError(t, w, http.StatusForbidden, "forbidden")
+	if f.gotFixKey != "" {
+		t.Fatal("an encoded path traversal through /hooks/ reached the fix route")
+	}
+}
+
+// The ordinary hook path, alongside the traversal above, still gets the
+// exemption: normalizing the path must not start refusing what it always
+// allowed.
+func TestOrdinaryHookPathIsStillExempt(t *testing.T) {
+	f := newFake()
+	w := send(t, loopback(f), "POST", "/hooks/"+knownWS+"/jira", `{"key":"OMNI-2510"}`, map[string]string{
+		"Content-Type":   "application/x-www-form-urlencoded",
+		"Sec-Fetch-Site": "cross-site",
+	})
+	// No receiver was configured for this source, so this is the hooks'
+	// own 404 rather than the guard's 403 or 415.
+	assertError(t, w, http.StatusNotFound, "not_found")
+}
+
+// --- the Host check -----------------------------------------------------
+
+// DNS rebinding: a page served as evil.test, resolved to 127.0.0.1, can
+// send a Host and an Origin that agree with each other while naming
+// neither loopback nor this server. Comparing Origin to Host proves
+// nothing unless Host itself is trusted first.
+func TestDNSRebindingIsRefused(t *testing.T) {
+	f := newFake()
+	w := send(t, loopback(f), "POST", "/api/workspaces/"+knownWS+"/fix", `{"key":"OMNI-2510"}`,
+		map[string]string{
+			"Content-Type":   "application/json",
+			"Host":           "evil.test",
+			"Origin":         "http://evil.test",
+			"Sec-Fetch-Site": "same-origin",
+		})
+	assertError(t, w, http.StatusForbidden, "forbidden")
+	if f.gotFixKey != "" {
+		t.Fatal("a rebound Host reached the fix route")
+	}
+}
+
+// The ordinary loopback hosts a browser reaching the default `sirdar
+// serve` address would send, with or without an explicit port.
+func TestLoopbackHostsAreAccepted(t *testing.T) {
+	for _, host := range []string{"127.0.0.1:7777", "127.0.0.1", "localhost:7777", "localhost"} {
+		t.Run(host, func(t *testing.T) {
+			f := newFake()
+			w := send(t, loopback(f), "POST", "/api/workspaces/"+knownWS+"/fix", `{"key":"OMNI-2510"}`,
+				map[string]string{"Content-Type": "application/json", "Host": host})
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+			if f.gotFixKey != "OMNI-2510" {
+				t.Fatal("the fix did not reach the service")
+			}
+		})
+	}
+}
+
+// ::1 is loopback whether or not a request against it carries a port; Go
+// never sends a Host header for it without brackets.
+func TestIPv6LoopbackHostIsAccepted(t *testing.T) {
+	for _, host := range []string{"[::1]:7777", "[::1]"} {
+		t.Run(host, func(t *testing.T) {
+			f := newFake()
+			w := send(t, loopback(f), "POST", "/api/workspaces/"+knownWS+"/fix", `{"key":"OMNI-2510"}`,
+				map[string]string{"Content-Type": "application/json", "Host": host})
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
+}
+
+// A non-loopback address that resolves to something other than loopback is
+// refused just the same on a loopback-only listener: the rebinding case
+// above is this with an Origin that happens to agree.
+func TestNonLoopbackHostIsRefusedOnALoopbackListener(t *testing.T) {
+	f := newFake()
+	w := send(t, loopback(f), "POST", "/api/workspaces/"+knownWS+"/fix", `{"key":"OMNI-2510"}`,
+		map[string]string{"Content-Type": "application/json", "Host": "192.168.1.5:7777"})
+	assertError(t, w, http.StatusForbidden, "forbidden")
+}
+
+// With ListenAddr configured, an explicit --allow-remote listener requires
+// Host to name the address the operator actually bound.
+func TestConfiguredListenAddrIsRequiredOnARemoteListener(t *testing.T) {
+	f := newFake()
+	s := New(f, nil, LoopbackOnly(false), ListenAddr("203.0.113.5:8080"))
+
+	w := send(t, s, "POST", "/api/workspaces/"+knownWS+"/triage", `{"keys":["OMNI-2510"]}`,
+		map[string]string{"Content-Type": "application/json", "Host": "203.0.113.5:8080"})
+	if w.Code != http.StatusAccepted {
+		t.Fatalf("matching host: status %d: %s", w.Code, w.Body.String())
+	}
+
+	w = send(t, s, "POST", "/api/workspaces/"+knownWS+"/triage", `{"keys":["OMNI-2510"]}`,
+		map[string]string{"Content-Type": "application/json", "Host": "attacker.example"})
+	assertError(t, w, http.StatusForbidden, "forbidden")
+}
+
+// Without ListenAddr, or with one that names every interface, a remote
+// listener has no single host to require and the check is skipped: this is
+// the pre-existing behaviour for a caller that never described its bind.
+func TestUnconfiguredListenAddrSkipsTheHostCheck(t *testing.T) {
+	for _, addr := range []string{"", ":8080", "0.0.0.0:8080"} {
+		t.Run("addr="+addr, func(t *testing.T) {
+			var opts []Option
+			if addr != "" {
+				opts = append(opts, ListenAddr(addr))
+			}
+			s := New(newFake(), nil, append(opts, LoopbackOnly(false))...)
+			w := send(t, s, "POST", "/api/workspaces/"+knownWS+"/triage", `{"keys":["OMNI-2510"]}`,
+				map[string]string{"Content-Type": "application/json", "Host": "whatever.example"})
+			if w.Code != http.StatusAccepted {
+				t.Fatalf("status %d: %s", w.Code, w.Body.String())
+			}
+		})
+	}
 }
 
 // --- the loopback gate ------------------------------------------------
