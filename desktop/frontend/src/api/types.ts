@@ -46,7 +46,7 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
  * `text` and how the run was continued (`resume` or `primed`). Every other
  * kind carries the agent's fields.
  */
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; action?: string; path?: string; hunk?: number; continuation?: string } }
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**

@@ -19,6 +19,7 @@ func init() { commands["register"] = cmdRegister }
 type registerEntry struct {
 	key                           string
 	title, company                string
+	model                         string
 	triageDate, confidence, class string
 	rcaDate, verdict, severity    string
 	resolutionType                string
@@ -76,6 +77,14 @@ func groupRegister(rows []store.RegisterRow) []registerEntry {
 		if row.Company != "" {
 			e.company = row.Company
 		}
+		// The model that wrote the newest of the ticket's notes. A run
+		// records the id its provider reported, so this is the model that
+		// actually answered rather than whatever the workspace was
+		// configured with; a row from before that was recorded leaves
+		// what is already here.
+		if row.Model != "" {
+			e.model = row.Model
+		}
 		switch note.Kind(row.Kind) {
 		case note.Triage:
 			e.triageDate, e.confidence, e.class, e.triagePath = row.Date, row.Confidence, row.Classification, row.NotePath
@@ -100,11 +109,11 @@ func groupRegister(rows []store.RegisterRow) []registerEntry {
 
 func printRegisterTable(stdout, stderr io.Writer, entries []registerEntry) int {
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "KEY\tTRIAGE\tCONF\tCLASS\tFIX\tRCA\tVERDICT\tSEV\tRESOLUTION\tNOTES")
+	fmt.Fprintln(w, "KEY\tTRIAGE\tCONF\tCLASS\tFIX\tRCA\tVERDICT\tSEV\tRESOLUTION\tMODEL\tNOTES")
 	for _, e := range entries {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
 			e.key, e.triageDate, e.confidence, e.class, e.fixDate,
-			e.rcaDate, e.verdict, e.severity, e.resolutionType, e.notesPresent())
+			e.rcaDate, e.verdict, e.severity, e.resolutionType, e.model, e.notesPresent())
 	}
 	return flush(w, stderr)
 }

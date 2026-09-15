@@ -306,6 +306,11 @@ func (s *session) handshake(ctx context.Context) error {
 		Thread struct {
 			ID string `json:"id"`
 		} `json:"thread"`
+		// Model is the id the app-server resolved for the thread, which
+		// is the only place a session started without one is told what
+		// it is talking to. Codex has no init line; this result is its
+		// init line.
+		Model string `json:"model"`
 	}
 	if err := json.Unmarshal(raw, &started); err != nil {
 		return fmt.Errorf("codex: %s result: %w", method, err)
@@ -316,6 +321,7 @@ func (s *session) handshake(ctx context.Context) error {
 	s.mu.Lock()
 	s.threadID = started.Thread.ID
 	s.mu.Unlock()
+	s.emit(provider.Event{Kind: provider.EvSystem, Text: method, Model: started.Model, Raw: raw})
 
 	return s.startTurn(s.spec.Prompt, s.spec.Images)
 }

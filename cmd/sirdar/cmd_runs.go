@@ -15,10 +15,13 @@ func init() { commands["runs"] = cmdRuns }
 // runRow is one line of `sirdar runs`, and the element type of its --json
 // output: a stable, documented shape rather than the internal state file.
 type runRow struct {
-	RunID   string `json:"runId"`
-	Key     string `json:"key"`
-	Kind    string `json:"kind"`
-	State   string `json:"state"`
+	RunID string `json:"runId"`
+	Key   string `json:"key"`
+	Kind  string `json:"kind"`
+	State string `json:"state"`
+	// Model is the model that answered: the id the provider reported on
+	// its init line, or the configured one when it reported none.
+	Model   string `json:"model,omitempty"`
 	Updated string `json:"updated"`
 	Reason  string `json:"reason,omitempty"`
 }
@@ -58,6 +61,7 @@ func cmdRuns(args []string, stdout, stderr io.Writer) int {
 			Key:     s.Key,
 			Kind:    string(s.Kind),
 			State:   string(s.Status),
+			Model:   s.Model,
 			Updated: formatTime(s.UpdatedAt),
 			Reason:  s.Reason,
 		})
@@ -74,9 +78,9 @@ func cmdRuns(args []string, stdout, stderr io.Writer) int {
 	}
 
 	w := tabwriter.NewWriter(stdout, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(w, "RUN_ID\tKEY\tKIND\tSTATE\tUPDATED\tREASON")
+	fmt.Fprintln(w, "RUN_ID\tKEY\tKIND\tSTATE\tMODEL\tUPDATED\tREASON")
 	for _, r := range rows {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", r.RunID, r.Key, r.Kind, r.State, r.Updated, r.Reason)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n", r.RunID, r.Key, r.Kind, r.State, r.Model, r.Updated, r.Reason)
 	}
 	return flush(w, stderr)
 }

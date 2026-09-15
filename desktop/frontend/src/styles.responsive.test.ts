@@ -115,11 +115,20 @@ describe('the sidebar', () => {
     const chip = sheet('ui/quota-chip/QuotaChip.css')
     expect(rule(chip, '.sd-quota')).toContain('white-space: nowrap')
     expect(rule(chip, '.sd-quota')).toContain('overflow: hidden')
-    expect(chip).toMatch(/\n\.sd-quota__reset \{[^}]*text-overflow: ellipsis/)
-    // The bar and the countdown are what give way; the words and the
-    // percentage never do.
-    expect(rule(chip, '.sd-quota > .sd-quota__bar')).toContain('min-inline-size: 24px')
-    expect(rule(chip, '.sd-quota > .sd-quota__reset')).toContain('flex: 0 4 auto')
+    // One line tall: a countdown with no room wraps onto a second line that
+    // is never drawn, so the chip reads "57%" rather than "57% · …".
+    expect(rule(chip, '.sd-quota')).toContain('flex-wrap: wrap')
+    expect(rule(chip, '.sd-quota')).toContain(
+      'max-block-size: calc(var(--sd-text-micro) * 1.5 + 6px)',
+    )
+    expect(rule(chip, '.sd-quota')).toContain('align-content: flex-start')
+    // The countdown is all-or-nothing, so it neither shrinks nor ellipsises.
+    expect(rule(chip, '.sd-quota > .sd-quota__reset')).toContain('flex: 0 0 auto')
+    expect(rule(chip, '.sd-quota__reset')).not.toContain('text-overflow')
+    // The bar is what gives way first; the words and the percentage never do,
+    // and nothing inside the group can wrap away.
+    expect(rule(chip, '.sd-quota__line > .sd-quota__bar')).toContain('min-inline-size: 24px')
+    expect(rule(chip, '.sd-quota__line')).toContain('overflow: hidden')
     expect(rule(css, '.quota-meter__provider')).toContain('flex-direction: column')
   })
 })

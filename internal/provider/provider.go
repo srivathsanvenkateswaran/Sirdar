@@ -146,6 +146,14 @@ type Event struct {
 
 	ResetsAt time.Time // rate limit
 
+	// Model is the model id the provider says is answering, carried by the
+	// EvSystem event its init line becomes. A workspace that configured no
+	// model, or configured an alias the CLI resolves, has no other way of
+	// learning which model a run actually used: SessionSpec.Model is what
+	// was asked for, and this is the answer. Empty on every other event,
+	// and on an agent that reports none.
+	Model string
+
 	Final json.RawMessage // structured output, nil if absent
 	Raw   json.RawMessage // original provider line, always set
 }

@@ -260,6 +260,24 @@ describe('Session', () => {
     expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
   })
 
+  // The run record starts with whatever the workspace configured, which for
+  // most workspaces is nothing; the provider's init line is what says which
+  // model answered, and the runner writes it to state.json mid-run. That
+  // reaches this screen as a `run.updated` carrying the same `model` field
+  // the topbar already reads, so "model unknown" is replaced in place.
+  it('names the model as soon as run.updated reports one', async () => {
+    const f = fake({ detail: { ...RUN, model: '' } })
+    renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
+
+    f.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, model: 'claude-sonnet-5-20260514' } })
+    await waitFor(() =>
+      expect(screen.getByText('claude-sonnet-5-20260514')).toHaveClass('session-provider-model'),
+    )
+    expect(screen.queryByText('model unknown')).toBeNull()
+  })
+
   it('keeps the composer Model chip read-only: a steer resumes the same session', async () => {
     const f = fake()
     renderSession(f)

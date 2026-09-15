@@ -133,6 +133,10 @@ type EventPayload struct {
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
 
+	// Model is carried by the `system` event a provider's init line
+	// became: the model that answered, as the provider reported it.
+	Model string `json:"model,omitempty"`
+
 	// Continuation is carried by a `steer` event alone: "resume" or
 	// "primed", saying whether the session answering the instruction is
 	// the one that wrote the note.

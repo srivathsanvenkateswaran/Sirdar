@@ -10,7 +10,9 @@ export interface QuotaChipProps {
   /**
    * The countdown to the reset, already formatted: "2h 14m". Drawn after a
    * middot at the chip's end, and said in full ("resets in 2h 14m") in the
-   * chip's title and the bar's name. This component does no arithmetic.
+   * chip's title and the bar's name. Where the chip is too narrow for the
+   * whole countdown it is dropped, middot and all, rather than cut down to
+   * a stub; the title still carries it. This component does no arithmetic.
    */
   resetsIn?: string
   /** When the workspace has stopped starting runs against this provider. */
@@ -52,15 +54,19 @@ export default function QuotaChip({
 
   return (
     <div className="sd-quota" data-level={level} title={resets || undefined}>
-      <span className="sd-quota__provider">{provider}</span>
-      <span className="sd-quota__window">{quotaWindow}</span>
-      <span className="sd-quota__bar" role="img" aria-label={sentence}>
-        <span className="sd-quota__fill" style={{ inlineSize: `${pct}%` }} />
+      {/* Everything that is never dropped sits in one group, so the
+          countdown is the only thing the chip can wrap away. */}
+      <span className="sd-quota__line">
+        <span className="sd-quota__provider">{provider}</span>
+        <span className="sd-quota__window">{quotaWindow}</span>
+        <span className="sd-quota__bar" role="img" aria-label={sentence}>
+          <span className="sd-quota__fill" style={{ inlineSize: `${pct}%` }} />
+        </span>
+        <span className="sd-quota__pct" dir="ltr">
+          {rounded}%
+        </span>
+        {level === 'over' && <span className="sd-quota__word">over budget</span>}
       </span>
-      <span className="sd-quota__pct" dir="ltr">
-        {rounded}%
-      </span>
-      {level === 'over' && <span className="sd-quota__word">over budget</span>}
       {resetsIn && (
         <span className="sd-quota__reset" dir="ltr">
           {resetsIn}

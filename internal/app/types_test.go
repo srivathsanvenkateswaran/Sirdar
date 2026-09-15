@@ -65,6 +65,17 @@ func TestWireFieldNames(t *testing.T) {
 		"startedAt", "updatedAt", "reason", "assignee", "mine", "usage", "notes",
 		"promptPath", "bundleDir", "warnings", "handle", "budget")
 	wantKeys(t, "Budget", detail.Budget, "maxTurns", "maxMinutes", "maxUsd")
+	// The Session topbar reads detail.model, and it is the run record's
+	// Model — the id the provider reported — not the configured value the
+	// run kept in ModelRequested.
+	state.Model, state.ModelRequested = "claude-sonnet-5-20260514", "sonnet"
+	if got := DetailOf("/root", state).Model; got != "claude-sonnet-5-20260514" {
+		t.Errorf("RunDetail.model = %q, want the reported id", got)
+	}
+	if got := SummaryOf(state).Model; got != "claude-sonnet-5-20260514" {
+		t.Errorf("RunSummary.model = %q, want the reported id", got)
+	}
+	state.Model, state.ModelRequested = "m", ""
 
 	wantKeys(t, "RunEvent", RunEvent{
 		T: "t", Kind: "tool_started",
@@ -73,6 +84,9 @@ func TestWireFieldNames(t *testing.T) {
 	wantKeys(t, "RunEvent payload", EventPayload{
 		Tool: "Bash", Decision: "deny", Text: "x", Turns: 1, CostUSD: 0.1, Raw: json.RawMessage(`{}`),
 	}, "tool", "decision", "text", "turns", "costUsd", "raw")
+	// The system event a provider's init line became carries the model it
+	// reported, and nothing else.
+	wantKeys(t, "init payload", EventPayload{Model: "claude-sonnet-5-20260514"}, "model")
 	// A review event carries its own three fields and none of the agent's.
 	// Hunk 0 is a real index, so it must survive the round trip.
 	hunk := 0

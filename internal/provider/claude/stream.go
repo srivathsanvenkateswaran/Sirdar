@@ -22,6 +22,11 @@ type streamLine struct {
 	Subtype   string `json:"subtype"`
 	SessionID string `json:"session_id"`
 
+	// Model is on the system/init line, and is the model that actually
+	// answers — the dated id an alias like `sonnet` resolved to, or the
+	// CLI's own default when the run configured none.
+	Model string `json:"model"`
+
 	Message struct {
 		Role    string          `json:"role"`
 		Content json.RawMessage `json:"content"`
@@ -140,6 +145,9 @@ func decode(raw []byte) []provider.Event {
 		ev.Text = l.Subtype
 		if ev.Text == "" {
 			ev.Text = l.Type
+		}
+		if l.Type == "system" && l.Subtype == "init" {
+			ev.Model = l.Model
 		}
 		return []provider.Event{ev}
 	}

@@ -5,6 +5,7 @@
 .sd-quota {
   display: inline-flex;
   align-items: center;
+  align-content: flex-start;
   gap: var(--sd-space-2);
   max-inline-size: 100%;
   padding-block: 2px;
@@ -12,30 +13,50 @@
   border-radius: var(--sd-radius-pill);
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-micro);
+  line-height: 1.5;
   font-variant-numeric: tabular-nums;
   color: var(--sd-ink-2);
   /* One line at every width: "claude 7d ▮▮▮ 88% · 1h 58m". The countdown is
      the part that gives way, and the chip's title says it in full. */
   white-space: nowrap;
   overflow: hidden;
-  /* Provider names, window labels and percentages are all identifiers or
-     numbers; they do not mirror inside an Arabic header. */
-  unicode-bidi: isolate;
+  /* All of the countdown or none of it. At 248px the sidebar chip often has
+     room for the reading but not for "· 1h 58m" beside it, and an ellipsis
+     there left "57% · …" — a separator pointing at nothing. So the chip
+     wraps instead of cutting, and is one line tall: a countdown with no room
+     lands on a second line 8px below, which is never drawn. Nothing else can
+     wrap, because everything else is inside .sd-quota__line. */
+  flex-wrap: wrap;
+  max-block-size: calc(var(--sd-text-micro) * 1.5 + 6px);
 }
 
-/* The words and the percentage never shrink. What gives way, in order: the
-   countdown (shrink 4, then cut), then the bar down to 24px. */
-.sd-quota > * {
-  flex: 0 0 auto;
+/* The group that is always drawn: provider, window, bar, percentage and the
+   over-budget words. It gives way inside itself rather than wrapping. */
+.sd-quota__line {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+  overflow: hidden;
 }
 
-.sd-quota > .sd-quota__bar {
-  flex: 0 1 56px;
-  min-inline-size: 24px;
+.sd-quota > .sd-quota__line {
+  flex: 0 1 auto;
 }
 
 .sd-quota > .sd-quota__reset {
-  flex: 0 4 auto;
+  flex: 0 0 auto;
+}
+
+/* The words and the percentage never shrink; the bar gives way first, down
+   to 24px, and the countdown goes only when even that is not enough. */
+.sd-quota__line > * {
+  flex: 0 0 auto;
+}
+
+.sd-quota__line > .sd-quota__bar {
+  flex: 0 1 56px;
+  min-inline-size: 24px;
 }
 
 .sd-quota__provider {
@@ -83,12 +104,9 @@
 }
 
 /* "· 1h 58m": the middot is drawn, not typed, so the text node stays a bare
-   countdown for the title and the bar's name. */
+   countdown for the title and the bar's name — and so a countdown the chip
+   has no room for takes its separator with it. */
 .sd-quota__reset {
-  flex: 0 1 auto;
-  min-inline-size: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
   color: var(--sd-ink-3);
 }
 
