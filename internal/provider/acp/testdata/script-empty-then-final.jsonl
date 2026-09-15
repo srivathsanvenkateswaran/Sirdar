@@ -1,0 +1,16 @@
+// Copilot's live shape (2026-09-15): two turns that end with no assistant
+// text at all — the agent spent both on tool calls and thinking — and a
+// third that answers. The run passed and should carry no error line.
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"copilot","version":"1.0.83"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-r"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-r","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Reading the checkout service."}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}
+{"$expect":"session/prompt","as":"p2"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-r","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Still reading."}}}}
+{"$reply_to":"p2","result":{"stopReason":"end_turn"}}
+{"$expect":"session/prompt","as":"p3"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-r","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Third time\",\"ok\":true}"}}}}
+{"$reply_to":"p3","result":{"stopReason":"end_turn"}}

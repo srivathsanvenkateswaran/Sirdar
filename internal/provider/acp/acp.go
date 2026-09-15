@@ -824,7 +824,10 @@ type session struct {
 	finalJSON     json.RawMessage
 	finalText     string
 	turns         int
-	usage         struct {
+	// emptyTurns counts the turns that ended with no assistant text at
+	// all. See finishAnswer and unanswered.
+	emptyTurns int
+	usage      struct {
 		in, out int64
 		cost    float64
 	}
@@ -1207,22 +1210,69 @@ func (s *session) finishAnswer(text string, raw json.RawMessage) {
 
 	s.mu.Lock()
 	s.finalText = text
+	empty := strings.TrimSpace(text) == ""
+	if empty {
+		s.emptyTurns++
+	}
 	s.mu.Unlock()
+
 	// An empty turn and a prose turn are different failures and the
 	// operator has to be able to tell them apart: one agent answered the
 	// wrong way, the other stopped without answering at all — which is
 	// what a turn spent entirely on tool calls and thinking looks like.
+	//
+	// The prose answer is an error where it stands, because the turn was
+	// spent and something wrong came back. An empty turn is only a
+	// warning here: Copilot ends two of them before a good third often
+	// enough that a run which goes on to file a valid note should not be
+	// carrying error lines about the turns it took to get there. If no
+	// answer ever arrives, the session says so on the way out — see
+	// unanswered.
+	kind := provider.EvError
 	reason := "acp: the agent did not return a JSON note"
-	if strings.TrimSpace(text) == "" {
-		reason = "acp: the agent ended the turn without an answer"
+	if empty {
+		kind = provider.EvSystem
+		reason = emptyTurnText
 	}
 	s.emit(provider.Event{
-		Kind: provider.EvError,
+		Kind: kind,
 		Text: reason,
 		Raw:  raw,
 	})
 	s.emit(provider.Event{Kind: provider.EvFinal, Text: text, Raw: raw})
 	s.endTurn(nil)
+}
+
+// emptyTurnText is what a turn that produced no assistant text at all is
+// called, as a warning while the run may still recover and as the run's
+// error once it has not.
+const emptyTurnText = "acp: the agent ended the turn without an answer"
+
+// unanswered is the error the empty-turn warnings were held back from. It
+// goes out at the end of the session — after the final event and after the
+// caller has had its chance to send a retry — and only when the run really
+// did end with nothing: no JSON note, and no prose answer either (a prose
+// answer earned its own error when it arrived).
+func (s *session) unanswered() {
+	s.mu.Lock()
+	empty := s.emptyTurns
+	answered := len(s.finalJSON) > 0 || strings.TrimSpace(s.finalText) != ""
+	s.mu.Unlock()
+	if empty == 0 || answered {
+		return
+	}
+
+	ev := provider.Event{
+		Kind: provider.EvError,
+		At:   time.Now(),
+		Text: emptyTurnText,
+		Raw:  rawOf(map[string]any{"emptyTurns": empty}),
+	}
+	select {
+	case s.events <- ev:
+	case <-s.stopped:
+	case <-s.closing:
+	}
 }
 
 // promptText is the run's prompt plus the only structured-output mechanism
@@ -1536,6 +1586,9 @@ func (s *session) barrier() bool {
 	if text, ok := s.takeSend(); ok {
 		return s.resume(text)
 	}
+	// Past the last retry: the session is over, and whatever the empty
+	// turns were held back for is now certain either way.
+	s.unanswered()
 	return false
 }
 

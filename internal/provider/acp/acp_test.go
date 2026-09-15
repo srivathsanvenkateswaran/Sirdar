@@ -1015,16 +1015,74 @@ func TestEmptyFinalSaysTheTurnEndedWithoutAnAnswer(t *testing.T) {
 		t.Fatalf("Wait: %v", err)
 	}
 
+	// While the turn was ending it was a warning — nothing had yet said
+	// the run would not recover. Nothing did, so the run also carries the
+	// error.
+	if !systemText(evs, emptyTurnText) {
+		t.Errorf("the empty turn was not warned about; system events = %+v", only(evs, provider.EvSystem))
+	}
 	errs := only(evs, provider.EvError)
 	if len(errs) != 1 {
 		t.Fatalf("error events: %+v", errs)
 	}
-	if errs[0].Text != "acp: the agent ended the turn without an answer" {
+	if errs[0].Text != emptyTurnText {
 		t.Fatalf("error text %q", errs[0].Text)
 	}
 	finals := only(evs, provider.EvFinal)
 	if len(finals) != 1 || strings.TrimSpace(finals[0].Text) != "" || len(finals[0].Final) != 0 {
 		t.Fatalf("final events: %+v", finals)
+	}
+}
+
+// TestEmptyTurnsAreWarningsOnceTheRunRecovers: Copilot ended two turns
+// with nothing to say before answering properly on the third. The run
+// passed and filed a good note, and used to carry two EvError lines for
+// it — which a person reading the run afterwards has to explain away. An
+// empty turn is only an error if it is how the run ends.
+func TestEmptyTurnsAreWarningsOnceTheRunRecovers(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-empty-then-final.jsonl", cwd, nil)
+
+	var (
+		final    json.RawMessage
+		warnings int
+		errTexts []string
+	)
+	for ev := range sess.Events() {
+		switch ev.Kind {
+		case provider.EvSystem:
+			if ev.Text == emptyTurnText {
+				warnings++
+			}
+		case provider.EvError:
+			errTexts = append(errTexts, ev.Text)
+		case provider.EvFinal:
+			if len(ev.Final) > 0 {
+				final = ev.Final
+				continue
+			}
+			// The runner's own answer to a note that did not validate.
+			if err := sess.Send(context.Background(), "Reply with the JSON object only."); err != nil {
+				t.Errorf("Send: %v", err)
+			}
+		}
+	}
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if len(errTexts) != 0 {
+		t.Errorf("a run that recovered carries error events: %v", errTexts)
+	}
+	if warnings != 2 {
+		t.Errorf("empty-turn warnings = %d, want 2", warnings)
+	}
+	if string(final) != `{"title":"Third time","ok":true}` {
+		t.Errorf("final = %s", final)
+	}
+	if string(res.Final) != string(final) {
+		t.Errorf("Result.Final = %s", res.Final)
 	}
 }
 
