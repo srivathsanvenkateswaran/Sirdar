@@ -151,6 +151,34 @@ func drain(t *testing.T, s provider.Session) ([]provider.Event, provider.Result)
 	return events, res
 }
 
+// TestInitLineReportsModel: cursor-agent picks the model itself unless one
+// was named, and the init line is where it says which. The name travels as
+// a field on the system event rather than only inside the notice text, so
+// the run layer can record the model that answered.
+func TestInitLineReportsModel(t *testing.T) {
+	p := New()
+	s, err := p.Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl", nil))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, _ := drain(t, s)
+
+	var reported []string
+	for _, ev := range events {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	// script-basic.jsonl's init line says "model":"Auto".
+	if len(reported) != 1 || reported[0] != "Auto" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "Auto")
+	}
+}
+
 // argvOf pulls the fake CLI's recorded command line out of a stderr tail.
 func argvOf(t *testing.T, tail []string) []string {
 	t.Helper()

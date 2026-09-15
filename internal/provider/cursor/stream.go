@@ -115,6 +115,12 @@ func decode(raw []byte) []provider.Event {
 	case "system":
 		ev := newEvent(provider.EvSystem, raw)
 		ev.Text = initNote(l)
+		if l.Subtype == "init" {
+			// What the CLI says answered, which on a session started
+			// without a model is the account's own choice — "Auto", or
+			// whichever id the picker last landed on.
+			ev.Model = l.Model
+		}
 		return []provider.Event{ev}
 
 	default:
