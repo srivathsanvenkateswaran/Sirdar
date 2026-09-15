@@ -1,8 +1,51 @@
 /*
- * The two ambient motions. Both are decorative, both reverse under RTL, and
- * both have a static pose rather than a shorter animation when the reader has
- * asked for less motion.
+ * The app's motions, all of them.
+ *
+ * Two ambient loops (ring text and the marquee), which are decorative, reverse
+ * under RTL, and have a static pose rather than a shorter animation when the
+ * reader has asked for less motion. And two entrances: the sheet's content on
+ * navigation, and the settings modal behind its scrim. Nothing else in the app
+ * moves except the live-run pulse.
  */
+
+/* ---------- entrances ---------- */
+
+@keyframes sd-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+@keyframes sd-modal-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+}
+
+@keyframes sd-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The sheet's content on every navigation: rises 8px and fades over 320ms. */
+.sd-motion-page {
+  animation: sd-page-enter var(--sd-dur-page) var(--sd-ease) both;
+}
+
+/* The settings modal: scales from 0.98 and fades over 300ms. */
+.sd-motion-modal {
+  animation: sd-modal-enter var(--sd-dur-3) var(--sd-ease) both;
+}
+
+/* The scrim under it: a 200ms fade. */
+.sd-motion-scrim {
+  animation: sd-fade-in var(--sd-dur-2) ease both;
+}
+
+/* ---------- ambient loops ---------- */
 
 @keyframes sd-ring-spin {
   to {
@@ -35,8 +78,13 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* The loops stop in their static pose; the entrances are simply not drawn,
+     so the sheet and the modal appear at their final place and opacity. */
   .sd-motion-ring,
-  .sd-motion-marquee {
+  .sd-motion-marquee,
+  .sd-motion-page,
+  .sd-motion-modal,
+  .sd-motion-scrim {
     animation: none;
   }
 }

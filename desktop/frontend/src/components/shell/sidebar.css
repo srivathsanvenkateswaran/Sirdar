@@ -7,61 +7,157 @@
  * barely-there colour difference is doing the whole job of the landing page's
  * colour bands: this is the chrome, that is the work. There is no shadow
  * anywhere in this file.
+ *
+ * The measures are the 2026-09-15 mocks': 248 wide, 20px top padding and 16
+ * at the sides and foot, 44-tall rows, a Recent sessions list under a
+ * hairline, and the footer card pinned to the bottom.
  */
 
 .sd-sidebar {
   display: flex;
   flex-direction: column;
-  flex: 0 0 208px;
+  flex: 0 0 var(--sd-sidebar-w);
   min-block-size: 0;
-  padding: var(--sd-space-2);
+  padding-block: 20px var(--sd-space-4);
+  padding-inline: var(--sd-space-4);
   /* No fill of its own: the sidebar sits directly on the window ground. */
   background: transparent;
 }
 
+/* The wordmark with the workspace as a badge beside it. */
 .sd-sidebar__brand {
   display: flex;
   align-items: center;
-  min-block-size: 32px;
-  padding-inline: var(--sd-space-2);
+  gap: 10px;
+  min-block-size: 36px;
+  padding-block: 0 var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
 }
 
 .sd-sidebar__nav {
   display: flex;
   flex-direction: column;
-  padding-block-start: var(--sd-space-2);
+  gap: 2px;
+  padding-block-start: var(--sd-space-4);
+}
+
+/* ---------- recent sessions ---------- */
+
+.sd-sidebar__recent {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-block-start: 20px;
+  padding-block-start: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-rule);
+}
+
+.sd-sidebar__recent-label {
+  margin: 0;
+  padding-block: 0 6px;
+  padding-inline: 14px;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-ledger);
+}
+
+.sd-recent-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-block: 0;
+  padding-inline: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--sd-dur-1) ease;
+}
+
+.sd-recent-row:hover {
+  background: var(--sd-nav-hover);
+}
+
+.sd-recent-row[aria-current='page'] {
+  background: var(--sd-nav-active);
+  color: var(--sd-ink);
+}
+
+/* The dot says live or waiting on a person, and nothing else. The word for
+   either is in the row's accessible name. */
+.sd-recent-row__dot {
+  flex: 0 0 auto;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-rule-strong);
+}
+
+.sd-recent-row__dot[data-live='true'] {
+  background: var(--sd-accent);
+}
+
+.sd-recent-row__dot[data-blocked='true'] {
+  background: var(--sd-st-blocked);
+}
+
+.sd-recent-row__key {
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-weight: 600;
+  unicode-bidi: isolate;
+}
+
+.sd-recent-row__kind {
+  margin-inline-start: auto;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
 }
 
 /* ---------- the workspace switcher ---------- */
 
+/*
+ * The trigger is the workspace badge beside the wordmark: the reference's
+ * lavender plan chip, carrying a fact about the workspace. Its popover opens
+ * downward, under the brand row.
+ */
 .switcher {
   position: relative;
   min-inline-size: 0;
 }
 
 .switcher-trigger {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: var(--sd-space-2);
-  inline-size: 100%;
-  min-block-size: 28px;
-  padding-block: var(--sd-space-1);
-  padding-inline: var(--sd-space-2);
+  gap: var(--sd-space-1);
+  max-inline-size: 100%;
+  min-block-size: 26px;
+  margin-inline-start: 2px;
+  padding-block: 0;
+  padding-inline: 10px 6px;
   border: 0;
-  border-radius: var(--sd-radius-sm);
-  background: transparent;
-  color: var(--sd-ink);
+  border-radius: 6px;
+  background: var(--sd-badge-bg);
+  color: var(--sd-badge-ink);
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-body);
+  font-size: var(--sd-text-ledger);
   font-weight: 500;
+  line-height: 26px;
+  letter-spacing: 0;
   text-align: start;
   cursor: pointer;
-  transition: background-color var(--sd-dur-1) ease;
+  transition: opacity var(--sd-dur-1) ease;
 }
 
 .switcher-trigger:hover {
-  background: var(--sd-nav-hover);
+  opacity: 0.85;
 }
 
 .switcher-name {
@@ -73,12 +169,12 @@
 
 .switcher-list {
   position: absolute;
-  inset-block-end: calc(100% + var(--sd-space-1));
+  inset-block-start: calc(100% + var(--sd-space-1));
   inset-inline-start: 0;
   z-index: 20;
   margin: 0;
   padding: var(--sd-space-1);
-  min-inline-size: 100%;
+  min-inline-size: 200px;
   max-inline-size: 320px;
   max-block-size: 40vh;
   overflow-y: auto;
@@ -94,14 +190,14 @@
   flex-direction: column;
   gap: 1px;
   inline-size: 100%;
-  padding-block: var(--sd-space-1);
-  padding-inline: var(--sd-space-2);
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
   border: 0;
   border-radius: var(--sd-radius-sm);
   background: transparent;
   color: var(--sd-ink);
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-body);
+  font-size: var(--sd-text-meta);
   text-align: start;
   cursor: pointer;
 }
@@ -128,8 +224,8 @@
 }
 
 .switcher-empty {
-  padding-block: var(--sd-space-1);
-  padding-inline: var(--sd-space-2);
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
   color: var(--sd-ink-3);
   font-size: var(--sd-text-meta);
 }
@@ -143,7 +239,8 @@
  * card, which are library components, do not have to know Sirdar's breakpoint.
  */
 .sd-sidebar[data-collapsed='true'] {
-  flex-basis: 56px;
+  flex-basis: 72px;
+  padding-inline: var(--sd-space-2);
 }
 
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand {
@@ -156,6 +253,11 @@
   inline-size: 1.2em;
 }
 
+.sd-sidebar[data-collapsed='true'] .switcher,
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__recent {
+  display: none;
+}
+
 /*
  * Under 720px the shell stacks and the sidebar becomes a strip across the top
  * of the window. `flex-basis` would be a height there rather than a width, so
@@ -165,17 +267,22 @@
 @media (max-width: 720px) {
   .sd-sidebar {
     flex: 0 0 auto;
+    padding-block: var(--sd-space-3);
     border-block-end: 1px solid var(--sd-rule);
   }
 
   .sd-sidebar__nav {
     flex-direction: row;
     flex-wrap: wrap;
-    padding-block-start: 0;
+    padding-block-start: var(--sd-space-2);
   }
 
   .sd-sidebar__nav .sd-nav-row {
     inline-size: auto;
+  }
+
+  .sd-sidebar__recent {
+    display: none;
   }
 
   .sd-sidebar-foot {
@@ -185,24 +292,19 @@
     margin-block-start: var(--sd-space-2);
   }
 
-  .sd-sidebar-foot__switcher,
+  .sd-sidebar-foot__title,
   .sd-sidebar-foot__action {
     flex: 0 0 auto;
   }
 
-  .sd-sidebar-foot__switcher > *,
   .sd-sidebar-foot__action > * {
     inline-size: auto;
-  }
-
-  .switcher-list {
-    inset-block-end: auto;
-    inset-block-start: calc(100% + var(--sd-space-1));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .switcher-trigger {
+  .switcher-trigger,
+  .sd-recent-row {
     transition-duration: 1ms;
   }
 }

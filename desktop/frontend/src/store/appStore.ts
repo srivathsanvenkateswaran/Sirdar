@@ -10,13 +10,21 @@ import type {
 import { parseTime } from '../lib/format'
 import { clearJob, setRunJob } from '../lib/jobs'
 
-/** Which screen the window is showing. Run detail carries the run it opened. */
+/**
+ * Which screen the window is showing. Run detail and Change review carry the
+ * run they opened; Settings carries the page inside the modal, when a link
+ * named one.
+ */
 export type Screen =
   | { name: 'board' }
+  /** The New session screen: a key or URL, a mode, and Start. */
+  | { name: 'new' }
   | { name: 'run'; runId: string }
+  /** The run's change, full width, before a branch is made of it. */
+  | { name: 'review'; runId: string }
   | { name: 'register' }
   | { name: 'eval' }
-  | { name: 'settings' }
+  | { name: 'settings'; page?: string }
   /** The design library. Only reachable while the Settings switch is on. */
   | { name: 'library' }
 

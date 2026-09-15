@@ -13,7 +13,7 @@
   justify-content: center;
   padding: var(--sd-space-4);
   background: var(--sd-scrim);
-  animation: sd-modal-scrim-in var(--sd-dur-2) ease;
+  /* The 200ms fade is `.sd-motion-scrim`, from src/ui/motion. */
 }
 
 .sd-modal {
@@ -28,7 +28,9 @@
   font-size: var(--sd-text-body);
   /* No shadow. The scrim is the elevation. */
   overflow: hidden;
-  animation: sd-modal-in var(--sd-dur-3) var(--sd-ease);
+  /* The entrance — scale from 0.98 and fade over 300ms — is
+     `.sd-motion-modal`, from src/ui/motion, which also freezes it under
+     reduced motion. */
 }
 
 /* ---------- secondary nav ---------- */
@@ -138,19 +140,6 @@
   border-block-start: 1px solid var(--sd-rule);
 }
 
-@keyframes sd-modal-scrim-in {
-  from {
-    opacity: 0;
-  }
-}
-
-@keyframes sd-modal-in {
-  from {
-    opacity: 0;
-    transform: scale(0.98);
-  }
-}
-
 /* Under 720px the nav column stacks above the panel rather than eating half
    the window. */
 @media (max-width: 720px) {
@@ -172,16 +161,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .sd-modal-scrim,
-  .sd-modal {
-    animation-duration: 1ms;
-  }
-
-  /* The modal cross-fades with no scale, which is the stated answer. */
-  .sd-modal {
-    animation-name: sd-modal-scrim-in;
-  }
-
   .sd-modal__nav-row {
     transition-duration: 1ms;
   }

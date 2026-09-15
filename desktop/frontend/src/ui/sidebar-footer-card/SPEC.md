@@ -2,9 +2,9 @@
 
 ## What it is
 
-The block pinned to the bottom of the app's sidebar, under a `--sd-rule`
-hairline: the workspace switcher, one quota chip per budgeted provider, and the
-screen's one primary action.
+The block pinned to the bottom of the app's sidebar: a title row ("Plan
+usage"), one quota chip per budgeted provider, and the one button that starts
+a session — or the screen's own primary action, when a screen publishes one.
 
 Built. `desktop/frontend/src/ui/sidebar-footer-card/`. It takes over from the
 right-hand half of `styles.css` `.header` — the workspace `select`, the
@@ -13,11 +13,14 @@ bar when `docs/design/03-desktop-app.md` section 5 replaced it with a sidebar.
 
 ## Anatomy
 
-- `div.sd-sidebar-foot` — `--sd-card-row` fill, `--sd-radius-md`, a
-  `--sd-rule` hairline across its block start, 8px padding, no border and no
-  shadow. `margin-block-start: auto`, which is what pins it.
+- `div.sd-sidebar-foot` — `--sd-card-row` fill, `--sd-radius-md`, 16px
+  padding, 12px gap, no border, no hairline and no shadow. `margin-block-start:
+  auto`, which is what pins it.
+- `div.sd-sidebar-foot__title` — the title row: `--sd-text-meta` weight 500,
+  a chevron at the inline end in `--sd-ink-3`.
 - `div.sd-sidebar-foot__switcher` — one row, full width: the workspace name
-  and the control that opens the list.
+  and the control that opens the list. The app no longer fills it; the
+  switcher is the workspace badge beside the wordmark.
 - `div.sd-sidebar-foot__quotas` — a column of quota chips, scrolling past
   32vh so a workspace with six budgeted providers cannot push the action off
   the window.
@@ -70,6 +73,13 @@ clear **15.70 / 12.51** and **7.37 / 6.60**. Reduced motion: nothing here
 moves.
 
 ## Changelog
+
+### 2026-09-15 (v2 register)
+Gains a `title` slot ("Plan usage" in the app, with a chevron), drawn above the
+quota chips. Padding goes from 8 to 16, the gap from 8 to 12, the quota gap to
+6, and the hairline above the card is gone: the card-row fill on the shell is
+the separation, as it is for the sheet. The app's workspace switcher moved up
+beside the wordmark as a badge; the `switcher` slot stays.
 
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 5. The three

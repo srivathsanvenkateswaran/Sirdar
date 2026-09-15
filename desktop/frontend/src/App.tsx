@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Sidebar from './components/shell/Sidebar'
 import NewTriageDialog from './components/shell/NewTriageDialog'
-import { PrimaryActionProvider, useProvidePrimaryAction } from './components/shell/primaryAction'
+import { PrimaryActionProvider } from './components/shell/primaryAction'
+import { PAGE_ENTER_CLASS } from './ui/motion'
 import Toasts from './ui/toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
 import Library from './screens/Library'
+import NewSession from './screens/NewSession'
 import Register from './screens/Register'
+import Review from './screens/Review'
 import RunDetail from './screens/RunDetail'
 import Settings from './screens/Settings'
 import { showLibrary, subscribeShowLibrary } from './lib/library'
@@ -83,31 +86,6 @@ function isTyping(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
 }
 
-/**
- * The Board's commit action, published to the sidebar footer.
- *
- * It is a component rather than a call in `App` because publishing is an
- * effect, and an effect that runs in `App` would run for every screen and
- * would have to work out which one it was on. A component that is only
- * mounted while the board is up cannot get that wrong.
- */
-function BoardPrimary({
-  onNewTriage,
-  disabled,
-}: {
-  onNewTriage: () => void
-  disabled: boolean
-}): null {
-  useProvidePrimaryAction({
-    label: 'New triage',
-    onRun: onNewTriage,
-    disabled,
-    shortcut: 'n',
-    title: 'New triage (n)',
-  })
-  return null
-}
-
 function Shell(): JSX.Element {
   const store = useStore()
   const state = useAppState()
@@ -136,6 +114,7 @@ function Shell(): JSX.Element {
   const behind = useRef<Screen>({ name: 'board' })
   if (state.screen.name !== 'settings') behind.current = state.screen
   const settingsOpen = state.screen.name === 'settings'
+  const settingsPage = state.screen.name === 'settings' ? state.screen.page : undefined
   const shown = settingsOpen ? behind.current : state.screen
 
   const workspaceId = state.currentWorkspaceId
@@ -146,6 +125,10 @@ function Shell(): JSX.Element {
   const navigate = useCallback((screen: Screen) => store.navigate(screen), [store])
   const dismissToast = useCallback((id: number) => store.dismissToast(id), [store])
   const closeSettings = useCallback(() => store.navigate(behind.current), [store])
+  const selectSettingsPage = useCallback(
+    (page: string) => store.navigate({ name: 'settings', page }),
+    [store],
+  )
 
   const openTriage = useCallback(() => {
     if (state.workspaces.length === 0) {
@@ -198,6 +181,9 @@ function Shell(): JSX.Element {
 
   let screen
   switch (shown.name) {
+    case 'new':
+      screen = <NewSession />
+      break
     case 'run':
       screen = (
         <RunDetail
@@ -209,6 +195,11 @@ function Shell(): JSX.Element {
           onStartRCA={startRCA}
           onStartFix={startFix}
         />
+      )
+      break
+    case 'review':
+      screen = (
+        <Review runId={shown.runId} onBack={() => navigate({ name: 'run', runId: shown.runId })} />
       )
       break
     case 'register':
@@ -235,21 +226,23 @@ function Shell(): JSX.Element {
       break
     default:
       screen = (
-        <>
-          <BoardPrimary onNewTriage={openTriage} disabled={state.workspaces.length === 0} />
-          <Board
-            tickets={tickets}
-            runs={runs}
-            queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
-            loading={state.loading}
-            inbound={state.inbound}
-            filterRef={filterRef}
-            onOpenRun={(runId) => navigate({ name: 'run', runId })}
-            onTriage={(keys) => void store.startTriage(keys).catch(reported)}
-          />
-        </>
+        <Board
+          tickets={tickets}
+          runs={runs}
+          queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
+          loading={state.loading}
+          inbound={state.inbound}
+          filterRef={filterRef}
+          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+          onTriage={(keys) => void store.startTriage(keys).catch(reported)}
+        />
       )
   }
+
+  // The page's key is its address, so every navigation mounts a fresh page
+  // and the enter motion runs again; a settings modal opening over it does
+  // not, because the page underneath has not moved.
+  const pageKey = routeHash(shown, workspaceId)
 
   return (
     <div className="app">
@@ -258,23 +251,28 @@ function Shell(): JSX.Element {
         currentWorkspaceId={workspaceId}
         quota={state.quota}
         screen={state.screen}
+        runs={runs}
         inboundCount={state.inbound?.length ?? 0}
         onSelectWorkspace={(id) => store.setWorkspace(id)}
-        onAddWorkspace={() => navigate({ name: 'settings' })}
+        onAddWorkspace={() => navigate({ name: 'settings', page: 'workspaces' })}
         onNavigate={navigate}
       />
       <main className="main">
-        {state.workspaces.length === 0 && !state.loading && shown.name !== 'library' ? (
-          <p className="app-empty">
-            No workspace yet. Open Settings and add the path to a repository that has a{' '}
-            <code>.sirdar</code> config.
-          </p>
-        ) : (
-          screen
-        )}
+        <div className={`sd-page ${PAGE_ENTER_CLASS}`} key={pageKey}>
+          {state.workspaces.length === 0 && !state.loading && shown.name !== 'library' ? (
+            <p className="app-empty">
+              No workspace yet. Open Settings and add the path to a repository that has a{' '}
+              <code>.sirdar</code> config.
+            </p>
+          ) : (
+            screen
+          )}
+        </div>
       </main>
       <Settings
         open={settingsOpen}
+        page={settingsPage}
+        onSelectPage={selectSettingsPage}
         transport={state.transport}
         workspaces={state.workspaces}
         currentWorkspaceId={workspaceId}

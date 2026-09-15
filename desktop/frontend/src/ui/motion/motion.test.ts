@@ -1,5 +1,14 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { prefersReducedMotion, ringAngles, subscribeReducedMotion } from './index'
+import {
+  MODAL_ENTER_CLASS,
+  PAGE_ENTER_CLASS,
+  SCRIM_ENTER_CLASS,
+  prefersReducedMotion,
+  ringAngles,
+  subscribeReducedMotion,
+} from './index'
 
 /** A MediaQueryList that answers what the case is about. */
 function stubMedia(matches: boolean, legacy = false): () => void {
@@ -76,5 +85,25 @@ describe('the ring layout', () => {
 
   it('does not divide by zero on an empty sentence', () => {
     expect(ringAngles('')).toEqual([])
+  })
+})
+
+describe('the two entrances', () => {
+  const sheet = readFileSync(resolve(process.cwd(), 'src', 'ui', 'motion', 'motion.css'), 'utf8')
+
+  it.each([PAGE_ENTER_CLASS, MODAL_ENTER_CLASS, SCRIM_ENTER_CLASS])(
+    'defines .%s and turns it off under reduced motion',
+    (name) => {
+      expect(sheet).toMatch(new RegExp(`\\.${name}\\s*\\{[^}]*animation:`))
+      const reduced = sheet.slice(sheet.indexOf('prefers-reduced-motion'))
+      expect(reduced).toContain(`.${name}`)
+      expect(reduced).toMatch(/animation:\s*none/)
+    },
+  )
+
+  it('runs the page enter over the 320ms token and the modal over 300ms', () => {
+    expect(sheet).toMatch(/\.sd-motion-page\s*\{[^}]*var\(--sd-dur-page\)/)
+    expect(sheet).toMatch(/\.sd-motion-modal\s*\{[^}]*var\(--sd-dur-3\)/)
+    expect(sheet).toMatch(/\.sd-motion-scrim\s*\{[^}]*var\(--sd-dur-2\)/)
   })
 })

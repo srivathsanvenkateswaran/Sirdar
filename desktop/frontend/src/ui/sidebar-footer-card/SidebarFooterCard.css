@@ -1,22 +1,39 @@
 /*
- * Sidebar footer card. Pinned under a hairline at the foot of the sidebar.
+ * Sidebar footer card. Pinned to the foot of the sidebar: the 2026-09-15
+ * mocks' 16px padding and 12px gap on the card-row fill, with no hairline
+ * above it — the colour step is the whole separation.
  */
 
 .sd-sidebar-foot {
   display: flex;
   flex-direction: column;
-  gap: var(--sd-space-2);
+  gap: var(--sd-space-3);
   margin-block-start: auto;
-  padding: var(--sd-space-2);
-  border-block-start: 1px solid var(--sd-rule);
+  padding: var(--sd-space-4);
   border-radius: var(--sd-radius-md);
   background: var(--sd-card-row);
+}
+
+.sd-sidebar-foot__title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  min-block-size: 24px;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  font-weight: 500;
+}
+
+.sd-sidebar-foot__title > svg {
+  color: var(--sd-ink-3);
 }
 
 .sd-sidebar-foot__quotas {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   /* A workspace with several budgeted providers must not push the primary
      action off the bottom of the sidebar. */
   max-block-size: 32vh;
@@ -34,7 +51,12 @@
   inline-size: 100%;
 }
 
-/* Collapsed to the rail, the card keeps only what fits in 56px. */
+/* Collapsed to the rail, the card keeps only what fits in the rail's width. */
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot {
+  padding: var(--sd-space-2);
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__title,
 .sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__switcher,
 .sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__quotas {
   display: none;

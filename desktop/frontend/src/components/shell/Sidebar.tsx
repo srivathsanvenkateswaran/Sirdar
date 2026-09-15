@@ -1,31 +1,37 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import type { Quota, Workspace } from '../../api/types'
+import type { Quota, RunSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import type { Screen } from '../../store/appStore'
 import Button from '../../ui/button'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
 import SidebarNavItem from '../../ui/sidebar-nav-item'
 import QuotaMeter from '../QuotaMeter'
-import { BoardIcon, EvalIcon, LibraryIcon, RegisterIcon, SettingsIcon } from './icons'
+import {
+  BoardIcon,
+  EvalIcon,
+  LibraryIcon,
+  RegisterIcon,
+  SessionsIcon,
+  SettingsIcon,
+  SwitcherIcon,
+} from './icons'
 import { usePrimaryAction } from './primaryAction'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import './sidebar.css'
 
-type NavName = Extract<Screen['name'], 'board' | 'register' | 'eval' | 'library' | 'settings'>
+type NavName = 'sessions' | 'board' | 'register' | 'eval' | 'library' | 'settings'
 
 const ROWS: { name: NavName; label: string; icon: JSX.Element }[] = [
+  { name: 'sessions', label: 'Sessions', icon: <SessionsIcon /> },
   { name: 'board', label: 'Board', icon: <BoardIcon /> },
   { name: 'register', label: 'Register', icon: <RegisterIcon /> },
   { name: 'eval', label: 'Eval', icon: <EvalIcon /> },
+  { name: 'library', label: 'Library', icon: <LibraryIcon /> },
   { name: 'settings', label: 'Settings', icon: <SettingsIcon /> },
 ]
 
-/** The design library is a row only while Settings says it is. */
-const LIBRARY_ROW: { name: NavName; label: string; icon: JSX.Element } = {
-  name: 'library',
-  label: 'Library',
-  icon: <LibraryIcon />,
-}
+/** How many runs the Recent sessions list shows. */
+export const RECENT_LIMIT = 4
 
 /** Below this window width the sidebar keeps its icons and drops its labels. */
 const RAIL_AT = '(max-width: 900px)'
@@ -50,15 +56,97 @@ function useRail(): boolean {
   return rail
 }
 
+function stamp(run: RunSummary): number {
+  const updated = Date.parse(run.updatedAt ?? '')
+  if (!Number.isNaN(updated)) return updated
+  const started = Date.parse(run.startedAt ?? '')
+  return Number.isNaN(started) ? 0 : started
+}
+
+/** The newest `limit` runs, by their last change. */
+export function recentRuns(runs: RunSummary[], limit = RECENT_LIMIT): RunSummary[] {
+  return runs
+    .slice()
+    .sort((a, b) => stamp(b) - stamp(a))
+    .slice(0, limit)
+}
+
+/** The nav row a screen belongs to. A run is reached from Sessions, a review from its run. */
+function rowOf(screen: Screen): NavName {
+  switch (screen.name) {
+    case 'new':
+    case 'run':
+    case 'review':
+      return 'sessions'
+    default:
+      return screen.name
+  }
+}
+
 /**
- * The app's left edge: where you are, which repository you are looking at,
- * what is left of each provider's limit, and the one action this screen can
- * commit.
+ * The four sessions that changed last, under the nav.
+ *
+ * A row is the key in the ledger face and the kind beside it, with a dot that
+ * says only whether the run is live or waiting on a person: the two states a
+ * reader would open a session for. Everything else about a run is on the
+ * board and in the session itself.
+ */
+function RecentSessions({
+  runs,
+  currentRunId,
+  onOpen,
+}: {
+  runs: RunSummary[]
+  currentRunId?: string
+  onOpen: (runId: string) => void
+}): JSX.Element | null {
+  const recent = recentRuns(runs)
+  if (recent.length === 0) return null
+  return (
+    <nav className="sd-sidebar__recent" aria-label="Recent sessions">
+      <p className="sd-sidebar__recent-label">Recent sessions</p>
+      {recent.map((run) => {
+        const live = run.status === 'preparing' || run.status === 'running'
+        const blocked = run.status === 'blocked'
+        return (
+          <button
+            key={run.runId}
+            type="button"
+            className="sd-recent-row"
+            aria-current={run.runId === currentRunId ? 'page' : undefined}
+            aria-label={`${run.key} ${run.kind}${live ? ', running' : blocked ? ', needs input' : ''}`}
+            onClick={() => onOpen(run.runId)}
+          >
+            <span
+              className="sd-recent-row__dot"
+              data-live={live ? 'true' : undefined}
+              data-blocked={blocked ? 'true' : undefined}
+              aria-hidden="true"
+            />
+            <span className="sd-recent-row__key" dir="ltr">
+              {run.key}
+            </span>
+            <span className="sd-recent-row__kind" dir="ltr">
+              {run.kind}
+            </span>
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/**
+ * The app's left edge: the wordmark with the workspace as a badge, the six
+ * screens, the sessions that changed last, and a footer card with how much of
+ * each provider's plan is gone and the one button that starts a session.
  *
  * It replaces the top header. A board that scrolls horizontally has no room to
  * spare above it, and a nav that does not move is one less thing that can
  * cover a lane — which is the reason `docs/design/03-desktop-app.md` section 5
- * gives, and it is the same reason the reference it is read from did it.
+ * gives, and it is the same reason the reference it is read from did it. The
+ * 2026-09-15 screens round re-scaled it to the reference's own register:
+ * 248 wide, 44-tall rows, 20px icons.
  *
  * Settings is a row here but not a screen: it opens a modal over whatever is
  * behind it, because settings is a place you leave and the board staying
@@ -69,6 +157,8 @@ export default function Sidebar(props: {
   currentWorkspaceId: string
   quota: Quota[]
   screen: Screen
+  /** The current workspace's runs; the newest four are listed under the nav. */
+  runs?: RunSummary[]
   /** Inbound deliveries waiting to be read, badged on the Board row. */
   inboundCount?: number
   onSelectWorkspace: (id: string) => void
@@ -80,6 +170,7 @@ export default function Sidebar(props: {
     currentWorkspaceId,
     quota,
     screen,
+    runs = [],
     inboundCount = 0,
     onSelectWorkspace,
     onAddWorkspace,
@@ -89,15 +180,32 @@ export default function Sidebar(props: {
   const primary = usePrimaryAction()
   const rail = useRail()
 
-  // Run detail is reached from a card rather than from here, so it keeps the
-  // Board row current while it is open.
-  const current = screen.name === 'run' ? 'board' : screen.name
-  const rows = library ? [...ROWS.slice(0, 3), LIBRARY_ROW, ROWS[3]] : ROWS
+  const current = rowOf(screen)
+  const rows = library ? ROWS : ROWS.filter((row) => row.name !== 'library')
+  const currentRunId =
+    screen.name === 'run' || screen.name === 'review' ? screen.runId : undefined
+  const newest = recentRuns(runs, 1)[0]
+
+  function open(name: NavName): void {
+    if (name === 'sessions') {
+      // Sessions is the session that changed last, or a new one when the
+      // workspace has none yet.
+      onNavigate(newest ? { name: 'run', runId: newest.runId } : { name: 'new' })
+      return
+    }
+    onNavigate({ name })
+  }
 
   return (
     <div className="sd-sidebar" data-collapsed={rail ? 'true' : undefined}>
       <div className="sd-sidebar__brand">
         <span className="brand">Sirdar</span>
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          currentId={currentWorkspaceId}
+          onSelect={onSelectWorkspace}
+          onAdd={onAddWorkspace}
+        />
       </div>
 
       <nav className="sd-sidebar__nav" aria-label="Screens">
@@ -110,19 +218,24 @@ export default function Sidebar(props: {
             count={row.name === 'board' ? inboundCount : undefined}
             countLabel={row.name === 'board' ? 'inbound deliveries' : undefined}
             title={rail ? row.label : undefined}
-            onSelect={() => onNavigate({ name: row.name } as Screen)}
+            onSelect={() => open(row.name)}
           />
         ))}
       </nav>
 
+      <RecentSessions
+        runs={runs}
+        currentRunId={currentRunId}
+        onOpen={(runId) => onNavigate({ name: 'run', runId })}
+      />
+
       <SidebarFooterCard
-        switcher={
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            currentId={currentWorkspaceId}
-            onSelect={onSelectWorkspace}
-            onAdd={onAddWorkspace}
-          />
+        label="Plan usage"
+        title={
+          <>
+            <span>Plan usage</span>
+            <SwitcherIcon />
+          </>
         }
         quotas={quota.length > 0 ? <QuotaMeter quota={quota} /> : undefined}
         action={
@@ -137,7 +250,11 @@ export default function Sidebar(props: {
             >
               {primary.label}
             </Button>
-          ) : undefined
+          ) : (
+            <Button variant="primary" onClick={() => onNavigate({ name: 'new' })}>
+              New session
+            </Button>
+          )
         }
       />
     </div>

@@ -69,6 +69,15 @@ kbd {
   color: var(--sd-ink-2);
 }
 
+.screen__title {
+  margin-block: 0 var(--sd-space-2);
+  color: var(--sd-ink);
+  font-size: var(--sd-text-display-m);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
 /* ---------- the keyboard hint ---------- */
 
 .kbd {

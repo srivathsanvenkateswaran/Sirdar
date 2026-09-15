@@ -188,7 +188,7 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
-    expect(s.getState().screen).toEqual({ name: 'settings' })
+    expect(s.getState().screen).toEqual({ name: 'settings', page: 'workspaces' })
   })
 })
 
@@ -339,6 +339,29 @@ describe('Deep links', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Board' }))
     await waitFor(() => expect(window.location.hash).toBe('#/'))
+  })
+
+  it('a settings link opens the modal on the page it names, and the page writes the address', async () => {
+    window.location.hash = '#/settings/notifications'
+    mount(seeded())
+    const dialog = await screen.findByRole('dialog', { name: 'Notifications' })
+    expect(dialog).toBeInTheDocument()
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'About' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/settings/about'))
+    expect(screen.getByRole('dialog', { name: 'About' })).toBeInTheDocument()
+  })
+
+  it('New session in the footer opens #/new, and Sessions leads back to the newest run', async () => {
+    mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/new'))
+    expect(screen.getByRole('heading', { name: 'New session' })).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r1'))
   })
 
   it('opening a run card writes a link to that run', async () => {

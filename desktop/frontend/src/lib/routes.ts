@@ -11,8 +11,11 @@ import type { Screen } from '../store/appStore'
  * binary's embedded FS, neither of which rewrites unknown paths to index.html.
  *
  *   #/                        the board
- *   #/register  #/eval  #/settings  #/library
+ *   #/new                     a new session
+ *   #/register  #/eval  #/library
+ *   #/settings  #/settings/<page>
  *   #/runs/<workspaceId>/<runId>
+ *   #/runs/<workspaceId>/<runId>/review
  *
  * A run link names its workspace because a run id means nothing without one:
  * following the link into the wrong repository would show a run that is not
@@ -52,18 +55,30 @@ export function parseRoute(hash: string): Route | null {
   switch (parts[0]) {
     case 'board':
       return parts.length === 1 ? { screen: { name: 'board' } } : null
+    case 'new':
     case 'register':
     case 'eval':
-    case 'settings':
     case 'library':
       // A library link parses whether or not the switch is on. The window
       // decides what to do with it: a route is an address, and refusing to
       // read one here would mean the address bar and the screen disagree.
       return parts.length === 1 ? { screen: { name: parts[0] } } : null
+    case 'settings': {
+      // `#/settings/<page>` opens the modal on that page. A page the modal
+      // does not have is the modal's problem, not the address bar's: it
+      // falls back to its first page, and the address then catches up.
+      if (parts.length === 1) return { screen: { name: 'settings' } }
+      if (parts.length === 2 && parts[1]) return { screen: { name: 'settings', page: parts[1] } }
+      return null
+    }
     case 'runs': {
-      if (parts.length !== 3) return null
-      const [, workspaceId, runId] = parts
+      if (parts.length !== 3 && parts.length !== 4) return null
+      const [, workspaceId, runId, tail] = parts
       if (!workspaceId || !runId) return null
+      if (parts.length === 4) {
+        if (tail !== 'review') return null
+        return { screen: { name: 'review', runId }, workspaceId }
+      }
       return { screen: { name: 'run', runId }, workspaceId }
     }
     default:
@@ -75,9 +90,14 @@ export function parseRoute(hash: string): Route | null {
 export function routeHash(screen: Screen, workspaceId: string): string {
   switch (screen.name) {
     case 'run':
+    case 'review': {
       // A run with no workspace behind it yet is not linkable; the board is.
       if (!workspaceId) return '#/'
-      return `#/runs/${encodeURIComponent(workspaceId)}/${encodeURIComponent(screen.runId)}`
+      const base = `#/runs/${encodeURIComponent(workspaceId)}/${encodeURIComponent(screen.runId)}`
+      return screen.name === 'review' ? `${base}/review` : base
+    }
+    case 'settings':
+      return screen.page ? `#/settings/${encodeURIComponent(screen.page)}` : '#/settings'
     case 'board':
       return '#/'
     default:
@@ -88,6 +108,9 @@ export function routeHash(screen: Screen, workspaceId: string): string {
 /** True when two screens are the same place, so a sync can stand still. */
 export function sameScreen(a: Screen, b: Screen): boolean {
   if (a.name !== b.name) return false
-  if (a.name === 'run' && b.name === 'run') return a.runId === b.runId
+  if ((a.name === 'run' || a.name === 'review') && (b.name === 'run' || b.name === 'review')) {
+    return a.runId === b.runId
+  }
+  if (a.name === 'settings' && b.name === 'settings') return (a.page ?? '') === (b.page ?? '')
   return true
 }

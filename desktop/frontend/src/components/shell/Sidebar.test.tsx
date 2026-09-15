@@ -2,8 +2,9 @@ import { act, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
+import { run } from '../../store/fakeTransport'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
-import Sidebar from './Sidebar'
+import Sidebar, { recentRuns } from './Sidebar'
 
 afterEach(() => {
   localStorage.removeItem('sirdar.showLibrary')
@@ -54,11 +55,12 @@ function mount(props: Partial<React.ComponentProps<typeof Sidebar>> = {}, action
 }
 
 describe('the sidebar nav', () => {
-  it('lists the four screens an engineer works in, in order', () => {
+  it('lists the five screens an engineer works in, in order', () => {
     setShowLibrary(false)
     mount()
     const nav = screen.getByRole('navigation', { name: 'Screens' })
     expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Sessions',
       'Board',
       'Register',
       'Eval',
@@ -71,6 +73,7 @@ describe('the sidebar nav', () => {
     mount({ screen: { name: 'library' } })
     const nav = screen.getByRole('navigation', { name: 'Screens' })
     expect(within(nav).getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Sessions',
       'Board',
       'Register',
       'Eval',
@@ -88,10 +91,29 @@ describe('the sidebar nav', () => {
     expect(screen.queryByRole('button', { name: 'Library' })).toBeNull()
   })
 
-  it('marks the Board row while a run is open, since a run is reached from it', () => {
+  it.each([
+    { name: 'run', runId: 'r1' } as const,
+    { name: 'review', runId: 'r1' } as const,
+    { name: 'new' } as const,
+  ])('marks the Sessions row while %o is open', (open) => {
     setShowLibrary(false)
-    mount({ screen: { name: 'run', runId: 'r1' } })
-    expect(screen.getByRole('button', { name: 'Board' })).toHaveAttribute('aria-current', 'page')
+    mount({ screen: open })
+    expect(screen.getByRole('button', { name: 'Sessions' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Board' })).not.toHaveAttribute('aria-current')
+  })
+
+  it('opens the session that changed last from the Sessions row, or a new one', () => {
+    setShowLibrary(false)
+    const older = run({ runId: 'r-old', key: 'OMNI-1', updatedAt: '2026-09-10T09:00:00Z' })
+    const newer = run({ runId: 'r-new', key: 'OMNI-2', updatedAt: '2026-09-12T09:00:00Z' })
+    const { onNavigate, unmount } = mount({ runs: [older, newer] })
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r-new' })
+    unmount()
+
+    const empty = mount({ runs: [] })
+    fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
+    expect(empty.onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 
   it('reports the screen that was asked for', () => {
@@ -113,6 +135,52 @@ describe('the sidebar nav', () => {
     setShowLibrary(false)
     const { container } = mount({ inboundCount: 0 })
     expect(container.querySelector('.sd-nav-row__count')).toBeNull()
+  })
+})
+
+describe('recent sessions', () => {
+  const runs = [
+    run({ runId: 'r1', key: 'OMNI-1', kind: 'triage', status: 'running', updatedAt: '2026-09-10T09:05:00Z' }),
+    run({ runId: 'r2', key: 'OMNI-2', kind: 'fix', status: 'blocked', updatedAt: '2026-09-10T09:04:00Z' }),
+    run({ runId: 'r3', key: 'OMNI-3', kind: 'rca', status: 'completed', updatedAt: '2026-09-10T09:03:00Z' }),
+    run({ runId: 'r4', key: 'OMNI-4', kind: 'triage', status: 'completed', updatedAt: '2026-09-10T09:02:00Z' }),
+    run({ runId: 'r5', key: 'OMNI-5', kind: 'triage', status: 'failed', updatedAt: '2026-09-10T09:01:00Z' }),
+  ]
+
+  it('keeps the newest four, by last change', () => {
+    expect(recentRuns(runs.slice().reverse()).map((r) => r.runId)).toEqual(['r1', 'r2', 'r3', 'r4'])
+  })
+
+  it('lists them with their key and kind, and says which is live or waiting', () => {
+    setShowLibrary(false)
+    mount({ runs })
+    const recent = screen.getByRole('navigation', { name: 'Recent sessions' })
+    const rows = within(recent).getAllByRole('button')
+    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
+      'OMNI-1 triage, running',
+      'OMNI-2 fix, needs input',
+      'OMNI-3 rca',
+      'OMNI-4 triage',
+    ])
+    expect(within(recent).queryByText('OMNI-5')).toBeNull()
+  })
+
+  it('marks the open run and opens another on click', () => {
+    setShowLibrary(false)
+    const { onNavigate } = mount({ runs, screen: { name: 'run', runId: 'r2' } })
+    const recent = screen.getByRole('navigation', { name: 'Recent sessions' })
+    expect(within(recent).getByRole('button', { name: /OMNI-2/ })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    fireEvent.click(within(recent).getByRole('button', { name: /OMNI-3/ }))
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r3' })
+  })
+
+  it('draws nothing when the workspace has no runs', () => {
+    setShowLibrary(false)
+    mount({ runs: [] })
+    expect(screen.queryByRole('navigation', { name: 'Recent sessions' })).toBeNull()
   })
 })
 
@@ -153,20 +221,29 @@ describe('the sidebar footer', () => {
     expect(trigger).toHaveFocus()
   })
 
-  it('draws the screen that published one, and nothing when no screen did', () => {
+  it('draws the screen that published one, and New session when no screen did', () => {
     setShowLibrary(false)
 
     function Publisher(): null {
-      useProvidePrimaryAction({ label: 'New triage', onRun: () => {} })
+      useProvidePrimaryAction({ label: 'Run eval', onRun: () => {} })
       return null
     }
 
     const { unmount } = mount({}, <Publisher />)
-    expect(screen.getByRole('button', { name: /New triage/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Run eval/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     unmount()
 
+    const { onNavigate } = mount()
+    expect(screen.queryByRole('button', { name: /Run eval/ })).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
+  })
+
+  it('is titled Plan usage', () => {
+    setShowLibrary(false)
     mount()
-    expect(screen.queryByRole('button', { name: /New triage/ })).toBeNull()
+    expect(screen.getByRole('group', { name: 'Plan usage' })).toHaveTextContent('Plan usage')
   })
 
   it('shows one quota chip per window a provider reports', () => {

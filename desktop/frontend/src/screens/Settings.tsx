@@ -77,6 +77,10 @@ const TITLES: Record<string, string> = {
 
 export default function Settings(props: {
   open: boolean
+  /** The page the address names, when it names one. */
+  page?: string
+  /** Called with the page the reader chose, so the address can follow. */
+  onSelectPage?: (page: string) => void
   transport: Transport
   workspaces: Workspace[]
   /** The workspace whose notify and webhooks blocks are summarised. */
@@ -84,8 +88,25 @@ export default function Settings(props: {
   onClose: () => void
   onWorkspacesChanged: () => void
 }): JSX.Element | null {
-  const { open, transport, workspaces, currentWorkspaceId, onClose, onWorkspacesChanged } = props
-  const [page, setPage] = useState('workspaces')
+  const {
+    open,
+    transport,
+    workspaces,
+    currentWorkspaceId,
+    onClose,
+    onWorkspacesChanged,
+    onSelectPage,
+  } = props
+  // The page comes from the address when a link named one (`#/settings/<page>`)
+  // and from here otherwise. A page the modal does not have falls back to the
+  // first, so a stale link opens the modal rather than an empty panel.
+  const [localPage, setLocalPage] = useState('workspaces')
+  const wanted = props.page && props.page in TITLES ? props.page : localPage
+  const page = wanted in TITLES ? wanted : 'workspaces'
+  function setPage(id: string): void {
+    setLocalPage(id)
+    onSelectPage?.(id)
+  }
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)

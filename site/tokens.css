@@ -192,6 +192,10 @@
      under prefers-reduced-motion; see src/ui/motion. */
   --sd-dur-ring: 48s;
   --sd-dur-marquee: 34s;
+  /* The page enter: the sheet's content rises 8px and fades in on navigation.
+     The settings modal uses --sd-dur-3 behind a --sd-dur-2 scrim. Both freeze
+     under prefers-reduced-motion; see src/ui/motion. */
+  --sd-dur-page: 320ms;
 
   /* ---------- layout ---------- */
   --sd-measure-wide: 1200px;
