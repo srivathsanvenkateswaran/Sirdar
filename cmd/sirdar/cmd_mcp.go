@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -67,7 +68,12 @@ func cmdMCPList(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "sirdar: %s\n", w)
 	}
 	if len(inv.Servers) == 0 {
-		fmt.Fprintf(stdout, "no MCP servers: %s declares none\n", cfg.Root+"/.mcp.json")
+		where := filepath.Join(cfg.Root, ".mcp.json") + " declares none"
+		if !inv.WorkspaceOnly {
+			where = "neither " + filepath.Join(cfg.Root, ".mcp.json") +
+				" nor the operator's own files declare any"
+		}
+		fmt.Fprintf(stdout, "no MCP servers: %s\n", where)
 		return 0
 	}
 
