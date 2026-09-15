@@ -93,6 +93,7 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/resume", s.resume)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/steer", s.steer)
 	s.mux.HandleFunc("POST /api/jobs/{jobId}/cancel", s.cancel)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/register", s.register)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/doctor", s.doctor)
@@ -336,6 +337,35 @@ func (s *server) resume(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusAccepted, jobResponse{id})
+}
+
+// steerResponse is what a steer answers with: the job that carries the
+// session, and the run it continues — the same id the caller passed, said
+// back so a client that fired the request off a list can tell which row
+// to watch.
+type steerResponse struct {
+	JobID JobID  `json:"jobId"`
+	RunID string `json:"runId"`
+}
+
+func (s *server) steer(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if strings.TrimSpace(body.Text) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "text is required")
+		return
+	}
+	runID := r.PathValue("runId")
+	id, err := s.svc.Steer(r.Context(), r.PathValue("id"), runID, body.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusAccepted, steerResponse{JobID: id, RunID: runID})
 }
 
 func (s *server) cancel(w http.ResponseWriter, r *http.Request) {

@@ -60,6 +60,8 @@ type fake struct {
 	retro        *RetroReport
 	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
+	gotSteer     string
+	steerErr     error // when set, Steer refuses with it
 	gotCancelled JobID
 
 	// Webhook plumbing: the reason TriageIfIdle gives for starting
@@ -348,6 +350,19 @@ func (f *fake) Resume(_ context.Context, wsID, runID, answer string) (JobID, err
 	f.mu.Lock()
 	f.gotAnswer = answer
 	f.mu.Unlock()
+	return knownJob, nil
+}
+
+func (f *fake) Steer(_ context.Context, wsID, runID, text string) (JobID, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.steerErr != nil {
+		return "", f.steerErr
+	}
+	f.gotSteer = text
 	return knownJob, nil
 }
 

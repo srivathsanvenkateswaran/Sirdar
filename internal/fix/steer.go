@@ -22,6 +22,7 @@ type SteerResult struct {
 	RunID  string
 	State  store.State
 	Report Report
+	Digest note.DigestRow
 
 	// Commit is the head of the fix branch after the steer. Amended says
 	// it is a new sha: the session changed the tree and the run's commit
@@ -137,7 +138,7 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text string) (SteerResu
 	if err != nil {
 		return res, err
 	}
-	res.State = out.State
+	res.State, res.Digest = out.State, out.Digest
 
 	after, snapErr := takeSnapshot(ctx, cfg.Root, work.dir)
 	if snapErr != nil {

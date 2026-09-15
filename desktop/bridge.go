@@ -156,5 +156,12 @@ func (b *Bridge) Resume(ws, runId, answer string) (string, error) {
 	return string(id), err
 }
 
+// Steer continues a finished run with a follow-up instruction, on the
+// same run.
+func (b *Bridge) Steer(ws, runId, text string) (string, error) {
+	id, err := b.svc.Steer(context.Background(), ws, runId, text)
+	return string(id), err
+}
+
 // Cancel stops a job this process started.
 func (b *Bridge) Cancel(jobId string) error { return b.svc.Cancel(app.JobID(jobId)) }

@@ -54,6 +54,7 @@ commands:
   eval        replay the golden bundles and score the notes they produce
   golden      manage the golden set (add, list)
   resume      continue a blocked or interrupted run
+  steer       give a finished run a follow-up instruction; the same run continues
   runs        list runs and states
   register    print the register
   serve       serve the web UI and API on loopback
