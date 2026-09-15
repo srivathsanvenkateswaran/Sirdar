@@ -1657,6 +1657,20 @@ func TestRCAWithSubdirectoryPatternsFilesBothNotesAndUpdatesTriage(t *testing.T)
 	if !strings.Contains(triageNote, "status: resolved") {
 		t.Fatalf("triage note inside Triage/ was not updated:\n%s", triageNote)
 	}
+	// The body's links were written at triage time from the triage
+	// title's slug; the rca retitled the issue and filed under its own.
+	// Both halves of the note have to point at the notes that exist.
+	for _, want := range []string{
+		"RCA/OMNI-1 RCA export-times-out-on-large-orders",
+		"Resolutions/OMNI-1 RES stream-the-csv-export",
+	} {
+		if strings.Count(triageNote, want) < 2 {
+			t.Errorf("triage note does not carry %q in both its frontmatter and its body:\n%s", want, triageNote)
+		}
+	}
+	if strings.Contains(triageNote, "RCA export-fails-for-large-orders") {
+		t.Errorf("a link predicted at triage time survived in the body:\n%s", triageNote)
+	}
 
 	rows, err := store.ReadRegister(cfg.Root)
 	if err != nil {

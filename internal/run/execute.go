@@ -1218,16 +1218,24 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		return note.DigestRow{}, err
 	}
 
-	// The triage note is now resolved and links to both new notes.
+	// The triage note is now resolved and links to both new notes — in
+	// its frontmatter and in its body, which until now kept the names the
+	// triage run predicted from its own title. An rca that retitles the
+	// issue files under a different slug, and the body's links then
+	// pointed at notes nobody wrote while the frontmatter was right.
 	links := map[string]string{
 		"rca":        wikiLink(meta.Links.RCA),
 		"resolution": wikiLink(meta.Links.Resolution),
+	}
+	relinks := []note.Relink{
+		{Pattern: cfg.Notes.Filenames.RCA, Key: key, Stem: meta.Links.RCA},
+		{Pattern: cfg.Notes.Filenames.Resolution, Key: key, Stem: meta.Links.Resolution},
 	}
 	for _, path := range []string{p.triageNotePath, p.triageNoteCopy} {
 		if path == "" {
 			continue
 		}
-		if err := note.UpdateTriageStatus(path, "resolved", links); err != nil {
+		if err := note.UpdateTriageStatus(path, "resolved", links, relinks...); err != nil {
 			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf("triage note %s was not updated: %v", path, err))
 		}
 	}
