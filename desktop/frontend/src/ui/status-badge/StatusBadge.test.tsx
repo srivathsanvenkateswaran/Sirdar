@@ -1,6 +1,7 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
-import StatusBadge, { PriorityBadge, STATUS_WORDS, type SdStatus } from './index'
+import StatusBadge, { PriorityBadge, STATE_WORDS, stateWord, type SdStatus } from './index'
+import { STATE_WORDS as GLYPH_WORDS } from '../state-glyph'
 
 const EVERY: SdStatus[] = [
   'queued',
@@ -8,6 +9,7 @@ const EVERY: SdStatus[] = [
   'running',
   'blocked',
   'completed',
+  'done',
   'failed',
   'over_budget',
 ]
@@ -17,17 +19,31 @@ describe('StatusBadge', () => {
     const { container } = render(<StatusBadge status={status} />)
     const badge = container.querySelector('.sd-badge')
     expect(badge).toHaveAttribute('data-status', status)
-    expect(badge).toHaveTextContent(STATUS_WORDS[status])
+    expect(badge).toHaveTextContent(STATE_WORDS[status])
   })
 
-  it('says what blocked means rather than saying blocked', () => {
-    render(<StatusBadge status="blocked" />)
-    expect(screen.getByText('Needs input')).toBeInTheDocument()
+  it('spells every word lowercase, the way the mocks do on every screen', () => {
+    for (const word of Object.values(STATE_WORDS)) expect(word).toBe(word.toLowerCase())
+    expect(STATE_WORDS.over_budget).toBe('over budget')
   })
 
-  it('takes a word the CLI reports under another name', () => {
-    render(<StatusBadge status="completed">Triaged</StatusBadge>)
-    expect(screen.getByText('Triaged')).toBeInTheDocument()
+  it('shares its words with the state glyph, so a pill and a card footer never disagree', () => {
+    expect(GLYPH_WORDS).toBe(STATE_WORDS)
+  })
+
+  it('keeps the word when a screen adds what the state means there', () => {
+    render(<StatusBadge status="blocked" detail="waiting on you" />)
+    expect(screen.getByText('blocked · waiting on you')).toBeInTheDocument()
+  })
+
+  it('takes a translation of the word', () => {
+    render(<StatusBadge status="completed">تم</StatusBadge>)
+    expect(screen.getByText('تم')).toBeInTheDocument()
+  })
+
+  it('gives a state off the wire its word, and an unknown one back as it came', () => {
+    expect(stateWord('over_budget')).toBe('over budget')
+    expect(stateWord('cancelled')).toBe('cancelled')
   })
 
   it('renders an Arabic word without losing the hue', () => {

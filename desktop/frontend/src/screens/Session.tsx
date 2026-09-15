@@ -50,27 +50,6 @@ const LIVE = new Set(['preparing', 'running'])
  */
 const TERMINAL = new Set(['completed', 'failed', 'over_budget'])
 
-/** The state's word on this screen, in the mocks' vocabulary. */
-export function stateWord(status: string): string {
-  switch (status) {
-    case 'preparing':
-    case 'queued':
-      return 'queued'
-    case 'running':
-      return 'running'
-    case 'blocked':
-      return 'blocked · waiting on you'
-    case 'completed':
-      return 'completed'
-    case 'failed':
-      return 'failed'
-    case 'over_budget':
-      return 'over budget'
-    default:
-      return status
-  }
-}
-
 /** Keys typed into a field belong to that field, not to the window. */
 function isTyping(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null
@@ -438,7 +417,11 @@ export default function Session(props: {
       <header className="session-topbar">
         <h1 className="session-key">{detail.key}</h1>
         <KindChip kind={detail.kind} />
-        <StatusBadge status={detail.status as SdStatus}>{stateWord(detail.status)}</StatusBadge>
+        <StatusBadge
+          status={detail.status as SdStatus}
+          // On this screen the reader is the one being waited on.
+          detail={detail.status === 'blocked' ? 'waiting on you' : undefined}
+        />
         <span className="session-title" title={title} dir="auto">
           {title ?? ''}
         </span>

@@ -31,8 +31,8 @@ describe('StateGlyph', () => {
     expect(container.querySelector('.sd-state__clock')).toBeNull()
   })
 
-  it('takes another word for a state the CLI names differently', () => {
-    render(<StateGlyph state="blocked" word="needs input" />)
-    expect(screen.getByText('needs input')).toBeInTheDocument()
+  it('takes a translation of the word', () => {
+    render(<StateGlyph state="blocked" word="بانتظار ردّك" />)
+    expect(screen.getByText('بانتظار ردّك')).toBeInTheDocument()
   })
 })
