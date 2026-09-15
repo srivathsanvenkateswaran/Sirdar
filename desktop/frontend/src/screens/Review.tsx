@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RunDetail as RunDetailData, RunDiff, RunEvent, Ticket, Transport } from '../api/types'
 import { elapsed, type IndexedEvent } from '../lib/events'
-import { costOrUnknown } from '../lib/format'
+import { costOrUnknown, reasonOf } from '../lib/format'
 import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand } from '../lib/review'
 import Button from '../ui/button'
 import DiffView, { hunkKey, parsePatch, type DiffMode, type HunkDecision } from '../ui/diff-view'
@@ -126,7 +126,7 @@ export default function Review({
       .catch((err: unknown) => {
         if (cancelled) return
         setDiff(null)
-        setDiffError(err instanceof Error ? err.message : String(err))
+        setDiffError(reasonOf(err))
       })
       .finally(() => {
         if (!cancelled) setDiffLoading(false)
@@ -174,7 +174,7 @@ export default function Review({
         if (!cancelled) setDetail(d)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) setLoadError(reasonOf(err))
       })
 
     transport
@@ -273,7 +273,7 @@ export default function Review({
           current && next.files.some((f) => f.path === current) ? current : next.files[0]?.path ?? '',
         )
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = reasonOf(err)
         setDropError(message)
         // A stale etag means the change moved under this screen; read it
         // again so the next drop names the hunk that is really there.

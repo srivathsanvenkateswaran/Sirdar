@@ -9,11 +9,11 @@ import {
 } from 'react'
 import type { FixStart, NoteKind, RunDetail, RunDiff, Transport } from '../api/types'
 import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
-import { costOrUnknown } from '../lib/format'
+import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import BundleView from '../components/run/BundleView'
-import ChangesPane, { reasonOf } from '../components/run/ChangesPane'
+import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../components/run/Composer'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
@@ -142,7 +142,7 @@ export default function Session(props: {
         if (!cancelled) setDetail(d)
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) setLoadError(reasonOf(err))
       })
 
     transport
@@ -268,7 +268,7 @@ export default function Session(props: {
         noteAnswer(text)
         setSent((n) => n + 1)
       } catch (err: unknown) {
-        setActionError(reasonOf(err))
+        setActionError(withoutCode(err))
       } finally {
         setPending('')
       }
@@ -299,12 +299,11 @@ export default function Session(props: {
           ]
         })
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
         // The run's own state refuses it — 409 — or the provider cannot
         // continue at all. Either way the button says so and stays down
         // until the run moves.
-        if (/^conflict:|refused/i.test(message)) setSteerRefusal(reasonOf(err))
-        else setActionError(reasonOf(err))
+        if (/^conflict:|refused/i.test(reasonOf(err))) setSteerRefusal(withoutCode(err))
+        else setActionError(withoutCode(err))
       } finally {
         setPending('')
       }
@@ -319,7 +318,7 @@ export default function Session(props: {
     try {
       await onStartFix(detail.key, { acceptDeviation: true })
     } catch (err: unknown) {
-      setActionError(reasonOf(err))
+      setActionError(withoutCode(err))
     } finally {
       setPending('')
     }
@@ -333,7 +332,7 @@ export default function Session(props: {
       await transport.cancel(jobId)
       clearRunJob(runId)
     } catch (err: unknown) {
-      setActionError(reasonOf(err))
+      setActionError(withoutCode(err))
     } finally {
       setPending('')
     }

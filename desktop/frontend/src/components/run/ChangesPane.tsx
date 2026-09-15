@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FixInfo, RunDiff, Transport } from '../../api/types'
-import { OUTCOME_WORDS, type Check } from '../../lib/review'
+import { reasonOf } from '../../lib/format'
+import { OUTCOME_WORDS, type RunCheck } from '../../lib/review'
 import Button from '../../ui/button'
 import DiffView, { hunkKey, type HunkDecision } from '../../ui/diff-view'
 import FixPanel from './FixPanel'
 
-/** Strips the HTTP code the transport prefixes, so the reader gets the reason alone. */
-export function reasonOf(err: unknown): string {
-  const text = err instanceof Error ? err.message : String(err)
-  return text.replace(/^(?:conflict|not_found|no_diff|forbidden|internal|unsupported):\s*/, '')
+/** The reason without the code the transport prefixes it with, so the reader gets the sentence alone. */
+export function withoutCode(err: unknown): string {
+  return reasonOf(err).replace(/^(?:conflict|not_found|no_diff|forbidden|internal|unsupported):\s*/, '')
 }
 
 /**
@@ -38,7 +38,7 @@ export default function ChangesPane({
   workspaceId: string
   runId: string
   /** The build, vet and test commands read off the run's events. */
-  checks: Check[]
+  checks: RunCheck[]
   /** Where the commit went, off the run's state, for the deviation gate. */
   fix?: FixInfo
   /** Bumped when the run finishes, so the diff written at the end is read. */
@@ -71,7 +71,7 @@ export default function ChangesPane({
     } catch (err: unknown) {
       if (mine !== generation.current) return
       setDiff(null)
-      setLoadError(reasonOf(err))
+      setLoadError(withoutCode(err))
       onLoaded?.(null)
     } finally {
       if (mine === generation.current) setLoading(false)
@@ -112,7 +112,7 @@ export default function ChangesPane({
         // against the old numbering would name the wrong hunk.
         setDecisions({})
       } catch (err: unknown) {
-        setRefusal(`${path} hunk ${index + 1}: ${reasonOf(err)}`)
+        setRefusal(`${path} hunk ${index + 1}: ${withoutCode(err)}`)
         void load()
       } finally {
         setDropping(undefined)

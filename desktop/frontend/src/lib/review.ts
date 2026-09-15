@@ -28,8 +28,12 @@ export interface FixReport {
   deviationFromNote: string
 }
 
-/** One check as the rail lists it: the command, its verdict, and what it said. */
-export interface Check {
+/**
+ * One check as the rail lists it: the command, its verdict, and what it
+ * said. `RunCheck`, because `api/types` already has a `Check` — the doctor's
+ * kind — and the two are not the same thing.
+ */
+export interface RunCheck {
   command: string
   /** `ok` and `failed` are read off the result; `ran` is a command whose outcome the log does not say. */
   outcome: 'ok' | 'failed' | 'ran'
@@ -109,7 +113,7 @@ const NONE_FAILED = /\b(0|no|zero|without)\s+(fail|failed|failures?|errors?)\b/i
 const OK = /\b(ok|pass|passed|passing|passes|success|successful|succeeded|green|clean|compiled|builds?)\b/i
 
 /** Reads a verdict out of the agent's one-line result for a command. */
-export function outcomeOf(result: string): Check['outcome'] {
+export function outcomeOf(result: string): RunCheck['outcome'] {
   if (!result.trim()) return 'ran'
   const text = result.replace(NONE_FAILED, ' ')
   if (FAILED.test(text)) return 'failed'
@@ -144,7 +148,7 @@ function finishedInError(event: RunEvent): boolean {
  * when the provider flagged the result as an error, and `ran` otherwise,
  * because a passing exit is not something the log records.
  */
-export function checksFromEvents(events: RunEvent[]): Check[] {
+export function checksFromEvents(events: RunEvent[]): RunCheck[] {
   const report = fixReport(events)
   if (report && report.testsRun.length > 0) {
     return report.testsRun.map((t) => ({
@@ -154,7 +158,7 @@ export function checksFromEvents(events: RunEvent[]): Check[] {
     }))
   }
 
-  const checks: Check[] = []
+  const checks: RunCheck[] = []
   for (let i = 0; i < events.length; i += 1) {
     const event = events[i]
     if (event.kind !== 'tool_started') continue
@@ -162,7 +166,7 @@ export function checksFromEvents(events: RunEvent[]): Check[] {
     if (!/^(bash|shell|commandexecution|command_execution)$/i.test(tool)) continue
     const command = inputSummary(event)
     if (!CHECK_COMMAND.test(command)) continue
-    let outcome: Check['outcome'] = 'ran'
+    let outcome: RunCheck['outcome'] = 'ran'
     let result = ''
     for (let j = i + 1; j < events.length; j += 1) {
       const next = events[j]
@@ -187,7 +191,7 @@ export function checksFromEvents(events: RunEvent[]): Check[] {
 
 /** A test run's verdict as read off its output: the count and the time, when the runner said them. */
 export interface Judged {
-  outcome: Check['outcome']
+  outcome: RunCheck['outcome']
   /** "12 passed · 1.2s", the failing line, or '' when the log has no text. */
   result: string
   tests?: number
@@ -403,7 +407,7 @@ export function describeTests(
 }
 
 /** The word the rail prints before a check, so the verdict is never the colour alone. */
-export const OUTCOME_WORDS: Record<Check['outcome'], string> = {
+export const OUTCOME_WORDS: Record<RunCheck['outcome'], string> = {
   ok: 'ok',
   failed: 'failed',
   ran: 'ran',

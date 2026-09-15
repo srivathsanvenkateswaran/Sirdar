@@ -10,6 +10,15 @@ const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
+/**
+ * The words a failure is shown by. A rejection is an `Error` almost always,
+ * but a transport can reject with a string and a thrown literal is not
+ * unheard of, and either would read as `[object Object]` in a sentence.
+ */
+export function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
 /** Parses an RFC 3339 timestamp; returns NaN for empty or unparseable input. */
 export function parseTime(value: string | undefined): number {
   if (!value) return Number.NaN

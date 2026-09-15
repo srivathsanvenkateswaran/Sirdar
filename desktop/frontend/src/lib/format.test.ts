@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { duration, elapsedSince, parseKeys, percent, relativeTime, tokens, usd } from './format'
+import { duration, elapsedSince, parseKeys, percent, relativeTime, tokens, usd, reasonOf } from './format'
 
 const NOW = Date.parse('2026-09-10T12:00:00Z')
 
@@ -71,5 +71,13 @@ describe('parseKeys', () => {
 
   it('leaves the key text exactly as typed', () => {
     expect(parseKeys('omni-1')).toEqual(['omni-1'])
+  })
+})
+
+describe('reasonOf', () => {
+  it('reads the message off an Error and shows anything else as it came', () => {
+    expect(reasonOf(new Error('conflict: the change moved'))).toBe('conflict: the change moved')
+    expect(reasonOf('offline')).toBe('offline')
+    expect(reasonOf(42)).toBe('42')
   })
 })
