@@ -266,6 +266,9 @@ function Shell(): JSX.Element {
     default:
       screen = (
         <Board
+          transport={state.transport}
+          workspaceId={workspaceId}
+          provider={currentWorkspace?.provider}
           tickets={tickets}
           runs={runs}
           queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}

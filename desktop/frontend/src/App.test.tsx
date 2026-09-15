@@ -57,7 +57,7 @@ describe('Board', () => {
     const { container } = mount(seeded())
 
     await screen.findByRole('heading', { name: /Queue/ })
-    for (const name of ['Queue', 'Gathering', 'Needs input', 'Triaged', 'Done', 'Failed']) {
+    for (const name of ['Queue', 'Gathering', 'Blocked', 'Triaged', 'Done', 'Failed']) {
       expect(screen.getByRole('heading', { name: new RegExp(name) })).toBeInTheDocument()
     }
 
@@ -91,17 +91,40 @@ describe('Board', () => {
     expect(s.getState().screen).toEqual({ name: 'run', runId: 'r1' })
   })
 
+  // A queued ticket is drawn as a card like every other, and the one thing a
+  // card does is get clicked; for a ticket with no run behind it that click is
+  // the triage, and the card's name says so.
   it('a queue card starts triage for its own key', async () => {
     const transport = seeded()
     const { container } = mount(transport)
     await waitFor(() => expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument())
 
-    fireEvent.click(within(lane(container, 'queue')).getByRole('button', { name: 'Triage' }))
+    fireEvent.click(
+      within(lane(container, 'queue')).getByRole('button', { name: /Start triage of OMNI-9/ }),
+    )
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
         { ws: 'ws1', keys: ['OMNI-9'], opts: undefined },
       ]),
     )
+  })
+
+  it('moves a card between lanes as the watcher reports the run', async () => {
+    const transport = seeded()
+    const { container } = mount(transport)
+    await waitFor(() => expect(within(lane(container, 'gathering')).getByText('OMNI-1')).toBeInTheDocument())
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r1', key: 'OMNI-1', status: 'blocked', updatedAt: '2026-09-10T09:06:00Z' }),
+    })
+
+    await waitFor(() =>
+      expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument(),
+    )
+    expect(within(lane(container, 'gathering')).queryByRole('button', { name: /OMNI-1/ })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Blocked (2)' })).toBeInTheDocument()
   })
 
   it('filters cards by key or title, and `/` puts the cursor in the box', async () => {
@@ -469,15 +492,16 @@ describe('Inbound deliveries', () => {
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
 
-    const panel = screen.getByRole('region', { name: 'Inbound' })
+    const panel = screen.getByRole('region', { name: 'Landed today' })
     expect(within(panel).getByText(/No webhook delivery has arrived/)).toBeInTheDocument()
 
     transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-9', outcome: 'started' })
 
-    await waitFor(() =>
-      expect(within(panel).getByText('started a triage')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(within(panel).getByText('started')).toBeInTheDocument())
+    // The row is titled by the ticket, keyed in the meta line, and toned live.
+    expect(within(panel).getByText('Statement export times out')).toBeInTheDocument()
     expect(within(panel).getByText('OMNI-9')).toBeInTheDocument()
+    expect(panel.querySelector('.sd-item')).toHaveAttribute('data-tone', 'live')
     expect(screen.getByText(/Webhook from jira .* started a triage\./)).toBeInTheDocument()
   })
 })

@@ -79,7 +79,9 @@ radius and the 14px block padding are the mock's; one component uses each.
 ## Accessibility
 
 Native `button` with `aria-label` of `"<key>: <title>"`, because the visible
-title is clamped and the key alone does not say what the run is about. State
+title is clamped and the key alone does not say what the run is about; `label`
+overrides it for the one card whose click is not an open — the board's queued
+ticket, which starts a triage, and says so. State
 is carried by the glyph's word, kind by the chip's word, provider by the
 mark's `aria-label`; none of the three is colour alone. Contrast: title
 `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3` **5.25:1**, the state
@@ -87,6 +89,11 @@ hues **4.84:1** or more (blocked, the tightest) in light. Reduced motion:
 only the hover border transitions.
 
 ## Changelog
+
+### 2026-09-15 (Board build)
+`label` joins the props: an accessible-name override for a card whose click
+does something other than open a session. The board draws a queued ticket
+with it, named "Start triage of <key>: <title>".
 
 ### 2026-09-15 (Jira-shaped)
 Rebuilt to the Board mock's `.tcard`: sheet fill on a `--sd-rule` hairline at
