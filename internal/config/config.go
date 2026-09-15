@@ -2,6 +2,7 @@
 package config
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -265,10 +266,38 @@ type CursorConfig struct {
 // Effort is the CLI's reasoning tier: low, medium or high. The model ids
 // carry a tier of their own (gemini-3.6-flash-low) and naming both is
 // accepted.
+//
+// AcknowledgeTerms is the switch that turns the provider back on. It is
+// off, and the provider with it: Google's Antigravity terms do not allow
+// driving the CLI from another program, and an account that does it can be
+// banned. Setting it is at the operator's own risk and is not recommended.
 type AgyConfig struct {
-	Path   string `yaml:"path,omitempty"`
-	Model  string `yaml:"model,omitempty"`
-	Effort string `yaml:"effort,omitempty"`
+	Path             string `yaml:"path,omitempty"`
+	Model            string `yaml:"model,omitempty"`
+	Effort           string `yaml:"effort,omitempty"`
+	AcknowledgeTerms bool   `yaml:"acknowledgeTerms,omitempty"`
+}
+
+// ErrAgyDisabled is what every path that would start an Antigravity
+// session returns while the acknowledgement is absent: config load,
+// `--provider agy` on triage and rca, and the provider wiring both shells
+// share. It is a sentinel so `sirdar doctor` can tell this refusal from a
+// broken configuration and report the disablement as a row instead of
+// failing the load.
+var ErrAgyDisabled = errors.New("provider agy is disabled: Google's Antigravity terms do not allow " +
+	"driving the CLI from another program; choose claude, codex, openai, acp, qwen or cursor")
+
+// AgyAcknowledged reports whether the workspace has accepted the risk of
+// running the Antigravity CLI from Sirdar anyway.
+func (c *Config) AgyAcknowledged() bool {
+	return c.Agy != nil && c.Agy.AcknowledgeTerms
+}
+
+// AgyDisabled reports whether this workspace names the disabled provider
+// without the acknowledgement — the state `sirdar doctor` prints a row
+// for and every start refuses.
+func (c *Config) AgyDisabled() bool {
+	return c.Provider == "agy" && !c.AgyAcknowledged()
 }
 
 // agyEfforts are the values `agy --effort` accepts.
@@ -560,6 +589,35 @@ type Config struct {
 
 // Load reads <root>/.sirdar/config.yaml, applies defaults, and validates the result.
 func Load(root string) (*Config, error) {
+	c, err := decode(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Validate(); err != nil {
+		return nil, err
+	}
+	return c, nil
+}
+
+// LoadDoctor loads a workspace the way Load does but keeps a configuration
+// whose only fault is a disabled provider. `sirdar doctor` is the one
+// command that has to survive that refusal: an operator whose workspace
+// still says `provider: agy` should read the row saying so in the report
+// they ran to find out what is wrong, rather than a load error in place of
+// the whole report.
+func LoadDoctor(root string) (*Config, error) {
+	c, err := decode(root)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.Validate(); err != nil && !errors.Is(err, ErrAgyDisabled) {
+		return nil, err
+	}
+	return c, nil
+}
+
+// decode reads and defaults the file without validating it.
+func decode(root string) (*Config, error) {
 	path := filepath.Join(root, ".sirdar", "config.yaml")
 	f, err := os.Open(path)
 	if err != nil {
@@ -576,9 +634,6 @@ func Load(root string) (*Config, error) {
 
 	c.Root = root
 	applyDefaults(&c)
-	if err := c.Validate(); err != nil {
-		return nil, err
-	}
 	return &c, nil
 }
 
@@ -1076,6 +1131,16 @@ func validateCursor(c *Config) error {
 // worth catching at load time rather than as an argument-parse failure
 // halfway through a triage sweep.
 func validateAgy(c *Config) error {
+	// The provider is off before anything else about it is judged.
+	// Google's Antigravity terms do not allow a program to drive the CLI,
+	// and an account caught doing it can be banned, so a workspace that
+	// names the provider is refused at load rather than at the first run.
+	// agy.acknowledgeTerms: true takes the refusal off, at the operator's
+	// own risk; it is not recommended and nothing else in Sirdar treats
+	// the provider as supported once it is set.
+	if c.AgyDisabled() {
+		return ErrAgyDisabled
+	}
 	// billing: api has nothing to mean here. It is the switch that tells
 	// the Claude adapter to leave ANTHROPIC_API_KEY and the gateway
 	// variables in the agent's environment; the agy adapter strips

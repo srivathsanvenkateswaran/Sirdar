@@ -20,6 +20,18 @@ const exitUsage = 2
 // loads its configuration. The bool is false when the caller should give
 // up; the message has already been written to stderr.
 func loadWorkspace(stderr io.Writer) (*config.Config, bool) {
+	return loadWorkspaceWith(config.Load, stderr)
+}
+
+// loadDoctorWorkspace is loadWorkspace for `sirdar doctor` alone: a
+// configuration whose only fault is a disabled provider still loads, so
+// the report can carry a row saying the provider is disabled instead of
+// the command answering with a load error and no report at all.
+func loadDoctorWorkspace(stderr io.Writer) (*config.Config, bool) {
+	return loadWorkspaceWith(config.LoadDoctor, stderr)
+}
+
+func loadWorkspaceWith(load func(string) (*config.Config, error), stderr io.Writer) (*config.Config, bool) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
@@ -30,7 +42,7 @@ func loadWorkspace(stderr io.Writer) (*config.Config, bool) {
 		fmt.Fprintf(stderr, "sirdar: no .sirdar/config.yaml found in %s or its parents; run 'sirdar init'\n", cwd)
 		return nil, false
 	}
-	cfg, err := config.Load(root)
+	cfg, err := load(root)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return nil, false

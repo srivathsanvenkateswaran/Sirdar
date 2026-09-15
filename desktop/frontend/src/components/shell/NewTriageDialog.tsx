@@ -86,7 +86,8 @@ export default function NewTriageDialog(props: {
               <option value="acp">acp</option>
               <option value="qwen">qwen</option>
               <option value="cursor">cursor</option>
-              <option value="agy">agy</option>
+              {/* agy is disabled: Google's Antigravity terms do not allow driving
+                  the CLI from another program, and every start refuses it. */}
             </select>
           </div>
 

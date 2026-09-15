@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai | acp | qwen | cursor | agy
+provider: claude            # claude | codex | openai | acp | qwen | cursor (agy is disabled)
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -32,13 +32,17 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 #   model: qwen3-coder-plus
 #   apiKey: keychain:dashscope-api-key        # a local server still needs one named
-# provider: agy drives Google's Antigravity CLI against the Google account it
-# is already signed in to. Read it before choosing it: the CLI gives Sirdar no
-# way to mediate a tool call, so the read-only guarantee is its own plan mode
-# rather than anything Sirdar imposes, mcp.workspaceOnly cannot be enforced,
-# there is no cost on the wire so budget.maxUsd never bites, and sirdar fix
-# is refused. docs/config.md has the whole list.
+# provider: agy is DISABLED. Google's Antigravity terms do not allow driving
+# the CLI from another program, and an account that does it can be banned, so
+# config load refuses provider: agy and so does --provider agy. The adapter is
+# kept in the tree for reference. acknowledgeTerms: true takes the refusal off
+# at your own risk; it is not recommended. Everything else about the provider
+# still holds: the CLI gives Sirdar no way to mediate a tool call,
+# mcp.workspaceOnly cannot be enforced, there is no cost on the wire so
+# budget.maxUsd never bites, and sirdar fix is refused. docs/config.md has the
+# whole list.
 # agy:
+#   acknowledgeTerms: false                   # true runs it anyway, at your own risk
 #   path: agy                                 # optional: where the CLI lives
 #   model: gemini-3.6-flash-low               # agy models lists what the account has
 #   effort: low                               # low | medium | high

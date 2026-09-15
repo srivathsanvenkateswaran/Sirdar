@@ -99,8 +99,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates. Each row is `[OK]`, `[!!]` for an advisory warning, or `[XX]` for a failure; exits 1 only on a failure |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
@@ -265,8 +265,8 @@ branch to cut from and target.
 
 ## Models
 
-`provider: claude`, `provider: codex`, `provider: qwen` and `provider: agy` spawn the Claude
-Code, Codex, Qwen Code or Antigravity CLI you already have installed and signed in, so the work
+`provider: claude`, `provider: codex` and `provider: qwen` spawn the Claude Code, Codex or Qwen
+Code CLI you already have installed and signed in, so the work
 counts against the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop itself against
 any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together, DeepSeek,
 Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own read-only tool
@@ -279,6 +279,14 @@ OpenAI-compatible endpoint, so one `qwen:` block gets you a vendor model, an agg
 server on your own machine without Sirdar owning the loop. What you give up against Claude Code
 is the cost signal: Qwen Code reports no spend, so `budget.maxUsd` never bites and a run is
 bounded by turns and wall-clock time instead.
+
+**`provider: agy` is disabled.** Google's Antigravity terms do not allow driving the CLI from
+another program, and an account that does it can be banned, so config load and `--provider agy`
+both refuse it: `provider agy is disabled: Google's Antigravity terms do not allow driving the
+CLI from another program; choose claude, codex, openai, acp, qwen or cursor`. The adapter is
+kept in the tree for reference, `agy.acknowledgeTerms: true` runs it anyway at your own risk
+(not recommended), and `sirdar doctor` reports `agy — disabled (Antigravity terms)` until it is
+set. The rest of this paragraph describes what the adapter does when it is.
 
 `provider: agy` drives Google's Antigravity CLI against the Google account it is already signed
 in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is the one provider
