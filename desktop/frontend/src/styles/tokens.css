@@ -13,12 +13,13 @@
  * asserted in `src/styles.contrast.test.ts`. A token that cannot state its
  * ratio does not ship.
  *
- * Nothing here is downloaded. The three families the design language names —
- * Newsreader, Inter, JetBrains Mono — lead each stack so that the day the
- * woff2 files are self-hosted they are picked up without a token change; until
- * then every stack falls through to a face the operating system already has,
- * which is what keeps the desktop app working offline and the landing page
- * free of a third-party request.
+ * The four families the screens round names — Figtree, Inter, JetBrains
+ * Mono, Newsreader — lead each stack. The app's `index.html` and the landing
+ * page both link them from Google Fonts, the way the reviewed mocks do; the
+ * repository has no fonts folder, so nothing is self-hosted yet. Every stack
+ * still falls through to a face the operating system already has, which is
+ * what keeps the desktop app usable offline: the day the woff2 files are
+ * self-hosted they are picked up without a token change.
  */
 
 :root {
@@ -120,19 +121,27 @@
 
   /* ---------- type ---------- */
   --sd-font-display: Newsreader, Georgia, "Noto Naskh Arabic", serif;
-  --sd-font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+  --sd-font-ui: Figtree, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
     "IBM Plex Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", "Segoe UI Arabic",
     system-ui, sans-serif;
   --sd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
     Consolas, "Liberation Mono", "Noto Sans Arabic", monospace;
 
-  /* The app column of the type ladder in 00-design-language.md section 4. */
-  --sd-text-display-m: 1.5rem;
-  --sd-text-title: 1.125rem;
-  --sd-text-body-l: 0.9375rem;
-  --sd-text-body: 0.8125rem;
-  --sd-text-meta: 0.71875rem;
-  --sd-text-micro: 0.65625rem;
+  /*
+   * The app column of the type ladder, re-based on 2026-09-15 to the
+   * reference app's register (docs/design/2026-09-15-screens/README.md,
+   * round 2): a 16px UI face, 14px meta, 12px micro. `--sd-text-ledger` is
+   * the mono ledger size — keys, clocks, costs, event rows — which sits a
+   * half-step under the body so a run id does not out-weigh the title beside
+   * it.
+   */
+  --sd-text-display-m: 2rem;
+  --sd-text-title: 1.375rem;
+  --sd-text-body-l: 1.0625rem;
+  --sd-text-body: 1rem;
+  --sd-text-meta: 0.875rem;
+  --sd-text-micro: 0.75rem;
+  --sd-text-ledger: 0.84375rem;
 
   /* The landing column of the same ladder. */
   --sd-text-display-xl: 4.5rem;
@@ -157,6 +166,9 @@
   --sd-radius-lg: 20px;
   --sd-radius-band: 40px;
   --sd-radius-pill: 999px;
+  /* The content sheet's corner. Larger than a panel's, smaller than a landing
+     card's: the sheet is the one box the whole app sits in. */
+  --sd-radius-sheet: 16px;
 
   /* ---------- elevation ---------- */
   /*
@@ -185,6 +197,15 @@
   --sd-measure-wide: 1200px;
   --sd-measure-prose: 68ch;
   --sd-gutter: 12px;
+  /*
+   * The shell's fixed measures, from the reviewed mocks. A control is 40 tall
+   * wherever it is (button, select, search well, segmented track); the sidebar
+   * is 248 wide with 44-tall rows. Two components read each of these, which
+   * is what makes them tokens rather than constants.
+   */
+  --sd-control-h: 40px;
+  --sd-sidebar-w: 248px;
+  --sd-nav-row-h: 44px;
 
   color-scheme: light;
 }
