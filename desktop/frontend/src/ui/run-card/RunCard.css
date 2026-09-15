@@ -18,11 +18,19 @@
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-body);
   text-align: start;
-  cursor: pointer;
+  text-decoration: none;
   transition: border-color var(--sd-dur-1) ease;
 }
 
-.sd-run-card:hover {
+/* A button or a link is the card that does something on click; a plain box
+   is one that does not, and its cursor says so. */
+button.sd-run-card,
+a.sd-run-card {
+  cursor: pointer;
+}
+
+button.sd-run-card:hover,
+a.sd-run-card:hover {
   border-color: var(--sd-rule-strong);
 }
 
@@ -56,8 +64,18 @@
   margin-block-start: var(--sd-space-3);
 }
 
+/* The state is the side that gives way when the card is narrow: the key and
+   the mark keep their width and the state's word is cut with an ellipsis. */
+.sd-run-card__state {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .sd-run-card__who {
   display: inline-flex;
+  flex-shrink: 0;
   align-items: center;
   gap: var(--sd-space-2);
 }
@@ -68,6 +86,8 @@
   font-weight: 500;
   font-variant-numeric: tabular-nums;
   color: var(--sd-ink-3);
+  /* A key never breaks across lines: it is looked up as one token. */
+  white-space: nowrap;
   /* A key is an identifier: it stays left to right whichever way the prose
      around it runs. */
   unicode-bidi: isolate;
