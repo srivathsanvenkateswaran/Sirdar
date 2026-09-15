@@ -25,6 +25,9 @@ related:
 {{- end}}
 run: {{yq .meta.RunID}}
 provider: {{yq .meta.Provider}}
+{{- if .meta.At}}
+at: {{yq .meta.At}}
+{{- end}}
 ---
 
 # {{.doc.rca.title}}

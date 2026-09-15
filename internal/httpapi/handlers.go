@@ -49,8 +49,10 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key             string `json:"key"`
 		DryRun          bool   `json:"dryRun"`
+		Local           bool   `json:"local"`
 		NoPR            bool   `json:"noPr"`
 		Base            string `json:"base"`
+		At              string `json:"at"`
 		AcceptDeviation bool   `json:"acceptDeviation"`
 		Provider        string `json:"provider"`
 		Model           string `json:"model"`
@@ -67,8 +69,10 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.svc.StartFix(r.Context(), r.PathValue("id"), body.Key, FixOptions{
 		DryRun:          body.DryRun,
+		Local:           body.Local,
 		NoPR:            body.NoPR,
 		Base:            body.Base,
+		At:              body.At,
 		AcceptDeviation: body.AcceptDeviation,
 		Provider:        body.Provider,
 		Model:           body.Model,

@@ -26,7 +26,9 @@ func (s *Service) StartFix(ctx context.Context, wsID, key string, o FixOptions) 
 		res, err := fix.Run(jctx, deps, key, fix.Options{
 			Model:           o.Model,
 			Base:            o.Base,
+			At:              o.At,
 			DryRun:          o.DryRun,
+			Local:           o.Local,
 			NoPR:            o.NoPR,
 			AcceptDeviation: o.AcceptDeviation,
 		})

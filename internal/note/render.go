@@ -22,7 +22,12 @@ type Meta struct {
 	Date, DateReported                                             string // YYYY-MM-DD
 	Priority, Service                                              string
 	RunID, Provider                                                string
-	Links                                                          struct {
+	// At is the commit a retrospective run read the repository at, empty
+	// for an ordinary run. A note written against historical code says so
+	// in its own frontmatter: nothing else in it would tell a reader that
+	// its code references are not about today's tip.
+	At    string
+	Links struct {
 		Triage, RCA, Resolution string // wiki-link targets (file stems)
 	}
 }

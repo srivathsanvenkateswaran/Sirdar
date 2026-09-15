@@ -24,6 +24,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
 )
 
 // Deps is everything a Runner needs from the program around it. Tracker and
@@ -73,6 +74,28 @@ type Options struct {
 	// invocation, for a batch being re-run that the channel has already
 	// heard about.
 	NoNotify bool
+
+	// At runs the session against the repository as it stood at this
+	// commit rather than as it stands now. The run checks the commit out
+	// into a linked worktree of its own under
+	// <root>/.sirdar/worktrees/<run-id> at a detached HEAD, points the
+	// session's cwd and its confinement root at that directory, and takes
+	// it away again when the run ends. The workspace's own .sirdar/ — the
+	// configuration, the playbooks, the note templates — is still read
+	// from the main tree: those are what the operator configured, and a
+	// historical copy of them is not.
+	//
+	// Anything `git rev-parse` accepts will do. What is recorded is the
+	// resolved sha.
+	//
+	// It changes nothing else. A triage at a commit is as read-only as a
+	// triage at HEAD, judged by the same policy and the same disallowed
+	// tools; the main tree's HEAD and index are not touched.
+	At string
+
+	// KeepWorktree leaves the --at worktree on disk after the run, for an
+	// operator who wants to look at what the session was looking at.
+	KeepWorktree bool
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull
@@ -328,6 +351,20 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 	}
 
 	p := &prepared{run: rn, state: state, kind: state.Kind, bundle: bundle}
+	// A blocked --at run kept its worktree, and the resumed session has to
+	// stand where the first one stood. A worktree that is no longer there —
+	// the operator removed it, or the run was kept from an older Sirdar —
+	// leaves the resumed session in the main tree, which is wrong enough to
+	// say so rather than to pretend otherwise.
+	if state.At != "" {
+		path := worktree.Path(r.Config.Root, state.RunID)
+		if worktree.IsWorktree(path) {
+			p.root, p.ownWorktree = path, true
+		} else {
+			p.state.Warnings = append(p.state.Warnings, fmt.Sprintf(
+				"the worktree this run stood in at %s is gone; the resumed session runs against the working tree", state.At))
+		}
+	}
 	if p.kind == store.KindRCA {
 		notePath, err := store.LatestNote(r.Config.Root, state.Key, store.KindTriage)
 		if err != nil {
@@ -348,6 +385,7 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 	p.promptText = text
 
 	out := r.execute(ctx, p, state.Handle, nil)
+	r.releaseWorktree(ctx, p, out.State.Status)
 	return out, nil
 }
 
@@ -387,15 +425,26 @@ func (r *Runner) resumeText(state store.State) (string, error) {
 }
 
 // runOne prepares and then executes a single run.
+//
+// The worktree an --at run stands in is taken away here, on the way out,
+// whichever way the run ended — including a preparation failure, which can
+// happen after the checkout succeeded and the ticket fetch did not.
 func (r *Runner) runOne(ctx context.Context, key string, kind store.Kind, o Options, rca *RCAOptions, pl *pool) (Outcome, error) {
 	p, err := r.prepare(ctx, key, kind, o, rca)
 	if err != nil {
-		return r.prepareFailed(ctx, p, key, kind, err), err
+		out := r.prepareFailed(ctx, p, key, kind, err)
+		r.releaseWorktree(ctx, p, out.State.Status)
+		return out, err
 	}
 	if o.DryRun {
-		return r.finish(ctx, p, store.StatusCompleted, "dry-run", note.DigestRow{}), nil
+		// Nothing ran in it, so nothing is in it to read.
+		out := r.finish(ctx, p, store.StatusCompleted, "dry-run", note.DigestRow{})
+		r.releaseWorktree(ctx, p, out.State.Status)
+		return out, nil
 	}
-	return r.execute(ctx, p, "", pl), nil
+	out := r.execute(ctx, p, "", pl)
+	r.releaseWorktree(ctx, p, out.State.Status)
+	return out, nil
 }
 
 // prepareFailed records a run that never reached the agent. When the run
