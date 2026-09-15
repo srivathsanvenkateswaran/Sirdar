@@ -2,7 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { RegisterRow, RunSummary, Transport } from '../api/types'
 import NoteDots from '../components/register/NoteDots'
 import OutlineChip, { VERDICT_TONES } from '../components/register/OutlineChip'
-import { usd } from '../lib/format'
+import { reasonOf, usd } from '../lib/format'
 import {
   buildLedger,
   confirmedShare,
@@ -174,7 +174,7 @@ export default function Register(props: {
       setRuns(onDisk)
     } catch (err) {
       if (mine !== generation.current) return
-      setError(err instanceof Error ? err.message : String(err))
+      setError(reasonOf(err))
     }
   }, [transport, workspaceId])
 
@@ -229,6 +229,14 @@ export default function Register(props: {
   const perDay = useMemo(() => ledgerPerDay(ledger), [ledger])
   const today = dayOf(new Date().toISOString())
 
+  // The ticket's title, by run, for the key cell's tooltip: the table is
+  // read by key and the title is what the key was about.
+  const titles = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of runs) if (r.title) map.set(r.runId, r.title)
+    return map
+  }, [runs])
+
   const kinds = useMemo(() => uniqueSorted(ledger.map((r) => r.kind)), [ledger])
   const states = useMemo(() => uniqueSorted(ledger.map((r) => r.state)), [ledger])
   const providers = useMemo(() => uniqueSorted(ledger.map((r) => r.provider)), [ledger])
@@ -267,12 +275,12 @@ export default function Register(props: {
               className="register-key register-key--link"
               dir="ltr"
               onClick={() => onOpenRun(r.runId)}
-              title="Open this run"
+              title={titles.get(r.runId) || 'Open this run'}
             >
               {r.key}
             </button>
           ) : (
-            <span className="register-key" dir="ltr">
+            <span className="register-key" dir="ltr" title={titles.get(r.runId)}>
               {r.key}
             </span>
           ),
@@ -309,7 +317,7 @@ export default function Register(props: {
         sortable: true,
       },
     ],
-    [onOpenRun],
+    [onOpenRun, titles],
   )
 
   /** Why a run stopped, under the row of a run that did not finish cleanly. */
