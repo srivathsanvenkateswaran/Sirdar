@@ -3,9 +3,28 @@ import { cleanup, render, screen } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { Quota } from '../api/types'
-import QuotaMeter from './QuotaMeter'
+import QuotaMeter, { formatResetIn, formatSeenAgo } from './QuotaMeter'
 
 afterEach(cleanup)
+
+describe('formatSeenAgo', () => {
+  const now = Date.parse('2026-09-10T12:00:00Z')
+
+  it('reads in the shared relative clock', () => {
+    expect(formatSeenAgo('2026-09-10T11:59:50Z', now)).toBe('seen just now')
+    expect(formatSeenAgo('2026-09-10T11:56:00Z', now)).toBe('seen 4m ago')
+    expect(formatSeenAgo('2026-09-10T09:00:00Z', now)).toBe('seen 3h ago')
+    expect(formatSeenAgo('not a date', now)).toBe('')
+  })
+})
+
+describe('formatResetIn', () => {
+  it('counts down to the minute', () => {
+    const now = Date.parse('2026-09-10T12:00:00Z')
+    expect(formatResetIn('2026-09-10T14:14:00Z', now)).toBe('resets in 2h 14m')
+    expect(formatResetIn('2026-09-10T11:00:00Z', now)).toBe('resets in 0h 0m')
+  })
+})
 
 describe('QuotaMeter', () => {
   it('renders nothing when there is no quota', () => {
