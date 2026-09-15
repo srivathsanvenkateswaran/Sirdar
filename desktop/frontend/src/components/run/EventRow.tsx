@@ -1,14 +1,21 @@
 import type { ReactNode } from 'react'
 import type { RunEvent } from '../../api/types'
 import { classify, offsetLabel, truncate } from '../../lib/events'
+import SdEventRow, { type EventVariant } from '../../ui/event-row'
 import ToolCallRow from './ToolCallRow'
 import PermissionRow from './PermissionRow'
 import UsageRow from './UsageRow'
 
 /**
- * The ledger row every event shares: offset in the left gutter, then the rail
- * with its one-character glyph, then the content. Colour lives on the rail, so
- * the variant is what a denial or an error changes.
+ * The ledger row every event shares, drawn by the library's Event row: offset
+ * in the leading gutter, then the rail with its one-character glyph, then the
+ * content. Colour lives on the rail, so the variant is what a denial or an
+ * error changes.
+ *
+ * This wrapper stays because the three row kinds that build on it —
+ * `ToolCallRow`, `PermissionRow`, `UsageRow` — pass their own glyph, and
+ * because the app's `classify` names one family (`system`) the library spells
+ * `state`.
  */
 export function Row({
   at,
@@ -18,17 +25,13 @@ export function Row({
 }: {
   at: string
   glyph: string
-  variant: string
+  variant: EventVariant
   children: ReactNode
 }) {
   return (
-    <div className={`ev ev--${variant}`}>
-      <span className="ev-at">{at}</span>
-      <span className="ev-mark" aria-hidden="true">
-        {glyph}
-      </span>
-      <div className="ev-main">{children}</div>
-    </div>
+    <SdEventRow at={at} variant={variant} glyph={glyph}>
+      {children}
+    </SdEventRow>
   )
 }
 
@@ -85,7 +88,7 @@ export default function EventRow({
     }
     default:
       return (
-        <Row at={at} glyph="·" variant="system">
+        <Row at={at} glyph="·" variant="state">
           <div className="ev-summary">{truncate(event.payload?.text || event.kind, 90)}</div>
         </Row>
       )

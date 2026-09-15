@@ -168,9 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-Fifteen components are built and six are `planned`, which means the inventory above
-describes them in a line and no SPEC.md exists yet. Numbering is one sequence across both.
-Each built row links the spec in this folder, which is a
+All twenty-one are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -196,22 +194,27 @@ component it is showing.
 | 13 | Quota chip | app, landing | built | `src/ui/quota-chip/` | [quota-chip/SPEC.md](quota-chip/SPEC.md) |
 | 14 | Hero band | landing, docs home | built | `src/ui/hero-band/` | [hero-band/SPEC.md](hero-band/SPEC.md) |
 | 15 | Ring text and marquee | landing | built | `src/ui/ambient/` | [ambient/SPEC.md](ambient/SPEC.md) |
-| 16 | Sidebar nav item | app | planned | none yet | not written |
-| 17 | Sidebar footer card | app | planned | none yet | not written |
-| 18 | Modal sheet with secondary nav | app | planned | none yet | not written |
-| 19 | Setting row | app | planned | none yet | not written |
-| 20 | Heatmap | app | planned | none yet | not written |
-| 21 | Badge | app, landing | planned | none yet | not written |
+| 16 | Sidebar nav item | app | built | `src/ui/sidebar-nav-item/` | [sidebar-nav-item/SPEC.md](sidebar-nav-item/SPEC.md) |
+| 17 | Sidebar footer card | app | built | `src/ui/sidebar-footer-card/` | [sidebar-footer-card/SPEC.md](sidebar-footer-card/SPEC.md) |
+| 18 | Modal sheet with secondary nav | app | built | `src/ui/modal-sheet/` | [modal-sheet/SPEC.md](modal-sheet/SPEC.md) |
+| 19 | Setting row | app | built | `src/ui/setting-row/` | [setting-row/SPEC.md](setting-row/SPEC.md) |
+| 20 | Heatmap | app | built | `src/ui/heatmap/` | [heatmap/SPEC.md](heatmap/SPEC.md) |
+| 21 | Badge | app, landing | built | `src/ui/badge/` | [badge/SPEC.md](badge/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two keyframes and the RTL reversal that ring text and the marquee share; it is
 described inside the ambient spec and is skipped by the sync script, the same
 way this folder's `_`-prefixed partials are skipped by the catalogue scanner.
 
-Nothing here is restyled into the app's screens yet. The components exist, they
-are tested, and they are on show at `#/library`; the branch that points Board,
-Run detail, Register, Eval and Settings at them is a separate one, which is why
-`styles.css` still carries the rules they will replace.
+Every screen is on the library now. Board draws its lanes with Kanban column
+and its cards with Run card and Card; Run detail's ledger is Event row, its
+note is Note pane and its state is Status badge; Register is Data table with
+Heatmap above it; Eval is Data table; and Settings is Modal sheet with Setting
+row inside it. The rules those components replaced are gone from `styles.css`,
+`components/panels.css` and `components/run/run.css` rather than left beside
+them, and `src/styles.library.test.ts` holds the app's own stylesheets to the
+same two rules this file states for the library: no component declares a
+colour, and logical properties only.
 
 ### Where each spec lives
 

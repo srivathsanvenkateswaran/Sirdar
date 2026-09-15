@@ -876,3 +876,145 @@ func TestPolicyToolMapsACPKinds(t *testing.T) {
 		}
 	}
 }
+
+// fixPolicy is the mutate spawn takes to make a session a fix run: writes
+// confined to the workspace, shell commands judged against a
+// permissions.fixBash list.
+func fixPolicy(cwd string) func(*provider.SessionSpec) {
+	return func(spec *provider.SessionSpec) {
+		spec.Policy = provider.FixPolicy(cwd, []string{"go build*", "go test*"}, nil, nil)
+	}
+}
+
+// permissionAnswers pairs each request id the fake agent raised with the
+// optionId Sirdar selected, or "cancelled" when it picked nothing.
+func permissionAnswers(t *testing.T, res provider.Result) map[string]string {
+	t.Helper()
+	out := map[string]string{}
+	for _, line := range stderrLines(t, res) {
+		rest, ok := strings.CutPrefix(line, "ANSWER ")
+		if !ok {
+			continue
+		}
+		id, answer, _ := strings.Cut(rest, " session/request_permission: ")
+		if answer == "" {
+			continue
+		}
+		var reply struct {
+			Outcome struct {
+				Outcome  string `json:"outcome"`
+				OptionID string `json:"optionId"`
+			} `json:"outcome"`
+		}
+		if err := json.Unmarshal([]byte(answer), &reply); err != nil {
+			t.Fatalf("answer to %s is not an outcome: %s", id, answer)
+		}
+		if reply.Outcome.Outcome == "selected" {
+			out[id] = reply.Outcome.OptionID
+			continue
+		}
+		out[id] = reply.Outcome.Outcome
+	}
+	return out
+}
+
+// TestFixModeDecidesWritesOnTheirPaths is the whole of what fix mode adds to
+// the ACP path: an edit is judged on the file it names rather than refused
+// for being an edit, and the same FixPolicy that confines a Claude fix
+// confines this one.
+func TestFixModeDecidesWritesOnTheirPaths(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-fix-permissions.jsonl", cwd, fixPolicy(cwd))
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	answers := permissionAnswers(t, res)
+	want := map[string]string{
+		"30": "yes", // an edit inside the worktree
+		"31": "no",  // .git/hooks/x
+		"32": "no",  // apply_patch: a patch string, no path anywhere
+		"33": "no",  // a move whose destination leaves the workspace
+		"34": "yes", // `sh -lc "go build ./..."`, unwrapped to the fixBash list
+		"35": "no",  // curl, which no fixBash pattern covers
+	}
+	for id, wantOption := range want {
+		if answers[id] != wantOption {
+			t.Errorf("request %s answered %q, want %q (all: %v)", id, answers[id], wantOption, answers)
+		}
+	}
+
+	perms := only(evs, provider.EvPermission)
+	if len(perms) != 6 {
+		t.Fatalf("permission events: %d (%+v)", len(perms), perms)
+	}
+	if perms[0].Decision != "allow" || perms[0].Tool != "Write" {
+		t.Errorf("the in-worktree edit: %+v", perms[0])
+	}
+	if !strings.Contains(perms[1].Text, ".git/") {
+		t.Errorf("the .git/hooks edit should say what it is inside: %q", perms[1].Text)
+	}
+	if !strings.Contains(perms[2].Text, "named no path") {
+		t.Errorf("the pathless patch should say so: %q", perms[2].Text)
+	}
+	if !strings.Contains(perms[3].Text, "outside the workspace") {
+		t.Errorf("the escaping move: %q", perms[3].Text)
+	}
+	if perms[4].Decision != "allow" || perms[4].Tool != "Bash" {
+		t.Errorf("the wrapped go build: %+v", perms[4])
+	}
+	if perms[5].Decision != "deny" {
+		t.Errorf("curl: %+v", perms[5])
+	}
+}
+
+// TestTriageModeStillRefusesEdits is the other half of the same switch: the
+// read-only posture is unchanged for a triage run, whatever paths the edit
+// names.
+func TestTriageModeStillRefusesEdits(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-fix-permissions.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	answers := permissionAnswers(t, res)
+	if answers["30"] != "no" {
+		t.Fatalf("an edit in a triage run was answered %q (all: %v)", answers["30"], answers)
+	}
+	perms := only(evs, provider.EvPermission)
+	if perms[0].Decision != "deny" || !strings.Contains(perms[0].Text, "read-only") {
+		t.Fatalf("the triage refusal: %+v", perms[0])
+	}
+}
+
+// TestEmptyFinalSaysTheTurnEndedWithoutAnAnswer covers the failure the
+// Copilot run hit: a turn spent entirely on tool calls and thinking, which
+// used to reach the operator as a JSON parse error.
+func TestEmptyFinalSaysTheTurnEndedWithoutAnAnswer(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-empty-final.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	errs := only(evs, provider.EvError)
+	if len(errs) != 1 {
+		t.Fatalf("error events: %+v", errs)
+	}
+	if errs[0].Text != "acp: the agent ended the turn without an answer" {
+		t.Fatalf("error text %q", errs[0].Text)
+	}
+	finals := only(evs, provider.EvFinal)
+	if len(finals) != 1 || strings.TrimSpace(finals[0].Text) != "" || len(finals[0].Final) != 0 {
+		t.Fatalf("final events: %+v", finals)
+	}
+}

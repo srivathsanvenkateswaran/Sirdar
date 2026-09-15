@@ -26,6 +26,8 @@ import ResumeBox from '../components/run/ResumeBox'
 import RCAForm from '../components/run/RCAForm'
 import FixForm from '../components/run/FixForm'
 import FixPanel from '../components/run/FixPanel'
+import Button from '../ui/button'
+import StatusBadge, { type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
 /**
@@ -347,9 +349,7 @@ export default function RunDetail(props: {
     return (
       <div className="run">
         <header className="run-head">
-          <button type="button" className="run-btn" onClick={onBack}>
-            Back
-          </button>
+          <Button onClick={onBack}>Back</Button>
         </header>
         <p className={loadError ? 'run-failed' : 'run-loading'}>{loadError || 'Loading run…'}</p>
       </div>
@@ -366,10 +366,8 @@ export default function RunDetail(props: {
     <div className="run">
       <header className="run-head">
         <h2 className="run-key">{detail.key}</h2>
-        <span className="run-badge">{detail.kind}</span>
-        <span className="run-badge" data-status={detail.status}>
-          {detail.status.replace('_', ' ')}
-        </span>
+        <span className="run-kind">{detail.kind}</span>
+        <StatusBadge status={detail.status as SdStatus} />
         <div className="run-stats">
           <span className="run-stat">
             {detail.provider} {detail.model}
@@ -383,14 +381,10 @@ export default function RunDetail(props: {
           </span>
         </div>
         <div className="run-actions">
-          <button type="button" className="run-btn" onClick={onBack}>
-            Back
-          </button>
+          <Button onClick={onBack}>Back</Button>
           {/* Nothing is left to stop once the run has ended. */}
           {terminal ? null : (
-            <button
-              type="button"
-              className="run-btn"
+            <Button
               onClick={cancel}
               disabled={!jobId || pending !== ''}
               title={
@@ -400,48 +394,34 @@ export default function RunDetail(props: {
               }
             >
               Cancel
-            </button>
+            </Button>
           )}
           {canStartRCA ? (
-            <button
-              type="button"
-              className="run-btn"
-              onClick={() => setRcaOpen((v) => !v)}
-              aria-expanded={rcaOpen}
-            >
+            <Button onClick={() => setRcaOpen((v) => !v)} aria-expanded={rcaOpen}>
               Start RCA
-            </button>
+            </Button>
           ) : null}
           {canStartFix ? (
-            <button
-              type="button"
-              className="run-btn"
-              onClick={() => setFixOpen((v) => !v)}
-              aria-expanded={fixOpen}
-            >
+            <Button onClick={() => setFixOpen((v) => !v)} aria-expanded={fixOpen}>
               Start fix
-            </button>
+            </Button>
           ) : null}
           {canStartRCA ? (
-            <button
-              type="button"
-              className="run-btn"
+            <Button
               onClick={() => void addToGolden()}
               disabled={pending !== ''}
               title="Copy this run's bundle into the golden set the eval replays"
             >
               {pending === 'golden' ? 'Adding…' : 'Add to golden set'}
-            </button>
+            </Button>
           ) : null}
-          <button
-            type="button"
-            className="run-btn"
+          <Button
             onClick={copyNotePath}
             disabled={!notePath}
             title={notePath || 'This run has written no note'}
           >
             {copied ? 'Copied' : 'Copy note path'}
-          </button>
+          </Button>
         </div>
       </header>
 

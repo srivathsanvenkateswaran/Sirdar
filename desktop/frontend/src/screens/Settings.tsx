@@ -3,20 +3,17 @@ import type { Check, CheckLevel, ConfigSummary, Transport, Workspace } from '../
 import { showLibrary, setShowLibrary, subscribeShowLibrary } from '../lib/library'
 import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
 import ConfigSummaryPanel from '../components/shell/ConfigSummaryPanel'
+import Badge from '../ui/badge'
+import Button from '../ui/button'
+import ModalSheet, { type ModalNavGroup } from '../ui/modal-sheet'
+import SettingRow, { SettingCard } from '../ui/setting-row'
 import '../components/panels.css'
-
 
 type DoctorState =
   | { status: 'loading' }
   | { status: 'done'; checks: Check[] }
   | { status: 'error'; message: string }
 
-/**
- * The configuration reference, on GitHub. A relative `docs/config.md` resolves
- * against the asset server the bundle is loaded from, which serves the app's
- * own index.html for it — so the link led back to Sirdar rather than to the
- * documentation.
- */
 /** The mark each doctor level prints, matching `sirdar doctor`'s own. */
 const MARKS: Record<CheckLevel, string> = { ok: 'OK', warn: '!!', fail: 'XX' }
 
@@ -29,20 +26,66 @@ function levelOf(c: Check): CheckLevel {
   return c.level ?? (c.ok ? 'ok' : 'fail')
 }
 
+/**
+ * The configuration reference, on GitHub. A relative `docs/config.md` resolves
+ * against the asset server the bundle is loaded from, which serves the app's
+ * own index.html for it — so the link led back to Sirdar rather than to the
+ * documentation.
+ */
 export const CONFIG_DOCS_URL =
   'https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/config.md'
 
 /** How long a Remove button stays armed before it goes back to asking. */
 const CONFIRM_MS = 5000
 
+/**
+ * The pages, in two groups.
+ *
+ * `03-desktop-app.md` section 6 sketches the reference's own groups (General,
+ * Providers, Budgets, Sources, Eval; Identity, Keys, Data and privacy). Sirdar
+ * has none of those pages: its providers, budgets and sources live in the
+ * workspace's `.sirdar/config.yaml`, which this app reads and never writes. So
+ * the groups are what Sirdar actually has — what belongs to the workspace, and
+ * what belongs to this copy of the app — rather than five empty pages named
+ * after somebody else's product.
+ */
+export const SETTINGS_GROUPS: ModalNavGroup[] = [
+  {
+    label: 'Workspace',
+    items: [
+      { id: 'workspaces', label: 'Workspaces' },
+      { id: 'notifications', label: 'Notifications' },
+    ],
+  },
+  {
+    label: 'This app',
+    items: [
+      { id: 'reading', label: 'Reading' },
+      { id: 'library', label: 'Design library' },
+      { id: 'about', label: 'About' },
+    ],
+  },
+]
+
+const TITLES: Record<string, string> = {
+  workspaces: 'Workspaces',
+  notifications: 'Notifications',
+  reading: 'Reading',
+  library: 'Design library',
+  about: 'About',
+}
+
 export default function Settings(props: {
+  open: boolean
   transport: Transport
   workspaces: Workspace[]
   /** The workspace whose notify and webhooks blocks are summarised. */
   currentWorkspaceId?: string
+  onClose: () => void
   onWorkspacesChanged: () => void
-}): JSX.Element {
-  const { transport, workspaces, currentWorkspaceId, onWorkspacesChanged } = props
+}): JSX.Element | null {
+  const { open, transport, workspaces, currentWorkspaceId, onClose, onWorkspacesChanged } = props
+  const [page, setPage] = useState('workspaces')
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -57,7 +100,6 @@ export default function Settings(props: {
   const [summary, setSummary] = useState<ConfigSummary | null>(null)
   const [summaryError, setSummaryError] = useState('')
 
-
   useEffect(() => {
     let cancelled = false
     transport
@@ -67,7 +109,7 @@ export default function Settings(props: {
       })
       .catch(() => {
         // The HTTP transport has no Version to fail; the Wails one rarely
-        // does either. Either way the About panel just omits the version.
+        // does either. Either way the About page just omits the version.
       })
     return () => {
       cancelled = true
@@ -149,140 +191,185 @@ export default function Settings(props: {
     }
   }
 
-  return (
-    <div className="panel settings">
-      <section className="settings-workspaces">
-        <h2 className="panel-heading">Workspaces</h2>
-        {workspaces.length === 0 ? (
-          <p className="empty-state">No workspaces registered yet. Add one below.</p>
-        ) : (
-          <ul className="workspace-list">
-            {workspaces.map((ws) => {
-              const d = doctor[ws.id]
-              return (
-                <li key={ws.id} className="workspace-row">
-                  <div className="workspace-row__main">
-                    <span className="workspace-row__name">{ws.name}</span>
-                    <span className="workspace-row__root mono">{ws.root}</span>
-                    <span className="workspace-row__meta">
-                      {ws.provider} / {ws.model}
-                    </span>
-                    <span className="workspace-row__meta">notes: {ws.notesDir}</span>
-                    <span className="workspace-row__meta">billing: {ws.billing}</span>
-                  </div>
-                  <div className="workspace-row__actions">
-                    <button
-                      type="button"
-                      onClick={() => handleDoctor(ws)}
-                      disabled={d?.status === 'loading'}
-                    >
-                      {d?.status === 'loading' ? 'Running doctor…' : 'Run doctor'}
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-danger"
-                      onClick={() => handleRemove(ws)}
-                      title={
-                        confirming === ws.id
-                          ? `Sirdar stops watching ${ws.root}. Nothing on disk is deleted.`
-                          : `Remove ${ws.name} from the workspace list`
-                      }
-                    >
-                      {confirming === ws.id ? 'Confirm remove' : 'Remove'}
-                    </button>
-                  </div>
-                  {d?.status === 'error' && <p className="form-error">{d.message}</p>}
-                  {d?.status === 'done' && (
-                    <ul className="doctor-list">
-                      {d.checks.map((c) => (
-                        <li key={c.name} className={`doctor-check doctor-check--${levelOf(c)}`}>
-                          <span className="doctor-check__mark mono">{MARKS[levelOf(c)]}</span>
-                          <span className="doctor-check__name">{c.name}</span>
-                          <span className="doctor-check__detail">{c.detail}</span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        )}
-      </section>
+  const workspacesPage = (
+    <>
+      {workspaces.length === 0 ? (
+        <p className="empty-state">No workspaces registered yet. Add one below.</p>
+      ) : (
+        workspaces.map((ws) => {
+          const d = doctor[ws.id]
+          return (
+            <SettingCard key={ws.id} heading={ws.name}>
+              <SettingRow
+                label="Repository"
+                value={<span className="mono">{ws.root}</span>}
+                control={
+                  <button
+                    type="button"
+                    className="sd-setting-button"
+                    onClick={() => handleRemove(ws)}
+                    title={
+                      confirming === ws.id
+                        ? `Sirdar stops watching ${ws.root}. Nothing on disk is deleted.`
+                        : `Remove ${ws.name} from the workspace list`
+                    }
+                  >
+                    {confirming === ws.id ? 'Confirm remove' : 'Remove'}
+                  </button>
+                }
+              />
+              <SettingRow label="Provider" value={`${ws.provider} / ${ws.model}`} />
+              <SettingRow label="Notes" value={ws.notesDir} />
+              <SettingRow label="Billing" value={<Badge title="Billing mode">{ws.billing}</Badge>} />
+              <SettingRow
+                label="Checks"
+                value={
+                  d?.status === 'done'
+                    ? `${d.checks.length} ${d.checks.length === 1 ? 'check' : 'checks'} read`
+                    : 'Not run in this session'
+                }
+                control={
+                  <button
+                    type="button"
+                    className="sd-setting-button"
+                    onClick={() => handleDoctor(ws)}
+                    disabled={d?.status === 'loading'}
+                  >
+                    {d?.status === 'loading' ? 'Running doctor…' : 'Run doctor'}
+                  </button>
+                }
+              />
+              {d?.status === 'error' && <p className="form-error">{d.message}</p>}
+              {d?.status === 'done' && (
+                <ul className="doctor-list">
+                  {d.checks.map((c) => (
+                    <li key={c.name} className={`doctor-check doctor-check--${levelOf(c)}`}>
+                      <span className="doctor-check__mark mono">{MARKS[levelOf(c)]}</span>
+                      <span className="doctor-check__name">{c.name}</span>
+                      <span className="doctor-check__detail">{c.detail}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </SettingCard>
+          )
+        })
+      )}
 
-      <section className="settings-add">
-        <h2 className="panel-heading">Add workspace</h2>
+      <SettingCard heading="Add workspace">
         <form className="add-workspace-form" onSubmit={handleAdd}>
           <input
             type="text"
+            className="sd-setting-input"
             placeholder="/path/to/repo"
             value={root}
             onChange={(e) => setRoot(e.target.value)}
             aria-label="Workspace path"
           />
-          <button type="submit" disabled={adding || !root.trim()}>
+          {/*
+            The one filled button on this page. Registering a repository is the
+            only thing Settings commits; everything else here applies as it is
+            switched.
+          */}
+          <Button type="submit" variant="primary" disabled={adding || !root.trim()}>
             {adding ? 'Adding…' : 'Add workspace'}
-          </button>
+          </Button>
         </form>
         {addError && <p className="form-error">{addError}</p>}
-      </section>
+      </SettingCard>
+    </>
+  )
 
-      {currentWorkspaceId ? (
-        <ConfigSummaryPanel summary={summary} error={summaryError} />
-      ) : null}
+  const notificationsPage = currentWorkspaceId ? (
+    <ConfigSummaryPanel summary={summary} error={summaryError} />
+  ) : (
+    <p className="empty-state">
+      Choose a workspace from the switcher to see its notify and webhook blocks.
+    </p>
+  )
 
-      <section className="settings-reading">
-        <h2 className="panel-heading">Reading</h2>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={rtl}
-            onChange={(e) => setPreferRTL(e.target.checked)}
-          />
-          <span>Prefer right-to-left layout for Arabic content</span>
-        </label>
-        <p className="about-note">
-          Notes mix an English body with the customer's own Arabic, and each block is laid
-          out from its own first letter either way. This lays the whole note pane out right
-          to left. It is remembered in this browser and changes nothing in the workspace or
-          in the note on disk; the run's event log stays left to right, where paths and tool
-          names are readable.
-        </p>
-      </section>
+  const readingPage = (
+    <SettingCard heading="Note pane">
+      <SettingRow
+        label="Reading direction"
+        value={rtl ? 'Right to left' : 'Each block from its own first letter'}
+        help="Notes mix an English body with the customer's own Arabic, and each block is laid out from its own first letter either way. This lays the whole note pane out right to left. It is remembered in this browser and changes nothing in the workspace or in the note on disk; the run's event log stays left to right, where paths and tool names are readable."
+        control={
+          <label className="settings-toggle">
+            <input type="checkbox" checked={rtl} onChange={(e) => setPreferRTL(e.target.checked)} />
+            <span>Prefer right-to-left layout for Arabic content</span>
+          </label>
+        }
+      />
+    </SettingCard>
+  )
 
-      <section className="settings-library">
-        <h2 className="panel-heading">Design library</h2>
-        <label className="settings-toggle">
-          <input
-            type="checkbox"
-            checked={library}
-            onChange={(e) => setShowLibrary(e.target.checked)}
-          />
-          <span>Show the design library</span>
-        </label>
-        <p className="about-note">
-          Adds a Library tab and the <code>#/library</code> address, where every interface
-          component is shown in each of its states, in both themes and in both reading
-          directions. It is for whoever is building the interface; it changes nothing about a
-          run. On by default in a development build.
-        </p>
-      </section>
+  const libraryPage = (
+    <SettingCard heading="Design library">
+      <SettingRow
+        label="Show the design library"
+        value={library ? 'On' : 'Off'}
+        help={
+          <>
+            Adds a Library row and the <code>#/library</code> address, where every interface
+            component is shown in each of its states, in both themes and in both reading
+            directions. It is for whoever is building the interface; it changes nothing about a
+            run. On by default in a development build.
+          </>
+        }
+        control={
+          <label className="settings-toggle">
+            <input
+              type="checkbox"
+              checked={library}
+              onChange={(e) => setShowLibrary(e.target.checked)}
+            />
+            <span>Show the design library</span>
+          </label>
+        }
+      />
+    </SettingCard>
+  )
 
-      <section className="settings-about">
-
-        <h2 className="panel-heading">About</h2>
-        <p className="about-version">Sirdar desktop{version ? ` v${version}` : ''}</p>
-        <p>
-          Configuration reference:{' '}
+  const aboutPage = (
+    <SettingCard heading="About">
+      <SettingRow label="Sirdar desktop" value={version ? `v${version}` : 'version unknown'} />
+      <SettingRow
+        label="Configuration reference"
+        value={
           <a href={CONFIG_DOCS_URL} target="_blank" rel="noreferrer noopener">
             docs/config.md
           </a>
-        </p>
-        <p className="about-note">
-          Sirdar runs your own installed agent CLI with your login. Sirdar never stores
-          credentials.
-        </p>
-      </section>
-    </div>
+        }
+      />
+      <SettingRow
+        label="Credentials"
+        value="Never stored by Sirdar"
+        help="Sirdar runs your own installed agent CLI with your login."
+      />
+    </SettingCard>
+  )
+
+  const pages: Record<string, JSX.Element> = {
+    workspaces: workspacesPage,
+    notifications: notificationsPage,
+    reading: readingPage,
+    library: libraryPage,
+    about: aboutPage,
+  }
+
+  return (
+    <ModalSheet
+      open={open}
+      title={TITLES[page] ?? 'Settings'}
+      groups={SETTINGS_GROUPS}
+      current={page}
+      onSelect={setPage}
+      onClose={onClose}
+      navFooter={<>Sirdar desktop{version ? ` v${version}` : ''}</>}
+      footer={<Button onClick={onClose}>Close</Button>}
+    >
+      <div className="settings">{pages[page]}</div>
+    </ModalSheet>
   )
 }

@@ -243,6 +243,30 @@ type CursorConfig struct {
 	Mode  string `yaml:"mode,omitempty"`
 }
 
+// AgyConfig configures `provider: agy`, where Google's Antigravity CLI
+// drives the session. Every field is optional: with none of them set the
+// session runs against whatever Google account the operator's own `agy`
+// binary is signed in to, on the cheapest model that account lists.
+//
+// There is no endpoint block here and there will not be one. The CLI can
+// be pointed at the Gemini API instead, with GEMINI_API_KEY and a
+// settings-file switch, but that swaps the operator's Antigravity login
+// for an API key mid-run and routes it at whatever GOOGLE_GEMINI_BASE_URL
+// names, so the adapter strips those variables rather than offering them
+// (internal/provider/agy, strippedEnvKeys).
+//
+// Effort is the CLI's reasoning tier: low, medium or high. The model ids
+// carry a tier of their own (gemini-3.6-flash-low) and naming both is
+// accepted.
+type AgyConfig struct {
+	Path   string `yaml:"path,omitempty"`
+	Model  string `yaml:"model,omitempty"`
+	Effort string `yaml:"effort,omitempty"`
+}
+
+// agyEfforts are the values `agy --effort` accepts.
+var agyEfforts = map[string]bool{"low": true, "medium": true, "high": true}
+
 // DefaultMaxContextTokens is the context window assumed for an
 // openai-compatible endpoint that does not name one. The loop starts
 // dropping old tool results as the prompt approaches it.
@@ -503,6 +527,7 @@ type Config struct {
 	} `yaml:"providers"`
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 	Qwen   *QwenConfig   `yaml:"qwen,omitempty"`
+	Agy    *AgyConfig    `yaml:"agy,omitempty"`
 	ACP    *ACPConfig    `yaml:"acp,omitempty"`
 	Cursor *CursorConfig `yaml:"cursor,omitempty"`
 
@@ -656,14 +681,17 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai", "acp", "qwen", "cursor":
+	case "claude", "codex", "openai", "acp", "qwen", "cursor", "agy":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex, openai, acp, qwen or cursor, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai, acp, qwen, cursor or agy, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
 		return err
 	}
 	if err := validateQwen(c); err != nil {
+		return err
+	}
+	if err := validateAgy(c); err != nil {
 		return err
 	}
 	if err := validateACP(c); err != nil {
@@ -990,6 +1018,36 @@ func validateCursor(c *Config) error {
 	case "", "ask", "plan":
 	default:
 		return fmt.Errorf("config: cursor.mode: must be ask or plan, got %q", cu.Mode)
+	}
+	return nil
+}
+
+// validateAgy checks the agy block. Every field is optional — a workspace
+// that names none runs the CLI against the operator's own Antigravity
+// login on the cheapest model — but an effort the CLI does not accept is
+// worth catching at load time rather than as an argument-parse failure
+// halfway through a triage sweep.
+func validateAgy(c *Config) error {
+	// billing: api has nothing to mean here. It is the switch that tells
+	// the Claude adapter to leave ANTHROPIC_API_KEY and the gateway
+	// variables in the agent's environment; the agy adapter strips
+	// GEMINI_API_KEY and GOOGLE_GEMINI_BASE_URL unconditionally and has
+	// no setting that stops it, because swapping the operator's
+	// Antigravity login for an API key mid-run is the one thing this
+	// provider will not do. Accepting the word and ignoring it would read
+	// as a billing mode that was chosen and honoured.
+	if c.Provider == "agy" && strings.TrimSpace(c.Billing) == "api" {
+		return fmt.Errorf("config: billing: api has no meaning on provider agy: the session runs " +
+			"against the Google account the operator's own `agy` binary is signed in to, and the " +
+			"adapter strips GEMINI_API_KEY and GOOGLE_GEMINI_BASE_URL from it. Remove the billing " +
+			"key or set billing: subscription")
+	}
+	a := c.Agy
+	if a == nil {
+		return nil
+	}
+	if e := strings.TrimSpace(a.Effort); e != "" && !agyEfforts[e] {
+		return fmt.Errorf("config: agy.effort: must be low, medium or high, got %q", a.Effort)
 	}
 	return nil
 }

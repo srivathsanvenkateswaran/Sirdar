@@ -9,11 +9,11 @@ import "fmt"
 // Service directly and never passes through internal/httpapi.
 var providers = map[string]bool{
 	"claude": true, "codex": true, "openai": true, "acp": true, "qwen": true,
-	"cursor": true,
+	"cursor": true, "agy": true,
 }
 
 // ProviderList names the set the way an error message should.
-const ProviderList = "claude, codex, openai, acp, qwen or cursor"
+const ProviderList = "claude, codex, openai, acp, qwen, cursor or agy"
 
 // ValidProvider reports whether name is a provider Sirdar drives. An empty
 // name is the workspace's own provider and is always valid.

@@ -75,6 +75,13 @@ nothing moves.
 
 ## Changelog
 
+### 2026-09-15 (restyle)
+Gained a ninth variant, `callout`, for the two lines that mean the run is
+waiting on a person — the agent asked a question, and the provider rate-limited
+it. It takes `--sd-st-blocked`, which is the hue the blocked lane already
+carries for the same fact, and the glyph `?`. Added when Run detail was pointed
+at this component: the app's own row had the family and the library did not.
+
 ### 2026-09-15
 Added. Initial spec from `components/run/run.css` `.ev`. `--run-line` becomes
 `--sd-rule`; `--run-ok` becomes `--sd-st-triaged` rather than the accent, so an

@@ -194,6 +194,142 @@ func TestMatchCommandStaysInTheRoot(t *testing.T) {
 	}
 }
 
+// TestSedDenialKeepsMinusNReadOnly: "sed -n *" is meant to approve only
+// sed's read-only form. -i/--in-place turns a read into a write, and GNU
+// sed lets it ride combined with -n ("-ni") or with a suffix stuck to it
+// ("-i.bak"), so the denial has to catch those shapes too, not just a bare
+// "-i" token, and it has to fire wherever in the command the flag falls,
+// the same way a denied git flag does.
+func TestSedDenialKeepsMinusNReadOnly(t *testing.T) {
+	allow := []string{"sed -n *"}
+	denied := []string{
+		"sed -i",
+		"sed -i 's/x/y/' file",
+		"sed -e s/x/y/ -i",
+		"sed -e s/x/y/ -i file",
+		"sed -i.bak 's/x/y/' file",
+		"sed -ni 's/x/y/p' file",
+		"sed --in-place 's/x/y/' file",
+		"sed --in-place=.bak 's/x/y/' file",
+		"sed -n -i 's/x/y/p' file",
+	}
+	for _, cmd := range denied {
+		if ok, reason := MatchCommand("", allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		} else if !strings.Contains(reason, "in place") {
+			t.Errorf("MatchCommand(%q) reason = %q, want it to mention the in-place edit", cmd, reason)
+		}
+	}
+
+	allowed := []string{
+		"sed -n 1,20p f",
+		"sed -n '1,20p' file.go",
+		"sed -n -e '1,20p' file.go",
+	}
+	for _, cmd := range allowed {
+		if ok, reason := MatchCommand("", allow, cmd); !ok {
+			t.Errorf("MatchCommand refused a read-only sed command %q: %s", cmd, reason)
+		}
+	}
+}
+
+// TestFindDenialRefusesActionsThatChangeTheFilesystem: "find *" approves a
+// search, and find's -delete, -exec, -execdir, -ok and -okdir turn one
+// into a payload — deleting or running a command per match — that no
+// allow-list pattern was ever meant to approve.
+func TestFindDenialRefusesActionsThatChangeTheFilesystem(t *testing.T) {
+	allow := []string{"find *"}
+	denied := []string{
+		"find . -name *.tmp -delete",
+		`find . -type f -exec rm {} \;`,
+		`find . -type f -execdir rm {} \;`,
+		`find . -type f -ok rm {} \;`,
+		`find . -type f -okdir rm {} \;`,
+	}
+	for _, cmd := range denied {
+		if ok, reason := MatchCommand("", allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		} else if !strings.Contains(reason, "find") {
+			t.Errorf("MatchCommand(%q) reason = %q, want it to mention find", cmd, reason)
+		}
+	}
+
+	allowed := []string{
+		"find . -name *.go",
+		"find . -type f -newer go.mod",
+		"find . -maxdepth 2 -name *.tmp",
+	}
+	for _, cmd := range allowed {
+		if ok, reason := MatchCommand("", allow, cmd); !ok {
+			t.Errorf("MatchCommand refused a read-only find command %q: %s", cmd, reason)
+		}
+	}
+}
+
+// TestBashDenialNamesTheRuleAndHintsWhatIsAllowed is the fix for a real
+// triage session: `nl -ba ledger.go` was denied and the reason gave no way
+// to tell whether the workspace's own permissions.bash simply did not name
+// `nl`, so the session abandoned the file instead of reaching for `cat` or
+// `rg` again. The denial now names the config key and echoes back (a
+// truncated slice of) what it actually allows.
+func TestBashDenialNamesTheRuleAndHintsWhatIsAllowed(t *testing.T) {
+	p := &PermissionPolicy{BashAllow: []string{"git log*", "git show*", "git grep*", "rg *", "ls *", "cat *", "head *", "tail *", "wc *", "file *"}}
+	d := p.Decide("Bash", json.RawMessage(`{"command":"nl -ba ledger.go"}`))
+	if d.Allow {
+		t.Fatal("nl was allowed by a policy that never named it")
+	}
+	for _, want := range []string{
+		"not permitted by permissions.bash",
+		"allowed here:",
+		"git log*, git show*, git grep*, rg *, ls *, cat *, head *, tail *",
+		"...",
+		"see .sirdar/config.yaml",
+	} {
+		if !strings.Contains(d.Message, want) {
+			t.Errorf("denial message %q does not contain %q", d.Message, want)
+		}
+	}
+	// The tenth pattern (wc *) is past the eight-pattern hint cap and must
+	// not appear.
+	if strings.Contains(d.Message, "wc *") {
+		t.Errorf("denial message %q named more than the first eight patterns", d.Message)
+	}
+
+	// A fix policy names permissions.fixBash instead, since that is the
+	// list MatchCommand actually judged the command against.
+	fix := FixPolicy("", []string{"git log*", "go test*"}, nil, nil)
+	fd := fix.Decide("Bash", json.RawMessage(`{"command":"nl -ba ledger.go"}`))
+	if fd.Allow {
+		t.Fatal("nl was allowed by a fix policy that never named it")
+	}
+	if !strings.Contains(fd.Message, "not permitted by permissions.fixBash") {
+		t.Errorf("fix denial message %q does not name permissions.fixBash", fd.Message)
+	}
+	if strings.Contains(fd.Message, "permissions.bash;") {
+		t.Errorf("fix denial message %q named permissions.bash instead of permissions.fixBash", fd.Message)
+	}
+}
+
+// TestBashAllowHint covers the truncation rule on its own: up to eight
+// patterns, comma-separated, "..." only when there is more, and an
+// explicit "none configured" rather than an empty parenthetical when the
+// workspace named none.
+func TestBashAllowHint(t *testing.T) {
+	if got := bashAllowHint(nil); got != "none configured" {
+		t.Errorf("bashAllowHint(nil) = %q, want %q", got, "none configured")
+	}
+	short := []string{"rg *", "cat *"}
+	if got := bashAllowHint(short); got != "rg *, cat *" {
+		t.Errorf("bashAllowHint(%v) = %q, want %q", short, got, "rg *, cat *")
+	}
+	long := []string{"a", "b", "c", "d", "e", "f", "g", "h", "i", "j"}
+	got := bashAllowHint(long)
+	want := "a, b, c, d, e, f, g, h, ..."
+	if got != want {
+		t.Errorf("bashAllowHint(%v) = %q, want %q", long, got, want)
+	}
+}
+
 // TestMatchGlobBareCommand is the rule that a pattern ending in " *" also
 // covers the bare command: splitting a compound command into segments
 // leaves an `ls` next to an `ls -la`, and refusing one while allowing the

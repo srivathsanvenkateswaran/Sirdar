@@ -1,0 +1,208 @@
+/*
+ * The app shell: a window ground with one content sheet on it, and the chrome
+ * moved to the left edge.
+ *
+ * Every value comes from `styles/tokens.css`. The two planes are --sd-shell
+ * under --sd-sheet, a step of 1.14:1 in light and 1.12:1 in dark, and that
+ * barely-there colour difference is doing the whole job of the landing page's
+ * colour bands: this is the chrome, that is the work. There is no shadow
+ * anywhere in this file.
+ */
+
+.sd-sidebar {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 208px;
+  min-block-size: 0;
+  padding: var(--sd-space-2);
+  /* No fill of its own: the sidebar sits directly on the window ground. */
+  background: transparent;
+}
+
+.sd-sidebar__brand {
+  display: flex;
+  align-items: center;
+  min-block-size: 32px;
+  padding-inline: var(--sd-space-2);
+}
+
+.sd-sidebar__nav {
+  display: flex;
+  flex-direction: column;
+  padding-block-start: var(--sd-space-2);
+}
+
+/* ---------- the workspace switcher ---------- */
+
+.switcher {
+  position: relative;
+  min-inline-size: 0;
+}
+
+.switcher-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: 28px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: transparent;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  font-weight: 500;
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--sd-dur-1) ease;
+}
+
+.switcher-trigger:hover {
+  background: var(--sd-nav-hover);
+}
+
+.switcher-name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-list {
+  position: absolute;
+  inset-block-end: calc(100% + var(--sd-space-1));
+  inset-inline-start: 0;
+  z-index: 20;
+  margin: 0;
+  padding: var(--sd-space-1);
+  min-inline-size: 100%;
+  max-inline-size: 320px;
+  max-block-size: 40vh;
+  overflow-y: auto;
+  list-style: none;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+}
+
+.switcher-option {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  inline-size: 100%;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: transparent;
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  text-align: start;
+  cursor: pointer;
+}
+
+.switcher-option:hover {
+  background: var(--sd-nav-hover);
+}
+
+.switcher-option[aria-selected='true'] {
+  background: var(--sd-nav-active);
+}
+
+.switcher-option__root {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.switcher-option--add {
+  color: var(--sd-ink-2);
+}
+
+.switcher-empty {
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+/* ---------- the collapsed rail ---------- */
+
+/*
+ * Under 900px the sidebar keeps the icons and drops the labels, which is where
+ * a board with six lanes starts needing every pixel of the sheet. The switch
+ * is an attribute rather than a media query so the nav item and the footer
+ * card, which are library components, do not have to know Sirdar's breakpoint.
+ */
+.sd-sidebar[data-collapsed='true'] {
+  flex-basis: 56px;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand {
+  overflow: hidden;
+  inline-size: 1.2em;
+}
+
+/*
+ * Under 720px the shell stacks and the sidebar becomes a strip across the top
+ * of the window. `flex-basis` would be a height there rather than a width, so
+ * it is released, the nav rows run in a row, and the footer card's own column
+ * becomes a row too.
+ */
+@media (max-width: 720px) {
+  .sd-sidebar {
+    flex: 0 0 auto;
+    border-block-end: 1px solid var(--sd-rule);
+  }
+
+  .sd-sidebar__nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    padding-block-start: 0;
+  }
+
+  .sd-sidebar__nav .sd-nav-row {
+    inline-size: auto;
+  }
+
+  .sd-sidebar-foot {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-items: center;
+    margin-block-start: var(--sd-space-2);
+  }
+
+  .sd-sidebar-foot__switcher,
+  .sd-sidebar-foot__action {
+    flex: 0 0 auto;
+  }
+
+  .sd-sidebar-foot__switcher > *,
+  .sd-sidebar-foot__action > * {
+    inline-size: auto;
+  }
+
+  .switcher-list {
+    inset-block-end: auto;
+    inset-block-start: calc(100% + var(--sd-space-1));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switcher-trigger {
+    transition-duration: 1ms;
+  }
+}

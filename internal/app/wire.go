@@ -14,6 +14,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/notify"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/acp"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/agy"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/claude"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/cursor"
@@ -144,6 +145,8 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 		return openAIProvider(cfg, creds)
 	case "qwen":
 		return qwenProvider(cfg, creds)
+	case "agy":
+		return agyProvider(cfg), nil
 	case "acp":
 		return acpProvider(cfg)
 	case "cursor":
@@ -151,6 +154,28 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 	default:
 		return nil, fmt.Errorf("unknown provider %q: use %s", cfg.Provider, ProviderList)
 	}
+}
+
+// agyProvider builds the adapter that drives Google's Antigravity CLI.
+// Nothing is resolved here: the CLI authenticates against the Google
+// account the operator already signed it in to, and its OAuth material
+// lives in the OS keyring, not in config and not in the environment. The
+// block therefore carries no credential reference — only where the binary
+// is, which model to ask for, and which reasoning tier.
+func agyProvider(cfg *config.Config) provider.Provider {
+	a := cfg.Agy
+	if a == nil {
+		return agy.NewConfig(agy.Config{Model: cfg.Model})
+	}
+	c := agy.Config{
+		Binary: cfg.ExpandPath(a.Path),
+		Model:  a.Model,
+		Effort: a.Effort,
+	}
+	if cfg.Model != "" {
+		c.Model = cfg.Model
+	}
+	return agy.NewConfig(c)
 }
 
 // qwenProvider builds the adapter that drives the Qwen Code CLI. The

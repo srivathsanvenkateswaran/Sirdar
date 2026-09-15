@@ -1,0 +1,7 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"copilot","version":"1.0.83"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-e"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-e","update":{"sessionUpdate":"agent_thought_chunk","content":{"type":"text","text":"Thinking, and saying nothing."}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

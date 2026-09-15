@@ -99,8 +99,8 @@ triage note resolved.
 |---|---|---|
 | `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
 | `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates. Each row is `[OK]`, `[!!]` for an advisory warning, or `[XX]` for a failure; exits 1 only on a failure |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
+| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
+| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor\|agy`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
@@ -242,9 +242,9 @@ branch to cut from and target.
 
 ## Models
 
-`provider: claude`, `provider: codex` and `provider: qwen` spawn the Claude Code, Codex or Qwen
-Code CLI you already have installed and signed in, so the work counts against the plan you
-already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop itself against
+`provider: claude`, `provider: codex`, `provider: qwen` and `provider: agy` spawn the Claude
+Code, Codex, Qwen Code or Antigravity CLI you already have installed and signed in, so the work
+counts against the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop itself against
 any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together, DeepSeek,
 Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own read-only tool
 set and your workspace's MCP servers, and a per-million-token price you set in config for the
@@ -256,6 +256,18 @@ OpenAI-compatible endpoint, so one `qwen:` block gets you a vendor model, an agg
 server on your own machine without Sirdar owning the loop. What you give up against Claude Code
 is the cost signal: Qwen Code reports no spend, so `budget.maxUsd` never bites and a run is
 bounded by turns and wall-clock time instead.
+
+`provider: agy` drives Google's Antigravity CLI against the Google account it is already signed
+in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is the one provider
+whose read-only guarantee Sirdar does not impose: the CLI gives a parent process no way to
+mediate a tool call, so every session runs in the CLI's own `--mode plan`, `permissions.bash`,
+`permissions.mcp` and `permissions.fetch` are never consulted, `mcp.workspaceOnly` cannot be
+enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
+watch, and fail loudly: a refusal the CLI makes appears as a denied permission, and a write or a
+command that *completes* in a triage session ends the run — the session is killed and the run is
+`failed`, with no note written and no register row added, because both would assert a read-only
+run that did not happen. There is no cost on that wire either, so `budget.maxUsd` never bites.
+Read the `provider: agy` section of `docs/config.md` before choosing it.
 
 `provider: acp` reaches the widest: one Agent Client Protocol client that drives
 any agent speaking it — Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
@@ -284,16 +296,17 @@ it in the environment; Anthropic documents the gateway variables that make this 
 support routing non-Claude models through them, and reported cost is unreliable there, so see
 `docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
 
-See `docs/config.md` for the `openai:`, `qwen:`, `acp:` and `cursor:` blocks,
-`docs/research/09-qwen-wire-formats.md` for the Qwen Code capture the adapter is built on,
-`docs/research/11-cursor-wire-formats.md` for the Cursor capture, and
+See `docs/config.md` for the `openai:`, `qwen:`, `acp:`, `cursor:` and `agy:` blocks,
+`docs/research/09-qwen-wire-formats.md`, `docs/research/10-antigravity-wire-formats.md` and
+`docs/research/11-cursor-wire-formats.md` for the Qwen Code, Antigravity and Cursor captures
+those adapters are built on, and
 `docs/research/providers/acp-agents.md` for the ACP agents and their launch commands, and
 `docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after them.
 
 ## Bring your own agent login
 
-Sirdar spawns the `claude`, `codex`, `qwen` or `cursor-agent` binary already installed on your
-machine and signed in with your own account; it never stores or proxies your credentials. Usage counts against your
+Sirdar spawns the `claude`, `codex`, `qwen`, `cursor-agent` or `agy` binary already installed on
+your machine and signed in with your own account; it never stores or proxies your credentials. Usage counts against your
 existing Claude or ChatGPT plan the same way an interactive session would. If you'd rather pay
 per token instead, set `billing: api` in config and put an API key in the provider's environment.
 See `docs/research/03-licensing-byo-subscription.md` for the licensing research behind this.
@@ -362,7 +375,7 @@ make vet     # go vet ./...
 Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
 is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
 override is available to you in config as `providers.claude.path`, `providers.codex.path`,
-`qwen.path` and `cursor.path`.
+`qwen.path`, `cursor.path` and `agy.path`.
 The tests therefore run offline and deterministically.
 
 Release builds via `.goreleaser.yaml` stamp the version, commit, and date with

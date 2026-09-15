@@ -5,7 +5,7 @@ package config
 // or that the operator fills in by hand (adapter command, org ID, keychain
 // service).
 const DefaultConfigYAML = `workspace: <name>
-provider: claude            # claude | codex | openai | acp | qwen | cursor
+provider: claude            # claude | codex | openai | acp | qwen | cursor | agy
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
@@ -32,6 +32,16 @@ billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in
 #   baseUrl: https://dashscope-intl.aliyuncs.com/compatible-mode/v1
 #   model: qwen3-coder-plus
 #   apiKey: keychain:dashscope-api-key        # a local server still needs one named
+# provider: agy drives Google's Antigravity CLI against the Google account it
+# is already signed in to. Read it before choosing it: the CLI gives Sirdar no
+# way to mediate a tool call, so the read-only guarantee is its own plan mode
+# rather than anything Sirdar imposes, mcp.workspaceOnly cannot be enforced,
+# there is no cost on the wire so budget.maxUsd never bites, and sirdar fix
+# is refused. docs/config.md has the whole list.
+# agy:
+#   path: agy                                 # optional: where the CLI lives
+#   model: gemini-3.6-flash-low               # agy models lists what the account has
+#   effort: low                               # low | medium | high
 # provider: acp drives any agent that speaks the Agent Client Protocol —
 # Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
 # more — over one adapter. There is no cost signal, and a whole prompt turn
@@ -205,10 +215,22 @@ permissions:
   # "rg foo | head -50" needs both "rg *" and "head *". A segment that
   # redirects or substitutes ($(…), backticks, >, >>, <, &>) is refused
   # whatever the patterns say; 2>&1 and 2>/dev/null are the exceptions.
+  #
+  # A few of these carry their own carve-out because the plain pattern would
+  # otherwise wave through a write: "sed -n *" only ever matches sed's
+  # read-only form, and "sed -i"/"sed -ni"/"sed --in-place" (in-place edit)
+  # is refused outright, whatever else the command matches. "find *"
+  # likewise never matches a segment carrying -delete, -exec, -execdir, -ok
+  # or -okdir, which run or remove what find finds rather than reading it.
   bash:
     - "git log*"
     - "git show*"
     - "git grep*"
+    - "git diff *"
+    - "git blame *"
+    - "git status*"
+    - "git branch --list*"
+    - "git rev-parse *"
     - "rg *"
     - "ls *"
     - "cat *"
@@ -218,6 +240,19 @@ permissions:
     - "file *"
     - "which *"
     - "echo *"
+    - "nl *"
+    - "sed -n *"
+    - "sort *"
+    - "uniq *"
+    - "cut *"
+    - "tr *"
+    - "find *"
+    - "stat *"
+    - "du *"
+    - "diff *"
+    - "tree *"
+    - "pwd"
+    - "jq *"
   # Globs matched against an MCP tool's full name. While this list is empty,
   # a tool is denied when any word of its name is a write verb (create,
   # update, delete, send, deploy, buy, save, log, run, execute, trigger, …)

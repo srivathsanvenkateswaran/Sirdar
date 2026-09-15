@@ -148,3 +148,26 @@ export function toMarkdownTable(groups: RegisterGroup[]): string {
   })
   return [MARKDOWN_HEADER, MARKDOWN_DIVIDER, ...rows].join('\n')
 }
+
+/**
+ * How many runs happened on each day, for the Register's heatmap.
+ *
+ * Every underlying row counts, not every group: a key that was triaged, fixed
+ * and then had its root cause written is three runs on three days, and the
+ * question the grid answers is how much the machine worked, not how many
+ * tickets were closed. A row with no date is not a day and is dropped rather
+ * than counted against today.
+ */
+export function runsPerDay(groups: RegisterGroup[]): { date: string; count: number }[] {
+  const byDay = new Map<string, number>()
+  for (const group of groups) {
+    for (const row of group.rows) {
+      const day = (row.date ?? '').slice(0, 10)
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) continue
+      byDay.set(day, (byDay.get(day) ?? 0) + 1)
+    }
+  }
+  return [...byDay.entries()]
+    .map(([date, count]) => ({ date, count }))
+    .sort((a, b) => a.date.localeCompare(b.date))
+}

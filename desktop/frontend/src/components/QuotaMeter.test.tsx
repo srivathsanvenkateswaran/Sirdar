@@ -38,7 +38,7 @@ describe('QuotaMeter', () => {
     expect(screen.getByText('used')).toBeInTheDocument()
   })
 
-  it('applies the warning class above 80% and the danger class at 100%', () => {
+  it('warns above 80% and says the words at 100%', () => {
     const quota: Quota[] = [
       {
         provider: 'claude',
@@ -48,8 +48,11 @@ describe('QuotaMeter', () => {
       },
     ]
     const { container } = render(<QuotaMeter quota={quota} />)
-    const fills = container.querySelectorAll('.quota-bar__fill')
-    expect(fills[0]).toHaveClass('quota-bar--warn')
-    expect(fills[1]).toHaveClass('quota-bar--danger')
+    const chips = container.querySelectorAll('.sd-quota')
+    expect(chips[0]).toHaveAttribute('data-level', 'warn')
+    expect(chips[1]).toHaveAttribute('data-level', 'over')
+    // Over budget is said in words as well as in red, which is the rule the
+    // design language states for every status: never colour alone.
+    expect(screen.getByText('over budget')).toBeInTheDocument()
   })
 })
