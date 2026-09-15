@@ -1,0 +1,69 @@
+{
+  "_pagination": {"next": null},
+  "_links": {"self": "https://api2.frontapp.com/conversations/cnv_1/messages?page_token=PAGE2"},
+  "_results": [
+    {
+      "id": "msg_2",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": null,
+      "created_at": 1788000600,
+      "blurb": "Looking into it now.",
+      "author": {
+        "id": "tea_grace",
+        "email": "grace@example.com",
+        "username": "grace",
+        "first_name": "Grace",
+        "last_name": "Hopper",
+        "type": "user"
+      },
+      "recipients": [{"name": "Ada Lovelace", "handle": "ada@example.com", "role": "to"}],
+      "body": "<p>Looking into it now.</p>",
+      "text": "Looking into it now.",
+      "attachments": []
+    },
+    {
+      "id": "msg_3",
+      "type": "email",
+      "is_inbound": false,
+      "draft_mode": null,
+      "created_at": 1788001200,
+      "blurb": "Auto-reply",
+      "author": {"id": "tea_rule", "username": "office-hours", "type": "rule"},
+      "recipients": [{"name": "Ada Lovelace", "handle": "ada@example.com", "role": "to"}],
+      "body": "",
+      "text": "Auto-reply: we are outside office hours.",
+      "attachments": []
+    },
+    {
+      "id": "msg_4",
+      "type": "email",
+      "is_inbound": true,
+      "draft_mode": null,
+      "created_at": 1788001500,
+      "blurb": "Here is the screenshot.",
+      "author": null,
+      "recipients": [{"name": "Ada Lovelace", "handle": "ada@example.com", "role": "from"}],
+      "body": "<p>Here is the screenshot.</p>",
+      "text": "Here is the screenshot.",
+      "attachments": [
+        {
+          "id": "fil_shot",
+          "filename": "../../etc/shot.png",
+          "url": "https://api2.frontapp.com/download/fil_shot",
+          "content_type": "image/png",
+          "size": 11,
+          "metadata": {"is_inline": false, "cid": ""}
+        },
+        {
+          "id": "fil_evil",
+          "filename": "leak.bin",
+          "url": "https://files.evil.example/download/fil_evil",
+          "content_type": "application/octet-stream",
+          "size": 11,
+          "metadata": {"is_inline": false, "cid": ""}
+        }
+      ]
+    }
+  ]
+}

@@ -22,6 +22,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/front"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
@@ -406,7 +407,7 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "gorgias":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias":
 		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
@@ -414,9 +415,9 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 }
 
 // newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
-// plain credential refs — zendesk, freshdesk, helpscout, intercom, hubspot
-// and gorgias — resolving them on the way in. zohodesk is built separately
-// (ZohoTokenSource) because of its refresh-token grant option.
+// plain credential refs — zendesk, freshdesk, helpscout, intercom, hubspot,
+// front and gorgias — resolving them on the way in. zohodesk is built
+// separately (ZohoTokenSource) because of its refresh-token grant option.
 //
 // helpscout is the one that keeps refreshing after this point: it is
 // handed a client id and secret rather than a token, and mints its own
@@ -497,6 +498,17 @@ func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.
 			return nil, err
 		}
 		c, err := hubspot.New(hubspot.Config{AccessToken: accessToken}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "front":
+		token, err := resolveRef(creds, "token", sc.Token)
+		if err != nil {
+			return nil, err
+		}
+		c, err := front.New(front.Config{Token: token}, hc)
 		if err != nil {
 			return nil, err
 		}

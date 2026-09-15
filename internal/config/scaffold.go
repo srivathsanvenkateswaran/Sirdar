@@ -127,6 +127,9 @@ sources:
     # adapter: hubspot
     # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
     #
+    # adapter: front
+    # token: keychain:front-api-token                 # API token, Settings -> Developers
+    #
     # adapter: gorgias
     # account: acme                           # acme.gorgias.com
     # baseUrl: ""                             # optional override, e.g. a proxy
