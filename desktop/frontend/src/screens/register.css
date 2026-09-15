@@ -244,9 +244,9 @@
  * The rows still carry them, and the CSV export writes every column.
  */
 @media (max-width: 1199px) {
-  .register .sd-table [data-column='confidence'],
-  .register .sd-table [data-column='verdict'],
-  .register .sd-table [data-column='notes'] {
+  .register .sd-table [data-col='confidence'],
+  .register .sd-table [data-col='verdict'],
+  .register .sd-table [data-col='notes'] {
     display: none;
   }
 }

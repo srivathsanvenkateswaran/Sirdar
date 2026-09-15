@@ -26,6 +26,7 @@ import Banner from '../ui/banner'
 import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
 import ProviderMark from '../ui/provider-mark'
+import { AssignedTo } from '../ui/run-card/Avatar'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
@@ -78,9 +79,12 @@ export function statsTitle(detail: {
   usage?: { turns?: number }
 }): string {
   const turns = detail.usage?.turns ?? 0
-  return [detail.provider, detail.model, `${turns} ${turns === 1 ? 'turn' : 'turns'}`]
-    .filter(Boolean)
-    .join(' · ')
+  // The same words the drawn span uses: never blank on the model.
+  return [
+    detail.provider,
+    detail.model || 'model unknown',
+    `${turns} ${turns === 1 ? 'turn' : 'turns'}`,
+  ].join(' · ')
 }
 
 export default function Session(props: {
@@ -403,6 +407,10 @@ export default function Session(props: {
         <span className="session-title" title={title} dir="auto">
           {title ?? ''}
         </span>
+        {/* Who the ticket belongs to. It follows the title rather than sitting
+            with the run's own figures, because it is a fact about the ticket.
+            It stays whatever the width: the stats are what collapse. */}
+        <AssignedTo name={detail.assignee ?? ''} />
         <div
           className="session-stats"
           data-compact={compact ? 'true' : undefined}
@@ -412,7 +420,10 @@ export default function Session(props: {
             <span className="session-stat session-provider">
               <ProviderMark provider={detail.provider} size="sm" />
               <span className="session-provider-name">{detail.provider}</span>
-              {detail.model ? <span className="session-provider-model">{detail.model}</span> : null}
+              {/* Never blank: a run that has not reported its model yet says so. */}
+              <span className="session-provider-model" dir="ltr">
+                {detail.model || 'model unknown'}
+              </span>
             </span>
           )}
           <span className="session-stat">

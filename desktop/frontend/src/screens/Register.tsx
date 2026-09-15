@@ -20,6 +20,7 @@ import DataTable, { type DataColumn } from '../ui/data-table'
 import Heatmap, { dayName } from '../ui/heatmap'
 import PageHead from '../ui/page-head'
 import ProviderMark from '../ui/provider-mark'
+import Avatar from '../ui/run-card/Avatar'
 import StatCard from '../ui/stat-card'
 import StatusBadge from '../ui/status-badge'
 import './register.css'
@@ -237,6 +238,15 @@ export default function Register(props: {
     return map
   }, [runs])
 
+  // Who the ticket belonged to, by run. A register row on its own does not
+  // record it — the run does, off the bundle it gathered — so a row with no
+  // run behind it any more shows an em dash rather than a guess.
+  const assignees = useMemo(() => {
+    const map = new Map<string, string>()
+    for (const r of runs) if (r.assignee) map.set(r.runId, r.assignee)
+    return map
+  }, [runs])
+
   const kinds = useMemo(() => uniqueSorted(ledger.map((r) => r.kind)), [ledger])
   const states = useMemo(() => uniqueSorted(ledger.map((r) => r.state)), [ledger])
   const providers = useMemo(() => uniqueSorted(ledger.map((r) => r.provider)), [ledger])
@@ -300,6 +310,21 @@ export default function Register(props: {
             <span className="register-none">—</span>
           ),
       },
+      {
+        id: 'assignee',
+        header: 'Assignee',
+        cell: (r) => {
+          const who = assignees.get(r.runId) ?? ''
+          return who ? (
+            <span className="sd-assignee">
+              <Avatar name={who} />
+              <span className="sd-assignee__name">{who}</span>
+            </span>
+          ) : (
+            <span className="register-none">—</span>
+          )
+        },
+      },
       { id: 'turns', header: 'Turns', cell: (r) => r.turns, numeric: true },
       { id: 'cost', header: 'Cost', cell: (r) => usd(r.costUsd), numeric: true },
       { id: 'mins', header: 'Mins', cell: (r) => (r.minutes === null ? '—' : r.minutes), numeric: true },
@@ -317,7 +342,7 @@ export default function Register(props: {
         sortable: true,
       },
     ],
-    [onOpenRun, titles],
+    [assignees, onOpenRun, titles],
   )
 
   /** Why a run stopped, under the row of a run that did not finish cleanly. */

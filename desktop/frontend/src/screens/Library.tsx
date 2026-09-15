@@ -13,6 +13,7 @@ import ItemRow from '../ui/item-row'
 import KanbanColumn, { type LaneId } from '../ui/kanban-column'
 import KindChip from '../ui/kind-chip'
 import ModalSheet from '../ui/modal-sheet'
+import ModelPicker, { type ModelChoicePair } from '../ui/model-picker'
 import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
 import NotePane from '../ui/note-pane'
 import PageHead from '../ui/page-head'
@@ -163,6 +164,7 @@ export default function Library(): JSX.Element {
   const [search, setSearch] = useState('')
   const [well, setWell] = useState('')
   const [toggled, setToggled] = useState(true)
+  const [choice, setChoice] = useState<ModelChoicePair>({ provider: '', model: '' })
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
     columnId: 'key',
     direction: 'asc',
@@ -1223,6 +1225,47 @@ export default function Library(): JSX.Element {
             ))}
             <State label="Arabic">
               <StateGlyph state="blocked" word="بانتظار ردّك" clock="04:12" />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="model-picker"
+          name="Model picker"
+          note="The chip says which pair will run; the popover under it is where it changes."
+        >
+          <div className="lib-row">
+            <State label="Nothing chosen, with what the last run used">
+              <ModelPicker
+                provider={choice.provider}
+                model={choice.model}
+                defaultProvider="claude"
+                lastUsed="claude-sonnet-5"
+                onChange={setChoice}
+              />
+            </State>
+            <State label="A model chosen">
+              <ModelPicker provider="" model="claude-sonnet-5" defaultProvider="claude" />
+            </State>
+            <State label="Free text">
+              <ModelPicker provider="qwen" model="qwen3-coder" defaultProvider="claude" />
+            </State>
+            <State label="Read-only, in a session">
+              <ModelPicker
+                provider="claude"
+                model="claude-haiku-4-5-20251001"
+                readOnly="A steer resumes the same session, so the model cannot change"
+              />
+            </State>
+            <State label="Change, on a setting row">
+              <ModelPicker provider="" model="" defaultProvider="claude" trigger="change" />
+            </State>
+            <State label="Arabic">
+              <ModelPicker
+                provider="claude"
+                model="claude-sonnet-5"
+                readOnly="التوجيه يستأنف الجلسة نفسها، فلا يتغيّر النموذج"
+              />
             </State>
           </div>
         </Section>

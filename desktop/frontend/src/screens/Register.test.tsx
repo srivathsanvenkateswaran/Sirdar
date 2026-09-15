@@ -381,4 +381,30 @@ describe('Register', () => {
     await shownTable()
     expect(document.querySelector('.sd-button[data-variant="primary"]')).toBeNull()
   })
+
+  it('gives each run an Assignee cell of initials and name, and a dash when nobody is named', async () => {
+    const t = await shownTable()
+    expect(within(t).getByRole('columnheader', { name: 'Assignee' })).toHaveAttribute(
+      'data-col',
+      'assignee',
+    )
+
+    const cells = [...t.querySelectorAll('td[data-col="assignee"]')]
+    expect(cells).toHaveLength(5)
+    // run-1 is the reader's; the two rows the register filed with no run left
+    // on disk say nothing about who owned them.
+    const named = cells.filter((cell) => cell.querySelector('.sd-avatar'))
+    expect(named).toHaveLength(3)
+    expect(named[0].querySelector('.sd-avatar')).toHaveTextContent('S')
+    expect(named[0].querySelector('.sd-avatar')).toHaveAttribute('title', 'sri@acme.com')
+    expect(named[0]).toHaveTextContent('sri@acme.com')
+    expect(cells.filter((cell) => cell.textContent === '—')).toHaveLength(2)
+  })
+
+  it('leaves the Assignee cell empty-handed for a run the service never named one for', async () => {
+    mount({ runs: [run({ runId: 'run-1', key: 'OMNI-1', assignee: '', mine: false })] })
+    const t = await table()
+    const cells = [...t.querySelectorAll('td[data-col="assignee"]')]
+    expect(cells.every((cell) => cell.textContent === '—')).toBe(true)
+  })
 })

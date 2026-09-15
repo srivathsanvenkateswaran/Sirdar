@@ -42,10 +42,10 @@ describe('DataTable', () => {
   it('names the column on every cell, so a screen can hide one at a width', () => {
     render(table())
     expect(screen.getByRole('columnheader', { name: 'Ticket' })).toHaveAttribute(
-      'data-column',
+      'data-col',
       'title',
     )
-    const cells = screen.getAllByRole('cell').filter((c) => c.getAttribute('data-column') === 'cost')
+    const cells = screen.getAllByRole('cell').filter((c) => c.getAttribute('data-col') === 'cost')
     expect(cells.map((c) => c.textContent)).toEqual(['$0.42', '$1.08'])
   })
 

@@ -9,13 +9,14 @@ import type {
   RetroResult,
   Transport,
 } from '../api/types'
-import ProviderFields from '../components/run/ProviderFields'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { reasonOf } from '../lib/format'
+import { describeModel } from '../lib/models'
 import Badge from '../ui/badge'
 import Button from '../ui/button'
 import DataTable, { type DataColumn } from '../ui/data-table'
 import Dialog from '../ui/dialog'
+import ModelPicker from '../ui/model-picker'
 import PageHead from '../ui/page-head'
 import ProviderMark from '../ui/provider-mark'
 import SettingRow, { SettingCard } from '../ui/setting-row'
@@ -279,7 +280,7 @@ function CheckIcon(): JSX.Element {
   )
 }
 
-type Open = 'golden' | 'json' | 'provider' | null
+type Open = 'golden' | 'json' | null
 
 /** How long the Copy button says Copied before it says Copy again. */
 const COPIED_MS = 1500
@@ -337,10 +338,6 @@ export default function Eval(props: {
   const [goldenKey, setGoldenKey] = useState('')
   const [goldenPending, setGoldenPending] = useState(false)
   const [goldenError, setGoldenError] = useState('')
-
-  // The provider dialog edits a draft and commits it on Save.
-  const [draftProvider, setDraftProvider] = useState('')
-  const [draftModel, setDraftModel] = useState('')
 
   const load = useCallback(async () => {
     if (!workspaceId) return
@@ -510,18 +507,6 @@ export default function Eval(props: {
     }
   }
 
-  function openProvider(): void {
-    setDraftProvider(provider)
-    setDraftModel(model)
-    setOpen('provider')
-  }
-
-  function saveProvider(): void {
-    setProvider(draftProvider)
-    setModel(draftModel)
-    setOpen(null)
-  }
-
   const latest = useMemo(() => (reports === null ? null : latestOf(reports, retro)), [reports, retro])
 
   const disabledReason = running
@@ -669,9 +654,8 @@ export default function Eval(props: {
                 effectiveProvider ? (
                   <span className="eval-provider">
                     <ProviderMark provider={effectiveProvider} size="sm" />
-                    <span className="eval-provider__pair">
-                      {effectiveProvider}
-                      {effectiveModel ? ` · ${effectiveModel}` : ''}
+                    <span className="eval-provider__pair" dir="ltr">
+                      {describeModel(effectiveProvider, effectiveModel)}
                     </span>
                   </span>
                 ) : (
@@ -679,9 +663,20 @@ export default function Eval(props: {
                 )
               }
               control={
-                <Button variant="pale" disabled={running} onClick={openProvider}>
-                  Change
-                </Button>
+                // The same picker New session opens from its chip; every
+                // choice applies as it is made and feeds the suite's options.
+                <ModelPicker
+                  trigger="change"
+                  provider={provider}
+                  model={model}
+                  defaultProvider={defaultProvider}
+                  defaultModel={defaultModel}
+                  disabled={running}
+                  onChange={(choice) => {
+                    setProvider(choice.provider)
+                    setModel(choice.model)
+                  }}
+                />
               }
             />
           </SettingCard>
@@ -812,29 +807,6 @@ export default function Eval(props: {
         <pre className="eval-dialog__json" tabIndex={0}>
           {json}
         </pre>
-      </Dialog>
-
-      <Dialog
-        open={open === 'provider'}
-        title="Provider"
-        onClose={() => setOpen(null)}
-        actions={
-          <>
-            <Button onClick={() => setOpen(null)}>Cancel</Button>
-            <Button variant="primary" onClick={saveProvider}>
-              Save
-            </Button>
-          </>
-        }
-      >
-        <ProviderFields
-          idPrefix="eval"
-          provider={draftProvider}
-          model={draftModel}
-          defaultProvider={defaultProvider}
-          onProvider={setDraftProvider}
-          onModel={setDraftModel}
-        />
       </Dialog>
     </div>
   )

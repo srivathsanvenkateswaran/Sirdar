@@ -601,28 +601,7 @@ section:first-child > .turn-rule {
   color: var(--sd-ink-3);
 }
 
-.chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sd-space-2);
-  min-block-size: 32px;
-  padding-inline: var(--sd-space-3);
-  border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-pill);
-  background: transparent;
-  color: var(--sd-ink-2);
-  font-size: var(--sd-text-ledger);
-  white-space: nowrap;
-}
-
-.chip > .sd-mark {
-  margin-inline-start: -4px;
-}
-
-.chip-mono {
-  font-family: var(--sd-font-mono);
-  color: var(--sd-ink-3);
-}
+/* The bar's Model chip is the library's model picker, read-only here. */
 
 /* ------------------------------------------------------------- right panes */
 

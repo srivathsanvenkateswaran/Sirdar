@@ -4,6 +4,11 @@ import './DataTable.css'
 export type SortDirection = 'asc' | 'desc'
 
 export interface DataColumn<Row> {
+  /**
+   * Also written onto every header and body cell as `data-col`, so a screen's
+   * own stylesheet can narrow or drop one column at a width without the table
+   * knowing anything about it.
+   */
   id: string
   header: ReactNode
   /** The cell. Returning a string is the common case. */
@@ -80,8 +85,8 @@ export default function DataTable<Row>({
                 <th
                   key={column.id}
                   scope="col"
+                  data-col={column.id}
                   style={column.width ? { width: column.width } : undefined}
-                  data-column={column.id}
                   data-numeric={column.numeric ? 'true' : undefined}
                   aria-sort={
                     active ? ANNOUNCED[sort.direction] : column.sortable ? 'none' : undefined
@@ -115,7 +120,7 @@ export default function DataTable<Row>({
                   {columns.map((column) => (
                     <td
                       key={column.id}
-                      data-column={column.id}
+                      data-col={column.id}
                       data-numeric={column.numeric ? 'true' : undefined}
                     >
                       {column.numeric ? (

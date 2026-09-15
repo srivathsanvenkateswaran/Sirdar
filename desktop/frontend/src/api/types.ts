@@ -18,8 +18,15 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * else ''. A card shows it over the key; with no title the key is the title.
  * The wire always carries it; it is optional here so a literal built in a test
  * need not spell an empty one.
+ *
+ * `assignee` is who the bundle said the ticket belonged to when the run
+ * gathered it, and `mine` says that person is the workspace's own account —
+ * the same account `assignee: me` resolves to for a webhook filter or a queue
+ * query. Both let a card draw an avatar and the board filter by owner without
+ * a second call to the tracker. An `assignee` of '' draws nothing, and `mine`
+ * is false for every run of a workspace whose credentials name nobody.
  */
-export interface RunSummary { runId: string; key: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+export interface RunSummary { runId: string; key: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`

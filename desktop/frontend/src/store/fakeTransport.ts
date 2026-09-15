@@ -193,9 +193,29 @@ export function usage(over: Partial<Usage> = {}): Usage {
 }
 
 /**
+ * Who the fake workspace's own credentials belong to: the account
+ * `assignee: me` resolves to, the way `SelfOf` resolves it in the service.
+ * It is what `queue(ws, { assignee: 'me' })` answers against.
+ */
+export const SELF = 'sri@acme.com'
+
+/**
+ * The service's rule for "is this person me", so the fake queue answers the
+ * `me` filter the way a tracker would: case never matters, and a bare local
+ * part matches the address it is the local part of.
+ */
+export function isSelf(assignee: string): boolean {
+  const who = assignee.trim().toLowerCase()
+  if (!who) return false
+  return who === SELF || who === SELF.split('@')[0]
+}
+
+/**
  * A run as the service lists it. The title is empty by default, the way a
  * run whose bundle and note have gone reads, so a test that wants the card's
- * titled shape passes one in.
+ * titled shape passes one in. The assignee is the reader's own, since the
+ * sample workspace is the reader's; a test about somebody else's run passes
+ * `assignee` and `mine` in.
  */
 export function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
@@ -209,6 +229,8 @@ export function run(over: Partial<RunSummary> = {}): RunSummary {
     startedAt: '2026-09-10T09:00:00Z',
     updatedAt: '2026-09-10T09:04:00Z',
     reason: '',
+    assignee: SELF,
+    mine: true,
     usage: usage(),
     notes: [],
     ...over,
@@ -349,9 +371,13 @@ export function createFakeTransport(seed: {
     workspaces: async () => seed.workspaces ?? [workspace()],
     addWorkspace: async (root) => workspace({ id: 'ws-new', root }),
     removeWorkspace: async () => {},
-    queue: async (ws) => {
+    queue: async (ws, filter) => {
       calls.queue.push(ws)
       if (queueError) throw queueError
+      // The one filter the tracker really applies here: `me` narrows the
+      // queue to the reader's own keys, which is what the board's Queue lane
+      // asks for.
+      if (filter?.assignee === 'me') return ticketList.filter((t) => isSelf(t.assignee))
       return ticketList
     },
     runs: async (ws) => {

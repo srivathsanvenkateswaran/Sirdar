@@ -217,8 +217,57 @@ describe('Session', () => {
       expect(statsTitle({ provider: 'claude', model: 'sonnet', usage: { turns: 1 } })).toBe(
         'claude · sonnet · 1 turn',
       )
-      expect(statsTitle({ provider: 'codex' })).toBe('codex · 0 turns')
+      expect(statsTitle({ provider: 'codex' })).toBe('codex · model unknown · 0 turns')
     })
+
+    it('keeps the assignee line while the stats collapse', async () => {
+      const media = stubMatchMedia([BELOW_STANDARD])
+      try {
+        const f = fake({ detail: { ...RUN, assignee: 'Sri Venkateswaran' } })
+        const { container } = renderSession(f, { title: 'Statement export times out' })
+        await screen.findByRole('heading', { name: 'OMNI-2510' })
+        expect(container.querySelector('.sd-assigned')).toHaveTextContent(
+          'assigned to Sri Venkateswaran',
+        )
+        expect(container.querySelector('.session-stats')).toHaveAttribute('data-compact', 'true')
+      } finally {
+        media.restore()
+      }
+    })
+  })
+
+  it('says in the topbar who the ticket is assigned to, and nothing when nobody is', async () => {
+    const f = fake({ detail: { ...RUN, assignee: 'Sri Venkateswaran' } })
+    const { container } = renderSession(f, { title: 'Statement export times out' })
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+
+    const line = container.querySelector('.sd-assigned') as HTMLElement
+    expect(line).toHaveTextContent('assigned to Sri Venkateswaran')
+    expect(line).toHaveAttribute('title', 'Sri Venkateswaran')
+    // After the title, not among the run's own figures.
+    expect(line.previousElementSibling).toHaveClass('session-title')
+
+    const bare = renderSession(fake({ detail: { ...RUN, assignee: '' } }))
+    await bare.findByRole('heading', { name: 'OMNI-2510' })
+    expect(bare.container.querySelector('.sd-assigned')).toBeNull()
+  })
+
+  it('always names the model in the topbar, and says so when the run has not reported one', async () => {
+    const f = fake({ detail: { ...RUN, model: '' } })
+    renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(screen.getByText('model unknown')).toHaveClass('session-provider-model')
+    expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
+  })
+
+  it('keeps the composer Model chip read-only: a steer resumes the same session', async () => {
+    const f = fake()
+    renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    const chip = screen.getByRole('button', { name: /^Model claude · claude-haiku-4-5/ })
+    expect(chip).toBeDisabled()
+    expect(chip).toHaveAttribute('title', expect.stringContaining('A steer resumes the same session'))
+    expect(screen.getByText('claude · claude-haiku-4-5')).toBeInTheDocument()
   })
 
   it('appends a subscribed run.event for this run and ignores another run', async () => {

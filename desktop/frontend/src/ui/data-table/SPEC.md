@@ -18,10 +18,11 @@ Built. `desktop/frontend/src/ui/data-table/`. It replaces `.register-table`,
 - `button.sd-table__sort` + `span.sd-table__arrow` — a sortable header.
 - `td[data-numeric]` — mono, tabular, `text-align: end`, contents wrapped
   `dir="ltr"`.
-- `th[data-column]` / `td[data-column]` — every cell carries its column's
-  id, so a screen can hide a column at a width in its own stylesheet
-  (`[data-column='notes'] { display: none }`) without the table knowing the
-  breakpoint. What is hidden stays in the rows and in any export.
+- `th[data-col]` / `td[data-col]` — every cell carries its column's `id`, so a
+  screen's own stylesheet can narrow or drop one column at a width
+  (`[data-col='notes'] { display: none }`). The table neither reads the
+  attribute nor knows the widths; what is hidden stays in the rows and in any
+  export.
 
 ## States
 
@@ -77,10 +78,11 @@ nothing moves.
 
 ## Changelog
 
-### 2026-09-16 (responsive)
-Every `th` and `td` carries `data-column="<id>"`, so the register can drop
-Confidence, Verdict and Notes under 1200 from its own stylesheet. The table
-itself has no breakpoints.
+### 2026-09-16 (assignee round, responsive)
+Every header and body cell now carries `data-col` with its column's id. It is
+the hook a screen needs to drop a column at a narrow width — the register's
+Assignee is the first, and under 1200 the register also drops Confidence,
+Verdict and Notes — without the table taking on a media query of its own.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: 48-tall rows with 16px cell padding and

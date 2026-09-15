@@ -247,7 +247,7 @@ describe('the register', () => {
   it('hides Confidence, Verdict and Notes below 1200', () => {
     const compact = atMost(css, BANDS.compact)
     for (const column of ['confidence', 'verdict', 'notes']) {
-      expect(compact).toContain(`[data-column='${column}']`)
+      expect(compact).toContain(`[data-col='${column}']`)
     }
     expect(compact).toContain('display: none')
   })

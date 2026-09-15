@@ -1,0 +1,57 @@
+/*
+ * The assignee's avatar, and the two places outside a card that name an
+ * assignee in words: the register's cell and the session topbar's line.
+ *
+ * It is its own stylesheet rather than more of RunCard.css because the same
+ * circle is drawn on a card, in a table row and, one day, anywhere else a
+ * ticket says whose it is — and because the card's own sizing is settled.
+ */
+
+.sd-avatar {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  /* Initials are read as a unit, never wrapped or reordered. */
+  white-space: nowrap;
+  unicode-bidi: isolate;
+}
+
+/* The register's cell: the circle, then the name it stands for. */
+.sd-assignee {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+  color: var(--sd-ink-2);
+}
+
+.sd-assignee__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The session topbar's line: who the ticket on this screen belongs to. The
+   width cap is the line's own: a long name cuts itself rather than pushing
+   the run's figures off the end of the bar. */
+.sd-assigned {
+  max-inline-size: 24ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+}
