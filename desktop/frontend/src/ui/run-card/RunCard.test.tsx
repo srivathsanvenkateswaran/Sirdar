@@ -129,3 +129,69 @@ describe('RunCard', () => {
     expect(screen.getByText('العميل لا يستطيع تصدير كشف الحساب')).toHaveAttribute('dir', 'auto')
   })
 })
+
+describe('the assignee avatar', () => {
+  it('draws the initials before the provider mark and names the person in the label', () => {
+    const { container } = render(
+      <RunCard
+        {...BASE}
+        status="running"
+        title="Statement export times out"
+        assignee="Sri Venkateswaran"
+      />,
+    )
+    const avatar = container.querySelector('.sd-avatar') as HTMLElement
+    expect(avatar).toHaveTextContent('SV')
+    expect(avatar).toHaveAttribute('title', 'Sri Venkateswaran')
+    expect(avatar).toHaveAttribute('aria-hidden', 'true')
+
+    // The foot's trailing side reads key, then who it is, then what ran it.
+    const who = [...(container.querySelector('.sd-run-card__who')?.children ?? [])]
+    expect(who.map((el) => el.className.split(' ')[0])).toEqual([
+      'sd-run-card__key',
+      'sd-avatar',
+      'sd-mark',
+    ])
+
+    expect(
+      screen.getByRole('button', {
+        name: 'OMNI-2510: Statement export times out, running, assigned to Sri Venkateswaran',
+      }),
+    ).toBeInTheDocument()
+  })
+
+  it('reads an address by its local part', () => {
+    const { container, rerender } = render(
+      <RunCard {...BASE} status="queued" assignee="sri.venkateswaran@acme.com" />,
+    )
+    expect(container.querySelector('.sd-avatar')).toHaveTextContent('SV')
+    rerender(<RunCard {...BASE} status="queued" assignee="sri@acme.com" />)
+    expect(container.querySelector('.sd-avatar')).toHaveTextContent('S')
+  })
+
+  it('draws nothing when nobody is assigned', () => {
+    const { container, rerender } = render(<RunCard {...BASE} status="queued" title="Login loop" />)
+    expect(container.querySelector('.sd-avatar')).toBeNull()
+    expect(screen.getByRole('button', { name: 'OMNI-2510: Login loop, queued' })).toBeInTheDocument()
+
+    rerender(<RunCard {...BASE} status="queued" title="Login loop" assignee="   " />)
+    expect(container.querySelector('.sd-avatar')).toBeNull()
+    expect(screen.getByRole('button', { name: 'OMNI-2510: Login loop, queued' })).toBeInTheDocument()
+  })
+
+  it('lets an explicit label stand, avatar and all', () => {
+    const { container } = render(
+      <RunCard
+        runKey="OMNI-2510"
+        kind="triage"
+        provider="claude"
+        status="queued"
+        title="Login loop"
+        assignee="Sri Venkateswaran"
+        label="Start triage of OMNI-2510"
+      />,
+    )
+    expect(screen.getByLabelText('Start triage of OMNI-2510')).toBeInTheDocument()
+    expect(container.querySelector('.sd-avatar')).toHaveTextContent('SV')
+  })
+})

@@ -126,8 +126,8 @@ describe('Board', () => {
       ],
     })
     const gathering = within(lane(container, 'gathering'))
-    expect(gathering.getByRole('button', { name: 'OMNI-1: Login loop after reset, running' })).toBeInTheDocument()
-    const bare = gathering.getByRole('button', { name: 'OMNI-6, running' })
+    expect(gathering.getByRole('button', { name: /^OMNI-1: Login loop after reset, running/ })).toBeInTheDocument()
+    const bare = gathering.getByRole('button', { name: /^OMNI-6, running/ })
     expect(within(bare).getAllByText('OMNI-6')).toHaveLength(1)
     expect(bare.querySelector('.sd-run-card__key')).toBeNull()
   })
@@ -137,7 +137,9 @@ describe('Board', () => {
       runs: [run({ runId: 'r1', key: 'OMNI-1', status: 'running', title: 'What the bundle recorded' })],
     })
     expect(
-      within(lane(container, 'gathering')).getByRole('button', { name: 'OMNI-1: What the bundle recorded, running' }),
+      within(lane(container, 'gathering')).getByRole('button', {
+        name: /^OMNI-1: What the bundle recorded, running/,
+      }),
     ).toBeInTheDocument()
   })
 
