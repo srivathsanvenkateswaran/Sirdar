@@ -83,21 +83,29 @@ type Attachment struct {
 // the session can read and evidence it cannot.
 func (a Attachment) Transcribed() bool { return a.Transcript != "" }
 
+// SkippedAttachment is an attachment the bundle's manifest listed but could
+// not make available to a session — over the size cap, or a type it cannot
+// open — recorded so a note can tell a reader what evidence went unread
+// rather than only surfacing it as a run warning. An attachment that was
+// transcribed instead is not one of these: its contents did reach the
+// session, as text.
+type SkippedAttachment struct {
+	Name   string
+	Type   string // MIME type, best effort
+	Size   string // human-readable, e.g. "17.0 MiB"; "size unknown" when unknown
+	Reason string // e.g. "over the 15.0 MiB limit", "cannot be opened in this session"
+}
+
 // Bundle is everything gathered for a ticket: the tracker record, the helpdesk
 // record, the conversation thread, its attachments, and any warnings surfaced
 // while assembling them.
 type Bundle struct {
-	Tracker     *TrackerTicket  // nil when the workspace has no tracker
-	Helpdesk    *HelpdeskTicket // nil when fetch failed or absent
-	Thread      Thread
-	Attachments []Attachment
-	Warnings    []string // e.g. attachment download failures, surfaced to the prompt
-
-	// Unreviewed names the attachments that were dropped from the bundle
-	// — too large, or of a type the session cannot open and that no
-	// transcription could rescue. A transcribed audio file is not in this
-	// list: its contents did reach the session, as text.
-	Unreviewed []string `json:",omitempty"`
+	Tracker            *TrackerTicket  // nil when the workspace has no tracker
+	Helpdesk           *HelpdeskTicket // nil when fetch failed or absent
+	Thread             Thread
+	Attachments        []Attachment
+	SkippedAttachments []SkippedAttachment // from the manifest, but dropped: too large, unreadable, or unrecoverably untranscribed
+	Warnings           []string            // e.g. attachment download failures, surfaced to the prompt
 }
 
 // Key returns Tracker.Key if present else Helpdesk.ID.

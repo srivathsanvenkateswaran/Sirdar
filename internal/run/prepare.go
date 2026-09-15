@@ -421,8 +421,9 @@ func baseMIME(t string) string {
 // transcription command a chance to turn a file the session cannot open
 // into one it can. A file that fails is deleted from the bundle — leaving
 // it there means the session can still read 17 MB of mp4 into its context
-// — and named, with its size, in a warning the prompt and the run state
-// both carry, and in the bundle's Unreviewed list the note renders from.
+// — and named, with its size and a reason, in a warning the prompt and the
+// run state both carry, and in the bundle's SkippedAttachments list the
+// note's "Attachments not reviewed" section renders from.
 //
 // A transcribed voice note stays in the bundle beside its transcript. It
 // is still unreadable, but it is now the source of a quotation in the
@@ -445,10 +446,12 @@ func (r *Runner) keepReadableAttachments(ctx context.Context, p *prepared, b *ti
 		}
 
 		mimeType := attachmentMIME(a)
+		var reason string
 		switch {
 		case size > max:
-			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) is over the %s limit and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size), humanBytes(max)))
+			reason = fmt.Sprintf("over the %s limit", humanBytes(max))
+			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) is %s and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), reason))
 		case readableMIME(mimeType):
 			kept = append(kept, a)
 			continue
@@ -456,6 +459,7 @@ func (r *Runner) keepReadableAttachments(ctx context.Context, p *prepared, b *ti
 			res, err := tx.Run(ctx, path)
 			if err == nil {
 				if err := r.writeTranscript(p, &a, res); err != nil {
+					reason = "transcribed, but the transcript could not be written"
 					p.warn(b, fmt.Sprintf("attachment %q was transcribed but the transcript could not be written: %v; its contents are unread", a.Name, err))
 					break
 				}
@@ -469,17 +473,22 @@ func (r *Runner) keepReadableAttachments(ctx context.Context, p *prepared, b *ti
 					p.warn(b, fmt.Sprintf("transcription stopped: %v; the audio after this point is unread", err))
 					cappedReported = true
 				}
+				reason = "not transcribed before the transcription budget ran out"
 				p.warn(b, fmt.Sprintf("attachment %q (%s, %s) was not transcribed and was not kept; its contents are unread",
 					a.Name, mimeType, humanBytes(size)))
 				break
 			}
+			reason = fmt.Sprintf("could not be transcribed: %v", err)
 			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) could not be transcribed and was not kept; its contents are unread: %v",
 				a.Name, mimeType, humanBytes(size), err))
 		default:
-			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) cannot be opened in this session and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size)))
+			reason = "cannot be opened in this session"
+			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) %s and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), reason))
 		}
-		b.Unreviewed = append(b.Unreviewed, a.Name)
+		b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
+			Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
+		})
 		if path != "" {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				fmt.Fprintf(r.stderr(), "[%s] remove attachment %s: %v\n", p.state.Key, path, err)

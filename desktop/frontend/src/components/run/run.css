@@ -307,7 +307,9 @@
   padding-top: 3px;
   font-family: var(--mono, monospace);
   font-size: 11px;
-  color: color-mix(in srgb, var(--muted, #6b7280) 75%, transparent);
+  /* The offset is text a reader uses, not decoration: it takes the dim ink
+     whole rather than fading it a further quarter out of the page. */
+  color: var(--muted, #6b7280);
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
@@ -796,4 +798,30 @@
 
 .run-failed-line {
   color: var(--run-error);
+}
+
+/*
+ * The collapsed run of raw stream lines under "All". It reads as one more
+ * ledger row rather than a control, so it borrows the summary's type and only
+ * warms up on hover.
+ */
+.ev-fold {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-family: var(--mono, monospace);
+  color: var(--muted, #6b7280);
+  cursor: pointer;
+}
+
+.ev-fold:hover {
+  color: var(--fg, #16181d);
+}
+
+.ev-fold-caret {
+  font-size: 10px;
 }

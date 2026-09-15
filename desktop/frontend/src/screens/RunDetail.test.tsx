@@ -38,6 +38,11 @@ function toolEvent(command: string): RunEvent {
   }
 }
 
+/** A raw provider delta: what "All" used to list dozens of, per turn. */
+function streamEvent(text: string): RunEvent {
+  return { t: '2026-09-10T10:00:05Z', kind: 'stream_event', payload: { text } }
+}
+
 interface Fake {
   transport: Transport
   emit: (e: AppEvent) => void
@@ -180,7 +185,8 @@ describe('RunDetail', () => {
       event: toolEvent('rm -rf /'),
     })
 
-    await waitFor(() => expect(screen.getByText('0 events')).toBeInTheDocument())
+    // The stream opens on Tools, whose counter reads "shown of total".
+    await waitFor(() => expect(screen.getByText('0 of 0')).toBeInTheDocument())
     expect(screen.queryByText('rm -rf /')).toBeNull()
   })
 
@@ -207,7 +213,7 @@ describe('RunDetail', () => {
       event: toolEvent('git status'),
     })
 
-    await waitFor(() => expect(screen.getByText('2 events')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('2 of 2')).toBeInTheDocument())
     expect(screen.getAllByText('git status')).toHaveLength(1)
 
     // The line after the page is new, and is appended.
@@ -472,6 +478,138 @@ describe('RunDetail', () => {
     renderRun(fakeTransport({ detail: { ...RUN, status: 'completed' } }))
     await screen.findByText('completed')
     expect(screen.queryByRole('region', { name: 'Fix result' })).toBeNull()
+  })
+
+
+  /*
+   * A run opened while it was still working. The note is written as the run
+   * finishes, so the pane that asked once on mount went on saying "No note
+   * yet" for a run that had one, and the only way to see it was to leave the
+   * screen and come back.
+   */
+  it('asks for the note and the run again when the run it is watching finishes', async () => {
+    let current: RunDetailData = RUN
+    const fake = fakeTransport({
+      run: vi.fn(async () => current),
+      note: vi.fn(async () =>
+        current.status === 'completed'
+          ? '# Summary\n\nThe ledger handler dereferences a nil tenant.'
+          : '',
+      ),
+    } as Partial<Transport>)
+    renderRun(fake)
+
+    expect(
+      await screen.findByText('No note yet. It is written when the run completes.'),
+    ).toBeInTheDocument()
+    expect(fake.transport.run).toHaveBeenCalledTimes(1)
+
+    current = { ...RUN, status: 'completed' }
+    fake.emit({ kind: 'run.updated', workspaceId: 'ws1', run: current })
+
+    expect(
+      await screen.findByText('The ledger handler dereferences a nil tenant.'),
+    ).toBeInTheDocument()
+    // State and the fix panel are read off the same detail, so it is re-read
+    // rather than left at whatever the run had while it was working.
+    await waitFor(() => expect(fake.transport.run).toHaveBeenCalledTimes(2))
+  })
+
+  // `blocked` is not the end of a run: it resumes, and its note is not written
+  // yet, so nothing is re-asked for and Cancel stays on offer.
+  it('does not re-ask while the run is only blocked', async () => {
+    const fake = fakeTransport()
+    renderRun(fake)
+    await screen.findByText('running')
+
+    fake.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: { ...RUN, status: 'blocked', reason: 'agent asked: which tenant?' },
+    })
+    await screen.findByText('blocked')
+
+    expect(fake.transport.run).toHaveBeenCalledTimes(1)
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+  })
+
+  it.each(['completed', 'failed', 'over_budget'] as const)(
+    'offers no Cancel on a run that ended %s',
+    async (status) => {
+      const fake = fakeTransport({ detail: { ...RUN, status } })
+      renderRun(fake)
+      await screen.findByText(status.replace('_', ' '))
+      expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+    },
+  )
+
+  it('takes Cancel away as the run it is watching completes', async () => {
+    let current: RunDetailData = RUN
+    const fake = fakeTransport({ run: vi.fn(async () => current) } as Partial<Transport>)
+    renderRun(fake)
+    await screen.findByText('running')
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+
+    current = { ...RUN, status: 'completed' }
+    fake.emit({ kind: 'run.updated', workspaceId: 'ws1', run: current })
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull())
+  })
+
+  /*
+   * A provider that streams token deltas writes a `stream_event` line per
+   * delta. Under "All" they were one row each — dozens per turn — and the tool
+   * calls between them were unfindable. They fold now, and Tools is what the
+   * stream opens on.
+   */
+  describe('the event stream', () => {
+    const noisy = () =>
+      fakeTransport({
+        events: vi.fn(async () => ({
+          events: [
+            toolEvent('rg -n "nil tenant"'),
+            streamEvent('delta one'),
+            streamEvent('delta two'),
+            streamEvent('delta three'),
+            streamEvent('delta four'),
+          ],
+          next: 5,
+        })),
+      } as Partial<Transport>)
+
+    it('opens on Tools, with the raw deltas out of the way', async () => {
+      renderRun(noisy())
+      expect(await screen.findByText('rg -n "nil tenant"')).toBeInTheDocument()
+
+      expect(screen.getByRole('button', { name: 'Tools' })).toHaveAttribute(
+        'aria-pressed',
+        'true',
+      )
+      expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'false')
+      expect(screen.queryByText('delta one')).toBeNull()
+      expect(screen.getByText('1 of 5')).toBeInTheDocument()
+    })
+
+    it('folds consecutive stream events into one row under All, and opens it', async () => {
+      renderRun(noisy())
+      await screen.findByText('rg -n "nil tenant"')
+
+      fireEvent.click(screen.getByRole('button', { name: 'All' }))
+
+      const fold = await screen.findByRole('button', { name: /4 stream events/ })
+      expect(fold).toHaveAttribute('aria-expanded', 'false')
+      expect(screen.queryByText('delta one')).toBeNull()
+      // The tool call it used to be buried under is still a row of its own.
+      expect(screen.getByText('rg -n "nil tenant"')).toBeInTheDocument()
+
+      fireEvent.click(fold)
+      expect(fold).toHaveAttribute('aria-expanded', 'true')
+      expect(screen.getByText('delta one')).toBeInTheDocument()
+      expect(screen.getByText('delta four')).toBeInTheDocument()
+
+      fireEvent.click(fold)
+      expect(screen.queryByText('delta four')).toBeNull()
+    })
   })
 
   // A screen that closes while "Copied" is still showing must not leave the

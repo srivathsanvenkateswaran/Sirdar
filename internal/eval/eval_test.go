@@ -355,6 +355,135 @@ func TestRunWithNoGoldenBundles(t *testing.T) {
 	}
 }
 
+// --- fourth finding: the pre-eval golden layout -----------------------
+
+// newLegacyGolden writes key's bundle files directly under
+// "<root>/<key>/" — the layout `sirdar golden add` produced before the
+// bundle/ split — rather than under "<root>/<key>/bundle/".
+func newLegacyGolden(t *testing.T, key string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := ticket.WriteBundle(filepath.Join(root, key), sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+	return root
+}
+
+// TestRunWithNoGoldenBundles is generic and returns a generic error; this
+// case must be told apart from it, since a directory the pre-eval layout
+// alone occupies is not empty, and migration — not `golden add` — is the
+// fix.
+func TestRunNamesLegacyEntriesInItsError(t *testing.T) {
+	cfg := newWorkspace(t)
+	deps := newDeps(t, cfg, &stubProvider{doc: triageDoc})
+	root := newLegacyGolden(t, "OMNI-9")
+
+	_, err := Run(t.Context(), deps, nil, Options{GoldenDir: root})
+	if err == nil {
+		t.Fatal("a golden set with only pre-eval entries did not report itself")
+	}
+	for _, want := range []string{root, "OMNI-9", "sirdar golden migrate"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("the error does not mention %q: %v", want, err)
+		}
+	}
+}
+
+func TestLegacyKeysAndKeysPartitionByLayout(t *testing.T) {
+	root := t.TempDir()
+	if err := ticket.WriteBundle(filepath.Join(root, "OMNI-OLD"), sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+	if err := ticket.WriteBundle(filepath.Join(root, "OMNI-NEW", "bundle"), sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+
+	legacy, err := LegacyKeys(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(legacy) != 1 || legacy[0] != "OMNI-OLD" {
+		t.Errorf("LegacyKeys = %v, want [OMNI-OLD]", legacy)
+	}
+
+	keys, err := Keys(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || keys[0] != "OMNI-NEW" {
+		t.Errorf("Keys = %v, want [OMNI-NEW]", keys)
+	}
+}
+
+func TestMigrateMovesBundleFilesAndLeavesExpectedAlone(t *testing.T) {
+	root := newLegacyGolden(t, "OMNI-9")
+	dir := filepath.Join(root, "OMNI-9")
+	if err := os.WriteFile(filepath.Join(dir, "expected.json"), []byte(`{"classification":"code"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	m, err := Migrate(root, "OMNI-9")
+	if err != nil {
+		t.Fatalf("Migrate: %v", err)
+	}
+	if m.BundleDir != filepath.Join(dir, "bundle") {
+		t.Errorf("BundleDir = %s", m.BundleDir)
+	}
+	wantMoved := []string{"thread.md", "ticket.json"}
+	if strings.Join(m.Moved, ",") != strings.Join(wantMoved, ",") {
+		t.Errorf("Moved = %v, want %v", m.Moved, wantMoved)
+	}
+
+	if !fileExists(filepath.Join(dir, "bundle", "ticket.json")) {
+		t.Error("ticket.json was not moved into bundle/")
+	}
+	if !fileExists(filepath.Join(dir, "bundle", "thread.md")) {
+		t.Error("thread.md was not moved into bundle/")
+	}
+	if fileExists(filepath.Join(dir, "ticket.json")) {
+		t.Error("ticket.json is still at the top level")
+	}
+	if !fileExists(filepath.Join(dir, "expected.json")) {
+		t.Error("expected.json should have been left where a human put it")
+	}
+
+	// The migrated entry is now one `sirdar eval` can read.
+	keys, err := Keys(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(keys) != 1 || keys[0] != "OMNI-9" {
+		t.Errorf("Keys after migration = %v, want [OMNI-9]", keys)
+	}
+}
+
+func TestMigrateRefusesANonLegacyEntry(t *testing.T) {
+	root := t.TempDir()
+	if err := ticket.WriteBundle(filepath.Join(root, "OMNI-9", "bundle"), sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Migrate(root, "OMNI-9"); err == nil {
+		t.Fatal("migrating an entry already in the current layout was accepted")
+	}
+}
+
+func TestMigrateRefusesAnAlreadyMigratedEntry(t *testing.T) {
+	root := t.TempDir()
+	if err := ticket.WriteBundle(filepath.Join(root, "OMNI-9", "bundle"), sampleBundle()); err != nil {
+		t.Fatal(err)
+	}
+	// Stray ticket.json left at the top level after a manual copy: still
+	// refused, because bundle/ticket.json already exists and merging the
+	// two silently would be a way to lose data.
+	if err := os.WriteFile(filepath.Join(root, "OMNI-9", "ticket.json"), []byte(`{}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Migrate(root, "OMNI-9")
+	if err == nil || !strings.Contains(err.Error(), "nothing to migrate") {
+		t.Fatalf("Migrate = %v, want a refusal naming nothing to migrate", err)
+	}
+}
+
 // TestRunKeepsGoingAfterAMissingKey: one bad entry must not cost the rest
 // of the set its scores.
 func TestRunKeepsGoingAfterAMissingKey(t *testing.T) {
@@ -523,6 +652,81 @@ func TestAddRefusesAGoldenSetInsideAGitWorkTree(t *testing.T) {
 	outside := filepath.Join(t.TempDir(), "golden")
 	if _, err := Add(cfg.Root, outside, "OMNI-1", "", false); err != nil && strings.Contains(err.Error(), "git work tree") {
 		t.Errorf("a golden set outside any repository was refused: %v", err)
+	}
+}
+
+// TestSkeletonStripsCodeRefAnnotations is the third finding from the first
+// live triage and eval runs: `sirdar golden add` copied rootCause.codeRefs
+// verbatim into rootCause.codeRefs_contains, parenthetical annotation and
+// all, e.g. "Domain/Fin.Logic/Models/FinReportModel.cs:253-282 (default
+// branch: main)". A naive fix that just cuts at the last ":" in the whole
+// string cuts inside the annotation instead of before the line range,
+// leaving a mangled string that can never be a substring of a real
+// codeRefs entry. The skeleton must hold the bare file path.
+func TestSkeletonStripsCodeRefAnnotations(t *testing.T) {
+	doc := []byte(`{
+  "classification": "code",
+  "rootCause": {
+    "confidence": "high",
+    "codeRefs": [
+      "Domain/Fin.Logic/Models/FinReportModel.cs:253-282 (default branch: main)",
+      "Domain/Fin.Logic/Models/FinReportModel.cs:300",
+      "Domain/Fin.Logic/Services/Report.cs (see PR #123)",
+      "Domain/Fin.Logic/Services/Report.cs"
+    ]
+  }
+}`)
+	skeleton, err := Skeleton(doc)
+	if err != nil {
+		t.Fatalf("Skeleton: %v", err)
+	}
+	var out map[string]any
+	if err := json.Unmarshal(skeleton, &out); err != nil {
+		t.Fatalf("skeleton is not valid JSON: %v\n%s", err, skeleton)
+	}
+	refs, ok := out["rootCause.codeRefs_contains"].([]any)
+	if !ok {
+		t.Fatalf("rootCause.codeRefs_contains missing or not an array: %v", out)
+	}
+	var got []string
+	for _, r := range refs {
+		got = append(got, r.(string))
+	}
+	want := []string{
+		"Domain/Fin.Logic/Models/FinReportModel.cs",
+		"Domain/Fin.Logic/Services/Report.cs",
+	}
+	if len(got) != len(want) {
+		t.Fatalf("codeRefs_contains = %v, want %v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("codeRefs_contains[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+
+	// The point of stripping the annotation is that the result matches a
+	// real produced note's codeRefs, which still carry the line range.
+	produced := []any{"Domain/Fin.Logic/Models/FinReportModel.cs:260-270"}
+	pass, detail := containsAll(json.RawMessage(`["Domain/Fin.Logic/Models/FinReportModel.cs"]`), produced)
+	if !pass {
+		t.Errorf("the stripped assertion does not match a real codeRefs entry: %s", detail)
+	}
+}
+
+func TestRefFileHandlesBareAndAnnotatedPaths(t *testing.T) {
+	cases := map[string]string{
+		"Domain/Fin.Logic/Models/FinReportModel.cs:253-282 (default branch: main)": "Domain/Fin.Logic/Models/FinReportModel.cs",
+		"Domain/Fin.Logic/Models/FinReportModel.cs:253-282 (default branch)":       "Domain/Fin.Logic/Models/FinReportModel.cs",
+		"Domain/Fin.Logic/Models/FinReportModel.cs:253":                            "Domain/Fin.Logic/Models/FinReportModel.cs",
+		"Domain/Fin.Logic/Models/FinReportModel.cs":                                "Domain/Fin.Logic/Models/FinReportModel.cs",
+		"Domain/Fin.Logic/Services/Report.cs (see PR #123)":                        "Domain/Fin.Logic/Services/Report.cs",
+		"  Domain/Fin.Logic/Services/Report.cs:1-2  ":                              "Domain/Fin.Logic/Services/Report.cs",
+	}
+	for in, want := range cases {
+		if got := refFile(in); got != want {
+			t.Errorf("refFile(%q) = %q, want %q", in, got, want)
+		}
 	}
 }
 

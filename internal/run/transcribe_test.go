@@ -295,8 +295,13 @@ func TestTheNoteNamesTheAttachmentsNobodyRead(t *testing.T) {
 		t.Fatalf("no note was written: %+v", out.State)
 	}
 	note := readFile(t, out.State.Notes[0])
-	if !strings.Contains(note, "Attachments not reviewed: screen.mov") {
-		t.Errorf("the note does not name the video nobody read:\n%s", note)
+	if !strings.Contains(note, "## Attachments not reviewed") {
+		t.Fatalf("no \"Attachments not reviewed\" section:\n%s", note)
+	}
+	for _, want := range []string{"screen.mov", "video/quicktime", "cannot be opened in this session"} {
+		if !strings.Contains(note, want) {
+			t.Errorf("the attachments-not-reviewed section is missing %q:\n%s", want, note)
+		}
 	}
 	if strings.Contains(note, "PTT-2026a.ogg") {
 		t.Errorf("a transcribed voice note is listed as unreviewed:\n%s", note)

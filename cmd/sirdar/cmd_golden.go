@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/eval"
 )
@@ -11,7 +12,8 @@ func init() { commands["golden"] = cmdGolden }
 
 func cmdGolden(args []string, stdout, stderr io.Writer) int {
 	if len(args) == 0 {
-		fmt.Fprintln(stderr, "usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]")
+		fmt.Fprintln(stderr, "usage: sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force] | "+
+			"golden list [--golden DIR] | golden migrate [KEY...] [--golden DIR]")
 		return exitUsage
 	}
 	switch args[0] {
@@ -19,8 +21,10 @@ func cmdGolden(args []string, stdout, stderr io.Writer) int {
 		return cmdGoldenAdd(args[1:], stdout, stderr)
 	case "list":
 		return cmdGoldenList(args[1:], stdout, stderr)
+	case "migrate":
+		return cmdGoldenMigrate(args[1:], stdout, stderr)
 	default:
-		fmt.Fprintf(stderr, "sirdar golden: unknown subcommand %q; use add or list\n", args[0])
+		fmt.Fprintf(stderr, "sirdar golden: unknown subcommand %q; use add, list, or migrate\n", args[0])
 		return exitUsage
 	}
 }
@@ -52,6 +56,42 @@ func cmdGoldenAdd(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stdout, "%s already exists and was left alone\n", added.ExpectedPath)
 	}
 	return 0
+}
+
+func cmdGoldenMigrate(args []string, stdout, stderr io.Writer) int {
+	fs := newFlagSet("golden migrate", stderr, "usage: sirdar golden migrate [KEY...] [--golden DIR]")
+	golden := fs.String("golden", "", "golden set directory (default ~/.sirdar/golden)")
+	positional, ok := parseFlags(fs, args, 0, -1, stderr)
+	if !ok {
+		return exitUsage
+	}
+
+	root := eval.ExpandDir(*golden)
+	keys := positional
+	if len(keys) == 0 {
+		found, err := eval.LegacyKeys(root)
+		if err != nil {
+			fmt.Fprintf(stderr, "sirdar: %v\n", err)
+			return 1
+		}
+		if len(found) == 0 {
+			fmt.Fprintf(stdout, "no golden entries under %s use the pre-eval layout\n", root)
+			return 0
+		}
+		keys = found
+	}
+
+	status := 0
+	for _, key := range keys {
+		m, err := eval.Migrate(*golden, key)
+		if err != nil {
+			fmt.Fprintf(stderr, "sirdar: %v\n", err)
+			status = 1
+			continue
+		}
+		fmt.Fprintf(stdout, "%s: moved %s into %s\n", m.Key, strings.Join(m.Moved, ", "), m.BundleDir)
+	}
+	return status
 }
 
 func cmdGoldenList(args []string, stdout, stderr io.Writer) int {
