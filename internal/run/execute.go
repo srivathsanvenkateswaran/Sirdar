@@ -496,9 +496,13 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 	// the workspace's.
 	root := p.sessionRoot(cfg.Root)
 	spec := provider.SessionSpec{
-		Cwd:          root,
-		Prompt:       p.promptText,
-		Model:        p.state.Model,
+		Cwd:    root,
+		Prompt: p.promptText,
+		// What the workspace asked for, not what a previous session of
+		// this run was told answered: a steer that pinned the reported
+		// id would quietly stop honouring a configuration that named an
+		// alias on purpose.
+		Model:        p.state.RequestedModel(),
 		OutputSchema: schemaFor(p.kind),
 		Policy: &provider.PermissionPolicy{
 			BashAllow:  cfg.Permissions.Bash,
@@ -711,6 +715,11 @@ type eventPayload struct {
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
 
+	// Model is set on the `system` line the provider's init reported one
+	// on: the model that answered, which the transcript records whether
+	// or not it was also what the run's state already said.
+	Model string `json:"model,omitempty"`
+
 	// Continuation is set on a `steer` line only: "resume" or "primed",
 	// saying whether the session that answers the instruction is the one
 	// that wrote the note or a fresh one handed it.
@@ -724,6 +733,7 @@ func (r *Runner) record(p *prepared, log *store.EventLog, ev provider.Event) {
 		Text:     ev.Text,
 		Turns:    ev.Turns,
 		CostUSD:  ev.CostUSD,
+		Model:    ev.Model,
 	}
 	if ev.Raw != nil {
 		payload.Raw = ev.Raw
@@ -910,8 +920,55 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 			ex.blind = firstLine(ev.Text)
 		}
 
+	case provider.EvSystem:
+		r.noteModel(p, ev)
+
 	case provider.EvFinal:
 		r.handleFinal(ctx, p, sess, ex, ev)
+	}
+}
+
+// modelAliases are the shorthands a workspace configures in place of a
+// model id. The CLI resolves one to a dated id of its own choosing, so a
+// run configured with an alias knows no more about which model answered
+// than a run configured with nothing at all.
+var modelAliases = map[string]bool{
+	"sonnet": true,
+	"opus":   true,
+	"haiku":  true,
+}
+
+// modelUnresolved reports whether configured is a value the provider's own
+// report should replace: nothing at all, or an alias that stands for
+// whichever id the CLI picks.
+func modelUnresolved(configured string) bool {
+	configured = strings.TrimSpace(configured)
+	return configured == "" || modelAliases[strings.ToLower(configured)]
+}
+
+// noteModel records the model the provider says is answering. A run whose
+// configuration named none, or named an alias, learns its real model only
+// from the init line, and until it does every screen and every register row
+// showing the run has nothing to name. The configured value moves to
+// ModelRequested, so the record still says what was asked for and a later
+// session on this run asks for the same thing again.
+//
+// state.json is rewritten on the spot rather than at the end of the run:
+// the desktop watcher turns that write into the run.updated event the
+// session topbar reads, and a run that only recorded its model once it
+// finished would read "model unknown" for the whole of it.
+func (r *Runner) noteModel(p *prepared, ev provider.Event) {
+	reported := strings.TrimSpace(ev.Model)
+	if reported == "" || reported == p.state.Model || !modelUnresolved(p.state.Model) {
+		return
+	}
+	if p.state.Model != "" {
+		p.state.ModelRequested = p.state.Model
+	}
+	p.state.Model = reported
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
 	}
 }
 
