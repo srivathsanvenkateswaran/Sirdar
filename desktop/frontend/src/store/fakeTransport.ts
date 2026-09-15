@@ -246,6 +246,8 @@ export function createFakeTransport(seed: {
   mcp?: MCPInventory
   /** Per-server tool lists; a server not named here gets the sample list under its own name. */
   mcpTools?: Record<string, MCPToolList>
+  /** What `register()` answers: the rows the workspace's register.jsonl holds. */
+  register?: RegisterRow[]
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
@@ -415,7 +417,7 @@ export function createFakeTransport(seed: {
     cancel: async (jobId) => {
       calls.cancel.push(jobId)
     },
-    register: async () => [] as RegisterRow[],
+    register: async () => seed.register ?? ([] as RegisterRow[]),
     doctor: async () => [] as Check[],
     quota: async () => seed.quota ?? [],
     subscribe: (handler) => {

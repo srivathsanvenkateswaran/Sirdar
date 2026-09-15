@@ -1,6 +1,18 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import Heatmap, { bucketOf, cellName } from './index'
+import Heatmap, { bucketOf, cellName, monthLabels } from './index'
+
+describe('monthLabels', () => {
+  it('names the column whose Monday starts a month, and never the first column', () => {
+    const cells = []
+    for (let i = 0; i < 28; i += 1) {
+      const d = new Date(Date.UTC(2026, 7, 24 + i)) // Monday 24 August 2026 onwards
+      cells.push({ date: d.toISOString().slice(0, 10) })
+    }
+    // Columns start 24 Aug, 31 Aug, 7 Sep, 14 Sep: September begins on the third.
+    expect(monthLabels(cells)).toEqual([{ column: 2, label: 'Sep' }])
+  })
+})
 
 describe('bucketOf', () => {
   it('puts each count in the step the design language names', () => {
@@ -59,6 +71,28 @@ describe('Heatmap', () => {
     render(<Heatmap days={days} weeks={2} endDate="2026-09-14" onSelect={onSelect} />)
     fireEvent.click(screen.getByRole('button', { name: /14 September, 6 runs/ }))
     expect(onSelect).toHaveBeenCalledWith('2026-09-14')
+  })
+
+  it('runs its weeks Monday to Sunday and letters the rows', () => {
+    // 14 September 2026 is a Monday; the grid closes on Sunday the 20th.
+    render(<Heatmap days={days} weeks={1} endDate="2026-09-14" />)
+    const cells = screen.getAllByRole('button')
+    expect(cells[0]).toHaveAccessibleName('Monday 14 September, 6 runs')
+    expect(cells[6]).toHaveAccessibleName('Sunday 20 September, 0 runs')
+    expect(screen.getAllByText(/^[MTWFS]$/).map((el) => el.textContent)).toEqual([
+      'M',
+      'T',
+      'W',
+      'T',
+      'F',
+      'S',
+      'S',
+    ])
+  })
+
+  it('names the months along the top of the grid', () => {
+    render(<Heatmap days={days} weeks={6} endDate="2026-09-14" />)
+    expect(screen.getByText('Sep')).toBeInTheDocument()
   })
 
   it('names the grid and gives it a scroll container a keyboard can reach', () => {

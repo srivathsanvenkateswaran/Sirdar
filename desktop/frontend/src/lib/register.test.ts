@@ -1,12 +1,21 @@
 import { describe, expect, it } from 'vitest'
-import type { RegisterRow } from '../api/types'
+import type { RegisterRow, RunSummary } from '../api/types'
 import {
+  buildLedger,
   computeAccuracy,
+  confirmedShare,
   formatHeld,
   groupDate,
   groupRegisterRows,
   groupStatus,
+  kindsLine,
+  ledgerPerDay,
+  minutesOf,
+  runsThisWeek,
+  spendLine,
+  spent,
   sumUsage,
+  toCSV,
   toMarkdownTable,
 } from './register'
 
@@ -216,5 +225,190 @@ describe('toMarkdownTable', () => {
     const lines = table.split('\n')
 
     expect(lines[2]).toBe('| 1 | OMNI\\|1 | Times out \\| fails | A \\| B |  |  |  |  |  | triaged |')
+  })
+})
+
+// ---------------------------------------------------------------------------
+// The ledger
+// ---------------------------------------------------------------------------
+
+function run(overrides: Partial<RunSummary>): RunSummary {
+  return {
+    runId: 'run-1',
+    key: 'OMNI-1',
+    kind: 'triage',
+    status: 'completed',
+    provider: 'claude',
+    model: 'sonnet',
+    startedAt: '2026-09-14T09:00:00Z',
+    updatedAt: '2026-09-14T09:04:30Z',
+    reason: '',
+    usage: { turns: 4, inputTokens: 0, outputTokens: 0, costUsd: 0.5 },
+    notes: [],
+    ...overrides,
+  }
+}
+
+const NOW = Date.parse('2026-09-15T12:00:00Z')
+
+describe('buildLedger', () => {
+  it('joins a register row to its run for the state, the minutes and the reason', () => {
+    const ledger = buildLedger(
+      [row({ key: 'OMNI-1', runId: 'run-1', date: '2026-09-14', triageVerdict: 'confirmed', notePath: 't.md' })],
+      [run({ runId: 'run-1' })],
+      NOW,
+    )
+    expect(ledger).toHaveLength(1)
+    expect(ledger[0]).toMatchObject({
+      key: 'OMNI-1',
+      state: 'completed',
+      minutes: 5,
+      verdict: 'confirmed',
+      confidence: 'high',
+      notes: { triage: true, rca: false, resolution: false },
+      when: '2026-09-14T09:00:00Z',
+      day: '2026-09-14',
+    })
+  })
+
+  it('lists a run the register has no line for, which is how a failed run is seen', () => {
+    const ledger = buildLedger(
+      [row({ key: 'OMNI-1', runId: 'run-1', date: '2026-09-14' })],
+      [
+        run({ runId: 'run-1' }),
+        run({
+          runId: 'run-2',
+          key: 'OMNI-2',
+          status: 'failed',
+          reason: 'provider refused the prompt',
+          startedAt: '2026-09-15T08:00:00Z',
+          updatedAt: '2026-09-15T08:01:00Z',
+          usage: { turns: 0, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+        }),
+      ],
+      NOW,
+    )
+    expect(ledger.map((r) => r.runId)).toEqual(['run-2', 'run-1'])
+    expect(ledger[0]).toMatchObject({
+      state: 'failed',
+      reason: 'provider refused the prompt',
+      turns: 0,
+      costUsd: 0,
+      minutes: 1,
+      verdict: '',
+    })
+  })
+
+  it('treats a register row whose run is gone as a completed run on the register date', () => {
+    const ledger = buildLedger([row({ runId: 'old', date: '2026-08-01' })], [], NOW)
+    expect(ledger[0]).toMatchObject({ state: 'completed', minutes: null, when: '2026-08-01', day: '2026-08-01' })
+  })
+
+  it('times a live run against now rather than its last change', () => {
+    const live = run({ status: 'running', startedAt: '2026-09-15T11:30:00Z', updatedAt: '2026-09-15T11:31:00Z' })
+    expect(minutesOf(live, NOW)).toBe(30)
+  })
+
+  it('carries a key’s triage facts onto its other runs', () => {
+    const ledger = buildLedger(
+      [
+        row({ key: 'OMNI-1', kind: 'triage', runId: 'r1', date: '2026-09-10', confidence: 'medium', triageVerdict: 'partial', notePath: 't.md' }),
+        row({ key: 'OMNI-1', kind: 'rca', runId: 'r2', date: '2026-09-11', confidence: '', notePath: 'r.md' }),
+      ],
+      [],
+      NOW,
+    )
+    const rca = ledger.find((r) => r.kind === 'rca')
+    expect(rca).toMatchObject({ confidence: 'medium', verdict: 'partial', notes: { triage: true, rca: true, resolution: false } })
+  })
+})
+
+describe('the three figures', () => {
+  const ledger = buildLedger(
+    [
+      row({ key: 'A', kind: 'triage', runId: 'a', date: '2026-09-15', provider: 'claude', costUsd: 1.0, triageVerdict: 'confirmed' }),
+      row({ key: 'B', kind: 'triage', runId: 'b', date: '2026-09-13', provider: 'codex', costUsd: 0.25, triageVerdict: 'wrong' }),
+      row({ key: 'A', kind: 'fix', runId: 'c', date: '2026-09-12', provider: 'claude', costUsd: 2.0 }),
+      row({ key: 'C', kind: 'triage', runId: 'd', date: '2026-09-01', provider: 'qwen', costUsd: 0.1, triageVerdict: 'partial' }),
+      row({ key: 'D', kind: 'rca', runId: 'e', date: '2026-09-09', provider: 'kimi', costUsd: 0.05 }),
+    ],
+    [],
+    NOW,
+  )
+
+  it('counts the seven days ending today, by kind', () => {
+    const week = runsThisWeek(ledger, NOW)
+    expect(week.total).toBe(4)
+    expect(kindsLine(week.kinds)).toBe('2 triages · 1 fix · 1 RCA')
+  })
+
+  it('sums what was spent and names the two providers that took most of it', () => {
+    const s = spent(ledger)
+    expect(s.total).toBeCloseTo(3.4)
+    expect(spendLine(s.providers, (n) => `$${n.toFixed(2)}`)).toBe('claude $3.00 · codex $0.25 · others $0.15')
+  })
+
+  it('names a lone third provider rather than calling it others', () => {
+    expect(
+      spendLine(
+        [
+          { provider: 'claude', costUsd: 3 },
+          { provider: 'codex', costUsd: 1 },
+          { provider: 'qwen', costUsd: 0.5 },
+        ],
+        (n) => `$${n.toFixed(2)}`,
+      ),
+    ).toBe('claude $3.00 · codex $1.00 · qwen $0.50')
+  })
+
+  it('is the share of recorded verdicts that were confirmed', () => {
+    const c = confirmedShare([
+      row({ triageVerdict: 'confirmed' }),
+      row({ triageVerdict: 'confirmed' }),
+      row({ triageVerdict: 'wrong' }),
+      row({ triageVerdict: '' }),
+      row({ kind: 'fix', triageVerdict: '' }),
+    ])
+    expect(c).toEqual({ recorded: 3, confirmed: 2, percent: 67 })
+    expect(confirmedShare([])).toEqual({ recorded: 0, confirmed: 0, percent: 0 })
+  })
+
+  it('buckets runs by the day they happened, for the grid', () => {
+    expect(ledgerPerDay(ledger)).toEqual([
+      { date: '2026-09-01', count: 1 },
+      { date: '2026-09-09', count: 1 },
+      { date: '2026-09-12', count: 1 },
+      { date: '2026-09-13', count: 1 },
+      { date: '2026-09-15', count: 1 },
+    ])
+  })
+})
+
+describe('toCSV', () => {
+  it('writes a header and one line per run with CRLF ends', () => {
+    const ledger = buildLedger(
+      [row({ key: 'OMNI-1', runId: 'run-1', date: '2026-09-14', triageVerdict: 'confirmed', notePath: 't.md' })],
+      [run({ runId: 'run-1' })],
+      NOW,
+    )
+    const csv = toCSV(ledger)
+    const lines = csv.split('\r\n')
+    expect(lines[0]).toBe(
+      'key,kind,state,provider,model,turns,cost_usd,minutes,confidence,verdict,triage_note,rca_note,resolution_note,when,reason',
+    )
+    expect(lines[1]).toBe(
+      'OMNI-1,triage,completed,claude,sonnet,4,0.50,5,high,confirmed,yes,no,no,2026-09-14T09:00:00Z,',
+    )
+    expect(csv.endsWith('\r\n')).toBe(true)
+  })
+
+  it('quotes a field carrying a comma, a quote or a line break', () => {
+    const ledger = buildLedger(
+      [],
+      [run({ runId: 'x', status: 'failed', reason: 'said "no", then\nstopped' })],
+      NOW,
+    )
+    const line = toCSV(ledger).split('\r\n')[1]
+    expect(line.endsWith(',"said ""no"", then\nstopped"')).toBe(true)
   })
 })
