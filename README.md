@@ -15,7 +15,7 @@ decides who goes up and when, and answers to the client for the outcome. The nam
 to the Sherpa people, whose work on the mountain makes every ascent possible and is rarely the
 part that gets photographed.
 
-Status: v0: command-line triage core; the board is next.
+Status: v0: the command-line triage core, and the desktop app and web UI over it.
 
 ## Install
 
@@ -49,6 +49,40 @@ make build
 ```
 
 See `docs/release.md` for how releases are cut.
+
+## The desktop app and `sirdar serve`
+
+One React frontend (`desktop/frontend`) serves two shells. `sirdar serve --open` runs it in your
+browser over a loopback HTTP API with a live event stream; the Wails desktop app under
+`desktop/` runs the same pages over an in-process Go bridge. Either way the screens are:
+
+- **Board** — every run in the workspace as a card in the lane its state puts it in
+  (gathering, triaged, blocked, done, failed), the tracker queue beside them, and the inbound
+  webhook deliveries of the day.
+- **New session** — a ticket key or URL, Triage / RCA / Fix, a one-off provider and model,
+  Start. Opens the session it started.
+- **Session** — the run's transcript as it happens: tool calls with their results, the
+  agent's prose, permission decisions, the question it is blocked on. The composer answers a
+  blocked run (`resume`) or steers a finished one (`steer`). The side pane holds the note, the
+  bundle, the tools it used and, on a fix, the change with a Keep/Drop per hunk.
+- **Change review** — a fix run's diff full width, with the checks, the agent's summary and
+  the resolution note.
+- **Register** and **Eval** — the run ledger, and the golden set with its reports and Run suite.
+- **Settings** — a modal over whatever you were on: the workspace's `config.yaml` read back
+  (never written), providers with what `doctor` says about each, MCP servers with Test, and
+  Try a tool, which runs one MCP tool by hand under the workspace's own permissions.
+
+The two build paths:
+
+```
+make ui        # builds the frontend and stages it for `sirdar serve` (embedded in the binary)
+make desktop   # `wails build` — the desktop app, with the frontend built in
+```
+
+`make ui` runs `npm ci && npm run build` under `desktop/frontend` and copies `dist/` to where
+`internal/httpapi` embeds it, so a `go build` after it ships the UI. `make desktop` needs the
+Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`); `make desktop-dev`
+gives the live-reload shell.
 
 ## Quick start
 
@@ -403,7 +437,13 @@ see `docs/notifications.md`.
 make build   # ./sirdar
 make test    # go test ./...
 make vet     # go vet ./...
+make ui      # the frontend, staged for `sirdar serve`
+make desktop # the Wails desktop app
 ```
+
+The frontend's own checks run from `desktop/frontend`: `npx tsc --noEmit`, `npx vitest run`,
+and `npm run check-specs`, which fails if a component's `SPEC.md` under `src/ui` and its copy
+under `docs/design/library` have drifted apart.
 
 Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
 is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
