@@ -18,17 +18,17 @@
   min-block-size: 0;
   align-items: center;
   justify-content: center;
-  padding-block: 40px;
-  padding-inline: var(--sd-space-7);
+  padding-block: var(--sd-page-pad-block);
+  padding-inline: var(--sd-page-pad-inline);
   overflow-y: auto;
 }
 
+/* The mock's 880 column, or the sheet less 24 a side, whichever is less. */
 .new-session__col {
   display: flex;
   flex-direction: column;
   gap: var(--sd-space-6);
-  inline-size: 100%;
-  max-inline-size: 880px;
+  inline-size: min(880px, calc(100% - 48px));
 }
 
 .new-session__title {
@@ -175,6 +175,32 @@
   margin: 0;
   font-size: var(--sd-text-body);
   color: var(--sd-ink-3);
+}
+
+/*
+ * Compact (under 1200): the control row is two lines. The mode control and
+ * Start keep the first, Start still at the right; the chips take the
+ * second. The break is a full-width pseudo item ordered between them.
+ */
+@media (max-width: 1199px) {
+  .new-session__controls > .sd-segmented {
+    order: 0;
+  }
+
+  .new-session__controls > .sd-button[data-variant='primary'] {
+    order: 1;
+  }
+
+  .new-session__controls::before {
+    content: '';
+    order: 2;
+    flex-basis: 100%;
+    block-size: 0;
+  }
+
+  .new-session__controls > .new-session__chip {
+    order: 3;
+  }
 }
 
 @media (max-width: 720px) {

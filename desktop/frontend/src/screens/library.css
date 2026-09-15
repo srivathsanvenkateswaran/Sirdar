@@ -30,7 +30,7 @@
   inset-block-start: 0;
   z-index: 15;
   padding-block: var(--sd-space-6) var(--sd-space-5);
-  padding-inline: var(--sd-space-7);
+  padding-inline: var(--sd-page-pad-inline);
   border-block-end: 1px solid var(--sd-rule);
   background: var(--sd-surface);
 }
@@ -65,12 +65,20 @@
   grid-template-columns: 260px minmax(0, 1fr);
   column-gap: var(--sd-space-6);
   padding-block: 20px;
-  padding-inline: var(--sd-space-7);
+  padding-inline: var(--sd-page-pad-inline);
   border-block-end: 1px solid var(--sd-rule);
 }
 
 .lib-section:last-child {
   border-block-end: 0;
+}
+
+/* Compact (under 1200): the name sits above its specimens. */
+@media (max-width: 1199px) {
+  .lib-section {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sd-space-4);
+  }
 }
 
 .lib-section__head,
