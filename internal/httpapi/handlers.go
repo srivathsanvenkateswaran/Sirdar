@@ -1,6 +1,8 @@
 package httpapi
 
 import (
+	"encoding/json"
+	"errors"
 	"net/http"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -178,6 +180,83 @@ func (s *server) addGolden(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, entry)
+}
+
+// mcpServers is GET /api/workspaces/{id}/mcp: the MCP servers a run in
+// this workspace would be offered. With ?connect=1 each is started and its
+// tools counted, which is slow enough that it is never the default.
+//
+// Nothing here carries a credential value: an entry's env and headers
+// cross as key names, and its command line crosses as configured rather
+// than expanded.
+func (s *server) mcpServers(w http.ResponseWriter, r *http.Request) {
+	connect, ok := boolParam(w, r, "connect")
+	if !ok {
+		return
+	}
+	inv, err := s.svc.MCPServers(r.Context(), r.PathValue("id"), connect)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, inv)
+}
+
+// mcpTools is GET /api/workspaces/{id}/mcp/{server}/tools: every tool the
+// server lists, with the verdict a run would get for it and the rule that
+// settled it.
+func (s *server) mcpTools(w http.ResponseWriter, r *http.Request) {
+	list, err := s.svc.MCPTools(r.Context(), r.PathValue("id"), r.PathValue("server"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, list)
+}
+
+// mcpCall is POST /api/workspaces/{id}/mcp/{server}/call: run one tool by
+// hand. A tool the workspace's permissions would refuse a run is refused
+// here too — 403, with the same reason, and nothing started.
+func (s *server) mcpCall(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Tool string          `json:"tool"`
+		Args json.RawMessage `json:"args"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if body.Tool == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "tool is required")
+		return
+	}
+	res, err := s.svc.MCPCall(r.Context(), r.PathValue("id"), r.PathValue("server"), body.Tool, body.Args)
+	switch {
+	case errors.Is(err, ErrMCPDenied):
+		writeJSON(w, http.StatusForbidden, res)
+		return
+	case err != nil:
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
+// boolParam reads a query parameter that is on when present and not "0" or
+// "false", refusing anything else so a typo is a 400 rather than an
+// expensive default nobody asked for.
+func boolParam(w http.ResponseWriter, r *http.Request, name string) (bool, bool) {
+	raw := r.URL.Query().Get(name)
+	switch raw {
+	case "":
+		return false, true
+	case "1", "true", "yes":
+		return true, true
+	case "0", "false", "no":
+		return false, true
+	default:
+		writeError(w, http.StatusBadRequest, "bad_request", name+" must be 1 or 0")
+		return false, false
+	}
 }
 
 // configSummary is GET /api/workspaces/{id}/config/summary: the notify and
