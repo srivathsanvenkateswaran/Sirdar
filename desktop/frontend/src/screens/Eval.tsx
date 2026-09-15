@@ -1,17 +1,29 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
 import type {
   EvalReport,
   EvalResult,
+  EvalStart,
   GoldenEntry,
+  Quota,
   RetroReport,
   RetroResult,
   Transport,
 } from '../api/types'
 import ProviderFields from '../components/run/ProviderFields'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import Badge from '../ui/badge'
 import Button from '../ui/button'
 import DataTable, { type DataColumn } from '../ui/data-table'
-import '../components/panels.css'
+import Dialog from '../ui/dialog'
+import PageHead from '../ui/page-head'
+import ProviderMark from '../ui/provider-mark'
+import SettingRow, { SettingCard } from '../ui/setting-row'
+import StatusBadge, { type SdStatus } from '../ui/status-badge'
+import Toggle from '../ui/toggle'
+import './eval.css'
+
+/** How long one key takes, for the estimate under the actions. */
+export const MINUTES_PER_KEY = 5
 
 /** A fraction rendered the way the CLI's table renders it, or a dash. */
 export function pct(f?: { matched: number; total: number; score: number }): string {
@@ -29,73 +41,130 @@ export function jaccard(j?: { intersection: number; union: number; score: number
   return `${j.intersection}/${j.union} ${Math.round(j.score * 100)}%`
 }
 
+/**
+ * "N selected · about M min", with the 5h clause when a quota reading exists.
+ *
+ * Five minutes a key is the estimate; the clause reads the provider's own
+ * five-hour window, and says nothing when no provider has reported one, so
+ * the line never claims a budget it cannot see.
+ */
+export function estimate(selected: number, quota: Quota | undefined, running: boolean): string {
+  if (running) return `A suite is running · ${selected} selected`
+  if (selected === 0) return 'Nothing selected'
+  const parts = [`${selected} selected`, `about ${selected * MINUTES_PER_KEY} min`]
+  if (quota?.fiveHour) {
+    parts.push(
+      quota.fiveHour.utilization < 1 ? 'within the 5h window' : 'the 5h window is used up',
+    )
+  }
+  return parts.join(' · ')
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+
+/** "15 Sep 09:33" in local time, or the raw stamp when it does not parse. */
+export function when(at: string): string {
+  const ms = Date.parse(at)
+  if (Number.isNaN(ms)) return at
+  const d = new Date(ms)
+  const two = (n: number) => String(n).padStart(2, '0')
+  return `${d.getDate()} ${MONTHS[d.getMonth()]} ${two(d.getHours())}:${two(d.getMinutes())}`
+}
+
 /** yes, no, or a dash for a session that said nothing legible about it. */
 function yesNo(b?: boolean): string {
   if (b === undefined || b === null) return '—'
   return b ? 'yes' : 'no'
 }
 
-/** The local time a report was written, or its raw stamp when unparseable. */
-function when(at: string): string {
-  const ms = Date.parse(at)
-  return Number.isNaN(ms) ? at : new Date(ms).toLocaleString()
+function money(usd: number): string {
+  return `$${usd.toFixed(2)}`
 }
 
-/** The state cell carries its own hue, which is the lane hue the board uses. */
+function mins(m?: number): string {
+  if (m === undefined || m === null) return '—'
+  return m.toFixed(1)
+}
+
+/** The run states a report can carry, narrowed to the badge's own set. */
+function asStatus(state: string): SdStatus {
+  switch (state) {
+    case 'queued':
+    case 'preparing':
+    case 'running':
+    case 'blocked':
+    case 'completed':
+    case 'failed':
+    case 'over_budget':
+      return state
+    default:
+      return 'failed'
+  }
+}
+
+/** The state word. A completed replay is done; the rest are the library's. */
 function StateCell({ state }: { state: string }): JSX.Element {
+  const status = asStatus(state)
+  return <StatusBadge status={status}>{status === 'completed' ? 'Done' : undefined}</StatusBadge>
+}
+
+/**
+ * One state for a retro row. A retro is up to three runs; the row is failed
+ * if any of them failed, otherwise the least finished of them.
+ */
+export function retroState(r: RetroResult): SdStatus {
+  const stages = [r.triage, r.rca, r.fix].filter((s): s is NonNullable<typeof s> => Boolean(s))
+  const states = stages.map((s) => s.state ?? '')
+  for (const s of ['failed', 'over_budget', 'blocked', 'running', 'preparing', 'queued'] as const) {
+    if (states.includes(s)) return s
+  }
+  if (stages.length === 0) return r.reason ? 'failed' : 'queued'
+  return 'completed'
+}
+
+/**
+ * What the rubric said about the root cause, as an outlined chip. A retro run
+ * without a rubric has no opinion to show, so the cell is a dash rather than
+ * a guess from the overlap numbers.
+ */
+function RootCauseChip({ r }: { r: RetroResult }): JSX.Element {
+  if (!r.rubric) return <span className="eval-none">—</span>
+  if (r.rubric.sameRootCause) {
+    return (
+      <span className="eval-chip" data-tone="done">
+        matched
+      </span>
+    )
+  }
+  if (r.rubric.verdict === 'partial') {
+    return (
+      <span className="eval-chip" data-tone="blocked">
+        partial
+      </span>
+    )
+  }
   return (
-    <span className="eval-state" data-state={state}>
-      {state.replace('_', ' ')}
+    <span className="eval-chip" data-tone="failed">
+      different
     </span>
   )
 }
 
-const EVAL_COLUMNS: DataColumn<EvalResult>[] = [
-  { id: 'key', header: 'Key', cell: (r) => r.key, numeric: true },
-  { id: 'state', header: 'State', cell: (r) => <StateCell state={r.state} /> },
-  { id: 'turns', header: 'Turns', cell: (r) => r.turns, numeric: true },
-  { id: 'cost', header: 'Cost', cell: (r) => `$${r.costUsd.toFixed(2)}`, numeric: true },
-  { id: 'minutes', header: 'Mins', cell: (r) => r.minutes.toFixed(1), numeric: true },
-  { id: 'valid', header: 'Valid', cell: (r) => (r.schemaValid ? 'yes' : 'no') },
-  { id: 'assertions', header: 'Assertions', cell: (r) => `${r.passed}/${r.total}`, numeric: true },
-  { id: 'refs', header: 'Refs', cell: (r) => pct(r.overlap?.refs), numeric: true },
-  { id: 'headings', header: 'Headings', cell: (r) => pct(r.overlap?.headings), numeric: true },
-]
-
-/** Why a key scored what it did: the run's own reason, then each failed check. */
-function evalDetail(result: EvalResult): JSX.Element | null {
-  const failed = result.checks.filter((c) => !c.pass)
-  if (failed.length === 0 && !result.reason) return null
-  return (
-    <>
-      {result.reason && result.state !== 'completed' ? (
-        <p className="eval-why">{result.reason}</p>
-      ) : null}
-      {failed.map((c) => (
-        <p className="eval-why" key={c.key}>
-          <span className="mono">{c.key}</span> — {c.detail || 'did not hold'}
-        </p>
-      ))}
-    </>
-  )
+function sumStages(r: RetroResult, field: 'turns' | 'minutes'): number | undefined {
+  const values = [r.triage, r.rca, r.fix].map((s) => s?.[field]).filter((v): v is number => typeof v === 'number')
+  if (values.length === 0) return undefined
+  return values.reduce((a, b) => a + b, 0)
 }
 
 const RETRO_COLUMNS: DataColumn<RetroResult>[] = [
   { id: 'key', header: 'Key', cell: (r) => r.key, numeric: true },
-  { id: 'class', header: 'Class', cell: (r) => r.triageScore?.classification || '—' },
-  { id: 'confidence', header: 'Confidence', cell: (r) => r.triageScore?.confidence || '—' },
-  {
-    id: 'refs',
-    header: 'Refs',
-    cell: (r) => pct(r.triageScore?.codeRefsPathOverlap),
-    numeric: true,
-  },
-  { id: 'prFiles', header: 'PR files', cell: (r) => pct(r.triageScore?.prFilesHit), numeric: true },
-  { id: 'files', header: 'Files', cell: (r) => jaccard(r.fixScore?.filesJaccard), numeric: true },
-  { id: 'hunks', header: 'Hunks', cell: (r) => pct(r.fixScore?.hunkOverlap), numeric: true },
-  { id: 'build', header: 'Build', cell: (r) => yesNo(r.fixScore?.buildPassed) },
+  { id: 'state', header: 'State', cell: (r) => <StateCell state={retroState(r)} /> },
+  { id: 'rootCause', header: 'Root cause', cell: (r) => <RootCauseChip r={r} /> },
+  { id: 'files', header: 'File overlap', cell: (r) => jaccard(r.fixScore?.filesJaccard), numeric: true },
   { id: 'rubric', header: 'Rubric', cell: (r) => r.rubric?.verdict ?? '—' },
-  { id: 'cost', header: 'Cost', cell: (r) => `$${r.costUsd.toFixed(2)}`, numeric: true },
+  { id: 'turns', header: 'Turns', cell: (r) => sumStages(r, 'turns') ?? '—', numeric: true },
+  { id: 'cost', header: 'Cost', cell: (r) => money(r.costUsd), numeric: true },
+  { id: 'minutes', header: 'Mins', cell: (r) => mins(sumStages(r, 'minutes')), numeric: true },
 ]
 
 /** What the agent missed, and what the rubric said about it. */
@@ -119,37 +188,144 @@ function retroDetail(result: RetroResult): JSX.Element | null {
   )
 }
 
+const PLAIN_COLUMNS: DataColumn<EvalResult>[] = [
+  { id: 'key', header: 'Key', cell: (r) => r.key, numeric: true },
+  { id: 'state', header: 'State', cell: (r) => <StateCell state={r.state} /> },
+  { id: 'assertions', header: 'Assertions', cell: (r) => `${r.passed}/${r.total}`, numeric: true },
+  { id: 'refs', header: 'Refs', cell: (r) => pct(r.overlap?.refs), numeric: true },
+  { id: 'headings', header: 'Headings', cell: (r) => pct(r.overlap?.headings), numeric: true },
+  { id: 'valid', header: 'Valid', cell: (r) => yesNo(r.schemaValid) },
+  { id: 'turns', header: 'Turns', cell: (r) => r.turns, numeric: true },
+  { id: 'cost', header: 'Cost', cell: (r) => money(r.costUsd), numeric: true },
+  { id: 'minutes', header: 'Mins', cell: (r) => mins(r.minutes), numeric: true },
+]
+
+/** Why a key scored what it did: the run's own reason, then each failed check. */
+function plainDetail(result: EvalResult): JSX.Element | null {
+  const failed = result.checks.filter((c) => !c.pass)
+  if (failed.length === 0 && !result.reason) return null
+  return (
+    <>
+      {result.reason && result.state !== 'completed' ? (
+        <p className="eval-why">{result.reason}</p>
+      ) : null}
+      {failed.map((c) => (
+        <p className="eval-why" key={c.key}>
+          <span className="mono">{c.key}</span> — {c.detail || 'did not hold'}
+        </p>
+      ))}
+    </>
+  )
+}
+
+/** The newest report the workspace has, whichever shape it is. */
+type Latest = { kind: 'retro'; report: RetroReport } | { kind: 'plain'; report: EvalReport }
+
+export function latestOf(reports: EvalReport[], retro: RetroReport | null): Latest | null {
+  const plain = reports[0]
+  if (!plain && !retro) return null
+  if (!retro) return { kind: 'plain', report: plain }
+  if (!plain) return { kind: 'retro', report: retro }
+  return Date.parse(retro.at) >= Date.parse(plain.at)
+    ? { kind: 'retro', report: retro }
+    : { kind: 'plain', report: plain }
+}
+
+function reportMeta(latest: Latest): string {
+  const parts = [when(latest.report.at), latest.kind]
+  if (latest.kind === 'retro') {
+    if (latest.report.rubric) parts.push('rubric')
+    if (latest.report.withRca) parts.push('rca')
+  }
+  parts.push(
+    latest.report.model ? `${latest.report.provider} ${latest.report.model}` : latest.report.provider,
+  )
+  return parts.join(' · ')
+}
+
+function PlusIcon(): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 5v14M5 12h14" />
+    </svg>
+  )
+}
+
+function CheckIcon(): JSX.Element {
+  return (
+    <svg
+      className="eval-cb__mark"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="m5 12 5 5 9-10" />
+    </svg>
+  )
+}
+
+type Open = 'golden' | 'json' | 'provider' | null
+
 /**
- * The golden set and what the last eval scored against it.
+ * The golden set and what the last suite scored against it.
  *
- * An eval replays stored bundles through real triage runs, so starting one
- * spends the provider exactly as a triage does. The table is read back from
- * the report the run wrote, not held in the window: a report survives the app
+ * A suite replays stored bundles through real runs, so starting one spends
+ * the provider exactly as a triage does. The table is read back from the
+ * report the run wrote, not held in the window: a report survives the app
  * being closed, and the CLI writes the same file.
  */
 export default function Eval(props: {
   transport: Transport
   workspaceId: string
   defaultProvider?: string
+  defaultModel?: string
+  /** The store's quota readings; the estimate's 5h clause reads them. */
+  quota?: Quota[]
   /**
-   * Whole-set eval jobs this window started. An eval over selected keys makes
-   * runs that carry those keys, and Run detail cancels it from there; one over
-   * the whole set names no key, so no run claims it and this screen is the only
-   * place its Cancel can live.
+   * Whole-set eval jobs this window started. Such a job names no key, so no
+   * run claims it and this screen is the only place its Cancel can live.
    */
   jobs?: { jobId: string; label: string }[]
-  onStartEval: (keys?: string[], opts?: { provider?: string; model?: string }) => Promise<void> | void
+  onStartEval: (keys?: string[], opts?: EvalStart) => Promise<void> | void
   onCancelJob?: (jobId: string) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, defaultProvider, jobs, onStartEval, onCancelJob } = props
+  const { transport, workspaceId, defaultProvider, defaultModel, quota, jobs, onStartEval, onCancelJob } =
+    props
   const [golden, setGolden] = useState<GoldenEntry[] | null>(null)
-  const [reports, setReports] = useState<EvalReport[]>([])
+  const [reports, setReports] = useState<EvalReport[] | null>(null)
   const [retro, setRetro] = useState<RetroReport | null>(null)
   const [selected, setSelected] = useState<Set<string>>(new Set())
+  const [rubric, setRubric] = useState(true)
+  const [withRca, setWithRca] = useState(false)
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
   const [pending, setPending] = useState(false)
+  const [started, setStarted] = useState(false)
   const [error, setError] = useState('')
+  const [open, setOpen] = useState<Open>(null)
+
+  // The add-golden dialog's own state.
+  const [goldenKey, setGoldenKey] = useState('')
+  const [goldenPending, setGoldenPending] = useState(false)
+  const [goldenError, setGoldenError] = useState('')
+
+  // The provider dialog edits a draft and commits it on Save.
+  const [draftProvider, setDraftProvider] = useState('')
+  const [draftModel, setDraftModel] = useState('')
 
   const load = useCallback(async () => {
     if (!workspaceId) return
@@ -166,6 +342,7 @@ export default function Eval(props: {
       setRetro(lastRetro)
     } catch (err) {
       setGolden([])
+      setReports([])
       setError(err instanceof Error ? err.message : String(err))
     }
   }, [transport, workspaceId])
@@ -174,13 +351,27 @@ export default function Eval(props: {
     void load()
   }, [load])
 
-  // An eval writes its report when the job ends, so the table is reloaded
-  // then rather than leaving the reader to press Refresh.
+  // A suite writes its report when the job ends, so the table is reloaded
+  // then rather than leaving the reader to press anything.
   useEffect(() => {
     return transport.subscribe((e) => {
-      if (e.kind === 'job.finished') void load()
+      if (e.kind === 'job.finished' && e.workspaceId === workspaceId) {
+        setStarted(false)
+        void load()
+      }
     })
-  }, [transport, load])
+  }, [transport, workspaceId, load])
+
+  const entries = golden ?? []
+
+  // A key that left the set leaves the selection with it.
+  useEffect(() => {
+    if (golden === null) return
+    setSelected((prev) => {
+      const keep = new Set([...prev].filter((k) => golden.some((g) => g.key === k)))
+      return keep.size === prev.size ? prev : keep
+    })
+  }, [golden])
 
   const toggle = (key: string) => {
     setSelected((prev) => {
@@ -191,7 +382,45 @@ export default function Eval(props: {
     })
   }
 
-  const running = jobs ?? []
+  const running = (jobs?.length ?? 0) > 0 || started
+  const effectiveProvider = provider || defaultProvider || ''
+  const effectiveModel = model.trim() || (provider ? '' : defaultModel || '')
+
+  /*
+   * A suite is a retro when every picked key can be replayed as one. A plain
+   * key in the selection makes the whole suite a plain replay, which every
+   * key can do, rather than a retro half the keys would fail.
+   */
+  const picked = useMemo(() => entries.filter((g) => selected.has(g.key)), [entries, selected])
+  const isRetro = picked.length > 0 && picked.every((g) => Boolean(g.hasRetro))
+
+  const quotaFor = useMemo(() => {
+    if (!quota || quota.length === 0) return undefined
+    return quota.find((q) => q.provider === effectiveProvider && q.fiveHour) ?? quota.find((q) => q.fiveHour)
+  }, [quota, effectiveProvider])
+
+  async function start(): Promise<void> {
+    if (selected.size === 0 || running || pending) return
+    setPending(true)
+    setError('')
+    try {
+      const opts: EvalStart = {
+        provider: provider || undefined,
+        model: model.trim() || undefined,
+        retro: isRetro,
+      }
+      if (isRetro) {
+        opts.rubric = rubric
+        opts.withRca = withRca
+      }
+      await onStartEval([...selected], opts)
+      setStarted(true)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPending(false)
+    }
+  }
 
   async function cancel(jobId: string): Promise<void> {
     if (!onCancelJob) return
@@ -203,175 +432,345 @@ export default function Eval(props: {
     }
   }
 
-  async function start(): Promise<void> {
-    setPending(true)
-    setError('')
+  async function addGolden(event: FormEvent): Promise<void> {
+    event.preventDefault()
+    const key = goldenKey.trim()
+    if (!key) {
+      setGoldenError('Enter a ticket key.')
+      return
+    }
+    setGoldenPending(true)
+    setGoldenError('')
     try {
-      const keys = [...selected]
-      await onStartEval(keys.length > 0 ? keys : undefined, {
-        provider: provider || undefined,
-        model: model.trim() || undefined,
-      })
+      await transport.addGolden(workspaceId, { key })
+      setGoldenKey('')
+      setOpen(null)
+      await load()
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setGoldenError(err instanceof Error ? err.message : String(err))
     } finally {
-      setPending(false)
+      setGoldenPending(false)
     }
   }
 
-  const latest = reports[0]
-  const entries = golden ?? []
+  function openProvider(): void {
+    setDraftProvider(provider)
+    setDraftModel(model)
+    setOpen('provider')
+  }
+
+  function saveProvider(): void {
+    setProvider(draftProvider)
+    setModel(draftModel)
+    setOpen(null)
+  }
+
+  const latest = useMemo(() => (reports === null ? null : latestOf(reports, retro)), [reports, retro])
+
+  const disabledReason = running
+    ? 'A suite is already running'
+    : selected.size === 0
+      ? 'Select at least one key'
+      : entries.length === 0
+        ? 'The golden set is empty'
+        : ''
 
   /*
-   * Eval's one commit action, published to the sidebar footer. It is the
-   * screen's only filled button and the only thing on it that spends the
-   * provider; what it says depends on the selection, which is why the screen
-   * publishes it rather than the shell guessing.
+   * Run suite is drawn in the page head, and published so the sidebar's New
+   * session steps down while this screen is up: one filled button, and it
+   * is the one that spends the provider.
    */
   useProvidePrimaryAction({
-    label: pending
-      ? 'Starting…'
-      : selected.size > 0
-        ? `Run eval on ${selected.size} ${selected.size === 1 ? 'key' : 'keys'}`
-        : 'Run eval on the whole set',
+    label: 'Run suite',
     onRun: () => void start(),
-    disabled: pending || entries.length === 0,
+    disabled: Boolean(disabledReason) || pending,
     busy: pending,
-    title: 'An eval replays each bundle through a real triage run',
+    title: disabledReason || 'Replay the picked keys through real runs',
+    placement: 'screen',
   })
 
-  return (
-    <div className="panel eval">
-      <section className="eval-golden">
-        <h2 className="panel-heading">Golden set</h2>
-        {golden === null ? (
-          <p className="empty-state">Loading the golden set…</p>
-        ) : entries.length === 0 ? (
-          <p className="empty-state">
-            No golden bundles yet. Open a completed triage run and add it to the golden set, or
-            run <code>sirdar golden add KEY</code>.
-          </p>
-        ) : (
-          <ul className="golden-list">
-            {entries.map((entry) => (
-              <li key={entry.key} className="golden-row">
-                <label className="golden-row__pick">
-                  <input
-                    type="checkbox"
-                    checked={selected.has(entry.key)}
-                    onChange={() => toggle(entry.key)}
-                  />
-                  <span className="mono">{entry.key}</span>
-                </label>
-                <span className="golden-row__meta">
-                  {entry.assertions} {entry.assertions === 1 ? 'assertion' : 'assertions'}
-                </span>
-                <span className="golden-row__meta">
-                  {entry.hasExpectedNote ? 'expected.md' : 'no expected.md'}
-                </span>
-              </li>
-            ))}
-          </ul>
-        )}
+  const json = latest ? JSON.stringify(latest.report, null, 2) : ''
 
+  return (
+    <div className="eval">
+      <div className="eval-head">
+        <PageHead
+          title="Eval"
+          lede="Run the golden set again and compare with what a person did."
+          actions={
+            <div className="eval-actions">
+              <div className="eval-actions__row">
+                {jobs && onCancelJob
+                  ? jobs.map((job) => (
+                      <Button
+                        key={job.jobId}
+                        variant="ghost"
+                        onClick={() => void cancel(job.jobId)}
+                        title="Stop the suite this window started"
+                      >
+                        Cancel suite
+                      </Button>
+                    ))
+                  : null}
+                <Button icon={<PlusIcon />} onClick={() => setOpen('golden')}>
+                  Add golden
+                </Button>
+                <Button
+                  variant="pale"
+                  disabled={!latest}
+                  title={latest ? latest.report.path : 'No report yet'}
+                  onClick={() => setOpen('json')}
+                >
+                  Open JSON
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={Boolean(disabledReason)}
+                  busy={pending}
+                  title={disabledReason || 'Replay the picked keys through real runs'}
+                  onClick={() => void start()}
+                >
+                  Run suite
+                </Button>
+              </div>
+              <p className="eval-estimate" aria-live="polite">
+                {estimate(selected.size, quotaFor, running)}
+              </p>
+            </div>
+          }
+        />
+        {error ? <p className="eval-error">{error}</p> : null}
+      </div>
+
+      <div className="eval-body">
+        <div className="eval-col-l">
+          <SettingCard heading="Golden set">
+            <div className="eval-golden">
+              {golden === null ? (
+                <p className="eval-golden__note">Loading the golden set…</p>
+              ) : entries.length === 0 ? (
+                <p className="eval-golden__note">
+                  No golden bundles yet. Add golden copies a completed triage run's bundle here, or
+                  run <code>sirdar golden add KEY</code>.
+                </p>
+              ) : (
+                entries.map((entry) => (
+                  <label key={entry.key} className="eval-grow">
+                    <span className="eval-cb">
+                      <input
+                        type="checkbox"
+                        className="eval-cb__input"
+                        aria-label={entry.key}
+                        checked={selected.has(entry.key)}
+                        disabled={running}
+                        onChange={() => toggle(entry.key)}
+                      />
+                      <CheckIcon />
+                    </span>
+                    <span className="eval-grow__key">{entry.key}</span>
+                    <span className="eval-grow__title">
+                      {entry.assertions} {entry.assertions === 1 ? 'assertion' : 'assertions'} ·{' '}
+                      {entry.hasExpectedNote ? 'expected.md' : 'no expected.md'}
+                    </span>
+                    <Badge title={entry.hasRetro ? 'Replays against the merged fix' : 'Scores assertions and the note'}>
+                      {entry.hasRetro ? 'retro' : 'plain'}
+                    </Badge>
+                  </label>
+                ))
+              )}
+            </div>
+          </SettingCard>
+
+          <SettingCard heading="Options">
+            <SettingRow
+              label="Score with a rubric"
+              help="The provider grades root cause and files against the human fix"
+              control={
+                <Toggle
+                  label="Score with a rubric"
+                  checked={rubric}
+                  disabled={running || (picked.length > 0 && !isRetro)}
+                  onChange={setRubric}
+                />
+              }
+            />
+            <SettingRow
+              label="Include the RCA step"
+              help="Off runs triage and fix only; the note is not scored"
+              control={
+                <Toggle
+                  label="Include the RCA step"
+                  checked={withRca}
+                  disabled={running || (picked.length > 0 && !isRetro)}
+                  onChange={setWithRca}
+                />
+              }
+            />
+            <SettingRow
+              label="Provider"
+              value={
+                effectiveProvider ? (
+                  <span className="eval-provider">
+                    <ProviderMark provider={effectiveProvider} size="sm" />
+                    <span className="eval-provider__pair">
+                      {effectiveProvider}
+                      {effectiveModel ? ` · ${effectiveModel}` : ''}
+                    </span>
+                  </span>
+                ) : (
+                  'Workspace default'
+                )
+              }
+              control={
+                <Button variant="pale" disabled={running} onClick={openProvider}>
+                  Change
+                </Button>
+              }
+            />
+          </SettingCard>
+        </div>
+
+        <div className="eval-col-r">
+          <div className="eval-report__head">
+            <h2 className="eval-report__title">
+              Last report
+              {latest ? <span className="eval-report__meta">{reportMeta(latest)}</span> : null}
+            </h2>
+          </div>
+          {reports === null ? (
+            <p className="eval-empty">Loading the last report…</p>
+          ) : !latest ? (
+            <p className="eval-empty">
+              No report yet. Run suite writes one to <code>.sirdar/eval</code>, and so does{' '}
+              <code>sirdar eval</code>.
+            </p>
+          ) : latest.kind === 'retro' ? (
+            <>
+              <DataTable
+                caption="Each key against the change a human merged"
+                columns={RETRO_COLUMNS}
+                rows={latest.report.results}
+                rowKey={(r) => r.key}
+                detail={retroDetail}
+                empty="This report scored no keys."
+              />
+              <div className="eval-read">
+                <div className="eval-read__label">Reading the report</div>
+                <p>
+                  File overlap counts the files touched by both diffs, so 1/3 means the agent
+                  changed one of the three files the person changed.
+                </p>
+                <p>
+                  A matched root cause with low overlap usually means the agent fixed it somewhere
+                  else, which is worth a look before you call it wrong.
+                </p>
+              </div>
+            </>
+          ) : (
+            <>
+              <DataTable
+                caption="Score per key"
+                columns={PLAIN_COLUMNS}
+                rows={latest.report.results}
+                rowKey={(r) => r.key}
+                detail={plainDetail}
+                empty="This report scored no keys."
+              />
+              <div className="eval-read">
+                <div className="eval-read__label">Reading the report</div>
+                <p>
+                  Assertions are the checks in expected.json; a row that failed one names it
+                  underneath.
+                </p>
+                <p>
+                  Refs and headings count what the human's note named that the produced note also
+                  named, so 4/5 means the agent pointed at four of the five.
+                </p>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      <Dialog
+        open={open === 'golden'}
+        title="Add golden"
+        onClose={() => {
+          setOpen(null)
+          setGoldenError('')
+        }}
+        actions={
+          <>
+            <Button onClick={() => setOpen(null)}>Cancel</Button>
+            <Button variant="primary" form="eval-add-golden" type="submit" busy={goldenPending}>
+              Add
+            </Button>
+          </>
+        }
+      >
+        <form id="eval-add-golden" onSubmit={(e) => void addGolden(e)}>
+          <div className="eval-dialog__field">
+            <label className="eval-dialog__label" htmlFor="eval-golden-key">
+              Ticket key
+            </label>
+            <input
+              id="eval-golden-key"
+              className="eval-dialog__input"
+              value={goldenKey}
+              disabled={goldenPending}
+              autoComplete="off"
+              onChange={(e) => setGoldenKey(e.target.value)}
+            />
+            <p className="eval-dialog__help">
+              The key's newest completed triage run is copied into the golden set with an
+              expected.json skeleton beside it, as <code>sirdar golden add</code> does.
+            </p>
+            {goldenError ? <p className="eval-error">{goldenError}</p> : null}
+          </div>
+        </form>
+      </Dialog>
+
+      <Dialog
+        open={open === 'json'}
+        title="Report JSON"
+        onClose={() => setOpen(null)}
+        actions={
+          <>
+            <Button onClick={() => void navigator.clipboard?.writeText(json)}>Copy</Button>
+            <Button variant="pale" onClick={() => setOpen(null)}>
+              Close
+            </Button>
+          </>
+        }
+      >
+        {latest ? <p className="eval-dialog__path">{latest.report.path}</p> : null}
+        <pre className="eval-dialog__json" tabIndex={0}>
+          {json}
+        </pre>
+      </Dialog>
+
+      <Dialog
+        open={open === 'provider'}
+        title="Provider"
+        onClose={() => setOpen(null)}
+        actions={
+          <>
+            <Button onClick={() => setOpen(null)}>Cancel</Button>
+            <Button variant="primary" onClick={saveProvider}>
+              Save
+            </Button>
+          </>
+        }
+      >
         <ProviderFields
           idPrefix="eval"
-          provider={provider}
-          model={model}
+          provider={draftProvider}
+          model={draftModel}
           defaultProvider={defaultProvider}
-          disabled={pending}
-          onProvider={setProvider}
-          onModel={setModel}
+          onProvider={setDraftProvider}
+          onModel={setDraftModel}
         />
-        {/*
-          The button that starts the suite lives in the sidebar footer, where
-          the app-shell language puts every screen's one commit action. What is
-          left here is the reload, which changes nothing.
-        */}
-        <div className="form-row" style={{ marginTop: 8 }}>
-          <Button onClick={() => void load()} disabled={pending}>
-            Refresh
-          </Button>
-        </div>
-        {running.length > 0 && onCancelJob ? (
-          <div className="form-row" style={{ marginTop: 8 }}>
-            {running.map((job) => (
-              <Button
-                key={job.jobId}
-                onClick={() => void cancel(job.jobId)}
-                title="Stop the eval this window started"
-              >
-                Cancel {job.label.toLowerCase()}
-              </Button>
-            ))}
-          </div>
-        ) : null}
-        <p className="about-note">
-          An eval replays each bundle through a real triage run, so it spends the provider the
-          way a triage does. Its runs are marked eval: they never file a note and never reach the
-          register.
-        </p>
-        {error ? <p className="form-error">{error}</p> : null}
-      </section>
-
-      <section className="eval-report">
-        <h2 className="panel-heading">Last eval</h2>
-        {!latest ? (
-          <p className="empty-state">
-            No eval has been recorded for this workspace yet. Reports are written to{' '}
-            <code>.sirdar/eval</code>.
-          </p>
-        ) : (
-          <>
-            <p className="eval-meta">
-              {when(latest.at)} · {latest.provider}
-              {latest.model ? ` ${latest.model}` : ''} ·{' '}
-              <span className="mono">{latest.path}</span>
-            </p>
-            <DataTable
-              caption="Score per key"
-              columns={EVAL_COLUMNS}
-              rows={latest.results}
-              rowKey={(r) => r.key}
-              detail={evalDetail}
-              empty="This report scored no keys."
-            />
-          </>
-        )}
-      </section>
-
-      <section className="eval-report eval-retro">
-        <h2 className="panel-heading">Retro</h2>
-        {!retro ? (
-          <p className="empty-state">
-            No retro has been recorded for this workspace. A retro replays a ticket at the commit
-            its fix branched from and scores what came back against the pull request that fixed
-            it: <code>sirdar eval --retro</code>.
-          </p>
-        ) : (
-          <>
-            <p className="eval-meta">
-              {when(retro.at)} · {retro.provider}
-              {retro.model ? ` ${retro.model}` : ''}
-              {retro.rubric ? ' · rubric' : ''}
-              {retro.withRca ? ' · with rca' : ''} · <span className="mono">{retro.path}</span>
-            </p>
-            <DataTable
-              caption="Each key against the change a human merged"
-              columns={RETRO_COLUMNS}
-              rows={retro.results}
-              rowKey={(r) => r.key}
-              detail={retroDetail}
-              empty="This retro scored no keys."
-            />
-            <p className="about-note">
-              A retro is a measurement, not a gate: there is no threshold it passes. Refs is how
-              much of what the note pointed at the change touched, PR files how much of the change
-              the note found, Files and Hunks how close the agent's own diff came.
-            </p>
-          </>
-        )}
-      </section>
+      </Dialog>
     </div>
   )
 }

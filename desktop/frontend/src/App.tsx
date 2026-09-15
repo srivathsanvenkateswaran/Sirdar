@@ -266,6 +266,8 @@ function Shell(): JSX.Element {
           transport={state.transport}
           workspaceId={workspaceId}
           defaultProvider={currentWorkspace?.provider}
+          defaultModel={currentWorkspace?.model}
+          quota={state.quota}
           jobs={state.keylessJobs.filter((j) => j.workspaceId === workspaceId)}
           onStartEval={startEval}
           onCancelJob={cancelJob}

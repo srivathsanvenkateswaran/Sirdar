@@ -28,6 +28,11 @@ type GoldenEntry struct {
 	// written, which is what the overlap columns of a report compare
 	// against.
 	HasExpectedNote bool `json:"hasExpectedNote"`
+	// HasRetro says whether the entry carries a retro.json, so `sirdar eval
+	// --retro` can put the agent back at the commit the human fix branched
+	// from. The Eval screen draws it as the entry's kind and decides from it
+	// whether a suite is a retro or a plain replay.
+	HasRetro bool `json:"hasRetro"`
 }
 
 // EvalReport is one recorded eval run: the report internal/eval wrote,
@@ -77,6 +82,7 @@ func (s *Service) Golden(wsID string) ([]GoldenEntry, error) {
 			BundleDir:       g.BundleDir,
 			Assertions:      len(g.Expected),
 			HasExpectedNote: g.ExpectedMD != "",
+			HasRetro:        eval.HasRetro(root, key),
 		})
 	}
 	return out, nil
@@ -126,6 +132,7 @@ func (s *Service) AddGolden(wsID, key, runID string) (GoldenEntry, error) {
 		BundleDir:       g.BundleDir,
 		Assertions:      len(g.Expected),
 		HasExpectedNote: g.ExpectedMD != "",
+		HasRetro:        eval.HasRetro(s.goldenDir(), key),
 	}, nil
 }
 

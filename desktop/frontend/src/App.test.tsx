@@ -334,7 +334,7 @@ describe('Eval tab', () => {
     expect(s.getState().screen).toEqual({ name: 'eval' })
 
     expect(await screen.findByRole('checkbox', { name: 'OMNI-2510' })).toBeInTheDocument()
-    expect(screen.getByText('2 assertions')).toBeInTheDocument()
+    expect(screen.getByText(/2 assertions/)).toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
   })
 
@@ -355,14 +355,23 @@ describe('Eval tab', () => {
     await screen.findByRole('heading', { name: 'Start with a ticket' })
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
 
-    // Eval's commit action is the sidebar footer's button, and publishing it
-    // is an effect, so it lands a commit after the screen that published it.
-    const start = await screen.findByRole('button', { name: /Run eval on the whole set/ })
+    // Run suite lives in the page head and runs the keys that were ticked;
+    // the sidebar's New session steps down while this screen is up.
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    const start = screen.getByRole('button', { name: 'Run suite' })
     await waitFor(() => expect(start).not.toBeDisabled())
+    expect(screen.getByRole('button', { name: 'New session' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    )
     fireEvent.click(start)
     await waitFor(() =>
       expect(transport.calls.startEval).toEqual([
-        { ws: 'ws1', keys: undefined, opts: { provider: undefined, model: undefined } },
+        {
+          ws: 'ws1',
+          keys: ['OMNI-2510'],
+          opts: { provider: undefined, model: undefined, retro: false },
+        },
       ]),
     )
   })

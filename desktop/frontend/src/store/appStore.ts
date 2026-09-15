@@ -112,6 +112,12 @@ export interface EvalOptions {
   provider?: string
   model?: string
   concurrency?: number
+  /** Replay each key at the commit its fix branched from and score against the merged change. */
+  retro?: boolean
+  /** With `retro`: add the blind RCA run between triage and fix. */
+  withRca?: boolean
+  /** With `retro`: one provider call grading root cause and files against the human fix. */
+  rubric?: boolean
 }
 
 /**
