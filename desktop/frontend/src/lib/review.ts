@@ -1,5 +1,5 @@
 import type { DiffFile, RunEvent } from '../api/types'
-import { inputSummary } from './events'
+import { inputSummary, toolInput } from './events'
 
 /**
  * What the Change review screen reads out of a fix run's event log.
@@ -163,17 +163,243 @@ export function checksFromEvents(events: RunEvent[]): Check[] {
     const command = inputSummary(event)
     if (!CHECK_COMMAND.test(command)) continue
     let outcome: Check['outcome'] = 'ran'
+    let result = ''
     for (let j = i + 1; j < events.length; j += 1) {
       const next = events[j]
       if (next.kind === 'tool_started') break
       if (next.kind === 'tool_finished') {
-        outcome = finishedInError(next) ? 'failed' : 'ran'
+        // What the command printed says more than the flag: a `go test`
+        // that printed `ok` passed, one that printed `FAIL` failed, and the
+        // summary line is worth keeping. Without any text the flag is all
+        // there is.
+        const judged = judgeOutput(command, next)
+        outcome = judged.outcome
+        result = judged.result
         break
       }
     }
-    checks.push({ command, outcome, result: '' })
+    checks.push({ command, outcome, result })
   }
   return checks
+}
+
+// ------------------------------------------------- what a command printed
+
+/** A test run's verdict as read off its output: the count and the time, when the runner said them. */
+export interface Judged {
+  outcome: Check['outcome']
+  /** "12 passed · 1.2s", the failing line, or '' when the log has no text. */
+  result: string
+  tests?: number
+  seconds?: number
+}
+
+function firstNumber(text: string, re: RegExp): number | undefined {
+  const m = re.exec(text)
+  return m ? Number(m[1]) : undefined
+}
+
+function firstLine(text: string, re: RegExp): string {
+  for (const line of text.split('\n')) if (re.test(line)) return line.trim()
+  return ''
+}
+
+function shorten(text: string, max = 100): string {
+  const flat = text.replace(/\s+/g, ' ').trim()
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat
+}
+
+function trimSeconds(n: number): string {
+  return n >= 10 ? n.toFixed(0) : n.toFixed(1).replace(/\.0$/, '')
+}
+
+/** True when the openai loop appended a non-zero exit to the output. */
+function exitedNonZero(text: string): boolean {
+  const exit = /\[exit status (\d+)\]\s*$/.exec(text)
+  return exit !== null && exit[1] !== '0'
+}
+
+const TEST_COMMAND =
+  /(?:^|[\s;&|(])(?:go test|npm (?:run )?test|pnpm test|yarn test|bun test|(?:npx )?vitest|(?:npx )?jest|(?:python3? -m )?pytest|cargo test|make test|mvn test|gradle test|dotnet test|rspec)(?=$|[\s;&|)])/
+
+/** True for a command that runs tests, as opposed to a build or a lint. */
+export function isTestCommand(command: string): boolean {
+  return TEST_COMMAND.test(command)
+}
+
+/**
+ * Reads a finished command's outcome from what it printed, the way a person
+ * would: the runner's own summary line for a test run, an error line for a
+ * build. A result with no text at all is `ran` unless the provider flagged
+ * it, because a passing exit is not something the log records.
+ */
+export function judgeOutput(command: string, finished: RunEvent): Judged {
+  const text = str(finished.payload?.text)
+  const flagged = finishedInError(finished) || exitedNonZero(text)
+  if (!text.trim()) return { outcome: flagged ? 'failed' : 'ran', result: '' }
+
+  if (isTestCommand(command)) {
+    let tests: number | undefined
+    let seconds: number | undefined
+    let failed = flagged
+
+    if (/\bgo test\b/.test(command)) {
+      failed ||= /^(?:FAIL\b|--- FAIL)/m.test(text)
+      const passes = text.match(/^\s*--- PASS:/gm)
+      if (passes) tests = passes.length
+      let total = 0
+      let any = false
+      for (const m of text.matchAll(/^ok\s+\S+\s+(?:\(cached\)|([\d.]+)s)/gm)) {
+        if (m[1] !== undefined) {
+          total += Number(m[1])
+          any = true
+        }
+      }
+      if (any) seconds = total
+    } else if (/vitest|jest/.test(command)) {
+      failed ||= /^\s*(?:Tests?:?\s+\d+ failed|FAIL\s)/m.test(text)
+      tests = firstNumber(text, /Tests:?\s+(\d+) passed/)
+      seconds = firstNumber(text, /(?:Duration|Time):?\s+([\d.]+)\s*s/)
+    } else if (/pytest/.test(command)) {
+      failed ||= /\d+ failed|FAILED/.test(text)
+      tests = firstNumber(text, /(\d+) passed/)
+      seconds = firstNumber(text, /in ([\d.]+)s/)
+    } else if (/cargo test/.test(command)) {
+      failed ||= /test result: FAILED/.test(text)
+      tests = firstNumber(text, /test result: ok\. (\d+) passed/)
+      seconds = firstNumber(text, /finished in ([\d.]+)s/)
+    } else {
+      failed ||= /\b(?:FAIL(?:ED)?|\d+ failed)\b/.test(text)
+    }
+
+    if (failed) {
+      return { outcome: 'failed', result: shorten(firstLine(text, /FAIL|failed|error/i) || text) || 'failed' }
+    }
+    const parts: string[] = []
+    if (tests !== undefined) parts.push(`${tests} passed`)
+    if (seconds !== undefined) parts.push(`${trimSeconds(seconds)}s`)
+    return { outcome: 'ok', result: parts.join(' · ') || 'passed', tests, seconds }
+  }
+
+  const failed = flagged || /(?:^|\n)\S+:\d+(?::\d+)?: |\b(?:error|FAIL)\b|✖/i.test(text)
+  if (failed) {
+    return { outcome: 'failed', result: shorten(firstLine(text, /:\d+|error|FAIL|✖/i) || text) || 'failed' }
+  }
+  return { outcome: 'ok', result: 'ok' }
+}
+
+// ------------------------------------------------- the last finished step
+
+/** The step the session banner reports: a test run finishing, or the note landing. */
+export type Step =
+  | {
+      kind: 'tests'
+      ok: boolean
+      tests?: number
+      seconds?: number
+      /** How many distinct files the agent had written by then. */
+      filesChanged: number
+      /** The line that says why it failed; empty when it passed. */
+      detail: string
+    }
+  | { kind: 'note' }
+
+const WRITE_TOOLS = new Set([
+  'Edit',
+  'Write',
+  'MultiEdit',
+  'NotebookEdit',
+  'write_file',
+  'edit',
+  'replace',
+  'edit_file',
+  'apply_patch',
+  'fileChange',
+])
+
+const PATH_FIELDS = ['file_path', 'filePath', 'path', 'notebook_path', 'target_file']
+
+function pathOf(args: Record<string, unknown> | undefined): string {
+  if (!args) return ''
+  for (const field of PATH_FIELDS) {
+    const value = args[field]
+    if (typeof value === 'string' && value !== '') return value
+  }
+  return ''
+}
+
+/** The files a write tool call named, whichever provider recorded it. */
+function writtenPaths(event: RunEvent): string[] {
+  if (event.kind !== 'tool_started' || !WRITE_TOOLS.has(str(event.payload?.tool))) return []
+  const args = asRecord(toolInput(event))
+  const one = pathOf(args)
+  if (one) return [one]
+  const changes = args?.changes
+  if (Array.isArray(changes)) return changes.map((c) => pathOf(asRecord(c))).filter(Boolean)
+  return []
+}
+
+/**
+ * The most recent test run to finish, with how many files the agent had
+ * written by then, or the note landing — whichever came last. Nothing, for
+ * a run that has done neither yet. Test results are paired with their
+ * command the way `checksFromEvents` pairs them: the result that follows.
+ */
+export function latestStep(events: RunEvent[]): Step | undefined {
+  const written = new Set<string>()
+  let pending: string | undefined
+  let step: Step | undefined
+
+  for (const event of events) {
+    for (const path of writtenPaths(event)) written.add(path)
+
+    if (event.kind === 'final') {
+      step = { kind: 'note' }
+      pending = undefined
+      continue
+    }
+    if (event.kind === 'tool_started') {
+      const tool = str(event.payload?.tool)
+      const command = /^(bash|shell|commandexecution|command_execution)$/i.test(tool)
+        ? inputSummary(event)
+        : ''
+      pending = command && isTestCommand(command) ? command : undefined
+      continue
+    }
+    if (event.kind !== 'tool_finished' || !pending) continue
+    const judged = judgeOutput(pending, event)
+    pending = undefined
+    if (judged.outcome === 'ran') continue
+    step = {
+      kind: 'tests',
+      ok: judged.outcome === 'ok',
+      tests: judged.tests,
+      seconds: judged.seconds,
+      filesChanged: written.size,
+      detail: judged.outcome === 'ok' ? '' : judged.result,
+    }
+  }
+  return step
+}
+
+/** "12 tests in 1.2s, 2 files changed" — the banner's body for a passed test run. */
+export function describeTests(
+  step: Extract<Step, { kind: 'tests' }>,
+  filesChanged = step.filesChanged,
+): string {
+  const parts: string[] = []
+  const noun = step.tests === 1 ? 'test' : 'tests'
+  if (step.tests !== undefined) {
+    parts.push(
+      step.seconds !== undefined
+        ? `${step.tests} ${noun} in ${trimSeconds(step.seconds)}s`
+        : `${step.tests} ${noun}`,
+    )
+  } else if (step.seconds !== undefined) {
+    parts.push(`in ${trimSeconds(step.seconds)}s`)
+  }
+  if (filesChanged > 0) parts.push(`${filesChanged} ${filesChanged === 1 ? 'file' : 'files'} changed`)
+  return parts.join(', ')
 }
 
 /** The word the rail prints before a check, so the verdict is never the colour alone. */

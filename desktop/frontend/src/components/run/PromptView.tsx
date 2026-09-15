@@ -11,7 +11,7 @@ interface Section {
  * ticket — so it is split at its top-level headings and every section past the
  * first stays folded until asked for.
  */
-function sections(prompt: string): Section[] {
+export function sections(prompt: string): Section[] {
   const lines = prompt.split('\n')
   const out: Section[] = []
   let title = 'Prompt'

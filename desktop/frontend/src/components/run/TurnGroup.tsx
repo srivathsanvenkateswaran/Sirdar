@@ -46,9 +46,10 @@ function StreamFold({
 /**
  * One turn of the run. The rule above the rows is the only place a number is
  * announced, because turns really are a sequence: turn 3 came after turn 2.
+ * The offset at the rule's other end is when the turn began.
  *
- * `fold` is on under the "All" filter, the only one that shows the raw stream
- * lines at all; every other filter has already dropped them.
+ * `fold` collapses the raw stream lines — the token deltas a provider writes
+ * by the dozen per turn — behind one row each burst.
  */
 export default function TurnGroup({
   turn,
@@ -66,12 +67,14 @@ export default function TurnGroup({
         : turn.events.map((item) => ({ kind: 'event' as const, index: item.index, item })),
     [fold, turn.events],
   )
+  const began = offsetLabel(turn.events[0]?.event.t, startedAt)
 
   return (
     <section aria-label={`turn ${turn.n}`}>
       <div className="turn-rule">
         <span>turn {turn.n}</span>
         <i className="turn-line" />
+        {began ? <span>{began}</span> : null}
       </div>
       {items.map((row) =>
         row.kind === 'fold' ? (

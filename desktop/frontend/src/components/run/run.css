@@ -1,15 +1,18 @@
 /*
- * Run detail. Every value here comes from `styles/tokens.css`; nothing in this
- * file declares a colour, and `src/styles.library.test.ts` checks it.
+ * The session. Every value here comes from `styles/tokens.css`; nothing in
+ * this file declares a colour, and `src/styles.library.test.ts` checks it.
  *
- * The ledger itself — the fixed gutter, the glyph, the hairline rail — is the
- * library's Event row now. What is left here is the content that sits inside
- * a row, the two-pane split around it, and the forms.
+ * The sizes are the ones `docs/design/2026-09-15-screens/Session.html` and
+ * `Review.html` draw: a 72px topbar, a 480px right pane, 15px transcript
+ * text with the ledger face at 13.5px, a composer with a 16px textarea. The
+ * ledger row itself — gutter, glyph, rail — is the library's Event row; the
+ * diff is the library's Diff view; what is left here is the content inside
+ * a row, the two panes around it, the composer, and the forms.
  */
 
-.run {
+.session {
   /*
-   * The one local name left, and it is a shade rather than a hue: an allowed
+   * The one local name, and it is a shade rather than a hue: an allowed
    * tool call is tinted with the triaged hue at 12%. Everything else reads a
    * token directly, which is what removed this file's own dark-mode block —
    * once the hues are tokens, the theme switch happens in one place.
@@ -17,169 +20,194 @@
   --run-tint: color-mix(in srgb, var(--sd-st-triaged) 12%, transparent);
 
   display: flex;
+  flex: 1;
   flex-direction: column;
-  block-size: 100%;
   min-block-size: 0;
   color: var(--sd-ink);
   background: var(--sd-sheet);
 }
 
-/* ------------------------------------------------------------------ header */
+/* ------------------------------------------------------------------ topbar */
 
-.run-head {
+.session-topbar {
   display: flex;
-  flex-wrap: wrap;
+  flex: 0 0 auto;
   align-items: center;
-  gap: 10px 14px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--sd-rule);
+  gap: var(--sd-space-4);
+  min-block-size: 72px;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-6);
+  border-block-end: 1px solid var(--sd-rule);
 }
 
-.run-key {
+.session-topbar > * {
+  flex: 0 0 auto;
+}
+
+.session-key {
   margin: 0;
   font-family: var(--sd-font-mono);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.01em;
+  unicode-bidi: isolate;
 }
 
-/* What the run is: triage, rca, fix, eval. Its state beside it is the
-   library's Status badge, which carries the word and the hue. */
-.run-kind {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
-  color: var(--sd-ink-3);
+/* The ticket's title takes what is left and ellipsises. */
+.session-title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-2);
 }
 
-.run-stats {
+.session-stats {
   display: flex;
-  flex-wrap: wrap;
   align-items: center;
-  margin-inline-start: auto;
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--sd-ink-3);
 }
 
-.run-stat {
-  padding-inline: 10px;
+.session-stat {
+  padding-inline: 14px;
   border-inline-start: 1px solid var(--sd-rule);
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.run-stat:first-child {
+.session-stat:first-child {
   border-inline-start: 0;
   padding-inline-start: 0;
 }
 
-.run-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  width: 100%;
+.session-stat b {
+  font-weight: 500;
+  color: var(--sd-ink-2);
 }
 
-/*
- * The buttons on this screen are the library's Button now, and so is the focus
- * ring: `.run :focus-visible` used to repaint it in the triaged hue, which
- * made one screen's ring a different colour from every other screen's. The
- * design language says the ring is `--sd-accent` everywhere and that no rule
- * replaces it.
- */
+.session-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.session-provider-name {
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  font-weight: 500;
+  color: var(--sd-ink);
+}
+
+.session-provider-model {
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+.session-loading,
+.session-failed,
+.session-failed-line {
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: var(--sd-space-6);
+  color: var(--sd-ink-3);
+}
+
+.session-failed,
+.session-failed-line {
+  color: var(--sd-st-failed);
+}
+
+.session-failed-line {
+  padding-block: var(--sd-space-2);
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: var(--sd-text-meta);
+}
 
 /* -------------------------------------------------------------------- body */
 
-.run-body {
+.session-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 460px);
+  grid-template-columns: minmax(0, 1fr) 480px;
   flex: 1;
-  min-height: 0;
+  min-block-size: 0;
 }
 
-.run-left {
+.session-left {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
+  min-inline-size: 0;
+  min-block-size: 0;
   border-inline-end: 1px solid var(--sd-rule);
 }
 
-.run-right {
+.session-right {
   display: flex;
   flex-direction: column;
-  min-width: 0;
-  min-height: 0;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+@media (max-width: 1100px) {
+  .session-body {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
+  }
 }
 
 @media (max-width: 900px) {
-  .run-body {
+  .session-body {
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .run-left {
+  .session-left {
     border-inline-end: 0;
     border-block-end: 1px solid var(--sd-rule);
-    max-height: 55vh;
+    max-block-size: 60vh;
   }
 }
 
-.run-tabs {
+/* ------------------------------------------------------------------- tabs */
+
+.session-tabs {
   display: flex;
-  gap: 2px;
-  padding: 0 12px;
-  border-bottom: 1px solid var(--sd-rule);
+  flex: 0 0 auto;
+  gap: var(--sd-space-6);
+  padding-inline: var(--sd-space-5);
+  border-block-end: 1px solid var(--sd-rule);
 }
 
-.run-tab {
-  padding: 7px 10px;
+.session-tab {
+  padding-block: 14px;
+  padding-inline: 0;
+  margin-block-end: -1px;
   border: 0;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  border-block-end: 2px solid transparent;
   background: transparent;
-  color: var(--sd-ink-3);
+  color: var(--sd-ink-2);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--sd-text-body);
   cursor: pointer;
 }
 
-.run-tab:hover {
+.session-tab:hover {
   color: var(--sd-ink);
 }
 
-.run-tab[aria-selected='true'] {
-  border-bottom-color: var(--sd-st-triaged);
+.session-tab[aria-selected='true'] {
+  border-block-end-color: var(--sd-ink);
   color: var(--sd-ink);
+  font-weight: 500;
 }
 
-.run-chip {
-  padding: 2px 9px;
-  border: 1px solid var(--sd-rule);
-  border-radius: 999px;
-  background: transparent;
-  color: var(--sd-ink-3);
-  font: inherit;
-  font-size: 11px;
-  cursor: pointer;
-}
-
-.run-chip[aria-pressed='true'] {
-  border-color: color-mix(in srgb, var(--sd-st-triaged) 50%, var(--sd-rule));
-  background: var(--run-tint);
-  color: var(--sd-st-triaged);
-}
-
-.stream-bar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--sd-rule);
-}
-
-.stream-count {
-  margin-inline-start: auto;
+.session-tab-n {
+  margin-inline-start: var(--sd-space-2);
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: 12.5px;
+  font-weight: 400;
   color: var(--sd-ink-3);
   font-variant-numeric: tabular-nums;
 }
@@ -188,100 +216,180 @@
 
 .stream {
   position: relative;
+  display: flex;
   flex: 1;
-  min-height: 0;
+  flex-direction: column;
+  min-block-size: 0;
+  padding-block: var(--sd-space-4) var(--sd-space-3);
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.session-banner {
+  flex: 0 0 auto;
+  margin-block-end: var(--sd-space-3);
+  margin-inline: var(--sd-space-5);
+}
+
+.banner-path {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  overflow-wrap: anywhere;
+  unicode-bidi: isolate;
 }
 
 .stream-scroll {
-  height: 100%;
+  flex: 1;
+  min-block-size: 0;
   overflow: auto;
-  padding: 6px 0 24px;
-  font-size: 12px;
+  padding-block-end: var(--sd-space-5);
 }
 
 .stream-empty {
-  padding: 24px 16px;
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: var(--sd-space-5);
   color: var(--sd-ink-3);
 }
 
 .stream-jump {
   position: absolute;
-  inset-inline-end: 16px;
-  inset-block-end: 14px;
-  padding: 4px 12px;
-  border: 1px solid color-mix(in srgb, var(--sd-st-triaged) 50%, var(--sd-rule));
-  border-radius: 999px;
+  inset-inline-end: var(--sd-space-5);
+  inset-block-end: var(--sd-space-5);
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
   background: var(--sd-surface);
-  color: var(--sd-st-triaged);
+  color: var(--sd-ink-2);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--sd-text-ledger);
   cursor: pointer;
+}
+
+.stream-jump:hover {
+  border-color: var(--sd-accent);
+  color: var(--sd-accent);
 }
 
 .turn-rule {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 0 12px;
-  margin: 12px 0 4px;
+  gap: var(--sd-space-3);
+  margin-block: var(--sd-space-4) 6px;
+  margin-inline: var(--sd-space-5);
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--sd-ink-3);
   font-variant-numeric: tabular-nums;
 }
 
-.turn-rule:first-child {
-  margin-top: 2px;
+section:first-child > .turn-rule {
+  margin-block-start: 2px;
 }
 
 .turn-line {
   flex: 1;
-  height: 1px;
+  block-size: 1px;
   background: var(--sd-rule);
 }
 
 /*
- * The row itself — the gutter, the rail, the glyph, the hue — is the library's
- * Event row now (`src/ui/event-row/`). What is left here is the content that
- * sits inside one: a tool line, a JSON disclosure, a callout box.
+ * The ledger row is the library's Event row. On this screen it takes the
+ * mock's register — a 4rem offset gutter and the ledger face at 13.5px for
+ * the gutter and the glyph — and sits inside the transcript's 24px margin.
+ */
+.session .sd-event {
+  grid-template-columns: 4rem 1.4rem minmax(0, 1fr);
+  margin-inline: var(--sd-space-5);
+  font-size: 15px;
+}
+
+.session .sd-event__at,
+.session .sd-event__mark {
+  font-size: var(--sd-text-ledger);
+}
+
+/* The operator's own words: a bubble, not a ledger row. */
+.you {
+  display: flex;
+  gap: var(--sd-space-3);
+  margin-block: var(--sd-space-3) var(--sd-space-2);
+  margin-inline: var(--sd-space-5);
+}
+
+.you-who {
+  flex: 0 0 4rem;
+  padding-block-start: 15px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+}
+
+.you-say {
+  max-inline-size: 64ch;
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  font-size: var(--sd-text-body);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.you-note {
+  display: block;
+  margin-block-start: var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+}
+
+/*
+ * What sits inside a ledger row: a tool line, a JSON disclosure, a callout
+ * box. The row itself is the library's.
  */
 
 .ev-line {
   display: flex;
   align-items: baseline;
-  gap: 8px;
-  min-width: 0;
+  gap: 10px;
+  min-inline-size: 0;
 }
 
 .ev-tool {
   flex: none;
   font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
   font-weight: 600;
 }
 
 .ev-summary {
-  min-width: 0;
+  min-inline-size: 0;
   overflow: hidden;
   font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
   color: var(--sd-ink-3);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .ev-text {
+  max-inline-size: 72ch;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  max-width: 74ch;
 }
 
 .ev-toggle {
   flex: none;
-  padding: 0 4px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-1);
   border: 0;
   background: transparent;
   color: var(--sd-ink-3);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--sd-text-micro);
   cursor: pointer;
 }
 
@@ -290,13 +398,15 @@
 }
 
 .ev-json {
-  margin: 4px 0 6px;
-  padding: 8px 10px;
+  margin-block: var(--sd-space-1) 6px;
+  margin-inline: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: 10px;
   border: 1px solid var(--sd-rule);
-  border-radius: 3px;
+  border-radius: var(--sd-radius-xs);
   background: color-mix(in srgb, var(--sd-ink) 4%, transparent);
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: var(--sd-text-micro);
   line-height: 1.45;
   overflow-x: auto;
   white-space: pre;
@@ -308,6 +418,7 @@
 
 [data-variant='deny'] .ev-reason {
   font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
   color: var(--sd-st-blocked);
 }
 
@@ -320,37 +431,271 @@
 }
 
 .ev-callout {
-  margin: 2px 0;
-  padding: 6px 10px;
-  border: 1px solid color-mix(in srgb, var(--sd-st-blocked) 40%, var(--sd-rule));
-  border-radius: 3px;
+  max-inline-size: 72ch;
+  margin-block: 2px;
+  padding: var(--sd-space-4);
+  border: 1px solid color-mix(in srgb, var(--sd-st-blocked) 40%, transparent);
+  border-radius: var(--sd-radius-sm);
   background: color-mix(in srgb, var(--sd-st-blocked) 8%, transparent);
-  max-width: 74ch;
 }
 
 .ev-callout-head {
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: 13px;
   color: var(--sd-st-blocked);
 }
 
 .ev-callout-body {
-  margin-top: 2px;
+  margin-block-start: var(--sd-space-1);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 
 .ev-note {
   font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+}
+
+/*
+ * The collapsed run of raw stream lines. It reads as one more ledger row
+ * rather than a control, so it borrows the summary's type and only warms up
+ * on hover.
+ */
+.ev-fold {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+  cursor: pointer;
+}
+
+.ev-fold:hover {
+  color: var(--sd-ink);
+}
+
+.ev-fold-caret {
+  font-size: 10px;
+}
+
+/* ---------------------------------------------------------------- composer */
+
+.composer {
+  flex: 0 0 auto;
+  margin-block: 0 20px;
+  margin-inline: var(--sd-space-5);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sheet);
+  background: var(--sd-surface);
+}
+
+.composer:focus-within {
+  border-color: var(--sd-accent);
+}
+
+.composer-text {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 96px;
+  padding-block: 20px var(--sd-space-2);
+  padding-inline: 20px;
+  border: 0;
+  border-radius: var(--sd-radius-sheet) var(--sd-radius-sheet) 0 0;
+  background: transparent;
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-body);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.composer-text:focus-visible {
+  /* The composer's own border carries the ring for the whole box. */
+  outline: none;
+}
+
+.composer-text::placeholder {
+  color: var(--sd-ink-3);
+}
+
+.composer-text:disabled {
+  color: var(--sd-ink-3);
+}
+
+.composer-error {
+  margin: 0;
+  padding-block: 0 var(--sd-space-2);
+  padding-inline: 20px;
+  font-size: var(--sd-text-meta);
+  color: var(--sd-st-failed);
+}
+
+.composer-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-2) 20px;
+  padding-inline: 20px;
+}
+
+.composer-bar > .sd-button {
+  margin-inline-start: auto;
+}
+
+.composer-reason {
+  min-inline-size: 0;
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+}
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-block-size: 32px;
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-ledger);
+  white-space: nowrap;
+}
+
+.chip > .sd-mark {
+  margin-inline-start: -4px;
+}
+
+.chip-mono {
+  font-family: var(--sd-font-mono);
+  color: var(--sd-ink-3);
 }
 
 /* ------------------------------------------------------------- right panes */
 
+.changes {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+.changes-note {
+  margin: 0;
+  padding-block: var(--sd-space-4);
+  padding-inline: var(--sd-space-5);
+}
+
+.checks {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-rule);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.check {
+  display: flex;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+}
+
+.check-word {
+  flex: 0 0 3ch;
+  color: var(--sd-ink-3);
+}
+
+.check[data-outcome='ok'] .check-word {
+  color: var(--sd-st-done);
+}
+
+.check[data-outcome='failed'] .check-word {
+  color: var(--sd-st-failed);
+}
+
+.changes-diff {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.changes-refused {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-st-failed);
+}
+
+.check-command,
+.check-detail {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.check-detail {
+  color: var(--sd-ink-3);
+}
+
+.branch {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-rule);
+  font-size: 15px;
+  color: var(--sd-ink-3);
+}
+
+.branch-name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+  unicode-bidi: isolate;
+}
+
+.branch > .sd-button {
+  margin-inline-start: auto;
+}
+
+.tools {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  padding-block: var(--sd-space-2) var(--sd-space-5);
+  font-size: 15px;
+}
+
+.tools .sd-event {
+  margin-inline: var(--sd-space-4);
+}
+
 .pane {
   flex: 1;
-  min-height: 0;
+  min-block-size: 0;
   overflow: auto;
-  padding: 14px 18px 32px;
+  padding-block: var(--sd-space-4) var(--sd-space-6);
+  padding-inline: var(--sd-space-5);
 }
 
 .pane-empty {
@@ -362,21 +707,22 @@
 }
 
 .fm {
-  width: 100%;
-  margin-bottom: 14px;
+  inline-size: 100%;
+  margin-block-end: 14px;
   border-collapse: collapse;
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: var(--sd-text-micro);
 }
 
 .fm td {
-  padding: 2px 8px 2px 0;
-  border-bottom: 1px solid var(--sd-rule);
+  padding-block: 2px;
+  padding-inline: 0 var(--sd-space-2);
+  border-block-end: 1px solid var(--sd-rule);
   vertical-align: top;
 }
 
 .fm td:first-child {
-  width: 1%;
+  inline-size: 1%;
   white-space: nowrap;
   color: var(--sd-ink-3);
 }
@@ -386,34 +732,20 @@
 }
 
 .md {
-  max-width: 70ch;
+  max-inline-size: 70ch;
   line-height: 1.62;
 }
 
-/*
- * `dir` on the container resolves each block on its own, which is all a mixed
- * note needs. These rules cover what it cannot do: with the whole pane laid
- * out right to left, list markers and the blockquote rule have to move to the
- * right margin too, and Arabic wants more leading than Latin at the same size.
- */
+/* Arabic wants more leading than Latin at the same size. */
 .md[dir='rtl'] {
   line-height: 1.85;
 }
 
-/*
- * The list marker and the quote rail follow the reading direction on their
- * own now: the Note pane sets them with `padding-inline-start` and
- * `border-inline-start`, which mirror with the pane rather than needing a
- * second rule per direction. What is left here is the leading, which is a
- * property of the script and not of the direction.
- */
-
-
-
 .md h1,
 .md h2,
 .md h3 {
-  margin: 1.4em 0 0.5em;
+  margin-block: 1.4em 0.5em;
+  margin-inline: 0;
   font-size: 1em;
   font-weight: 700;
   letter-spacing: 0.01em;
@@ -429,29 +761,31 @@
 
 .md h1:first-child,
 .md h2:first-child {
-  margin-top: 0;
+  margin-block-start: 0;
 }
 
 .md p,
 .md ul,
 .md ol {
-  margin: 0 0 0.85em;
+  margin-block: 0 0.85em;
+  margin-inline: 0;
 }
 
 .md li {
-  margin-bottom: 0.2em;
+  margin-block-end: 0.2em;
 }
 
 .md code {
   font-family: var(--sd-font-mono);
   font-size: 0.92em;
   background: color-mix(in srgb, var(--sd-ink) 6%, transparent);
-  padding: 0 3px;
+  padding-inline: 3px;
   border-radius: 2px;
 }
 
 .md pre {
-  padding: 9px 11px;
+  padding-block: 9px;
+  padding-inline: 11px;
   border: 1px solid var(--sd-rule);
   border-radius: 3px;
   overflow-x: auto;
@@ -463,7 +797,8 @@
 }
 
 .md blockquote {
-  margin: 0 0 0.85em;
+  margin-block: 0 0.85em;
+  margin-inline: 0;
   padding-inline-start: 10px;
   border-inline-start: 2px solid var(--sd-rule);
   color: var(--sd-ink-3);
@@ -476,15 +811,16 @@
 
 .md th,
 .md td {
-  padding: 3px 8px;
+  padding-block: 3px;
+  padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule);
-  text-align: left;
+  text-align: start;
 }
 
 .mono-block {
   margin: 0;
   font-family: var(--sd-font-mono);
-  font-size: 11.5px;
+  font-size: var(--sd-text-ledger);
   line-height: 1.55;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -492,18 +828,25 @@
 
 .pane-path {
   font-family: var(--sd-font-mono);
-  font-size: 11px;
+  font-size: var(--sd-text-ledger);
   color: var(--sd-ink-3);
   overflow-wrap: anywhere;
+  unicode-bidi: isolate;
 }
 
 .pane-section {
-  margin-bottom: 14px;
+  margin-block-end: 14px;
+}
+
+.pane-section > summary {
+  cursor: pointer;
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
 }
 
 .pane-label {
-  margin-bottom: 3px;
-  font-size: 11px;
+  margin-block-end: 3px;
+  font-size: var(--sd-text-meta);
   color: var(--sd-ink-3);
 }
 
@@ -512,20 +855,21 @@
   padding: 0;
   list-style: none;
   font-family: var(--sd-font-mono);
-  font-size: 11.5px;
+  font-size: var(--sd-text-ledger);
 }
 
 .file-list li {
-  padding: 3px 0;
-  border-bottom: 1px solid var(--sd-rule);
+  padding-block: 3px;
+  border-block-end: 1px solid var(--sd-rule);
   overflow-wrap: anywhere;
 }
 
-/* --------------------------------------------------------- resume and RCA */
+/* ------------------------------------------------- the fix result and forms */
 
 .form {
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--sd-rule);
+  padding-block: 10px;
+  padding-inline: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule);
   background: color-mix(in srgb, var(--sd-st-blocked) 7%, transparent);
 }
 
@@ -537,16 +881,18 @@
 /*
  * The fix result and the review it may be waiting on. It is not a form the
  * reader opened — it is what the run left behind — so it keeps the warning
- * ground the blocked resume box uses rather than the quiet RCA tint.
+ * ground the blocked resume box used rather than the quiet RCA tint.
  */
 .form--fix-review {
-  background: color-mix(in srgb, var(--sd-st-blocked) 7%, transparent);
+  flex: 0 0 auto;
+  border-block-start: 1px solid var(--sd-rule);
+  border-block-end: 0;
 }
 
 .form-note {
-  max-width: 78ch;
-  margin: 0 0 8px;
-  font-size: 12px;
+  max-inline-size: 78ch;
+  margin-block: 0 var(--sd-space-2);
+  font-size: var(--sd-text-meta);
   line-height: 1.5;
   color: var(--sd-ink-3);
 }
@@ -555,7 +901,7 @@
   display: flex;
   align-items: baseline;
   gap: 6px;
-  font-size: 12px;
+  font-size: var(--sd-text-meta);
 }
 
 .form-check input {
@@ -564,8 +910,8 @@
 
 /* The two override fields are narrower than a URL field and sit on one row. */
 .form-row--providers .form-field {
-  min-width: 170px;
-  max-width: 260px;
+  min-inline-size: 170px;
+  max-inline-size: 260px;
 }
 
 .fix-facts {
@@ -573,7 +919,7 @@
   grid-template-columns: auto 1fr;
   gap: 2px 10px;
   margin: 0;
-  font-size: 12px;
+  font-size: var(--sd-text-meta);
 }
 
 .fix-facts dt {
@@ -586,25 +932,26 @@
 }
 
 .fix-deviation {
-  margin-top: 10px;
-  padding-top: 8px;
-  border-top: 1px solid var(--sd-rule);
+  margin-block-start: 10px;
+  padding-block-start: var(--sd-space-2);
+  border-block-start: 1px solid var(--sd-rule);
 }
 
 /* What the agent said it did instead: quoted, so it reads as the agent's. */
 .fix-deviation__text {
-  max-width: 78ch;
-  margin: 0 0 8px;
+  max-inline-size: 78ch;
+  margin-block: 0 var(--sd-space-2);
+  margin-inline: 0;
   padding-inline-start: 10px;
   border-inline-start: 2px solid var(--sd-st-blocked);
-  font-size: 12px;
+  font-size: var(--sd-text-meta);
   line-height: 1.55;
   white-space: pre-wrap;
 }
 
 .form-question {
-  max-width: 78ch;
-  margin: 0 0 8px;
+  max-inline-size: 78ch;
+  margin-block: 0 var(--sd-space-2);
 }
 
 .form-question strong {
@@ -614,7 +961,7 @@
 .form-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--sd-space-2);
   align-items: flex-end;
 }
 
@@ -623,86 +970,34 @@
   flex-direction: column;
   gap: 3px;
   flex: 1;
-  min-width: 220px;
+  min-inline-size: 220px;
 }
 
 .form-field label {
-  font-size: 11px;
+  font-size: var(--sd-text-micro);
   color: var(--sd-ink-3);
 }
 
 .form input,
 .form textarea {
-  padding: 5px 8px;
+  padding-block: 5px;
+  padding-inline: var(--sd-space-2);
   border: 1px solid var(--sd-rule);
   border-radius: 3px;
   background: var(--sd-surface);
   color: var(--sd-ink);
   font: inherit;
-  font-size: 12px;
+  font-size: var(--sd-text-meta);
 }
 
 .form textarea {
   font-family: var(--sd-font-mono);
   resize: vertical;
-  min-height: 62px;
+  min-block-size: 62px;
 }
 
 .form-error {
-  margin-top: 6px;
+  margin-block-start: 6px;
   color: var(--sd-st-failed);
-  font-size: 12px;
-}
-
-.run-loading,
-.run-failed {
-  padding: 24px 16px;
-  color: var(--sd-ink-3);
-}
-
-.run-failed {
-  color: var(--sd-st-failed);
-}
-
-/* What the last action on this run said, under the header that started it. */
-.run-said,
-.run-failed-line {
-  margin: 0;
-  padding: 7px 16px;
-  border-bottom: 1px solid var(--sd-rule);
-  font-size: 12px;
-}
-
-.run-said {
-  color: var(--sd-ink-3);
-}
-
-.run-failed-line {
-  color: var(--sd-st-failed);
-}
-
-/*
- * The collapsed run of raw stream lines under "All". It reads as one more
- * ledger row rather than a control, so it borrows the summary's type and only
- * warms up on hover.
- */
-.ev-fold {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  padding: 0;
-  border: 0;
-  background: none;
-  font: inherit;
-  font-family: var(--sd-font-mono);
-  color: var(--sd-ink-3);
-  cursor: pointer;
-}
-
-.ev-fold:hover {
-  color: var(--sd-ink);
-}
-
-.ev-fold-caret {
-  font-size: 10px;
+  font-size: var(--sd-text-meta);
 }

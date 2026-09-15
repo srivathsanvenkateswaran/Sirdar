@@ -28,9 +28,11 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
 /**
  * A 'review' event's payload carries what a person did to the fix commit
  * after the session ended — `action: 'drop'` with the file and the 0-based
- * hunk index within that file. Every other kind carries the agent's fields.
+ * hunk index within that file. A 'steer' event carries the instruction as
+ * `text` and how the run was continued (`resume` or `primed`). Every other
+ * kind carries the agent's fields.
  */
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; action?: string; path?: string; hunk?: number } }
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; action?: string; path?: string; hunk?: number; continuation?: string } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**

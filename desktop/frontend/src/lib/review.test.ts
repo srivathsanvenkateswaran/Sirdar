@@ -3,7 +3,10 @@ import type { RunEvent } from '../api/types'
 import {
   changeTotals,
   checksFromEvents,
+  describeTests,
   fixReport,
+  judgeOutput,
+  latestStep,
   noteLabel,
   outcomeOf,
   pushCommand,
@@ -40,6 +43,31 @@ function finished(isError = false): RunEvent {
     raw: { type: 'user', message: { content: [{ type: 'tool_result', is_error: isError }] } },
   })
 }
+
+/** A result that printed something, which is what the verdict is read from. */
+function printed(text: string, isError = false): RunEvent {
+  return ev('tool_finished', {
+    tool: 'Bash',
+    text,
+    raw: { type: 'user', message: { content: [{ type: 'tool_result', content: text, is_error: isError }] } },
+  })
+}
+
+function edit(path: string): RunEvent {
+  return ev('tool_started', {
+    tool: 'Edit',
+    raw: { type: 'assistant', message: { content: [{ type: 'tool_use', name: 'Edit', input: { file_path: path } }] } },
+  })
+}
+
+const GO_TEST_OK = [
+  '=== RUN   TestPageReleasesConnection',
+  '--- PASS: TestPageReleasesConnection (0.01s)',
+  '=== RUN   TestClose',
+  '--- PASS: TestClose (0.00s)',
+  'PASS',
+  'ok  \tgithub.com/acme/app/internal/export\t1.204s',
+].join('\n')
 
 describe('fixReport', () => {
   it('reads the report off the final event\'s text', () => {
@@ -152,5 +180,72 @@ describe('the footer helpers', () => {
     expect(noteLabel('/w/notes/SBX-1 RCA double-counted-return.md')).toBe('RCA note')
     expect(noteLabel('/w/notes/SBX-1 double-counted-return.md')).toBe('Triage note')
     expect(noteLabel('/w/.sirdar/runs/SBX-1/r1/note.md')).toBe('Note')
+  })
+})
+
+describe('judgeOutput', () => {
+  it('reads a go test summary into a count and a time', () => {
+    expect(judgeOutput('go test ./...', printed(GO_TEST_OK))).toEqual({
+      outcome: 'ok',
+      result: '2 passed · 1.2s',
+      tests: 2,
+      seconds: 1.204,
+    })
+  })
+
+  it('reads a failed go test, a flagged build, and a clean build', () => {
+    expect(judgeOutput('go test ./...', printed('--- FAIL: TestPage (0.00s)\n    page_test.go:12: open = 1, want 0\nFAIL\nFAIL\tapp\t0.4s'))).toMatchObject({
+      outcome: 'failed',
+      result: '--- FAIL: TestPage (0.00s)',
+    })
+    expect(judgeOutput('go build ./...', printed('./main.go:4:2: imported and not used', true))).toEqual({
+      outcome: 'failed',
+      result: './main.go:4:2: imported and not used',
+    })
+    expect(judgeOutput('go build ./...', printed('ok'))).toEqual({ outcome: 'ok', result: 'ok' })
+  })
+
+  it('reads vitest, pytest and cargo summaries', () => {
+    expect(judgeOutput('npx vitest run', printed(' Test Files  3 passed (3)\n      Tests  41 passed (41)\n   Duration  2.31s')).result).toBe('41 passed · 2.3s')
+    expect(judgeOutput('pytest', printed('===== 12 passed in 0.84s =====')).result).toBe('12 passed · 0.8s')
+    expect(judgeOutput('cargo test', printed('test result: ok. 7 passed; 0 failed; finished in 0.12s')).result).toBe('7 passed · 0.1s')
+  })
+
+  it('judges a printed result inside checksFromEvents too', () => {
+    expect(checksFromEvents([bash('go test ./app/...'), printed(GO_TEST_OK)])).toEqual([
+      { command: 'go test ./app/...', result: '2 passed · 1.2s', outcome: 'ok' },
+    ])
+  })
+})
+
+describe('latestStep', () => {
+  it('is the test run that finished last, with the files written by then', () => {
+    const step = latestStep([
+      edit('app/ledger.go'),
+      edit('app/ledger_test.go'),
+      edit('app/ledger.go'),
+      bash('go test ./app/...'),
+      printed(GO_TEST_OK),
+    ])
+    expect(step).toEqual({ kind: 'tests', ok: true, tests: 2, seconds: 1.204, filesChanged: 2, detail: '' })
+    expect(describeTests(step as Extract<typeof step, { kind: 'tests' }>)).toBe('2 tests in 1.2s, 2 files changed')
+  })
+
+  it('is the note once the final event lands after the tests', () => {
+    expect(latestStep([bash('go test ./...'), printed(GO_TEST_OK), ev('final')])).toEqual({ kind: 'note' })
+  })
+
+  it('is nothing for a run that has neither tested nor filed, or whose test has no result yet', () => {
+    expect(latestStep([bash('git log'), printed('x')])).toBeUndefined()
+    expect(latestStep([bash('go test ./...')])).toBeUndefined()
+    expect(latestStep([bash('go test ./...'), finished()])).toBeUndefined()
+  })
+
+  it('says a failed test run failed, with the line that says so', () => {
+    expect(latestStep([bash('go test ./...'), printed('FAIL\tapp\t0.1s')])).toMatchObject({
+      kind: 'tests',
+      ok: false,
+      detail: 'FAIL app 0.1s',
+    })
   })
 })

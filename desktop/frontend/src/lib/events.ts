@@ -77,9 +77,14 @@ export type EventClass =
   | 'error'
   | 'callout'
   | 'system'
+  /** The operator's own words: a steer the run recorded, or an answer this window posted. */
+  | 'you'
 
 export function classify(event: RunEvent): EventClass {
   switch (event.kind) {
+    case 'steer':
+    case 'answer':
+      return 'you'
     case 'tool_started':
     case 'tool_finished':
       return 'tool'
@@ -122,7 +127,13 @@ export function matchesFilter(event: RunEvent, filter: Filter): boolean {
   const family = classify(event)
   if (filter === 'tools') return family === 'tool' || family === 'permission'
   if (filter === 'denials') return family === 'permission' && event.payload?.decision === 'deny'
-  return family === 'text' || family === 'final' || family === 'callout' || family === 'error'
+  return (
+    family === 'text' ||
+    family === 'final' ||
+    family === 'callout' ||
+    family === 'error' ||
+    family === 'you'
+  )
 }
 
 /**

@@ -35,6 +35,27 @@ export function Row({
   )
 }
 
+/**
+ * The operator's own words in the transcript: a steer the run recorded, or
+ * an answer this window posted. Not a ledger row — it is the one thing in
+ * the stream a person wrote, and it reads as a message rather than a record.
+ * The original prompt is never one of these; it is the run's brief, under
+ * Bundle.
+ */
+export function YouBubble({ text, continuation }: { text: string; continuation?: string }) {
+  return (
+    <div className="you" data-testid="you-bubble">
+      <span className="you-who">you</span>
+      <div className="you-say" dir="auto">
+        {text}
+        {continuation === 'primed' ? (
+          <span className="you-note">continued in a new session</span>
+        ) : null}
+      </div>
+    </div>
+  )
+}
+
 /** Picks the row for one event. `startedAt` sets the zero of the offset gutter. */
 export default function EventRow({
   event,
@@ -53,9 +74,11 @@ export default function EventRow({
       return <PermissionRow event={event} at={at} />
     case 'usage':
       return <UsageRow event={event} at={at} />
+    case 'you':
+      return <YouBubble text={event.payload?.text ?? ''} continuation={event.payload?.continuation} />
     case 'text':
       return (
-        <Row at={at} glyph="▪" variant="text">
+        <Row at={at} glyph="·" variant="text">
           <div className="ev-text">{event.payload?.text ?? ''}</div>
         </Row>
       )
@@ -77,10 +100,12 @@ export default function EventRow({
         <Row at={at} glyph={rateLimited ? '~' : '?'} variant="callout">
           <div className="ev-callout">
             <div className="ev-callout-head">
-              {rateLimited ? 'rate limited' : 'agent asked a question'}
+              {rateLimited ? 'Rate limited' : 'The agent is asking'}
             </div>
             {event.payload?.text ? (
-              <div className="ev-callout-body">{event.payload.text}</div>
+              <div className="ev-callout-body" dir="auto">
+                {event.payload.text}
+              </div>
             ) : null}
           </div>
         </Row>
