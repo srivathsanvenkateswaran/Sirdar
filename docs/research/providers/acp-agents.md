@@ -3,13 +3,14 @@
 What to put in the `acp:` block of `.sirdar/config.yaml` for each agent Sirdar knows about.
 Sourced from the ACP registry snapshot in `acp-protocol.md` (section 3), taken 2026-09-10.
 
-**Every row here is unverified.** None of these agents has been run against Sirdar's ACP
-adapter; the commands are transcribed from the registry, not observed working. What the
-adapter *has* been run against is a scripted fake agent
-(`internal/provider/acp/testdata/*.jsonl`). Treat a row as a starting point and confirm it with
-`sirdar doctor`, which starts the agent, initializes it and prints what it says about itself —
-including whether it supports `loadSession` (resume) and image prompts, the two capabilities
-that change what a Sirdar run can do with it.
+**Three rows are verified live (2026-09-15): GitHub Copilot CLI, OpenCode and Kimi CLI** — see
+"Verified live" below for what each one actually did. **Every other row is unverified**: those
+agents have not been run against Sirdar's ACP adapter and their commands are transcribed from the
+registry, not observed working. What the adapter is otherwise exercised against is a scripted
+fake agent (`internal/provider/acp/testdata/*.jsonl`). Treat an unverified row as a starting point
+and confirm it with `sirdar doctor`, which starts the agent, initializes it and prints what it
+says about itself — including whether it supports `loadSession` (resume) and image prompts, the
+two capabilities that change what a Sirdar run can do with it.
 
 Registry pins an exact version in each `npx` line; the pins below are the ones in that
 snapshot and will be stale. Drop the `@version` to take the latest, or pin your own.
@@ -23,12 +24,12 @@ These speak ACP themselves, usually behind a flag.
 | Gemini CLI | `gemini` | `["--experimental-acp"]` | The form the scaffold and `docs/config.md` use, for a locally installed CLI. The registry's own entry is `npx` with `["@google/gemini-cli@0.59.0", "--acp"]`, so the flag name differs between versions — unverified which your build takes; `sirdar doctor` settles it in one run |
 | Goose (Block) | `goose` | `["acp"]` | Distributed as a binary, no npx wrapper in the registry |
 | Qwen Code (Alibaba) | `npx` | `["@qwen-code/qwen-code@0.23.2", "--acp", "--experimental-skills"]` | |
-| Kimi CLI (Moonshot) | `kimi` (usually an absolute path, see below) | `["acp"]` | **Verified** against `kimi` 0.43.1 — the one row on this page that has been run. Protocol version 1, `loadSession`, image prompts. Set the session mode to `plan`: in `default` mode a write inside the workspace is approved before Sirdar is asked. `docs/research/12-kimi-wire-formats.md` |
-| OpenCode | `opencode` | unverified | Binary; the registry lists no argv |
+| Kimi CLI (Moonshot) | `kimi` (usually an absolute path, see below) | `["acp"]` | **Verified 2026-09-15** against `kimi` 0.43.1, handshake only — the account's quota was spent before a model turn. Protocol version 1, `loadSession`, image prompts. Sirdar selects the `plan` session mode: in `default` mode a write inside the workspace is approved before Sirdar is asked. `docs/research/12-kimi-wire-formats.md` |
+| OpenCode | `opencode` | `["acp"]` | **Verified 2026-09-15**, triage and fix |
 | Crush | `crush` | unverified | Not found in the registry snapshot at all — may be unregistered or renamed |
 | Junie (JetBrains) | `junie` | unverified | Binary; `junie.jetbrains.com` |
 | Augment (`auggie`) | `npx` | `["@augmentcode/auggie@0.36.0", "--acp"]` | |
-| GitHub Copilot CLI | `npx` | `["@github/copilot@1.0.83", "--acp"]` | |
+| GitHub Copilot CLI | `copilot` | `["--acp"]` | **Verified 2026-09-15**, triage, rca and fix. The registry's own entry is `npx` with `["@github/copilot@1.0.83", "--acp"]`; the locally installed binary is what was run |
 | Cursor | `cursor-agent` | unverified | Binary; docs at `cursor.com/docs/cli/acp` |
 | Devin (Cognition) | `devin` | unverified | Binary |
 
@@ -80,8 +81,8 @@ Four things to know before running one against a repository you care about, all 
   registers its own `onBeforeExecuteTool` listener and vetoes `Write` and `Edit` outside the
   plan file, and a veto short-circuits the in-workspace approval above. `Bash` is deliberately
   left to the normal chain, so it arrives as a permission request and `permissions.bash`
-  decides. Sirdar's ACP adapter does **not** send `session/set_mode` today, so this has to be
-  done by hand or added to the adapter.
+  decides. Sirdar's ACP adapter selects this mode itself now, on every triage and rca session
+  against an agent that offers it; `acp.mode` overrides the id.
 - **A subagent escapes both.** `Agent` and `AgentSwarm` are approved without asking, and a
   subagent is created with its permission mode forced to `auto` and without the parent's
   plan-mode state. Nothing it does asks, and nothing vetoes its writes. No flag removes the
@@ -93,6 +94,28 @@ The free "Kimi Code" tier's quota is small enough that it can be spent before th
 run. It surfaces as a `-32000` JSON-RPC error on `session/prompt` whose message begins
 `Authentication required: 403 You've reached your monthly usage limit…` — indistinguishable
 from a broken login except by reading the text.
+
+## Verified live, 2026-09-15
+
+Three agents were driven end to end against the sandbox workspace
+(`~/Documents/Personal/sirdar-sandbox`). What each one did:
+
+| Agent | Launch | Triage | RCA | Fix | What it showed |
+|---|---|---|---|---|---|
+| GitHub Copilot CLI | `copilot --acp` | pass | pass | pass | The only agent that finished all three kinds. Earlier fix attempts failed on the report shape — an answer carrying extra root properties, and a turn that ended with nothing in it — before one came back clean |
+| OpenCode | `opencode acp` | pass | **fail** | pass | The rca answered a good root-cause analysis with the `rca` object's own fields written at the root, so the document was missing both required top-level keys, and the schema retry repeated the same shape. That failure is what the sharpened retry now names explicitly (`docs/config.md`, "No schema-constrained output") |
+| Kimi CLI | `~/.kimi-code/bin/kimi acp` | — | — | — | **No model turn.** The account's monthly quota was already spent, and `session/prompt` came back as a `-32000` error before a token was billed. The handshake, the session-modes machinery and `session/set_mode` were all exercised for real; everything downstream of a model reply was not |
+
+Two things came out of these runs and are now in the adapter:
+
+- **Session modes.** Kimi advertises `availableModes` on `session/new` and serves
+  `session/set_mode`, and its `default` mode approves any write inside a git working tree before
+  a permission request is even built. A client that does not select the read-only mode is asked
+  about nothing. Sirdar now selects one; `acp.mode` overrides the choice.
+- **A completed tool call nobody approved ends the run.** It used to be a warning in the event
+  log. In a triage or rca session it is now an `EvBreach`: the session is cancelled, no note is
+  written and no row reaches the register. `docs/config.md` has the exact rules, including what
+  stays a warning in a fix run.
 
 ## Worked example
 
@@ -129,9 +152,15 @@ not found" and "not logged in" actually appear.
   cost, `budget.maxUsd` never triggers — and since a whole prompt turn counts as one turn,
   `budget.maxTurns` does not either. `budget.maxMinutes` is the bound.
 - **Whether it asks permission, and for what.** `session/request_permission` is sent at the
-  agent's discretion. Watch a first run's event log: an `edit` or `execute` tool call that
-  completes without a permission event raises a warning, and that warning is the signal to run
-  this agent against a scratch checkout rather than a real one.
+  agent's discretion. An `edit`, `delete`, `move` or `execute` tool call that completes without
+  a permission event fails a triage or rca run outright — `read-only breach:` in the run's
+  reason — so an agent that does that is one to run against a scratch checkout, or not at all.
+  A `fetch` that asks nobody is a warning instead.
+- **Whether it offers session modes, and what its read-only one is called.** `sirdar doctor`
+  does not show these (they ride on `session/new`, which doctor does not open), so the first run's
+  event log is where to look: `acp mode <id> selected for this read-only session` means one was
+  found, and a line naming what the agent offered means none of them matched — set `acp.mode`
+  to the right id.
 - **What MCP servers it already has.** Sirdar adds the workspace's to whatever the agent is
   configured with globally; `mcp.workspaceOnly` cannot reach across ACP.
 - **Whether it honours the JSON-only instruction.** ACP has no schema field, so this is the

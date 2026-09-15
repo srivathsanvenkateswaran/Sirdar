@@ -1,0 +1,10 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false},"sessionCapabilities":{"setMode":{}}},"agentInfo":{"name":"kimi-code","version":"0.43.1"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-m","modes":{"currentModeId":"ask","availableModes":[{"id":"ask","name":"Ask"},{"id":"plan","name":"Plan","description":"Read-only planning; no tool execution."},{"id":"edit","name":"Edit"}]}}}
+{"$expect":"session/set_mode"}
+{"$reply":{}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-m","update":{"sessionUpdate":"current_mode_update","modeId":"plan"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-m","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Moded\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

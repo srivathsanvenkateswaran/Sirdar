@@ -117,6 +117,7 @@ rather than being silently ignored.
 | `acp.command` | string | none (required for `provider: acp`) | The ACP agent's program: `gemini`, `goose`, `opencode`, `npx` |
 | `acp.args` | list of string, optional | unset | The rest of the agent's command line, e.g. `["--experimental-acp"]` |
 | `acp.env` | map, optional | unset | Literal environment entries added to the agent's environment; these are values, not credential references |
+| `acp.mode` | string, optional | picked automatically | The ACP session mode id to select for this workspace, overriding the adapter's own choice; see [Session modes](#session-modes) |
 | `cursor.path` | string, optional | `""` (look up `cursor-agent` on `PATH`) | Path to the Cursor Agent binary |
 | `cursor.model` | string, optional | `auto` | Model id the CLI is asked for. A Cursor Free plan may only use `auto`; `--model` and `model` override it |
 | `cursor.mode` | string, optional | `ask` | The read-only execution mode a triage or rca session runs in: `ask` or `plan` |
@@ -1120,7 +1121,9 @@ whatever point the provider offers to be asked.
   Sirdar cannot find a URL in is declined rather than approved unseen. ACP leaves it to the
   agent to decide what is worth asking about, so an agent that fetches without asking is not
   reached by the list at all — a completed `fetch` call that never raised a permission request
-  is reported as an `EvError` on the run.
+  is reported as an `EvError` on the run. A completed *write*, *command* or *sub-agent spawn*
+  that asked nobody is treated harder: it fails the run. See
+  [What fails the run](#what-fails-the-run) under `provider: acp`.
 - **codex** — a triage session runs with `sandbox: read-only`, a fix session with
   `sandbox: workspace-write`, and both with `approvalPolicy: untrusted`, so Codex asks before
   running a shell command, calling an MCP tool or writing a file, and the policy answers.
@@ -1876,11 +1879,69 @@ meaning the protocol settles — the three writes, `execute` and `fetch` — are
 alone, so an agent cannot route a write or a fetch through the laxer MCP rules by titling it
 `mcp__editor__apply_diff` or `mcp__browser__get_page`.
 
-When an `edit`, `delete`, `move`, `execute` or `fetch` tool call completes having never produced
-a permission request, the run records an error event naming it. Nothing can be undone at that
-point — the write, or the request, already happened inside the agent's process — but it is the
-difference between finding out and not. An agent that raises that warning is one to run against
-a scratch checkout, or not at all.
+#### Session modes
+
+ACP lets an agent expose *session modes* — `session/new` answers with an `availableModes` list
+and a `currentModeId`, and the client picks one with `session/set_mode` before the first prompt.
+Most agents expose none. The ones that do usually have a read-only mode that is a real
+in-process guard rather than a line of prompt text: kimi's `plan` mode vetoes `Write` and `Edit`
+inside the agent before its permission chain is consulted at all.
+
+That matters because the mode an agent opens in is often the wrong one. kimi's `default` mode
+approves any write inside a git working tree *before* a permission request is built, so a triage
+run that never sets a mode is asked about nothing — the read-only guarantee holds only because
+the write is caught after it lands (see below), which is the worst place to catch it.
+
+So Sirdar selects one:
+
+- a **triage or rca** session takes the first of `plan`, `read-only`, `readonly`, `read_only`,
+  `ask` the agent offers;
+- a **`sirdar fix`** session takes the first of `default`, `edit`, since it has to be able to
+  write;
+- **`acp.mode`** overrides both, for an agent whose read-only mode is spelled something else.
+  An id the agent does not offer is reported as an error and no mode is set.
+
+The chosen id is recorded as a system event (`acp mode plan selected for this read-only
+session`), and it is sent even when the agent says it is already current, so the mode the run ran
+under was set by this client rather than inferred. An agent that offers no modes says so once,
+and an agent that offers modes but none Sirdar recognises names what it offered — that is the
+signal to set `acp.mode`.
+
+This is defence in depth, not the guarantee. The guarantee is still that every
+`session/request_permission` is answered by the run's permission policy.
+
+#### What fails the run
+
+When an `edit`, `delete` or `move` tool call **completes** having never produced a permission
+request, a triage or rca run **fails on the spot**: the session is cancelled, no note is written,
+no row reaches the register, and the run's reason is `read-only breach: <kind> <path>`. So does a
+completed `execute`, and so does a tool call whose kind or title says it spawned a sub-agent
+(`Task`, `Agent`, `AgentSwarm`, `spawn_*`, matched on the leading identifier so "update the task
+list" is not one).
+
+Nothing can be undone at that point — the write, or the command, already happened inside the
+agent's process. What the failure buys is that the run does not go on to file a note asserting a
+read-only investigation that did not happen. This is the same verdict
+[`provider: agy`](#provider-agy) reaches for the same reason, and the difference between the two
+is only where it comes from: Antigravity cannot be asked, whereas an ACP agent could have asked
+and did not.
+
+A sub-agent spawn is a breach in a **fix** run too. A sub-agent is a second agent loop with its
+own permission state — every agent whose behaviour has been captured starts one in a mode that
+approves everything — so nothing it goes on to do reaches Sirdar as a permission request and
+nothing configured here applies to it.
+
+Two things stay warnings:
+
+- an unannounced **`fetch`**, in any mode. It is neither a write nor a command; what it cost is
+  that `permissions.fetch` never judged the destination.
+- an unannounced **write or command in a `sirdar fix` run**, but only when every path it named
+  resolves inside the run's own worktree. A write that landed outside it, or one that named no
+  destination at all, is a breach in a fix run as well: staying inside the worktree is the whole
+  of what `sirdar fix` promises, and a write nobody looked at cannot be shown to have stayed
+  there.
+
+An agent that raises any of these is one to run against a scratch checkout, or not at all.
 
 Sirdar declines the write-file and terminal client capabilities at `initialize`, so a
 well-behaved agent never asks Sirdar to write a file or open a terminal *on its behalf*; one
@@ -1935,13 +1996,14 @@ matters more here than for most agents:
   asked about the writes it exists to refuse.
 - **`auto`** and **`yolo`** approve more still, and neither belongs in a Sirdar run.
 
-Sirdar's ACP adapter does not send `session/set_mode` today, so a kimi session starts in
-`default`. Until it does, **treat `provider: acp` with kimi as a scratch-checkout provider**,
-not one to point at a repository you care about. Two further gaps are Kimi's own and no client
-setting reaches them: a subagent spawned through its `Agent` or `AgentSwarm` tool runs with
-permissions forced to auto and without the parent's plan-mode state, so nothing it does is
+Sirdar selects `plan` itself on every triage and rca session — see [Session modes](#session-modes)
+above — so a kimi run no longer starts in `default`. Two gaps remain, both Kimi's own, and no
+client setting reaches either: a subagent spawned through its `Agent` or `AgentSwarm` tool runs
+with permissions forced to auto and without the parent's plan-mode state, so nothing it does is
 asked about; and `FetchURL` and `WebSearch` are approved without asking, so `permissions.fetch`
-is never consulted. `docs/research/12-kimi-wire-formats.md` has the evidence for all of it.
+is never consulted. The first of those is why a sub-agent spawn is itself a breach (see
+[What fails the run](#what-fails-the-run)): Sirdar cannot govern the second loop, so it refuses
+to carry on after one has started. `docs/research/12-kimi-wire-formats.md` has the evidence.
 
 Headless `kimi -p` is not an alternative: it forces the session's permission mode to auto on
 every path, and refuses `--plan`, `--auto` and `--yolo` outright when combined with `-p`. That
@@ -2010,7 +2072,7 @@ session is cancelled, its process group killed, and **no triage note is written 
 row recorded**, even if the answer was already in flight. A triage note asserts that the run
 read and wrote nothing, and this is the run that cannot assert it. A *rejected* tool call is the
 ordinary outcome and is not a breach — it is logged as `rejected: <reason>` and the session
-carries on. `provider: agy` fails a run the same way and for the same reason.
+carries on. `provider: agy` and `provider: acp` fail a run the same way and for the same reason.
 
 **`sirdar fix` is refused,** before `sirdar fix` touches git at all — the provider answers
 `SupportsFix() == false`, which is asked ahead of fetching the default branch, cutting a branch
