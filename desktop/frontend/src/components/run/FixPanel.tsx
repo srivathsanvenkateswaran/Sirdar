@@ -90,7 +90,7 @@ export default function FixPanel({
             session, and you start that yourself from Start fix.
           </p>
           <div className="form-row">
-            <Button variant="primary" onClick={onAccept} disabled={pending}>
+            <Button variant="pale" onClick={onAccept} disabled={pending}>
               {pending ? 'Publishing…' : 'Accept and publish'}
             </Button>
           </div>

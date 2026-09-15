@@ -1,47 +1,40 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import {
-  DEFAULT_FILTER,
-  FILTERS,
-  filterTurns,
-  groupTurns,
-  type Filter,
-  type IndexedEvent,
-} from '../../lib/events'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { groupTurns, type IndexedEvent } from '../../lib/events'
 import TurnGroup from './TurnGroup'
 
 /** How close to the bottom still counts as following the stream, in pixels. */
 const STICK_SLACK = 24
 
 /**
- * The live log. It follows the tail while the engineer is at the bottom and
- * stops the moment they scroll up to read something, offering a pill back.
+ * The transcript. Every line the run wrote, in turns, with the raw stream
+ * deltas folded behind one row per burst; the operator's own words as
+ * bubbles among them. It follows the tail while the engineer is at the
+ * bottom and stops the moment they scroll up to read something, offering a
+ * pill back.
  *
- * It is pinned `dir="ltr"`. What it shows is tool names, file paths, queries
- * and JSON, and a right-to-left layout moves their leading slashes, brackets
- * and colons to the wrong end — so the one place an Arabic string appears here
- * (a quoted ticket line) is worth less than keeping every path readable.
+ * It is pinned `dir="ltr"`. What it shows is tool names, file paths,
+ * queries and JSON, and a right-to-left layout moves their leading slashes,
+ * brackets and colons to the wrong end — so the one place an Arabic string
+ * appears here (a quoted ticket line) is worth less than keeping every path
+ * readable.
  */
-
 export default function EventStream({
   events,
   startedAt,
   live,
+  head,
 }: {
   events: IndexedEvent[]
   startedAt: string | undefined
   live: boolean
+  /** Drawn above the scroll and outside it: the banner for the last finished step. */
+  head?: ReactNode
 }) {
-  const [filter, setFilter] = useState<Filter>(DEFAULT_FILTER)
   const [showJump, setShowJump] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stick = useRef(true)
 
   const turns = useMemo(() => groupTurns(events), [events])
-  const shown = useMemo(() => filterTurns(turns, filter), [turns, filter])
-  const shownCount = useMemo(
-    () => shown.reduce((n, t) => n + t.events.length, 0),
-    [shown],
-  )
 
   const toBottom = useCallback(() => {
     const el = scrollRef.current
@@ -56,7 +49,7 @@ export default function EventStream({
       return
     }
     if (events.length > 0) setShowJump(true)
-  }, [events.length, filter, live, toBottom])
+  }, [events.length, live, toBottom])
 
   const onScroll = () => {
     const el = scrollRef.current
@@ -67,51 +60,20 @@ export default function EventStream({
   }
 
   return (
-    <>
-      <div className="stream-bar" role="group" aria-label="Filter events">
-        {FILTERS.map((f) => (
-          <button
-            key={f.id}
-            type="button"
-            className="run-chip"
-            aria-pressed={filter === f.id}
-            onClick={() => setFilter(f.id)}
-          >
-            {f.label}
-          </button>
-        ))}
-        <span className="stream-count">
-          {filter === 'all'
-            ? `${events.length} ${events.length === 1 ? 'event' : 'events'}`
-            : `${shownCount} of ${events.length}`}
-        </span>
+    <div className="stream" dir="ltr">
+      {head}
+      <div className="stream-scroll" ref={scrollRef} onScroll={onScroll} data-testid="event-stream">
+        {turns.length === 0 ? (
+          <p className="stream-empty">No events yet. They appear here as the agent works.</p>
+        ) : (
+          turns.map((turn) => <TurnGroup key={turn.n} turn={turn} startedAt={startedAt} fold />)
+        )}
       </div>
-      <div className="stream" dir="ltr">
-        <div className="stream-scroll" ref={scrollRef} onScroll={onScroll} data-testid="event-stream">
-
-          {shown.length === 0 ? (
-            <p className="stream-empty">
-              {events.length === 0
-                ? 'No events yet. They appear here as the agent works.'
-                : 'Nothing matches this filter.'}
-            </p>
-          ) : (
-            shown.map((turn) => (
-              <TurnGroup
-                key={turn.n}
-                turn={turn}
-                startedAt={startedAt}
-                fold={filter === 'all'}
-              />
-            ))
-          )}
-        </div>
-        {showJump ? (
-          <button type="button" className="stream-jump" onClick={toBottom}>
-            Jump to latest
-          </button>
-        ) : null}
-      </div>
-    </>
+      {showJump ? (
+        <button type="button" className="stream-jump" onClick={toBottom}>
+          Jump to latest
+        </button>
+      ) : null}
+    </div>
   )
 }

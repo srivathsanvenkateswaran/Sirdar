@@ -308,7 +308,8 @@ describe('Deep links', () => {
 
     await waitFor(() => expect(s.getState().screen).toEqual({ name: 'run', runId: 'r9' }))
     expect(s.getState().currentWorkspaceId).toBe('ws2')
-    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+    // The session topbar carries the run's key as the screen's heading.
+    expect(await screen.findByRole('heading', { name: 'OMNI-1' })).toBeInTheDocument()
     await waitFor(() => expect(transport.calls.runs).toContain('ws2'))
   })
 

@@ -10,11 +10,11 @@ import Library from './screens/Library'
 import NewSession from './screens/NewSession'
 import Register from './screens/Register'
 import Review from './screens/Review'
-import RunDetail from './screens/RunDetail'
+import Session from './screens/Session'
 import Settings from './screens/Settings'
 import { showLibrary, subscribeShowLibrary } from './lib/library'
 import { parseRoute, routeHash, sameScreen } from './lib/routes'
-import type { AppState, AppStore, EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
+import type { AppState, AppStore, EvalOptions, FixOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
 import './components/shell/shell.css'
 
@@ -162,14 +162,11 @@ function Shell(): JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openTriage, shown.name, triageOpen, settingsOpen])
 
-  // Every start goes through the store, which keeps the job id the run detail
+  // Every start goes through the store, which keeps the job id the session
   // screen's Cancel button needs. A start that fails rejects as well as
   // toasting, so the form that asked can show the reason beside its button;
   // the two call sites with no form behind them swallow it here instead, and
   // the toast is what the reader sees.
-  const startRCA = useCallback((key: string, opts?: RCAOptions) => store.startRCA(key, opts), [
-    store,
-  ])
   const startFix = useCallback((key: string, opts?: FixOptions) => store.startFix(key, opts), [
     store,
   ])
@@ -184,19 +181,25 @@ function Shell(): JSX.Element {
     case 'new':
       screen = <NewSession />
       break
-    case 'run':
+    case 'run': {
+      // The tracker's title for the run's ticket, when the queue lists it;
+      // the run itself records only the key.
+      const runId = shown.runId
+      const key = runs.find((r) => r.runId === runId)?.key
+      const title = key ? tickets.find((t) => t.key === key)?.title : undefined
       screen = (
-        <RunDetail
+        <Session
           transport={state.transport}
           workspaceId={workspaceId}
-          runId={shown.runId}
-          defaultProvider={currentWorkspace?.provider}
+          runId={runId}
+          title={title}
           onBack={() => navigate({ name: 'board' })}
-          onStartRCA={startRCA}
+          onOpenReview={() => navigate({ name: 'review', runId })}
           onStartFix={startFix}
         />
       )
       break
+    }
     case 'review':
       screen = (
         <Review runId={shown.runId} onBack={() => navigate({ name: 'run', runId: shown.runId })} />

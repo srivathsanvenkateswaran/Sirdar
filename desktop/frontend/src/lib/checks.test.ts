@@ -163,7 +163,14 @@ describe('latestStep', () => {
         result('a', GO_TEST_OK),
       ]),
     )
-    expect(step).toEqual({ kind: 'tests', ok: true, tests: 2, seconds: 1.204, filesChanged: 2 })
+    expect(step).toEqual({
+      kind: 'tests',
+      ok: true,
+      tests: 2,
+      seconds: 1.204,
+      filesChanged: 2,
+      detail: '',
+    })
     expect(describeTests(step as Extract<typeof step, { kind: 'tests' }>)).toBe(
       '2 tests in 1.2s, 2 files changed',
     )
@@ -187,6 +194,7 @@ describe('latestStep', () => {
 
   it('says a failed test run failed', () => {
     const step = latestStep(indexed([bash('go test ./...', 'a'), result('a', 'FAIL\tapp\t0.1s')]))
-    expect(step).toMatchObject({ kind: 'tests', ok: false })
+    // The line is flattened for a banner: one space where the tab was.
+    expect(step).toMatchObject({ kind: 'tests', ok: false, detail: 'FAIL app 0.1s' })
   })
 })

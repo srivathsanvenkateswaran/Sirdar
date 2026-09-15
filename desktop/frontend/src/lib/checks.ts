@@ -29,7 +29,15 @@ export interface Check {
 
 /** The last step the run finished: a test run, or the note landing. */
 export type Step =
-  | { kind: 'tests'; ok: boolean; tests?: number; seconds?: number; filesChanged: number }
+  | {
+      kind: 'tests'
+      ok: boolean
+      tests?: number
+      seconds?: number
+      filesChanged: number
+      /** The line that says why it failed; empty when it passed. */
+      detail: string
+    }
   | { kind: 'note' }
 
 function asRecord(value: unknown): Record<string, unknown> | undefined {
@@ -301,6 +309,7 @@ export function latestStep(events: IndexedEvent[]): Step | undefined {
       tests: verdict.tests,
       seconds: verdict.seconds,
       filesChanged: written.size,
+      detail: verdict.ok ? '' : verdict.detail,
     }
   }
   return step
