@@ -280,6 +280,20 @@ permissions:
   fetch: []
     # - "docs.microsoft.com"
     # - "*.readthedocs.io"
+  # Paths outside the workspace a read tool may still open. A session reads
+  # the workspace, this run's directory and its bundle of ticket text and
+  # attachments; anything else is refused with "read outside the workspace".
+  # Name a runbook directory or a skills tree here to widen that. An entry
+  # is absolute or starts with "~", and "*" spans "/", so
+  # "~/notes/support/*" covers a file at any depth under it; an entry with
+  # no wildcard names a directory and everything in it.
+  #
+  # This does not reach Bash — a shell command is confined by the list
+  # above — and it decides nothing on providers that answer their own tool
+  # calls (cursor, agy), where doctor says so.
+  readAlso: []
+    # - "~/notes/support/*"
+    # - "/opt/runbooks"
 mcp:
   # Start the session against <workspace>/.mcp.json and nothing else, so the
   # operator's own global connectors are not loaded into a triage run. With
