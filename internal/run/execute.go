@@ -13,6 +13,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
@@ -1166,7 +1168,7 @@ func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error)
 	})
 
 	return note.DigestRow{
-		Issue:          firstSentence(f.Complaint),
+		Issue:          issueLine(f.Title, f.Complaint),
 		Confidence:     f.RootCause.Confidence,
 		Classification: f.Classification,
 	}, nil
@@ -1609,6 +1611,120 @@ func firstSentence(s string) string {
 		return strings.TrimSpace(s[:i+1])
 	}
 	return s
+}
+
+// issueLine is the digest's ISSUE column for a triage row: the note's own
+// title when the agent wrote one, and otherwise the first sentence of the
+// complaint that says something about the issue.
+//
+// The title comes first because it is the one line written to describe the
+// problem. The complaint is the customer's own words, and a support ticket
+// opens with a greeting: a live digest's ISSUE column read "Peace be upon
+// you." for every row of an Arabic thread, which is the sentence
+// firstSentence lands on and tells the reader nothing.
+func issueLine(title, complaint string) string {
+	if t := strings.TrimSpace(title); t != "" {
+		return t
+	}
+	return firstIssueSentence(complaint)
+}
+
+// greetingOpeners are the salutations a ticket opens with before it says
+// anything, in the two languages this workspace reads. A sentence counts
+// as a greeting only when it starts with one of them, is shorter than
+// greetingMaxWords, and ends inside the complaint's first line — all
+// three, because "Hello, the export has failed every night since Tuesday"
+// is the complaint and "Peace be upon you." is not.
+var greetingOpeners = []string{
+	"السلام عليكم", "سلام عليكم", "وعليكم السلام", "عليكم السلام",
+	"صباح الخير", "مساء الخير", "تحية طيبة", "أهلا", "اهلا", "أهلاً",
+	"مرحبا", "مرحباً", "السلام",
+	"peace be upon you", "peace upon you", "assalamu alaikum", "as-salamu alaykum",
+	"salam alaikum", "salaam", "salam", "hello", "hi", "hey", "dear", "greetings",
+	"good morning", "good afternoon", "good evening", "good day",
+}
+
+// greetingMaxWords is the length a greeting stays under. A sentence that
+// opens with "Hello" and runs to six words is carrying content.
+const greetingMaxWords = 6
+
+// firstIssueSentence is the first sentence of a complaint that is not the
+// opening greeting. When every sentence looks like one — a complaint that
+// is nothing but a salutation — it falls back to firstSentence, so the
+// column says what the customer wrote rather than going empty.
+func firstIssueSentence(s string) string {
+	text := strings.TrimSpace(s)
+	if text == "" {
+		return ""
+	}
+	firstLineEnd := len(text)
+	if i := strings.IndexByte(text, '\n'); i >= 0 {
+		firstLineEnd = i
+	}
+	for _, sen := range splitSentences(text) {
+		if sen.end <= firstLineEnd+1 && isGreeting(sen.text) {
+			continue
+		}
+		if trimmed := strings.TrimSpace(sen.text); trimmed != "" {
+			return firstSentence(trimmed)
+		}
+	}
+	return firstSentence(text)
+}
+
+// sentence is one sentence of a complaint and the offset just past its
+// terminator, which is what says whether it ended on the first line.
+type sentence struct {
+	text string
+	end  int
+}
+
+// splitSentences cuts text at the marks a sentence ends on, keeping the
+// terminator with the sentence it closes. A newline counts: a ticket
+// written as a list of lines has no full stops at all.
+func splitSentences(text string) []sentence {
+	var out []sentence
+	start := 0
+	for i, r := range text {
+		if !isSentenceEnd(r) {
+			continue
+		}
+		end := i + utf8.RuneLen(r)
+		out = append(out, sentence{text: text[start:end], end: end})
+		start = end
+	}
+	if start < len(text) {
+		out = append(out, sentence{text: text[start:], end: len(text)})
+	}
+	return out
+}
+
+func isSentenceEnd(r rune) bool {
+	switch r {
+	case '.', '!', '?', '\n', '؟', '۔':
+		return true
+	}
+	return false
+}
+
+// isGreeting reports whether a sentence is a salutation and nothing else.
+func isGreeting(s string) bool {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return true
+	}
+	if len(strings.Fields(trimmed)) >= greetingMaxWords {
+		return false
+	}
+	lower := strings.ToLower(strings.TrimLeftFunc(trimmed, func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	}))
+	for _, opener := range greetingOpeners {
+		if strings.HasPrefix(lower, opener) {
+			return true
+		}
+	}
+	return false
 }
 
 // stallTimeout is how long this run tolerates silence from the provider:
