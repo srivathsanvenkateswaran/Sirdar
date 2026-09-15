@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 )
@@ -127,12 +128,23 @@ func TestTriageThenRCA(t *testing.T) {
 	}
 
 	out, _ = mustRun(t, 0, "register", "--markdown")
-	if !strings.Contains(out, "| Issue |") {
-		t.Errorf("register --markdown is missing the vault header:\n%s", out)
+	for _, want := range []string{"| Issue |", "| Title |", "| Company |"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("register --markdown is missing the %s column:\n%s", want, out)
+		}
 	}
 	stem := strings.TrimSuffix(filepath.Base(rcaNote), ".md")
 	if !strings.Contains(out, "[["+stem+"]]") {
 		t.Errorf("register --markdown is missing the rca wiki link %q:\n%s", stem, out)
+	}
+	// The two cells a human used to fill in: the rca note's title (the
+	// newest line for this key wins) and the customer its frontmatter
+	// carries.
+	if !strings.Contains(out, "Export job times out on large orders") {
+		t.Errorf("register --markdown did not carry the note title:\n%s", out)
+	}
+	if !strings.Contains(out, "شركة") {
+		t.Errorf("register --markdown did not carry the company:\n%s", out)
 	}
 }
 
@@ -280,11 +292,48 @@ func TestDoctorReportsBrokenWorkspace(t *testing.T) {
 	chdir(t, root)
 
 	out, errb := runCLI(t, "doctor")
-	if !strings.Contains(out, "[!!]") {
+	if !strings.Contains(out, "[XX]") {
 		t.Errorf("doctor found nothing wrong with a broken adapter:\n%s\nstderr:\n%s", out, errb)
 	}
 	if !strings.Contains(out, "[OK]") {
 		t.Errorf("doctor reported no passing check:\n%s", out)
+	}
+}
+
+// A warning is not a failure: a doctor run whose worst row only warns
+// prints [!!], says so in the summary, and still exits 0. The exit code is
+// what a CI gate reads, which is the whole point of the third state.
+func TestDoctorWarningsDoNotFailTheRun(t *testing.T) {
+	var out bytes.Buffer
+	checks := []app.Check{
+		{Name: "config", OK: true, Level: "ok", Detail: "valid"},
+		{Name: "mcp", OK: true, Level: "warn", Detail: "the agent will have no MCP tools"},
+	}
+	if code := printChecks(&out, checks); code != 0 {
+		t.Errorf("exit %d on a warning-only report, want 0:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "[!!] mcp") {
+		t.Errorf("the warning row should be marked [!!]:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "1 of 2 checks warned") {
+		t.Errorf("the summary should count the warning:\n%s", out.String())
+	}
+
+	out.Reset()
+	checks = append(checks, app.Check{Name: "notes.dir", Level: "fail", Detail: "unwritable"})
+	if code := printChecks(&out, checks); code != 1 {
+		t.Errorf("exit %d on a failed check, want 1:\n%s", code, out.String())
+	}
+	if !strings.Contains(out.String(), "[XX] notes.dir") {
+		t.Errorf("the failing row should be marked [XX]:\n%s", out.String())
+	}
+	// One summary line naming both counts, not the warning count on one
+	// line and the failure count on the next.
+	if !strings.Contains(out.String(), "1 of 3 checks failed, 1 warned") {
+		t.Errorf("the summary should name both counts on one line:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "checks warned\n") {
+		t.Errorf("the warning count should not also print its own summary line:\n%s", out.String())
 	}
 }
 

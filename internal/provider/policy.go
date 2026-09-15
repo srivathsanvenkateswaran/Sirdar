@@ -141,27 +141,68 @@ const mcpPrefix = "mcp__"
 // mcp__grafana__create_incident or mcp__..._deploy_to_vercel must not be
 // approved just because nobody wrote a list.
 //
-// The list is deliberately shorter than "every verb that could write":
-// `run`, `exec`, `start` and `trigger` are how read-only query tools are
-// named too (mcp__metabase__run_query), and denying those by name cost
-// more real triage evidence than it ever saved.
+// The list is long on purpose, and a write word anywhere in the name wins
+// over a read word beside it. The earlier shape of this rule went the
+// other way — a read word made the tool a read whatever else it said —
+// which approved run_query and also approved anything a server chose to
+// name with a read word in it. Sirdar is read-only by construction, so the
+// side to err on is refusing a query tool whose name contains `run`. A
+// workspace that needs one names it in permissions.mcp, which is the whole
+// rule once it is non-empty.
 var mcpWriteVerbs = map[string]bool{
-	"save": true, "log": true, "transition": true, "assign": true,
-	"upload": true, "delete": true, "create": true, "update": true,
-	"send": true, "post": true, "put": true, "patch": true, "write": true,
-	"remove": true, "deploy": true, "buy": true, "purchase": true,
-	"pause": true, "unpause": true, "revoke": true, "reset": true,
-	"install": true, "archive": true, "cancel": true, "close": true,
-	"edit": true, "set": true, "add": true,
+	"create": true, "update": true, "delete": true, "remove": true,
+	"set": true, "write": true, "post": true, "put": true, "patch": true,
+	"send": true, "add": true, "insert": true, "upsert": true,
+	"trigger": true, "run": true, "exec": true, "execute": true,
+	"apply": true, "transition": true, "assign": true, "log": true,
+	"upload": true, "publish": true, "install": true, "restart": true,
+	"kill": true, "pause": true, "unpause": true, "buy": true,
+	"reply": true, "resolve": true, "schedule": true, "deploy": true,
+	"edit": true, "change": true, "modify": true, "merge": true,
+	"push": true, "commit": true, "save": true, "purchase": true,
+	"revoke": true, "reset": true, "archive": true, "cancel": true,
+	"close":  true,
+	"manage": true, "generate": true, "enable": true, "disable": true,
+	"start": true, "stop": true, "grant": true, "import": true,
+	"restore": true, "rename": true, "move": true, "drop": true,
+	"truncate": true, "submit": true, "approve": true, "invite": true,
+	"share": true, "sync": true, "promote": true, "scale": true,
+	"use": true, "input": true, "eval": true,
 }
 
-// mcpReadWords mark a tool as a read whatever else its name says. A tool
-// whose name carries one of these is asking for data back, so the write
-// verb next to it (run_query, get_or_create_view) is not the operation.
+// mcpPassthroughWords mark a tool whose name describes a transport rather
+// than an operation: mcp__grafana__grafana_api_request takes a method and
+// a path, graphql takes a document, sql_execute takes a statement. The
+// name says nothing about what the call does, and the argument decides —
+// which is exactly the case the heuristic cannot judge, so it refuses.
+// This is the finding that started the rewrite: grafana_api_request led
+// with no verb at all and was approved.
+var mcpPassthroughWords = map[string]bool{
+	"request": true, "raw": true, "graphql": true, "sql": true,
+	"passthrough": true, "proxy": true,
+}
+
+// mcpReadWords mark a tool as a read, but only when no write word and no
+// passthrough word is in the name beside them. A tool whose name carries
+// one of these and nothing else is asking for data back: read_query,
+// list_tables and describe_table on an oxo-mysql server, query_loki_logs
+// on Grafana.
+//
+// This is the exemption, not the default: since MCPLooksLikeWrite's tail
+// case now denies a name carrying none of these, a name has to earn a read
+// classification by containing one of them (and no write or passthrough
+// word beside it), rather than merely avoid a write word.
 var mcpReadWords = map[string]bool{
 	"query": true, "select": true, "read": true, "search": true,
 	"list": true, "get": true, "find": true, "describe": true,
-	"show": true,
+	"show": true, "fetch": true, "view": true, "lookup": true,
+	"count": true, "check": true, "status": true, "health": true,
+	"summary": true, "metadata": true, "label": true, "labels": true,
+	"names": true, "values": true, "history": true, "analyze": true,
+	"analyse": true, "suggest": true, "explain": true, "diff": true,
+	"log": true, "blame": true, "grep": true, "cat": true, "head": true,
+	"tail": true, "ls": true, "tree": true, "peek": true, "watch": true,
+	"inspect": true,
 }
 
 // camelBoundary finds a lower-to-upper transition, so a camelCase tool
@@ -675,35 +716,71 @@ func (p *PermissionPolicy) decideMCP(tool string) Decision {
 	return Decision{Allow: true}
 }
 
-// MCPLooksLikeWrite reports whether an MCP tool's own name segment carries
-// a verb that describes a write. The segment is everything after the last
-// "__", so the server name — which may itself contain underscores, as in
-// mcp__plugin_vercel_vercel__buy_domain — is never what is tested.
+// MCPLooksLikeWrite reports whether an MCP tool's name describes anything
+// but a read. The segment tested is everything after the last "__", so the
+// server name — which may itself contain underscores, as in
+// mcp__plugin_vercel_vercel__buy_domain — is never what is judged.
 //
-// Every word of the segment is tested, not just the first: servers put the
-// verb wherever reads well (mcp__athena__wiki_save), and a leading-verb
-// rule missed all of those. A word that marks the tool as a read wins over
-// any write verb beside it, which is what keeps mcp__metabase__run_query
-// and mcp__oxo-mysql-stg__run_select usable.
+// The whole segment is tokenised, on "_", "-", "." and camelCase boundaries, and
+// every token is tested. Servers put the verb wherever reads well
+// (mcp__athena__wiki_save), so a rule that read the leading word alone
+// missed those, and one that let a read word win approved run_query
+// alongside grafana_api_request. The order is: any write word makes it a
+// write, even beside a read word -- a read word does not save a name that
+// also carries one; a generically named passthrough (..._api_request,
+// graphql, sql_execute) is a write, because its arguments decide what it
+// does and the name cannot say; only then does a read word make it a read.
+// A name with none of the above -- carrying no read word at all -- is a
+// write too: alerting_manage_rules used to fall through here and be
+// approved for want of a recognised verb, which is the finding this tail
+// case exists to close. Only a name whose words are all read or
+// otherwise-neutral (no write, no passthrough, and at least one read word
+// among them) comes back as a read.
+//
+// This denies query tools named run_* and exec_*, and now also denies any
+// name the word lists do not recognise at all -- javascript_tool,
+// generate_deeplink, next_departures. That is the trade: the heuristic
+// fails closed for a workspace that configured nothing, and
+// permissions.mcp is how a workspace that needs one of these says so.
 func MCPLooksLikeWrite(tool string) bool {
-	name := tool
-	if i := strings.LastIndex(tool, "__"); i >= 0 {
-		name = tool[i+2:]
-	}
-	name = strings.ToLower(camelBoundary.ReplaceAllString(name, "${1}_${2}"))
-	words := strings.FieldsFunc(name, func(r rune) bool { return r == '_' || r == '-' })
+	words := mcpNameWords(tool)
 
-	for _, w := range words {
-		if mcpReadWords[w] {
-			return false
-		}
-	}
 	for _, w := range words {
 		if mcpWriteVerbs[w] {
 			return true
 		}
 	}
-	return false
+	for _, w := range words {
+		if mcpPassthroughWords[w] {
+			return true
+		}
+	}
+	// A tool called nothing but "query" names no object to query, which is
+	// the same generic passthrough an api_request is.
+	if len(words) == 1 && words[0] == "query" {
+		return true
+	}
+	for _, w := range words {
+		if mcpReadWords[w] {
+			return false
+		}
+	}
+	// No write word, no passthrough word, and no read word either: the name
+	// says nothing this heuristic recognises, so it is judged a write
+	// rather than approved unseen. A workspace that knows better names the
+	// tool in permissions.mcp.
+	return true
+}
+
+// mcpNameWords splits an MCP tool's own name segment into lower-case
+// words, on "__", "_", "-", "." and camelCase boundaries.
+func mcpNameWords(tool string) []string {
+	name := tool
+	if i := strings.LastIndex(tool, "__"); i >= 0 {
+		name = tool[i+2:]
+	}
+	name = strings.ToLower(camelBoundary.ReplaceAllString(name, "${1}_${2}"))
+	return strings.FieldsFunc(name, func(r rune) bool { return r == '_' || r == '-' || r == '.' })
 }
 
 // SplitCommand splits a shell command into the segments a policy has to

@@ -23,6 +23,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/azdo"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/front"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/helpscout"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/hubspot"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/intercom"
@@ -30,6 +31,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/linear"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/rally"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/servicenow"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zendesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
 )
@@ -260,7 +262,7 @@ func (a *adapterSet) tracker(cfg *config.Config, sc *config.SourceConfig, creds 
 	switch sc.Adapter {
 	case "exec":
 		return a.client(ExpandCommand(cfg, sc.Command))
-	case "jira", "linear", "azdo", "rally":
+	case "jira", "linear", "azdo", "rally", "servicenow":
 		tracker, helpdesk, err := newBuiltinTracker(sc, creds)
 		if err != nil {
 			return nil, err
@@ -305,6 +307,17 @@ func newBuiltinTracker(sc *config.SourceConfig, creds config.Resolver) (source.T
 		return nil, nil, err
 	}
 	hc := &http.Client{Timeout: builtinTimeout}
+
+	if sc.Adapter == "servicenow" {
+		// ServiceNow is the one built-in that is a helpdesk first: the
+		// client itself serves the conversation and Tracker() is the view
+		// of the same records as work items.
+		c, err := newServiceNow(sc, creds, hc)
+		if err != nil {
+			return nil, nil, err
+		}
+		return c.Tracker(), c, nil
+	}
 
 	switch sc.Adapter {
 	case "jira":
@@ -382,6 +395,13 @@ func builtinEndpoint(sc *config.SourceConfig) string {
 		return sc.OrgURL + "/" + sc.Project
 	case "linear":
 		return linear.DefaultEndpoint
+	case "servicenow":
+		// A doctor row is display only: an instance invalid enough that
+		// ResolveBaseURL refuses it is reported as configured-but-empty
+		// here, and New — called when the client is actually built —
+		// is what surfaces the real error.
+		base, _ := servicenow.ResolveBaseURL(sc.Instance, sc.BaseURL)
+		return base
 	case "rally":
 		if sc.BaseURL == "" {
 			return config.RallyDefaultBaseURL
@@ -406,7 +426,7 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 			return nil, err
 		}
 		return zohodesk.New(sc.BaseURL, sc.OrgID, ts), nil
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias", "servicenow":
 		return newBuiltinHelpdesk(sc, creds)
 	default:
 		return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
@@ -414,9 +434,10 @@ func (a *adapterSet) helpdesk(cfg *config.Config, sc *config.SourceConfig, creds
 }
 
 // newBuiltinHelpdesk builds one of the built-in helpdesk adapters that take
-// plain credential refs — zendesk, freshdesk, helpscout, intercom, hubspot
-// and front — resolving them on the way in. zohodesk is built separately
-// (ZohoTokenSource) because of its refresh-token grant option.
+// plain credential refs — zendesk, freshdesk, helpscout, intercom, hubspot,
+// front, gorgias and servicenow — resolving them on the way in. zohodesk is
+// built separately (ZohoTokenSource) because of its refresh-token grant
+// option.
 //
 // helpscout is the one that keeps refreshing after this point: it is
 // handed a client id and secret rather than a token, and mints its own
@@ -512,8 +533,56 @@ func newBuiltinHelpdesk(sc *config.SourceConfig, creds config.Resolver) (source.
 			return nil, err
 		}
 		return c, nil
+
+	case "gorgias":
+		apiKey, err := resolveRef(creds, "apiKey", sc.APIKey)
+		if err != nil {
+			return nil, err
+		}
+		// The email is the Basic username and is written literally in the
+		// config: it identifies the account, it is not a secret, and
+		// making it a credential ref would mean an operator storing their
+		// own address in a keychain.
+		c, err := gorgias.New(gorgias.Config{
+			Account: sc.Account,
+			BaseURL: sc.BaseURL,
+			Email:   sc.Email,
+			APIKey:  apiKey,
+		}, hc)
+		if err != nil {
+			return nil, err
+		}
+		return c, nil
+
+	case "servicenow":
+		return newServiceNow(sc, creds, hc)
 	}
 	return nil, fmt.Errorf("adapter %q cannot serve a helpdesk", sc.Adapter)
+}
+
+// newServiceNow builds the ServiceNow client both roles share. The
+// password or the OAuth token is resolved here and stays in the returned
+// client: it is never written to a run directory and never reaches the
+// agent's environment. The username is not a credential reference — it is
+// taken as the literal login name it is.
+func newServiceNow(sc *config.SourceConfig, creds config.Resolver, hc *http.Client) (*servicenow.Client, error) {
+	password, err := resolveRef(creds, "password", sc.Password)
+	if err != nil {
+		return nil, err
+	}
+	oauthToken, err := resolveRef(creds, "oauthToken", sc.OAuthToken)
+	if err != nil {
+		return nil, err
+	}
+	return servicenow.New(servicenow.Config{
+		Instance:   sc.Instance,
+		BaseURL:    sc.BaseURL,
+		Table:      sc.Table,
+		Username:   sc.Username,
+		Password:   password,
+		OAuthToken: oauthToken,
+		DateFormat: sc.DateFormat,
+	}, hc)
 }
 
 // ZohoTokenSource builds what a Zoho Desk client authenticates with: either

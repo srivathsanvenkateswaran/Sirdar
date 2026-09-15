@@ -15,7 +15,7 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front`/`gorgias` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
@@ -31,6 +31,9 @@ rather than being silently ignored.
 | `sources.helpdesk.clientId` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client id |
 | `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
 | `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
+| `sources.helpdesk.account` | string | none (one of `account`/`baseUrl` required for `gorgias`) | Gorgias account identifier, e.g. `acme` for `acme.gorgias.com` |
+| `sources.helpdesk.email` | string | none (required for `gorgias`; required with `apiToken` for `zendesk` basic auth) | The Gorgias login email sent as the HTTP Basic username; a plain address, not a credential reference |
+| `sources.helpdesk.apiKey` | string | none (required for `gorgias`) | Credential reference to a Gorgias API key, sent as the HTTP Basic password |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -131,6 +134,49 @@ mistyped source name or a secret written out literally fails the first time the 
 rather than the first time a hook fires. `docs/webhooks.md` has the per-source setup steps, the
 signing schemes, and the `--allow-remote` warning.
 
+## `sirdar doctor` levels
+
+Every row of the report carries one of three levels, and the mark says which:
+
+| Mark | Level | Means | Exit code |
+|---|---|---|---|
+| `[OK]` | ok | The thing checked works | — |
+| `[!!]` | warn | Worth knowing, not a broken workspace | 0 |
+| `[XX]` | fail | A run would not work, or would not work the way the config says | 1 |
+
+`sirdar doctor` exits non-zero only on a failure, so a warning does not trip a CI gate. What
+warns today: the `mcp` row when `mcp.workspaceOnly` is off (the agent sees every user-level
+server the operator has) and when it is on with no workspace `.mcp.json` (the agent gets no MCP
+tools at all); the Codex `mcp servers` row when the session would see none; the
+`claude environment` row under `billing: api` with a custom `ANTHROPIC_BASE_URL`, where
+`budget.maxUsd` cannot be trusted; and the qwen `workspace settings` row when a session that
+keeps folder trust for MCP would load the repository's own `.qwen/settings.json` or
+`.qwen/agents`.
+
+The desktop Settings screen reads the same list and marks the rows the same way. On the wire
+each check carries `level` (`"ok"`, `"warn"`, `"fail"`) alongside the older `ok` boolean, which
+stays true for a warning.
+
+## `sirdar register` columns
+
+`sirdar register --markdown` fills two cells that used to be left blank for a human to type in:
+Title and Company. Both come from the notes themselves, not from a tracker call — the triage
+note's own title (refined by the RCA note's title where one exists) and the note's
+`company`/`customer` frontmatter, falling back to the customer the run resolved. A resolution
+note carries no title of its own, since it is titled after the fix rather than the issue, so its
+register line keeps the company only.
+
+`RegisterRow` (`internal/store/register.go`) gained `Title` and `Company` fields, both omitted
+from a line's JSON when empty, so `register.jsonl` — append-only and long-lived — reads back
+unchanged for every line written before these columns existed. The wire shape the desktop app
+reads (`internal/app.RegisterRow`) carries `title` and `company` too, and the Register screen's
+own markdown export mirrors the CLI's table shape column for column: Issue holds the tracker
+key, Helpdesk and Tracker stay blank, Triage/RCA/Resolution are `[[wiki links]]` to whichever
+note was written (blank where none was), and Status is resolved once an RCA or resolution note
+exists, fix-pushed once a fix ran with neither, triaged before any of that — the same rule
+`registerEntry.status()` (`cmd/sirdar/cmd_register.go`) and `groupStatus()`
+(`desktop/frontend/src/lib/register.ts`) both apply.
+
 ## Built-in trackers
 
 `jira`, `linear`, `azdo` and `rally` are compiled into Sirdar, so they need no adapter process.
@@ -189,7 +235,8 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom`, `hubspot` and `front` are compiled into
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom`, `hubspot`, `front` and `gorgias` are
+compiled into
 Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
 refresh-token grant. Config load checks what each of the others cannot work without:
 
@@ -201,11 +248,14 @@ refresh-token grant. Config load checks what each of the others cannot work with
 | `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
 | `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
 | `front` | `token` | An API token from Settings → Developers; Front's OAuth flow is for multi-tenant apps |
+| `gorgias` | one of `account`/`baseUrl`, `email`, `apiKey` | HTTP Basic: the login `email` is the username, `apiKey` the password. `account` is the identifier alone, e.g. `acme` for `acme.gorgias.com` |
 
-The last four talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
-`api.hubapi.com`, `api2.frontapp.com` — so none of them takes a `baseUrl`. An Intercom workspace
-on the EU or AU data-residency host is not supported by this adapter yet; calls to the US host
-are proxied by Intercom, which works but is not what Intercom recommends.
+`helpscout`, `intercom`, `hubspot` and `front` talk to one fixed vendor host each —
+`api.helpscout.net`, `api.intercom.io`, `api.hubapi.com`, `api2.frontapp.com` — so none of them
+takes a `baseUrl`. `gorgias`, like `zendesk` and `freshdesk`, gives every account its own host, so
+it needs one named. An Intercom workspace on the EU or AU data-residency host is not supported by
+this adapter yet; calls to the US host are proxied by Intercom, which works but is not what
+Intercom recommends.
 
 ```yaml
 sources:
@@ -253,10 +303,20 @@ sources:
     token: env:FRONT_TOKEN
 ```
 
+```yaml
+sources:
+  helpdesk:
+    adapter: gorgias
+    account: acme
+    email: ops@acme.com
+    apiKey: env:GORGIAS_API_KEY
+```
+
 `sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
 signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
 `helpscout`, `/me` for `intercom`, the account details for `hubspot`, one page of one teammate
-for `front` — and names who the connection authenticates as, never the credential itself:
+for `front`, `/api/account` for `gorgias` — and names who the connection authenticates as, never
+the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
@@ -265,12 +325,14 @@ for `front` — and names who the connection authenticates as, never the credent
 [OK] sources.helpdesk (intercom) — reachable as the workspace access token
 [OK] sources.helpdesk (hubspot) — reachable as the private app token
 [OK] sources.helpdesk (front) — reachable as the Front API token
+[OK] sources.helpdesk (gorgias) — reachable as ops@acme.com
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant. The last four name the kind
-of grant rather than an account, because none of their probes returns an account identifier worth
-printing — the row itself is the proof the credential was accepted.
+as oauth`, since there is no account email to show for that grant. `helpscout`, `intercom`,
+`hubspot` and `front` name the kind of grant rather than an account, because none of their probes
+returns an account identifier worth printing — the row itself is the proof the credential was
+accepted.
 
 ## Credential references
 
@@ -772,19 +834,46 @@ give up: the loop starts MCP servers itself, and the workspace's `.mcp.json` is 
 it reads.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
-`mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is allowed unless a word
-of its own name segment is a verb that describes a write — `create`, `update`, `edit`,
-`delete`, `remove`, `write`, `save`, `log`, `send`, `post`, `put`, `patch`, `deploy`,
-`pause`, `unpause`, `buy`, `purchase`, `add`, `set`, `upload`, `transition`, `assign`,
-`close`, `archive`, `cancel`, `install`, `reset`, `revoke` — in which case it is denied with
-`MCP tool <name> looks like a write and is not in permissions.mcp`. Every word is tested, not
-just the first, so `mcp__athena__wiki_save` is denied on its second word.
+`mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is judged by its name alone,
+in four steps.
 
-A name that also carries a read word — `query`, `select`, `read`, `search`, `list`, `get`,
-`find`, `describe`, `show` — is treated as a read whatever else it says. That is what keeps
-`mcp__metabase__run_query` and `mcp__oxo-mysql-stg__run_select` usable; `run`, `exec`,
-`start`, `stop`, `schedule` and `trigger` are not write verbs at all, because query tools are
-routinely named that way.
+1. **A write word anywhere in the name denies it.** The name's own segment — everything after
+   the last `__` — is split on `_`, `-`, `.` and camelCase boundaries, and every word is tested
+   against `create`, `update`, `delete`, `remove`, `set`, `write`, `post`, `put`, `patch`,
+   `send`, `add`, `insert`, `upsert`, `trigger`, `run`, `exec`, `execute`, `apply`,
+   `transition`, `assign`, `log`, `upload`, `publish`, `install`, `restart`, `kill`, `pause`,
+   `unpause`, `buy`, `purchase`, `reply`, `resolve`, `schedule`, `deploy`, `edit`, `change`,
+   `modify`, `merge`, `push`, `commit`, `save`, `revoke`, `reset`, `archive`, `cancel`, `close`,
+   `manage`, `generate`, `enable`, `disable`, `start`, `stop`, `grant`, `import`, `restore`,
+   `rename`, `move`, `drop`, `truncate`, `submit`, `approve`, `invite`, `share`, `sync`,
+   `promote`, `scale`, `use`, `input` and `eval`. The verb is wherever the server put it, so
+   `mcp__athena__wiki_save` is denied on its second word, `mcp__github__createPullRequest` on
+   its camelCase first, and `mcp__grafana__alerting_manage_rules` on `manage` in the middle.
+2. **A generically named passthrough is denied too**, because its arguments decide what it does
+   and its name cannot say: a word of `request`, `raw`, `graphql`, `sql`, `proxy` or
+   `passthrough`, or a tool called nothing but `query`. `mcp__grafana__grafana_api_request` is
+   the example that prompted this — it leads with no verb at all and takes a method and a path.
+3. **A read word makes it a read**: `query`, `select`, `read`, `search`, `list`, `get`, `find`,
+   `describe`, `show`, `fetch`, `view`, `lookup`, `count`, `check`, `status`, `health`,
+   `summary`, `metadata`, `label`, `labels`, `names`, `values`, `history`, `analyze`, `analyse`,
+   `suggest`, `explain`, `diff`, `log`, `blame`, `grep`, `cat`, `head`, `tail`, `ls`, `tree`,
+   `peek`, `watch` and `inspect`. So `read_query`, `list_tables` and `describe_table` on a MySQL
+   MCP server, and `mcp__grafana__query_loki_logs`, all go through. (`log` is also a write word
+   above, and a write word wins beside a read one — see below — so `tail_log` is still denied.)
+4. **A name with none of the above is denied too.** A tool whose words match neither list —
+   `mcp__claude-in-chrome__javascript_tool`, `mcp__claude_ai_Figma__use_figma` before `use` was
+   added, a server's own invented noun — used to fall through and be approved for want of a
+   recognised verb. It is now denied the same as a write, which is also why a noun-form read
+   like `get_commit` or `get_log` is denied: `commit` and `log` are write words, and a write
+   word wins over the `get` beside it. A workspace that needs one of these names it in
+   `permissions.mcp`.
+
+A denial reads `MCP tool <name> looks like a write and is not in permissions.mcp`.
+
+The read word no longer wins over a write word beside it, which is a change: `run_query` and
+`run_select` are denied by the heuristic now. Sirdar is read-only by construction, so the side
+to err on is refusing a query tool whose name says `run` — and a workspace that needs one names
+it in `permissions.mcp`, which is the whole rule the moment it is non-empty.
 
 The server part of the name is never what is tested, so
 `mcp__plugin_vercel_vercel__buy_domain` is judged on `buy_domain`.
@@ -1244,9 +1333,18 @@ no other path in a run passes a credential to a child process.
 [OK] openai model — qwen/qwen3-coder
 ```
 
-Not in v1: streaming, image content parts, `response_format: json_schema`, and resuming a
-session in a later process (`sirdar resume` starts a fresh session instead, because the
-transcript lives in the Sirdar process that ran it).
+**Resuming.** The loop writes its message transcript — the system message, every user turn,
+every assistant turn and every tool result — to `transcript.json` in the run's own directory
+(`.sirdar/runs/<run id>/`), mode `0600`, rewritten after each turn. That file is this provider's
+resume handle: `sirdar resume RUN_ID` and the runner's schema retry both start a new session
+against it, and the conversation continues with the new message on the end of it rather than
+starting the triage again. No credential is in the file — the API key travels in an
+Authorization header and is never a message — but everything the session read is, which is why
+it is `0600` and why it lives under `.sirdar/runs/`, which `sirdar init` adds to the repository's
+git excludes. A run directory that cannot be written costs the session its resume handle and
+nothing else: the run carries on, and the loop says so once as a warning.
+
+Not in v1: streaming, image content parts, and `response_format: json_schema`.
 
 ### `provider: acp`
 

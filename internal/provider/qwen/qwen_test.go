@@ -1846,6 +1846,61 @@ func TestDoctor(t *testing.T) {
 	}
 }
 
+// TestDoctorWithConfigWarnsAboutTrustedResidue: a session that keeps
+// folder trust to load MCP servers reads the repository's own
+// .qwen/settings.json, so doctor says which files that is before the run
+// rather than only in the run's event log. It is a warning: the session
+// still goes ahead.
+func TestDoctorWithConfigWarnsAboutTrustedResidue(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "qwen-ok")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 0.23.3\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".qwen"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".qwen", "settings.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	cd, ok := New().(provider.ConfigDoctor)
+	if !ok {
+		t.Fatal("the qwen provider should answer DoctorWithConfig")
+	}
+
+	// workspaceOnly with no .mcp.json: the session runs untrusted, so the
+	// repository's settings are never read and there is nothing to say.
+	quiet := cd.DoctorWithConfig(context.Background(), bin, provider.DoctorConfig{Root: root, MCPWorkspaceOnly: true})
+	for _, c := range quiet {
+		if c.Name == "qwen workspace settings" {
+			t.Fatalf("an untrusted session has no residue to warn about: %+v", c)
+		}
+	}
+
+	// A workspace .mcp.json keeps trust, and then the residue is live.
+	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(`{"mcpServers":{}}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	checks := cd.DoctorWithConfig(context.Background(), bin, provider.DoctorConfig{Root: root, MCPWorkspaceOnly: true})
+	var found *provider.Check
+	for i := range checks {
+		if checks[i].Name == "qwen workspace settings" {
+			found = &checks[i]
+		}
+	}
+	if found == nil {
+		t.Fatalf("no residue row in %+v", checks)
+	}
+	if found.Severity() != provider.LevelWarn || !found.OK {
+		t.Errorf("residue row = %+v, want a warning that is still OK", *found)
+	}
+	if !strings.Contains(found.Detail, "settings.json") {
+		t.Errorf("residue row should name the file: %q", found.Detail)
+	}
+}
+
 func TestName(t *testing.T) {
 	if got := New().Name(); got != "qwen" {
 		t.Fatalf("Name() = %q", got)

@@ -1,0 +1,21 @@
+{
+  "result": [
+    {
+      "sys_id": "att1",
+      "file_name": "screenshot.png",
+      "content_type": "image/png",
+      "size_bytes": "1024",
+      "table_name": "incident",
+      "table_sys_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "download_link": "{{base}}/api/now/attachment/att1/file"
+    },
+    {
+      "sys_id": "att2",
+      "file_name": "../../evil.txt",
+      "content_type": "text/plain",
+      "table_name": "incident",
+      "table_sys_id": "a1b2c3d4e5f60718293a4b5c6d7e8f90",
+      "download_link": ""
+    }
+  ]
+}

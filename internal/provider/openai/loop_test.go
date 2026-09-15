@@ -316,8 +316,15 @@ func TestLoopReadsRefusesCallsMCPAndSubmits(t *testing.T) {
 		PriceOutputPerMTok: 15,
 		MCPWorkspaceOnly:   true,
 	}, provider.SessionSpec{
-		Cwd:    root,
-		Policy: &provider.PermissionPolicy{BashAllow: []string{"git log*"}},
+		Cwd: root,
+		Policy: &provider.PermissionPolicy{
+			BashAllow: []string{"git log*"},
+			// mcp__fake__echo names neither a read nor a write verb, so
+			// since the round-1 fix to MCPLooksLikeWrite the heuristic
+			// denies it by default; list it explicitly, the way a
+			// workspace with an unrecognised tool name has to.
+			MCPAllow: []string{"mcp__fake__echo"},
+		},
 		Budget: provider.Budget{MaxTurns: 10},
 	})
 
@@ -413,8 +420,11 @@ func TestLoopReadsRefusesCallsMCPAndSubmits(t *testing.T) {
 	if !strings.Contains(strings.Join(res.StderrTail, "\n"), "fake mcp server: listening") {
 		t.Errorf("StderrTail = %q, want the MCP server's stderr", res.StderrTail)
 	}
+	// This session was given no run directory, so it wrote no transcript
+	// and reports no handle. TestTranscriptIsTheResumeHandle covers the
+	// other half.
 	if h := sess.Handle(); h != "" {
-		t.Errorf("Handle() = %q, want empty: this provider cannot resume", h)
+		t.Errorf("Handle() = %q, want empty: nothing was persisted to resume from", h)
 	}
 }
 
@@ -982,5 +992,215 @@ func TestFixModeSystemPromptDoesNotClaimReadOnly(t *testing.T) {
 	}
 	if SystemFor(provider.ModeTriage) != System() {
 		t.Error("triage mode did not get the triage system prompt")
+	}
+}
+
+// --- transcript and resume ----------------------------------------------
+
+// TestTranscriptIsTheResumeHandle is the resume handle this provider did
+// not have: the loop writes its messages to the run directory, Handle
+// names that file, and a session started with it as SessionSpec.Resume
+// carries the whole conversation into the next request — which is what
+// makes the runner's schema retry work against `provider: openai`.
+func TestTranscriptIsTheResumeHandle(t *testing.T) {
+	root, runDir := t.TempDir(), t.TempDir()
+
+	first := newChatServer(t, scripted(
+		toolCallReply("c1", "read_file", `{"path":"go.mod"}`, 100, 10),
+		toolCallReply("c2", submitNoteTool, `{"nope":1}`, 200, 20),
+	))
+	sess := newSession(t, first, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Prompt: "Triage OMNI-1.",
+	})
+	drain(t, sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	handle := sess.Handle()
+	want := filepath.Join(runDir, "transcript.json")
+	if handle != want {
+		t.Fatalf("Handle() = %q, want %q", handle, want)
+	}
+
+	// 0600: the file holds everything the session read.
+	info, err := os.Stat(handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if perm := info.Mode().Perm(); perm != 0o600 {
+		t.Errorf("transcript mode = %04o, want 0600", perm)
+	}
+
+	// No credential is in it: the API key travels in a header, never as a
+	// message.
+	data, err := os.ReadFile(handle)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "sk-secret-key") {
+		t.Error("the transcript carries the API key")
+	}
+	var saved transcript
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("transcript is not valid JSON: %v", err)
+	}
+	if saved.Version != transcriptVersion || saved.Messages[0].Role != "system" {
+		t.Fatalf("transcript = %+v", saved)
+	}
+
+	// The retry: a new session against the handle, opening with the
+	// runner's schema-retry message.
+	second := newChatServer(t, scripted(toolCallReply("c3", submitNoteTool, noteJSON, 300, 30)))
+	retry := newSession(t, second, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Resume: handle,
+		Prompt: "Your previous answer did not match the schema. Reply again.",
+	})
+	drain(t, retry)
+	res, err := retry.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if string(res.Final) != noteJSON {
+		t.Errorf("Result.Final = %s, want the corrected note", res.Final)
+	}
+
+	reqs := second.captured()
+	if len(reqs) == 0 {
+		t.Fatal("the resumed session made no chat request")
+	}
+	roles := make([]string, 0, len(reqs[0].Messages))
+	for _, m := range reqs[0].Messages {
+		roles = append(roles, m.Role)
+	}
+	if !kindsEqual(roles, "system", "user", "assistant", "tool", "assistant", "tool", "user") {
+		t.Errorf("resumed roles = %v, want the whole transcript plus the retry message", roles)
+	}
+	last := reqs[0].Messages[len(reqs[0].Messages)-1]
+	if !strings.Contains(last.Content, "did not match the schema") {
+		t.Errorf("the retry message is not the last user turn: %q", last.Content)
+	}
+	// One system message, not two: the resumed transcript brings its own.
+	system := 0
+	for _, m := range reqs[0].Messages {
+		if m.Role == "system" {
+			system++
+		}
+	}
+	if system != 1 {
+		t.Errorf("%d system messages in the resumed request, want 1", system)
+	}
+}
+
+// TestResumeSeedsTheTurnCounterFromTheTranscript is the round-1 fix: the
+// transcript's Turns field was written but never read back, so a resumed
+// session always started its own turn count at 0 and budget.MaxTurns
+// covered only the resumed half of the run, not the whole one. A session
+// that already spent its budget before the first resume could then spend
+// it again on every resume after.
+func TestResumeSeedsTheTurnCounterFromTheTranscript(t *testing.T) {
+	root, runDir := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	first := newChatServer(t, scripted(
+		toolCallReply("c1", "read_file", `{"path":"a.txt"}`, 100, 10),
+		toolCallReply("c2", submitNoteTool, `{"nope":1}`, 200, 20),
+	))
+	sess := newSession(t, first, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Prompt: "Triage OMNI-1.",
+		Budget: provider.Budget{MaxTurns: 10},
+	})
+	drain(t, sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	data, err := os.ReadFile(sess.Handle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved transcript
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("transcript is not valid JSON: %v", err)
+	}
+	if saved.Turns != 2 {
+		t.Fatalf("first session's transcript.Turns = %d, want 2", saved.Turns)
+	}
+
+	// The resume is given a budget the first session already spent. If the
+	// turn counter is not seeded from the transcript, the resumed session
+	// starts back at 0 and happily takes 2 more turns; seeded correctly,
+	// it is already over budget and must not send a single request.
+	second := newChatServer(t, scripted(toolCallReply("c3", submitNoteTool, noteJSON, 300, 30)))
+	retry := newSession(t, second, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Resume: sess.Handle(),
+		Prompt: "Your previous answer did not match the schema. Reply again.",
+		Budget: provider.Budget{MaxTurns: 2},
+	})
+	events := drain(t, retry)
+	res, _ := retry.Wait()
+	if res.ExitErr == nil || !strings.Contains(res.ExitErr.Error(), "2 turns") {
+		t.Fatalf("Result.ExitErr = %v, want the over-budget error", res.ExitErr)
+	}
+	if got := len(second.captured()); got != 0 {
+		t.Errorf("the resumed session made %d chat requests, want 0: the turn budget from before the resume was already spent", got)
+	}
+	last := events[len(events)-2]
+	if last.Kind != provider.EvError || !strings.Contains(last.Text, "2 turns") {
+		t.Fatalf("last event = %+v, want the turn-budget error", last)
+	}
+}
+
+// A transcript that cannot be read is an error at Start, not a session
+// that quietly begins the triage again on a budget meant for one answer.
+func TestResumeRefusesAnUnreadableTranscript(t *testing.T) {
+	cs := newChatServer(t, scripted(toolCallReply("c1", submitNoteTool, noteJSON, 10, 5)))
+	cfg := LoopConfig{Chat: Config{BaseURL: cs.srv.URL, Model: "test-model"}}
+
+	missing := filepath.Join(t.TempDir(), "transcript.json")
+	if _, err := NewProvider(cfg).Start(t.Context(), provider.SessionSpec{Cwd: t.TempDir(), Resume: missing}); err == nil {
+		t.Error("Start accepted a transcript that is not there")
+	}
+
+	bad := filepath.Join(t.TempDir(), "transcript.json")
+	if err := os.WriteFile(bad, []byte(`{"version":99,"messages":[{"role":"system"}]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := NewProvider(cfg).Start(t.Context(), provider.SessionSpec{Cwd: t.TempDir(), Resume: bad}); err == nil {
+		t.Error("Start accepted a transcript from a format it does not read")
+	}
+}
+
+// An assistant message whose tool calls were never answered is a 400 from
+// most endpoints on the next request, so the transcript closes them out.
+func TestTranscriptClosesUnansweredToolCalls(t *testing.T) {
+	var call ToolCall
+	call.ID = "c1"
+	call.Function.Name = "read_file"
+
+	msgs := closeOpenToolCalls([]Message{
+		{Role: "system", Content: "s"},
+		{Role: "user", Content: "u"},
+		{Role: "assistant", ToolCalls: []ToolCall{call}},
+	})
+	if len(msgs) != 4 {
+		t.Fatalf("messages = %+v, want an answer appended", msgs)
+	}
+	if msgs[3].Role != "tool" || msgs[3].ToolCallID != "c1" || msgs[3].Name != "read_file" {
+		t.Errorf("synthesised answer = %+v", msgs[3])
+	}
+	if !strings.Contains(msgs[3].Content, "interrupted") {
+		t.Errorf("the answer should say what happened: %q", msgs[3].Content)
+	}
+
+	// An answered call is left exactly as it is.
+	answered := []Message{
+		{Role: "assistant", ToolCalls: []ToolCall{call}},
+		{Role: "tool", ToolCallID: "c1", Name: "read_file", Content: "module x"},
+	}
+	if got := closeOpenToolCalls(answered); len(got) != 2 || got[1].Content != "module x" {
+		t.Errorf("closeOpenToolCalls rewrote an answered call: %+v", got)
 	}
 }

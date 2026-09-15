@@ -34,12 +34,35 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks = append(checks, sourceChecks(ctx, cfg)...)
 	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
+	return levelled(checks)
+}
+
+// levelled fills in the level of every check that set none, so a caller —
+// the CLI's marks, the desktop list, an HTTP client — never has to derive
+// it a second time. A check that only set OK is "ok" or "fail"; the
+// warning state is never inferred.
+func levelled(checks []Check) []Check {
+	for i := range checks {
+		if checks[i].Level != "" {
+			continue
+		}
+		checks[i].Level = string(provider.LevelFail)
+		if checks[i].OK {
+			checks[i].Level = string(provider.LevelOK)
+		}
+	}
 	return checks
+}
+
+// warn builds an advisory check: worth reading, never a reason to exit
+// non-zero.
+func warn(name, detail string) Check {
+	return Check{Name: name, OK: true, Level: string(provider.LevelWarn), Detail: detail}
 }
 
 // checkOf converts a provider diagnostic into the wire shape.
 func checkOf(c provider.Check) Check {
-	return Check{Name: c.Name, OK: c.OK, Detail: c.Detail}
+	return Check{Name: c.Name, OK: c.OK, Level: string(c.Severity()), Detail: c.Detail}
 }
 
 func providerChecks(ctx context.Context, cfg *config.Config) []Check {
@@ -123,7 +146,11 @@ func claudeEnvironmentCheck(cfg *config.Config) Check {
 	if cfg.Billing == "api" {
 		check.OK = true
 		if base := os.Getenv("ANTHROPIC_BASE_URL"); base != "" {
-			check.Detail = "custom base URL: " + hostOnly(base) + "; budget.maxUsd cannot be trusted"
+			// Nothing here stops a run: under api billing the variable is
+			// the supported way to reach an Anthropic-compatible
+			// endpoint. What it costs is the spend ceiling, which is
+			// worth a warning and not an exit code.
+			return warn(check.Name, "custom base URL: "+hostOnly(base)+"; budget.maxUsd cannot be trusted")
 		}
 		return check
 	}
@@ -214,7 +241,10 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias", "servicenow":
+		// ServiceNow is here under either role: the same client answers
+		// both, and its Ping is the one authenticated round trip worth
+		// making whichever role it was configured for.
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -237,7 +267,10 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 	}
 	p, ok := tracker.(pinger)
 	if !ok {
-		return Check{Name: name, OK: true, Detail: "configured (" + builtinEndpoint(sc) + ")"}
+		// This adapter has no Ping, so nothing here has actually reached
+		// the network yet: the config parsed and the credential resolved,
+		// but whether either is good is still unknown.
+		return warn(name, "configured, credential untested ("+builtinEndpoint(sc)+")")
 	}
 	if err := p.Ping(ctx); err != nil {
 		return Check{Name: name, Detail: err.Error()}
@@ -246,12 +279,14 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 }
 
 // builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
-// freshdesk, helpscout, intercom, hubspot, front) with the credentials the
-// config names and calls its Ping: one authenticated round trip proving the
-// base URL/domain, the credential and the network all work. The detail names
-// who the connection authenticates as — an email for Zendesk basic auth,
-// "oauth" for a bearer token, the account domain for Freshdesk, the kind
-// of grant for the four fixed-host vendors — never the secret itself.
+// freshdesk, helpscout, intercom, hubspot, front, gorgias, servicenow) with
+// the credentials the config names and calls its Ping: one authenticated
+// round trip proving the base URL/domain, the credential and the network
+// all work. The detail names who the connection authenticates as — an
+// email for Zendesk and Gorgias basic auth, "oauth" for a bearer token, the
+// account domain for Freshdesk, the kind of grant for the four fixed-host
+// vendors, the username or OAuth token on its instance for ServiceNow —
+// never the secret itself.
 func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
 	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
@@ -259,7 +294,10 @@ func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceCon
 	}
 	p, ok := hd.(pinger)
 	if !ok {
-		return Check{Name: name, OK: true, Detail: "configured"}
+		// Same as builtinProbe: no Ping means the config parsed and the
+		// credential resolved, but neither one has been tried against the
+		// network yet.
+		return warn(name, "configured, credential untested")
 	}
 	if err := p.Ping(ctx); err != nil {
 		return Check{Name: name, Detail: err.Error()}
@@ -292,6 +330,19 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		// or company name to print: the reachable row is the proof the
 		// API token was accepted.
 		return "the Front API token"
+	case "gorgias":
+		// The login email is the Basic username. It identifies the
+		// account; the API key is the password and is never printed.
+		return sc.Email
+	case "servicenow":
+		// The instance is worth naming: one workspace can point at a dev
+		// instance and a production one on different days. The password
+		// and the OAuth token are named only by kind.
+		who := "the OAuth token"
+		if sc.Username != "" {
+			who = sc.Username
+		}
+		return who + " on " + builtinEndpoint(sc)
 	default:
 		return "configured"
 	}
@@ -353,10 +404,16 @@ func mcpCheck(cfg *config.Config) Check {
 	path := filepath.Join(cfg.Root, ".mcp.json")
 	switch {
 	case !cfg.WorkspaceOnlyMCP():
+		// Neither of the two outer states is a failure and neither is
+		// plainly fine: the session either sees every server the operator
+		// has, or none at all. Both are warnings, which is the row this
+		// tri-state was added for.
+		check.Level = string(provider.LevelWarn)
 		check.Detail = "mcp.workspaceOnly is off: every user-level MCP server is visible to the agent"
 	case cfg.MCPConfigPath() != "":
 		check.Detail = path + " — the session sees these servers only"
 	default:
+		check.Level = string(provider.LevelWarn)
 		check.Detail = "no workspace .mcp.json: the agent will have no MCP tools; add the servers the playbooks need to " + path
 	}
 	if len(cfg.Permissions.MCP) > 0 {
