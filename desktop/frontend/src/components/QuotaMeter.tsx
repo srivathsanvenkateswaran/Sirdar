@@ -1,18 +1,11 @@
 import type { Quota } from '../api/types'
-import './panels.css'
+import QuotaChip from '../ui/quota-chip'
 
-const WARN_THRESHOLD = 80
-const DANGER_THRESHOLD = 100
+const OVER_BUDGET = 100
 
 function clampPercent(value: number): number {
   if (!Number.isFinite(value)) return 0
   return Math.min(100, Math.max(0, value))
-}
-
-function levelClass(percent: number): string {
-  if (percent >= DANGER_THRESHOLD) return 'quota-bar--danger'
-  if (percent >= WARN_THRESHOLD) return 'quota-bar--warn'
-  return ''
 }
 
 /** "seen 3m ago" from an ISO timestamp, for the widget's tooltip. */
@@ -35,23 +28,14 @@ export function formatResetIn(resetsAt: string, now: number = Date.now()): strin
   return `resets in ${hours}h ${minutes}m`
 }
 
-function Bar({ label, percent, resetsAt }: { label: string; percent: number; resetsAt?: string }) {
-  const pct = clampPercent(percent)
-  return (
-    <div className="quota-row">
-      <span className="quota-row__label">{label}</span>
-      <div className="quota-bar" role="img" aria-label={`${label} ${Math.round(pct)}%`}>
-        <div className={`quota-bar__fill ${levelClass(pct)}`} style={{ width: `${pct}%` }} />
-      </div>
-      <span className="quota-row__pct">{Math.round(pct)}%</span>
-      {resetsAt && <span className="quota-row__reset">{formatResetIn(resetsAt)}</span>}
-    </div>
-  )
-}
-
 /**
- * Compact header widget: two bars (5h/7d) for a Claude quota, one bar for a
- * Codex quota (usedPercent). Renders nothing when there is no quota to show.
+ * How much of each provider's limit is gone, as a column of quota chips in the
+ * sidebar footer.
+ *
+ * Two chips (5h and 7d) for a Claude quota, one (used) for a Codex one. The
+ * chip itself is the library component; what is left here is the arithmetic on
+ * the timestamps, which is Sirdar's and not the chip's — the chip does no
+ * arithmetic on a clock by design.
  */
 export default function QuotaMeter(props: { quota: Quota[] }): JSX.Element {
   const { quota } = props
@@ -61,15 +45,32 @@ export default function QuotaMeter(props: { quota: Quota[] }): JSX.Element {
     <div className="quota-meter">
       {quota.map((q) => (
         <div key={q.provider} className="quota-meter__provider" title={formatSeenAgo(q.observedAt)}>
-          <span className="quota-meter__name">{q.provider}</span>
           {q.fiveHour && (
-            <Bar label="5h" percent={q.fiveHour.utilization * 100} resetsAt={q.fiveHour.resetsAt} />
+            <QuotaChip
+              provider={q.provider}
+              window="5h"
+              percent={clampPercent(q.fiveHour.utilization * 100)}
+              resetsIn={q.fiveHour.resetsAt ? formatResetIn(q.fiveHour.resetsAt) : undefined}
+              overBudget={q.fiveHour.utilization * 100 >= OVER_BUDGET}
+            />
           )}
           {q.sevenDay && (
-            <Bar label="7d" percent={q.sevenDay.utilization * 100} resetsAt={q.sevenDay.resetsAt} />
+            <QuotaChip
+              provider={q.provider}
+              window="7d"
+              percent={clampPercent(q.sevenDay.utilization * 100)}
+              resetsIn={q.sevenDay.resetsAt ? formatResetIn(q.sevenDay.resetsAt) : undefined}
+              overBudget={q.sevenDay.utilization * 100 >= OVER_BUDGET}
+            />
           )}
           {q.usedPercent !== undefined && (
-            <Bar label="used" percent={q.usedPercent} resetsAt={q.resetsAt} />
+            <QuotaChip
+              provider={q.provider}
+              window="used"
+              percent={clampPercent(q.usedPercent)}
+              resetsIn={q.resetsAt ? formatResetIn(q.resetsAt) : undefined}
+              overBudget={q.usedPercent >= OVER_BUDGET}
+            />
           )}
         </div>
       ))}

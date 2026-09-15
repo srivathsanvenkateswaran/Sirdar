@@ -610,6 +610,74 @@ that catches the obvious ways out.
 - The pattern is anchored to the whole command string, not a prefix or substring: `git log`
   without a trailing `*` matches only the exact command `git log`, with no arguments.
 
+### The default list
+
+`sirdar init` scaffolds `.sirdar/config.yaml` with a starting `permissions.bash`: read-only git,
+a handful of read-only text and filesystem utilities, and nothing that writes, execs, or shells
+out on its own:
+
+```yaml
+permissions:
+  bash:
+    - "git log*"
+    - "git show*"
+    - "git grep*"
+    - "git diff *"
+    - "git blame *"
+    - "git status*"
+    - "git branch --list*"
+    - "git rev-parse *"
+    - "rg *"
+    - "ls *"
+    - "cat *"
+    - "head *"
+    - "tail *"
+    - "wc *"
+    - "file *"
+    - "which *"
+    - "echo *"
+    - "nl *"
+    - "sed -n *"
+    - "sort *"
+    - "uniq *"
+    - "cut *"
+    - "tr *"
+    - "find *"
+    - "stat *"
+    - "du *"
+    - "diff *"
+    - "tree *"
+    - "pwd"
+    - "jq *"
+```
+
+Two entries carry a carve-out on top of the segment rules above, because the plain pattern would
+otherwise wave through a write: `sed -n *` matches only sed's read-only `-n` form, and `sed -i`,
+`sed -ni`, `sed --in-place` and `sed -e 's/x/y/' -i` are refused outright, whatever pattern the
+rest of the command matches, because `-i`/`--in-place` turns sed from a read into an edit.
+`find *` is refused the same way when a segment carries `-delete`, `-exec`, `-execdir`, `-ok` or
+`-okdir`, which run or remove what find matches instead of reading it. Neither carve-out depends
+on where in the command the flag falls, the same as the `git` flag denials below.
+
+`awk` and `xargs` are deliberately not in the default: `awk`'s `system()` runs an arbitrary shell
+command, and `xargs` turns whatever a prior read produced into the argument list of a second
+command the allow-list never saw. A workspace that needs either writes it into its own
+`permissions.bash`, eyes open.
+
+A workspace's own `permissions.bash` replaces this list outright — like `permissions.fixBash`
+below, it is a starting point, not a floor.
+
+### What a denial says
+
+A refused `Bash` call is answered with a message that names the rule and, when the reason is "no
+pattern matched", a short reminder of what is: `Sirdar policy: not permitted by permissions.bash;
+allowed here: rg, cat, head, nl, sed -n, git log, git show, git grep, ... (see
+.sirdar/config.yaml)`, followed by the specific reason (which segment, which construct, which
+path). The hint is built from the workspace's own configured patterns — the first eight,
+comma-separated, with `...` when there are more — which is safe to echo back verbatim: a
+`permissions.bash` glob is never a credential. A `sirdar fix` denial names `permissions.fixBash`
+instead, since that is the list `MatchCommand` judged it against.
+
 ## `permissions.fixBash`
 
 `sirdar fix` is the one session allowed to change the workspace, and it needs a different set

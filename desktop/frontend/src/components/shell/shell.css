@@ -1,0 +1,65 @@
+/*
+ * The window: a shell with one sheet on it.
+ *
+ * `docs/design/03-desktop-app.md` sections 3 and 4. The app is not the landing
+ * page with the volume down — it is a different register of the same language:
+ * one warm window ground, one content sheet floating on it at a step of
+ * 1.14:1 in light and 1.12:1 in dark, and no colour band anywhere. That barely
+ * perceptible step does the whole job the landing page's bands do: this is the
+ * chrome, that is the work.
+ *
+ * There is no shadow in this file. Separation is a 1px --sd-rule hairline and
+ * the colour step, which is the rule the design language already states for
+ * board cards and is now the rule for the shell too.
+ */
+
+.app {
+  display: flex;
+  block-size: 100%;
+  min-block-size: 0;
+  background: var(--sd-shell);
+}
+
+.main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  /* The sheet: inset from the window on three sides, flush against the
+     sidebar, as the reference has it. */
+  margin-block: var(--sd-space-2);
+  margin-inline-end: var(--sd-space-2);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-sheet);
+  overflow: hidden;
+}
+
+.app-empty {
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: var(--sd-gutter);
+  max-inline-size: 62ch;
+  color: var(--sd-ink-2);
+}
+
+.brand {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--sd-ink);
+}
+
+/* Under 720px the sidebar becomes a strip across the top of the window and the
+   sheet takes what is left, which is the same stacking the lanes do. */
+@media (max-width: 720px) {
+  .app {
+    flex-direction: column;
+  }
+
+  .main {
+    margin-inline: var(--sd-space-2);
+  }
+}

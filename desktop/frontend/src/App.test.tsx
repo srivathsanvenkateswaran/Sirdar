@@ -168,7 +168,7 @@ describe('New triage', () => {
   })
 })
 
-describe('Header', () => {
+describe('Sidebar', () => {
   it('switches workspace and reloads that workspace', async () => {
     const transport = createFakeTransport({
       workspaces: [workspace({ id: 'ws1', name: 'omni' }), workspace({ id: 'ws2', name: 'billing' })],
@@ -176,7 +176,9 @@ describe('Header', () => {
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
 
-    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: 'ws2' } })
+    // The switcher is a popover in the sidebar footer now, not a select.
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
+    fireEvent.click(screen.getByRole('option', { name: /billing/ }))
     await waitFor(() => expect(transport.calls.runs).toContain('ws2'))
   })
 
@@ -184,7 +186,8 @@ describe('Header', () => {
     const { store: s } = mount(seeded())
     await screen.findByRole('heading', { name: /Queue/ })
 
-    fireEvent.change(screen.getByLabelText('Workspace'), { target: { value: '__add__' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
     expect(s.getState().screen).toEqual({ name: 'settings' })
   })
 })
@@ -254,7 +257,11 @@ describe('Eval tab', () => {
     await screen.findByRole('heading', { name: /Queue/ })
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Run eval on the whole set' }))
+    // Eval's commit action is the sidebar footer's button, and publishing it
+    // is an effect, so it lands a commit after the screen that published it.
+    const start = await screen.findByRole('button', { name: /Run eval on the whole set/ })
+    await waitFor(() => expect(start).not.toBeDisabled())
+    fireEvent.click(start)
     await waitFor(() =>
       expect(transport.calls.startEval).toEqual([
         { ws: 'ws1', keys: undefined, opts: { provider: undefined, model: undefined } },
@@ -395,6 +402,10 @@ describe('Settings', () => {
     await screen.findByRole('heading', { name: /Queue/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    // Settings is a modal with its own secondary nav; the summary is one page
+    // of it and the board stays painted behind the scrim.
+    expect(await screen.findByRole('dialog', { name: 'Workspaces' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
     const panel = await screen.findByRole('region', { name: 'Notifications and webhooks' })
     expect(within(panel).getByText('env: reference')).toBeInTheDocument()
     expect(within(panel).getByText(/Inbound webhooks are off/)).toBeInTheDocument()

@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react'
+import { Fragment, type ReactNode } from 'react'
 import './DataTable.css'
 
 export type SortDirection = 'asc' | 'desc'
@@ -25,6 +25,12 @@ export interface DataTableProps<Row> {
   onSort?: (columnId: string) => void
   /** Prose for a table with nothing in it. */
   empty: ReactNode
+  /**
+   * A block of prose about one row — why a check did not hold, what a run
+   * stopped on — drawn full width underneath it. Returning nothing draws
+   * nothing, which is the common case.
+   */
+  detail?: (row: Row) => ReactNode
 }
 
 /** The `aria-sort` value each direction is announced as. */
@@ -52,6 +58,7 @@ export default function DataTable<Row>({
   sort,
   onSort,
   empty,
+  detail,
 }: DataTableProps<Row>): JSX.Element {
   if (rows.length === 0) {
     return (
@@ -99,19 +106,29 @@ export default function DataTable<Row>({
           </tr>
         </thead>
         <tbody>
-          {rows.map((row) => (
-            <tr key={rowKey(row)}>
-              {columns.map((column) => (
-                <td key={column.id} data-numeric={column.numeric ? 'true' : undefined}>
-                  {column.numeric ? (
-                    <span dir="ltr">{column.cell(row)}</span>
-                  ) : (
-                    column.cell(row)
-                  )}
-                </td>
-              ))}
-            </tr>
-          ))}
+          {rows.map((row) => {
+            const why = detail?.(row)
+            return (
+              <Fragment key={rowKey(row)}>
+                <tr>
+                  {columns.map((column) => (
+                    <td key={column.id} data-numeric={column.numeric ? 'true' : undefined}>
+                      {column.numeric ? (
+                        <span dir="ltr">{column.cell(row)}</span>
+                      ) : (
+                        column.cell(row)
+                      )}
+                    </td>
+                  ))}
+                </tr>
+                {why ? (
+                  <tr className="sd-table__detail">
+                    <td colSpan={columns.length}>{why}</td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            )
+          })}
         </tbody>
       </table>
     </div>

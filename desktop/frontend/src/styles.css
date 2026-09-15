@@ -1,27 +1,20 @@
 /*
- * Sirdar desktop — the app shell.
+ * Sirdar desktop — what is left of the shell once the library draws it.
  *
- * Every value this file paints with comes from `styles/tokens.css`, which is
- * the single source of truth for the app, the landing site and the docs site
- * alike. Nothing below declares a colour, a radius or a duration of its own;
- * the import has to lead the file because that is where CSS allows it.
+ * `src/ui/` holds the components that used to live here, and this file no
+ * longer carries the rules they replace: the header and its nav (the Sidebar
+ * nav item and the Sidebar footer card), the board cards and badges (Run card,
+ * Card, Status badge), the lanes (Kanban column), the dialog (Dialog) and the
+ * toasts (Toast). The shell's own two planes moved to
+ * `components/shell/shell.css`, and the board's frame to `screens/board.css`.
  *
- * The board is a workbench, not a landing page: hairline rules instead of
- * shadows and no gradient anywhere. Two typographic registers do the work —
- * prose is set in the UI sans, while every identifier and every number (keys,
- * elapsed clocks, costs, counts) is monospace with tabular figures, so a lane
- * of cards reads like a ledger column.
+ * What stays is what belongs to no component: the document reset, the type
+ * defaults, the focus ring, the form fields the dialogs and forms share, and
+ * the keyboard-hint chip.
  *
- * Colour carries meaning and nothing else. One accent means "Sirdar itself":
- * it is the interactive colour and the colour of a run that is live. The six
- * status hues are used only for the state they name, in the lane rail and in
- * the badge on every card in that lane, so the rail doubles as the legend.
- *
- * What is still here that is not shell: the board, card, badge, dialog and
- * toast rules below. `src/ui/` now holds the library components that replace
- * them, and the branch that restyles the screens deletes each rule here as it
- * points a screen at the component. Deleting them on this branch would strip
- * the running app of its paint for the sake of a tidier file.
+ * Every value comes from `styles/tokens.css`. Nothing below declares a colour,
+ * a radius or a duration of its own, and `src/styles.library.test.ts` checks
+ * that for this file and for every other stylesheet the app ships.
  */
 
 @import './styles/tokens.css';
@@ -33,12 +26,12 @@
 html,
 body,
 #root {
-  height: 100%;
+  block-size: 100%;
 }
 
 body {
   margin: 0;
-  background: var(--sd-paper);
+  background: var(--sd-shell);
   color: var(--sd-ink);
   font: var(--sd-text-body) / 1.5 var(--sd-font-ui);
   -webkit-font-smoothing: antialiased;
@@ -51,8 +44,8 @@ kbd {
 
 .visually-hidden {
   position: absolute;
-  width: 1px;
-  height: 1px;
+  inline-size: 1px;
+  block-size: 1px;
   margin: -1px;
   padding: 0;
   overflow: hidden;
@@ -68,522 +61,43 @@ kbd {
   outline-offset: 2px;
 }
 
-/* ---------- shell ---------- */
-
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  min-height: 0;
+.screen {
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: var(--sd-gutter);
+  max-inline-size: 62ch;
+  color: var(--sd-ink-2);
 }
 
-.header {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  padding: 0 var(--gutter);
-  min-height: 44px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--rule);
-}
-
-.brand {
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-}
-
-.header-gap {
-  flex: 1 1 0;
-  min-width: 0;
-}
-
-.nav {
-  display: flex;
-  gap: 2px;
-}
-
-.nav-item {
-  padding: 3px 9px;
-  border: 0;
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--ink-2);
-  font: inherit;
-  cursor: pointer;
-}
-
-.nav-item:hover {
-  color: var(--ink);
-}
-
-.nav-item[aria-current="page"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-
-.switcher {
-  display: flex;
-  align-items: center;
-  /* A select is as wide as its longest option unless it is told it may shrink,
-     and "Add workspace…" would otherwise push the header past the window. */
-  min-width: 0;
-}
-
-.switcher-select,
-.field-input {
-  padding: 3px 6px;
-  max-width: 100%;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-}
-
-.switcher-select {
-  min-width: 0;
-  max-width: 190px;
-}
-
-.button {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px;
-  border: 1px solid var(--rule-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-  cursor: pointer;
-}
-
-.button:hover:not(:disabled) {
-  border-color: var(--accent);
-  color: var(--accent);
-}
-
-.button:disabled {
-  opacity: 0.45;
-  cursor: default;
-}
-
-.button--accent {
-  border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink);
-}
-
-.button--accent:hover:not(:disabled) {
-  color: var(--accent-ink);
-  filter: saturate(1.15) brightness(1.06);
-}
-
-.button--quiet {
-  padding: 2px 7px;
-  border-color: var(--rule);
-  color: var(--ink-2);
-  font-size: 12px;
-}
+/* ---------- the keyboard hint ---------- */
 
 .kbd {
-  padding: 0 3px;
+  padding-inline: 3px;
   border: 1px solid currentColor;
-  border-radius: 2px;
-  font-size: 10px;
+  border-radius: var(--sd-radius-xs);
+  font-size: var(--sd-text-micro);
   line-height: 14px;
   opacity: 0.6;
 }
 
-.main {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.app-empty,
-.screen {
-  margin: 0;
-  padding: 24px var(--gutter);
-  max-width: 62ch;
-  color: var(--ink-2);
-}
-
-/* ---------- board ---------- */
-
-.board {
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-  min-height: 0;
-}
-
-.board-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px var(--gutter);
-  border-bottom: 1px solid var(--rule);
-}
-
-.filter {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.filter-input {
-  width: 240px;
-  max-width: 46vw;
-  padding: 3px 6px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--ink);
-  font: inherit;
-}
-
-.board-status {
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-3);
-}
-
-.lanes {
-  display: flex;
-  flex: 1;
-  min-height: 0;
-  gap: 1px;
-  overflow-x: auto;
-  background: var(--rule);
-  border-bottom: 1px solid var(--rule);
-}
-
-.lane {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-width: 208px;
-  min-height: 0;
-  background: var(--lane);
-  /* The rail is the lane's status hue, repeated on every badge inside it. */
-  border-top: 2px solid var(--lane-hue, var(--st-queue));
-}
-
-.lane[data-lane="queue"] { --lane-hue: var(--st-queue); }
-.lane[data-lane="gathering"] { --lane-hue: var(--st-live); }
-.lane[data-lane="blocked"] { --lane-hue: var(--st-blocked); }
-.lane[data-lane="triaged"] { --lane-hue: var(--st-triaged); }
-.lane[data-lane="done"] { --lane-hue: var(--st-done); }
-.lane[data-lane="failed"] { --lane-hue: var(--st-failed); }
-
-.lane-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 8px;
-  margin: 0;
-  padding: 7px 9px 6px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.lane-count {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-weight: 500;
-  font-variant-numeric: tabular-nums;
-  color: var(--lane-hue);
-}
-
-.lane-body {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1;
-  min-height: 0;
-  padding: 0 7px 9px;
-  overflow-y: auto;
-}
-
-.lane-empty {
-  margin: 2px 2px 0;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--ink-3);
-}
-
-/* ---------- inbound deliveries ---------- */
+/* ---------- fields ---------- */
 
 /*
- * A tracker fires on every field change, so most deliveries do nothing. The
- * strip exists for the case that is otherwise invisible: telling a hook that
- * never arrives apart from one that arrives and is filtered out.
+ * Shared by the New triage dialog, the RCA and fix forms and the resume box.
+ * A field is a label, a control and one line of help, and the control sits in
+ * the sunk well so an input reads as somewhere to type rather than as another
+ * card.
  */
-.inbound {
-  flex: 0 0 auto;
-  max-height: 27vh;
-  overflow-y: auto;
-  padding: 7px var(--gutter) 9px;
-  border-top: 1px solid var(--rule);
-  background: var(--surface);
-}
-
-.inbound-head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  margin: 0 0 5px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.inbound-head .lane-count {
-  color: var(--ink-3);
-}
-
-.inbound-empty {
-  margin: 0;
-  max-width: 72ch;
-  font-size: 11.5px;
-  line-height: 1.45;
-  color: var(--ink-3);
-}
-
-.inbound-list {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.inbound-row {
-  display: grid;
-  grid-template-columns: minmax(64px, auto) minmax(78px, auto) minmax(56px, auto) 1fr auto;
-  gap: 8px;
-  align-items: baseline;
-  padding: 3px 0;
-  border-bottom: 1px solid var(--rule);
-  font-size: 11.5px;
-}
-
-.inbound-row:last-child {
-  border-bottom: 0;
-}
-
-.inbound-source {
-  font-weight: 600;
-}
-
-.inbound-key {
-  font-size: 11px;
-  color: var(--ink-2);
-}
-
-/* The outcome is the only coloured thing in the row, so it reads first. */
-.inbound-outcome {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--st-queue);
-}
-
-.inbound-row[data-outcome="started"] .inbound-outcome { color: var(--st-live); }
-.inbound-row[data-outcome="skipped"] .inbound-outcome { color: var(--st-blocked); }
-.inbound-row[data-outcome="rejected"] .inbound-outcome { color: var(--st-failed); }
-
-.inbound-why {
-  color: var(--ink-2);
-}
-
-.inbound-at {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-3);
-}
-
-/* ---------- cards ---------- */
-
-.card {
-  display: grid;
-  gap: 5px;
-  width: 100%;
-  margin: 0;
-  padding: 7px 8px;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: inherit;
-  font: inherit;
-  text-align: left;
-}
-
-.card--run {
-  cursor: pointer;
-}
-
-.card--run:hover {
-  border-color: var(--rule-strong);
-}
-
-/* A live run gets the accent edge — the one thing on the board still moving. */
-.card--run[data-status="running"],
-.card--run[data-status="preparing"] {
-  box-shadow: inset 2px 0 0 var(--accent);
-}
-
-.card-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.key {
-  font-family: var(--mono);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.card-kind {
-  font-family: var(--mono);
-  font-size: 10.5px;
-  color: var(--ink-3);
-}
-
-.card-title {
-  font-size: 12px;
-  line-height: 1.35;
-  color: var(--ink-2);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-
-.card-reason {
-  font-size: 11.5px;
-  line-height: 1.4;
-  color: var(--ink-2);
-  padding-left: 7px;
-  border-left: 2px solid var(--rule-strong);
-}
-
-.card-foot {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.badge {
-  padding: 1px 5px;
-  border-radius: 2px;
-  font-size: 10.5px;
-  line-height: 1.5;
-  background: color-mix(in srgb, var(--badge-hue, var(--st-queue)) 13%, transparent);
-  color: var(--badge-hue, var(--st-queue));
-}
-
-/*
- * Inside the board the badge takes the lane's hue, so the rail at the top of a
- * column and every badge under it are the same signal. The per-status hues
- * below apply wherever a run is shown outside a lane.
- */
-.lane .badge:not(.badge--priority) {
-  --badge-hue: var(--lane-hue);
-}
-
-.badge[data-status="preparing"],
-.badge[data-status="running"] { --badge-hue: var(--st-live); }
-.badge[data-status="blocked"] { --badge-hue: var(--st-blocked); }
-.badge[data-status="completed"] { --badge-hue: var(--st-triaged); }
-.badge[data-status="failed"],
-.badge[data-status="over_budget"] { --badge-hue: var(--st-failed); }
-
-.badge--priority {
-  background: transparent;
-  border: 1px solid var(--rule-strong);
-  color: var(--ink-2);
-  font-family: var(--mono);
-}
-
-.badge--priority[data-priority="p1"],
-.badge--priority[data-priority="highest"],
-.badge--priority[data-priority="blocker"],
-.badge--priority[data-priority="critical"] {
-  border-color: color-mix(in srgb, var(--st-failed) 55%, transparent);
-  color: var(--st-failed);
-}
-
-.badge--priority[data-priority="p2"],
-.badge--priority[data-priority="high"] {
-  border-color: color-mix(in srgb, var(--st-blocked) 55%, transparent);
-  color: var(--st-blocked);
-}
-
-.elapsed,
-.cost {
-  font-family: var(--mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--ink-2);
-}
-
-.elapsed--live {
-  color: var(--accent);
-}
-
-.cost {
-  color: var(--ink-3);
-}
-
-/* ---------- new triage ---------- */
-
-.scrim {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 8vh 16px 16px;
-  background: color-mix(in srgb, var(--ink) 32%, transparent);
-}
-
-.dialog {
-  display: grid;
-  gap: 12px;
-  width: 100%;
-  max-width: 420px;
-  padding: 16px;
-  border: 1px solid var(--rule-strong);
-  border-radius: 5px;
-  background: var(--surface);
-}
-
-.dialog-title {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-}
 
 .field {
   display: grid;
-  gap: 4px;
-  min-width: 0;
+  gap: var(--sd-space-1);
+  min-inline-size: 0;
 }
 
 .field-row {
   display: flex;
-  gap: 10px;
+  gap: var(--sd-space-3);
 }
 
 .field-row .field {
@@ -591,20 +105,32 @@ kbd {
 }
 
 .field-label {
-  font-size: 11.5px;
-  color: var(--ink-2);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.field-input {
+  min-block-size: 28px;
+  max-inline-size: 100%;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink);
+  font: inherit;
 }
 
 .field-input--keys {
-  font-family: var(--mono);
+  font-family: var(--sd-font-mono);
   resize: vertical;
 }
 
 .field-help {
   margin: 0;
-  font-size: 11px;
+  font-size: var(--sd-text-meta);
   line-height: 1.4;
-  color: var(--ink-3);
+  color: var(--sd-ink-3);
   word-break: break-word;
 }
 
@@ -612,103 +138,12 @@ kbd {
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 12px;
-  color: var(--ink-2);
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-2);
 }
 
-.dialog-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 8px;
-}
-
-/* ---------- toasts ---------- */
-
-.toasts {
-  position: fixed;
-  right: 12px;
-  bottom: 12px;
-  z-index: 20;
+.triage-form {
   display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  max-width: min(380px, calc(100vw - 24px));
-}
-
-.toast {
-  display: flex;
-  align-items: flex-start;
-  gap: 10px;
-  padding: 8px 10px;
-  border: 1px solid var(--rule-strong);
-  border-left: 2px solid var(--accent);
-  border-radius: var(--radius);
-  background: var(--surface);
-  font-size: 12px;
-  animation: toast-in 140ms ease-out;
-}
-
-.toast[data-tone="error"] {
-  border-left-color: var(--st-failed);
-}
-
-.toast-text {
-  flex: 1;
-}
-
-.toast-dismiss {
-  border: 0;
-  background: transparent;
-  color: var(--ink-3);
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-}
-
-@keyframes toast-in {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .toast {
-    animation: none;
-  }
-}
-
-/* ---------- narrow windows ---------- */
-
-@media (max-width: 720px) {
-  .nav {
-    order: 3;
-    flex-basis: 100%;
-  }
-
-  .lanes {
-    flex-direction: column;
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  /* Stacked lanes size to their own content; the board scrolls as one page. */
-  .lane {
-    flex: 0 0 auto;
-    min-width: 0;
-  }
-
-  .lane-body {
-    overflow: visible;
-  }
-
-  .inbound-row {
-    grid-template-columns: 1fr auto;
-  }
-
-  .inbound-why {
-    grid-column: 1 / -1;
-  }
+  gap: var(--sd-space-3);
+  min-inline-size: 0;
 }

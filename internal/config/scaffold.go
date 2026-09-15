@@ -205,10 +205,22 @@ permissions:
   # "rg foo | head -50" needs both "rg *" and "head *". A segment that
   # redirects or substitutes ($(…), backticks, >, >>, <, &>) is refused
   # whatever the patterns say; 2>&1 and 2>/dev/null are the exceptions.
+  #
+  # A few of these carry their own carve-out because the plain pattern would
+  # otherwise wave through a write: "sed -n *" only ever matches sed's
+  # read-only form, and "sed -i"/"sed -ni"/"sed --in-place" (in-place edit)
+  # is refused outright, whatever else the command matches. "find *"
+  # likewise never matches a segment carrying -delete, -exec, -execdir, -ok
+  # or -okdir, which run or remove what find finds rather than reading it.
   bash:
     - "git log*"
     - "git show*"
     - "git grep*"
+    - "git diff *"
+    - "git blame *"
+    - "git status*"
+    - "git branch --list*"
+    - "git rev-parse *"
     - "rg *"
     - "ls *"
     - "cat *"
@@ -218,6 +230,19 @@ permissions:
     - "file *"
     - "which *"
     - "echo *"
+    - "nl *"
+    - "sed -n *"
+    - "sort *"
+    - "uniq *"
+    - "cut *"
+    - "tr *"
+    - "find *"
+    - "stat *"
+    - "du *"
+    - "diff *"
+    - "tree *"
+    - "pwd"
+    - "jq *"
   # Globs matched against an MCP tool's full name. While this list is empty,
   # a tool is denied when any word of its name is a write verb (create,
   # update, delete, send, deploy, buy, save, log, run, execute, trigger, …)

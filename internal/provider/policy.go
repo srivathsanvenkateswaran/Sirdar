@@ -328,13 +328,55 @@ func (p *PermissionPolicy) decideWrite(tool string, input json.RawMessage) Decis
 	return Decision{Allow: true}
 }
 
-// decideBash allows a command only when MatchCommand does, and reports
-// MatchCommand's reason when it does not.
+// decideBash allows a command only when MatchCommand does, and otherwise
+// composes a denial that names the rule a workspace operator can actually
+// go change, not just the one segment that tripped it.
+//
+// MatchCommand's own reason stays specific to what happened (which segment,
+// which construct, which path), because that is what tells apart a command
+// nothing allow-lists (`rm -rf /`) from one an allow-list entry exists for
+// but a flag or a redirection ruled out. What it cannot say is which config
+// key to edit or what else is already permitted, which is the gap a triage
+// session hit when `nl` was denied: the reason named no path to widening
+// the list, and the session gave up on the file instead of asking for `cat`
+// or `rg` again. bashAllowHint and the ", see .sirdar/config.yaml" pointer
+// close that gap without hiding anything — every pattern named here is one
+// the workspace's own operator already wrote into that file.
 func (p *PermissionPolicy) decideBash(command string) Decision {
-	if ok, reason := MatchCommand(p.Root, p.BashAllow, command, p.ExtraReserved...); !ok {
-		return Decision{Allow: false, Message: "Sirdar policy: " + reason}
+	ok, reason := MatchCommand(p.Root, p.BashAllow, command, p.ExtraReserved...)
+	if ok {
+		return Decision{Allow: true}
 	}
-	return Decision{Allow: true}
+	key := "permissions.bash"
+	if p.IsFix() {
+		key = "permissions.fixBash"
+	}
+	return Decision{Allow: false, Message: "Sirdar policy: not permitted by " + key +
+		"; allowed here: " + bashAllowHint(p.BashAllow) + " (see .sirdar/config.yaml). " + reason}
+}
+
+// bashAllowHint summarizes a Bash allow-list for a denial message: the
+// first eight patterns, comma-separated, with a trailing "..." when the
+// workspace configured more than that. Every pattern here is something the
+// workspace's own .sirdar/config.yaml already names in the clear, so
+// echoing it back carries nothing sensitive — unlike an MCP tool's
+// arguments or a fetch URL, a permissions.bash/fixBash glob is never a
+// credential. Eight is enough to show the shape of the list (the read
+// utilities, a handful of git subcommands) without the message ballooning
+// on a workspace that has written fifty of them.
+func bashAllowHint(allow []string) string {
+	if len(allow) == 0 {
+		return "none configured"
+	}
+	n := len(allow)
+	if n > 8 {
+		n = 8
+	}
+	hint := strings.Join(allow[:n], ", ")
+	if len(allow) > 8 {
+		hint += ", ..."
+	}
+	return hint
 }
 
 // MatchCommand reports whether a whole shell command is covered by an
@@ -383,6 +425,12 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 		if denial := gitDenial(segment); denial != "" {
 			return false, denial
 		}
+		if denial := findDenial(segment); denial != "" {
+			return false, denial
+		}
+		if denial := sedDenial(segment); denial != "" {
+			return false, denial
+		}
 		matched := false
 		for _, pattern := range allow {
 			if MatchGlob(pattern, segment) {
@@ -391,9 +439,8 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 			}
 		}
 		if !matched {
-			return false, quote(segment) + " is not in the allow-list (" +
-				strings.Join(allow, ", ") +
-				"); every segment of a pipeline or compound command has to match"
+			return false, quote(segment) + " is not in the allow-list; " +
+				"every segment of a pipeline or compound command has to match"
 		}
 		if escape := escapesRoot(root, extraReserved, segment); escape != "" {
 			return false, escape
@@ -643,6 +690,78 @@ func envAssignment(tok string) (name, value string, ok bool) {
 func isGit(word string) bool {
 	word = strings.TrimSuffix(word, ".exe")
 	return word == "git" || strings.HasSuffix(word, "/git")
+}
+
+// findDeniedFlags are find options that act on what find matches rather
+// than reading it: -delete removes the file, and -exec/-execdir/-ok/-okdir
+// run an arbitrary command per match — the same "policy cannot see what
+// this actually does" problem $(...) is refused for, except find's version
+// is a plain word a "find *" pattern would otherwise wave through.
+var findDeniedFlags = map[string]bool{
+	"-delete":  true,
+	"-exec":    true,
+	"-execdir": true,
+	"-ok":      true,
+	"-okdir":   true,
+}
+
+// findDenial reports why a find command segment is refused outright, or ""
+// when nothing in it is. Denied wherever the flag falls, the same as
+// gitDeniedFlagsAnywhere: find accepts its tests and actions in any order
+// after the starting path(s).
+func findDenial(segment string) string {
+	args := argTokens(segment)
+	if len(args) == 0 || !isFind(args[0]) {
+		return ""
+	}
+	for _, arg := range args[1:] {
+		if findDeniedFlags[arg] {
+			return quote(segment) + " passes find " + quote(arg) +
+				", which runs or removes what find matches instead of reading it; " +
+				"no allow-list pattern approves it"
+		}
+	}
+	return ""
+}
+
+// isFind reports whether a command word invokes find, by the name or by a
+// path ending in it.
+func isFind(word string) bool {
+	word = strings.TrimSuffix(word, ".exe")
+	return word == "find" || strings.HasSuffix(word, "/find")
+}
+
+// sedDenial reports why a sed command segment is refused outright, or ""
+// when nothing in it is. -i/--in-place turns sed from a read into a write
+// wherever it appears — GNU sed accepts it combined with -n as -ni, and BSD
+// sed always takes a (possibly empty) backup-suffix argument right after
+// it — so a "sed -n *" pattern, meant to approve only the read-only form,
+// never approves an invocation carrying it.
+func sedDenial(segment string) string {
+	args := argTokens(segment)
+	if len(args) == 0 || !isSed(args[0]) {
+		return ""
+	}
+	for _, arg := range args[1:] {
+		if arg == "--in-place" || strings.HasPrefix(arg, "--in-place=") {
+			return quote(segment) + " passes sed " + quote(arg) +
+				", which edits the file in place instead of reading it; " +
+				"no allow-list pattern approves it"
+		}
+		if strings.HasPrefix(arg, "-") && !strings.HasPrefix(arg, "--") && strings.ContainsRune(arg, 'i') {
+			return quote(segment) + " passes sed " + quote(arg) +
+				", which edits the file in place instead of reading it; " +
+				"no allow-list pattern approves it"
+		}
+	}
+	return ""
+}
+
+// isSed reports whether a command word invokes sed, by the name or by a
+// path ending in it.
+func isSed(word string) bool {
+	word = strings.TrimSuffix(word, ".exe")
+	return word == "sed" || strings.HasSuffix(word, "/sed")
 }
 
 // withinRoot reports whether an absolute path is root or sits under it.

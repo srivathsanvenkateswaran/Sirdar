@@ -51,3 +51,6 @@
 .sd-event[data-variant='error'] { --sd-event-hue: var(--sd-st-failed); }
 .sd-event[data-variant='final'] { --sd-event-hue: var(--sd-accent); }
 .sd-event[data-variant='usage'] { --sd-event-hue: var(--sd-rule-strong); }
+/* A question the agent asked, or a rate limit: the run is waiting on a person,
+   which is the same fact the blocked lane carries. */
+.sd-event[data-variant='callout'] { --sd-event-hue: var(--sd-st-blocked); }

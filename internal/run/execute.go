@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -21,6 +22,24 @@ import (
 
 // maxMalformed is how many malformed provider lines in a row end the run.
 const maxMalformed = 10
+
+// noWireSchemaEnforcement names the providers with no mechanism to enforce
+// SessionSpec.OutputSchema on the wire: the schema reaches the model only
+// as prompt text, so nothing stops it from echoing the schema's own header
+// back, or answering with the schema itself. Claude and Qwen pass it as a
+// CLI flag their own process enforces, Codex as a protocol param its agent
+// enforces, and the openai loop as a tool-call parameter schema; ACP has
+// none of those, so it alone gets the sharpened retry and prompt wording.
+var noWireSchemaEnforcement = map[string]bool{
+	"acp": true,
+}
+
+// maxEmptyTurns is how many turns may end with no answer before the run is
+// given up on. A turn that says nothing is not a wrong answer but a session
+// that stopped — an ACP agent ends its turn on the spot when a tool call is
+// refused — so it is asked to carry on rather than spending the schema
+// retry, and the wall-clock and turn budgets are what stop this for good.
+const maxEmptyTurns = 2
 
 // closeGrace is how long a session gets to end on its own after its input
 // has been closed, before it is cancelled outright. The note is already on
@@ -43,6 +62,7 @@ type execution struct {
 	completeErr error
 
 	retried     bool
+	emptyTurns  int // turns that ended with no answer at all
 	schemaError string
 	malformed   int
 
@@ -762,6 +782,11 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 
 // handleFinal validates the session's JSON output. The first failure buys
 // one retry turn quoting the validation errors; the second ends the run.
+//
+// A turn that ended with no answer at all is counted separately (see
+// maxEmptyTurns): nothing was validated, so it is not the schema retry
+// being spent, and an agent that stops mid-work — the ACP agents do it on
+// a refused tool call — is asked again.
 func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
 	// A session that has already produced a valid note is done. A provider
 	// that emits a second final line — a resumed session replaying its
@@ -799,7 +824,33 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		doc = []byte(strings.TrimSpace(ev.Text))
 	}
 
-	err := note.Validate(noteKind(p.kind), doc)
+	// An empty document is a turn that ended with nothing in it — all tool
+	// calls and thinking, no answer — and note.Validate would report that
+	// as "parse document: EOF", which reads like malformed JSON and tells
+	// an operator nothing about what actually happened.
+	var err error
+	if len(bytes.TrimSpace(doc)) == 0 {
+		err = errEmptyAnswer
+	} else {
+		err = note.Validate(noteKind(p.kind), doc)
+	}
+	if err != nil && !errors.Is(err, errEmptyAnswer) {
+		// A provider with no wire-level schema enforcement (acp today) is
+		// only ever shown the schema as prompt text, and sometimes echoes
+		// its own header keys ($schema, title, ...) back alongside a real
+		// answer, or — rarer — answers with the schema itself. Recover the
+		// former when the rest of the document goes on to validate; the
+		// latter gets a clearer reason than a bare additionalProperties
+		// error naming every schema keyword in turn.
+		schema := schemaFor(p.kind)
+		if cleaned, schemaItself, ok := stripSchemaEcho(schema, doc); ok {
+			if cerr := note.Validate(noteKind(p.kind), cleaned); cerr == nil {
+				doc, err = cleaned, nil
+			}
+		} else if schemaItself {
+			err = fmt.Errorf("the agent's answer is the JSON Schema itself (a root \"properties\" object), not a document shaped by it")
+		}
+	}
 	if err == nil {
 		ex.final = append([]byte(nil), doc...)
 		ex.rawFinal = ""
@@ -820,18 +871,51 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 
 	ex.rawFinal = string(doc)
-	if ex.retried {
+	empty := errors.Is(err, errEmptyAnswer)
+	switch {
+	case empty && ex.emptyTurns >= maxEmptyTurns:
+		// Nothing was ever validated, so calling this a schema failure
+		// would name the wrong problem.
+		ex.schemaError = firstProblem(err)
+		ex.failure = errEmptyAnswer.Error()
+		sess.Cancel()
+		return
+	case !empty && ex.retried:
 		ex.schemaError = firstProblem(err)
 		ex.failure = "schema validation failed twice: " + ex.schemaError
 		sess.Cancel()
 		return
 	}
 
-	ex.retried = true
+	if empty {
+		ex.emptyTurns++
+	} else {
+		ex.retried = true
+	}
 	ex.schemaError = firstProblem(err)
 	msg := "Your previous answer did not match the schema: " +
 		strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", "; ") +
 		". Reply again with the corrected JSON object only."
+	if empty {
+		msg = "Your previous turn ended without an answer. A refused tool call does not end the " +
+			"task: carry on from what you have already done, and finish by replying with the JSON " +
+			"object only."
+	}
+	if p.kind == store.KindFix {
+		// The session has been editing files and running commands for
+		// several turns by now, and the report shape was last stated in
+		// the opening prompt. Restating it is cheaper than a second
+		// failed answer.
+		msg += " The fix report is one JSON object matching this schema: " +
+			string(compactJSON(schemaFor(p.kind)))
+	}
+	if noWireSchemaEnforcement[r.providerName()] {
+		// This provider has nothing enforcing OutputSchema on the wire, so
+		// the retry has to spell out the exact mistake it is likely to
+		// repeat: quoting the schema's own header back instead of the
+		// answer it describes.
+		msg += " Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+	}
 	sendErr := sess.Send(ctx, msg)
 	if sendErr == nil {
 		return
@@ -1467,4 +1551,20 @@ func (r *Runner) grace() time.Duration {
 		return r.CloseGrace
 	}
 	return closeGrace
+}
+
+// errEmptyAnswer is the failure of a turn that ended with no answer in it:
+// the provider reported a final with neither JSON nor text, which is what a
+// session spent entirely on tool calls and thinking looks like from here.
+var errEmptyAnswer = errors.New("the agent ended the turn without an answer")
+
+// compactJSON strips the whitespace out of a schema before it goes into a
+// retry message, and hands back what it was given when that fails — the
+// point is to send the schema, not to validate it here.
+func compactJSON(raw []byte) []byte {
+	var out bytes.Buffer
+	if err := json.Compact(&out, raw); err != nil {
+		return raw
+	}
+	return out.Bytes()
 }
