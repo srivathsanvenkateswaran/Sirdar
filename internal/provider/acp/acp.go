@@ -1587,6 +1587,13 @@ type sessionUpdate struct {
 	Entries       json.RawMessage `json:"entries"`
 	ModeID        string          `json:"modeId"`
 
+	// available_commands_update's payload: the agent's whole slash-command
+	// catalogue, re-sent in full every time any of it changes. Only the
+	// names are read; see onAvailableCommands for why none of it is kept.
+	AvailableCommands []struct {
+		Name string `json:"name"`
+	} `json:"availableCommands"`
+
 	// usage_update, whose shipped shape carries context used/size and an
 	// optional session cost. Some agents nest it under "usage"; both are
 	// read because the RFD's own examples show the flat form and the
@@ -1705,12 +1712,52 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 	case "usage_update":
 		s.onUsage(u, raw)
 
+	case "available_commands_update":
+		s.onAvailableCommands(u)
+
 	case "current_mode_update":
 		s.emit(provider.Event{Kind: provider.EvSystem, Text: "acp mode " + u.ModeID, Raw: raw})
 
 	default:
 		s.emit(provider.Event{Kind: provider.EvSystem, Text: "acp " + u.SessionUpdate, Raw: raw})
 	}
+}
+
+// onAvailableCommands records that the agent's slash-command catalogue
+// arrived, and nothing else about it.
+//
+// The notification carries the whole catalogue every time, descriptions
+// included — OpenCode's is the host's 31 skills, some 15 KiB a copy, and it
+// re-sends the lot on every update. Kept verbatim, one run's event log
+// reached 1300-odd system events made almost entirely of the same text.
+// None of it is anything the run acts on: Sirdar never invokes a
+// slash-command, and what an operator needs from this line is that the
+// catalogue is there and roughly what is in it.
+func (s *session) onAvailableCommands(u sessionUpdate) {
+	const named = 3
+	names := make([]string, 0, named)
+	for _, cmd := range u.AvailableCommands {
+		if len(names) == named {
+			break
+		}
+		if cmd.Name != "" {
+			names = append(names, cmd.Name)
+		}
+	}
+
+	text := fmt.Sprintf("acp available commands: %d", len(u.AvailableCommands))
+	if len(names) > 0 {
+		listed := strings.Join(names, ", ")
+		if len(u.AvailableCommands) > len(names) {
+			listed += ", …"
+		}
+		text += " (" + listed + ")"
+	}
+	s.emit(provider.Event{
+		Kind: provider.EvSystem,
+		Text: text,
+		Raw:  rawOf(map[string]any{"availableCommands": len(u.AvailableCommands), "first": names}),
+	})
 }
 
 // onUsage records what little ACP reports. "used" is the tokens currently

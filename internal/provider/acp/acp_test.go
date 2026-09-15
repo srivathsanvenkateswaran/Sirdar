@@ -1320,6 +1320,51 @@ func indexOf(values []string, want string) int {
 	return -1
 }
 
+// TestAvailableCommandsAreSummarisedNotStored: OpenCode re-sends the host's
+// whole slash-command catalogue on every update — 31 entries with their
+// descriptions, about 15 KiB a time — and the event log kept every byte of
+// it, which is how one run finished with 1300-odd system events. The run
+// needs to know the catalogue changed and roughly what is in it; it does
+// not need the bodies.
+func TestAvailableCommandsAreSummarisedNotStored(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-commands.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	var found provider.Event
+	for _, ev := range only(evs, provider.EvSystem) {
+		if strings.Contains(ev.Text, "available commands") {
+			if found.Text != "" {
+				t.Fatalf("more than one summary: %q and %q", found.Text, ev.Text)
+			}
+			found = ev
+		}
+	}
+	if found.Text == "" {
+		t.Fatalf("no summary; system events = %+v", only(evs, provider.EvSystem))
+	}
+	for _, want := range []string{"4", "claude-usage-dashboard", "customize-opencode", "find-skills"} {
+		if !strings.Contains(found.Text, want) {
+			t.Errorf("summary %q does not name %q", found.Text, want)
+		}
+	}
+	// The fourth name and every description stay off the event.
+	if strings.Contains(found.Text, "unslop") {
+		t.Errorf("summary %q lists more than the first three names", found.Text)
+	}
+	whole := found.Text + string(found.Raw)
+	if strings.Contains(whole, "LONG-DESCRIPTION-MARKER") {
+		t.Errorf("a command body was stored on the event: %s", whole)
+	}
+	if len(found.Raw) > 512 {
+		t.Errorf("the summary's raw payload is %d bytes: %s", len(found.Raw), found.Raw)
+	}
+}
+
 // --- tool calls nobody approved ---
 
 // unmediated pairs each tool call in script-unmediated.jsonl with the kind
