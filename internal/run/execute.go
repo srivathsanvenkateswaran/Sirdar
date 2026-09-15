@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1382,14 +1381,18 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 	path := filepath.Join(dir, filename)
 
 	if kind == note.Triage {
-		if existing := r.existingTriageNote(p, dir); existing != "" {
+		if existing := r.existingTriageNote(p, filepath.Dir(path)); existing != "" {
 			status := ""
 			if data, err := os.ReadFile(existing); err == nil {
 				status = frontmatterValue(string(data), "status")
 			}
 			if status != "triaged" {
-				p.state.Warnings = append(p.state.Warnings,
-					fmt.Sprintf("%s has status %q and was left unchanged", existing, status))
+				// The one warning that decides where this run's note can
+				// be read, so it is said out loud when the run ends as
+				// well as recorded on it (see Runner.finish).
+				msg := fmt.Sprintf("%s has status %q and was left unchanged; this run's note was not filed", existing, status)
+				p.state.Warnings = append(p.state.Warnings, msg)
+				p.noteRefused = msg
 				return ""
 			}
 			// Keep the filename the vault already links to.
@@ -1408,13 +1411,18 @@ func (r *Runner) fileNote(p *prepared, kind note.Kind, filename, body string) st
 	return path
 }
 
-// existingTriageNote finds this key's triage note in the notes directory,
-// whatever it is called or however deep the configured filename pattern
-// files it. It prefers the path the last completed triage run recorded, and
-// falls back to walking dir recursively — skipping dot-directories such as
-// .obsidian — for a "<key> *.md" file whose frontmatter tags it as triage,
-// which is how a note written by hand, filed before the run state existed,
-// or filed into a pattern subdirectory such as Triage/ is still found.
+// existingTriageNote finds this key's triage note where the configured
+// filename pattern would file it — the notes directory itself, or the one
+// subdirectory a pattern such as "Triage/{key} {slug}.md" names — whatever
+// the note is called. It prefers the path the last completed triage run
+// recorded, and falls back to reading dir for a "<key> *.md" file whose
+// frontmatter tags it as triage, which is how a note written by hand or
+// filed before the run state existed is still found.
+//
+// dir is read, not walked. A vault keeps its old notes, and it keeps them
+// in a folder — `notes/previous/` in the case this cost a run: a recursive
+// walk found an archived note there, read its terminal status and refused
+// to file anything at all. A note lives at the pattern, not below it.
 func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	states, err := store.List(r.Config.Root, p.state.Key)
 	if err == nil {
@@ -1423,7 +1431,7 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 				continue
 			}
 			for _, path := range s.Notes {
-				if !underDir(path, dir) {
+				if !inDir(path, dir) {
 					continue
 				}
 				if _, err := os.Stat(path); err == nil {
@@ -1434,40 +1442,33 @@ func (r *Runner) existingTriageNote(p *prepared, dir string) string {
 	}
 
 	prefix := p.state.Key + " "
-	var found string
-	_ = filepath.WalkDir(dir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return nil // an unreadable entry just isn't a candidate
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return ""
+	}
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
 		}
-		if d.IsDir() {
-			if path != dir && strings.HasPrefix(d.Name(), ".") {
-				return filepath.SkipDir
-			}
-			return nil
+		name := e.Name()
+		if !strings.HasPrefix(name, prefix) || !strings.HasSuffix(name, ".md") {
+			continue
 		}
-		if !strings.HasPrefix(d.Name(), prefix) || !strings.HasSuffix(d.Name(), ".md") {
-			return nil
-		}
+		path := filepath.Join(dir, name)
 		data, err := os.ReadFile(path)
 		if err != nil {
-			return nil
+			continue
 		}
 		if strings.Contains(frontmatterValue(string(data), "tags"), string(note.Triage)) {
-			found = path
-			return filepath.SkipAll
+			return path
 		}
-		return nil
-	})
-	return found
+	}
+	return ""
 }
 
-// underDir reports whether path is dir itself or lies somewhere beneath it.
-func underDir(path, dir string) bool {
-	rel, err := filepath.Rel(dir, path)
-	if err != nil {
-		return false
-	}
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+// inDir reports whether path is a file directly inside dir.
+func inDir(path, dir string) bool {
+	return filepath.Clean(filepath.Dir(path)) == filepath.Clean(dir)
 }
 
 // writePlaybookSuggestions leaves the agent's playbook additions in the run
