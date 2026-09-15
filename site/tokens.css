@@ -1,0 +1,143 @@
+/*
+ * Sirdar design tokens.
+ *
+ * This file is the only place a value is declared. Three consumers read it and
+ * none of them redeclares anything:
+ *
+ *   desktop app   @import './styles/tokens.css' from styles.css
+ *   landing site  site/tokens.css, a byte-identical copy made by `make tokens`
+ *   docs site     docs/stylesheets/tokens.css, the same copy step
+ *
+ * The copies are copies, not forks. If the three ever disagree, this file is
+ * right and the other two are stale; scripts/check-tokens.sh fails CI when they
+ * drift. The rationale for every value, and the measured contrast ratio behind
+ * it, is in docs/design/01-tokens.md.
+ *
+ * Nothing outside this file may declare a colour.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Ground and surface -------------------------------------------------- */
+  --sd-paper: #faf7ec;
+  --sd-surface: #fffdf7;
+  --sd-sunk: #f1eddf;
+  --sd-band-deep: #1f2b52;
+  --sd-band-ink: #17181c;
+
+  /* Ink on a band. Not part of the ink ramp: a band keeps its paper-coloured
+     ink in both themes, so this value does not flip with the scheme. */
+  --sd-on-band: #faf7ec;
+  --sd-on-band-2: color-mix(in srgb, var(--sd-on-band) 78%, var(--sd-band-deep));
+  --sd-on-band-rule: color-mix(in srgb, var(--sd-on-band) 30%, transparent);
+
+  /* Ink ramp ------------------------------------------------------------ */
+  --sd-ink: #17181c;
+  --sd-ink-2: #4a4e58;
+  --sd-ink-3: #676b74;
+  --sd-rule: #e3dfd1;
+  --sd-rule-strong: #c9c4b2;
+
+  /* Accent and highlight ------------------------------------------------ */
+  --sd-accent: #3b3aa6;
+  --sd-accent-ink: #fffdf7;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  --sd-highlight: #e4e0ff;
+  --sd-highlight-ink: #17181c;
+
+  /* Status. Meaning is fixed by the run state machine in the CLI. -------- */
+  --sd-st-queue: #63676f;
+  --sd-st-live: var(--sd-accent);
+  --sd-st-blocked: #a15c07;
+  --sd-st-triaged: #0e6f66;
+  --sd-st-done: #17713a;
+  --sd-st-failed: #b02418;
+
+  /* Type ---------------------------------------------------------------- */
+  --sd-font-display: Newsreader, Georgia, "Noto Naskh Arabic", serif;
+  --sd-font-ui: Inter, -apple-system, "IBM Plex Sans Arabic", system-ui, sans-serif;
+  --sd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sd-font-arabic: "Noto Naskh Arabic", "IBM Plex Sans Arabic", serif;
+
+  /* Space --------------------------------------------------------------- */
+  --sd-space-1: 4px;
+  --sd-space-2: 8px;
+  --sd-space-3: 12px;
+  --sd-space-4: 16px;
+  --sd-space-5: 24px;
+  --sd-space-6: 32px;
+  --sd-space-7: 48px;
+  --sd-space-8: 64px;
+  --sd-space-9: 96px;
+  --sd-space-10: 128px;
+
+  /* Radius -------------------------------------------------------------- */
+  --sd-radius-xs: 4px;
+  --sd-radius-sm: 8px;
+  --sd-radius-md: 12px;
+  --sd-radius-lg: 20px;
+  --sd-radius-band: 40px;
+  --sd-radius-pill: 999px;
+
+  /* Elevation. Two shadows, and most things get neither. ---------------- */
+  --sd-shadow-hard: 2px 2px 0 0 var(--sd-ink);
+  --sd-shadow-soft: 0 4px 20px rgb(23 24 28 / 10%);
+
+  /* Motion -------------------------------------------------------------- */
+  --sd-dur-1: 120ms;
+  --sd-dur-2: 200ms;
+  --sd-dur-3: 300ms;
+  --sd-dur-4: 350ms;
+  --sd-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+
+  /* Measure ------------------------------------------------------------- */
+  --sd-measure-wide: 1200px;
+  --sd-measure-prose: 68ch;
+  --sd-gutter: 12px;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sd-radius-band: 64px;
+  }
+}
+
+[dir="rtl"] {
+  /* The light comes from the leading edge, so the one hard shadow flips. */
+  --sd-shadow-hard: -2px 2px 0 0 var(--sd-ink);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --sd-paper: #14151a;
+    --sd-surface: #1c1e25;
+    --sd-sunk: #0f1014;
+    --sd-band-deep: #232f58;
+    --sd-band-ink: #0c0d10;
+
+    --sd-ink: #e9e7df;
+    --sd-ink-2: #a6a9b2;
+    --sd-ink-3: #8c919b;
+    --sd-rule: #2a2d34;
+    --sd-rule-strong: #3d424b;
+
+    --sd-accent: #a6a2ff;
+    --sd-accent-ink: #14151a;
+    --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+    --sd-highlight: #2e2a55;
+    --sd-highlight-ink: #ddd8ff;
+
+    --sd-st-queue: #9298a3;
+    --sd-st-blocked: #e0a14a;
+    --sd-st-triaged: #58c7ba;
+    --sd-st-done: #6ec98a;
+    --sd-st-failed: #f08c8c;
+
+    --sd-shadow-hard: 2px 2px 0 0 var(--sd-rule-strong);
+  }
+
+  [dir="rtl"] {
+    --sd-shadow-hard: -2px 2px 0 0 var(--sd-rule-strong);
+  }
+}

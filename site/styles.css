@@ -1,0 +1,789 @@
+/*
+ * Sirdar landing page.
+ *
+ * Every colour, radius, duration and family comes from tokens.css, which is a
+ * byte-identical copy of desktop/frontend/src/styles/tokens.css. Nothing here
+ * declares a colour; `make tokens` is what keeps the copy honest.
+ *
+ * Layout is written in logical properties throughout, because a Sirdar note is
+ * routinely half Arabic: setting `dir="rtl"` on <html> mirrors this page
+ * without a second stylesheet. Identifiers, commands, keys, clocks and costs
+ * stay LTR inside an RTL line, which is the same rule the app follows.
+ */
+
+@import url("tokens.css");
+
+/* Reset and base ------------------------------------------------------- */
+
+*,
+*::before,
+*::after { box-sizing: border-box; }
+
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+/* Anchor targets clear the floating nav. */
+:target, .step { scroll-margin-block-start: calc(var(--sd-space-8) + var(--sd-space-4)); }
+
+body {
+  margin: 0;
+  background: var(--sd-paper);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: 1rem;
+  line-height: 1.6;
+  font-synthesis-weight: none;
+  overflow-wrap: break-word;
+}
+
+h1, h2, h3, p, ul, ol, dl, dd, figure, blockquote { margin: 0; }
+ul, ol { padding: 0; list-style: none; }
+
+code, .mono {
+  font-family: var(--sd-font-mono);
+  font-feature-settings: "tnum" 1;
+  font-size: 0.875em;
+}
+
+a { color: var(--sd-accent); text-underline-offset: 3px; }
+
+:focus-visible {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
+  border-radius: var(--sd-radius-xs);
+}
+
+.vh {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
+
+.skip {
+  position: absolute;
+  inset-block-start: -100px;
+  inset-inline-start: var(--sd-space-4);
+  z-index: 50;
+  padding: var(--sd-space-3) var(--sd-space-4);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  border: 1px solid var(--sd-ink);
+  border-radius: var(--sd-radius-sm);
+}
+.skip:focus { inset-block-start: var(--sd-space-4); }
+
+.wide {
+  max-width: var(--sd-measure-wide);
+  margin-inline: auto;
+  padding-inline: var(--sd-space-5);
+}
+
+/* Floating pill nav ----------------------------------------------------- */
+
+.navwrap {
+  position: sticky;
+  inset-block-start: var(--sd-space-4);
+  z-index: 30;
+  margin-block-start: var(--sd-space-4);
+  padding-inline: var(--sd-space-5);
+}
+
+.nav {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-4);
+  max-width: var(--sd-measure-wide);
+  margin-inline: auto;
+  padding: var(--sd-space-2) var(--sd-space-2) var(--sd-space-2) var(--sd-space-5);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  box-shadow: var(--sd-shadow-soft);
+}
+
+.wordmark {
+  font-family: var(--sd-font-mono);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: var(--sd-ink);
+  text-decoration: none;
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  margin-inline: auto;
+  background: var(--sd-sunk);
+  border-radius: var(--sd-radius-pill);
+}
+.seg a {
+  padding: 6px var(--sd-space-3);
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-2);
+  text-decoration: none;
+  border-radius: var(--sd-radius-pill);
+  transition: background var(--sd-dur-1) ease, color var(--sd-dur-1) ease;
+}
+.seg a:hover { background: var(--sd-surface); color: var(--sd-ink); }
+
+.navend { display: flex; align-items: center; gap: var(--sd-space-2); margin-inline-start: auto; }
+
+.navlink {
+  padding: var(--sd-space-2) var(--sd-space-3);
+  color: var(--sd-ink-2);
+  font-size: 0.9375rem;
+  text-decoration: none;
+}
+.navlink:hover { color: var(--sd-ink); text-decoration: underline; }
+
+.navpill {
+  padding: 10px var(--sd-space-4);
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  text-decoration: none;
+  border-radius: var(--sd-radius-pill);
+}
+.navpill:hover { background: var(--sd-accent); color: var(--sd-accent-ink); }
+
+/* Sections -------------------------------------------------------------- */
+
+.section { padding-block: var(--sd-space-9); }
+.hero { position: relative; overflow: hidden; padding-block: var(--sd-space-8) var(--sd-space-7); }
+
+h1 {
+  font-family: var(--sd-font-display);
+  font-weight: 400;
+  font-size: clamp(2.5rem, 7.2vw, 4.5rem);
+  line-height: 1.04;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+h1 em { font-style: italic; }
+
+.h-band, .h-mid {
+  font-family: var(--sd-font-display);
+  font-weight: 400;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  text-wrap: balance;
+}
+.h-band { font-size: clamp(2rem, 5vw, 3.5rem); }
+.h-mid { font-size: clamp(1.75rem, 3.6vw, 2.5rem); }
+.h-band em, .h-mid em { font-style: italic; }
+
+.h-small {
+  font-family: var(--sd-font-ui);
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--sd-ink-3);
+  margin-block-end: var(--sd-space-5);
+}
+
+.deck {
+  margin-block-start: var(--sd-space-5);
+  max-width: 46ch;
+  font-size: clamp(1.0625rem, 1.6vw, 1.25rem);
+  line-height: 1.6;
+  color: var(--sd-ink-2);
+}
+
+.lede {
+  margin-block-start: var(--sd-space-4);
+  max-width: 60ch;
+  color: var(--sd-ink-2);
+}
+
+.aside {
+  margin-block-start: var(--sd-space-5);
+  max-width: 64ch;
+  font-size: 0.9375rem;
+  color: var(--sd-ink-3);
+}
+
+/* Hero ------------------------------------------------------------------ */
+
+.hero-grid { position: relative; display: grid; gap: var(--sd-space-8); }
+
+/* A grid item's automatic minimum size is its min-content width, and the
+   install command does not wrap. Without this the hero column is as wide as
+   that command and the page clips itself at 360px. */
+.hero-copy, .sheet, .actions { min-width: 0; }
+
+@media (min-width: 980px) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+    align-items: center;
+    gap: var(--sd-space-7);
+  }
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sd-space-4);
+  margin-block-start: var(--sd-space-6);
+}
+
+.btn {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 var(--sd-space-6);
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  text-decoration: none;
+  border: 1px solid var(--sd-ink);
+  border-radius: var(--sd-radius-sm);
+  box-shadow: var(--sd-shadow-hard);
+  transition: transform var(--sd-dur-1) var(--sd-ease), box-shadow var(--sd-dur-1) var(--sd-ease);
+}
+.btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: 1px 1px 0 0 var(--sd-ink);
+}
+[dir="rtl"] .btn:active {
+  transform: translate(-1px, 1px);
+  box-shadow: -1px 1px 0 0 var(--sd-ink);
+}
+
+.copyline {
+  display: flex;
+  width: 100%;
+  max-width: 34rem;
+  min-width: 0;
+  align-items: stretch;
+  min-height: 44px;
+  background: var(--sd-sunk);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  overflow: hidden;
+}
+.copyline code {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding-inline: var(--sd-space-4);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-2);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.copybtn {
+  flex: none;
+  padding-inline: var(--sd-space-4);
+  background: transparent;
+  border: 0;
+  border-inline-start: 1px solid var(--sd-rule-strong);
+  font-family: var(--sd-font-ui);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sd-ink-2);
+  cursor: pointer;
+  transition: background var(--sd-dur-1) ease, color var(--sd-dur-1) ease;
+}
+.copybtn:hover { background: var(--sd-highlight); color: var(--sd-highlight-ink); }
+
+.fineprint {
+  margin-block-start: var(--sd-space-4);
+  max-width: 54ch;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--sd-ink-3);
+}
+.fineprint code { color: var(--sd-ink-2); overflow-wrap: anywhere; }
+
+/* The ring ---------------------------------------------------------------
+   Decorative, aria-hidden, and cropped by the inline-start edge. The sentence
+   on it is the product's actual scope, so the decoration is also information. */
+
+.ringwrap {
+  position: absolute;
+  inset-block-start: 9%;
+  inset-inline-start: -410px;
+  pointer-events: none;
+}
+.ring {
+  --ring-r: 240px;
+  position: relative;
+  width: calc(var(--ring-r) * 2);
+  height: calc(var(--ring-r) * 2);
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-3);
+  opacity: 0.5;
+  animation: ringspin 48s linear infinite;
+}
+.ring span {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+}
+[dir="rtl"] .ring { animation-direction: reverse; }
+
+@keyframes ringspin { to { transform: rotate(360deg); } }
+
+@media (max-width: 1279px) { .ringwrap { display: none; } }
+
+/* The sheet: a ticket that becomes a note ------------------------------- */
+
+.sheet {
+  position: relative;
+  overflow: hidden;
+  padding: var(--sd-space-5);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-lg);
+}
+
+.sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-3);
+  padding-block-end: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule);
+}
+.sheet-cmd { font-size: 0.8125rem; color: var(--sd-ink-2); }
+
+.chip {
+  flex: none;
+  padding: 3px var(--sd-space-3);
+  font-family: var(--sd-font-mono);
+  font-size: 0.6875rem;
+  border: 1px solid currentcolor;
+  border-radius: var(--sd-radius-pill);
+  transition: color var(--sd-dur-3) ease;
+}
+.chip[data-state="live"] { color: var(--sd-st-live); }
+.chip[data-state="triaged"] { color: var(--sd-st-triaged); }
+
+.scan {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 0;
+  height: 1px;
+  background: var(--sd-accent);
+  opacity: 0;
+  will-change: transform;
+}
+
+.rows { padding-block: var(--sd-space-2); }
+
+.row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 2px var(--sd-space-4);
+  padding-block: var(--sd-space-3);
+  border-block-end: 1px solid var(--sd-rule);
+}
+.row:last-child { border-block-end: 0; }
+
+@media (min-width: 420px) {
+  .row { grid-template-columns: 6.5rem minmax(0, 1fr); }
+}
+
+.row-label { grid-row: 1; grid-column: 1; }
+.row-face { grid-row: 2; grid-column: 1; }
+
+@media (min-width: 420px) {
+  .row-face { grid-row: 1; grid-column: 2; }
+}
+
+.row-label {
+  align-self: start;
+  padding-block-start: 4px;
+  font-family: var(--sd-font-mono);
+  font-size: 0.6875rem;
+  color: var(--sd-ink-3);
+}
+
+.row-face[data-in] {
+  font-family: var(--sd-font-arabic);
+  font-size: 1rem;
+  line-height: 1.95;
+  color: var(--sd-ink);
+}
+.row-face[data-out] {
+  font-family: var(--sd-font-display);
+  font-size: 1.0625rem;
+  line-height: 1.5;
+  color: var(--sd-ink);
+}
+.row-face[data-out] code { color: var(--sd-ink-2); }
+
+.row-face.blank {
+  align-self: center;
+  height: 1px;
+  width: 42%;
+  background: var(--sd-rule);
+}
+
+.conf {
+  padding: 1px 8px;
+  font-family: var(--sd-font-mono);
+  font-size: 0.75rem;
+  color: var(--sd-st-triaged);
+  border: 1px solid currentcolor;
+  border-radius: var(--sd-radius-pill);
+}
+
+.sheet-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2) var(--sd-space-4);
+  padding-block-start: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-rule);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-3);
+  transition: opacity var(--sd-dur-4) var(--sd-ease);
+}
+
+/* The one orchestrated moment. Without JS the sheet renders as the finished
+   note, which is the state that matters; the script rewinds it and plays. */
+.js .sheet .row [data-out] {
+  opacity: 0;
+  transform: translateY(5px);
+  transition: opacity var(--sd-dur-3) var(--sd-ease), transform var(--sd-dur-3) var(--sd-ease);
+}
+.js .sheet .row [data-in] {
+  opacity: 1;
+  transition: opacity var(--sd-dur-3) var(--sd-ease);
+}
+.js .sheet .row.done [data-out] { opacity: 1; transform: none; }
+.js .sheet .row.done [data-in] { opacity: 0; }
+.js .sheet .scan.on { opacity: 1; }
+.js .sheet-foot.pending { opacity: 0; }
+
+/* Text badges: names in Sirdar's own type, never a vendor's mark --------- */
+
+.badges { display: grid; gap: var(--sd-space-4); }
+
+@media (min-width: 720px) {
+  .badges { grid-template-columns: 7rem minmax(0, 1fr); align-items: baseline; }
+}
+
+.badges dt {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--sd-ink-3);
+}
+.badges dd {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin: 0;
+  padding-block-end: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule);
+}
+.badges dd:last-of-type { border-block-end: 0; padding-block-end: 0; }
+
+.badge-pill {
+  padding: 5px var(--sd-space-3);
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  white-space: nowrap;
+}
+
+/* The deep band: four commands ------------------------------------------ */
+
+.band {
+  background: var(--sd-band-deep);
+  color: var(--sd-on-band);
+  border-radius: var(--sd-radius-band);
+  padding-block: var(--sd-space-9);
+}
+.band a, .band code { color: inherit; }
+.band :focus-visible { outline-color: var(--sd-on-band); }
+
+.steps { margin-block-start: var(--sd-space-7); }
+
+.step {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-on-band-rule);
+}
+
+@media (min-width: 900px) {
+  .step {
+    grid-template-columns: 17rem minmax(0, 1fr) 13rem;
+    gap: var(--sd-space-5);
+    align-items: baseline;
+  }
+}
+
+.step-cmd {
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--sd-on-band);
+}
+.step-what { color: var(--sd-on-band); }
+.step-so { font-size: 0.9375rem; color: var(--sd-on-band-2); }
+
+.steps + .gate + .steps .step:first-child { border-block-start: 0; }
+
+.gate {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-4);
+  padding-block: var(--sd-space-5);
+}
+.gate::before, .gate::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--sd-on-band-rule);
+}
+.gate span {
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  color: var(--sd-on-band-2);
+}
+
+/* The ledger: one row per guarantee, mechanism named -------------------- */
+
+.ledger { margin-block-start: var(--sd-space-7); }
+
+.ledger-row {
+  display: grid;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-rule);
+}
+.ledger-row:last-child { border-block-end: 1px solid var(--sd-rule); }
+
+@media (min-width: 820px) {
+  .ledger-row {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.45fr);
+    gap: var(--sd-space-7);
+  }
+}
+
+.ledger dt {
+  font-size: 1.0625rem;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--sd-ink);
+}
+.ledger dd {
+  margin: 0;
+  color: var(--sd-ink-2);
+}
+.ledger dd code { color: var(--sd-ink); }
+.ledger a {
+  color: inherit;
+  text-decoration: underline;
+  background-image: linear-gradient(var(--sd-highlight), var(--sd-highlight));
+  background-repeat: no-repeat;
+  background-position: 0 100%;
+  background-size: 100% 0;
+  transition: background-size var(--sd-dur-3) var(--sd-ease);
+}
+.ledger a:hover { background-size: 100% 0.85em; }
+
+/* The board mock: real markup, fabricated keys --------------------------- */
+
+.frame {
+  margin-block-start: var(--sd-space-7);
+  padding: var(--sd-space-4);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-lg);
+  box-shadow: var(--sd-shadow-soft);
+}
+.frame figcaption {
+  padding-block-start: var(--sd-space-4);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-3);
+}
+
+.lanes {
+  display: flex;
+  gap: var(--sd-space-3);
+  overflow-x: auto;
+  padding-block-end: var(--sd-space-2);
+}
+
+.lane {
+  /* Six lanes fit the frame at desktop widths: the point of the section is
+     that you can see all six rails at once. Narrow, they scroll. */
+  flex: 1 1 0;
+  min-width: 158px;
+  padding: var(--sd-space-3);
+  background: var(--sd-sunk);
+  border-radius: var(--sd-radius-sm);
+  border-block-start: 2px solid var(--hue);
+}
+.lane[data-state="queue"]   { --hue: var(--sd-st-queue); }
+.lane[data-state="live"]    { --hue: var(--sd-st-live); }
+.lane[data-state="blocked"] { --hue: var(--sd-st-blocked); }
+.lane[data-state="triaged"] { --hue: var(--sd-st-triaged); }
+.lane[data-state="done"]    { --hue: var(--sd-st-done); }
+.lane[data-state="failed"]  { --hue: var(--sd-st-failed); }
+
+.lane-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  margin-block-end: var(--sd-space-3);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+.lane-n { font-family: var(--sd-font-mono); font-size: 0.6875rem; color: var(--sd-ink-3); }
+
+.cards { display: grid; gap: var(--sd-space-2); }
+
+.rcard {
+  padding: var(--sd-space-3);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+}
+.rcard.is-live { border-color: var(--sd-accent); }
+
+.rcard-top {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+}
+.key { font-size: 0.6875rem; color: var(--sd-ink-2); white-space: nowrap; }
+.badge {
+  font-family: var(--sd-font-mono);
+  font-size: 0.625rem;
+  white-space: nowrap;
+}
+.badge[data-state="queue"]   { color: var(--sd-st-queue); }
+.badge[data-state="live"]    { color: var(--sd-st-live); }
+.badge[data-state="blocked"] { color: var(--sd-st-blocked); }
+.badge[data-state="triaged"] { color: var(--sd-st-triaged); }
+.badge[data-state="done"]    { color: var(--sd-st-done); }
+.badge[data-state="failed"]  { color: var(--sd-st-failed); }
+
+.rcard-title {
+  margin-block-start: var(--sd-space-2);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  color: var(--sd-ink);
+}
+.rcard-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  margin-block-start: var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-size: 0.6875rem;
+  color: var(--sd-ink-3);
+}
+
+/* Footer ---------------------------------------------------------------- */
+
+.footer {
+  padding-block: var(--sd-space-9) var(--sd-space-6);
+  background: var(--sd-band-deep);
+  color: var(--sd-on-band);
+  border-start-start-radius: var(--sd-radius-band);
+  border-start-end-radius: var(--sd-radius-band);
+}
+.footer :focus-visible { outline-color: var(--sd-on-band); }
+
+.foot-grid {
+  display: grid;
+  gap: var(--sd-space-7);
+}
+
+@media (min-width: 720px) {
+  .foot-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .foot-about { grid-column: span 3; }
+}
+
+@media (min-width: 1000px) {
+  .foot-grid { grid-template-columns: repeat(3, minmax(0, 0.7fr)) minmax(0, 1.4fr); }
+  .foot-about { grid-column: auto; }
+}
+
+.foot-col h2 {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: var(--sd-on-band-2);
+  margin-block-end: var(--sd-space-4);
+}
+.foot-col li { margin-block-end: var(--sd-space-2); }
+.foot-col a {
+  color: var(--sd-on-band);
+  text-decoration: none;
+  border-block-end: 1px solid transparent;
+}
+.foot-col a:hover { border-block-end-color: var(--sd-on-band); }
+
+.origin {
+  font-family: var(--sd-font-display);
+  font-size: 1.0625rem;
+  line-height: 1.55;
+  color: var(--sd-on-band);
+  max-width: 42ch;
+}
+.origin em { font-style: italic; }
+
+.foot-rule {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2) var(--sd-space-6);
+  margin-block-start: var(--sd-space-8);
+  padding-block-start: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-on-band-rule);
+  font-family: var(--sd-font-mono);
+  font-size: 0.75rem;
+  color: var(--sd-on-band-2);
+}
+
+/* Narrow ---------------------------------------------------------------- */
+
+@media (max-width: 860px) {
+  .seg { display: none; }
+  .navend { margin-inline-start: auto; }
+}
+
+@media (max-width: 520px) {
+  .navlink { display: none; }
+  .nav { padding-inline-start: var(--sd-space-4); }
+  .section { padding-block: var(--sd-space-8); }
+  .band { padding-block: var(--sd-space-8); }
+  .footer { padding-block: var(--sd-space-8) var(--sd-space-6); }
+  .wide { padding-inline: var(--sd-space-4); }
+  .navwrap { padding-inline: var(--sd-space-4); }
+}
+
+/* Reduced motion --------------------------------------------------------
+   The ring freezes with its first word at 9 o'clock; the sheet is rendered
+   as the finished note, with no scan. Nothing on the page depends on an
+   animation finishing. */
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+
+  .ring { animation: none; transform: rotate(-90deg); }
+  [dir="rtl"] .ring { transform: rotate(90deg); }
+  .js .sheet .scan { display: none; }
+}
