@@ -10,11 +10,18 @@ const BASE = {
 } as const
 
 describe('RunCard', () => {
-  it('names the run and its ticket in one accessible label', () => {
+  it('names the run, its ticket and its state in one accessible label', () => {
     render(<RunCard {...BASE} status="completed" title="Statement export times out" />)
     expect(
-      screen.getByRole('button', { name: 'OMNI-2510: Statement export times out' }),
+      screen.getByRole('button', { name: 'OMNI-2510: Statement export times out, completed' }),
     ).toBeInTheDocument()
+  })
+
+  it('says the state in words in the label for every state', () => {
+    const { rerender } = render(<RunCard {...BASE} status="blocked" title="Login loop" />)
+    expect(screen.getByRole('button', { name: 'OMNI-2510: Login loop, blocked' })).toBeInTheDocument()
+    rerender(<RunCard {...BASE} status="over_budget" title="Login loop" />)
+    expect(screen.getByRole('button', { name: 'OMNI-2510: Login loop, over budget' })).toBeInTheDocument()
   })
 
   it('shows the title first and the key at the foot, with no key in the head', () => {
@@ -28,9 +35,36 @@ describe('RunCard', () => {
     )
   })
 
-  it('falls back to the key when the tracker has no title', () => {
-    render(<RunCard {...BASE} status="queued" />)
-    expect(screen.getByRole('button', { name: 'OMNI-2510: OMNI-2510' })).toBeInTheDocument()
+  it('shows the key once, as the title, when the tracker has no title', () => {
+    const { container } = render(<RunCard {...BASE} status="queued" />)
+    expect(screen.getByRole('button', { name: 'OMNI-2510, queued' })).toBeInTheDocument()
+    expect(container.querySelector('.sd-run-card__title')).toHaveTextContent('OMNI-2510')
+    expect(container.querySelector('.sd-run-card__key')).toBeNull()
+    expect(screen.getAllByText('OMNI-2510')).toHaveLength(1)
+  })
+
+  it('is a link to the tracker when it has somewhere to go but no session to open', () => {
+    render(
+      <RunCard
+        {...BASE}
+        onOpen={undefined}
+        status="queued"
+        title="Login loop"
+        href="https://acme.atlassian.net/browse/OMNI-2510"
+      />,
+    )
+    const link = screen.getByRole('link', { name: 'OMNI-2510: Login loop, queued' })
+    expect(link).toHaveAttribute('href', 'https://acme.atlassian.net/browse/OMNI-2510')
+    expect(link).toHaveAttribute('target', '_blank')
+    expect(link).toHaveAttribute('rel', 'noreferrer noopener')
+    expect(screen.queryByRole('button')).toBeNull()
+  })
+
+  it('is a plain box, not a control, when it neither opens nor goes anywhere', () => {
+    const { container } = render(<RunCard {...BASE} onOpen={undefined} status="queued" title="Login loop" />)
+    expect(screen.queryByRole('button')).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(container.querySelector('div.sd-run-card')).toHaveAttribute('aria-label', 'OMNI-2510: Login loop, queued')
   })
 
   it('opens the run on click and from the keyboard', () => {

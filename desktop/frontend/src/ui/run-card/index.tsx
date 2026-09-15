@@ -1,6 +1,6 @@
 import KindChip from '../kind-chip'
 import ProviderMark from '../provider-mark'
-import StateGlyph, { type GlyphState } from '../state-glyph'
+import StateGlyph, { STATE_WORDS, type GlyphState } from '../state-glyph'
 import './RunCard.css'
 
 export interface RunCardProps {
@@ -10,7 +10,10 @@ export interface RunCardProps {
   kind: string
   /** The CLI's state, or `done` for a key whose RCA is written. */
   status: GlyphState
-  /** The ticket's title. Falls back to the key when the tracker has none. */
+  /**
+   * The ticket's title. Without one the key is the title, drawn once: a card
+   * that said the key twice was a card with nothing else to say.
+   */
   title?: string
   /** The provider running it; drawn as the card's avatar. */
   provider: string
@@ -23,12 +26,19 @@ export interface RunCardProps {
   /** The clock's tooltip: what it is counting. */
   clockTitle?: string
   /**
-   * The accessible name, when the click does something other than open a
-   * session: a queued ticket's card starts a triage, and its name says so.
-   * Defaults to `<key>: <title>`.
+   * The accessible name, when the default of `<key>: <title>, <state>` does
+   * not say what the click does.
    */
   label?: string
-  onOpen: () => void
+  /** Opens the session. The card is a button while this is given. */
+  onOpen?: () => void
+  /**
+   * Where the card goes instead of opening a session: the ticket's own page
+   * in the tracker, for a queued key with no run yet. The card is a link,
+   * opened in the browser, and nothing about the click costs anything. Given
+   * both, `onOpen` wins.
+   */
+  href?: string
 }
 
 const CLOCKED: GlyphState[] = ['preparing', 'running', 'blocked']
@@ -46,6 +56,10 @@ const CLOCKED: GlyphState[] = ['preparing', 'running', 'blocked']
  *
  * The title carries `dir="auto"` because it can be the customer's own Arabic
  * inside an English board.
+ *
+ * The card is a button when it opens a session, a link when it goes to the
+ * tracker, and a plain box when it does neither; the anatomy inside is the
+ * same in all three.
  */
 export default function RunCard({
   runKey,
@@ -57,20 +71,16 @@ export default function RunCard({
   clockTitle,
   label,
   onOpen,
+  href,
 }: RunCardProps): JSX.Element {
   const live = status === 'preparing' || status === 'running'
   const heading = title || runKey
   const showClock = Boolean(clock) && CLOCKED.includes(status)
+  const word = STATE_WORDS[status] ?? status
+  const name = label ?? (title ? `${runKey}: ${title}, ${word}` : `${runKey}, ${word}`)
 
-  return (
-    <button
-      type="button"
-      className="sd-run-card"
-      data-status={status}
-      data-live={live ? 'true' : undefined}
-      aria-label={label ?? `${runKey}: ${heading}`}
-      onClick={onOpen}
-    >
+  const body = (
+    <>
       <span className="sd-run-card__title" dir="auto">
         {heading}
       </span>
@@ -80,16 +90,41 @@ export default function RunCard({
       </span>
 
       <span className="sd-run-card__foot">
-        <span title={showClock ? clockTitle : undefined}>
+        <span className="sd-run-card__state" title={showClock ? clockTitle : undefined}>
           <StateGlyph state={status} clock={showClock ? clock : undefined} />
         </span>
         <span className="sd-run-card__who">
-          <span className="sd-run-card__key" dir="ltr">
-            {runKey}
-          </span>
+          {title && (
+            <span className="sd-run-card__key" dir="ltr">
+              {runKey}
+            </span>
+          )}
           <ProviderMark provider={provider} size="sm" />
         </span>
       </span>
-    </button>
+    </>
   )
+
+  const shared = {
+    className: 'sd-run-card',
+    'data-status': status,
+    'data-live': live ? 'true' : undefined,
+    'aria-label': name,
+  }
+
+  if (onOpen) {
+    return (
+      <button type="button" {...shared} onClick={onOpen}>
+        {body}
+      </button>
+    )
+  }
+  if (href) {
+    return (
+      <a {...shared} href={href} target="_blank" rel="noreferrer noopener">
+        {body}
+      </a>
+    )
+  }
+  return <div {...shared}>{body}</div>
 }

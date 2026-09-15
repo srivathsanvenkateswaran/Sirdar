@@ -1,4 +1,5 @@
 import type { Quota } from '../api/types'
+import { relativeTime } from '../lib/format'
 import QuotaChip from '../ui/quota-chip'
 
 const OVER_BUDGET = 100
@@ -8,17 +9,17 @@ function clampPercent(value: number): number {
   return Math.min(100, Math.max(0, value))
 }
 
-/** "seen 3m ago" from an ISO timestamp, for the widget's tooltip. */
+/** "seen 3m ago" from an ISO timestamp, for the widget's tooltip; empty when the stamp is not one. */
 export function formatSeenAgo(observedAt: string, now: number = Date.now()): string {
-  const diffMs = now - new Date(observedAt).getTime()
-  if (!Number.isFinite(diffMs)) return ''
-  const minutes = Math.max(0, Math.round(diffMs / 60000))
-  if (minutes < 1) return 'seen just now'
-  if (minutes < 60) return `seen ${minutes}m ago`
-  return `seen ${Math.floor(minutes / 60)}h ago`
+  const ago = relativeTime(observedAt, now)
+  return ago ? `seen ${ago}` : ''
 }
 
-/** "resets in Xh Ym" from an ISO timestamp. */
+/**
+ * "resets in Xh Ym" from an ISO timestamp. A countdown to the minute, not
+ * the shared relative clock: the chip's spec quotes the minutes, and a
+ * quota that resets in 2h 14m is a fact a reader plans an hour around.
+ */
 export function formatResetIn(resetsAt: string, now: number = Date.now()): string {
   const diffMs = new Date(resetsAt).getTime() - now
   if (!Number.isFinite(diffMs)) return ''

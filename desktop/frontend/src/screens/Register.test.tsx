@@ -88,6 +88,7 @@ const RUNS: RunSummary[] = [
     runId: 'run-1',
     key: 'OMNI-1',
     status: 'completed',
+    title: 'Statement export times out',
     startedAt: '2026-09-14T09:41:00Z',
     updatedAt: '2026-09-14T09:43:00Z',
   }),
@@ -361,6 +362,12 @@ describe('Register', () => {
     const t = await table()
     fireEvent.click(within(t).getByRole('button', { name: 'OMNI-3' }))
     expect(onOpenRun).toHaveBeenCalledWith('run-3')
+  })
+
+  it('carries the ticket’s title on the key, when the run knows it', async () => {
+    const t = await shownTable()
+    expect(within(t).getByRole('button', { name: 'OMNI-1' })).toHaveAttribute('title', 'Statement export times out')
+    expect(within(t).getByRole('button', { name: 'OMNI-3' })).toHaveAttribute('title', 'Open this run')
   })
 
   it('names the notes a key has, so the dots are not the only copy', async () => {

@@ -107,7 +107,25 @@
   overflow-x: auto;
 }
 
-/* ---------- landed today ---------- */
+/* ---------- a queued ticket: the card and its Triage button ---------- */
+
+/*
+ * The card is a link to the ticket in the tracker; the button under it is
+ * the one click in the lane that starts a paid run, so it is its own control
+ * at the card's trailing edge rather than the card's body.
+ */
+.board-ticket {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.board-ticket > .sd-run-card {
+  width: 100%;
+}
+
+/* ---------- deliveries today ---------- */
 
 .board-landed {
   display: flex;

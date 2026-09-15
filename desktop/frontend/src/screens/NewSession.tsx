@@ -10,7 +10,7 @@ import {
 import type { RunSummary, Ticket, Transport, Workspace } from '../api/types'
 import ProviderFields from '../components/run/ProviderFields'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
-import { parseTime, relativeTime } from '../lib/format'
+import { parseTime, reasonOf, relativeTime } from '../lib/format'
 import { getRunJob, subscribeRunJobs } from '../lib/jobs'
 import { isQueueUnsupported } from '../store/appStore'
 import Button from '../ui/button'
@@ -250,7 +250,7 @@ export default function NewSession(props: {
         setNoTracker(true)
         return
       }
-      setLandedError(err instanceof Error ? err.message : String(err))
+      setLandedError(reasonOf(err))
     }
   }, [transport, workspaceId])
 
@@ -299,7 +299,7 @@ export default function NewSession(props: {
           setAwaiting(jobId)
         }
       } catch (err) {
-        setError(err instanceof Error ? err.message : String(err))
+        setError(reasonOf(err))
       } finally {
         setStarting('')
       }
@@ -309,8 +309,10 @@ export default function NewSession(props: {
 
   // The run the job produced: the store pairs it with the job id as its first
   // `run.updated` arrives, and the pairing is read here off the runs the
-  // store already holds. Both the pairing and the run list can be the one
-  // that lands second, so the check runs on either changing.
+  // store already holds. The store notifies the pairing before it publishes
+  // the run, so the run list is a real dependency: the check runs again when
+  // it lands. The open callback is read through its ref, because App hands
+  // over a fresh one every render and re-subscribing on each was the cost.
   useEffect(() => {
     if (!awaiting) return
     function check(): void {
@@ -318,11 +320,11 @@ export default function NewSession(props: {
       if (!found) return
       awaitingRef.current = ''
       setAwaiting('')
-      onOpenRun(found.runId)
+      openRun.current(found.runId)
     }
     check()
     return subscribeRunJobs(check)
-  }, [awaiting, runs, onOpenRun])
+  }, [awaiting, runs])
 
   // --- what Start can do ------------------------------------------------
 

@@ -81,3 +81,11 @@ describe('parseKeys', () => {
     expect(parseKeys('omni-1')).toEqual(['omni-1'])
   })
 })
+
+describe('reasonOf', () => {
+  it('reads the message off an Error and the text of anything else', () => {
+    expect(reasonOf(new Error('tracker is down'))).toBe('tracker is down')
+    expect(reasonOf('refused')).toBe('refused')
+    expect(reasonOf(404)).toBe('404')
+  })
+})

@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from 'react'
 import type { HookOutcome, RunSummary, Ticket, Transport } from '../api/types'
 import RunCard from '../components/cards/RunCard'
-import { relativeTime } from '../lib/format'
+import { reasonOf, relativeTime } from '../lib/format'
 import type { InboundDelivery } from '../store/appStore'
 import Button from '../ui/button'
 import GroupLabel from '../ui/group-label'
@@ -13,7 +13,11 @@ import SearchBar from '../ui/search-bar'
 import SegmentedControl from '../ui/segmented-control'
 import './board.css'
 
-/** One card in a lane: either an untouched ticket or a run. */
+/**
+ * One card in a lane: either an untouched ticket or a run. `title` is the
+ * ticket's, or empty when nothing names one; the card then shows the key
+ * once, as its title.
+ */
 export type BoardCard =
   | { kind: 'ticket'; key: string; title: string; ticket: Ticket }
   | { kind: 'run'; key: string; title: string; run: RunSummary; priority: string }
@@ -93,10 +97,12 @@ export function buildColumns(tickets: Ticket[], runs: RunSummary[]): BoardColumn
 
   for (const run of [...runs].sort((a, b) => stamp(b) - stamp(a))) {
     const ticket = ticketByKey.get(run.key)
+    // The run's own title is what its bundle recorded; the tracker's is the
+    // fallback for a run that predates the field.
     const card: BoardCard = {
       kind: 'run',
       key: run.key,
-      title: ticket?.title || run.key,
+      title: run.title || ticket?.title || '',
       run,
       priority: ticket?.priority ?? '',
     }
@@ -265,7 +271,7 @@ export interface BoardProps {
 
 /**
  * The board, at `#/`: every run as a card in the lane its state puts it in,
- * and under the lanes the deliveries the webhooks landed today.
+ * and under the lanes the deliveries the webhooks brought today.
  *
  * The lanes read the store's runs and tickets; the one thing the screen asks
  * the transport for itself is which keys are the reader's, when the Mine
@@ -324,7 +330,7 @@ export default function Board(props: BoardProps): JSX.Element {
         if (!cancelled) setMine(new Set(mineTickets.map((t) => t.key)))
       })
       .catch((err) => {
-        if (!cancelled) setMineError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) setMineError(reasonOf(err))
       })
     return () => {
       cancelled = true
@@ -444,21 +450,33 @@ export default function Board(props: BoardProps): JSX.Element {
                 ? null
                 : cards.map((card) =>
                     card.kind === 'ticket' ? (
-                      <SdRunCard
-                        key={`t:${card.key}`}
-                        runKey={card.key}
-                        kind="triage"
-                        status="queued"
-                        title={card.title}
-                        provider={provider}
-                        label={`Start triage of ${card.key}: ${card.title || card.key}`}
-                        onOpen={() => onTriage([card.key])}
-                      />
+                      // A queued ticket has no session to open, so its card
+                      // goes to the ticket in the tracker, and the one click
+                      // that spends the provider is a button of its own.
+                      <div key={`t:${card.key}`} className="board-ticket">
+                        <SdRunCard
+                          runKey={card.key}
+                          kind="triage"
+                          status="queued"
+                          title={card.title || undefined}
+                          provider={provider}
+                          href={card.ticket.url || undefined}
+                        />
+                        <Button
+                          variant="pale"
+                          size="sm"
+                          aria-label={`Triage ${card.key}`}
+                          title="Start a triage of this ticket"
+                          onClick={() => onTriage([card.key])}
+                        >
+                          Triage
+                        </Button>
+                      </div>
                     ) : (
                       <RunCard
                         key={card.run.runId}
                         run={card.run}
-                        title={card.title}
+                        title={card.title || undefined}
                         done={column.id === 'done'}
                         onOpen={onOpenRun}
                       />
@@ -469,9 +487,11 @@ export default function Board(props: BoardProps): JSX.Element {
         })}
       </div>
 
+      {/* Deliveries, not "landed": New session's "Landed today" is the
+          tracker's queue, and this is what the webhooks brought. */}
       <section className="board-landed" aria-labelledby="board-landed-label">
         <GroupLabel as="h2" id="board-landed-label">
-          Landed today
+          Deliveries today
         </GroupLabel>
         {deliveries.length === 0 ? (
           <p className="board-landed__empty">
