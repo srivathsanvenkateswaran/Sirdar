@@ -1161,18 +1161,18 @@ func TestUnwrapCommand(t *testing.T) {
 		{field: ``, want: ""},
 	} {
 		t.Run(c.field, func(t *testing.T) {
-			got, err := unwrapCommand(json.RawMessage(c.field))
+			got, err := provider.UnwrapCommand(json.RawMessage(c.field))
 			if c.err {
 				if err == nil {
-					t.Fatalf("unwrapCommand(%s) = %q, want an error", c.field, got)
+					t.Fatalf("provider.UnwrapCommand(%s) = %q, want an error", c.field, got)
 				}
 				return
 			}
 			if err != nil {
-				t.Fatalf("unwrapCommand(%s): %v", c.field, err)
+				t.Fatalf("provider.UnwrapCommand(%s): %v", c.field, err)
 			}
 			if got != c.want {
-				t.Errorf("unwrapCommand(%s) = %q, want %q", c.field, got, c.want)
+				t.Errorf("provider.UnwrapCommand(%s) = %q, want %q", c.field, got, c.want)
 			}
 		})
 	}

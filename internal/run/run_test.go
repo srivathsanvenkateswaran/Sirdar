@@ -2927,3 +2927,50 @@ func TestStallReasonNamesTheWindowInMinutes(t *testing.T) {
 		t.Errorf("stallReason(90s) = %q", got)
 	}
 }
+
+// TestEmptyFinalFailsWithoutCallingItASchemaError covers a fix session that
+// ends its turn with nothing in it — the ACP failure the Copilot sandbox
+// run hit. Nothing was ever validated, so neither the retry nor the run's
+// reason may talk about the schema; and the retry restates the report shape
+// the session was asked for several turns earlier.
+func TestEmptyFinalFailsWithoutCallingItASchemaError(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "acp", script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		// One more empty turn than the run tolerates.
+		for i := 0; i <= maxEmptyTurns; i++ {
+			if i > 0 {
+				select {
+				case <-s.sendCh:
+				case <-s.cancelled:
+					return
+				}
+			}
+			if !s.emit(provider.Event{Kind: provider.EvFinal, Text: "   "}) {
+				return
+			}
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{Prompt: "implement the fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q", out.State.Status)
+	}
+	if out.State.Reason != "the agent ended the turn without an answer" {
+		t.Fatalf("reason %q", out.State.Reason)
+	}
+	sends := p.session(0).sentTexts()
+	if len(sends) != maxEmptyTurns {
+		t.Fatalf("sends: %v", sends)
+	}
+	if !strings.Contains(sends[0], "ended without an answer") {
+		t.Errorf("the nudge does not say what went wrong: %q", sends[0])
+	}
+	if !strings.Contains(sends[0], "deviationFromNote") {
+		t.Errorf("the nudge does not restate the fix report shape: %q", sends[0])
+	}
+}
