@@ -25,7 +25,7 @@ a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, and
 Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
-Freshdesk, Help Scout, Intercom, and HubSpot Service Hub. Anything else — an internal
+Freshdesk, Help Scout, Intercom, HubSpot Service Hub, and Front. Anything else — an internal
 tracker, a different helpdesk — is a separate executable speaking a small
 line-delimited JSON protocol over stdin/stdout, so its credentials and vendor-specific
 code never touch Sirdar's core.
