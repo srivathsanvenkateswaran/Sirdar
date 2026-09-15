@@ -70,6 +70,10 @@ Risks: {{.doc.proposedFix.risks}}
 {{range .doc.openQuestions}}
 - {{.}}
 {{- end}}
+{{- if .meta.UnreviewedAttachments}}
+
+> Attachments not reviewed: {{join ", " .meta.UnreviewedAttachments}}. Nothing above rests on them.
+{{- end}}
 {{- if .doc.customerReplyDraft}}
 
 ## Customer reply draft

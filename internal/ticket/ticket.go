@@ -66,7 +66,22 @@ type Attachment struct {
 	Name string
 	MIME string
 	Path string
+
+	// Transcript is the bundle-relative path of the text transcription of
+	// an audio attachment, written beside the file itself. Empty when the
+	// attachment is not audio, or when the workspace configured no
+	// transcription command, or when the command could not read it.
+	Transcript string `json:",omitempty"`
+
+	// TranscriptLanguage is the language the transcription tool reported
+	// or was told to use, when it said; empty otherwise.
+	TranscriptLanguage string `json:",omitempty"`
 }
+
+// Transcribed reports whether this attachment has a transcript in the
+// bundle — which, for an audio file, is the difference between evidence
+// the session can read and evidence it cannot.
+func (a Attachment) Transcribed() bool { return a.Transcript != "" }
 
 // Bundle is everything gathered for a ticket: the tracker record, the helpdesk
 // record, the conversation thread, its attachments, and any warnings surfaced
@@ -77,6 +92,12 @@ type Bundle struct {
 	Thread      Thread
 	Attachments []Attachment
 	Warnings    []string // e.g. attachment download failures, surfaced to the prompt
+
+	// Unreviewed names the attachments that were dropped from the bundle
+	// — too large, or of a type the session cannot open and that no
+	// transcription could rescue. A transcribed audio file is not in this
+	// list: its contents did reach the session, as text.
+	Unreviewed []string `json:",omitempty"`
 }
 
 // Key returns Tracker.Key if present else Helpdesk.ID.

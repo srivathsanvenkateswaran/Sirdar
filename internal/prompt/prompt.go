@@ -5,6 +5,7 @@ package prompt
 
 import (
 	_ "embed"
+	"fmt"
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
@@ -219,8 +220,46 @@ func ticketSection(bundle ticket.Bundle, bundleDir string) string {
 			path = a.Name
 		}
 		b.WriteString("\n- " + path)
+		if a.Transcribed() {
+			b.WriteString(" (audio — read " + a.Transcript + " instead)")
+			b.WriteString("\n- " + a.Transcript)
+		}
+	}
+	if s := transcriptsNote(bundle); s != "" {
+		b.WriteString("\n\n" + s)
 	}
 	return b.String()
+}
+
+// transcriptsNote tells the session that the audio in this bundle has
+// already been turned into text, and how to treat it. Without it the
+// agent has a .transcript.txt beside a voice note and no reason to trust
+// or cite it; with it the transcript is evidence with a provenance, which
+// is the only honest way to quote a machine transcription of a customer
+// speaking.
+func transcriptsNote(bundle ticket.Bundle) string {
+	n := 0
+	lang := ""
+	for _, a := range bundle.Attachments {
+		if a.Transcribed() {
+			n++
+			if lang == "" {
+				lang = a.TranscriptLanguage
+			}
+		}
+	}
+	if n == 0 {
+		return ""
+	}
+	noun := "attachment was"
+	if n > 1 {
+		noun = "attachments were"
+	}
+	s := fmt.Sprintf("%d audio %s transcribed while this bundle was assembled. Each transcript is the `.transcript.txt` file listed beside its audio file: read it with the same tool you read any other file in the bundle. The audio itself cannot be opened.", n, noun)
+	if lang != "" {
+		s += " The transcripts are in the language the caller spoke (" + lang + "); translate a quotation into the note's language the way you translate the written complaint."
+	}
+	return s + " A transcript is machine-produced: quote it as a transcript, and say so when a conclusion rests on one."
 }
 
 func ticketTitle(bundle ticket.Bundle) string {

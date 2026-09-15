@@ -22,7 +22,12 @@ type Meta struct {
 	Date, DateReported                                             string // YYYY-MM-DD
 	Priority, Service                                              string
 	RunID, Provider                                                string
-	Links                                                          struct {
+	// UnreviewedAttachments names the ticket's attachments that never
+	// reached the session — too large, or a type it cannot open and that
+	// no transcription rescued. An audio file that was transcribed is not
+	// here: its contents did reach the session, as text.
+	UnreviewedAttachments []string
+	Links                 struct {
 		Triage, RCA, Resolution string // wiki-link targets (file stems)
 	}
 }

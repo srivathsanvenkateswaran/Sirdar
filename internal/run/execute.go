@@ -1264,6 +1264,8 @@ func (r *Runner) meta(p *prepared, service string) note.Meta {
 		Service:      service,
 		RunID:        p.state.RunID,
 		Provider:     p.state.Provider,
+
+		UnreviewedAttachments: b.Unreviewed,
 	}
 	if b.Tracker != nil {
 		m.TrackerURL = b.Tracker.URL
