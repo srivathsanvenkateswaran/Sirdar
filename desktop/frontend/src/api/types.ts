@@ -237,4 +237,11 @@ export interface Transport {
   subscribe(handler: (e: AppEvent) => void): () => void;
   /** Desktop build version, e.g. "1.2.3" or "dev". Only the Wails transport implements it. */
   version?(): Promise<string>;
+  /**
+   * Opens the workspace's `.sirdar/config.yaml` in whatever the desktop
+   * associates with it. Only the Wails transport implements it: a browser
+   * served by `sirdar serve` cannot open a file on the operator's machine,
+   * and Settings copies the path there instead.
+   */
+  openConfig?(ws: string): Promise<void>;
 }

@@ -310,6 +310,7 @@ interface BridgeBindings {
   MCPCall(ws: string, server: string, tool: string, args: Record<string, unknown>): Promise<MCPCallResult>
   Cancel(jobId: string): Promise<void>
   Version(): Promise<string>
+  OpenConfig(ws: string): Promise<void>
 }
 
 /** The subset of the Wails runtime the transport uses. */
@@ -429,6 +430,9 @@ export function createWailsTransport(): Transport {
     doctor: async (ws) => list(await bridge().Doctor(ws)),
     quota: async () => list(await bridge().Quota()),
     version: () => bridge().Version(),
+    openConfig: async (ws) => {
+      await bridge().OpenConfig(ws)
+    },
     subscribe: (handler) => {
       const rt = (window as any).runtime as WailsRuntime | undefined
       if (!rt) return () => {}
