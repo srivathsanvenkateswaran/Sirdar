@@ -298,12 +298,13 @@ export default function Board(props: BoardProps): JSX.Element {
 
   // The status line and the landed rows say how long ago; the clock ticks
   // every second while the newest change is under a minute old, and settles
-  // to a slower beat once the line reads in minutes.
+  // to a slower beat once the line reads in minutes. Each tick books the next,
+  // so a change to the runs re-times the clock without a second one running.
   const [now, setNow] = useState(() => Date.now())
   useEffect(() => {
     const period = now - latest < 60_000 ? 1000 : 15_000
-    const id = setInterval(() => setNow(Date.now()), period)
-    return () => clearInterval(id)
+    const id = setTimeout(() => setNow(Date.now()), period)
+    return () => clearTimeout(id)
   }, [latest, now])
 
   // Mine: the keys the tracker lists for the reader's own account. Asked for
@@ -382,7 +383,7 @@ export default function Board(props: BoardProps): JSX.Element {
           Quick filters
           <ChevronIcon open={filtersOpen} />
         </button>
-        <p className="board-status" dir="ltr">
+        <p className="board-status">
           {loading ? (
             'Loading runs…'
           ) : (
