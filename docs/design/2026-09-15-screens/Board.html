@@ -4,120 +4,196 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
 <title>Sirdar walkthrough · Board</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
-:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
-body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:13px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Figtree,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/* v2 scale: the reference app's register. 16px base, 44px nav rows, 24px card padding, 40px controls. */
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:16px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
 a{color:#3B3AA6}a:hover{color:#2B2A80}
 .app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
-.sidebar{display:flex;flex-direction:column;flex:0 0 208px;padding:8px;background:transparent}
-.brand{display:flex;align-items:center;min-height:32px;padding:0 8px;font-family:var(--sd-font-mono);font-size:13px;font-weight:600;letter-spacing:.06em}
-.nav{display:flex;flex-direction:column;padding-top:8px}
-.navrow{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;margin:2px 0;padding:4px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:13px;font-weight:500;line-height:1.4}
-.navrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
-.navrow svg{width:16px;height:16px;flex:0 0 auto}
-.navcount{margin-left:auto;padding:0 8px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:10.5px;line-height:16px}
-.recent{display:flex;flex-direction:column;margin-top:12px;padding-top:8px;border-top:1px solid var(--sd-rule)}
-.recent-label{padding:0 8px 4px;color:var(--sd-ink-3);font-size:10.5px;letter-spacing:.06em}
-.recentrow{display:flex;align-items:center;gap:8px;min-height:26px;margin:1px 0;padding:3px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:12px}
+/* ---------- sidebar ---------- */
+.sidebar{display:flex;flex-direction:column;flex:0 0 248px;padding:20px 16px 16px;background:transparent}
+.brand{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 12px 4px;font-size:22px;font-weight:600;letter-spacing:-0.01em}
+.brand .fact{margin-left:2px}
+.nav{display:flex;flex-direction:column;gap:2px;padding-top:16px}
+.navrow{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 14px;border-radius:10px;color:var(--sd-ink);font-size:16px;font-weight:500;line-height:1.3}
+.navrow[data-current="true"]{background:var(--sd-nav-active)}
+.navrow svg{width:20px;height:20px;flex:0 0 auto;color:var(--sd-ink)}
+.navcount{margin-left:auto;padding:0 9px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:12px;line-height:20px}
+.recent{display:flex;flex-direction:column;gap:2px;margin-top:20px;padding-top:16px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 14px 6px;color:var(--sd-ink-3);font-size:13px}
+.recentrow{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 14px;border-radius:10px;color:var(--sd-ink-2);font-size:15px}
 .recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
-.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:11.5px;color:var(--sd-ink)}
-.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
-.dot{width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:13.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.dot{width:7px;height:7px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
 .dot[data-live="true"]{background:var(--sd-accent)}
 .dot[data-blocked="true"]{background:var(--sd-st-blocked)}
-.foot{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:8px;border-top:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-card-row)}
-.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border-radius:8px;font-weight:500}
-.switcher svg{width:14px;height:14px;color:var(--sd-ink-3)}
-.quotas{display:flex;flex-direction:column;gap:2px}
-.quota{display:flex;align-items:center;gap:8px;padding:2px 8px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
-.quota .p{font-weight:600;color:var(--sd-ink);width:58px}
-.quota .bar{display:block;flex:1;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.foot{display:flex;flex-direction:column;gap:12px;margin-top:auto;padding:16px;border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px;font-size:15px;font-weight:500}
+.switcher svg{width:16px;height:16px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:6px}
+.quota{display:flex;align-items:center;gap:10px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:80px;white-space:nowrap}
+.quota .bar{display:block;flex:1;height:6px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
 .quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
-.quota .pct{min-width:3ch;text-align:right}
+.quota .pct{min-width:3.5ch;text-align:right}
 .quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
-.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:28px;padding:4px 12px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+/* ---------- controls ---------- */
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:40px;padding:0 20px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:15px;font-weight:500;line-height:1.3;white-space:nowrap}
 .primary[data-disabled="true"]{opacity:.45}
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:4px 12px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 18px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:15px;font-weight:500;line-height:1.3;white-space:nowrap}
 .btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
-.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink-2)}
-.btn svg{width:14px;height:14px}
-.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:8px 8px 8px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-sheet);overflow:hidden}
-.topbar{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-bottom:1px solid var(--sd-rule)}
-.topbar .key{font-family:var(--sd-font-mono);font-size:15px;font-weight:600;letter-spacing:.01em}
-.topbar .kind{font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
-.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
-.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
-.stat{padding:0 10px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
-.stat:first-child{border-left:0;padding-left:0}
-.stat b{font-weight:500;color:var(--sd-ink-2)}
-.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:1.5;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink)}
+.btn.small{min-height:32px;padding:0 12px;font-size:13.5px}
+.btn svg{width:16px;height:16px}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:32px;padding:5px 16px;border-radius:999px;color:var(--sd-ink-2);font-size:14px;line-height:22px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:44px;height:24px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:23px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;min-height:40px;padding:0 14px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:15px;white-space:nowrap}
+.sel svg{width:16px;height:16px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:3px 10px;border:1px solid var(--sd-rule-strong);border-radius:6px;font-size:13px;line-height:1.5;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
+.badge{display:inline-flex;align-items:center;padding:3px 12px;border-radius:999px;font-size:13.5px;line-height:1.5;font-weight:500;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
 .badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
 .badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
 .badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
 .badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
 .badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
-.fact{display:inline-flex;align-items:center;min-height:20px;padding:0 8px;border-radius:4px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:10.5px;font-weight:500;line-height:20px;white-space:nowrap}
+.fact{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:6px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:13px;font-weight:500;line-height:26px;white-space:nowrap}
 .mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
-.h-serif{margin:0;font-family:var(--sd-font-display);font-size:24px;font-weight:400;line-height:1.2}
-.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--sd-rule)}
-.tab{padding:7px 10px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-3);font-size:12px}
+.kbd{padding:0 5px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.5;opacity:.6}
+.icon{width:20px;height:20px;flex:0 0 auto}
+/* ---------- sheet ---------- */
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:12px 12px 12px 0;border:1px solid var(--sd-rule);border-radius:16px;background:var(--sd-sheet);overflow:hidden}
+.page{padding:40px 48px 32px;display:flex;flex-direction:column;min-height:0;flex:1}
+.h-page{margin:0;font-size:32px;font-weight:500;line-height:1.2;letter-spacing:-0.01em}
+.lede{margin:6px 0 0;font-size:16px;color:var(--sd-ink-3)}
+.h-serif{margin:0;font-size:32px;font-weight:500;line-height:1.2;letter-spacing:-0.01em}
+.tabs{display:flex;gap:32px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:14px 0;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-2);font-size:16px}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
-.tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
-.icon{width:16px;height:16px;flex:0 0 auto}
-/* shared controls: one segmented control, one toggle, one select look, one outline chip */
-.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
-.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
-.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
-.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
-.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
-.toggle[data-on="true"]{background:var(--sd-ink)}
-.toggle[data-on="true"]::after{left:16px}
-.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
-.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
-.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
-.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
-.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
-.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
-.filter{display:flex;align-items:center;gap:8px;width:240px;min-height:28px;padding:0 10px;border:1px solid var(--sd-rule);border-radius:8px;background:var(--sd-sunk);color:var(--sd-ink-3);font-size:12.5px;white-space:nowrap;overflow:hidden}
-.filter svg{width:16px;height:16px;flex:0 0 auto}
-.status{margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
+.tab .n{margin-left:8px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.topbar{display:flex;align-items:center;gap:16px;min-height:72px;padding:0 32px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:18px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-3)}
+.stat{padding:0 14px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+/* ---------- cards ---------- */
+.card{border-radius:12px;background:var(--sd-card-row);padding:24px}
+.card-title{margin:0 0 4px;font-size:22px;font-weight:500;line-height:1.25}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px}
+.card-side{font-size:13px;color:var(--sd-ink-3)}
+.big{font-size:36px;font-weight:500;line-height:1.1;letter-spacing:-0.01em}
+.big-label{margin-top:6px;font-size:13.5px;color:var(--sd-ink-3)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:72px;padding:12px 0;border-top:1px solid var(--sd-rule-faint)}
+.srow:first-of-type{border-top:0}
+.srow .lab{font-size:16px;font-weight:500}
+.srow .val{margin-top:2px;font-size:14.5px;color:var(--sd-ink-2)}
+.srow .help{margin-top:2px;font-size:13.5px;color:var(--sd-ink-3);max-width:60ch}
+/* ---------- v2 addendum, from the reference's Notetaker / Insights / Settings screens ---------- */
+.h-serif{font-family:var(--sd-font-display);font-size:34px;font-weight:400;line-height:1.15;letter-spacing:0}
+.h-serif-card{margin:0;font-family:var(--sd-font-display);font-size:30px;font-weight:400;line-height:1.15}
+.group-label{display:flex;align-items:center;gap:12px;font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink-2)}
+.group-label::after{content:"";flex:1;border-top:1px dashed var(--sd-rule-strong)}
+.group-label.plain::after{display:none}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.page-head .actions{display:flex;align-items:center;gap:12px}
+.banner{display:flex;align-items:center;gap:12px;padding:16px 20px;border-radius:12px;background:rgba(14,111,102,.10);color:var(--sd-st-triaged);font-size:16px}
+.banner b{font-weight:600}
+.banner .sep{color:var(--sd-st-triaged);opacity:.6}
+.banner[data-tone="blocked"]{background:rgba(161,92,7,.10);color:var(--sd-st-blocked)}
+.banner[data-tone="failed"]{background:rgba(176,36,24,.10);color:var(--sd-st-failed)}
+.item{position:relative;display:flex;align-items:center;gap:16px;padding:16px 20px 16px 24px;border-radius:12px;background:var(--sd-card-row)}
+.item::before{content:"";position:absolute;left:12px;top:16px;bottom:16px;width:3px;border-radius:2px;background:var(--sd-rule-strong)}
+.item[data-tone="live"]::before{background:var(--sd-accent)}
+.item[data-tone="blocked"]::before{background:var(--sd-st-blocked)}
+.item[data-tone="done"]::before{background:var(--sd-st-done)}
+.item[data-tone="failed"]::before{background:var(--sd-st-failed)}
+.item .ic{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:var(--sd-sunk);color:var(--sd-ink-2);flex:0 0 auto}
+.item .ic svg{width:20px;height:20px}
+.item .t{font-size:17px;font-weight:500;line-height:1.3}
+.item .m{margin-top:2px;font-size:15px;color:var(--sd-ink-2)}
+.search{display:flex;align-items:center;gap:16px;min-height:64px;padding:0 24px;border:1px solid var(--sd-rule);border-radius:16px;background:var(--sd-sheet);font-size:17px;color:var(--sd-ink-3)}
+.search .aside{margin-left:auto;font-size:15px;color:var(--sd-ink-2);white-space:nowrap}
+.srow.tall{min-height:104px;padding:20px 0}
+.srow.tall .lab{font-size:18px}
+.srow.tall .val{font-size:16px}
+.btn.wide{min-width:160px;min-height:48px;font-size:16px}
+.note-prose{font-size:16.5px;line-height:1.7;color:var(--sd-ink)}
+.note-prose b{font-weight:600}
+/* ---------- provider marks ---------- */
+/* Original monoline glyphs, one per provider, on the provider's signature tint. Not the vendors' logos: those are
+   trademarks with their own guidelines; a mark here is a drop-in <svg> so the official one can replace it later. */
+.pv{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex:0 0 auto;color:#FFFDF7}
+.pv svg{width:16px;height:16px}
+.pv.lg{width:40px;height:40px;border-radius:10px}.pv.lg svg{width:22px;height:22px}
+.pv.sm{width:22px;height:22px;border-radius:6px}.pv.sm svg{width:13px;height:13px}
+.pv[data-p="claude"]{background:#D97757}
+.pv[data-p="codex"],.pv[data-p="openai"]{background:#17181C}
+.pv[data-p="copilot"]{background:#24292F}
+.pv[data-p="antigravity"],.pv[data-p="gemini"],.pv[data-p="agy"]{background:#1A73E8}
+.pv[data-p="qwen"]{background:#6E4BD8}
+.pv[data-p="cursor"]{background:#3B3AA6}
+.pv[data-p="opencode"]{background:#0E6F66}
+.pv[data-p="kimi"]{background:#0B57D0}
+.pvrow{display:inline-flex;align-items:center;gap:10px}
+.pvrow .pn{font-weight:500}
+.pvrow .pm{color:var(--sd-ink-3);font-family:var(--sd-font-mono);font-size:13px}
+.page-head .btn svg{width:16px;height:16px}
+.iconbtn{width:40px;padding:0}
+.row2{display:flex;align-items:center;gap:20px;margin-top:24px}
+.search-well{display:flex;align-items:center;width:240px;min-height:40px;padding:0 12px;border-radius:8px;background:var(--sd-sunk);color:var(--sd-ink-3);box-sizing:border-box}
+.search-well svg{width:18px;height:18px}
+.quick{display:inline-flex;align-items:center;gap:6px;font-size:16px;color:var(--sd-ink-2)}
+.quick svg{width:16px;height:16px}
+.status{margin-left:auto;font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
 .status b{font-weight:500;color:var(--sd-ink-2)}
-.lanes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;flex:1;min-height:0;padding:12px 12px 0}
-.lane{display:flex;flex-direction:column;min-width:0;min-height:0;border-top:2px solid var(--sd-st-queue);border-radius:12px;background:var(--sd-sunk);overflow:hidden}
-.lane[data-h="live"]{border-top-color:var(--sd-accent)}
-.lane[data-h="blocked"]{border-top-color:var(--sd-st-blocked)}
-.lane[data-h="triaged"]{border-top-color:var(--sd-st-triaged)}
-.lane[data-h="done"]{border-top-color:var(--sd-st-done)}
-.lane[data-h="failed"]{border-top-color:var(--sd-st-failed)}
-.lane .head{display:flex;align-items:baseline;gap:8px;padding:8px 10px 6px;font-size:12.5px;font-weight:500}
-.lane .head .n{margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;font-weight:400;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
-.lane .cards{display:flex;flex-direction:column;gap:6px;padding:0 6px 6px;min-height:0;overflow:hidden}
-.card{display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface)}
-.card[data-live="true"]{border-left:2px solid var(--sd-accent)}
-.card .top{display:flex;align-items:baseline;gap:6px;font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
-.card .key{font-size:11.5px;font-weight:600}
-.card .kind{font-size:10.5px;color:var(--sd-ink-3)}
-.card .title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--sd-ink-2);font-size:12px;line-height:1.4}
-.card .reason{padding:1px 0 1px 8px;border-left:2px solid var(--sd-rule-strong);color:var(--sd-ink-3);font-size:11.5px;line-height:1.4}
-.card[data-live="true"] .reason{border-left-color:var(--sd-accent-soft)}
-.card .cf{display:flex;align-items:center;gap:6px;margin-top:1px;font-family:var(--sd-font-mono);font-size:11px;font-variant-numeric:tabular-nums}
-.card .cf .badge{font-size:11px;padding:0 7px}
-.card .clock{color:var(--sd-ink-2)}
-.card[data-live="true"] .clock{color:var(--sd-accent)}
-.card .cost{margin-left:auto;color:var(--sd-ink-3)}
-.inbound{display:flex;flex-direction:column;max-height:150px;margin:10px 12px 12px;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);overflow:hidden}
-.inbound .head{display:flex;align-items:baseline;gap:8px;padding:7px 12px;font-size:12.5px;font-weight:500}
-.inbound .head .n{font-family:var(--sd-font-mono);font-size:11px;font-weight:400;color:var(--sd-ink-3)}
-.irow{display:grid;grid-template-columns:5.2rem 4.6rem 5rem minmax(0,1fr) auto;align-items:center;column-gap:16px;min-height:30px;padding:0 12px;border-top:1px solid var(--sd-rule-faint);font-size:12px}
-.irow .src{font-weight:600}
-.irow .key,.irow .at{font-family:var(--sd-font-mono);font-size:11.5px;font-variant-numeric:tabular-nums}
-.irow .at{color:var(--sd-ink-3)}
-.irow .out{font-family:var(--sd-font-mono);font-size:10.5px;font-weight:500}
-.irow .out[data-o="started"]{color:var(--sd-accent)}
-.irow .out[data-o="skipped"]{color:var(--sd-st-blocked)}
-.irow .out[data-o="rejected"]{color:var(--sd-st-failed)}
-.irow .why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.cols{display:flex;gap:16px;flex:1;min-height:0;margin:24px -48px 0 0;overflow:hidden}
+.col{display:flex;flex-direction:column;flex:0 0 248px;box-sizing:border-box;padding:8px;border-radius:8px;background:var(--sd-card-row);overflow:hidden}
+.col .rail{display:block;height:3px;border-radius:2px;background:var(--sd-st-queue)}
+.col[data-h="live"] .rail{background:var(--sd-accent)}
+.col[data-h="blocked"] .rail{background:var(--sd-st-blocked)}
+.col[data-h="triaged"] .rail{background:var(--sd-st-triaged)}
+.col[data-h="done"] .rail{background:var(--sd-st-done)}
+.col[data-h="failed"] .rail{background:var(--sd-st-failed)}
+.colhead{display:flex;align-items:center;gap:8px;padding:12px 8px 12px;font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink-3);line-height:1.3}
+.colhead .n{font-variant-numeric:tabular-nums}
+.col .cards{display:flex;flex-direction:column;gap:8px;min-height:0;overflow:hidden}
+.tcard{display:flex;flex-direction:column;align-items:flex-start;padding:14px 16px;border:1px solid var(--sd-rule);border-radius:6px;background:var(--sd-sheet)}
+.tcard .title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;font-size:16px;font-weight:400;line-height:1.35;color:var(--sd-ink)}
+.chip{margin-top:10px;padding:3px 8px;border-radius:4px;font-size:11.5px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;line-height:1.3;background:var(--sd-highlight);color:var(--sd-highlight-ink)}
+.chip[data-k="rca"]{background:rgba(14,111,102,.16);color:var(--sd-st-triaged)}
+.chip[data-k="fix"]{background:rgba(161,92,7,.16);color:var(--sd-st-blocked)}
+.tcard .cfoot{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;margin-top:12px}
+.tcard .st{display:inline-flex;align-items:center;gap:6px;font-size:14px;color:var(--sd-st-queue)}
+.tcard .st svg{width:16px;height:16px;flex:0 0 auto}
+.tcard .st[data-s="running"]{color:var(--sd-st-live)}
+.tcard .st[data-s="blocked"]{color:var(--sd-st-blocked)}
+.tcard .st[data-s="completed"]{color:var(--sd-st-triaged)}
+.tcard .st[data-s="done"]{color:var(--sd-st-done)}
+.tcard .st[data-s="failed"]{color:var(--sd-st-failed)}
+.tcard .clock{margin-left:2px;font-family:var(--sd-font-mono);font-size:13px;font-variant-numeric:tabular-nums}
+.tcard .who{display:inline-flex;align-items:center;gap:8px}
+.tcard .key{font-family:var(--sd-font-mono);font-size:13.5px;font-weight:500;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
+.landed{display:flex;flex-direction:column;gap:14px;margin-top:24px}
+.landed .items{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.landed .item .body{min-width:0;flex:1}
+.landed .item .t{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.landed .item .m .key{font-family:var(--sd-font-mono);font-size:13.5px;font-variant-numeric:tabular-nums;color:var(--sd-ink)}
+.landed .item .m .out{font-weight:500}
+.landed .item .m .out[data-o="started"]{color:var(--sd-accent)}
+.landed .item .m .out[data-o="skipped"]{color:var(--sd-st-blocked)}
+.landed .item .m .out[data-o="rejected"]{color:var(--sd-st-failed)}
   </style>
 <style>
 .demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
@@ -130,6 +206,12 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
 .demo-from b{color:#FAF7EC;font-weight:500}
 [data-demo-link]{cursor:pointer}
+@keyframes sd-enter{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+@keyframes sd-modal{from{opacity:0;transform:scale(.98)}to{opacity:1;transform:none}}
+.sheet{animation:sd-enter 320ms cubic-bezier(.22,.61,.36,1) both}
+.modal{animation:sd-modal 300ms cubic-bezier(.22,.61,.36,1) both}
+.scrim{animation:sd-enter 200ms ease both}
+@media (prefers-reduced-motion:reduce){.sheet,.modal,.scrim{animation-duration:1ms}}
 body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
 </style>
 </head>
@@ -137,14 +219,14 @@ body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
 <div class="demo-bar"><span class="step">4 of 10</span><span class="name">Board</span><span class="what">Every run as a lane by state, and the inbound strip that says which tickets the webhooks started, skipped or rejected.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Review.html">Back</a><a href="Register.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the sidebar. Click any card to open its session.</div>
 <div class="app">
 <div class="sidebar">
-  <div class="brand">SIRDAR</div>
+  <div class="brand">Sirdar <span class="fact">acme-support</span></div>
   <nav class="nav">
-    <div class="navrow" data-cur="sessions"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
-    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
-    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
-    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
-    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
-    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+    <div class="navrow" data-cur="sessions"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
   </nav>
   <div class="recent">
     <div class="recent-label">Recent sessions</div>
@@ -154,7 +236,7 @@ body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
     <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
   </div>
   <div class="foot">
-    <div class="switcher"><span>acme-support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="switcher"><span>Plan usage</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
     <div class="quotas">
       <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
       <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
@@ -164,56 +246,39 @@ body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
   </div>
 </div>
 <div class="sheet">
-  <div class="topbar">
-    <span class="filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Filter by key, title or provider</span>
-    <span class="seg"><span data-on="true">Mine</span><span>All</span></span>
-    <span class="status"><b>8</b> runs · <b>1</b> live · updated 12s ago</span>
-  </div>
-  <div class="lanes">
-    <div class="lane" data-h="queue">
-      <div class="head">Queue<span class="n">2</span></div>
-      <div class="cards">
-        <div class="card"><div class="top"><span class="key">SBX-8</span><span class="kind">triage</span></div><div class="title">Supplier price import rounds to the nearest riyal</div><div class="cf"><span class="badge">queued</span><span class="clock">00:00</span><span class="cost">$0.00</span></div></div>
-        <div class="card"><div class="top"><span class="key">SBX-7</span><span class="kind">triage</span></div><div class="title">Monthly statement shows a paid invoice as overdue</div><div class="reason">behind SBX-4 · one live run at a time</div><div class="cf"><span class="badge">queued</span><span class="clock">00:00</span><span class="cost">$0.00</span></div></div>
-      </div>
+  <div class="page">
+    <div class="page-head"><h1 class="h-page">Board</h1><div class="actions"><span class="btn pale"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"></path><circle cx="16" cy="6" r="2"></circle><circle cx="10" cy="12" r="2"></circle><circle cx="18" cy="18" r="2"></circle></svg>Filters</span><span class="btn ghost iconbtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="5" r="1" fill="currentColor"></circle><circle cx="12" cy="12" r="1" fill="currentColor"></circle><circle cx="12" cy="19" r="1" fill="currentColor"></circle></svg></span></div></div>
+    <div class="row2"><span class="search-well"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg></span><span class="quick">Quick filters<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"></path></svg></span><span class="status"><b>8</b> runs · <b>1</b> live · updated 12s ago</span></div>
+    <div class="cols">
+      <div class="col" data-h="queue"><span class="rail"></span><div class="colhead">Queue<span class="n">2</span></div><div class="cards">
+        <div class="tcard"><div class="title">Supplier price import rounds to the nearest riyal</div><span class="chip" data-k="triage">triage</span><div class="cfoot"><span class="st" data-s="queued"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3.6 3"></circle></svg><span>queued</span></span><span class="who"><span class="key">SBX-8</span><span class="pv sm" data-p="cursor" title="Cursor"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 8-6 1.5L9.5 19z"/></svg></span></span></div></div>
+        <div class="tcard"><div class="title">Monthly statement shows a paid invoice as overdue</div><span class="chip" data-k="triage">triage</span><div class="cfoot"><span class="st" data-s="queued"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9" stroke-dasharray="3.6 3"></circle></svg><span>queued</span></span><span class="who"><span class="key">SBX-7</span><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span></span></div></div>
+      </div></div>
+      <div class="col" data-h="live"><span class="rail"></span><div class="colhead">Gathering<span class="n">1</span></div><div class="cards">
+        <div class="tcard"><div class="title">Reorder reminder fires twice for the same product</div><span class="chip" data-k="triage">triage</span><div class="cfoot"><span class="st" data-s="running"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M10 8.5v7l5.5-3.5z"></path></svg><span>running</span><span class="clock">01:47</span></span><span class="who"><span class="key">SBX-4</span><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span></span></div></div>
+      </div></div>
+      <div class="col" data-h="blocked"><span class="rail"></span><div class="colhead">Blocked<span class="n">1</span></div><div class="cards">
+        <div class="tcard"><div class="title">Product 00219 stock shows 1 more than the movement report</div><span class="chip" data-k="fix">fix</span><div class="cfoot"><span class="st" data-s="blocked"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="M9.5 9.5a2.5 2.5 0 1 1 3.6 2.2c-.8.4-1.1.9-1.1 1.6"></path><path d="M12 16.5h.01"></path></svg><span>blocked</span><span class="clock">04:12</span></span><span class="who"><span class="key">SBX-1</span><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span></span></div></div>
+      </div></div>
+      <div class="col" data-h="triaged"><span class="rail"></span><div class="colhead">Triaged<span class="n">2</span></div><div class="cards">
+        <div class="tcard"><div class="title">Stock count export skips products with a zero price</div><span class="chip" data-k="rca">rca</span><div class="cfoot"><span class="st" data-s="completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.2 2.4 2.4 4.8-4.8"></path></svg><span>completed</span></span><span class="who"><span class="key">SBX-3</span><span class="pv sm" data-p="copilot" title="GitHub Copilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/></svg></span></span></div></div>
+        <div class="tcard"><div class="title">Invoice total drops the VAT line when a discount is applied</div><span class="chip" data-k="triage">triage</span><div class="cfoot"><span class="st" data-s="completed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.2 2.4 2.4 4.8-4.8"></path></svg><span>completed</span></span><span class="who"><span class="key">SBX-2</span><span class="pv sm" data-p="codex" title="Codex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="3"/></svg></span></span></div></div>
+      </div></div>
+      <div class="col" data-h="done"><span class="rail"></span><div class="colhead">Done<span class="n">1</span></div><div class="cards">
+        <div class="tcard"><div class="title">Credit note lands on the wrong customer account</div><span class="chip" data-k="fix">fix</span><div class="cfoot"><span class="st" data-s="done"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12.2 2.4 2.4 4.8-4.8"></path></svg><span>done</span></span><span class="who"><span class="key">SBX-5</span><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span></span></div></div>
+      </div></div>
+      <div class="col" data-h="failed"><span class="rail"></span><div class="colhead">Failed<span class="n">1</span></div><div class="cards">
+        <div class="tcard"><div class="title">Barcode lookup returns the discontinued variant</div><span class="chip" data-k="triage">triage</span><div class="cfoot"><span class="st" data-s="failed"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"></circle><path d="m9 9 6 6M15 9l-6 6"></path></svg><span>failed</span></span><span class="who"><span class="key">SBX-6</span><span class="pv sm" data-p="qwen" title="Qwen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5 4 4 0 0 1 17 17z"/></svg></span></span></div></div>
+      </div></div>
     </div>
-    <div class="lane" data-h="live">
-      <div class="head">Gathering<span class="n">1</span></div>
-      <div class="cards">
-        <div class="card" data-live="true"><div class="top"><span class="key">SBX-4</span><span class="kind">triage</span></div><div class="title">Reorder reminder fires twice for the same product</div><div class="reason">reading 3 helpdesk messages · zendesk</div><div class="cf"><span class="badge" data-s="running">running</span><span class="clock">01:47</span><span class="cost">$0.08</span></div></div>
-      </div>
-    </div>
-    <div class="lane" data-h="blocked">
-      <div class="head">Blocked<span class="n">1</span></div>
-      <div class="cards">
-        <div class="card"><div class="top"><span class="key">SBX-1</span><span class="kind">fix</span></div><div class="title">Product 00219 stock shows 1 more than the movement report</div><div class="reason">asks: propose a one-off recount for affected SKUs, or leave balances alone?</div><div class="cf"><span class="badge" data-s="blocked">blocked</span><span class="clock">04:12</span><span class="cost">$0.41</span></div></div>
-      </div>
-    </div>
-    <div class="lane" data-h="triaged">
-      <div class="head">Triaged<span class="n">2</span></div>
-      <div class="cards">
-        <div class="card"><div class="top"><span class="key">SBX-3</span><span class="kind">rca</span></div><div class="title">Stock count export skips products with a zero price</div><div class="reason">export filter drops rows where price is 0, not quantity</div><div class="cf"><span class="badge" data-s="completed">completed</span><span class="clock">06:30</span><span class="cost">$0.52</span></div></div>
-        <div class="card"><div class="top"><span class="key">SBX-2</span><span class="kind">triage</span></div><div class="title">Invoice total drops the VAT line when a discount is applied</div><div class="cf"><span class="badge" data-s="completed">completed</span><span class="clock">02:58</span><span class="cost">$0.12</span></div></div>
-      </div>
-    </div>
-    <div class="lane" data-h="done">
-      <div class="head">Done<span class="n">1</span></div>
-      <div class="cards">
-        <div class="card"><div class="top"><span class="key">SBX-5</span><span class="kind">fix</span></div><div class="title">Credit note lands on the wrong customer account</div><div class="reason">branch sirdar/SBX-5 · 12 tests passed</div><div class="cf"><span class="badge" data-s="done">done</span><span class="clock">09:04</span><span class="cost">$0.77</span></div></div>
-      </div>
-    </div>
-    <div class="lane" data-h="failed">
-      <div class="head">Failed<span class="n">1</span></div>
-      <div class="cards">
-        <div class="card"><div class="top"><span class="key">SBX-6</span><span class="kind">triage</span></div><div class="title">Barcode lookup returns the discontinued variant</div><div class="reason">jira timed out after 30s</div><div class="cf"><span class="badge" data-s="failed">failed</span><span class="clock">00:41</span><span class="cost">$0.00</span></div></div>
-      </div>
+  <div class="landed">
+    <div class="group-label">Landed today</div>
+    <div class="items">
+    <div class="item" data-tone="live"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-3a8 8 0 0 1 16 0v3"></path><rect x="3" y="13" width="4" height="6" rx="1.5"></rect><rect x="17" y="13" width="4" height="6" rx="1.5"></rect><path d="M19 19a3 3 0 0 1-3 3h-3"></path></svg></span><div class="body"><div class="t">Reorder reminder fires twice for the same product</div><div class="m"><span class="key">SBX-4</span> · zendesk · <span class="out" data-o="started">started</span> · 2 min ago</div></div></div>
+    <div class="item" data-tone="blocked"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"></path><path d="M13 5v14"></path></svg></span><div class="body"><div class="t">Monthly statement shows a paid invoice as overdue</div><div class="m"><span class="key">SBX-7</span> · jira · <span class="out" data-o="skipped">skipped</span> · assignee is not you · 7 min ago</div></div></div>
+    <div class="item" data-tone="failed"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 6v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-6z"></path><path d="M13 5v14"></path></svg></span><div class="body"><div class="t">Barcode lookup returns the discontinued variant</div><div class="m"><span class="key">SBX-6</span> · jira · <span class="out" data-o="rejected">rejected</span> · cooldown 10m · 14 min ago</div></div></div>
     </div>
   </div>
-  <div class="inbound">
-    <div class="head">Inbound<span class="n">3</span></div>
-    <div class="irow"><span class="src">zendesk</span><span class="key">SBX-4</span><span class="out" data-o="started">started</span><span class="why">started SBX-4</span><span class="at">12:41</span></div>
-    <div class="irow"><span class="src">jira</span><span class="key">SBX-7</span><span class="out" data-o="skipped">skipped</span><span class="why">assignee is not you</span><span class="at">12:36</span></div>
-    <div class="irow"><span class="src">jira</span><span class="key">SBX-6</span><span class="out" data-o="rejected">rejected</span><span class="why">cooldown 10m</span><span class="at">12:29</span></div>
   </div>
 </div>
 </div>
