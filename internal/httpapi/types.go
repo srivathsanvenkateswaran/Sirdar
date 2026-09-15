@@ -29,6 +29,7 @@ type (
 	FixInfo              = app.FixInfo
 	EvalOptions          = app.EvalOptions
 	EvalReport           = app.EvalReport
+	RetroReport          = app.RetroReport
 	GoldenEntry          = app.GoldenEntry
 	ConfigSummary        = app.ConfigSummary
 	NotifySummary        = app.NotifySummary

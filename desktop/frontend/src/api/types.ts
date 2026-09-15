@@ -48,6 +48,44 @@ export interface EvalResult {
 }
 export interface EvalReport { path: string; at: string; provider: string; model: string; goldenDir: string; results: EvalResult[] }
 
+// --- the retro report ---
+/**
+ * A retro replays a ticket at the commit its fix branched from and scores
+ * what came back against the pull request a human merged. Every number here
+ * is arithmetic on two diffs, except `rubric`, which is one model's opinion
+ * and is off unless it was asked for.
+ */
+export interface EvalJaccard { intersection: number; union: number; score: number }
+/** One measure taken on both sides. There is no score: the two numbers are the point. */
+export interface EvalLinePair { agent: number; pr: number }
+export interface RetroStage {
+  runId?: string; state?: string; reason?: string;
+  turns?: number; costUsd?: number; minutes?: number;
+  docPath?: string; notePath?: string
+}
+export interface RetroFixStage extends RetroStage { diffPath?: string; commit?: string; buildPassed?: boolean }
+export interface RetroTriageScore {
+  classification: string; confidence: string;
+  codeRefsPathOverlap: EvalFraction; prFilesHit: EvalFraction;
+  missedFiles?: string[]; strayRefs?: string[]
+}
+export interface RetroFixScore {
+  filesJaccard: EvalJaccard; hunkOverlap: EvalFraction;
+  linesAdded: EvalLinePair; linesRemoved: EvalLinePair;
+  buildPassed?: boolean; diffPath?: string; agentFiles?: string[]
+}
+export interface RetroRubric { sameRootCause: boolean; sameFix: boolean; verdict: string; reasoning: string }
+export interface RetroResult {
+  key: string; baseCommit?: string; asOf?: string; prUrls?: string[]; reason?: string;
+  triage?: RetroStage; fix?: RetroFixStage; rca?: RetroStage;
+  triageScore?: RetroTriageScore; fixScore?: RetroFixScore; rubric?: RetroRubric;
+  costUsd: number; rubricCostUsd?: number
+}
+export interface RetroReport {
+  path: string; at: string; provider: string; model: string; goldenDir: string;
+  withRca: boolean; rubric: boolean; results: RetroResult[]
+}
+
 // --- the read-only configuration summary ---
 /**
  * What Settings shows of the workspace's notify and webhooks blocks. Every
@@ -75,7 +113,7 @@ export interface Overrides { provider?: string; model?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }
 export interface RCAStart extends Overrides { prUrl?: string; resolution?: string }
 export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; base?: string; acceptDeviation?: boolean }
-export interface EvalStart extends Overrides { concurrency?: number }
+export interface EvalStart extends Overrides { concurrency?: number; retro?: boolean; withRca?: boolean; rubric?: boolean }
 export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;
   queue(ws: string, f?: { assignee?: string; status?: string; limit?: number }): Promise<Ticket[]>;
@@ -87,6 +125,8 @@ export interface Transport {
   startFix(ws: string, key: string, o?: FixStart): Promise<{ jobId: string }>;
   startEval(ws: string, keys?: string[], o?: EvalStart): Promise<{ jobId: string }>;
   evalReports(ws: string): Promise<EvalReport[]>;
+  /** The newest retro report, or null when the workspace has run none. */
+  latestRetro(ws: string): Promise<RetroReport | null>;
   golden(ws: string): Promise<GoldenEntry[]>;
   addGolden(ws: string, o: { key?: string; runId?: string }): Promise<GoldenEntry>;
   configSummary(ws: string): Promise<ConfigSummary>;

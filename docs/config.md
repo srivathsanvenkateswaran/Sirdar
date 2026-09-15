@@ -67,7 +67,7 @@ rather than being silently ignored.
 | `budget.stallMinutes` | int | `6` | Minutes of complete silence from the provider before the run is cancelled and marked `failed` with `stalled: no activity for Nm`; `0` turns the check off. See Budgets below |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
-| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
+| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `npx tsc --noEmit*`, `go build*`, `go test*`, `go vet*`, `gofmt -l*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
 | `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
@@ -80,6 +80,11 @@ rather than being silently ignored.
 | `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
+| `attachments.transcribe` | object, optional | unset | Turn audio attachments into text with a command you name; absent means no audio is transcribed. See Audio transcription below |
+| `attachments.transcribe.command` | string | none (required with the block) | The command template, split into argv and never run through a shell: `{in}` is the audio file, `{out}` an output path without an extension, `{outdir}` a directory to write into |
+| `attachments.transcribe.maxSeconds` | int | `300` | Audio longer than this is skipped with a warning; `0` turns the check off. The length is read with `ffprobe`, so without `ffprobe` on `PATH` there is no check |
+| `attachments.transcribe.maxFiles` | int | `30` | Attachments one ticket may transcribe; the rest are named as unread. `0` means no cap |
+| `attachments.transcribe.formats` | list of string | `ogg`, `opus`, `mp3`, `m4a`, `wav`, `mp4` | Extensions treated as audio |
 | `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `fix.inPlace` | bool | `false` | Run the fix session in the operator's own working tree (`git checkout -B`) instead of a linked worktree under `.sirdar/worktrees/<run-id>`; see Fix worktrees below |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
@@ -620,8 +625,11 @@ permissions:
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
+    - "npx tsc --noEmit*"
     - "go build*"
     - "go test*"
+    - "go vet*"
+    - "gofmt -l*"
     - "make *"
 ```
 
@@ -692,11 +700,12 @@ through.
 
 ### What the allow-list does not confine
 
-`make *`, `go test*`, `npm test*` and `dotnet test*` run the workspace's own build system, and
-a build system runs whatever the repository tells it to: a Makefile target, a `go:generate`
-directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of that, and no
-allow-list can — approving `make test` is approving the Makefile on the branch the session is
-standing on.
+`make *`, `go test*`, `npm test*`, `npx tsc --noEmit*` and `dotnet test*` run the workspace's own
+build system, and a build system runs whatever the repository tells it to: a Makefile target, a
+`go:generate` directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of
+that, and no allow-list can — approving `make test` is approving the Makefile on the branch the
+session is standing on. `go vet*` and `gofmt -l*` are the exception in this list: both are
+read-only static checks over the source tree and run no repository-defined code.
 
 That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
 what it changed or its report is worthless, and the trust it asks for is the trust you already
@@ -722,7 +731,48 @@ people. Leave it off anywhere the pull request is public, or read by anyone who 
 with that customer's conversation. The triage note is always linked either way, through the
 tracker and helpdesk URLs in the body.
 
-## Fix worktrees
+## Worktrees
+
+Two flows stand a session somewhere other than the tree you are in, and both put the directory at
+`<root>/.sirdar/worktrees/<run-id>`: `sirdar fix`, so the agent's edits land somewhere nothing
+else is reading, and `sirdar triage --at` / `sirdar rca --at`, so a session reads the repository
+as it stood at a named commit.
+
+`sirdar init` excludes `.sirdar/worktrees/` in `.git/info/exclude`. That file lives in the
+repository's common git directory, so the one exclusion covers every linked worktree as well as
+the main tree.
+
+### `--at COMMIT` on triage and rca
+
+```
+sirdar triage OMNI-1 --at 4f2c1ab
+sirdar rca OMNI-1 --at 4f2c1ab --keep-worktree
+```
+
+checks that commit out at a detached HEAD — no branch is made or moved, because a read-only
+session has nothing a branch name would mean — and runs the session there. Anything
+`git rev-parse` accepts will do; the resolved sha is what gets recorded. A commit this repository
+does not have is refused during preparation, before the ticket is fetched.
+
+What follows the worktree is where the session stands and what its writes are confined to. What
+does not is the workspace's own `.sirdar/`: the configuration, the playbooks and the note
+templates are read from the main tree whichever commit the session stands at, because they are
+what you configured rather than what the repository happened to carry a year ago. The run
+directory is in the main tree too.
+
+The tree you are standing in is not touched — not its HEAD, not its index, not a file the older
+commit disagrees about. And nothing about the confinement changes: a triage at a commit is as
+read-only as a triage at HEAD, with the same disallowed tools and the same permission policy,
+pointed at the worktree.
+
+The run state records `At: <sha>`, and the note's frontmatter carries `at: <sha>` — nothing else
+in a note would tell a reader that its code references are about code that has since moved.
+
+The worktree is removed when the run ends. `--keep-worktree` leaves it, for reading what the
+session was reading; so does a run that ended `blocked`, since a `sirdar resume` has to stand
+where the first session stood.
+
+### Fix worktrees
 
 `sirdar fix` runs its session in a linked git worktree at `<root>/.sirdar/worktrees/<run-id>`,
 made with `git worktree add` and taken away with `git worktree remove` once the branch is
@@ -738,8 +788,8 @@ request are made from the worktree, since that is where the branch is checked ou
 
 A worktree is removed when the run succeeds and kept when it does not: a run blocked on a
 deviation leaves it in place, and `sirdar fix KEY --accept-deviation` publishes the recorded
-commit out of it. `sirdar init` excludes `.sirdar/worktrees/` in `.git/info/exclude`, which lives
-in the repository's common git directory and so covers every linked worktree too.
+commit out of it. A `sirdar fix --local` run keeps it as well — that run stops at the commit, and
+the commit and the `fix.diff` beside it are its whole output (`docs/fix.md`).
 
 ```yaml
 fix:
@@ -1027,8 +1077,74 @@ whatever point the provider offers to be asked.
 An attachment the helpdesk downloaded is kept only if the session could open it. Images,
 PDFs, `text/*`, JSON, CSV, XML and ZIP are kept; audio, video and anything else is deleted
 from the bundle, as is any file over `attachments.maxBytes`. Each dropped file is named, with
-its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
-could not read instead of hunting for a transcoder.
+its size, in the run's warnings, in the prompt, and in the triage note's "Attachments not
+reviewed" line, so the agent reports it as evidence it could not read instead of hunting for
+a transcoder.
+
+Audio is the one type with a second chance: see Audio transcription below.
+
+## Audio transcription
+
+A helpdesk serving a WhatsApp number gets voice notes. One ticket in this workspace's first
+live runs carried 28 of them, all `audio/ogg`, all Arabic, none of which the session could
+open — the triage came out low-confidence because the complaint itself was in the audio.
+
+With an `attachments.transcribe` block, each audio attachment is run through a command you
+name during bundle assembly, and the text lands beside the file as
+`<attachment>.transcript.txt`:
+
+```yaml
+attachments:
+  transcribe:
+    command: whisper-cli -m ~/models/ggml-large-v3.bin -l auto -otxt -of {out} {in}
+    maxSeconds: 300
+    maxFiles: 30
+    formats: [ogg, opus, mp3, m4a, wav, mp4]
+```
+
+The block is absent by default, and absent means no audio is transcribed.
+
+**Where the audio goes is your command's business, not Sirdar's.** Sirdar ships no model,
+downloads nothing, and calls no transcription service. The example above is
+[whisper.cpp](https://github.com/ggml-org/whisper.cpp), which runs the model on this machine
+and sends nothing anywhere. A command that posts to a hosted API — OpenAI's, a cloud vendor's
+— sends the customer's recorded voice to that API, under whatever terms you agreed with them.
+Sirdar runs the command you configured and makes no other judgement about it.
+
+The `whisper` CLI shape works too, since `{outdir}` is read as well as `{out}`:
+
+```yaml
+    command: whisper {in} --language auto --output_format txt --output_dir {outdir}
+```
+
+**How the command is run.** The template is split into argv once, at config load — quote a
+path with spaces, as a shell would — and executed directly. There is no shell, so a pipe, a
+redirect or a `&&` is refused at load rather than passed to the tool as a literal argument;
+put the pipeline in a script and name the script here. Each placeholder is substituted inside
+its own token, so `-of {out}` and `--output_dir={outdir}` both work and a path with spaces
+stays one argument. The command gets stdin closed, and an environment of `PATH`, `HOME` and
+`LANG` alone — none of the credentials the run resolved for the helpdesk or the model
+endpoint. Each file has two minutes, and the whole bundle has ten.
+
+**What ends up in the bundle.** A transcribed attachment stays where it was, with the
+transcript written next to it under the same name plus `.transcript.txt`. The first line of
+the transcript names the tool that produced it and the language, when the tool reported one
+or the command pinned one with `-l`. `ticket.json` marks the attachment transcribed and
+records the transcript's path, the rendered conversation points at it, and the prompt tells
+the session the transcripts exist, that they are machine-produced, and that quoting one means
+saying so. The audio is kept rather than deleted: a note quoting a voice note is only
+checkable if someone can still listen to it.
+
+**Failures are per-file warnings, never run failures.** A command that exits non-zero, a file
+over `maxSeconds`, the `maxFiles` cap or the ten-minute budget — each leaves that attachment
+exactly where an unreadable attachment has always been: dropped from the bundle, named in the
+run's warnings and in the prompt, and listed in the note as an attachment nobody reviewed. A
+transcribed file is never in that list.
+
+`sirdar doctor` has a `transcribe` row: whether a command is configured, whether its first
+token is on `PATH`, and the limits in force. It also says when `ffprobe` is missing, because
+`maxSeconds` is read with `ffprobe` and without it no length check can be made — the
+two-minute per-file timeout is then the only bound on a long recording.
 
 ## Languages
 

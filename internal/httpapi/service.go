@@ -28,6 +28,7 @@ type Service interface {
 	StartFix(ctx context.Context, wsID, key string, o FixOptions) (JobID, error)
 	StartEval(ctx context.Context, wsID string, keys []string, o EvalOptions) (JobID, error)
 	EvalReports(wsID string) ([]EvalReport, error)
+	LatestRetro(wsID string) (*RetroReport, error)
 	Golden(wsID string) ([]GoldenEntry, error)
 	AddGolden(wsID, key, runID string) (GoldenEntry, error)
 	ConfigSummary(wsID string) (ConfigSummary, error)

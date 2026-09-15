@@ -39,6 +39,15 @@ type FixOptions struct {
 	// session so the worktree can be named after it; empty means the run
 	// mints its own.
 	RunID string
+
+	// Local says the flow will stop at the commit: nothing is pushed and
+	// no pull request is opened. It is recorded on the run because a
+	// screen reading the run directory cannot otherwise tell a local fix
+	// from one still waiting to be pushed.
+	//
+	// The commit Options.At was cut from is carried on the embedded
+	// Options, the same field a retrospective triage uses.
+	Local bool
 }
 
 // Fix runs one write-enabled agent session against the workspace and files
@@ -100,12 +109,15 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 		Model:     model,
 		StartedAt: now,
 		UpdatedAt: now,
+		Eval:      o.Eval,
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
 	p.state.Budget.MaxUSD = cfg.Budget.MaxUSD
+	p.state.At = o.At
 	p.state.Fix.Branch = o.Branch
 	p.state.Fix.Base = o.Base
+	p.state.Fix.Local = o.Local
 	if o.Root != "" && o.Root != cfg.Root {
 		p.state.Fix.Worktree = o.Root
 	}

@@ -217,3 +217,93 @@ func TestStartEvalRejectsBadKeys(t *testing.T) {
 		t.Fatal("an unknown workspace: want an error")
 	}
 }
+
+// A retro report is a different table with different columns. It is
+// written into the same directory and must not turn up in the eval list as
+// a row with nothing in it.
+func TestRetroReportsStayOutOfTheEvalList(t *testing.T) {
+	root, golden := newWorkspace(t), t.TempDir()
+	dir := filepath.Join(root, ".sirdar", "eval")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	plain, err := json.Marshal(eval.Report{
+		At: time.Date(2026, 9, 11, 9, 0, 0, 0, time.UTC), Provider: "claude",
+		Results: []eval.Result{{Key: "OMNI-1", State: "completed"}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "20260911T090000Z.json"), plain, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	retro, err := json.Marshal(eval.RetroReport{
+		At: time.Date(2026, 9, 15, 9, 0, 0, 0, time.UTC), Provider: "codex", Rubric: true,
+		Results: []eval.RetroResult{{
+			Key: "OMNI-1", BaseCommit: "abc123", CostUSD: 3.75,
+			Triage:      &eval.Stage{RunID: "r-triage", State: "completed"},
+			TriageScore: &eval.TriageScore{Classification: "code", Confidence: "high"},
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "20260915T090000Z"+eval.RetroSuffix), retro, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	svc := newEvalService(t, root, golden)
+
+	reports, err := svc.EvalReports(WorkspaceID(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(reports) != 1 || reports[0].Provider != "claude" {
+		t.Fatalf("eval reports %+v", reports)
+	}
+
+	latest, err := svc.LatestRetro(WorkspaceID(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest == nil {
+		t.Fatal("no retro report")
+	}
+	if latest.Provider != "codex" || len(latest.Results) != 1 || latest.Results[0].Key != "OMNI-1" {
+		t.Fatalf("retro report %+v", latest)
+	}
+	if !strings.HasSuffix(latest.Path, eval.RetroSuffix) {
+		t.Errorf("path %q", latest.Path)
+	}
+}
+
+func TestLatestRetroWithoutOneIsNil(t *testing.T) {
+	root, golden := newWorkspace(t), t.TempDir()
+	svc := newEvalService(t, root, golden)
+	latest, err := svc.LatestRetro(WorkspaceID(root))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if latest != nil {
+		t.Errorf("got %+v, want nil", latest)
+	}
+	if _, err := svc.LatestRetro("nosuch"); err == nil {
+		t.Error("an unknown workspace is an error")
+	}
+}
+
+// A retro job runs against the keys that carry a retro.json, and a golden
+// set where no key does says so by name rather than reporting an empty
+// table.
+func TestStartRetroEvalReportsAGoldenSetWithNoRetroEntry(t *testing.T) {
+	root, golden := newWorkspace(t), t.TempDir()
+	svc := newEvalService(t, root, golden)
+	events, unsubscribe := svc.Subscribe()
+	defer unsubscribe()
+
+	if _, err := svc.StartEval(context.Background(), WorkspaceID(root), nil, EvalOptions{Retro: true}); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, events, "the no-retro-bundles log line", func(e Event) bool {
+		return e.Kind == KindLog && strings.Contains(e.Text, eval.RetroFile)
+	})
+}

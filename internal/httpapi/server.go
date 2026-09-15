@@ -88,6 +88,7 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/eval", s.startEval)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/eval", s.evalReports)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/eval/retro/latest", s.latestRetro)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/golden", s.golden)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
@@ -261,10 +262,12 @@ type jobResponse struct {
 
 func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Keys     []string `json:"keys"`
-		Provider string   `json:"provider"`
-		Model    string   `json:"model"`
-		DryRun   bool     `json:"dryRun"`
+		Keys         []string `json:"keys"`
+		Provider     string   `json:"provider"`
+		Model        string   `json:"model"`
+		DryRun       bool     `json:"dryRun"`
+		At           string   `json:"at"`
+		KeepWorktree bool     `json:"keepWorktree"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -278,6 +281,7 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.svc.StartTriage(r.Context(), r.PathValue("id"), body.Keys, TriageOptions{
 		Provider: body.Provider, Model: body.Model, DryRun: body.DryRun,
+		At: body.At, KeepWorktree: body.KeepWorktree,
 	})
 	if err != nil {
 		s.fail(w, err)
@@ -288,11 +292,13 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 
 func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		Key        string `json:"key"`
-		PRURL      string `json:"prUrl"`
-		Resolution string `json:"resolution"`
-		Provider   string `json:"provider"`
-		Model      string `json:"model"`
+		Key          string `json:"key"`
+		PRURL        string `json:"prUrl"`
+		Resolution   string `json:"resolution"`
+		Provider     string `json:"provider"`
+		Model        string `json:"model"`
+		At           string `json:"at"`
+		KeepWorktree bool   `json:"keepWorktree"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -307,6 +313,7 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 	id, err := s.svc.StartRCA(r.Context(), r.PathValue("id"), body.Key, RCAOptions{
 		PRURL: body.PRURL, Resolution: body.Resolution,
 		Provider: body.Provider, Model: body.Model,
+		At: body.At, KeepWorktree: body.KeepWorktree,
 	})
 	if err != nil {
 		s.fail(w, err)

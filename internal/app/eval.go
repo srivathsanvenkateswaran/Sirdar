@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/eval"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
@@ -147,6 +148,12 @@ func (s *Service) EvalReports(wsID string) ([]EvalReport, error) {
 		if e.IsDir() || filepath.Ext(e.Name()) != ".json" {
 			continue
 		}
+		// A retro report is a different table with different columns; it
+		// is read back by LatestRetro and would decode here as an eval
+		// with no results in it.
+		if strings.HasSuffix(e.Name(), eval.RetroSuffix) {
+			continue
+		}
 		names = append(names, e.Name())
 	}
 	// The file names are UTC timestamps, so newest first is reverse order.
@@ -193,6 +200,9 @@ func (s *Service) StartEval(ctx context.Context, wsID string, keys []string, o E
 	if err != nil {
 		return "", err
 	}
+	if o.Retro {
+		return s.startRetro(ctx, wsID, root, keys, o)
+	}
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		report, err := eval.Run(jctx, deps, keys, eval.Options{
 			GoldenDir:   s.opts.GoldenDir,
@@ -214,4 +224,91 @@ func (s *Service) StartEval(ctx context.Context, wsID string, keys []string, o E
 		}
 		return out
 	}, func(err error) []JobOutcome { return s.failed(keys, err) })
+}
+
+// startRetro is the retro half of StartEval: each key replayed at the
+// commit its fix branched from, scored against the pull request that fixed
+// it. It writes its report beside the ordinary ones, under a name that
+// keeps the two tables apart.
+func (s *Service) startRetro(ctx context.Context, wsID, root string, keys []string, o EvalOptions) (JobID, error) {
+	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
+		rd := eval.NewRetroDeps(deps, o.Model)
+		rd.Root = root
+		report, err := eval.RunRetro(jctx, rd, keys, eval.RetroOptions{
+			GoldenDir:   s.opts.GoldenDir,
+			Model:       o.Model,
+			Concurrency: o.Concurrency,
+			WithRCA:     o.WithRCA,
+			Rubric:      o.Rubric,
+		})
+		if err != nil {
+			s.log(err)
+			return s.failed(keys, nil)
+		}
+		if path, err := report.Write(root); err != nil {
+			s.log(err)
+		} else {
+			s.logText("eval: wrote " + path)
+		}
+		out := make([]JobOutcome, 0, len(report.Results))
+		for _, r := range report.Results {
+			row := JobOutcome{Key: r.Key, Status: string(store.StatusFailed)}
+			if r.Triage != nil {
+				row.Status, row.RunID = r.Triage.State, r.Triage.RunID
+			}
+			out = append(out, row)
+		}
+		return out
+	}, func(err error) []JobOutcome { return s.failed(keys, err) })
+}
+
+// RetroReport is one recorded retro report, with the path it was read from.
+type RetroReport struct {
+	Path string `json:"path"`
+	eval.RetroReport
+}
+
+// LatestRetro returns the newest retro report recorded for a workspace, or
+// nil when none has been run. It is one report rather than a list: the
+// screen shows the last retro's table, and a retro is expensive enough that
+// a workspace has a handful of them, not a nightly series.
+func (s *Service) LatestRetro(wsID string) (*RetroReport, error) {
+	root, err := s.root(wsID)
+	if err != nil {
+		return nil, err
+	}
+	dir := filepath.Join(root, ".sirdar", "eval")
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		if errors.Is(err, fs.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("app: read %s: %w", dir, err)
+	}
+	names := make([]string, 0, len(entries))
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), eval.RetroSuffix) {
+			names = append(names, e.Name())
+		}
+	}
+	// The file names are UTC timestamps, so newest first is reverse order.
+	sort.Sort(sort.Reverse(sort.StringSlice(names)))
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		var rep eval.RetroReport
+		if json.Unmarshal(data, &rep) != nil {
+			// A half-written report is skipped, and the one before it
+			// answers instead.
+			continue
+		}
+		if rep.Results == nil {
+			rep.Results = []eval.RetroResult{}
+		}
+		return &RetroReport{Path: path, RetroReport: rep}, nil
+	}
+	return nil, nil
 }

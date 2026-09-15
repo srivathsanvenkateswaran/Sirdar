@@ -91,6 +91,30 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
+- Added `sirdar golden add KEY --retro --pr URL`, which builds a golden entry out of a ticket
+  whose fix has already merged: the bundle is assembled as of the moment an engineer picked the
+  ticket up — thread messages and attachments from after it dropped, every pull-request URL and
+  `PR #N` mention redacted to `[redacted: pull request]` — and the merged pull request is filed
+  beside it as ground truth in `retro.json` and `pr.diff`. The cutoff is the earliest of the
+  ticket's first `in_progress` transition and the first pull request's `created_at`, or whatever
+  `--as-of` names. The ticket is read through the workspace's own adapters, the pull request
+  through `gh` with exec and never a shell, and nothing is written back to either system
+  (`docs/eval.md`).
+- Added `sirdar eval --retro`, which replays a golden key at the commit its fix branched from —
+  triage from the as-of bundle, then `fix --local` from that triage note, and a blind RCA behind
+  `--with-rca` — and scores what came back against the pull request a human merged: the note's
+  code references against the files the change touched, the agent's own diff against the
+  pull request's by file overlap and by hunk, and, behind `--rubric`, one extra provider call
+  answering a fixed JSON rubric. Each stage is the ordinary command at `--at <baseCommit>`, in a
+  linked worktree of its own, marked as an eval: no note is filed, no register row is appended
+  and nothing is pushed. The fix and the RCA are handed the run id of the retro's own triage
+  note, because the newest-triage-note lookup skips eval runs on purpose and would otherwise
+  find nothing. It exits 0 whatever the table says, because a retro is a measurement and not a
+  gate; the report lands in `.sirdar/eval/<ts>-retro.json` and the Eval screen's Retro section
+  reads the last one (`docs/eval.md`).
+- Added an as-of cutoff to bundle assembly (`run.Options.AsOf`), so a bundle can be built as the
+  ticket stood at an instant rather than as it stands now. What it dropped and redacted is
+  counted in `bundle/manifest.json`.
 - Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
@@ -123,6 +147,20 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   by signature, are exempt. And the fix route itself now answers 403 on a listener bound with
   `--allow-remote`: a remote caller may read notes and start a triage, but not write code and open
   a pull request under the operator's GitHub login (`docs/config.md`).
+- Added optional audio transcription to bundle assembly, under `attachments.transcribe`. A
+  helpdesk on a WhatsApp number gets voice notes — one ticket in the first live runs carried 28
+  Arabic `audio/ogg` files, none of which the session could open, and the triage came out
+  low-confidence because the complaint itself was in the audio. With a command configured, each
+  audio attachment is transcribed during bundle assembly and the text lands beside it as
+  `<attachment>.transcript.txt`, marked in the manifest, pointed at from the rendered
+  conversation, and announced to the session as machine-produced evidence. The command template
+  is split into argv at config load and executed directly, never through a shell; it runs with
+  stdin closed, an environment of `PATH`, `HOME` and `LANG` alone, two minutes per file and ten
+  per bundle. Every failure — a broken command, audio over `maxSeconds`, the `maxFiles` cap — is
+  a per-file warning that leaves the attachment where an unreadable attachment has always been:
+  named as unread in the warnings, the prompt and the note. The block is absent by default;
+  Sirdar ships no model and calls no service, so audio leaves the machine only if the command the
+  operator chose sends it somewhere. `sirdar doctor` has a `transcribe` row (`docs/config.md`).
 - Added `budget.stallMinutes`, a stall watch on the provider's stream. A session that says
   nothing at all — no tool call, no assistant text, no usage line — for six minutes (the default;
   `0` turns the check off) is cancelled, marked `failed` with `stalled: no activity for 6m`, and
@@ -162,3 +200,23 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   transcript to `transcript.json` (mode `0600`) in the run directory after every turn, and
   `sirdar resume` and the runner's schema retry both continue from it instead of starting the
   triage over.
+- Added `--at COMMIT` to `sirdar triage` and `sirdar rca`: the session runs against the
+  repository as it stood at that commit, in a linked worktree of the run's own under
+  `.sirdar/worktrees/<run-id>` at a detached HEAD, so a ticket can be triaged against the code
+  that was actually running when it was filed. The tree you are standing in is untouched — its
+  HEAD, its index and its uncommitted work are all where you left them — and the workspace's
+  `.sirdar/` is still read from the main tree, so the configuration, playbooks and templates are
+  the ones you configured rather than the ones the repository happened to carry a year ago. The
+  run state records `At:` and the note's frontmatter carries `at:`, because nothing else in a
+  note would tell a reader that its code references are not about today's tip. The worktree is
+  removed when the run ends, unless `--keep-worktree` or the run blocked and can be resumed.
+  Triage stays exactly as read-only inside the worktree as it is at HEAD.
+- Added `--local` and `--at COMMIT` to `sirdar fix`. `--local` stops the flow at the commit:
+  nothing is pushed, no pull request is opened, the worktree is kept, the commit's unified diff
+  is written to `fix.diff` in the run directory, and the run state records `Fix.Local`,
+  `Fix.Commit` and `Fix.DiffPath`. The triage note is left on its own status, since `fix-pushed`
+  would be a claim about work that never left the machine. `--accept-deviation` with `--local`
+  accepts the diff and still pushes nothing. `--at` cuts the fix branch from a named commit
+  instead of `origin/<base>` and skips the fetch, so a fix can be generated against the code the
+  ticket was filed against. Together they are what a retrospective evaluation runs — many fixes
+  against historical commits, none of which may reach a remote.

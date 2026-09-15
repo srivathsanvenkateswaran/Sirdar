@@ -189,6 +189,11 @@ type TriageOptions struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	DryRun   bool   `json:"dryRun"`
+	// At runs the session against the repository as it stood at this
+	// commit, in a linked worktree of the run's own, and KeepWorktree
+	// leaves that directory on disk afterwards.
+	At           string `json:"at"`
+	KeepWorktree bool   `json:"keepWorktree"`
 }
 
 // RCAOptions are the inputs an RCA run takes: the two only it has, and the
@@ -198,6 +203,10 @@ type RCAOptions struct {
 	Resolution string `json:"resolution"`
 	Provider   string `json:"provider"`
 	Model      string `json:"model"`
+	// At and KeepWorktree mean here what they mean on a triage: read the
+	// repository as it stood at that commit, and keep the worktree.
+	At           string `json:"at"`
+	KeepWorktree bool   `json:"keepWorktree"`
 }
 
 // FixOptions are the flags of one fix job, matching `sirdar fix`.
@@ -213,6 +222,12 @@ type FixOptions struct {
 	AcceptDeviation bool   `json:"acceptDeviation"`
 	Provider        string `json:"provider"`
 	Model           string `json:"model"`
+	// At cuts the fix branch from this commit instead of origin/<base>.
+	// Local stops the flow at the commit: nothing is pushed, no pull
+	// request is opened, the worktree is kept and the commit's diff is
+	// written to fix.diff in the run directory.
+	At    string `json:"at"`
+	Local bool   `json:"local"`
 }
 
 // EvalOptions are the per-invocation overrides an eval job takes. The
@@ -222,6 +237,16 @@ type EvalOptions struct {
 	Provider    string `json:"provider"`
 	Model       string `json:"model"`
 	Concurrency int    `json:"concurrency"`
+
+	// Retro replays each key at the commit its fix branched from and
+	// scores what comes back against the pull request that fixed it,
+	// rather than against the assertions a human wrote. Only the golden
+	// keys carrying a retro.json can be replayed this way.
+	Retro bool `json:"retro"`
+	// WithRCA adds the blind RCA stage to a retro, and Rubric the one
+	// judged provider call. Both are ignored without Retro.
+	WithRCA bool `json:"withRca"`
+	Rubric  bool `json:"rubric"`
 }
 
 // JobOutcome is one key's result in a finished job.

@@ -13,7 +13,14 @@ import (
 func ThreadMarkdown(t Thread, atts []Attachment) string {
 	pathByID := make(map[string]string, len(atts))
 	for _, a := range atts {
-		pathByID[a.ID] = a.Path
+		// An audio attachment reads as its transcript: the path in the
+		// conversation has to be the file the session can open, or it
+		// spends a turn discovering that the voice note is bytes.
+		label := a.Path
+		if a.Transcribed() {
+			label += " (audio; transcript: " + a.Transcript + ")"
+		}
+		pathByID[a.ID] = label
 	}
 
 	var b strings.Builder
@@ -55,6 +62,20 @@ func WriteBundle(dir string, b Bundle) error {
 	md := ThreadMarkdown(b.Thread, b.Attachments)
 	if err := os.WriteFile(filepath.Join(dir, "thread.md"), []byte(md), 0o644); err != nil {
 		return err
+	}
+
+	// manifest.json is the bundle's own record of the cutoff it was
+	// assembled under: what was dropped and what was redacted, in the
+	// directory a reader opens rather than only in the run state. An
+	// ordinary live bundle has no cutoff and gets no manifest.
+	if b.Cutoff != nil {
+		raw, err := json.MarshalIndent(b.Cutoff, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(filepath.Join(dir, "manifest.json"), append(raw, '\n'), 0o644); err != nil {
+			return err
+		}
 	}
 
 	return nil
