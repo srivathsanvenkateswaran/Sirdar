@@ -32,7 +32,8 @@ rather than being silently ignored.
 | `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
 | `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
 | `sources.helpdesk.account` | string | none (one of `account`/`baseUrl` required for `gorgias`) | Gorgias account identifier, e.g. `acme` for `acme.gorgias.com` |
-| `sources.helpdesk.email` | string | none (required for `gorgias`; required with `apiToken` for `zendesk` basic auth) | The Gorgias login email sent as the HTTP Basic username, or the Zendesk account email; a plain address, not a credential reference |
+| `sources.helpdesk.email` | string | none (required for `gorgias`; required with `apiToken` for `zendesk` basic auth) | The Gorgias login email sent as the HTTP Basic username; a plain address, not a credential reference |
+| `sources.helpdesk.apiKey` | string | none (required for `gorgias`) | Credential reference to a Gorgias API key, sent as the HTTP Basic password |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -40,7 +41,7 @@ rather than being silently ignored.
 | `sources.tracker.pat` | string | none (required for `jira` Data Center or `azdo`) | Credential reference to a Jira Data Center PAT or an Azure DevOps PAT |
 | `sources.tracker.projectKey` | string | unset | `jira` only: scopes `List` to one project |
 | `sources.tracker.epicLinkField` | string | unset (resolved by name via `/rest/api/2/field`) | `jira` only: Data Center epic-link custom field id or name |
-| `sources.tracker.apiKey` | string | none (required for `linear`, `rally`; required for `freshdesk` and `gorgias`) | Credential reference to a Linear personal API key, a Rally API key, a Freshdesk API key, or a Gorgias API key (sent as the HTTP Basic password) |
+| `sources.tracker.apiKey` | string | none (required for `linear`, `rally`; required for `freshdesk`) | Credential reference to a Linear personal API key, a Rally API key, or a Freshdesk API key |
 | `sources.tracker.teamKey` | string | unset | `linear` only: default team key used to scope `List` |
 | `sources.tracker.orgUrl` | string | none (required for `azdo`) | `https://dev.azure.com/{org}` (Services) or a Server collection URL |
 | `sources.tracker.project` | string | none (required for `azdo`); unset for `rally` | Azure DevOps team project, or a Rally project `_ref`/ObjectID |

@@ -742,6 +742,11 @@ func TestValidateGorgias(t *testing.T) {
 			want:  "one of account or baseUrl",
 		},
 		{
+			name:  "account and baseUrl both set",
+			block: "    adapter: gorgias\n    account: acme\n    baseUrl: https://acme.gorgias.com\n    email: ops@acme.com\n    apiKey: env:GORGIAS_KEY\n",
+			want:  "not both",
+		},
+		{
 			name:  "no email",
 			block: "    adapter: gorgias\n    account: acme\n    apiKey: env:GORGIAS_KEY\n",
 			want:  "sources.helpdesk.email",

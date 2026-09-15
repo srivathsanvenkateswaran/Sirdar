@@ -188,7 +188,7 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 		Subject:   gt.Subject,
 		Status:    gt.Status,
 		Channel:   gt.Channel,
-		URL:       c.baseURL + "/app/ticket/" + id,
+		URL:       c.baseURL + "/app/ticket/" + url.PathEscape(id),
 		CreatedAt: parseTime(gt.CreatedDatetime),
 		UpdatedAt: parseTime(gt.UpdatedDatetime),
 		Fields:    fields,
@@ -274,18 +274,23 @@ func (c *Client) listMessages(ctx context.Context, id string) ([]gMessage, []str
 // because a note is agent-to-agent and reading one as a customer's words
 // would be the worst of the available mistakes.
 //
-// A message a rule sent is automation rather than a person, so it maps to
-// system. Anything else from the company is an agent, and anything not
-// from the company is the customer.
+// A message a rule sent is automation rather than a person — rule_id is set
+// on one Gorgias fired directly, and via is "rule" on one a rule triggered
+// through another channel — and this is checked before the from_agent
+// split, not after: a rule can author a message with from_agent false (an
+// auto-generated "reply" Gorgias attributes to the customer's side of the
+// conversation), and reading from_agent first would read that automation as
+// the customer's own words. Anything else from the company is an agent, and
+// anything neither ruled nor from the company is the customer.
 func messageRole(m gMessage) (ticket.Role, bool) {
 	if !m.Public || strings.EqualFold(m.Channel, "internal-note") {
 		return ticket.RoleAgent, true
 	}
+	if m.RuleID != nil || strings.EqualFold(m.Via, "rule") {
+		return ticket.RoleSystem, false
+	}
 	if !m.FromAgent {
 		return ticket.RoleCustomer, false
-	}
-	if m.RuleID != nil {
-		return ticket.RoleSystem, false
 	}
 	return ticket.RoleAgent, false
 }

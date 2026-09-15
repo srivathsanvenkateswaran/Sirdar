@@ -165,7 +165,10 @@ func TestNewDerivesBaseURL(t *testing.T) {
 		{account: "acme", want: "https://acme.gorgias.com"},
 		{account: "https://acme.gorgias.com/", want: "https://acme.gorgias.com"},
 		{account: "acme.gorgias.com", want: "https://acme.gorgias.com"},
-		{account: "acme", baseURL: "https://proxy.internal/gorgias/", want: "https://proxy.internal/gorgias"},
+		// baseUrl overrides account outright, and a proxy host is reached
+		// through the bare origin alone — no path riding along.
+		{account: "acme", baseURL: "https://proxy.internal/", want: "https://proxy.internal"},
+		{account: "acme", baseURL: "https://proxy.internal:8443", want: "https://proxy.internal:8443"},
 	} {
 		c, err := New(Config{Account: tc.account, BaseURL: tc.baseURL, Email: testEmail, APIKey: "k"}, nil)
 		if err != nil {
@@ -174,6 +177,40 @@ func TestNewDerivesBaseURL(t *testing.T) {
 		if c.baseURL != tc.want {
 			t.Errorf("New(%q, %q).baseURL = %q, want %q", tc.account, tc.baseURL, c.baseURL, tc.want)
 		}
+	}
+}
+
+// TestAccountAllowList: a blocklist for "./ " still lets a query character,
+// userinfo separator or a percent-encoded slash through, each of which
+// changes what baseURLFor's "https://"+account+hostSuffix concatenation
+// actually builds. The allow-list refuses all three outright.
+func TestAccountAllowList(t *testing.T) {
+	for _, account := range []string{"internal?x", "a@b", "a%2f"} {
+		if _, err := baseURLFor(Config{Account: account}); err == nil {
+			t.Errorf("account %q: want an error", account)
+		}
+	}
+}
+
+// TestBaseURLRejectsNonOriginShapes: baseUrl is concatenated straight onto
+// every request this client builds, so userinfo, a path, a query string or
+// a fragment on it would ride along on all of them — and userinfo in
+// particular collides with the Basic auth this client sets itself. http is
+// refused too: every credentialed request must stay on the configured
+// account host, over https.
+func TestBaseURLRejectsNonOriginShapes(t *testing.T) {
+	for _, tc := range []struct{ name, baseURL string }{
+		{"userinfo", "https://user:pass@acme.gorgias.com"},
+		{"path", "https://acme.gorgias.com/proxy"},
+		{"query", "https://acme.gorgias.com?x=1"},
+		{"fragment", "https://acme.gorgias.com#frag"},
+		{"http", "http://acme.gorgias.com"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := baseURLFor(Config{BaseURL: tc.baseURL}); err == nil {
+				t.Fatalf("baseUrl %q: want an error", tc.baseURL)
+			}
+		})
 	}
 }
 
@@ -283,7 +320,85 @@ func TestErrorsNeverCarryTheCredential(t *testing.T) {
 	}
 }
 
+// TestGetEscapesIDInTicketURL: the ticket web URL is built by concatenating
+// the id onto baseURL rather than through the API, so an id that is not
+// already URL-safe has to be escaped here independently of fetchTicket's
+// own escaping of the same id in the API path.
+func TestGetEscapesIDInTicketURL(t *testing.T) {
+	srv := newCountingServer(t, func(w http.ResponseWriter, r *http.Request) {
+		writeFixture(t, w, "ticket.json")
+	})
+	c := newClient(t, map[string]string{accountHost: addrOf(srv.Server)})
+
+	got, err := c.Get(context.Background(), "12 3/4")
+	if err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if want := "https://acme.gorgias.com/app/ticket/12%203%2F4"; got.URL != want {
+		t.Errorf("URL = %q, want %q", got.URL, want)
+	}
+}
+
 // --- Threads ---
+
+// TestMessageRole covers messageRole's precedence directly: a rule fired is
+// checked before the from_agent split, not after, because a rule can author
+// a message with from_agent false — an auto-generated "reply" Gorgias
+// attributes to the customer's side — and reading from_agent first would
+// read that automation as the customer's own words.
+func TestMessageRole(t *testing.T) {
+	ruleID := int64(12)
+	for _, tc := range []struct {
+		name     string
+		msg      gMessage
+		wantRole ticket.Role
+		wantNote bool
+	}{
+		{
+			name:     "internal note, regardless of from_agent",
+			msg:      gMessage{Public: false, FromAgent: true, Channel: "internal-note"},
+			wantRole: ticket.RoleAgent,
+			wantNote: true,
+		},
+		{
+			name:     "rule-authored, not from_agent: still system, not customer",
+			msg:      gMessage{Public: true, FromAgent: false, RuleID: &ruleID},
+			wantRole: ticket.RoleSystem,
+		},
+		{
+			name:     "via rule, not from_agent: still system, not customer",
+			msg:      gMessage{Public: true, FromAgent: false, Via: "rule"},
+			wantRole: ticket.RoleSystem,
+		},
+		{
+			name:     "via Rule (case-insensitive)",
+			msg:      gMessage{Public: true, FromAgent: false, Via: "Rule"},
+			wantRole: ticket.RoleSystem,
+		},
+		{
+			name:     "rule-authored and from_agent: still system",
+			msg:      gMessage{Public: true, FromAgent: true, RuleID: &ruleID},
+			wantRole: ticket.RoleSystem,
+		},
+		{
+			name:     "plain customer message",
+			msg:      gMessage{Public: true, FromAgent: false},
+			wantRole: ticket.RoleCustomer,
+		},
+		{
+			name:     "plain agent message",
+			msg:      gMessage{Public: true, FromAgent: true},
+			wantRole: ticket.RoleAgent,
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			role, note := messageRole(tc.msg)
+			if role != tc.wantRole || note != tc.wantNote {
+				t.Errorf("messageRole(%+v) = (%q, %v), want (%q, %v)", tc.msg, role, note, tc.wantRole, tc.wantNote)
+			}
+		})
+	}
+}
 
 func TestThreadsRolesAndInternalNotes(t *testing.T) {
 	srv := newCountingServer(t, apiHandler(t))
@@ -442,6 +557,31 @@ func TestThreadsStopsOnRepeatedCursor(t *testing.T) {
 }
 
 // --- Attachments ---
+
+// TestDownloadTransportErrorDropsQuery: a transport failure that is
+// neither a refused redirect, a status code nor the size cap falls into
+// downloadTo's default branch. Go wraps it in a *url.Error carrying the
+// full request URL, and for an attachment download that URL is Gorgias's
+// own signed one — the query is the signature. The error this client
+// builds must keep the underlying reason without repeating that query,
+// since it goes straight into a per-ticket warning an agent reads.
+func TestDownloadTransportErrorDropsQuery(t *testing.T) {
+	// No routes at all: hostRouter refuses every host with a plain error,
+	// which net/http wraps in a *url.Error before it reaches downloadTo.
+	c := newClient(t, map[string]string{})
+	rawURL := "https://acme.gorgias.com/api/attachments/download/h4sh/screenshot.png?sig=leak-me-transport"
+
+	err := c.downloadTo(context.Background(), rawURL, true, filepath.Join(t.TempDir(), "out"))
+	if err == nil {
+		t.Fatal("want an error")
+	}
+	if strings.Contains(err.Error(), "leak-me-transport") || strings.Contains(err.Error(), "sig=") {
+		t.Fatalf("error quotes the signed URL's query: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no route") {
+		t.Fatalf("error lost the underlying transport failure: %v", err)
+	}
+}
 
 func TestAttachmentsHostTrust(t *testing.T) {
 	api := newCountingServer(t, apiHandler(t))

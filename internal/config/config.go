@@ -59,11 +59,12 @@ type SourceConfig struct {
 	// Freshdesk.
 	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
 
-	// Gorgias. Every account has its own host, so one of account (the
-	// identifier alone, "acme" for acme.gorgias.com) or baseUrl (for an
-	// account reached through a proxy) is required. Auth is HTTP Basic
-	// with the login email as the username — an identifier, not a secret,
-	// so it is written literally — and apiKey as the password.
+	// Gorgias. Every account has its own host, so exactly one of account
+	// (the identifier alone, "acme" for acme.gorgias.com) or baseUrl (a
+	// bare https origin, for an account reached through a proxy) is
+	// required. Auth is HTTP Basic with the login email as the username —
+	// an identifier, not a secret, so it is written literally — and
+	// apiKey as the password.
 	Account string `yaml:"account,omitempty"`
 
 	// Help Scout. Its Mailbox API has no API-key mode: every call carries
@@ -919,8 +920,11 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 			return fmt.Errorf("config: %s.accessToken: is required for adapter hubspot", prefix)
 		}
 	case "gorgias":
-		if s.Account == "" && s.BaseURL == "" {
+		switch {
+		case s.Account == "" && s.BaseURL == "":
 			return fmt.Errorf("config: %s: one of account or baseUrl is required for adapter gorgias", prefix)
+		case s.Account != "" && s.BaseURL != "":
+			return fmt.Errorf("config: %s: set account or baseUrl, not both", prefix)
 		}
 		if s.Email == "" {
 			return fmt.Errorf("config: %s.email: is required for adapter gorgias", prefix)

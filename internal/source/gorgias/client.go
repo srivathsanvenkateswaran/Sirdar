@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
 	"time"
 
@@ -89,7 +90,8 @@ type Config struct {
 	// Ignored when BaseURL is set.
 	Account string
 	// BaseURL overrides the host derived from Account, for an account
-	// reached through a proxy. No trailing slash is kept.
+	// reached through a proxy. It must be a bare https origin — no
+	// userinfo, path, query string or fragment; see validatedBaseURL.
 	BaseURL string
 	// Email is the Gorgias login email, sent as the HTTP Basic username.
 	// It is an identifier, not a secret.
@@ -163,14 +165,22 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 	}, nil
 }
 
+// accountPattern is the shape a bare Gorgias account identifier is allowed
+// to take: letters, digits and hyphens, starting with a letter or digit. It
+// is an allow-list rather than a blocklist of the characters someone
+// thought to name — a blocklist for "./ " still lets "internal?x", "a@b"
+// and "a%2f" through, each of which changes what baseURLFor's
+// "https://"+account+hostSuffix concatenation actually builds.
+var accountPattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*$`)
+
 // baseURLFor resolves the account host: the explicit baseUrl when there is
 // one, otherwise https://{account}.gorgias.com. An account identifier that
 // was pasted as a full host ("acme.gorgias.com") or a URL is trimmed back
 // to its label rather than refused, since that is the shape an operator
 // copies out of their browser.
 func baseURLFor(cfg Config) (string, error) {
-	if raw := strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"); raw != "" {
-		return raw, nil
+	if raw := strings.TrimSpace(cfg.BaseURL); raw != "" {
+		return validatedBaseURL(raw, cfg.BaseURL)
 	}
 	account := strings.TrimSpace(cfg.Account)
 	account = strings.TrimPrefix(account, "https://")
@@ -180,10 +190,43 @@ func baseURLFor(cfg Config) (string, error) {
 	if account == "" {
 		return "", fmt.Errorf("gorgias: one of account or baseUrl is required")
 	}
-	if strings.ContainsAny(account, "./ ") {
+	if !accountPattern.MatchString(account) {
 		return "", fmt.Errorf("gorgias: account %q must be the account identifier alone, e.g. acme for acme.gorgias.com", cfg.Account)
 	}
 	return "https://" + account + hostSuffix, nil
+}
+
+// validatedBaseURL parses raw and refuses anything that is not a bare https
+// origin. baseUrl is configuration, not something fetched off a response
+// body, but it is still concatenated straight onto every request this
+// client builds (c.baseURL+path in apiGET, Ping's own call), so userinfo,
+// a path, a query string or a fragment on it would ride along on every one
+// of them: userinfo collides with the Basic auth this client sets itself,
+// and a query or fragment corrupts the URL apiGET builds by appending its
+// own "?"-prefixed query. http is refused too — every credentialed request
+// this adapter makes must stay on the configured account host, and that
+// includes not sending the API key over plain HTTP by config accident.
+func validatedBaseURL(raw, original string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil || u.Host == "" {
+		return "", fmt.Errorf("gorgias: invalid baseUrl %q", original)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return "", fmt.Errorf("gorgias: baseUrl %q must be https", original)
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("gorgias: baseUrl %q must not carry userinfo", original)
+	}
+	if p := strings.Trim(u.Path, "/"); p != "" {
+		return "", fmt.Errorf("gorgias: baseUrl %q must be a bare host, not a path", original)
+	}
+	if u.RawQuery != "" {
+		return "", fmt.Errorf("gorgias: baseUrl %q must not carry a query string", original)
+	}
+	if u.Fragment != "" {
+		return "", fmt.Errorf("gorgias: baseUrl %q must not carry a fragment", original)
+	}
+	return "https://" + u.Host, nil
 }
 
 // Ping checks the credential with the cheapest authenticated call the API
@@ -290,8 +333,22 @@ func (c *Client) downloadTo(ctx context.Context, rawURL string, withAuth bool, d
 	case errors.Is(err, httpx.ErrTooLarge):
 		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("gorgias: GET %s: attachment exceeds the %d byte limit", logPath(rawURL), maxAttachmentBytes)}
 	default:
-		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("gorgias: GET %s: %v", logPath(rawURL), err)}
+		return &source.Error{Code: source.Internal, Message: fmt.Sprintf("gorgias: GET %s: %v", logPath(rawURL), unwrapURLError(err))}
 	}
+}
+
+// unwrapURLError strips the request URL Go's *url.Error wraps around a
+// transport failure. For an attachment download rawURL is Gorgias's own
+// signed URL, and %v on the *url.Error itself would print that URL whole —
+// signature and all — right back into the warning this error becomes;
+// logPath already reports the path alone, so only the wrapped reason
+// (a dial failure, a timeout, a TLS error) is worth repeating here.
+func unwrapURLError(err error) error {
+	var uerr *url.Error
+	if errors.As(err, &uerr) {
+		return uerr.Err
+	}
+	return err
 }
 
 // logPath reduces a request URL to its path, dropping the query string so
