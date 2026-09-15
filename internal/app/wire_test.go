@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/freshdesk"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/front"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/gorgias"
@@ -961,9 +962,49 @@ func TestACPProviderIsBuiltFromTheBlock(t *testing.T) {
 // provider a workspace may name.
 func TestProviderForRejectsAnUnknownName(t *testing.T) {
 	_, err := ProviderFor(&config.Config{Provider: "gemini"}, envResolver(nil))
-	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai, acp or qwen") {
+	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai, acp, qwen or agy") {
 		t.Fatalf("err = %v", err)
 	}
+}
+
+// TestAgyProviderWiring covers the block being optional and the per-run
+// --model override winning over it, and checks that doctor says the two
+// things this provider cannot do before an operator finds out the hard
+// way.
+func TestAgyProviderWiring(t *testing.T) {
+	p, err := ProviderFor(&config.Config{Provider: "agy"}, envResolver(nil))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	if p.Name() != "agy" {
+		t.Fatalf("Name() = %q", p.Name())
+	}
+	checks := p.Doctor(context.Background(), "/no/such/binary")
+	var warned []string
+	for _, c := range checks {
+		if c.Severity() == provider.LevelWarn {
+			warned = append(warned, c.Name)
+		}
+	}
+	if !hasName(warned, "agy mcp scope") || !hasName(warned, "agy fix mode") {
+		t.Fatalf("doctor warnings = %v, want the MCP and fix-mode rows: %+v", warned, checks)
+	}
+
+	// A fix session is never started on this provider, whatever else the
+	// workspace configured.
+	_, err = p.Start(context.Background(), provider.SessionSpec{Mode: provider.ModeFix})
+	if err == nil || !strings.Contains(err.Error(), "fix mode is refused") {
+		t.Fatalf("fix start err = %v", err)
+	}
+}
+
+func hasName(names []string, want string) bool {
+	for _, n := range names {
+		if n == want {
+			return true
+		}
+	}
+	return false
 }
 
 // TestQwenProviderWithoutABlock covers the ordinary case: a workspace that

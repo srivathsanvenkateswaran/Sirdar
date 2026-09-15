@@ -1,0 +1,6 @@
+{"type":"system","subtype":"init","cwd":"/w","session_id":"sess-hint","tools":["Bash"],"model":"m","permissionMode":"default"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"t1","name":"Bash","input":{"command":"nl -ba ledger.go"}}]}}
+{"type":"control_request","request_id":"r1","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"nl -ba ledger.go"},"tool_use_id":"t1"}}
+{"$wait":"control_response"}
+{"type":"user","message":{"role":"user","content":[{"tool_use_id":"t1","type":"tool_result","content":"denied","is_error":true}]}}
+{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"sess-hint","result":"{}","structured_output":{},"total_cost_usd":0.0,"usage":{"input_tokens":1,"output_tokens":1}}

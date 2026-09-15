@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
-import Header from './components/shell/Header'
+import Sidebar from './components/shell/Sidebar'
 import NewTriageDialog from './components/shell/NewTriageDialog'
-import Toasts from './components/shell/Toast'
+import { PrimaryActionProvider, useProvidePrimaryAction } from './components/shell/primaryAction'
+import Toasts from './ui/toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
 import Library from './screens/Library'
@@ -12,6 +13,7 @@ import { showLibrary, subscribeShowLibrary } from './lib/library'
 import { parseRoute, routeHash, sameScreen } from './lib/routes'
 import type { AppState, AppStore, EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
+import './components/shell/shell.css'
 
 /**
  * A rejection the store has already toasted. The forms show the reason beside
@@ -27,10 +29,14 @@ function reported(): void {}
  * pasted link. Nothing is applied until `init()` has answered, because a run
  * link names a workspace and there are none to match it against before then.
  *
- * Writing: every move the window makes — the header's buttons, a board card,
- * the store's own navigation — leaves an address that can be linked to. A hash
+ * Writing: every move the window makes — the sidebar's rows, a board card, the
+ * store's own navigation — leaves an address that can be linked to. A hash
  * that names nothing opens nothing and is then overwritten by the screen the
  * window is really on, so the address never describes a screen that is not up.
+ *
+ * Settings is a route like any other even though it is now a modal rather than
+ * a screen: `#/settings` opens the modal over whatever was behind it, and
+ * closing the modal writes the address of the screen it uncovers.
  */
 function useHashRoute(store: AppStore, state: AppState): void {
   const { screen, currentWorkspaceId, workspaces, loading } = state
@@ -77,7 +83,32 @@ function isTyping(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
 }
 
-export default function App(): JSX.Element {
+/**
+ * The Board's commit action, published to the sidebar footer.
+ *
+ * It is a component rather than a call in `App` because publishing is an
+ * effect, and an effect that runs in `App` would run for every screen and
+ * would have to work out which one it was on. A component that is only
+ * mounted while the board is up cannot get that wrong.
+ */
+function BoardPrimary({
+  onNewTriage,
+  disabled,
+}: {
+  onNewTriage: () => void
+  disabled: boolean
+}): null {
+  useProvidePrimaryAction({
+    label: 'New triage',
+    onRun: onNewTriage,
+    disabled,
+    shortcut: 'n',
+    title: 'New triage (n)',
+  })
+  return null
+}
+
+function Shell(): JSX.Element {
   const store = useStore()
   const state = useAppState()
   const libraryOn = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
@@ -94,6 +125,19 @@ export default function App(): JSX.Element {
     if (state.screen.name === 'library' && !libraryOn) store.navigate({ name: 'board' })
   }, [state.screen, libraryOn, store])
 
+  /*
+   * Settings is a modal over the screen it was opened from, not a screen of
+   * its own: it is a place you leave, and keeping the board painted behind the
+   * scrim is what says you are coming back. The store still holds `settings`
+   * as a screen so the route, the address bar and the nav row all keep
+   * working; this is the screen that stays painted underneath, and the one
+   * closing the modal returns to.
+   */
+  const behind = useRef<Screen>({ name: 'board' })
+  if (state.screen.name !== 'settings') behind.current = state.screen
+  const settingsOpen = state.screen.name === 'settings'
+  const shown = settingsOpen ? behind.current : state.screen
+
   const workspaceId = state.currentWorkspaceId
   const currentWorkspace = state.workspaces.find((w) => w.id === workspaceId)
   const runs = state.runsByWorkspace[workspaceId] ?? []
@@ -101,6 +145,7 @@ export default function App(): JSX.Element {
 
   const navigate = useCallback((screen: Screen) => store.navigate(screen), [store])
   const dismissToast = useCallback((id: number) => store.dismissToast(id), [store])
+  const closeSettings = useCallback(() => store.navigate(behind.current), [store])
 
   const openTriage = useCallback(() => {
     if (state.workspaces.length === 0) {
@@ -117,20 +162,22 @@ export default function App(): JSX.Element {
         setTriageOpen(false)
         return
       }
-      if (triageOpen || isTyping(e.target)) return
+      // The settings modal owns Escape while it is open, and a shortcut that
+      // opened a second dialog on top of it would leave two modals up.
+      if (triageOpen || settingsOpen || isTyping(e.target)) return
       if (e.key === 'n') {
         e.preventDefault()
         openTriage()
         return
       }
-      if (e.key === '/' && state.screen.name === 'board') {
+      if (e.key === '/' && shown.name === 'board') {
         e.preventDefault()
         filterRef.current?.focus()
       }
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openTriage, state.screen.name, triageOpen])
+  }, [openTriage, shown.name, triageOpen, settingsOpen])
 
   // Every start goes through the store, which keeps the job id the run detail
   // screen's Cancel button needs. A start that fails rejects as well as
@@ -150,13 +197,13 @@ export default function App(): JSX.Element {
   const cancelJob = useCallback((jobId: string) => store.cancelJob(jobId), [store])
 
   let screen
-  switch (state.screen.name) {
+  switch (shown.name) {
     case 'run':
       screen = (
         <RunDetail
           transport={state.transport}
           workspaceId={workspaceId}
-          runId={state.screen.runId}
+          runId={shown.runId}
           defaultProvider={currentWorkspace?.provider}
           onBack={() => navigate({ name: 'board' })}
           onStartRCA={startRCA}
@@ -186,45 +233,38 @@ export default function App(): JSX.Element {
       // screen the reader has said they do not want.
       screen = libraryOn ? <Library /> : null
       break
-    case 'settings':
-      screen = (
-        <Settings
-          transport={state.transport}
-          workspaces={state.workspaces}
-          currentWorkspaceId={workspaceId}
-          onWorkspacesChanged={() => void store.refresh()}
-        />
-      )
-      break
     default:
       screen = (
-        <Board
-          tickets={tickets}
-          runs={runs}
-          queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
-          loading={state.loading}
-          inbound={state.inbound}
-          filterRef={filterRef}
-          onOpenRun={(runId) => navigate({ name: 'run', runId })}
-          onTriage={(keys) => void store.startTriage(keys).catch(reported)}
-        />
+        <>
+          <BoardPrimary onNewTriage={openTriage} disabled={state.workspaces.length === 0} />
+          <Board
+            tickets={tickets}
+            runs={runs}
+            queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
+            loading={state.loading}
+            inbound={state.inbound}
+            filterRef={filterRef}
+            onOpenRun={(runId) => navigate({ name: 'run', runId })}
+            onTriage={(keys) => void store.startTriage(keys).catch(reported)}
+          />
+        </>
       )
   }
 
   return (
     <div className="app">
-      <Header
+      <Sidebar
         workspaces={state.workspaces}
         currentWorkspaceId={workspaceId}
         quota={state.quota}
         screen={state.screen}
+        inboundCount={state.inbound?.length ?? 0}
         onSelectWorkspace={(id) => store.setWorkspace(id)}
         onAddWorkspace={() => navigate({ name: 'settings' })}
         onNavigate={navigate}
-        onNewTriage={openTriage}
       />
       <main className="main">
-        {state.workspaces.length === 0 && !state.loading && state.screen.name !== 'library' ? (
+        {state.workspaces.length === 0 && !state.loading && shown.name !== 'library' ? (
           <p className="app-empty">
             No workspace yet. Open Settings and add the path to a repository that has a{' '}
             <code>.sirdar</code> config.
@@ -233,6 +273,14 @@ export default function App(): JSX.Element {
           screen
         )}
       </main>
+      <Settings
+        open={settingsOpen}
+        transport={state.transport}
+        workspaces={state.workspaces}
+        currentWorkspaceId={workspaceId}
+        onClose={closeSettings}
+        onWorkspacesChanged={() => void store.refresh()}
+      />
       <NewTriageDialog
         open={triageOpen}
         defaultProvider={currentWorkspace?.provider}
@@ -241,5 +289,13 @@ export default function App(): JSX.Element {
       />
       <Toasts toasts={state.toasts} onDismiss={dismissToast} />
     </div>
+  )
+}
+
+export default function App(): JSX.Element {
+  return (
+    <PrimaryActionProvider>
+      <Shell />
+    </PrimaryActionProvider>
   )
 }

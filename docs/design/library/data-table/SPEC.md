@@ -78,6 +78,13 @@ nothing moves.
 
 ## Changelog
 
+### 2026-09-15 (restyle)
+Gained an optional `detail` render prop, drawn as a full-width row under the
+row it belongs to. Added when the Eval screen was pointed at this component:
+its per-key rows carry the checks that did not hold and the reason a run
+stopped, and folding that prose into a cell would have moved every column
+below it out of alignment.
+
 ### 2026-09-15
 Added. Initial spec from `components/panels.css` `.register-table` and
 `.eval-table`. The literal fallbacks (`var(--border, #e4e6eb)`,

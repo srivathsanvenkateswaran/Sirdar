@@ -74,6 +74,12 @@ in dark). Reduced motion: only the hover border transitions.
 
 ## Changelog
 
+### 2026-09-15 (restyle)
+`elapsed` and `cost` gained optional `elapsedTitle` and `costTitle` tooltips,
+so the board keeps the exact timestamp behind the relative clock and the turn
+and token counts behind the one cost figure. Both strings are still formatted
+by the caller; the card does no arithmetic on a clock.
+
 ### 2026-09-15
 Added. Initial spec from `styles.css` `.card--run` and
 `components/cards/RunCard.tsx`. The live marker changes from

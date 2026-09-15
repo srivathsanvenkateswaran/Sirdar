@@ -2530,11 +2530,9 @@ func TestSchemaEchoIsStrippedWithoutARetry(t *testing.T) {
 
 // TestSchemaRetrySharpensForProvidersWithoutWireEnforcement covers a first
 // answer the echo strip cannot fully recover (it is short two required
-// fields as well as carrying $schema/title): the providers that cannot
-// hold a model to the schema — acp, which only ever shows it as prompt
-// text, and qwen, whose --json-schema fails the run rather than shaping
-// the answer — get the sharpened retry wording, and one that does gets the
-// plain one.
+// fields as well as carrying $schema/title): provider: acp gets the
+// sharpened retry wording, since ACP has no --json-schema equivalent to
+// fall back on, and a provider that does gets the plain one.
 func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 	const incomplete = `{"$schema":"http://json-schema.org/draft-07/schema#","title":"Sirdar Fix Report","summary":"x","filesChanged":[]}`
 	const complete = `{"summary":"x","filesChanged":[],"testsRun":[],"risks":"none","deviationFromNote":""}`
@@ -2544,10 +2542,6 @@ func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
 		sharpened bool
 	}{
 		{"acp", true},
-		// qwen's --json-schema only fails the run after the fact when the
-		// model answers in prose; it constrains nothing the model writes,
-		// so the retry has to spell the mistake out the same way.
-		{"qwen", true},
 		{"claude", false},
 	} {
 		t.Run(tc.provider, func(t *testing.T) {
@@ -2934,42 +2928,146 @@ func TestStallReasonNamesTheWindowInMinutes(t *testing.T) {
 	}
 }
 
-// TestNullForARequiredStringIsReadAsEmpty is the second half of the first
-// live `provider: qwen` run (SBX-1): with the answer recovered from the
-// model's text, what failed twice was `proposedFix.remediationSql: got
-// null, want string`. qwen-plus-character wrote null there on both the
-// first answer and the retry that named the field, having learned the
-// idiom from the schema's own optional fields. It means the same as "",
-// so the note is filed and the field is named in a warning.
-func TestNullForARequiredStringIsReadAsEmpty(t *testing.T) {
-	cfg := newWorkspace(t)
-	doc := strings.Replace(triageDoc, `"remediationSql":""`, `"remediationSql":null`, 1)
-	if doc == triageDoc {
-		t.Fatal("the fixture's remediationSql did not change")
+// --- read-only breaches -----------------------------------------------
+
+// breachEvent is what provider agy raises when a triage session finished a
+// write: the first line is the run's terminal reason, the rest is the
+// explanation the event log keeps.
+func breachEvent(reason string) provider.Event {
+	return provider.Event{
+		Kind: provider.EvBreach,
+		Text: reason + "\na triage session completed a write agy should have refused",
+		Tool: "write_to_file",
+		Raw:  json.RawMessage(`{"event":"step_update"}`),
 	}
-	p := &stubProvider{script: replay(finalEvent(doc))}
+}
+
+// TestBreachEndsTheRunAndFilesNothing is what makes the read-only claim
+// honest. A breach used to arrive as one more EvError, which the run layer
+// counts towards its malformed-line threshold and otherwise ignores — so a
+// session that had watched a write complete went on to file its note and
+// its register row, both asserting a run that wrote nothing.
+func TestBreachEndsTheRunAndFilesNothing(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+		finalEvent(triageDoc),
+	)}
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
 	if err != nil {
 		t.Fatal(err)
 	}
 	out := outs[0]
-	if out.State.Status != store.StatusCompleted {
-		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", out.State.Status, out.State.Reason)
 	}
-	// One answer, no retry: the coercion happens before the retry does.
-	if sends := p.session(0).sentTexts(); len(sends) != 0 {
-		t.Fatalf("sends %v, want none", sends)
-	}
-	warnings := strings.Join(out.State.Warnings, "\n")
-	if !strings.Contains(warnings, "proposedFix.remediationSql") {
-		t.Fatalf("warnings %q", warnings)
+	if out.State.Reason != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("reason %q: the breach's first line is the run's reason", out.State.Reason)
 	}
 
-	// The filed note has an empty SQL block, not a literal null.
-	filed := readFile(t, filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md"))
-	if strings.Contains(filed, "null") || strings.Contains(filed, "<nil>") {
-		t.Fatalf("the note rendered the null:\n%s", filed)
+	// No note, anywhere: not in the notes directory, not in the register.
+	if entries, err := os.ReadDir(filepath.Join(cfg.Root, "notes")); err == nil && len(entries) > 0 {
+		t.Errorf("a breached run filed %d note(s)", len(entries))
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".sirdar", "register.jsonl")); !os.IsNotExist(err) {
+		rows, _ := store.ReadRegister(cfg.Root)
+		t.Errorf("a breached run wrote %d register row(s)", len(rows))
+	}
+
+	// And the session was stopped rather than left to finish its turn.
+	if p.session(0).cancelCount() == 0 {
+		t.Error("the session was not cancelled on the breach")
+	}
+}
+
+// TestBreachIsNotCountedAsAMalformedLine: the malformed-line counter
+// exists so a run survives a few bad lines. A breach is the opposite kind
+// of event and must not need ten of itself to be believed.
+func TestBreachIsNotCountedAsAMalformedLine(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		breachEvent("read-only breach: run_command touch x"),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := outs[0].State.Reason; got != "read-only breach: run_command touch x" {
+		t.Fatalf("reason %q, want the breach and not a malformed-line count", got)
+	}
+}
+
+// TestBreachAfterTheNoteStillFailsTheRun: a note that landed first is not
+// a reprieve. The guarantee it was written under did not hold, so the run
+// is failed rather than completed with a warning, which is how every other
+// late arrival — a bad exit, an expired budget — is treated.
+func TestBreachAfterTheNoteStillFailsTheRun(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		finalEvent(triageDoc),
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", outs[0].State.Status, outs[0].State.Reason)
+	}
+}
+
+// TestEmptyFinalFailsWithoutCallingItASchemaError covers a fix session that
+// ends its turn with nothing in it — the ACP failure the Copilot sandbox
+// run hit. Nothing was ever validated, so neither the retry nor the run's
+// reason may talk about the schema; and the retry restates the report shape
+// the session was asked for several turns earlier.
+func TestEmptyFinalFailsWithoutCallingItASchemaError(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "acp", script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		// One more empty turn than the run tolerates.
+		for i := 0; i <= maxEmptyTurns; i++ {
+			if i > 0 {
+				select {
+				case <-s.sendCh:
+				case <-s.cancelled:
+					return
+				}
+			}
+			if !s.emit(provider.Event{Kind: provider.EvFinal, Text: "   "}) {
+				return
+			}
+		}
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{Prompt: "implement the fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q", out.State.Status)
+	}
+	if out.State.Reason != "the agent ended the turn without an answer" {
+		t.Fatalf("reason %q", out.State.Reason)
+	}
+	sends := p.session(0).sentTexts()
+	if len(sends) != maxEmptyTurns {
+		t.Fatalf("sends: %v", sends)
+	}
+	if !strings.Contains(sends[0], "ended without an answer") {
+		t.Errorf("the nudge does not say what went wrong: %q", sends[0])
+	}
+	if !strings.Contains(sends[0], "deviationFromNote") {
+		t.Errorf("the nudge does not restate the fix report shape: %q", sends[0])
 	}
 }

@@ -3,7 +3,9 @@ import type { RunSummary, Ticket } from '../api/types'
 import RunCard from '../components/cards/RunCard'
 import TicketCard from '../components/cards/TicketCard'
 import InboundPanel from '../components/shell/InboundPanel'
+import KanbanColumn from '../ui/kanban-column'
 import type { InboundDelivery } from '../store/appStore'
+import './board.css'
 
 /** One card in a lane: either an untouched ticket or a run. */
 export type BoardCard =
@@ -160,16 +162,16 @@ export default function Board(props: {
                 : column.empty
 
           return (
-            <section className="lane" key={column.id} data-lane={column.id}>
-              <h2 className="lane-head">
-                <span className="lane-name">{column.name}</span>
-                <span className="lane-count">{cards.length}</span>
-              </h2>
-              <div className="lane-body">
-                {cards.length === 0 ? (
-                  <p className="lane-empty">{emptyText}</p>
-                ) : (
-                  cards.map((card) =>
+            <KanbanColumn
+              key={column.id}
+              lane={column.id}
+              title={column.name}
+              count={cards.length}
+              empty={emptyText}
+            >
+              {cards.length === 0
+                ? null
+                : cards.map((card) =>
                     card.kind === 'ticket' ? (
                       <TicketCard
                         key={`t:${card.key}`}
@@ -185,10 +187,8 @@ export default function Board(props: {
                         onOpen={onOpenRun}
                       />
                     ),
-                  )
-                )}
-              </div>
-            </section>
+                  )}
+            </KanbanColumn>
           )
         })}
       </div>

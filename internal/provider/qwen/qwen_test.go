@@ -582,6 +582,47 @@ func TestForgedHookRequestsAreRefused(t *testing.T) {
 	}
 }
 
+// TestBashDenialHintReachesTheToolResult: a run_shell_command the policy
+// refuses is answered through permissionDecisionReason, which Qwen Code
+// hands back to the model as the tool's own result, so the hint that names
+// permissions.bash and echoes what it allows has to survive decisionReason
+// and writeDecision unchanged, the same as it does on the claude and codex
+// paths.
+func TestBashDenialHintReachesTheToolResult(t *testing.T) {
+	s := newTestSession("0123456789abcdef")
+	s.policy = &provider.PermissionPolicy{BashAllow: []string{
+		"git log*", "git show*", "git grep*", "rg *", "ls *", "cat *", "head *", "tail *", "wc *", "file *",
+	}}
+	body := `{"tool_name":"run_shell_command","tool_input":{"command":"nl -ba ledger.go"},"tool_call_id":"call_1"}`
+
+	rec := &recorder{}
+	s.decide(rec, hookPost(t, s, body))
+
+	var out struct {
+		HookSpecificOutput struct {
+			PermissionDecision       string `json:"permissionDecision"`
+			PermissionDecisionReason string `json:"permissionDecisionReason"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal(rec.body.Bytes(), &out); err != nil {
+		t.Fatalf("decode %q: %v", rec.body.String(), err)
+	}
+	if out.HookSpecificOutput.PermissionDecision != "deny" {
+		t.Fatalf("nl was allowed by a policy that never named it: %q", rec.body.String())
+	}
+	reason := out.HookSpecificOutput.PermissionDecisionReason
+	for _, want := range []string{
+		"not permitted by permissions.bash",
+		"allowed here:",
+		"git log*, git show*, git grep*, rg *, ls *, cat *, head *, tail *",
+		"see .sirdar/config.yaml",
+	} {
+		if !strings.Contains(reason, want) {
+			t.Errorf("permissionDecisionReason %q missing %q", reason, want)
+		}
+	}
+}
+
 // TestProbeRejectsAForgedToken keeps the reachability endpoint from being
 // a way to learn that a session is running, or to reach the mux at all.
 func TestProbeRejectsAForgedToken(t *testing.T) {

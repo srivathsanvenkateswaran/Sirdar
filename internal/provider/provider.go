@@ -6,6 +6,7 @@ package provider
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 )
 
@@ -87,6 +88,25 @@ const (
 	EvFinal         EventKind = "final"
 	EvSystem        EventKind = "system" // init, status, anything informational
 	EvError         EventKind = "error"
+
+	// EvBreach says a read-only session did something a read-only session
+	// cannot do: it finished a write or ran a command. It is separate from
+	// EvError because the two mean opposite things to the run layer. An
+	// error is a line the run survives — the malformed-line counter exists
+	// precisely so that a few of them do not end a run — whereas a breach
+	// is the guarantee the run was started under failing, which no amount
+	// of surviving makes better. A run that sees one ends failed and files
+	// nothing.
+	//
+	// Only a provider that cannot mediate a tool call before it runs has
+	// any use for this: provider agy, where the CLI decides permissions
+	// out of files Sirdar does not own and the first Sirdar hears of a
+	// write is the line saying it finished. Everywhere else a write is
+	// refused at the permission callback and never happens.
+	//
+	// Text is the operator-facing reason, whose first line is the run's
+	// terminal reason and reads "read-only breach: <tool> <path|command>".
+	EvBreach EventKind = "breach"
 )
 
 // Event is one line of a Session's activity stream.
@@ -229,4 +249,35 @@ type Provider interface {
 	Name() string
 	Start(ctx context.Context, spec SessionSpec) (Session, error)
 	Doctor(ctx context.Context, binary string) []Check
+}
+
+// FixSupport is the optional half of the Provider contract for a provider
+// that cannot run `sirdar fix` at all.
+//
+// Start refusing a fix spec is too late to be the only refusal: by the
+// time the runner starts a session, `sirdar fix` has already fetched the
+// default branch, cut a branch from it and checked that branch out into a
+// linked worktree. A provider that was never going to run leaves all of
+// that behind for the operator to clean up. SupportsFix is asked before
+// any of it, and FixRefusal is the same error Start would have returned,
+// so the early refusal and the late one read alike.
+type FixSupport interface {
+	// SupportsFix reports whether a fix session can run on this provider.
+	SupportsFix() bool
+	// FixRefusal is why not, in the words the operator should read.
+	FixRefusal() error
+}
+
+// RefuseFix returns the reason p cannot run a fix session, or nil when it
+// can. A provider that says nothing about fix support can run one: that is
+// every provider Sirdar can mediate a tool call for.
+func RefuseFix(p Provider) error {
+	fs, ok := p.(FixSupport)
+	if !ok || fs.SupportsFix() {
+		return nil
+	}
+	if err := fs.FixRefusal(); err != nil {
+		return err
+	}
+	return fmt.Errorf("provider %s: `sirdar fix` is not supported", p.Name())
 }

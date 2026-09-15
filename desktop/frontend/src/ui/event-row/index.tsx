@@ -11,6 +11,7 @@ export type EventVariant =
   | 'state'
   | 'final'
   | 'error'
+  | 'callout'
 
 /** The one character each variant marks its rail with. */
 export const EVENT_GLYPHS: Record<EventVariant, string> = {
@@ -22,6 +23,7 @@ export const EVENT_GLYPHS: Record<EventVariant, string> = {
   state: '•',
   final: '■',
   error: '!',
+  callout: '?',
 }
 
 export interface EventRowProps {

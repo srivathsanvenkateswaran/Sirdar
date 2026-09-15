@@ -1,7 +1,7 @@
 export type RunState = 'preparing'|'running'|'completed'|'failed'|'blocked'|'over_budget';
 export type RunKind = 'triage'|'rca'|'fix';
 /** The providers a one-off override may name; '' is the workspace's own. */
-export const PROVIDERS = ['claude', 'codex', 'openai', 'acp', 'qwen'] as const;
+export const PROVIDERS = ['claude', 'codex', 'openai', 'acp', 'qwen', 'agy'] as const;
 export type Provider = (typeof PROVIDERS)[number];
 /**
  * Which of a run's notes to read. The empty kind is the run's own note.md,

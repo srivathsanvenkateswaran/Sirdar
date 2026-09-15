@@ -1,51 +1,51 @@
 /*
- * Shared styles for Register, Settings and QuotaMeter. Reads the shell's own
- * tokens (--bg, --fg, --muted, --accent, --border, --mono) with fallbacks so
- * these panels still render correctly if the shell hasn't defined one yet.
- * Status colours (ok/warn/danger) are scoped locally since the shell doesn't
- * carry them.
+ * What is left of the Register, the Eval screen and the Settings modal once
+ * the library draws the rest of them.
+ *
+ * Gone with the restyle: the QuotaMeter block (the library's Quota chip), the
+ * `.register-table` and `.eval-table` blocks and their sort button (the Data
+ * table), and the `.workspace-row` block (the Setting row). Gone with them are
+ * the local `--panel-ok`, `--panel-warn` and `--panel-danger` and both
+ * `prefers-color-scheme` blocks: once the hues are tokens, the theme switch
+ * happens in one place. A passing doctor check reads `--sd-st-done` now rather
+ * than the accent, which used to make it the same hue as a live run.
+ *
+ * Every value here comes from `styles/tokens.css`. Nothing declares a colour,
+ * and `src/styles.library.test.ts` checks it.
  */
 
 .panel {
-  --panel-warn: #9a6b00;
-  --panel-danger: #b3392a;
-  --panel-ok: var(--accent, #2f6f4f);
-  padding: 16px;
-  color: var(--fg, #16181d);
-}
-
-@media (prefers-color-scheme: dark) {
-  .panel {
-    --panel-warn: #d9a441;
-    --panel-danger: #e0685a;
-  }
+  padding: var(--sd-space-4);
+  color: var(--sd-ink);
+  overflow-y: auto;
 }
 
 .panel-heading {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 var(--sd-space-2);
+  font-size: var(--sd-text-body);
   font-weight: 600;
 }
 
 .panel section + section {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid var(--border, #e4e6eb);
+  margin-block-start: var(--sd-space-5);
+  padding-block-start: var(--sd-space-4);
+  border-block-start: 1px solid var(--sd-rule);
 }
 
 .mono {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
+  font-family: var(--sd-font-mono);
+  unicode-bidi: isolate;
 }
 
 .empty-state,
 .loading-state {
-  color: var(--muted, #6b7280);
-  padding: 12px 0;
+  padding-block: var(--sd-space-3);
+  color: var(--sd-ink-3);
 }
 
 .form-error {
-  color: var(--panel-danger);
-  margin: 4px 0;
+  margin-block: var(--sd-space-1);
+  color: var(--sd-st-failed);
 }
 
 /* ---- Register ---- */
@@ -55,339 +55,165 @@
   flex-wrap: wrap;
   align-items: flex-end;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--sd-space-3);
+  margin-block-end: var(--sd-space-3);
 }
 
 .register-filters {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
+  gap: var(--sd-space-4);
 }
 
 .register-filters label {
   display: flex;
   flex-direction: column;
   gap: 3px;
-  font-size: 11px;
-  color: var(--muted, #6b7280);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-3);
 }
 
 .register-filters select {
+  min-block-size: 28px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
   font: inherit;
-  padding: 3px 6px;
-  border: 1px solid var(--border, #e4e6eb);
-  border-radius: 3px;
-  background: var(--bg, #fff);
-  color: var(--fg, #16181d);
 }
 
 .register-summary {
-  margin: 0 0 4px;
-  font-size: 13px;
+  margin: 0 0 var(--sd-space-1);
+  font-size: var(--sd-text-body);
 }
 
 .register-totals {
-  margin: 0 0 12px;
-  color: var(--muted, #6b7280);
+  margin: 0 0 var(--sd-space-3);
+  color: var(--sd-ink-3);
 }
 
-.register-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-variant-numeric: tabular-nums;
-}
-
-.register-table th,
-.register-table td {
-  padding: 6px 10px;
-  text-align: left;
-  border-bottom: 1px solid var(--border, #e4e6eb);
-  vertical-align: middle;
-}
-
-.register-table th {
-  font-weight: 500;
-  color: var(--muted, #6b7280);
-  font-size: 11px;
-}
-
-.sort-btn {
-  border: 0;
-  background: none;
-  font: inherit;
-  font-size: 11px;
-  color: var(--muted, #6b7280);
-  cursor: pointer;
-  padding: 0;
-}
-
-.sort-btn:hover {
-  color: var(--fg, #16181d);
-}
-
+/*
+ * The confidence and verdict chips. They are neither a run state nor a fact
+ * about the account, so they are neither library badge: a verdict is a
+ * judgement a person recorded about a triage, and it keeps the register's own
+ * outline chip.
+ */
 .badge {
   display: inline-block;
-  padding: 1px 6px;
-  border: 1px solid var(--border, #e4e6eb);
-  border-radius: 3px;
-  font-size: 11px;
+  padding-block: 1px;
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-xs);
+  font-size: var(--sd-text-meta);
   line-height: 1.6;
 }
 
 .badge--muted {
-  color: var(--muted, #6b7280);
+  color: var(--sd-ink-3);
 }
 
 .badge--confirmed {
-  color: var(--panel-ok);
-  border-color: var(--panel-ok);
+  color: var(--sd-st-done);
+  border-color: var(--sd-st-done);
 }
 
 .badge--partial {
-  color: var(--panel-warn);
-  border-color: var(--panel-warn);
+  color: var(--sd-st-blocked);
+  border-color: var(--sd-st-blocked);
 }
 
 .badge--wrong {
-  color: var(--panel-danger);
-  border-color: var(--panel-danger);
+  color: var(--sd-st-failed);
+  border-color: var(--sd-st-failed);
 }
 
 .note-dots {
   display: inline-flex;
-  gap: 4px;
+  gap: var(--sd-space-1);
 }
 
 .note-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--border, #e4e6eb);
   display: inline-block;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-rule-strong);
 }
 
 .note-dot--on {
-  background: var(--accent, #2f6f4f);
-}
-
-/* ---- QuotaMeter ---- */
-
-.quota-meter {
-  --panel-warn: #9a6b00;
-  --panel-danger: #b3392a;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  font-size: 11px;
-}
-
-@media (prefers-color-scheme: dark) {
-  .quota-meter {
-    --panel-warn: #d9a441;
-    --panel-danger: #e0685a;
-  }
-}
-
-.quota-meter__provider {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.quota-meter__name {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
-  color: var(--muted, #6b7280);
-  text-transform: lowercase;
-}
-
-.quota-row {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-
-.quota-row__label {
-  color: var(--muted, #6b7280);
-  min-width: 14px;
-}
-
-.quota-bar {
-  width: 44px;
-  height: 4px;
-  border-radius: 2px;
-  background: var(--border, #e4e6eb);
-  overflow: hidden;
-}
-
-.quota-bar__fill {
-  height: 100%;
-  background: var(--accent, #2f6f4f);
-  border-radius: 2px;
-}
-
-.quota-bar__fill.quota-bar--warn {
-  background: var(--panel-warn);
-}
-
-.quota-bar__fill.quota-bar--danger {
-  background: var(--panel-danger);
-}
-
-.quota-row__pct {
-  font-variant-numeric: tabular-nums;
-  min-width: 28px;
-}
-
-.quota-row__reset {
-  color: var(--muted, #6b7280);
+  background: var(--sd-accent);
 }
 
 /* ---- Settings ---- */
 
-.workspace-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.workspace-row {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border, #e4e6eb);
-}
-
-.workspace-row__main {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: baseline;
-}
-
-.workspace-row__name {
-  font-weight: 600;
-}
-
-.workspace-row__root {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
-  color: var(--muted, #6b7280);
-}
-
-.workspace-row__meta {
-  color: var(--muted, #6b7280);
-}
-
-.workspace-row__actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-}
-
-.workspace-row__actions button {
-  font: inherit;
-  padding: 3px 8px;
-  border: 1px solid var(--border, #e4e6eb);
-  border-radius: 3px;
-  background: var(--bg, #fff);
-  color: var(--fg, #16181d);
-  cursor: pointer;
-}
-
-.workspace-row__actions button:hover {
-  border-color: var(--accent, #2f6f4f);
-}
-
-.btn-danger {
-  color: var(--panel-danger);
+.settings {
+  padding-block-end: var(--sd-space-4);
 }
 
 .doctor-list {
   list-style: none;
-  margin: 8px 0 0;
+  margin-block: var(--sd-space-2) 0;
+  margin-inline: var(--sd-space-4);
   padding: 0;
 }
 
 .doctor-check {
   display: flex;
-  gap: 8px;
-  padding: 2px 0;
+  gap: var(--sd-space-2);
+  padding-block: 2px;
   align-items: baseline;
+  font-size: var(--sd-text-meta);
 }
 
 .doctor-check__mark {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
-  width: 20px;
+  inline-size: 20px;
+  font-family: var(--sd-font-mono);
 }
 
 .doctor-check--ok .doctor-check__mark {
-  color: var(--panel-ok);
+  color: var(--sd-st-done);
 }
 
 .doctor-check--warn .doctor-check__mark {
-  color: var(--panel-warn);
+  color: var(--sd-st-blocked);
 }
 
 .doctor-check--fail .doctor-check__mark {
-  color: var(--panel-danger);
+  color: var(--sd-st-failed);
 }
 
 .doctor-check__name {
-  min-width: 140px;
+  min-inline-size: 140px;
 }
 
 .doctor-check__detail {
-  color: var(--muted, #6b7280);
+  color: var(--sd-ink-3);
 }
 
 .add-workspace-form {
   display: flex;
-  gap: 8px;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-4);
 }
 
 .add-workspace-form input {
   flex: 1;
-  max-width: 420px;
-  font: inherit;
-  padding: 4px 8px;
-  border: 1px solid var(--border, #e4e6eb);
-  border-radius: 3px;
-  background: var(--bg, #fff);
-  color: var(--fg, #16181d);
-}
-
-.add-workspace-form button {
-  font: inherit;
-  padding: 4px 10px;
-  border: 1px solid var(--border, #e4e6eb);
-  border-radius: 3px;
-  background: var(--bg, #fff);
-  color: var(--fg, #16181d);
-  cursor: pointer;
-}
-
-.add-workspace-form button:hover:not(:disabled) {
-  border-color: var(--accent, #2f6f4f);
-}
-
-.add-workspace-form button:disabled {
-  color: var(--muted, #6b7280);
-  cursor: default;
-}
-
-.about-version {
-  font-family: var(--mono, ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace);
-  font-weight: 600;
+  max-inline-size: 420px;
 }
 
 .about-note {
-  color: var(--muted, #6b7280);
-  max-width: 60ch;
+  max-inline-size: 60ch;
+  color: var(--sd-ink-3);
 }
 
-/* The reading-direction preference: one checkbox and the line that names it. */
+/* One checkbox and the line that names it. */
 .settings-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--sd-space-2);
   cursor: pointer;
   user-select: none;
 }
@@ -406,17 +232,16 @@
  * and never what it is.
  */
 .config-sub {
-  margin: 14px 0 4px;
-  font-size: 12px;
+  margin-block: var(--sd-space-4) var(--sd-space-1);
+  font-size: var(--sd-text-body);
   font-weight: 600;
-  color: var(--muted, #6b7280);
-  text-transform: uppercase;
+  color: var(--sd-ink-3);
   letter-spacing: 0.05em;
 }
 
 .config-line {
-  margin: 0 0 8px;
-  max-width: 76ch;
+  margin: 0 0 var(--sd-space-2);
+  max-inline-size: 76ch;
   line-height: 1.5;
 }
 
@@ -430,29 +255,29 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 12px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border, #e4e6eb);
+  gap: var(--sd-space-1) var(--sd-space-3);
+  padding-block: 5px;
+  border-block-end: 1px solid var(--sd-rule-faint);
 }
 
 .config-row:last-child {
-  border-bottom: 0;
+  border-block-end: 0;
 }
 
 .config-row__type {
-  min-width: 90px;
+  min-inline-size: 90px;
   font-weight: 600;
 }
 
 .config-row__meta {
-  font-size: 12px;
-  color: var(--muted, #6b7280);
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-3);
 }
 
 /* ---- Eval and the golden set ---- */
 
 .golden-list {
-  margin: 0 0 12px;
+  margin: 0 0 var(--sd-space-3);
   padding: 0;
   list-style: none;
 }
@@ -461,74 +286,49 @@
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 4px 14px;
-  padding: 5px 0;
-  border-bottom: 1px solid var(--border, #e4e6eb);
+  gap: var(--sd-space-1) var(--sd-space-4);
+  padding-block: 5px;
+  border-block-end: 1px solid var(--sd-rule);
 }
 
 .golden-row:last-child {
-  border-bottom: 0;
+  border-block-end: 0;
 }
 
 .golden-row__pick {
   display: flex;
   align-items: baseline;
   gap: 7px;
-  min-width: 160px;
+  min-inline-size: 160px;
   cursor: pointer;
 }
 
 .golden-row__meta {
-  font-size: 12px;
-  color: var(--muted, #6b7280);
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-3);
 }
 
 .eval-meta {
-  margin: 0 0 10px;
-  font-size: 12px;
-  color: var(--muted, #6b7280);
+  margin: 0 0 var(--sd-space-3);
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-3);
   overflow-wrap: anywhere;
 }
 
-.eval-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+/* The state word is the row's only colour, so a failure is found by scanning. */
+.eval-state[data-state='failed'],
+.eval-state[data-state='over_budget'] {
+  color: var(--sd-st-failed);
 }
 
-.eval-table th,
-.eval-table td {
-  padding: 5px 8px;
-  text-align: left;
-  border-bottom: 1px solid var(--border, #e4e6eb);
-}
-
-.eval-table thead th {
-  font-weight: 600;
-  color: var(--muted, #6b7280);
-  white-space: nowrap;
-}
-
-/* The state hue is the row's only colour, so a failure is found by scanning. */
-.eval-row[data-state="failed"] td:nth-child(2),
-.eval-row[data-state="over_budget"] td:nth-child(2) {
-  color: var(--panel-danger);
-}
-
-.eval-row[data-state="completed"] td:nth-child(2) {
-  color: var(--panel-ok);
-}
-
-.eval-row--why td {
-  padding-top: 0;
-  border-bottom: 1px solid var(--border, #e4e6eb);
+.eval-state[data-state='completed'] {
+  color: var(--sd-st-done);
 }
 
 .eval-why {
   margin: 0 0 3px;
-  font-size: 12px;
+  font-size: var(--sd-text-body);
   line-height: 1.5;
-  color: var(--muted, #6b7280);
+  color: var(--sd-ink-3);
   overflow-wrap: anywhere;
 }
