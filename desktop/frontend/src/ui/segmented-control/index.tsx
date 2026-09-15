@@ -13,6 +13,11 @@ export interface SegmentedControlProps {
   /** Names the group for a screen reader. */
   label: string
   disabled?: boolean
+  /**
+   * Options that cannot be chosen right now, each with the reason in words.
+   * The reason is the option's `title`; the screen says it in prose as well.
+   */
+  disabledOptions?: Record<string, string>
 }
 
 /** The reading direction the control is laid out in, read from the DOM. */
@@ -43,6 +48,7 @@ export default function SegmentedControl({
   onChange,
   label,
   disabled = false,
+  disabledOptions = {},
 }: SegmentedControlProps): JSX.Element {
   const group = useRef<HTMLDivElement | null>(null)
   const name = useId()
@@ -51,12 +57,25 @@ export default function SegmentedControl({
     0,
   )
 
-  function move(to: number): void {
-    const next = options[(to + options.length) % options.length]
-    if (!next || disabled) return
-    onChange(next.id)
-    const buttons = group.current?.querySelectorAll<HTMLButtonElement>('.sd-segmented__option')
-    buttons?.[(to + options.length) % options.length]?.focus()
+  const isOff = (id: string): boolean => disabled || id in disabledOptions
+
+  /**
+   * Moves the choice to `to`, or on past it when that option is off: an
+   * arrow key walks the enabled options and wraps, and a run of disabled
+   * ones in the middle is stepped over rather than stopping the reader.
+   */
+  function move(to: number, step: 1 | -1): void {
+    if (disabled) return
+    for (let n = 0; n < options.length; n += 1) {
+      const at = (((to + n * step) % options.length) + options.length) % options.length
+      const next = options[at]
+      if (!next || isOff(next.id)) continue
+      if (at === index) return
+      onChange(next.id)
+      const buttons = group.current?.querySelectorAll<HTMLButtonElement>('.sd-segmented__option')
+      buttons?.[at]?.focus()
+      return
+    }
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -64,27 +83,27 @@ export default function SegmentedControl({
     switch (event.key) {
       case 'ArrowRight':
         event.preventDefault()
-        move(rtl ? index - 1 : index + 1)
+        rtl ? move(index - 1, -1) : move(index + 1, 1)
         break
       case 'ArrowLeft':
         event.preventDefault()
-        move(rtl ? index + 1 : index - 1)
+        rtl ? move(index + 1, 1) : move(index - 1, -1)
         break
       case 'ArrowDown':
         event.preventDefault()
-        move(index + 1)
+        move(index + 1, 1)
         break
       case 'ArrowUp':
         event.preventDefault()
-        move(index - 1)
+        move(index - 1, -1)
         break
       case 'Home':
         event.preventDefault()
-        move(0)
+        move(0, 1)
         break
       case 'End':
         event.preventDefault()
-        move(options.length - 1)
+        move(options.length - 1, -1)
         break
       default:
     }
@@ -112,7 +131,8 @@ export default function SegmentedControl({
           aria-checked={option.id === value}
           // Roving tabindex: the group is one stop, the arrows do the rest.
           tabIndex={i === index ? 0 : -1}
-          disabled={disabled}
+          disabled={isOff(option.id)}
+          title={disabledOptions[option.id]}
           onClick={() => onChange(option.id)}
         >
           {option.label}

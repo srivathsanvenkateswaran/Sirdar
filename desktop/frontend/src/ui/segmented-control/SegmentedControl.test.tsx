@@ -88,6 +88,39 @@ describe('SegmentedControl', () => {
     expect(screen.getByRole('radiogroup')).toHaveAttribute('aria-disabled', 'true')
   })
 
+  it('turns one option off with its reason, and the arrows step over it', () => {
+    const onChange = vi.fn()
+    function Off(): JSX.Element {
+      const [value, setValue] = useState('all')
+      return (
+        <SegmentedControl
+          options={OPTIONS}
+          value={value}
+          onChange={(id) => {
+            onChange(id)
+            setValue(id)
+          }}
+          label="Mode"
+          disabledOptions={{ mine: 'Needs a triage note first' }}
+        />
+      )
+    }
+    render(<Off />)
+    const mine = screen.getByRole('radio', { name: 'Mine' })
+    expect(mine).toBeDisabled()
+    expect(mine).toHaveAttribute('title', 'Needs a triage note first')
+    expect(screen.getByRole('radiogroup')).not.toHaveAttribute('aria-disabled')
+
+    fireEvent.click(mine)
+    expect(onChange).not.toHaveBeenCalled()
+
+    // The arrow walks past the option that is off to the next one that is on.
+    fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowRight' })
+    expect(onChange).toHaveBeenLastCalledWith('blocked')
+    fireEvent.keyDown(screen.getByRole('radiogroup'), { key: 'ArrowLeft' })
+    expect(onChange).toHaveBeenLastCalledWith('all')
+  })
+
   it('carries Arabic labels', () => {
     render(
       <div dir="rtl">

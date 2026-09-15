@@ -30,6 +30,7 @@ equivalent today.
 | active / pressed | n/a. The thumb arriving is the feedback. |
 | focus-visible | The shell's ring on the option itself, not on the track. |
 | disabled | `aria-disabled` on the group, `disabled` on every option, `opacity: .45`. Arrows and clicks both do nothing. |
+| one option off | `disabledOptions` names it with a reason: that option alone is `disabled`, carries the reason as its `title`, and the arrows step over it. The screen says the reason in prose as well, since a tooltip is not a place a fact lives. |
 | loading | n/a. |
 | error | n/a. |
 | empty | n/a. Fewer than two options is a label, not a control. |
@@ -58,6 +59,9 @@ equivalent today.
   physical direction and would send the thumb the wrong way in an Arabic pane.
 - **Do** let the arrows wrap at both ends. A reader holding an arrow key should
   not be stopped without being told why.
+- **Do** say why an option is off, in words, next to the control. The New
+  session screen's RCA and Fix are off until the key has a triage note, and
+  the line under the controls says so.
 
 ## Accessibility
 
@@ -71,6 +75,12 @@ rest are **7.76:1** on `--sd-sunk` or better. Reduced motion: the thumb jumps
 rather than slides, and nothing waits for the transition.
 
 ## Changelog
+
+### 2026-09-15 (New session)
+`disabledOptions` — one option off with a reason, for RCA and Fix before a
+key has a triage note. The arrows walk the options that are on and wrap
+past the ones that are off; Home and End land on the first and last that
+can be chosen.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: the option's padding goes from 4/12 to 5/16
