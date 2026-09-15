@@ -120,11 +120,18 @@ export function modelLabel(provider: string, model: string): string {
  * The chip's value: "claude · Sonnet 5", "claude · CLI default", or, when
  * nothing names a model and a run on that provider reported one, "claude ·
  * CLI default · last used claude-sonnet-5". A missing provider reads as
- * "not set", so the chip never shows a bare word.
+ * "not set", so the chip never shows a bare word. `unknownAs` is what an
+ * empty model reads as where "CLI default" would be a claim — a run that
+ * has not reported its model yet is "model unknown", not the default.
  */
-export function describeModel(provider: string, model: string, lastUsed = ''): string {
+export function describeModel(
+  provider: string,
+  model: string,
+  lastUsed = '',
+  unknownAs = CLI_DEFAULT.label,
+): string {
   if (!provider) return 'not set'
-  const parts = [provider, modelLabel(provider, model)]
+  const parts = [provider, model ? modelLabel(provider, model) : unknownAs]
   if (!model && lastUsed) parts.push(`last used ${lastUsed}`)
   return parts.join(' · ')
 }

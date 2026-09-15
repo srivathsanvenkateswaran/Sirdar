@@ -68,6 +68,10 @@ describe('describeModel', () => {
     expect(describeModel('claude', 'claude-opus-5', 'claude-sonnet-5')).toBe('claude · Opus 5')
   })
 
+  it('reads an empty model as whatever the caller says it is', () => {
+    expect(describeModel('claude', '', '', 'model unknown')).toBe('claude · model unknown')
+  })
+
   it('never shows a bare word when there is no provider', () => {
     expect(describeModel('', '')).toBe('not set')
   })
