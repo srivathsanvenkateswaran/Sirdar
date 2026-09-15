@@ -822,12 +822,14 @@ func promptText(spec provider.SessionSpec) string {
 	var b strings.Builder
 	b.WriteString(spec.Prompt)
 	b.WriteString("\n\n---\n\nFinish by replying with one JSON object and nothing else: " +
-		"no prose before or after it, no commentary, no summary. " +
-		"A single ```json fenced block is accepted; anything else is discarded and you will be asked again.")
+		"no prose before or after it, no commentary, no summary, no code fence. " +
+		"Anything else is discarded and you will be asked again.")
 	if len(spec.OutputSchema) > 0 {
 		b.WriteString("\n\nThe object must match this JSON Schema:\n\n```json\n")
 		b.Write(compactJSON(spec.OutputSchema))
 		b.WriteString("\n```")
+		b.WriteString("\n\nThat schema describes the shape of your answer; it is not the answer. " +
+			"Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence.")
 	}
 	b.WriteString("\n\nThis run is read-only. Do not write, edit, move or delete any file, " +
 		"and do not run a command that changes anything: such a request is refused by the harness, " +

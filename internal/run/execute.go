@@ -22,6 +22,17 @@ import (
 // maxMalformed is how many malformed provider lines in a row end the run.
 const maxMalformed = 10
 
+// noWireSchemaEnforcement names the providers with no mechanism to enforce
+// SessionSpec.OutputSchema on the wire: the schema reaches the model only
+// as prompt text, so nothing stops it from echoing the schema's own header
+// back, or answering with the schema itself. Claude and Qwen pass it as a
+// CLI flag their own process enforces, Codex as a protocol param its agent
+// enforces, and the openai loop as a tool-call parameter schema; ACP has
+// none of those, so it alone gets the sharpened retry and prompt wording.
+var noWireSchemaEnforcement = map[string]bool{
+	"acp": true,
+}
+
 // closeGrace is how long a session gets to end on its own after its input
 // has been closed, before it is cancelled outright. The note is already on
 // disk by then; this only decides how the process is reaped. Runner.CloseGrace
@@ -759,6 +770,23 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 
 	err := note.Validate(noteKind(p.kind), doc)
+	if err != nil {
+		// A provider with no wire-level schema enforcement (acp today) is
+		// only ever shown the schema as prompt text, and sometimes echoes
+		// its own header keys ($schema, title, ...) back alongside a real
+		// answer, or — rarer — answers with the schema itself. Recover the
+		// former when the rest of the document goes on to validate; the
+		// latter gets a clearer reason than a bare additionalProperties
+		// error naming every schema keyword in turn.
+		schema := schemaFor(p.kind)
+		if cleaned, schemaItself, ok := stripSchemaEcho(schema, doc); ok {
+			if cerr := note.Validate(noteKind(p.kind), cleaned); cerr == nil {
+				doc, err = cleaned, nil
+			}
+		} else if schemaItself {
+			err = fmt.Errorf("the agent's answer is the JSON Schema itself (a root \"properties\" object), not a document shaped by it")
+		}
+	}
 	if err == nil {
 		ex.final = append([]byte(nil), doc...)
 		ex.rawFinal = ""
@@ -791,6 +819,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	msg := "Your previous answer did not match the schema: " +
 		strings.ReplaceAll(strings.TrimSpace(err.Error()), "\n", "; ") +
 		". Reply again with the corrected JSON object only."
+	if noWireSchemaEnforcement[r.providerName()] {
+		// This provider has nothing enforcing OutputSchema on the wire, so
+		// the retry has to spell out the exact mistake it is likely to
+		// repeat: quoting the schema's own header back instead of the
+		// answer it describes.
+		msg += " Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+	}
 	sendErr := sess.Send(ctx, msg)
 	if sendErr == nil {
 		return
