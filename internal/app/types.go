@@ -11,11 +11,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
 // Event kinds published on Subscribe.
@@ -46,9 +49,15 @@ type Budget struct {
 }
 
 // RunSummary is the card-sized view of one run.
+//
+// Title is the ticket's, read off the run directory: the bundle's tracker
+// title or helpdesk subject, else the title of the first note the run
+// wrote, else empty. A card shows it over the key; without it the key is
+// the title.
 type RunSummary struct {
 	RunID     string   `json:"runId"`
 	Key       string   `json:"key"`
+	Title     string   `json:"title"`
 	Kind      string   `json:"kind"`
 	Status    string   `json:"status"`
 	Provider  string   `json:"provider"`
@@ -355,7 +364,9 @@ func wireTime(t time.Time) string {
 	return t.UTC().Format(time.RFC3339Nano)
 }
 
-// SummaryOf converts a persisted run state into its wire summary.
+// SummaryOf converts a persisted run state into its wire summary. It reads
+// nothing off disk, so Title stays empty; SummaryAt fills it from the run
+// directory.
 func SummaryOf(s store.State) RunSummary {
 	notes := s.Notes
 	if notes == nil {
@@ -381,6 +392,64 @@ func SummaryOf(s store.State) RunSummary {
 	}
 }
 
+// SummaryAt is SummaryOf with the ticket title the run directory holds.
+func SummaryAt(dir string, s store.State) RunSummary {
+	out := SummaryOf(s)
+	out.Title = titleOf(dir, s.Notes)
+	return out
+}
+
+// titleOf finds the ticket title for a run kept at dir: the bundle's
+// tracker title, else its helpdesk subject, else the first note's own
+// title, else "". A run directory with neither is not an error; the key
+// stands in.
+func titleOf(dir string, notes []string) string {
+	if data, err := os.ReadFile(filepath.Join(dir, "bundle", "ticket.json")); err == nil {
+		var b ticket.Bundle
+		if json.Unmarshal(data, &b) == nil {
+			if b.Tracker != nil && strings.TrimSpace(b.Tracker.Title) != "" {
+				return strings.TrimSpace(b.Tracker.Title)
+			}
+			if b.Helpdesk != nil && strings.TrimSpace(b.Helpdesk.Subject) != "" {
+				return strings.TrimSpace(b.Helpdesk.Subject)
+			}
+		}
+	}
+	for _, path := range notes {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		if t := noteTitle(string(data)); t != "" {
+			return t
+		}
+	}
+	return ""
+}
+
+// noteTitle is a note's title: a `title` key in its frontmatter when it
+// has one, else the first H1, which is where the shipped templates put it.
+func noteTitle(text string) string {
+	if t := strings.TrimSpace(note.Frontmatter(text, "title")); t != "" {
+		return t
+	}
+	inFrontmatter := false
+	for i, line := range strings.Split(text, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "---" && (i == 0 || inFrontmatter) {
+			inFrontmatter = !inFrontmatter
+			continue
+		}
+		if inFrontmatter {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "# ") {
+			return strings.TrimSpace(strings.TrimPrefix(trimmed, "# "))
+		}
+	}
+	return ""
+}
+
 // DetailOf converts a persisted run state into its wire detail, resolving
 // the run's own paths against the workspace root.
 func DetailOf(root string, s store.State) RunDetail {
@@ -390,7 +459,7 @@ func DetailOf(root string, s store.State) RunDetail {
 		warnings = []string{}
 	}
 	d := RunDetail{
-		RunSummary: SummaryOf(s),
+		RunSummary: SummaryAt(dir, s),
 		PromptPath: filepath.Join(dir, "prompt.md"),
 		BundleDir:  filepath.Join(dir, "bundle"),
 		Warnings:   warnings,

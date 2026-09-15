@@ -6,6 +6,7 @@ const sample: RunSummary[] = [
   {
     runId: '20260910-120000-OMNI-1',
     key: 'OMNI-1',
+    title: 'Statement export times out',
     kind: 'triage',
     status: 'completed',
     provider: 'claude',

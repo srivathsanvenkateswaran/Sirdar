@@ -12,7 +12,14 @@ export type Provider = (typeof PROVIDERS)[number];
 export type NoteKind = ''|'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: Provider; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
-export interface RunSummary { runId: string; key: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+/**
+ * `title` is the ticket's, read off the run directory by the service: the
+ * bundle's tracker title or helpdesk subject, else the first note's own title,
+ * else ''. A card shows it over the key; with no title the key is the title.
+ * The wire always carries it; it is optional here so a literal built in a test
+ * need not spell an empty one.
+ */
+export interface RunSummary { runId: string; key: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`
