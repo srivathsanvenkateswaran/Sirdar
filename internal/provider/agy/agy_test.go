@@ -722,6 +722,24 @@ func TestChildEnvStripsRedirectionVariables(t *testing.T) {
 	}
 }
 
+// TestUnconfinedReadsAreReported: the read scope is enforced wherever
+// Sirdar answers a tool call, and nowhere on this provider. Every session
+// says so on its own event stream, so the run's record shows what it could
+// reach rather than implying the read-only posture covered it.
+func TestUnconfinedReadsAreReported(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if !containsSubstring(d.systems, "reads are not confined on provider agy") {
+		t.Fatalf("the session said nothing about unconfined reads: %v", d.systems)
+	}
+}
+
 func TestMCPStrictIsReportedAsUnenforceable(t *testing.T) {
 	spec := fakeSpec(t, "testdata/script-basic.jsonl")
 	spec.MCPStrict = true
@@ -841,7 +859,7 @@ func TestDoctorRows(t *testing.T) {
 	for _, c := range checks {
 		byName[c.Name] = c
 	}
-	for _, name := range []string{"agy --version", "agy models", "agy model", "agy settings", "agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy --version", "agy models", "agy model", "agy settings", "agy mcp scope", "agy reads", "agy fix mode"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("missing doctor row %q: %+v", name, checks)
 		}
@@ -855,7 +873,7 @@ func TestDoctorRows(t *testing.T) {
 	if byName["agy model"].Severity() != provider.LevelOK {
 		t.Errorf("a configured model on the list should pass: %+v", byName["agy model"])
 	}
-	for _, name := range []string{"agy settings", "agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy settings", "agy mcp scope", "agy reads", "agy fix mode"} {
 		c := byName[name]
 		if c.Severity() != provider.LevelWarn {
 			t.Errorf("%s should warn, not fail or pass silently: %+v", name, c)

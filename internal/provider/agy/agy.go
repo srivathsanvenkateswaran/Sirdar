@@ -385,6 +385,14 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	// It is said once per session rather than left to doctor alone,
 	// because a run's own event log is where an operator looks afterwards
 	// to find out what the session could reach.
+	// Said once per session for the same reason the MCP notice is: the
+	// run's own event log is where an operator looks afterwards to find
+	// out what the session could reach, and "any file the CLI would open"
+	// is part of that answer.
+	notices = append(notices, systemNotice("reads are not confined on provider agy: the CLI answers "+
+		"its own tool calls, so a read outside the workspace never reaches Sirdar's permission policy "+
+		"and permissions.readAlso decides nothing for this session"))
+
 	if spec.MCPStrict {
 		notices = append(notices, systemNotice("mcp.workspaceOnly is not enforceable on provider agy: "+
 			"the CLI loads ~/.gemini/config/mcp_config.json for every session and takes no flag that "+
@@ -509,8 +517,22 @@ func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg prov
 			"run `agy models` and set agy.model to one that is")
 	}
 
-	checks := []provider.Check{version, login, model, settingsCheck(cfg), mcpCheck(cfg), fixCheck()}
+	checks := []provider.Check{version, login, model, settingsCheck(cfg), mcpCheck(cfg), readCheck(), fixCheck()}
 	return checks
+}
+
+// readCheck says that permissions.readAlso and the read scope behind it
+// govern nothing here. Everywhere Sirdar can answer a tool call, a read
+// whose target lands outside the workspace, the run directory and the
+// readAlso globs is refused; on this provider there is no call to answer,
+// so the session reads whatever the CLI lets it read. It is a warning
+// rather than a failure for the same reason the MCP row is: it describes
+// the provider the operator chose, not a misconfiguration.
+func readCheck() provider.Check {
+	return provider.Warn("agy reads", "reads are not confined on this provider: the CLI answers its "+
+		"own tool calls, so a Read, Glob or Grep outside the workspace is never offered to Sirdar's "+
+		"permission policy and permissions.readAlso decides nothing. What stands in its place is "+
+		"`--mode plan` and the CLI's own permission rules")
 }
 
 // agySettings is the part of the CLI's own settings file that decides what

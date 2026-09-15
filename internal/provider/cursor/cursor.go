@@ -433,6 +433,13 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	for _, ev := range envNotices {
 		s.events <- ev
 	}
+	// Said on the run's own event log, not only in doctor: this is where
+	// an operator looks afterwards to find out what the session could
+	// reach, and on this provider the answer includes every file the CLI
+	// was willing to open.
+	s.events <- systemNotice("reads are not confined on provider cursor: the CLI approves its own " +
+		"tool calls, so a Read, Glob or Grep outside the workspace never reaches Sirdar's permission " +
+		"policy and permissions.readAlso decides nothing for this session")
 	if spec.Budget.MaxUSD > 0 {
 		s.events <- systemNotice("the Cursor CLI reports no cost, so budget.maxUsd cannot stop this run")
 	}
@@ -477,6 +484,7 @@ func (p *Provider) doctor(ctx context.Context, binary string, cfg provider.Docto
 	if row, ok := proxyCheck(os.Environ()); ok {
 		checks = append(checks, row)
 	}
+	checks = append(checks, readCheck())
 	checks = append(checks, provider.Warn("cursor fix",
 		"`sirdar fix` is refused on this provider: "+shortFixReason()))
 	if withConfig {
@@ -537,6 +545,19 @@ func (p *Provider) modelCheck(ctx context.Context, binary string) provider.Check
 		}
 	}
 	return check
+}
+
+// readCheck says that the read scope governs nothing here. Everywhere
+// Sirdar can answer a tool call, a read landing outside the workspace, the
+// run directory and the permissions.readAlso globs is refused; on this
+// provider there is no call to answer, so the session reads whatever the
+// CLI lets it read. A warning, not a failure: it describes the provider
+// the operator chose rather than a misconfiguration.
+func readCheck() provider.Check {
+	return provider.Warn("cursor reads", "reads are not confined on this provider: the CLI approves "+
+		"its own tool calls, so a Read, Glob or Grep outside the workspace is never offered to "+
+		"Sirdar's permission policy and permissions.readAlso decides nothing. The execution mode "+
+		"and the excluded tool list are what stand in its place")
 }
 
 // mcpCheck says what a session will actually see, which is not what
