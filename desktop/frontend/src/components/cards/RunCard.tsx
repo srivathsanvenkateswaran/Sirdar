@@ -52,6 +52,7 @@ export default function RunCard(props: {
       status={status}
       title={title}
       provider={run.provider}
+      assignee={run.assignee}
       clock={clock || undefined}
       clockTitle={live ? 'Running for' : 'Waiting for an answer for'}
       onOpen={() => onOpen(run.runId)}

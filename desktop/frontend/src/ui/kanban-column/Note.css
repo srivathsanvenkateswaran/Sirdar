@@ -1,0 +1,18 @@
+/*
+ * The lane head's note: a few words after the count saying what narrows the
+ * lane. It is in its own stylesheet so the column's own layout — the well,
+ * the rail, the head, the stacking rule — stays one file.
+ *
+ * The head is tracked uppercase; the note is not, because it is a sentence
+ * about the lane rather than the lane's name.
+ */
+
+.sd-lane__note {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}

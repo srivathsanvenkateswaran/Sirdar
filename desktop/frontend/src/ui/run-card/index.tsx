@@ -2,6 +2,7 @@ import KindChip from '../kind-chip'
 import ProviderMark from '../provider-mark'
 import StateGlyph, { type GlyphState } from '../state-glyph'
 import { STATE_WORDS } from '../status-badge'
+import Avatar from './Avatar'
 import './RunCard.css'
 
 export interface RunCardProps {
@@ -16,8 +17,16 @@ export interface RunCardProps {
    * that said the key twice was a card with nothing else to say.
    */
   title?: string
-  /** The provider running it; drawn as the card's avatar. */
+  /** The provider running it; drawn as the card's mark. */
   provider: string
+  /**
+   * Who the ticket belongs to, as the tracker spells them. Drawn as a circle
+   * of their initials at the foot, before the provider's mark, and named in
+   * full in the card's accessible label. Nothing is drawn without one: an
+   * unassigned ticket has no owner to show, and an empty circle would read as
+   * a person whose name went missing.
+   */
+  assignee?: string
   /**
    * Already formatted, e.g. `4:12`. Drawn only while the run is live or
    * blocked — the two states where a clock is a fact about now — whatever the
@@ -50,7 +59,8 @@ const CLOCKED: GlyphState[] = ['preparing', 'running', 'blocked']
  *
  * The title first, up to two lines, with no key above it: a board is read by
  * title and the key is looked up second, so the key sits at the foot in the
- * ledger face beside the provider's mark. Under the title a kind chip; at the
+ * ledger face beside the assignee's initials and the provider's mark. Under
+ * the title a kind chip; at the
  * foot the state's glyph and word, with a clock only while the run is live
  * or waiting on a person. No reason and no cost: those are the session's, and
  * a card that quoted them was a second session screen at 240 wide.
@@ -68,6 +78,7 @@ export default function RunCard({
   status,
   title,
   provider,
+  assignee,
   clock,
   clockTitle,
   label,
@@ -78,7 +89,9 @@ export default function RunCard({
   const heading = title || runKey
   const showClock = Boolean(clock) && CLOCKED.includes(status)
   const word = STATE_WORDS[status] ?? status
-  const name = label ?? (title ? `${runKey}: ${title}, ${word}` : `${runKey}, ${word}`)
+  const who = assignee?.trim() ? `, assigned to ${assignee.trim()}` : ''
+  const name =
+    label ?? (title ? `${runKey}: ${title}, ${word}${who}` : `${runKey}, ${word}${who}`)
 
   const body = (
     <>
@@ -100,6 +113,7 @@ export default function RunCard({
               {runKey}
             </span>
           )}
+          {assignee?.trim() ? <Avatar name={assignee.trim()} /> : null}
           <ProviderMark provider={provider} size="sm" />
         </span>
       </span>

@@ -33,9 +33,16 @@ session's.
   word in the state's hue and, on a live or blocked run only, the mono
   clock; it is the side that gives way when the card is narrow, cut with an
   ellipsis. On the trailing side `__who`, which never shrinks: `__key`
-  (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`) and
-  the provider mark at `sm`. The key is left out of the foot when it is
-  already the title.
+  (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`), the
+  assignee's avatar, and the provider mark at `sm`. The key is left out of the
+  foot when it is already the title.
+- `span.sd-avatar` — the assignee, as a 22px circle of their initials:
+  `--sd-sunk` fill, 11px at weight 600 in `--sd-ink-2`, `dir="ltr"`, the whole
+  name in `title`. One letter for a one-word name, two when the name has two
+  parts; an address is read by its local part, whose `.`, `_`, `-` and `+` are
+  word breaks. It is `aria-hidden`, because the card's own label already names
+  the person. Nothing at all is drawn without an assignee. Its rules are in
+  `Avatar.css`, which the register and the session topbar import too.
 
 ## States
 
@@ -52,13 +59,15 @@ session's.
 | selected | n/a today. |
 | live | `preparing` and `running` take `border-inline-start: 2px solid var(--sd-accent)`, the play glyph in `--sd-st-live`, and the clock. Nothing else on the board wears the accent. |
 | blocked | The question glyph in `--sd-st-blocked` and the clock: how long a person has been asked. |
-| RTL | The title lays itself out from its own first letter; the key and the clock stay LTR; the footer's two ends swap from flex, and the accent edge moves to the right with `border-inline-start`. |
+| unassigned | No avatar at all. An empty circle reads as a person whose name went missing, not as a ticket nobody owns. |
+| RTL | The title lays itself out from its own first letter; the key, the clock and the initials stay LTR; the footer's two ends swap from flex, and the accent edge moves to the right with `border-inline-start`. |
 
 ## Tokens used
 
 - `--sd-sheet`, `--sd-rule`, `--sd-rule-strong` — the box and its hover
 - `--sd-accent` — the live edge
-- `--sd-ink` / `--sd-ink-3` — title and key
+- `--sd-ink` / `--sd-ink-2` / `--sd-ink-3` — title, initials, key
+- `--sd-sunk` — the avatar's fill
 - `--sd-font-mono`, `--sd-font-ui`
 - `--sd-space-2` / `--sd-space-3` / `--sd-space-4` — gaps and inline padding
 - `--sd-text-body`, `--sd-text-ledger`
@@ -86,18 +95,31 @@ radius and the 14px block padding are the mock's; one component uses each.
 
 ## Accessibility
 
-Native `button` (or `a`) with `aria-label` of `"<key>: <title>, <state>"` —
-`"<key>, <state>"` when there is no title — because the visible title is
-clamped, the key alone does not say what the run is about, and the state is
-the one fact a reader scanning a lane by name needs before deciding to open
-it; `label` overrides it when the default does not say what the click does.
-State is carried by the glyph's word, kind by the chip's word, provider by
-the mark's `aria-label`; none of the three is colour alone. Contrast: title
-`--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3` **5.25:1**, the state
-hues **4.84:1** or more (blocked, the tightest) in light. Reduced motion:
-only the hover border transitions.
+Native `button` (or `a`) with `aria-label` of
+`"<key>: <title>, <state>, assigned to <name>"` — the key alone when there is
+no title, and the assignee clause left off when nobody is assigned — because
+the visible title is clamped, the key alone does not say what the run is
+about, the state is the one fact a reader scanning a lane by name needs
+before deciding to open it, and initials are not a name; `label` overrides it
+when the default does not say what the click does. State is carried by the
+glyph's word, kind by the chip's word, provider by the mark's `aria-label`,
+assignee by the label's own clause; none of the four is colour alone.
+Contrast: title `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3`
+**5.25:1**, initials `--sd-ink-2` on `--sd-sunk` **7.11:1** in light and
+**8.09:1** in dark, the state hues
+**4.84:1** or more (blocked, the tightest) in light. Reduced motion: only the
+hover border transitions.
 
 ## Changelog
+
+### 2026-09-16 (assignee round)
+`assignee` joins the props and draws an avatar at the foot, before the
+provider mark: a 22px circle of the person's initials over `--sd-sunk`, the
+whole name in `title`, and the name spelled out at the end of the card's
+accessible label. Nothing is drawn for a ticket nobody owns. The circle's
+rules live in `Avatar.css` beside the component, because the register's
+assignee column and the session topbar's "assigned to" line draw the same
+person the same way.
 
 ### 2026-09-15 (fix round)
 The accessible name ends in the state's word. A card with no title shows the

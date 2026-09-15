@@ -25,6 +25,10 @@ Built. `desktop/frontend/src/ui/kanban-column/`, in the shape of `.col` in
   600, `letter-spacing: .08em`, uppercase, `--sd-ink-3`, `padding-block:
   12px`, `padding-inline: 8px`.
 - `span.sd-lane__count` — tabular, in the same ink as the name.
+- `span.sd-lane__note` — optional, after the count, as "· assigned to you":
+  the same ink and size, but sentence case and untracked, because it is a
+  sentence about the lane and not the lane's name. It ellipsises rather than
+  pushing the count out of a narrow well. Its rules are in `Note.css`.
 - `div.sd-lane__body` — the scrolling stack of cards, `gap: 8px`.
 - `p.sd-lane__empty` — prose for an empty column.
 
@@ -77,6 +81,13 @@ board's own heading structure. Contrast: the head and the empty prose are
 motion: nothing moves.
 
 ## Changelog
+
+### 2026-09-16 (assignee round)
+`note` joins the props: a few words after the count saying what narrows the
+lane. The board's Queue reads "QUEUE 6 · assigned to you", because a lane
+that lists only the reader's tickets has to say so whether or not it has
+anything in it. It is part of the head's own heading text, so a screen reader
+meets it on the way into the column.
 
 ### 2026-09-15 (Board build)
 Reshaped to the Board mock's `.col`: a 248-wide card-row well at radius 8

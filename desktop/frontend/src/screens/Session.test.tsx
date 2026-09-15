@@ -185,6 +185,22 @@ describe('Session', () => {
     expect(f.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
   })
 
+  it('says in the topbar who the ticket is assigned to, and nothing when nobody is', async () => {
+    const f = fake({ detail: { ...RUN, assignee: 'Sri Venkateswaran' } })
+    const { container } = renderSession(f, { title: 'Statement export times out' })
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+
+    const line = container.querySelector('.sd-assigned') as HTMLElement
+    expect(line).toHaveTextContent('assigned to Sri Venkateswaran')
+    expect(line).toHaveAttribute('title', 'Sri Venkateswaran')
+    // After the title, not among the run's own figures.
+    expect(line.previousElementSibling).toHaveClass('session-title')
+
+    const bare = renderSession(fake({ detail: { ...RUN, assignee: '' } }))
+    await bare.findByRole('heading', { name: 'OMNI-2510' })
+    expect(bare.container.querySelector('.sd-assigned')).toBeNull()
+  })
+
   it('always names the model in the topbar, and says so when the run has not reported one', async () => {
     const f = fake({ detail: { ...RUN, model: '' } })
     renderSession(f)
