@@ -83,7 +83,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	}
 	// The bind decision, handed to the handler rather than re-derived there:
 	// it is what the fix route is gated on.
-	opts = append(opts, httpapi.LoopbackOnly(loopback))
+	opts = append(opts, httpapi.LoopbackOnly(loopback), httpapi.ListenAddr(*addr))
 
 	ctx, stop := interruptible()
 	defer stop()
