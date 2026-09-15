@@ -1,6 +1,7 @@
 package fix
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -989,6 +990,77 @@ func TestAcceptDeviationRerunFallsBackWhenTheBranchMoved(t *testing.T) {
 	}
 }
 
+// TestPushReviewedRefusesATamperedWorktreePath: a state.json is not
+// adversarial for anything else the fix flow reads back from it, but
+// Fix.Worktree feeds `git worktree remove --force`, which deletes whatever
+// is at the path with no further question. A state naming a path outside
+// .sirdar/worktrees/ — standing in for a hand-edited state.json, or an
+// operator's own worktree recorded there by accident — must not be trusted:
+// the rerun falls back to the main tree and the path named is left alone.
+func TestPushReviewedRefusesATamperedWorktreePath(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	noGH(t)
+	report := strings.Replace(fixReport, `"deviationFromNote": ""`,
+		`"deviationFromNote": "different file"`, 1)
+
+	first, err := Run(t.Context(), newDeps(w, &stubProvider{report: report, edit: editCSV, t: t}), "OMNI-1", Options{})
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if first.Worktree == "" || first.Blocked == "" {
+		t.Fatalf("the first run did not block with a worktree: %+v", first)
+	}
+
+	// An operator's own worktree, entirely outside .sirdar/worktrees/ —
+	// what a tampered state.json is standing in for.
+	victim := filepath.Join(t.TempDir(), "operators-own-worktree")
+	run(t, w.root, "git", "worktree", "add", "-b", "operators-own-branch", victim)
+
+	rn, state, err := store.Open(w.root, first.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	state.Fix.Worktree = victim
+	if err := rn.WriteState(state); err != nil {
+		t.Fatal(err)
+	}
+
+	var stderr bytes.Buffer
+	deps := newDeps(w, &refusingProvider{t: t})
+	deps.Stderr = &stderr
+
+	second, err := Run(t.Context(), deps, "OMNI-1", Options{AcceptDeviation: true})
+	if err != nil {
+		t.Fatalf("rerun: %v", err)
+	}
+	if !second.Pushed {
+		t.Fatalf("the rerun did not push: %+v", second)
+	}
+	if second.Commit != first.Commit {
+		t.Errorf("the rerun did not push the reviewed commit: got %s, want %s", second.Commit, first.Commit)
+	}
+	if second.Worktree != "" {
+		t.Errorf("the rerun trusted the tampered worktree path: %q", second.Worktree)
+	}
+	if !strings.Contains(stderr.String(), victim) {
+		t.Errorf("no warning naming the out-of-bounds worktree:\n%s", stderr.String())
+	}
+	// The point of the guard: the path named outside .sirdar/worktrees/ is
+	// never handed to `git worktree remove --force`.
+	if !isWorktree(victim) {
+		t.Errorf("the operator's own worktree was removed: %s", victim)
+	}
+	found := false
+	for _, wt := range w.worktrees(t) {
+		if wt == realPath(victim) {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("git no longer knows about the operator's worktree %s: %v", victim, w.worktrees(t))
+	}
+}
+
 // TestDirtyTreeOfOnlySirdarFilesSaysSo: the commonest way to meet "working
 // tree not clean" is a workspace whose .sirdar/ is not excluded, and the
 // error that just says "commit or stash" sends people to commit their own
@@ -1299,5 +1371,80 @@ func TestTheWorktreeSessionReservesItsOwnGitAndSirdar(t *testing.T) {
 	in, _ := json.Marshal(map[string]string{"file_path": filepath.Join(spec.Cwd, "export", "csv.go")})
 	if d := spec.Policy.Decide("Write", in); !d.Allow {
 		t.Errorf("the session may not edit its own tree: %s", d.Message)
+	}
+}
+
+// --- pruning stale fix worktrees ---------------------------------------
+
+// seedFixWorktree registers a linked worktree under .sirdar/worktrees/ on a
+// branch of its own, and a run whose state.json says status and updatedAt,
+// so pruneStaleWorktrees has something to judge it by. The run id doubles
+// as the worktree's directory name, the convention worktreePath itself
+// uses.
+func seedFixWorktree(t *testing.T, root, runID, branch string, status store.Status, updatedAt time.Time) string {
+	t.Helper()
+	path := worktreePath(root, runID)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	run(t, root, "git", "worktree", "add", "-b", branch, path)
+
+	rn, err := store.CreateID(root, "OMNI-1", runID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := rn.WriteState(store.State{
+		RunID: runID, Key: "OMNI-1", Kind: store.KindFix, Status: status,
+		StartedAt: updatedAt, UpdatedAt: updatedAt,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+// TestPruneStaleWorktreesLeavesRunningAndBlockedAlone: only a worktree
+// whose run ended — completed or failed — a day or more ago is clutter.
+// One still running, blocked on an operator, or simply too recent to judge
+// safely is left exactly as it is.
+func TestPruneStaleWorktreesLeavesRunningAndBlockedAlone(t *testing.T) {
+	w := newWorkspace(t, "triaged")
+	now := time.Now()
+	day := 24 * time.Hour
+
+	oldCompleted := seedFixWorktree(t, w.root, "20260101T000000Z-0001", "prune-completed", store.StatusCompleted, now.Add(-2*day))
+	oldFailed := seedFixWorktree(t, w.root, "20260101T000000Z-0002", "prune-failed", store.StatusFailed, now.Add(-2*day))
+	oldBlocked := seedFixWorktree(t, w.root, "20260101T000000Z-0003", "prune-blocked", store.StatusBlocked, now.Add(-2*day))
+	recentCompleted := seedFixWorktree(t, w.root, "20260101T000000Z-0004", "prune-recent", store.StatusCompleted, now.Add(-1*time.Hour))
+	running := seedFixWorktree(t, w.root, "20260101T000000Z-0005", "prune-running", store.StatusRunning, now.Add(-2*day))
+
+	var stderr bytes.Buffer
+	pruneStaleWorktrees(t.Context(), git{dir: w.root}, w.root, now, &stderr)
+
+	live := map[string]bool{}
+	for _, path := range w.worktrees(t) {
+		live[path] = true
+	}
+	if live[realPath(oldCompleted)] {
+		t.Errorf("an old completed run's worktree survived pruning: %s", oldCompleted)
+	}
+	if live[realPath(oldFailed)] {
+		t.Errorf("an old failed run's worktree survived pruning: %s", oldFailed)
+	}
+	for name, path := range map[string]string{
+		"blocked": oldBlocked, "too-recent": recentCompleted, "running": running,
+	} {
+		if !live[realPath(path)] {
+			t.Errorf("the %s run's worktree was pruned: %s", name, path)
+		}
+	}
+	for _, want := range []string{"20260101T000000Z-0001", "20260101T000000Z-0002"} {
+		if !strings.Contains(stderr.String(), want) {
+			t.Errorf("no log line named the pruned run %s:\n%s", want, stderr.String())
+		}
+	}
+	for _, dontWant := range []string{"20260101T000000Z-0003", "20260101T000000Z-0004", "20260101T000000Z-0005"} {
+		if strings.Contains(stderr.String(), dontWant) {
+			t.Errorf("a worktree that should have been left alone was logged as pruned (%s):\n%s", dontWant, stderr.String())
+		}
 	}
 }

@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
 func init() { commands["init"] = cmdInit }
@@ -110,16 +112,34 @@ func writeTemplates(dir string) error {
 	return nil
 }
 
-// addGitExcludes appends the run directory and register to
-// .git/info/exclude, skipping lines that are already there so a repeated
-// init does not pile them up. A directory that is not a git checkout is
-// not an error: there is simply nothing to exclude.
+// addGitExcludes appends the run directory and register to the repository's
+// info/exclude, skipping lines that are already there so a repeated init
+// does not pile them up. A directory that is not a git checkout is not an
+// error: there is simply nothing to exclude.
+//
+// <root>/.git is a directory in an ordinary checkout, but a *file* in a
+// linked worktree — one naming the main tree's .git/worktrees/<name>. Its
+// info/exclude belongs to the repository, not to any one worktree, so it is
+// found with `git rev-parse --git-common-dir` rather than assumed to be
+// alongside <root>/.git; a linked worktree run from a bare os.Stat check
+// would otherwise see a non-directory and return silently, excluding
+// nothing anywhere.
 func addGitExcludes(root string) ([]string, error) {
 	gitDir := filepath.Join(root, ".git")
-	if info, err := os.Stat(gitDir); err != nil || !info.IsDir() {
+	info, err := os.Lstat(gitDir)
+	if err != nil {
 		return nil, nil
 	}
-	infoDir := filepath.Join(gitDir, "info")
+	var infoDir string
+	if info.IsDir() {
+		infoDir = filepath.Join(gitDir, "info")
+	} else {
+		common := provider.GitCommonDir(context.Background(), root)
+		if common == "" {
+			return nil, nil
+		}
+		infoDir = filepath.Join(common, "info")
+	}
 	if err := os.MkdirAll(infoDir, 0o755); err != nil {
 		return nil, err
 	}

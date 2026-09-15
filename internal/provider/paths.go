@@ -296,13 +296,13 @@ func HooksDir(ctx context.Context, root string) string {
 	if strings.TrimSpace(root) == "" {
 		return ""
 	}
-	if common := gitCommonDir(ctx, root); common != "" {
+	if common := GitCommonDir(ctx, root); common != "" {
 		return filepath.Join(common, "hooks")
 	}
 	return filepath.Join(root, GitDir, "hooks")
 }
 
-// gitCommonDir is the git directory this working tree shares with every
+// GitCommonDir is the git directory this working tree shares with every
 // other worktree of the same repository — the main tree's .git. It is
 // "<root>/.git" in an ordinary checkout and "<main>/.git" in a linked
 // worktree, and "" when root is not a repository or there is no git to ask.
@@ -310,7 +310,7 @@ func HooksDir(ctx context.Context, root string) string {
 // The value is asked for as an absolute path, which git has understood
 // since 2.31; an older git answers the plain form, relative to root, and
 // that is joined on here instead.
-func gitCommonDir(ctx context.Context, root string) string {
+func GitCommonDir(ctx context.Context, root string) string {
 	for _, args := range [][]string{
 		{"rev-parse", "--path-format=absolute", "--git-common-dir"},
 		{"rev-parse", "--git-common-dir"},

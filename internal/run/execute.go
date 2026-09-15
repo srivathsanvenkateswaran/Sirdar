@@ -154,8 +154,11 @@ func (g *stallGuard) reset() {
 	g.timer.Reset(g.d)
 }
 
-// hold suspends the countdown for the rest of the run: what the session is
-// waiting for is an operator, not the model.
+// hold suspends the countdown: what is being waited on right now is not the
+// model. A caller that means this for the rest of the run — the session
+// asked a question, or a rate limit parked it — simply never calls rearm;
+// one that means it for one specific wait, such as the time a fresh
+// process takes to start, calls rearm once that wait is over.
 func (g *stallGuard) hold() {
 	if g == nil {
 		return
@@ -167,6 +170,25 @@ func (g *stallGuard) hold() {
 	}
 	g.held = true
 	g.timer.Stop()
+}
+
+// rearm resumes the countdown after a hold that was only ever meant to
+// cover one wait — Provider.Start for a resumed session, say — as opposed
+// to a hold that means the run is now blocked on a person or a clock for
+// good. reset would not do this: it leaves a held guard held, on purpose,
+// so that the ordinary per-event reset during that same wait cannot
+// accidentally undo a hold meant to last the rest of the run.
+func (g *stallGuard) rearm() {
+	if g == nil {
+		return
+	}
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	if g.done {
+		return
+	}
+	g.held = false
+	g.timer.Reset(g.d)
 }
 
 // stop ends the watch, for a session that has produced its answer or is
@@ -513,7 +535,11 @@ func (r *Runner) consume(ctx context.Context, p *prepared, sess provider.Session
 		}
 		sess, ex.retrySession = ex.retrySession, nil
 		ex.live.set(sess)
-		ex.stall.reset()
+		// The retry session is live: the hold handleFinal put on for
+		// Provider.Start is over, and the countdown resumes rather than
+		// staying suspended. reset would not do this — the guard is
+		// still held at this point — so this is rearm, not reset.
+		ex.stall.rearm()
 		sessions = append(sessions, sess)
 	}
 }
@@ -528,6 +554,12 @@ func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.
 		case <-done:
 			done = nil // an interrupt is handled once; the stream still drains
 			ex.interrupted = true
+			// Stopped before the cancel, not after: an interrupt is why
+			// this session is ending, and the stall guard's own timer
+			// racing to the same conclusion a moment later must not also
+			// mark the run stalled and put a misleading error next to the
+			// real one in events.jsonl.
+			ex.stall.stop()
 			sess.Cancel()
 		case ev, ok := <-events:
 			if !ok {
@@ -655,9 +687,15 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		switch {
 		case b.MaxUSD > 0 && u.CostUSD > b.MaxUSD:
 			ex.overBudget = fmt.Sprintf("cost $%.2f exceeded the $%.2f budget", u.CostUSD, b.MaxUSD)
+			// Stopped beside the cancel it decided, for the same reason
+			// as the interrupt branch: the budget is why this session is
+			// ending, and the stall guard's own timer must not also fire
+			// and misname the reason in events.jsonl.
+			ex.stall.stop()
 			sess.Cancel()
 		case b.MaxTurns > 0 && u.Turns > b.MaxTurns:
 			ex.overBudget = fmt.Sprintf("%d turns exceeded the %d turn budget", u.Turns, b.MaxTurns)
+			ex.stall.stop()
 			sess.Cancel()
 		}
 
@@ -749,6 +787,13 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// note fails validation there is often no session left to answer on.
 	// Carry the retry into a fresh session against the same provider
 	// handle instead of throwing the run away over it.
+	//
+	// The guard is held across Provider.Start: starting a fresh process is
+	// not silence from a live session, and a start slow enough to cross
+	// the stall window must not fail a run that is about to carry on
+	// normally. consume rearms it once the retry session is live; on
+	// failure here the run is ending anyway; held is where it stays.
+	ex.stall.hold()
 	next, startErr := r.resumeForRetry(ctx, p, sess, msg)
 	if startErr != nil {
 		ex.failure = fmt.Sprintf("the schema retry could not be sent: %v; resuming for it failed: %v", sendErr, startErr)

@@ -160,6 +160,13 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	g := git{dir: cfg.Root}
 
+	// Workspace tidiness, ahead of anything else this run does: a linked
+	// worktree from a run that finished a day or more ago and has nothing
+	// left to say is clutter under .sirdar/worktrees/, not work in
+	// progress, and this is the one place in the flow that runs on every
+	// invocation regardless of which path below it takes.
+	pruneStaleWorktrees(ctx, g, cfg.Root, time.Now(), stderr)
+
 	// A rerun with --accept-deviation is a human saying yes to a commit
 	// they have already read. Cutting the branch again from origin would
 	// orphan that commit and spend a second session re-deriving it, so
@@ -398,7 +405,7 @@ func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn
 		State:    prior,
 		Report:   rep,
 		Commit:   prior.Fix.Commit,
-		Worktree: prior.Fix.Worktree,
+		Worktree: safeWorktree(cfg.Root, prior.Fix.Worktree, stderr, key),
 	}
 	if res.Base == "" {
 		base, err := g.defaultBranch(ctx)

@@ -10,8 +10,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
 
 // git runs git commands in one working tree.
@@ -150,6 +152,59 @@ func worktreePath(root, runID string) string {
 	return filepath.Join(worktreesDir(root), runID)
 }
 
+// staleWorktreeAge is how long a fix run's linked worktree outlives its run
+// once that run has ended. A completed run has nothing left to write into
+// its worktree, and a run that reused a branch that later published from it
+// — pushReviewed — does so through the branch and commit in the shared
+// repository, worktree or not; so a directory still there a day later is
+// clutter, not work still in progress.
+const staleWorktreeAge = 24 * time.Hour
+
+// pruneStaleWorktrees removes this workspace's own linked fix worktrees
+// whose run reached completed or failed at least staleWorktreeAge ago. It
+// runs once at the start of every fix, so a workspace where `sirdar fix`
+// runs often does not accumulate one directory under .sirdar/worktrees/ per
+// run forever.
+//
+// Only a worktree whose run state says completed or failed is a candidate.
+// One that is still running, or blocked — an operator's answer pending, a
+// rate limit, anything that pauses a run rather than ending it — is left
+// alone regardless of age, because it may still be resumed into. So is a
+// worktree whose run id cannot be read at all: with no state to judge it
+// by, the safe assumption is that it is not safe to touch, not that it is.
+//
+// A failure to remove one is reported and otherwise ignored — it is
+// workspace tidiness, not a reason to refuse the fix that triggered it —
+// and what was removed is logged, since --force deletes it without asking.
+func pruneStaleWorktrees(ctx context.Context, g git, root string, now time.Time, stderr io.Writer) {
+	mine := realPath(worktreesDir(root))
+	for _, wt := range listWorktrees(ctx, g) {
+		wtPath := realPath(wt.path)
+		if !within(mine, wtPath) {
+			continue
+		}
+		runID := filepath.Base(wtPath)
+		_, state, err := store.Open(root, runID)
+		if err != nil {
+			continue
+		}
+		if state.Status != store.StatusCompleted && state.Status != store.StatusFailed {
+			continue
+		}
+		if now.Sub(state.UpdatedAt) < staleWorktreeAge {
+			continue
+		}
+		if err := g.run(ctx, "worktree", "remove", "--force", wt.path); err != nil {
+			fmt.Fprintf(stderr, "fix: prune stale worktree %s: %v\n", relToRoot(root, wt.path), err)
+			continue
+		}
+		fmt.Fprintf(stderr, "fix: pruned stale worktree %s (run %s, %s)\n", relToRoot(root, wt.path), runID, state.Status)
+	}
+	if err := g.run(ctx, "worktree", "prune"); err != nil {
+		fmt.Fprintf(stderr, "fix: git worktree prune: %v\n", err)
+	}
+}
+
 // addWorktree checks branch out into its own directory, cut from
 // origin/base, without touching the tree the operator is standing in.
 //
@@ -215,8 +270,20 @@ func releaseBranch(ctx context.Context, g git, path, branch string) error {
 // build output — a bin/, an obj/, a node_modules/ the session's `make test`
 // created — and refusing to clean up because a build left something behind
 // would strand a directory for every fix that ever ran.
+//
+// path is checked against g.dir's own worktreesDir before anything runs.
+// Most callers pass a path this package built itself, always inside that
+// bound, but pushReviewed's comes from a run's state.json — data an
+// operator can hand-edit or a compromised session could have left behind —
+// and --force deletes whatever is at the path with no further question. A
+// path outside the bound is refused rather than handed to git.
 func removeWorktree(ctx context.Context, g git, path string, stderr io.Writer, key string) {
 	if path == "" {
+		return
+	}
+	if !within(realPath(worktreesDir(g.dir)), realPath(path)) {
+		fmt.Fprintf(stderr, "[%s] refusing to remove %s: it is not inside %s, so this cannot be one of Sirdar's own fix worktrees\n",
+			key, path, worktreesDir(g.dir))
 		return
 	}
 	if err := g.run(ctx, "worktree", "remove", "--force", path); err != nil {
@@ -225,6 +292,27 @@ func removeWorktree(ctx context.Context, g git, path string, stderr io.Writer, k
 	if err := g.run(ctx, "worktree", "prune"); err != nil {
 		fmt.Fprintf(stderr, "[%s] git worktree prune: %v\n", key, err)
 	}
+}
+
+// safeWorktree returns path when it lies inside this workspace's own
+// worktreesDir, and "" otherwise. It exists for the one place a worktree
+// path is read back out of a run's state.json rather than built by this
+// package: pushReviewed, where prior.Fix.Worktree feeds both the working
+// directory a git command runs in and, through removeWorktree, the argument
+// to `git worktree remove --force`. A tampered or hand-edited state.json
+// naming a path outside .sirdar/worktrees/ — an operator's own worktree,
+// say — is refused, with a reason on stderr, rather than trusted; the
+// caller falls back to the main tree.
+func safeWorktree(root, path string, stderr io.Writer, key string) string {
+	if path == "" {
+		return ""
+	}
+	if !within(realPath(worktreesDir(root)), realPath(path)) {
+		fmt.Fprintf(stderr, "[%s] the run state names a worktree outside %s (%s); using the main tree instead\n",
+			key, worktreesDir(root), path)
+		return ""
+	}
+	return path
 }
 
 // worktreeEntry is one line-group of `git worktree list --porcelain`.
