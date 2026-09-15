@@ -103,6 +103,13 @@ export function classify(event: RunEvent): EventClass {
 
 export type Filter = 'all' | 'tools' | 'denials' | 'text'
 
+/**
+ * What the stream opens on. "All" is the raw file, and a provider that streams
+ * token deltas writes tens of lines there for every one thing the agent did,
+ * so the useful default is the tool calls.
+ */
+export const DEFAULT_FILTER: Filter = 'tools'
+
 export const FILTERS: { id: Filter; label: string }[] = [
   { id: 'all', label: 'All' },
   { id: 'tools', label: 'Tools' },
@@ -116,6 +123,49 @@ export function matchesFilter(event: RunEvent, filter: Filter): boolean {
   if (filter === 'tools') return family === 'tool' || family === 'permission'
   if (filter === 'denials') return family === 'permission' && event.payload?.decision === 'deny'
   return family === 'text' || family === 'final' || family === 'callout' || family === 'error'
+}
+
+/**
+ * A row of a turn as the stream draws it: one event, or a run of consecutive
+ * `system` lines standing in for all of them.
+ */
+export type TurnItem =
+  | { kind: 'event'; index: number; item: IndexedEvent }
+  | { kind: 'fold'; index: number; items: IndexedEvent[] }
+
+/** Below this many in a row, a fold hides less than the row it costs. */
+export const FOLD_MIN = 3
+
+/**
+ * Collapses consecutive `system` rows — the raw `stream_event` deltas, dozens
+ * of them per turn — into one foldable row. Under "All" they buried the tool
+ * calls and the text they were deltas of; they are still there, behind the
+ * fold, because a malformed line the provider sent is sometimes the whole
+ * answer to why a run went wrong.
+ *
+ * Only `system` folds. Every other family is a thing the agent did.
+ */
+export function foldSystem(events: IndexedEvent[], min = FOLD_MIN): TurnItem[] {
+  const out: TurnItem[] = []
+  let run: IndexedEvent[] = []
+
+  const flush = () => {
+    if (run.length === 0) return
+    if (run.length >= min) out.push({ kind: 'fold', index: run[0].index, items: run })
+    else for (const item of run) out.push({ kind: 'event', index: item.index, item })
+    run = []
+  }
+
+  for (const item of events) {
+    if (classify(item.event) === 'system') {
+      run.push(item)
+      continue
+    }
+    flush()
+    out.push({ kind: 'event', index: item.index, item })
+  }
+  flush()
+  return out
 }
 
 /** Applies a filter without losing turn boundaries; turns left empty drop out. */
