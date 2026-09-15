@@ -1,3 +1,5 @@
+import { useSyncExternalStore } from 'react'
+import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import type { Screen } from '../../store/appStore'
 
 const TABS: { name: Screen['name']; label: string }[] = [
@@ -6,6 +8,9 @@ const TABS: { name: Screen['name']; label: string }[] = [
   { name: 'eval', label: 'Eval' },
   { name: 'settings', label: 'Settings' },
 ]
+
+/** The design library is a tab only while Settings says it is. */
+const LIBRARY_TAB: { name: Screen['name']; label: string } = { name: 'library', label: 'Library' }
 
 /**
  * Top-level screens. Run detail is reached from a card rather than from here,
@@ -17,10 +22,12 @@ export default function Nav(props: {
 }): JSX.Element {
   const { screen, onNavigate } = props
   const active = screen.name === 'run' ? 'board' : screen.name
+  const library = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
+  const tabs = library ? [...TABS, LIBRARY_TAB] : TABS
 
   return (
     <nav className="nav" aria-label="Screens">
-      {TABS.map((tab) => (
+      {tabs.map((tab) => (
         <button
           key={tab.name}
           type="button"

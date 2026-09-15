@@ -1,0 +1,42 @@
+/*
+ * The two ambient motions. Both are decorative, both reverse under RTL, and
+ * both have a static pose rather than a shorter animation when the reader has
+ * asked for less motion.
+ */
+
+@keyframes sd-ring-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes sd-marquee-run {
+  to {
+    /* One track width. The track is rendered twice, so the loop is seamless. */
+    transform: translateX(-50%);
+  }
+}
+
+.sd-motion-ring {
+  animation: sd-ring-spin var(--sd-dur-ring) linear infinite;
+}
+
+.sd-motion-marquee {
+  animation: sd-marquee-run var(--sd-dur-marquee) linear infinite;
+}
+
+/*
+ * A sentence that travels against its own reading direction is unreadable in
+ * either script, so both motions reverse with the page rather than ignoring it.
+ */
+[dir="rtl"] .sd-motion-ring,
+[dir="rtl"] .sd-motion-marquee {
+  animation-direction: reverse;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-motion-ring,
+  .sd-motion-marquee {
+    animation: none;
+  }
+}

@@ -17,6 +17,8 @@ export type Screen =
   | { name: 'register' }
   | { name: 'eval' }
   | { name: 'settings' }
+  /** The design library. Only reachable while the Settings switch is on. */
+  | { name: 'library' }
 
 export interface Toast {
   id: number

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { Check, CheckLevel, ConfigSummary, Transport, Workspace } from '../api/types'
+import { showLibrary, setShowLibrary, subscribeShowLibrary } from '../lib/library'
 import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
 import ConfigSummaryPanel from '../components/shell/ConfigSummaryPanel'
 import '../components/panels.css'
@@ -52,6 +53,7 @@ export default function Settings(props: {
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rtl = useSyncExternalStore(subscribePreferRTL, prefersRTL, () => false)
+  const library = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const [summary, setSummary] = useState<ConfigSummary | null>(null)
   const [summaryError, setSummaryError] = useState('')
 
@@ -245,6 +247,24 @@ export default function Settings(props: {
           to left. It is remembered in this browser and changes nothing in the workspace or
           in the note on disk; the run's event log stays left to right, where paths and tool
           names are readable.
+        </p>
+      </section>
+
+      <section className="settings-library">
+        <h2 className="panel-heading">Design library</h2>
+        <label className="settings-toggle">
+          <input
+            type="checkbox"
+            checked={library}
+            onChange={(e) => setShowLibrary(e.target.checked)}
+          />
+          <span>Show the design library</span>
+        </label>
+        <p className="about-note">
+          Adds a Library tab and the <code>#/library</code> address, where every interface
+          component is shown in each of its states, in both themes and in both reading
+          directions. It is for whoever is building the interface; it changes nothing about a
+          run. On by default in a development build.
         </p>
       </section>
 

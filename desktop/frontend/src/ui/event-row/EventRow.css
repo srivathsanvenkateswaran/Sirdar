@@ -1,0 +1,53 @@
+/*
+ * Event row. The ledger line: a fixed gutter, a hairline rail down the column,
+ * and colour on the rail only.
+ *
+ * No radius anywhere. A corner on a row that repeats four hundred times turns
+ * a column into a stack of pills, which is the failure this component is most
+ * likely to be pushed into by a radius change elsewhere.
+ */
+
+.sd-event {
+  display: grid;
+  grid-template-columns: 3.3rem 1.4rem minmax(0, 1fr);
+  column-gap: var(--sd-space-2);
+  align-items: stretch;
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  /* The stream is identifiers and paths; it does not mirror. */
+  unicode-bidi: isolate;
+}
+
+.sd-event__at {
+  padding-block-start: 3px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  /* The offset is text a reader uses, not decoration: it takes the dim ink
+     whole rather than fading it a further quarter out of the page. */
+  color: var(--sd-ink-3);
+}
+
+.sd-event__mark {
+  padding-block: 3px;
+  padding-inline-start: var(--sd-space-2);
+  border-inline-start: 2px solid var(--sd-event-hue, var(--sd-rule));
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  line-height: 1.5;
+  color: var(--sd-event-hue, var(--sd-ink-3));
+}
+
+.sd-event__main {
+  min-width: 0;
+  padding-block: 2px;
+  padding-inline-end: var(--sd-space-4);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.sd-event[data-variant='allow'] { --sd-event-hue: var(--sd-st-triaged); }
+.sd-event[data-variant='deny'] { --sd-event-hue: var(--sd-st-blocked); }
+.sd-event[data-variant='error'] { --sd-event-hue: var(--sd-st-failed); }
+.sd-event[data-variant='final'] { --sd-event-hue: var(--sd-accent); }
+.sd-event[data-variant='usage'] { --sd-event-hue: var(--sd-rule-strong); }

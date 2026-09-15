@@ -1,0 +1,84 @@
+/*
+ * Card. A surface, a hairline, a 12px corner, and no shadow at all.
+ */
+
+.sd-card {
+  display: grid;
+  gap: var(--sd-space-1);
+  width: 100%;
+  margin: 0;
+  padding: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  text-align: start;
+}
+
+/* The interactive card is a button, so it is one tab stop and one Enter. */
+button.sd-card {
+  cursor: pointer;
+  transition: border-color var(--sd-dur-1) ease;
+}
+
+button.sd-card:hover {
+  border-color: var(--sd-accent);
+}
+
+/*
+ * The leading edge, in the hue of the fact it states. `border-inline-start`
+ * rather than an inset box-shadow: the shadow is a physical offset and would
+ * stay on the left of an Arabic card, where the leading edge is the right.
+ */
+.sd-card[data-tone='live'],
+.sd-card[data-tone='blocked'],
+.sd-card[data-tone='failed'] {
+  border-inline-start-width: 2px;
+}
+
+.sd-card[data-tone='live'] {
+  border-inline-start-color: var(--sd-st-live);
+}
+
+.sd-card[data-tone='blocked'] {
+  border-inline-start-color: var(--sd-st-blocked);
+}
+
+.sd-card[data-tone='failed'] {
+  border-inline-start-color: var(--sd-st-failed);
+}
+
+.sd-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}
+
+.sd-card__title {
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.sd-card__meta {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+}
+
+.sd-card__body {
+  font-size: var(--sd-text-body);
+  line-height: 1.45;
+  color: var(--sd-ink-2);
+}
+
+.sd-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}

@@ -1,0 +1,645 @@
+import { useRef, useState } from 'react'
+import Button from '../ui/button'
+import Card from '../ui/card'
+import DataTable, { type DataColumn } from '../ui/data-table'
+import Dialog from '../ui/dialog'
+import EventRow, { EVENT_GLYPHS, type EventVariant } from '../ui/event-row'
+import HeroBand from '../ui/hero-band'
+import KanbanColumn, { type LaneId } from '../ui/kanban-column'
+import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
+import NotePane from '../ui/note-pane'
+import PillNav from '../ui/pill-nav'
+import QuotaChip from '../ui/quota-chip'
+import RunCard from '../ui/run-card'
+import SegmentedControl from '../ui/segmented-control'
+import StatusBadge, { PriorityBadge, STATUS_WORDS, type SdStatus } from '../ui/status-badge'
+import Toasts from '../ui/toast'
+import './library.css'
+
+/**
+ * The asset library, at `#/library`.
+ *
+ * Every component in `src/ui/`, in every state it has, with a light and dark
+ * switch and a direction switch that both apply to the specimens rather than
+ * to the page around them — so the two themes and the two directions can be
+ * compared without reloading and without changing what the rest of the window
+ * looks like.
+ *
+ * Every component that carries text carries a real Arabic string here, taken
+ * from the kind of ticket Sirdar is for. Arabic is not a localisation exercise
+ * in this product: the customer's complaint and the reply draft are usually
+ * Arabic, so a component that has never been seen with Arabic in it has not
+ * been seen.
+ */
+
+const ARABIC_TITLE = 'العميل لا يستطيع تصدير كشف الحساب منذ التحديث الأخير'
+const ARABIC_REASON = 'طلب الوكيل تحديد رقم الحساب قبل المتابعة'
+const ARABIC_BODY =
+  'يشكو العميل من أن تصدير كشف الحساب يتوقف بعد دقيقتين دون رسالة خطأ واضحة. تكرر ذلك ثلاث مرات أمس.'
+
+const EVERY_STATUS: SdStatus[] = [
+  'queued',
+  'preparing',
+  'running',
+  'blocked',
+  'completed',
+  'failed',
+  'over_budget',
+]
+
+const LANES: LaneId[] = ['queue', 'gathering', 'blocked', 'triaged', 'done', 'failed']
+
+interface TableRow {
+  key: string
+  ticket: string
+  verdict: string
+  cost: string
+}
+
+const TABLE_ROWS: TableRow[] = [
+  { key: 'OMNI-2510', ticket: 'Statement export times out', verdict: 'agreed', cost: '$0.42' },
+  { key: 'OMNI-2511', ticket: ARABIC_TITLE, verdict: 'needs work', cost: '$1.08' },
+  { key: 'OMNI-2514', ticket: 'Webhook delivery is filtered out', verdict: 'agreed', cost: '$0.19' },
+]
+
+const TABLE_COLUMNS: DataColumn<TableRow>[] = [
+  { id: 'key', header: 'Key', cell: (row) => row.key, sortable: true },
+  { id: 'ticket', header: 'Ticket', cell: (row) => <span dir="auto">{row.ticket}</span> },
+  { id: 'verdict', header: 'Verdict', cell: (row) => row.verdict },
+  { id: 'cost', header: 'Cost', cell: (row) => row.cost, numeric: true, sortable: true },
+]
+
+/** One component's section: a heading, a sentence, and its specimens. */
+function Section({
+  id,
+  name,
+  note,
+  children,
+}: {
+  id: string
+  name: string
+  note: string
+  children: React.ReactNode
+}): JSX.Element {
+  return (
+    <section className="lib-section" id={`lib-${id}`} aria-labelledby={`lib-h-${id}`}>
+      <div className="lib-section__head">
+        <h2 className="lib-section__name" id={`lib-h-${id}`}>
+          {name}
+        </h2>
+        <p className="lib-section__note">{note}</p>
+      </div>
+      {children}
+    </section>
+  )
+}
+
+/** A labelled specimen. The label says which state is on show. */
+function State({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
+  return (
+    <div className="lib-state">
+      <span className="lib-state__label">{label}</span>
+      <div className="lib-state__stage">{children}</div>
+    </div>
+  )
+}
+
+export default function Library(): JSX.Element {
+  const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [dir, setDir] = useState<'ltr' | 'rtl'>('ltr')
+  const [segment, setSegment] = useState('all')
+  const [dialogOpen, setDialogOpen] = useState(false)
+  const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
+    columnId: 'key',
+    direction: 'asc',
+  })
+  const root = useRef<HTMLDivElement | null>(null)
+
+  const sections = [
+    { id: 'button', label: 'Button' },
+    { id: 'pill-nav', label: 'Pill nav' },
+    { id: 'segmented-control', label: 'Segmented' },
+    { id: 'card', label: 'Card' },
+    { id: 'status-badge', label: 'Status badge' },
+    { id: 'kanban-column', label: 'Column' },
+    { id: 'run-card', label: 'Run card' },
+    { id: 'event-row', label: 'Event row' },
+    { id: 'note-pane', label: 'Note pane' },
+    { id: 'data-table', label: 'Data table' },
+    { id: 'toast', label: 'Toast' },
+    { id: 'dialog', label: 'Dialog' },
+    { id: 'quota-chip', label: 'Quota chip' },
+    { id: 'hero-band', label: 'Hero band' },
+    { id: 'ambient', label: 'Ambient' },
+  ]
+
+  return (
+    <div className="lib" ref={root}>
+      <header className="lib__bar">
+        <div className="lib__bar-row">
+          <h1 className="lib__title">Asset library</h1>
+          <p className="lib__lede">
+            Fifteen components, every state, both themes, both directions. The switches paint the
+            specimens, not this page.
+          </p>
+        </div>
+        <div className="lib__controls">
+          <SegmentedControl
+            label="Theme"
+            options={[
+              { id: 'light', label: 'Light' },
+              { id: 'dark', label: 'Dark' },
+            ]}
+            value={theme}
+            onChange={(id) => setTheme(id as 'light' | 'dark')}
+          />
+          <SegmentedControl
+            label="Direction"
+            options={[
+              { id: 'ltr', label: 'Left to right' },
+              { id: 'rtl', label: 'Right to left' },
+            ]}
+            value={dir}
+            onChange={(id) => setDir(id as 'ltr' | 'rtl')}
+          />
+        </div>
+        <PillNav
+          label="Components"
+          items={sections}
+          onSelect={(id) => {
+            root.current?.querySelector(`#lib-${id}`)?.scrollIntoView({ block: 'start' })
+          }}
+        />
+      </header>
+
+      <div className="lib__frame" data-theme={theme} dir={dir} data-testid="library-frame">
+        <Section id="button" name="Button" note="Only the primary variant may change anything.">
+          <div className="lib-row">
+            <State label="Primary">
+              <Button variant="primary">Start triage</Button>
+            </State>
+            <State label="Primary, pressed and busy">
+              <Button variant="primary" busy>
+                Starting
+              </Button>
+            </State>
+            <State label="Secondary">
+              <Button>Open note</Button>
+            </State>
+            <State label="Ghost">
+              <Button variant="ghost">Dismiss</Button>
+            </State>
+            <State label="Disabled">
+              <Button variant="primary" disabled>
+                Apply fix
+              </Button>
+            </State>
+            <State label="With a shortcut">
+              <Button variant="primary" shortcut="n">
+                New triage
+              </Button>
+            </State>
+            <State label="Arabic">
+              <Button variant="primary">ابدأ الفرز</Button>
+            </State>
+          </div>
+        </Section>
+
+        <Section id="pill-nav" name="Pill nav" note="The current item is a fill, never a border.">
+          <div className="lib-col">
+            <State label="In the app header">
+              <PillNav
+                label="Screens"
+                current="board"
+                items={[
+                  { id: 'board', label: 'Board' },
+                  { id: 'register', label: 'Register', count: 24 },
+                  { id: 'eval', label: 'Eval' },
+                  { id: 'settings', label: 'Settings' },
+                ]}
+              />
+            </State>
+            <State label="Floating, over a band">
+              <div className="lib-band-stage">
+                <PillNav
+                  floating
+                  label="Site"
+                  current="docs"
+                  items={[
+                    { id: 'home', label: 'Home', href: '#/library' },
+                    { id: 'docs', label: 'Docs', href: '#/library' },
+                  ]}
+                />
+              </div>
+            </State>
+            <State label="Arabic">
+              <PillNav
+                label="الشاشات"
+                current="board"
+                items={[
+                  { id: 'board', label: 'اللوحة' },
+                  { id: 'register', label: 'السجل', count: 24 },
+                  { id: 'settings', label: 'الإعدادات' },
+                ]}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="segmented-control"
+          name="Segmented control"
+          note="One track, one thumb; the arrows read in the reader's own direction."
+        >
+          <div className="lib-row">
+            <State label="Three options">
+              <SegmentedControl
+                label="Filter"
+                options={[
+                  { id: 'all', label: 'All' },
+                  { id: 'mine', label: 'Mine' },
+                  { id: 'blocked', label: 'Blocked' },
+                ]}
+                value={segment}
+                onChange={setSegment}
+              />
+            </State>
+            <State label="Disabled">
+              <SegmentedControl
+                label="Provider"
+                disabled
+                options={[
+                  { id: 'claude', label: 'Claude' },
+                  { id: 'codex', label: 'Codex' },
+                ]}
+                value="claude"
+                onChange={() => {}}
+              />
+            </State>
+            <State label="Arabic">
+              <SegmentedControl
+                label="التصفية"
+                options={[
+                  { id: 'all', label: 'الكل' },
+                  { id: 'mine', label: 'المسندة إليّ' },
+                ]}
+                value="mine"
+                onChange={() => {}}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section id="card" name="Card" note="The base box. No shadow, ever.">
+          <div className="lib-row">
+            <State label="Plain">
+              <Card title="Doctor" meta="3 checks">
+                Two checks passed. The tracker credential is missing.
+              </Card>
+            </State>
+            <State label="Interactive">
+              <Card title="OMNI-2514" meta="webhook" openLabel="Open OMNI-2514" onOpen={() => {}}>
+                Delivery filtered out by the queue rule.
+              </Card>
+            </State>
+            <State label="Live edge">
+              <Card title="OMNI-2510" meta="triage" tone="live">
+                Gathering evidence from the helpdesk thread.
+              </Card>
+            </State>
+            <State label="Failed edge">
+              <Card title="OMNI-2512" meta="fix" tone="failed">
+                The provider CLI exited with status 1.
+              </Card>
+            </State>
+            <State label="Arabic">
+              <Card title={ARABIC_TITLE} meta="OMNI-2511" dir="auto" tone="blocked">
+                {ARABIC_REASON}
+              </Card>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="status-badge"
+          name="Status badge"
+          note="Six hues, and every one of them carries its word."
+        >
+          <div className="lib-row lib-row--tight">
+            {EVERY_STATUS.map((status) => (
+              <State key={status} label={STATUS_WORDS[status]}>
+                <StatusBadge status={status} />
+              </State>
+            ))}
+            <State label="Priority, verbatim">
+              <PriorityBadge priority="P1" />
+            </State>
+            <State label="Priority, low">
+              <PriorityBadge priority="Minor" />
+            </State>
+            <State label="Arabic">
+              <StatusBadge status="blocked">بانتظار ردّك</StatusBadge>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="kanban-column"
+          name="Kanban column"
+          note="The rail is the board's legend; an empty column says what that means."
+        >
+          <div className="lib-lanes">
+            {LANES.map((lane) => (
+              <KanbanColumn
+                key={lane}
+                lane={lane}
+                title={lane}
+                count={lane === 'gathering' ? 1 : 0}
+                empty={
+                  lane === 'queue'
+                    ? 'No ticket is waiting. New ones arrive from the tracker.'
+                    : 'Nothing here yet.'
+                }
+              >
+                {lane === 'gathering' ? (
+                  <RunCard
+                    runKey="OMNI-2510"
+                    kind="triage"
+                    status="running"
+                    title="Statement export times out"
+                    elapsed="4m 12s"
+                    cost="$0.42"
+                    onOpen={() => {}}
+                  />
+                ) : null}
+              </KanbanColumn>
+            ))}
+          </div>
+        </Section>
+
+        <Section
+          id="run-card"
+          name="Run card"
+          note="A live run wears the accent on its leading edge and nothing else does."
+        >
+          <div className="lib-row">
+            <State label="Running">
+              <RunCard
+                runKey="OMNI-2510"
+                kind="triage"
+                status="running"
+                title="Statement export times out"
+                priority="P2"
+                elapsed="4m 12s"
+                cost="$0.42"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Needs input">
+              <RunCard
+                runKey="OMNI-2511"
+                kind="triage"
+                status="blocked"
+                title="Login fails after the update"
+                reason="The agent asked which account to use."
+                elapsed="1m 30s"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Failed">
+              <RunCard
+                runKey="OMNI-2512"
+                kind="fix"
+                status="failed"
+                title="Retry storm on the export worker"
+                reason="The provider CLI exited with status 1."
+                priority="P1"
+                elapsed="9m 02s"
+                cost="$1.61"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="No title from the tracker">
+              <RunCard runKey="OMNI-2513" kind="eval" status="queued" onOpen={() => {}} />
+            </State>
+            <State label="Arabic">
+              <RunCard
+                runKey="OMNI-2511"
+                kind="triage"
+                status="blocked"
+                title={ARABIC_TITLE}
+                reason={ARABIC_REASON}
+                elapsed="2m 04s"
+                cost="$0.31"
+                onOpen={() => {}}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="event-row"
+          name="Event row"
+          note="The ledger. Colour on the rail only, and always left to right."
+        >
+          <div className="lib-stream">
+            {(Object.keys(EVENT_GLYPHS) as EventVariant[]).map((variant, i) => (
+              <EventRow key={variant} at={`${i}m 0${i}s`} variant={variant}>
+                {variant === 'tool'
+                  ? 'Read(/srv/api/statements/export.go)'
+                  : variant === 'deny'
+                    ? 'Denied: Bash(rm -rf /)'
+                    : variant === 'usage'
+                      ? '41,204 tokens · $0.42'
+                      : variant === 'error'
+                        ? 'provider exited with status 1'
+                        : variant === 'final'
+                          ? 'Wrote notes/OMNI-2510-triage.md'
+                          : `a ${variant} event`}
+              </EventRow>
+            ))}
+            <EventRow at="9m 40s" variant="text">
+              {ARABIC_BODY}
+            </EventRow>
+          </div>
+        </Section>
+
+        <Section
+          id="note-pane"
+          name="Note pane"
+          note="The app's one serif moment, and the only place the marker sweep runs."
+        >
+          <div className="lib-row">
+            <State label="Bilingual, direction per block">
+              <NotePane dir="auto" title="OMNI-2510 triage" source="notes/OMNI-2510-triage.md">
+                <h2>Root cause</h2>
+                <p>
+                  The export job holds one database connection per page and the pool runs dry at
+                  the fourth page. See <a href="#/library">the register entry</a>.
+                </p>
+                <p>{ARABIC_BODY}</p>
+                <blockquote>{ARABIC_REASON}</blockquote>
+                <pre>
+                  <code>SELECT * FROM statements WHERE account_id = $1</code>
+                </pre>
+              </NotePane>
+            </State>
+            <State label="Laid out right to left">
+              <NotePane dir="rtl" title="فرز التذكرة" source="notes/OMNI-2511-triage.md">
+                <h2>السبب الجذري</h2>
+                <p>{ARABIC_BODY}</p>
+                <p>
+                  The reply draft stays in English where the engineer wrote it:{' '}
+                  <a href="#/library">open the thread</a>.
+                </p>
+              </NotePane>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="data-table"
+          name="Data table"
+          note="Tabular figures, a sticky header, and its own sideways scroll."
+        >
+          <div className="lib-col">
+            <State label="Sorted by key">
+              <DataTable
+                caption="Register"
+                columns={TABLE_COLUMNS}
+                rows={TABLE_ROWS}
+                rowKey={(row) => row.key}
+                sort={sort}
+                onSort={(columnId) =>
+                  setSort((now) => ({
+                    columnId,
+                    direction:
+                      now.columnId === columnId && now.direction === 'asc' ? 'desc' : 'asc',
+                  }))
+                }
+                empty="No run has been recorded in this workspace yet."
+              />
+            </State>
+            <State label="Empty">
+              <DataTable
+                caption="Register"
+                columns={TABLE_COLUMNS}
+                rows={[]}
+                rowKey={(row) => row.key}
+                empty="No run has been recorded in this workspace yet. Start one from the board."
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section id="toast" name="Toast" note="Polite, dismissible, and out of the board's way.">
+          <div className="lib-row lib-toast-stage">
+            <State label="Info and error">
+              <Toasts
+                dismissAfterMs={2_147_483_000}
+                onDismiss={() => {}}
+                toasts={[
+                  { id: 1, tone: 'info', text: 'Triage started for OMNI-2510.' },
+                  { id: 2, tone: 'error', text: 'Add a workspace before starting a run.' },
+                  { id: 3, tone: 'error', text: 'تعذّر بدء التشغيل: لا توجد مساحة عمل.' },
+                ]}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section id="dialog" name="Dialog" note="Focus goes in, stays in, and comes back out.">
+          <div className="lib-row">
+            <State label="Closed, with its opener">
+              <Button variant="primary" onClick={() => setDialogOpen(true)}>
+                Open the dialog
+              </Button>
+            </State>
+          </div>
+          <Dialog
+            open={dialogOpen}
+            title="Start a triage"
+            onClose={() => setDialogOpen(false)}
+            actions={
+              <>
+                <Button onClick={() => setDialogOpen(false)}>Cancel</Button>
+                <Button variant="primary" onClick={() => setDialogOpen(false)}>
+                  Start triage
+                </Button>
+              </>
+            }
+          >
+            <p>One ticket key per line. Each one gets its own run.</p>
+            <p dir="auto">{ARABIC_REASON}</p>
+          </Dialog>
+        </Section>
+
+        <Section
+          id="quota-chip"
+          name="Quota chip"
+          note="Over budget says so in words, not only in red."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="Fine">
+              <QuotaChip provider="claude" window="5h" percent={42} resetsIn="resets in 2h 14m" />
+            </State>
+            <State label="Getting close">
+              <QuotaChip provider="claude" window="7d" percent={88} resetsIn="resets in 3d 4h" />
+            </State>
+            <State label="Over budget">
+              <QuotaChip provider="codex" window="used" percent={100} />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="hero-band"
+          name="Hero band"
+          note="One roman clause, one italic clause, and one action."
+        >
+          <div className="lib-col">
+            <State label="Deep band, with ring text">
+              <HeroBand
+                headline="A ticket arrives."
+                headlineTail="You read the note, not the logs."
+                deck="Sirdar runs the agent you already pay for, inside your own repository, and writes the root cause down."
+                action={<Button variant="primary">Read the quick start</Button>}
+                aside={<RingText text="evidence first · read-only by default · " />}
+              />
+            </State>
+            <State label="Ink band, Arabic">
+              <HeroBand
+                tone="ink"
+                headline="تصل التذكرة."
+                headlineTail="تقرأ الملاحظة، لا السجلات."
+                deck="يشغّل سِردار الوكيل الذي تدفع مقابله أصلًا داخل مستودعك، ثم يكتب السبب الجذري."
+                action={<Button variant="primary">ابدأ من هنا</Button>}
+              />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="ambient"
+          name="Ring text and marquee"
+          note="Both decorative, both reversed under RTL, both stoppable."
+        >
+          <div className="lib-row">
+            <State label="Ring, 48s">
+              <RingText text="triage · evidence · note · fix · " />
+            </State>
+            <State label="Marquee, 34s">
+              <Marquee label="What Sirdar reads">
+                <MarqueeItem>Claude Code</MarqueeItem>
+                <MarqueeItem>Codex</MarqueeItem>
+                <MarqueeItem>Zoho Desk</MarqueeItem>
+                <MarqueeItem>Jira</MarqueeItem>
+                <MarqueeItem>مكتب زوهو</MarqueeItem>
+              </Marquee>
+            </State>
+          </div>
+        </Section>
+      </div>
+    </div>
+  )
+}

@@ -1,0 +1,93 @@
+/*
+ * The two ambient motions. Neither carries information and neither blocks
+ * reading. The animations themselves live in `../motion/motion.css`, which is
+ * also where the RTL reversal and the reduced-motion stop are declared.
+ */
+
+/* ---------- ring text ---------- */
+
+.sd-ring {
+  position: relative;
+  flex: none;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  letter-spacing: 0.02em;
+  /* Inside a band the ring takes the band's own ink, since nothing else is
+     allowed on a band. */
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+.sd-ring__glyph {
+  position: absolute;
+  inset-block-start: 50%;
+  inset-inline-start: 50%;
+  transform-origin: 0 0;
+  white-space: pre;
+}
+
+/* ---------- marquee ---------- */
+
+.sd-marquee {
+  --sd-marquee-mask: 64px;
+  width: 100%;
+  overflow: hidden;
+  /* The mask is what makes an item leave the row rather than be cut off by
+     it. With nothing moving there is nothing to soften, so the still version
+     drops it. */
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 var(--sd-marquee-mask),
+    #000 calc(100% - var(--sd-marquee-mask)),
+    transparent
+  );
+}
+
+.sd-marquee__track {
+  display: flex;
+  width: max-content;
+}
+
+.sd-marquee__run {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-6);
+  padding-inline: var(--sd-space-4);
+}
+
+.sd-marquee__item {
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body-l);
+  color: var(--sd-ink-2);
+  white-space: nowrap;
+}
+
+/* The static pose: a wrapped row, no mask, nothing moving. */
+.sd-marquee[data-still='true'] {
+  mask-image: none;
+}
+
+.sd-marquee[data-still='true'] .sd-marquee__track {
+  width: auto;
+}
+
+.sd-marquee[data-still='true'] .sd-marquee__run {
+  flex-wrap: wrap;
+  row-gap: var(--sd-space-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-marquee {
+    mask-image: none;
+  }
+
+  .sd-marquee__track {
+    width: auto;
+  }
+
+  .sd-marquee__run {
+    flex-wrap: wrap;
+    row-gap: var(--sd-space-2);
+  }
+}

@@ -149,6 +149,59 @@ In build order. The first five are shared by all three surfaces and unblock the 
 After these fifteen: Code block, Kbd, Link with marker sweep, Text badge row, Media frame,
 Step band, Inbound row, Workspace switcher, Settings panel, Fix panel.
 
+## The index
+
+Fifteen components are built. Each row links the spec in this folder, which is a
+copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
+writes the copies and `--check` fails CI when one is stale. The live examples
+are not static pages here but the gallery inside the app, at `#/library`, which
+renders every component in every state with a light/dark switch and an
+LTR/RTL switch — that is the "example is the proof" rule, moved from a folder of
+hand-written HTML into the app itself so a specimen cannot drift from the
+component it is showing.
+
+| # | Component | Surfaces | Status | Code | Spec |
+|---|---|---|---|---|---|
+| 1 | Button | all | built | `src/ui/button/` | [button/SPEC.md](button/SPEC.md) |
+| 2 | Pill nav | landing, docs, app | built | `src/ui/pill-nav/` | [pill-nav/SPEC.md](pill-nav/SPEC.md) |
+| 3 | Segmented control | landing, app | built | `src/ui/segmented-control/` | [segmented-control/SPEC.md](segmented-control/SPEC.md) |
+| 4 | Card | all | built | `src/ui/card/` | [card/SPEC.md](card/SPEC.md) |
+| 5 | Status badge | app, landing | built | `src/ui/status-badge/` | [status-badge/SPEC.md](status-badge/SPEC.md) |
+| 6 | Kanban column | app | built | `src/ui/kanban-column/` | [kanban-column/SPEC.md](kanban-column/SPEC.md) |
+| 7 | Run card | app | built | `src/ui/run-card/` | [run-card/SPEC.md](run-card/SPEC.md) |
+| 8 | Event row | app | built | `src/ui/event-row/` | [event-row/SPEC.md](event-row/SPEC.md) |
+| 9 | Note pane | app | built | `src/ui/note-pane/` | [note-pane/SPEC.md](note-pane/SPEC.md) |
+| 10 | Data table | app, docs | built | `src/ui/data-table/` | [data-table/SPEC.md](data-table/SPEC.md) |
+| 11 | Toast | app | built | `src/ui/toast/` | [toast/SPEC.md](toast/SPEC.md) |
+| 12 | Dialog | app, landing | built | `src/ui/dialog/` | [dialog/SPEC.md](dialog/SPEC.md) |
+| 13 | Quota chip | app, landing | built | `src/ui/quota-chip/` | [quota-chip/SPEC.md](quota-chip/SPEC.md) |
+| 14 | Hero band | landing, docs home | built | `src/ui/hero-band/` | [hero-band/SPEC.md](hero-band/SPEC.md) |
+| 15 | Ring text and marquee | landing | built | `src/ui/ambient/` | [ambient/SPEC.md](ambient/SPEC.md) |
+
+`src/ui/motion/` is not a component. It holds the reduced-motion switch, the
+two keyframes and the RTL reversal that ring text and the marquee share; it is
+described inside the ambient spec and is skipped by the sync script, the same
+way this folder's `_`-prefixed partials are skipped by the catalogue scanner.
+
+Nothing here is restyled into the app's screens yet. The components exist, they
+are tested, and they are on show at `#/library`; the branch that points Board,
+Run detail, Register, Eval and Settings at them is a separate one, which is why
+`styles.css` still carries the rules they will replace.
+
+### Where each spec lives
+
+The original is `desktop/frontend/src/ui/<component>/SPEC.md`, beside the
+component, so a change to one is reviewed with the other. The copy in this
+folder is generated and opens with a comment saying so. Editing the copy is
+lost work: the next sync overwrites it.
+
+### The changelog
+
+Each spec ends with its own changelog rather than carrying a separate
+`CHANGELOG.md`, so the record of what changed travels with the description of
+what the thing is. The layout sketch above keeps the separate file for the
+components that have not been built yet.
+
 ## Catalogue
 
 `index.html` lists every component: name, the three-surface flags, status (`spec only`,

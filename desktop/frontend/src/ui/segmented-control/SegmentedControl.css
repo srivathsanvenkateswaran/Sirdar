@@ -1,0 +1,78 @@
+/*
+ * Segmented control. One track, one thumb, and the thumb is the only moving
+ * part. The track is sunk so the control reads as a well cut into the surface
+ * rather than as a row of small buttons.
+ */
+
+.sd-segmented {
+  position: relative;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 0;
+  padding: 3px;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-sunk);
+  isolation: isolate;
+}
+
+.sd-segmented[data-disabled='true'] {
+  opacity: 0.45;
+}
+
+.sd-segmented__thumb {
+  position: absolute;
+  z-index: 0;
+  inset-block: 3px;
+  /* Logical inset, so the thumb travels the right way in an Arabic pane
+     without a second rule and without a mirrored transform. */
+  inset-inline-start: calc(3px + var(--sd-segmented-index, 0) * (100% - 6px) / var(--sd-segmented-count, 1));
+  width: calc((100% - 6px) / var(--sd-segmented-count, 1));
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  box-shadow: 0 0 0 1px var(--sd-rule-strong);
+  transition: inset-inline-start var(--sd-dur-2) var(--sd-ease);
+}
+
+.sd-segmented__option {
+  position: relative;
+  z-index: 1;
+  min-height: 32px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 0;
+  border-radius: var(--sd-radius-pill);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--sd-dur-1) ease;
+}
+
+.sd-segmented__option:hover:not(:disabled) {
+  color: var(--sd-ink);
+}
+
+.sd-segmented__option[aria-checked='true'] {
+  color: var(--sd-ink);
+  font-weight: 500;
+}
+
+.sd-segmented__option:disabled {
+  cursor: default;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  /* The thumb jumps. Nothing waits for it. */
+  .sd-segmented__thumb {
+    transition: none;
+  }
+
+  .sd-segmented__option {
+    transition-duration: 1ms;
+  }
+}

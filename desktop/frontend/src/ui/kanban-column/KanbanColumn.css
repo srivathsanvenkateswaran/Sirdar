@@ -1,0 +1,73 @@
+/*
+ * Kanban column. A sunk well with a hue rail across its top, which is the
+ * board's whole legend.
+ */
+
+.sd-lane {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-width: 208px;
+  min-height: 0;
+  background: var(--sd-sunk);
+  border-block-start: 2px solid var(--sd-lane-hue, var(--sd-st-queue));
+}
+
+.sd-lane[data-lane='queue'] { --sd-lane-hue: var(--sd-st-queue); }
+.sd-lane[data-lane='gathering'] { --sd-lane-hue: var(--sd-st-live); }
+.sd-lane[data-lane='blocked'] { --sd-lane-hue: var(--sd-st-blocked); }
+.sd-lane[data-lane='triaged'] { --sd-lane-hue: var(--sd-st-triaged); }
+.sd-lane[data-lane='done'] { --sd-lane-hue: var(--sd-st-done); }
+.sd-lane[data-lane='failed'] { --sd-lane-hue: var(--sd-st-failed); }
+
+.sd-lane__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sd-space-2);
+  margin: 0;
+  padding-block: var(--sd-space-2) var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+}
+
+.sd-lane__count {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-lane-hue);
+}
+
+.sd-lane__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-1);
+  flex: 1;
+  min-height: 0;
+  padding-block-end: var(--sd-space-2);
+  padding-inline: var(--sd-space-2);
+  overflow-y: auto;
+}
+
+.sd-lane__empty {
+  margin: 0;
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.45;
+  color: var(--sd-ink-3);
+}
+
+/* Under 720px the lanes stack and the board scrolls as one page. */
+@media (max-width: 720px) {
+  .sd-lane {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .sd-lane__body {
+    overflow: visible;
+  }
+}
