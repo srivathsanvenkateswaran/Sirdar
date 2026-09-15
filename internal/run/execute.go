@@ -23,17 +23,33 @@ import (
 // maxMalformed is how many malformed provider lines in a row end the run.
 const maxMalformed = 10
 
-// noWireSchemaEnforcement names the providers with no mechanism to enforce
-// SessionSpec.OutputSchema on the wire: the schema reaches the model only
-// as prompt text, so nothing stops it from echoing the schema's own header
-// back, or answering with the schema itself. Claude and Qwen pass it as a
-// CLI flag their own process enforces, Codex as a protocol param its agent
-// enforces, and the openai loop as a tool-call parameter schema; ACP and
-// cursor have none of those, so they get the sharpened retry and prompt
-// wording.
+// noWireSchemaEnforcement names the providers that cannot hold the model
+// to SessionSpec.OutputSchema, so a failed note is likely to have failed by
+// quoting the schema's own header back, or by answering with the schema
+// itself, rather than by getting a field wrong. Those get the sharpened
+// retry wording.
+//
+// Claude passes the schema as a CLI flag its own process enforces, Codex as
+// a protocol param its agent enforces, and the openai loop as a tool-call
+// parameter schema. ACP has none of those: the schema reaches the agent
+// only as prompt text (acp.promptText). Cursor has none of them either —
+// there is no --json-schema flag and no structured_output field, so the
+// schema is appended to the prompt and the answer is read back out of the
+// result line's prose (cursor.extractJSON, which refuses an object whose
+// whole top level is $schema and title).
+//
+// Qwen is here on the strength of the first live run rather than the flag.
+// --json-schema is a real flag and Qwen Code does act on it, but only after
+// the fact: it registers a synthetic structured_output tool and fails the
+// run when the model answers in prose instead of calling it, which is
+// exactly what qwen-plus-character did on both the first turn and the
+// resumed retry. The schema constrains nothing the model writes, so the
+// retry is talking to a model that is answering in free text and has to be
+// told so in the same words ACP's is.
 var noWireSchemaEnforcement = map[string]bool{
 	"acp":    true,
 	"cursor": true,
+	"qwen":   true,
 }
 
 // maxEmptyTurns is how many turns may end with no answer before the run is
@@ -875,6 +891,20 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 			}
 		} else if schemaItself {
 			err = fmt.Errorf("the agent's answer is the JSON Schema itself (a root \"properties\" object), not a document shaped by it")
+		}
+		if err != nil {
+			// The other thing a model writing free-text JSON gets wrong
+			// about a string field: null for "I have nothing to put
+			// here", which is what the schema's own optional fields
+			// spell that way. Same information as "", so it is read as
+			// "" and the fields are named in a warning.
+			if coerced, nulled, ok := coerceNullStrings(schema, doc); ok {
+				if cerr := note.Validate(noteKind(p.kind), coerced); cerr == nil {
+					doc, err = coerced, nil
+					p.state.Warnings = append(p.state.Warnings,
+						"the agent wrote null where the schema wants a string, read as empty: "+strings.Join(nulled, ", "))
+				}
+			}
 		}
 	}
 	if err == nil {

@@ -278,7 +278,9 @@ counts a whole prompt turn as one turn, so `budget.maxMinutes` is what actually 
 runs; it also has no schema field, so the note comes back as JSON in the agent's own message
 rather than as structured output. And because an ACP agent is a whole CLI with its own tools and
 its own MCP configuration, the permission policy covers what the agent chooses to ask about —
-`docs/config.md` says where that reaches and where it does not.
+`docs/config.md` says where that reaches and where it does not. Moonshot's Kimi Code CLI
+(`command: kimi`, `args: ["acp"]`) is the one agent on that list driven against a real binary;
+`docs/research/12-kimi-wire-formats.md` records what its session modes do and do not guarantee.
 
 `provider: cursor` drives the Cursor Agent CLI against the login `cursor-agent` already holds.
 It is the one provider whose read-only guarantee Sirdar does not enforce itself: `cursor-agent

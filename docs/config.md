@@ -1903,6 +1903,55 @@ itself — its name and version, the protocol version, and whether it supports `
 image prompts — then shuts it down again. That is the cheapest way to find out whether an agent
 you have not run before works here at all.
 
+#### Kimi Code CLI over ACP
+
+Moonshot's Kimi CLI speaks ACP natively — `kimi acp` — and it is the one agent in
+`docs/research/providers/acp-agents.md` that has been driven against a real binary rather than
+transcribed from a registry. Version 0.43.1 answers protocol version 1 and advertises
+`loadSession`, image prompts, embedded context, and HTTP and SSE MCP transports.
+
+```yaml
+provider: acp
+acp:
+  command: /Users/you/.kimi-code/bin/kimi
+  args: ["acp"]
+  env: {}
+budget:
+  maxMinutes: 20
+```
+
+The installer does not put `kimi` on `PATH` — it lives at `~/.kimi-code/bin/kimi` — so
+`acp.command` normally has to be the absolute path.
+
+Kimi's read-only posture is a session **mode**, chosen with `session/set_mode`, and the choice
+matters more here than for most agents:
+
+- **`plan`** vetoes `Write` and `Edit` in the agent's own process, before the permission chain
+  is consulted, and leaves `Bash` to arrive as a permission request that `permissions.bash`
+  answers. That is the mode a triage run wants.
+- **`default`** is not read-only in a git checkout. Kimi approves a `Write` or `Edit` whose
+  targets all lie inside the workspace whenever the workspace is inside a git work tree, and
+  that approval happens before a `session/request_permission` is built — so Sirdar is never
+  asked about the writes it exists to refuse.
+- **`auto`** and **`yolo`** approve more still, and neither belongs in a Sirdar run.
+
+Sirdar's ACP adapter does not send `session/set_mode` today, so a kimi session starts in
+`default`. Until it does, **treat `provider: acp` with kimi as a scratch-checkout provider**,
+not one to point at a repository you care about. Two further gaps are Kimi's own and no client
+setting reaches them: a subagent spawned through its `Agent` or `AgentSwarm` tool runs with
+permissions forced to auto and without the parent's plan-mode state, so nothing it does is
+asked about; and `FetchURL` and `WebSearch` are approved without asking, so `permissions.fetch`
+is never consulted. `docs/research/12-kimi-wire-formats.md` has the evidence for all of it.
+
+Headless `kimi -p` is not an alternative: it forces the session's permission mode to auto on
+every path, and refuses `--plan`, `--auto` and `--yolo` outright when combined with `-p`. That
+is why this is an ACP provider and not a native adapter.
+
+Cost is absent, as on every ACP agent — Kimi's `usage_update` carries context tokens and omits
+`cost` deliberately — so `budget.maxMinutes` is the bound. A spent quota on the free tier
+arrives as a JSON-RPC `-32000` whose message begins `Authentication required: 403 You've
+reached your monthly usage limit…`, which reads like a login failure and is not one.
+
 ### `provider: cursor`
 
 The [Cursor Agent CLI](https://cursor.com/cli) (`cursor-agent`, also installed as `agent`) runs

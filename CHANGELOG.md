@@ -22,7 +22,9 @@ Code or Codex CLI already installed and signed in, so a run counts against the p
 already being paid for; `provider: openai` runs Sirdar's own agent loop against any
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
-`provider: acp` drives any Agent Client Protocol agent (Gemini CLI, Goose, OpenCode);
+`provider: acp` drives any Agent Client Protocol agent (Gemini CLI, Goose, OpenCode,
+and Moonshot's Kimi Code CLI via `kimi acp`, the one of those verified against a real
+binary);
 `provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
 hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
 execution mode rather than by a policy Sirdar enforces — a write or a command that

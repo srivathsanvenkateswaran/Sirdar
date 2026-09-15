@@ -1,6 +1,10 @@
 package run
 
-import "encoding/json"
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+)
 
 // schemaEchoKeys are the JSON Schema header keywords a provider with no
 // wire-level schema enforcement sometimes echoes back alongside its real
@@ -74,4 +78,104 @@ func schemaRootProperties(schema []byte) map[string]bool {
 		out[k] = true
 	}
 	return out
+}
+
+// coerceNullStrings rewrites an explicit JSON null as "" wherever the
+// schema asks for a plain string, and reports the dotted paths it touched.
+// ok is false when the document had no such null and the original
+// validation error stands.
+//
+// A model writing the answer as free text has no wire-level schema to hold
+// it to the difference between "" and null, and the triage schema teaches
+// it the wrong lesson by using `"type": ["string", "null"]` for the two
+// fields whose absence it documents (complaintOriginal, customerIds) while
+// asking for a bare string on proposedFix.remediationSql, which is empty
+// on most notes and means exactly the same thing. Qwen's
+// qwen-plus-character wrote null there on both the first answer and the
+// retry, having been told by name which field was wrong.
+//
+// null and "" carry the same information for a string field — the model
+// had nothing to put there — so this coerces rather than fails, and the
+// caller still has to revalidate: nothing here makes a document a note.
+// The fields are named in a run warning, because "the agent left this
+// empty" is worth reading even when the note is otherwise good.
+func coerceNullStrings(schema, doc []byte) (cleaned []byte, fields []string, ok bool) {
+	var s, d any
+	if err := decodeJSON(schema, &s); err != nil {
+		return nil, nil, false
+	}
+	if err := decodeJSON(doc, &d); err != nil {
+		return nil, nil, false
+	}
+	out, changed := coerceNode(s, d, "", &fields)
+	if !changed {
+		return nil, nil, false
+	}
+	b, err := json.Marshal(out)
+	if err != nil {
+		return nil, nil, false
+	}
+	return b, fields, true
+}
+
+// decodeJSON unmarshals into any with numbers left as json.Number, so a
+// document that is re-marshalled after a coercion keeps the digits it
+// arrived with rather than being round-tripped through float64.
+func decodeJSON(raw []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.UseNumber()
+	return dec.Decode(v)
+}
+
+// coerceNode walks a schema and a value together. It only descends where
+// the schema does — an object's declared properties and an array's items —
+// so a value the schema says nothing about is left exactly as it is.
+func coerceNode(schema, value any, path string, fields *[]string) (any, bool) {
+	sm, isObject := schema.(map[string]any)
+	if !isObject {
+		return value, false
+	}
+	if value == nil {
+		if sm["type"] == "string" {
+			*fields = append(*fields, path)
+			return "", true
+		}
+		return value, false
+	}
+
+	changed := false
+	if props, has := sm["properties"].(map[string]any); has {
+		if vm, isMap := value.(map[string]any); isMap {
+			for key, child := range vm {
+				ps, declared := props[key]
+				if !declared {
+					continue
+				}
+				next, hit := coerceNode(ps, child, joinPath(path, key), fields)
+				if hit {
+					vm[key] = next
+					changed = true
+				}
+			}
+		}
+	}
+	if items, has := sm["items"]; has {
+		if va, isSlice := value.([]any); isSlice {
+			for i, child := range va {
+				next, hit := coerceNode(items, child, fmt.Sprintf("%s[%d]", path, i), fields)
+				if hit {
+					va[i] = next
+					changed = true
+				}
+			}
+		}
+	}
+	return value, changed
+}
+
+func joinPath(path, key string) string {
+	if path == "" {
+		return key
+	}
+	return path + "." + key
 }
