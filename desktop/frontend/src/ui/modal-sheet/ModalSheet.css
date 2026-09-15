@@ -112,6 +112,24 @@
   font-weight: 500;
 }
 
+/* The row's icon: 18px in the third ink, the ink itself on the current row. */
+.sd-modal__nav-icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  inline-size: 18px;
+  block-size: 18px;
+  color: var(--sd-ink-3);
+}
+
+.sd-modal__nav-icon > svg {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.sd-modal__nav-row[aria-current='page'] .sd-modal__nav-icon {
+  color: var(--sd-ink);
+}
+
 /* Where the reference prints a 2.11:1 version string. This one is 7.37:1. */
 .sd-modal__nav-foot {
   display: flex;

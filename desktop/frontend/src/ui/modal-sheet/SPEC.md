@@ -23,6 +23,9 @@ where the measurements come from.
   - `p.sd-modal__nav-label` — a group heading, 11px `--sd-ink-3`,
     letter-spacing 0.06em.
   - `button.sd-modal__nav-row` — 28-tall pill at 32 pitch, inset 8 each side.
+    - `span.sd-modal__nav-icon` — an optional 18px inline stroke SVG before
+      the label, `--sd-ink-3` at rest and `--sd-ink` on the current row,
+      `aria-hidden`: the label carries the word.
   - `div.sd-modal__nav-foot` — the version and the last sync, 11px
     `--sd-ink-3`, **4.60:1** on the card.
 - `div.sd-modal__panel` — `--sd-sheet`, 32 padding.
@@ -90,6 +93,11 @@ motion: the scrim and the sheet both cross-fade at 1ms with no scale, which is
 the answer `03-desktop-app.md` section 11 states.
 
 ## Changelog
+
+### 2026-09-15 (nav icons)
+A nav item may carry an `icon`, drawn at 18px before its label in
+`--sd-ink-3`, the ink on the current row — the settings mock's iconed rows.
+The icon is `aria-hidden`; the row's name is still its label alone.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: `min(1160px, 92vw)` by `min(820px, 88vh)`

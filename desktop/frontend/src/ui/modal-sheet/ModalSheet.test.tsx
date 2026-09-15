@@ -56,6 +56,28 @@ describe('ModalSheet', () => {
     expect(screen.getByRole('button', { name: 'Providers' })).not.toHaveAttribute('aria-current')
   })
 
+  // The icon is decoration: the row is still named by its label alone, so a
+  // screen reader hears "General" and not an unlabelled graphic before it.
+  it('draws an item icon before the label without changing the row name', () => {
+    open({
+      groups: [
+        {
+          label: 'Workspace',
+          items: [
+            {
+              id: 'general',
+              label: 'General',
+              icon: <svg viewBox="0 0 24 24" data-testid="general-icon" />,
+            },
+          ],
+        },
+      ],
+    })
+    const row = screen.getByRole('button', { name: 'General' })
+    expect(row.querySelector('.sd-modal__nav-icon')).toHaveAttribute('aria-hidden', 'true')
+    expect(screen.getByTestId('general-icon')).toBeInTheDocument()
+  })
+
   it('closes on Escape', () => {
     const { onClose } = open()
     fireEvent.keyDown(window, { key: 'Escape' })
