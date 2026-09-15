@@ -1,58 +1,59 @@
-import StatusBadge, { PriorityBadge, type SdStatus } from '../status-badge'
+import KindChip from '../kind-chip'
+import ProviderMark from '../provider-mark'
+import StateGlyph, { type GlyphState } from '../state-glyph'
 import './RunCard.css'
 
 export interface RunCardProps {
-  /** The tracker's key, shown in the ledger face because it is an identifier. */
+  /** The tracker's key, in the ledger face at the foot. */
   runKey: string
-  /** What the run is: triage, fix, rca, eval. */
+  /** What the run is: triage, rca, fix. */
   kind: string
-  status: SdStatus
+  /** The CLI's state, or `done` for a key whose RCA is written. */
+  status: GlyphState
   /** The ticket's title. Falls back to the key when the tracker has none. */
   title?: string
-  /** Why the run stopped. Shown only for a state that stopped on something. */
-  reason?: string
-  priority?: string
-  /** Already formatted: this component does no arithmetic on a clock. */
-  elapsed?: string
-  /** The clock's tooltip: the exact stamp, or what it is counting. */
-  elapsedTitle?: string
-  cost?: string
-  /** The cost's tooltip: turns and token flow, so the card stays to one number. */
-  costTitle?: string
+  /** The provider running it; drawn as the card's avatar. */
+  provider: string
+  /**
+   * Already formatted, e.g. `4:12`. Drawn only while the run is live or
+   * blocked — the two states where a clock is a fact about now — whatever the
+   * caller hands over otherwise. This component does no arithmetic on a clock.
+   */
+  clock?: string
+  /** The clock's tooltip: what it is counting. */
+  clockTitle?: string
   onOpen: () => void
 }
 
-const STOPPED: SdStatus[] = ['blocked', 'failed', 'over_budget']
+const CLOCKED: GlyphState[] = ['preparing', 'running', 'blocked']
 
 /**
- * A run, as the board shows it.
+ * A run, as the board shows it: the Jira-shaped card from the 2026-09-15
+ * screens round.
  *
- * The key is monospace and the title is not, which is the product's one
- * typographic rule: an identifier is a thing you match character by character,
- * a title is a thing you read. The title and the reason both carry `dir="auto"`
- * because either can be the customer's own Arabic, and a reason quoting a
- * customer inside an English board should still read from the right.
+ * The title first, up to two lines, with no key above it: a board is read by
+ * title and the key is looked up second, so the key sits at the foot in the
+ * ledger face beside the provider's mark. Under the title a kind chip; at the
+ * foot the state's glyph and word, with a clock only while the run is live
+ * or waiting on a person. No reason and no cost: those are the session's, and
+ * a card that quoted them was a second session screen at 240 wide.
  *
- * A live run takes the accent on its leading edge. It is the only moving thing
- * on the board and the only thing wearing the accent, so a column of cards
- * answers "what is happening right now" without being read.
+ * The title carries `dir="auto"` because it can be the customer's own Arabic
+ * inside an English board.
  */
 export default function RunCard({
   runKey,
   kind,
   status,
   title,
-  reason,
-  priority,
-  elapsed,
-  elapsedTitle,
-  cost,
-  costTitle,
+  provider,
+  clock,
+  clockTitle,
   onOpen,
 }: RunCardProps): JSX.Element {
   const live = status === 'preparing' || status === 'running'
   const heading = title || runKey
-  const showReason = Boolean(reason) && STOPPED.includes(status)
+  const showClock = Boolean(clock) && CLOCKED.includes(status)
 
   return (
     <button
@@ -63,45 +64,24 @@ export default function RunCard({
       aria-label={`${runKey}: ${heading}`}
       onClick={onOpen}
     >
-      <span className="sd-run-card__top">
-        <span className="sd-run-card__key" dir="ltr">
-          {runKey}
-        </span>
-        <span className="sd-run-card__kind" dir="ltr">
-          {kind}
-        </span>
-        <PriorityBadge priority={priority ?? ''} />
+      <span className="sd-run-card__title" dir="auto">
+        {heading}
       </span>
 
-      {heading !== runKey && (
-        <span className="sd-run-card__title" dir="auto">
-          {heading}
-        </span>
-      )}
-
-      {showReason && (
-        <span className="sd-run-card__reason" dir="auto">
-          {reason}
-        </span>
-      )}
+      <span className="sd-run-card__kind">
+        <KindChip kind={kind} />
+      </span>
 
       <span className="sd-run-card__foot">
-        <StatusBadge status={status} />
-        {elapsed && (
-          <span
-            className="sd-run-card__elapsed"
-            data-live={live ? 'true' : undefined}
-            title={elapsedTitle}
-            dir="ltr"
-          >
-            {elapsed}
+        <span title={showClock ? clockTitle : undefined}>
+          <StateGlyph state={status} clock={showClock ? clock : undefined} />
+        </span>
+        <span className="sd-run-card__who">
+          <span className="sd-run-card__key" dir="ltr">
+            {runKey}
           </span>
-        )}
-        {cost && (
-          <span className="sd-run-card__cost" title={costTitle} dir="ltr">
-            {cost}
-          </span>
-        )}
+          <ProviderMark provider={provider} size="sm" />
+        </span>
       </span>
     </button>
   )

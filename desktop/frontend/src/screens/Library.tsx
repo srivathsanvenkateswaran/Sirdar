@@ -437,8 +437,8 @@ export default function Library(): JSX.Element {
                     kind="triage"
                     status="running"
                     title="Statement export times out"
-                    elapsed="4m 12s"
-                    cost="$0.42"
+                    provider="claude"
+                    clock="4:12"
                     onOpen={() => {}}
                   />
                 ) : null}
@@ -450,47 +450,73 @@ export default function Library(): JSX.Element {
         <Section
           id="run-card"
           name="Run card"
-          note="A live run wears the accent on its leading edge and nothing else does."
+          note="The Jira-shaped card: title, kind chip, state glyph and clock, key and provider mark. No reason, no cost."
         >
           <div className="lib-row">
-            <State label="Running">
+            <State label="Queued">
               <RunCard
-                runKey="OMNI-2510"
+                runKey="SBX-8"
                 kind="triage"
-                status="running"
-                title="Statement export times out"
-                priority="P2"
-                elapsed="4m 12s"
-                cost="$0.42"
+                status="queued"
+                title="Supplier price import rounds to the nearest riyal"
+                provider="cursor"
                 onOpen={() => {}}
               />
             </State>
-            <State label="Needs input">
+            <State label="Running, with the clock">
               <RunCard
-                runKey="OMNI-2511"
+                runKey="SBX-4"
                 kind="triage"
+                status="running"
+                title="Reorder reminder fires twice for the same product"
+                provider="claude"
+                clock="1:47"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Blocked, with the clock">
+              <RunCard
+                runKey="SBX-1"
+                kind="fix"
                 status="blocked"
-                title="Login fails after the update"
-                reason="The agent asked which account to use."
-                elapsed="1m 30s"
+                title="Product 00219 stock shows 1 more than the movement report"
+                provider="claude"
+                clock="4:12"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Completed RCA">
+              <RunCard
+                runKey="SBX-3"
+                kind="rca"
+                status="completed"
+                title="Stock count export skips products with a zero price"
+                provider="copilot"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Done">
+              <RunCard
+                runKey="SBX-5"
+                kind="fix"
+                status="done"
+                title="Credit note lands on the wrong customer account"
+                provider="claude"
                 onOpen={() => {}}
               />
             </State>
             <State label="Failed">
               <RunCard
-                runKey="OMNI-2512"
-                kind="fix"
+                runKey="SBX-6"
+                kind="triage"
                 status="failed"
-                title="Retry storm on the export worker"
-                reason="The provider CLI exited with status 1."
-                priority="P1"
-                elapsed="9m 02s"
-                cost="$1.61"
+                title="Barcode lookup returns the discontinued variant"
+                provider="qwen"
                 onOpen={() => {}}
               />
             </State>
             <State label="No title from the tracker">
-              <RunCard runKey="OMNI-2513" kind="eval" status="queued" onOpen={() => {}} />
+              <RunCard runKey="OMNI-2513" kind="eval" status="queued" provider="acp" onOpen={() => {}} />
             </State>
             <State label="Arabic">
               <RunCard
@@ -498,9 +524,8 @@ export default function Library(): JSX.Element {
                 kind="triage"
                 status="blocked"
                 title={ARABIC_TITLE}
-                reason={ARABIC_REASON}
-                elapsed="2m 04s"
-                cost="$0.31"
+                provider="codex"
+                clock="2:04"
                 onOpen={() => {}}
               />
             </State>

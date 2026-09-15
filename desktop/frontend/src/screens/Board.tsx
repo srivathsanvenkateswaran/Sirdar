@@ -183,7 +183,7 @@ export default function Board(props: {
                         key={card.run.runId}
                         run={card.run}
                         title={card.title}
-                        priority={card.priority}
+                        done={column.id === 'done'}
                         onOpen={onOpenRun}
                       />
                     ),

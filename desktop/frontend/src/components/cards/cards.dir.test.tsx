@@ -48,12 +48,15 @@ describe('board cards', () => {
   })
 
   it('marks a run title dir="auto"', () => {
-    render(<RunCard run={RUN} title={ARABIC_TITLE} priority="high" onOpen={() => {}} />)
+    render(<RunCard run={RUN} title={ARABIC_TITLE} onOpen={() => {}} />)
     expect(screen.getByText(ARABIC_TITLE)).toHaveAttribute('dir', 'auto')
   })
 
-  it('marks the reason a run stopped dir="auto"; it can quote the customer', () => {
-    render(<RunCard run={RUN} title={ARABIC_TITLE} priority="high" onOpen={() => {}} />)
-    expect(screen.getByText(RUN.reason)).toHaveAttribute('dir', 'auto')
+  // The reason can quote the customer, so it stays off the card: it is the
+  // session's banner, laid out with its own direction there.
+  it('keeps the reason a run stopped off the board', () => {
+    render(<RunCard run={RUN} title={ARABIC_TITLE} onOpen={() => {}} />)
+    expect(screen.queryByText(RUN.reason)).toBeNull()
+    expect(screen.getByText('blocked')).toBeInTheDocument()
   })
 })

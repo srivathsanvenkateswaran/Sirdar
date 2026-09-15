@@ -62,17 +62,25 @@ describe('Board', () => {
     }
 
     await waitFor(() => expect(within(lane(container, 'gathering')).getByText('OMNI-1')).toBeInTheDocument())
-    expect(within(lane(container, 'triaged')).getByText('OMNI-2')).toBeInTheDocument()
-    expect(within(lane(container, 'blocked')).getByText('OMNI-3')).toBeInTheDocument()
-    expect(within(lane(container, 'done')).getByText('OMNI-4')).toBeInTheDocument()
-    expect(within(lane(container, 'failed')).getByText('OMNI-5')).toBeInTheDocument()
+    // A run with no tracker title shows its key as the title and again at the
+    // foot, so the card is found by its accessible name rather than by text.
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(within(lane(container, 'done')).getByRole('button', { name: /OMNI-4/ })).toBeInTheDocument()
+    expect(within(lane(container, 'failed')).getByRole('button', { name: /OMNI-5/ })).toBeInTheDocument()
 
     // OMNI-1 already has a run, so only the untouched ticket waits in Queue.
     expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument()
     expect(within(lane(container, 'queue')).queryByText('OMNI-1')).toBeNull()
 
-    // A blocked run says why it stopped.
-    expect(screen.getByText('Which tenant is affected?')).toBeInTheDocument()
+    // A blocked run says it is blocked and for how long; the question itself
+    // is the session's, not the card's.
+    const blockedCard = within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })
+    expect(within(blockedCard).getByText('blocked')).toBeInTheDocument()
+    expect(blockedCard.querySelector('.sd-state__clock')).not.toBeNull()
+    expect(screen.queryByText('Which tenant is affected?')).toBeNull()
+    // Done is the board's word for a completed RCA.
+    expect(within(lane(container, 'done')).getByText('done')).toBeInTheDocument()
   })
 
   it('opens run detail when a card is clicked', async () => {
