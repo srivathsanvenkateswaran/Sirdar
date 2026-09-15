@@ -497,6 +497,17 @@ type Config struct {
 		// page, a file), and a fetch nobody judged is how that text
 		// sends what the session knows to a host of its choosing.
 		Fetch []string `yaml:"fetch"`
+		// ReadAlso holds the globs that widen a session's read scope.
+		// A read-class tool (Read, Glob, Grep, LS and the same tools
+		// under a provider's own names) may look inside the workspace
+		// root, this run's directory and its bundle; a path outside all
+		// three is refused unless one of these globs names it.
+		//
+		// Empty — the default — widens nothing. An entry is an absolute
+		// path or one starting with "~", with "*" spanning "/": a
+		// wildcard-free entry names a directory and everything under
+		// it.
+		ReadAlso []string `yaml:"readAlso"`
 	} `yaml:"permissions"`
 	// MCP controls which MCP servers the agent session can see at all.
 	// WorkspaceOnly (default true) starts the session with
@@ -721,6 +732,9 @@ func (c *Config) Validate() error {
 	if err := validateFetch(c.Permissions.Fetch); err != nil {
 		return err
 	}
+	if err := validateReadAlso(c.Permissions.ReadAlso); err != nil {
+		return err
+	}
 
 	if c.Budget.MaxTurns <= 0 {
 		return fmt.Errorf("config: budget.maxTurns: must be > 0, got %d", c.Budget.MaxTurns)
@@ -840,6 +854,33 @@ func validateFetch(entries []string) error {
 	for i, entry := range entries {
 		if reason := provider.ValidateFetchEntry(entry); reason != "" {
 			return fmt.Errorf("config: permissions.fetch[%d]: %q %s", i, entry, reason)
+		}
+	}
+	return nil
+}
+
+// validateReadAlso checks permissions.readAlso. Each entry widens what a
+// session may read, so an entry that cannot mean what it looks like is a
+// failed load rather than a line that quietly matches nothing.
+//
+// A relative entry is the one shape refused: it would read as "relative to
+// the workspace", which is already in scope and needs no entry, while the
+// path it actually names depends on where the process was started. A bare
+// "*" is refused too — it is every file on the machine, which is not a
+// scope.
+func validateReadAlso(entries []string) error {
+	for i, entry := range entries {
+		trimmed := strings.TrimSpace(entry)
+		switch {
+		case trimmed == "":
+			return fmt.Errorf("config: permissions.readAlso[%d]: is empty", i)
+		case trimmed == "*" || trimmed == "/*" || trimmed == "**":
+			return fmt.Errorf("config: permissions.readAlso[%d]: %q names every file on the machine", i, entry)
+		case strings.HasPrefix(trimmed, "~"):
+		case filepath.IsAbs(trimmed):
+		default:
+			return fmt.Errorf("config: permissions.readAlso[%d]: %q must be an absolute path or start with ~; "+
+				"the workspace is already readable", i, entry)
 		}
 	}
 	return nil

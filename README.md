@@ -174,6 +174,17 @@ whatever the list says. It exists because a triage reads attacker-supplied text 
 it, an instruction hidden in a ticket comment could pick the destination and take the run's
 context with it.
 
+A read is judged the same way, on where it looks rather than on the tool's name. `Read`, `Glob`,
+`Grep` and `LS` — and the same tools under each provider's own names — may open the workspace,
+the run's directory, and the bundle of ticket text and attachments staged inside it; anything
+else is refused with `read outside the workspace: <path>`. Symlinks resolve before the check,
+and `permissions.readAlso` is a list of globs, empty by default, that widens it to a runbook
+directory or a skills tree you want a session to read. It applies wherever Sirdar answers a tool
+call — Claude's permission tool, the qwen hook, an ACP permission request and its
+`fs/read_text_file`, and Sirdar's own agent loop. On Codex a read is a shell command, so
+`permissions.bash` confines it; on `cursor` and `agy` nothing asks, so nothing is confined, and
+both `sirdar doctor` and the run's own event log say so.
+
 `sirdar fix` is the one session that may change files, and only after a human has read the note
 (see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
 `MultiEdit`; everything else is refused exactly as before. Being allowed to edit is not being
@@ -273,8 +284,8 @@ bounded by turns and wall-clock time instead.
 in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is the one provider
 whose read-only guarantee Sirdar does not impose: the CLI gives a parent process no way to
 mediate a tool call, so every session runs in the CLI's own `--mode plan`, `permissions.bash`,
-`permissions.mcp` and `permissions.fetch` are never consulted, `mcp.workspaceOnly` cannot be
-enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
+`permissions.mcp`, `permissions.fetch` and `permissions.readAlso` are never consulted,
+`mcp.workspaceOnly` cannot be enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
 watch, and fail loudly: a refusal the CLI makes appears as a denied permission, and a write or a
 command that *completes* in a triage session ends the run — the session is killed and the run is
 `failed`, with no note written and no register row added, because both would assert a read-only

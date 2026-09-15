@@ -90,16 +90,61 @@ func TestResolveRejectsPathsOutsideRoot(t *testing.T) {
 		t.Fatalf("resolve of the root itself: %v", err)
 	}
 
-	// The confinement is enforced by the tools, not just by resolve.
+	// The confinement is enforced by the tools, not just by resolve. A
+	// read refuses in the read scope's own words, which is what the
+	// permission policy in front of the loop tells the model too.
 	tools := ReadOnlySet(Options{Root: root})
 	if _, err := call(t, toolByName(t, tools, "read_file"), `{"path":"escape/secret.txt"}`); err == nil ||
-		!strings.Contains(err.Error(), "path escapes workspace") {
-		t.Fatalf("read_file through a symlink: err = %v, want path escapes workspace", err)
+		!strings.Contains(err.Error(), "read outside the workspace") {
+		t.Fatalf("read_file through a symlink: err = %v, want read outside the workspace", err)
 	}
 	if _, err := call(t, toolByName(t, tools, "list_dir"), `{"path":".."}`); err == nil ||
-		!strings.Contains(err.Error(), "path escapes workspace") {
-		t.Fatalf("list_dir on the parent: err = %v, want path escapes workspace", err)
+		!strings.Contains(err.Error(), "read outside the workspace") {
+		t.Fatalf("list_dir on the parent: err = %v, want read outside the workspace", err)
 	}
+}
+
+// TestReadToolsFollowTheSessionsReadScope pins the second half of the read
+// scope: the run directory the policy allowed is readable through the tool
+// as well, and so is a path a permissions.readAlso glob names. Without
+// this the outer gate approves a read the tool then refuses, which is a
+// contradiction the model cannot act on.
+func TestReadToolsFollowTheSessionsReadScope(t *testing.T) {
+	root := t.TempDir()
+	runDir := t.TempDir()
+	reference := t.TempDir()
+	writeFile(t, filepath.Join(runDir, "bundle", "thread.md"), "the ticket\n")
+	writeFile(t, filepath.Join(reference, "runbook.md"), "the runbook\n")
+
+	o := Options{
+		Root:      root,
+		ReadRoots: []string{runDir},
+		ReadAlso:  []string{filepath.Join(reference, "*")},
+	}
+	tools := ReadOnlySet(o)
+	read := toolByName(t, tools, "read_file")
+
+	if got := mustCall(t, read, `{"path":`+quoteJSON(filepath.Join(runDir, "bundle", "thread.md"))+`}`); !strings.Contains(got, "the ticket") {
+		t.Fatalf("read of the run bundle = %q", got)
+	}
+	if got := mustCall(t, read, `{"path":`+quoteJSON(filepath.Join(reference, "runbook.md"))+`}`); !strings.Contains(got, "the runbook") {
+		t.Fatalf("read of a readAlso path = %q", got)
+	}
+
+	elsewhere := t.TempDir()
+	writeFile(t, filepath.Join(elsewhere, "secret.txt"), "no\n")
+	if _, err := call(t, read, `{"path":`+quoteJSON(filepath.Join(elsewhere, "secret.txt"))+`}`); err == nil ||
+		!strings.Contains(err.Error(), "read outside the workspace") {
+		t.Fatalf("read outside every root: err = %v", err)
+	}
+}
+
+func quoteJSON(s string) string {
+	b, err := json.Marshal(s)
+	if err != nil {
+		panic(err)
+	}
+	return string(b)
 }
 
 // --- read_file ----------------------------------------------------------
@@ -230,7 +275,7 @@ func TestGrepGoFallbackSkipsNoiseAndBinaries(t *testing.T) {
 		t.Fatalf("grep with a bad regexp: err = %v", err)
 	}
 	if _, err := call(t, grep, `{"pattern":"needle","path":"../.."}`); err == nil ||
-		!strings.Contains(err.Error(), "path escapes workspace") {
+		!strings.Contains(err.Error(), "read outside the workspace") {
 		t.Fatalf("grep outside the workspace: err = %v", err)
 	}
 

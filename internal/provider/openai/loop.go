@@ -201,6 +201,8 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		BashAllow:     policy.BashAllow,
 		FetchAllow:    policy.FetchAllow,
 		ExtraReserved: policy.ExtraReserved,
+		ReadRoots:     policy.ReadRoots,
+		ReadAlso:      policy.ReadAlso,
 	}
 	locals := agenttools.ReadOnlySet(toolOpts)
 	// A fix session is the only one that may change the workspace, so the

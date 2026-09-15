@@ -1,0 +1,14 @@
+// A Codex session reads through the shell, so the read scope reaches it
+// as the command allow-list's own root-escape rule: `cat` is allowed, the
+// file it names is not.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-r","sessionId":"th-r","cwd":"/work"},"model":"gpt-5.6-luna","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-r","items":[],"status":"inProgress"}}}
+{"$expect_request":"item/commandExecution/requestApproval","id":401,"params":{"threadId":"th-r","turnId":"tn-r","itemId":"exec_1","command":"/bin/zsh -lc 'cat ledger.go'","cwd":"/work"}}
+{"$expect_request":"item/commandExecution/requestApproval","id":402,"params":{"threadId":"th-r","turnId":"tn-r","itemId":"exec_2","command":"/bin/zsh -lc 'cat /etc/passwd'","cwd":"/work"}}
+{"$expect_request":"item/commandExecution/requestApproval","id":403,"params":{"threadId":"th-r","turnId":"tn-r","itemId":"exec_3","command":"/bin/zsh -lc 'cat ~/.claude/skills/support-triage/SKILL.md'","cwd":"/work"}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-r","turnId":"tn-r"}}
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-r","turn":{"id":"tn-r","status":"completed","error":null,"items":[],"completedAt":1789467100,"durationMs":900}}}

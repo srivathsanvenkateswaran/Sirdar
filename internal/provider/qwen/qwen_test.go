@@ -476,6 +476,50 @@ func TestUnparseableHookRequestIsDenied(t *testing.T) {
 	}
 }
 
+// TestHookJudgesWhereAReadLooks: Qwen Code's own read tool ids arrive at
+// the hook under their own names and are judged as Read, Grep, Glob and LS
+// (policyNames), so the read scope has to hold on this path too — a
+// read_many_files naming a file in the operator's home directory is a read
+// outside the workspace whatever the tool is called.
+func TestHookJudgesWhereAReadLooks(t *testing.T) {
+	root := t.TempDir()
+	cases := []struct {
+		name, body string
+		allow      bool
+	}{
+		{"read inside", `{"tool_name":"read_file","tool_input":{"path":"src/main.go"},"tool_call_id":"c1"}`, true},
+		{"read outside", `{"tool_name":"read_file","tool_input":{"path":"/etc/passwd"},"tool_call_id":"c2"}`, false},
+		{"read_many_files outside", `{"tool_name":"read_many_files","tool_input":{"paths":["src/main.go","/etc/passwd"]},"tool_call_id":"c3"}`, false},
+		{"list_directory outside", `{"tool_name":"list_directory","tool_input":{"path":"/"},"tool_call_id":"c4"}`, false},
+		{"glob inside", `{"tool_name":"glob","tool_input":{"pattern":"**/*.go"},"tool_call_id":"c5"}`, true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			s := newTestSession("tok")
+			s.policy = &provider.PermissionPolicy{Root: root}
+			rec := &recorder{}
+			s.decide(rec, hookPost(t, s, c.body))
+
+			var out struct {
+				HookSpecificOutput struct {
+					PermissionDecision string `json:"permissionDecision"`
+					Reason             string `json:"permissionDecisionReason"`
+				} `json:"hookSpecificOutput"`
+			}
+			if err := json.Unmarshal(rec.body.Bytes(), &out); err != nil {
+				t.Fatalf("decode %q: %v", rec.body.String(), err)
+			}
+			got := out.HookSpecificOutput.PermissionDecision == "allow"
+			if got != c.allow {
+				t.Fatalf("decision %q, want allow=%v", rec.body.String(), c.allow)
+			}
+			if !c.allow && !strings.Contains(out.HookSpecificOutput.Reason, "read outside the workspace") {
+				t.Fatalf("reason %q does not say why", out.HookSpecificOutput.Reason)
+			}
+		})
+	}
+}
+
 // newTestSession is a session with just enough of itself to answer the
 // permission hook directly, without a child process.
 func newTestSession(token string) *session {

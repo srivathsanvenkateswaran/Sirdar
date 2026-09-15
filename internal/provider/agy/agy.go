@@ -484,6 +484,17 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	cmd.Dir = spec.Cwd
 	cmd.Env = env
 
+	// The other half of what the project file above says: it grants
+	// read_file, and grants it as read_file(*), so the session may read.
+	// Where it may read is not something this wire can be asked about.
+	// Said once per session for the same reason the MCP notice below is —
+	// the run's own event log is where an operator looks afterwards to
+	// find out what the session could reach, and "any file the CLI would
+	// open" is part of that answer.
+	notices = append(notices, systemNotice("reads are not confined on provider agy: the CLI answers "+
+		"its own tool calls, so a read outside the workspace never reaches Sirdar's permission policy "+
+		"and permissions.readAlso decides nothing for this session"))
+
 	// mcp.workspaceOnly asked for a restriction this CLI cannot express.
 	// It is said once per session rather than left to doctor alone,
 	// because a run's own event log is where an operator looks afterwards
@@ -620,9 +631,36 @@ func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg prov
 			"run `agy models` and set agy.model to one that is")
 	}
 
+	// Two rows about reading, and they answer different questions.
+	// readAccessCheck asks whether this session will be able to read at
+	// all — a failure when it cannot, because an agent answering out of
+	// the ticket text is worse than no run. readCheck says that what it
+	// reads is not confined to the workspace, which is a permanent
+	// property of the CLI and so a warning.
 	reads := readAccessCheck()
-	checks := []provider.Check{version, login, model, reads, settingsCheck(cfg, reads.OK), mcpCheck(cfg), fixCheck()}
+	checks := []provider.Check{version, login, model, reads, readCheck(),
+		settingsCheck(cfg, reads.OK), mcpCheck(cfg), fixCheck()}
 	return checks
+}
+
+// readCheck says that permissions.readAlso and the read scope behind it
+// govern nothing here. Everywhere Sirdar can answer a tool call, a read
+// whose target lands outside the workspace, the run directory and the
+// readAlso globs is refused; on this provider there is no call to answer,
+// so the session reads whatever the CLI lets it read — and what the
+// session's own project file grants is `read_file(*)`, the only form of
+// the rule whose meaning is not a guess (see projectAllowRules).
+//
+// It is a warning rather than a failure for the same reason the MCP row
+// is: it describes the provider the operator chose, not a
+// misconfiguration. It sits beside readAccessCheck, which asks the
+// opposite question — whether the session can read at all.
+func readCheck() provider.Check {
+	return provider.Warn("agy reads", "reads are not confined on this provider: the CLI answers its "+
+		"own tool calls, so a Read, Glob or Grep outside the workspace is never offered to Sirdar's "+
+		"permission policy and permissions.readAlso decides nothing. The session's project file "+
+		"grants read_file(*) and denies every write, command and execute_url, so a read that "+
+		"wanders outside the workspace has nowhere to send what it found but the triage note")
 }
 
 // agySettings is the part of the CLI's own settings file that decides what

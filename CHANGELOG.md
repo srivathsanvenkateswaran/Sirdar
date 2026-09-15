@@ -61,6 +61,24 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- A read is now judged on where it looks, not on the tool's name. `Read`, `Glob`, `Grep`, `LS`
+  and the same tools under each provider's own names were approved unseen, so a triage session
+  could open any file on the machine — a live run read a skill file out of the operator's home
+  directory. A read-class call whose target resolves outside the workspace root, the run's
+  directory or its bundle is refused with `read outside the workspace: <path>`, on Claude's
+  permission tool, the qwen hook, an ACP `session/request_permission` and its `fs/read_text_file`,
+  and in Sirdar's own agent loop. Symlinks resolve before the check. `permissions.readAlso` is a
+  new list of globs, empty by default, that widens the scope to a runbook directory or a skills
+  tree. `Bash` is unchanged — its own allow-list already refuses a path argument outside the
+  root — and on `provider: cursor` and `provider: agy`, which answer their own tool calls, there
+  is nothing to mediate: `sirdar doctor` warns and every session says so on its own event log.
+- The digest's ISSUE column reads the triage note's title, and falls back to the first sentence
+  of the complaint that is not a greeting. It used to take the complaint's first sentence, which
+  on an Arabic support thread is "Peace be upon you." for every row.
+- A triage note's body links now move with its frontmatter. The "Register:" line names the RCA
+  and Resolution notes by the slug predicted from the triage title; when the rca retitles the
+  issue and files under a different name, both halves of the note are rewritten, instead of the
+  frontmatter alone being right and the body links leading nowhere.
 - Added `sirdar steer RUN_ID "instruction"` and `POST /api/workspaces/{id}/runs/{runId}/steer`:
   a follow-up instruction on a finished (or blocked) run continues the same run. The transcript
   grows in place with a `steer` line saying who answered — the session that wrote the note

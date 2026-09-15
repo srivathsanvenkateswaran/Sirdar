@@ -31,6 +31,12 @@ import (
 // destination to judge — which also means the query text is a residual
 // channel: an injected instruction can put what the session read into a
 // search term. Nothing in the allow-list closes that; see docs/config.md.
+//
+// Read, Glob, Grep and LS are still here, and being here is now only half
+// their permission: the name says the call changes nothing, and decideRead
+// says where it may look. Before that, a triage session could read any
+// file on the machine — a live run read a skill file out of the operator's
+// home directory — because the tool's name was the whole decision.
 var AlwaysAllowed = map[string]bool{
 	"Read":             true,
 	"Glob":             true,
@@ -233,6 +239,16 @@ type PermissionPolicy struct {
 	// which is an ordinary-looking source directory git runs code from.
 	ExtraReserved []string
 
+	// ReadRoots names the directories a read-class tool may reach besides
+	// Root: this run's own directory and the bundle staged inside it,
+	// which a fix session's worktree does not contain. See ReadScope.
+	ReadRoots []string
+
+	// ReadAlso holds the globs from permissions.readAlso, which widen the
+	// read scope to paths outside every root — a shared runbook
+	// directory, a skills tree. Empty, the default, widens nothing.
+	ReadAlso []string
+
 	// Mode is ModeTriage (the zero value) for a read-only run and ModeFix
 	// for a run allowed to edit the workspace.
 	Mode Mode
@@ -260,6 +276,12 @@ func (p *PermissionPolicy) Decide(tool string, input json.RawMessage) Decision {
 	// its own, only the URL in its arguments does.
 	if FetchTools[tool] {
 		return p.decideFetch(tool, input)
+	}
+	// Before AlwaysAllowed for the same reason a fetch is: being a read
+	// approves the tool, not the target. A read tool takes an absolute
+	// path, so where it looks is judged on every call (see decideRead).
+	if IsReadTool(tool) {
+		return p.decideRead(tool, input)
 	}
 	if AlwaysAllowed[tool] {
 		return Decision{Allow: true}
