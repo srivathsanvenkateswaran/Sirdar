@@ -340,7 +340,7 @@ func TestDoctorWarningsDoNotFailTheRun(t *testing.T) {
 func TestCommandsWithoutWorkspace(t *testing.T) {
 	chdir(t, t.TempDir())
 	for _, args := range [][]string{
-		{"triage", "OMNI-1"}, {"rca", "OMNI-1"}, {"resume", "r1"}, {"runs"}, {"register"}, {"doctor"},
+		{"triage", "OMNI-1"}, {"rca", "OMNI-1"}, {"resume", "r1"}, {"steer", "r1", "go on"}, {"runs"}, {"register"}, {"doctor"},
 	} {
 		var out, errb bytes.Buffer
 		if code := run(args, &out, &errb); code != 2 {
@@ -359,6 +359,7 @@ func TestUsageErrors(t *testing.T) {
 		{"rca"},                     // no key
 		{"rca", "OMNI-1", "OMNI-2"}, // rca takes exactly one
 		{"resume"},                  // no run id
+		{"steer", "r1"},             // no instruction
 		{"triage", "--nope", "OMNI-1"},
 		{"runs", "A", "B"},
 	} {

@@ -674,6 +674,16 @@ func TestSupportsFixIsFalse(t *testing.T) {
 	}
 }
 
+// TestSteerIsRefused is what `sirdar steer` asks before it touches the
+// run: with no way to refuse a tool call before it runs, an open-ended
+// follow-up cannot be held to the read-only guarantee.
+func TestSteerIsRefused(t *testing.T) {
+	c, err := provider.PlanSteer(New())
+	if c != provider.ContinueNone || !errors.Is(err, ErrSteerUnsupported) {
+		t.Fatalf("PlanSteer = %q, %v; want ContinueNone and ErrSteerUnsupported", c, err)
+	}
+}
+
 // TestSendRunsAnotherTurn is the schema retry. Unlike Qwen Code, this CLI
 // takes --json-schema and --input-format stream-json together, so the retry
 // is one more stdin line rather than a fresh --resume.

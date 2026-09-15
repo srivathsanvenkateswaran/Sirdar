@@ -61,6 +61,15 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- Added `sirdar steer RUN_ID "instruction"` and `POST /api/workspaces/{id}/runs/{runId}/steer`:
+  a follow-up instruction on a finished (or blocked) run continues the same run. The transcript
+  grows in place with a `steer` line saying who answered — the session that wrote the note
+  (`claude`, `codex`, `qwen`, `openai` resume it by handle) or a fresh session primed with the
+  run's prompt and answer (`acp`); `cursor` and `agy` refuse through the new
+  `provider.Steerable` contract. The note is rendered again and a register row appended only
+  when the answer changes; turns, minutes and cost accumulate on the run and the same caps apply
+  to the total. A `--local` or deviation-blocked fix run is steered in its own worktree with its
+  commit amended, never pushed (`docs/steer.md`).
 - Tagging a release now builds and drafts it end to end: CLI archives for all three platforms,
   deb/rpm packages, checksums, a Homebrew tap formula, and desktop app zips, all attached to one
   GitHub release that stays a draft until a human clicks Publish (`docs/release.md`).

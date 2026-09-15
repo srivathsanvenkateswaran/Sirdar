@@ -437,6 +437,16 @@ func TestSessionRunsATurnAndReturnsTheNote(t *testing.T) {
 	}
 }
 
+// TestSteerIsPrimed pins what `sirdar steer` does on this provider: a fresh
+// session handed the run's own note, never a session/load the agent may
+// not offer.
+func TestSteerIsPrimed(t *testing.T) {
+	c, err := provider.PlanSteer(New(Config{}))
+	if err != nil || c != provider.ContinuePrimed {
+		t.Fatalf("PlanSteer = %q, %v; want primed", c, err)
+	}
+}
+
 func TestSessionNewCarriesCwdAndWorkspaceMCPServers(t *testing.T) {
 	cwd := workspace(t)
 	sess := spawn(t, "script-basic.jsonl", cwd, nil)

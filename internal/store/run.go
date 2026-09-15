@@ -36,11 +36,28 @@ const (
 )
 
 // Usage tracks provider consumption for a run.
+//
+// ElapsedSeconds is the wall-clock time every session of the run has
+// spent, summed. It exists for `sirdar steer`: the minute budget applies
+// to the run as a whole, and a steer's session has to know how much of it
+// the earlier sessions used. It is omitted from the JSON when zero, so a
+// state written before it existed reads back unchanged.
 type Usage struct {
-	Turns        int
-	InputTokens  int64
-	OutputTokens int64
-	CostUSD      float64
+	Turns          int
+	InputTokens    int64
+	OutputTokens   int64
+	CostUSD        float64
+	ElapsedSeconds float64 `json:",omitempty"`
+}
+
+// Steer records one follow-up instruction a person typed on a finished
+// run. Continuation says who answered it: "resume" when the provider
+// carried on the session that wrote the note, "primed" when a fresh
+// session was handed the note and the instruction instead.
+type Steer struct {
+	At           time.Time
+	Text         string
+	Continuation string
 }
 
 // State is the persisted state of a single run.
@@ -68,6 +85,13 @@ type State struct {
 	// into the notes directory, never reaches the register, and is never
 	// what `sirdar rca` or `sirdar fix` reads as "the newest triage note".
 	Eval bool `json:",omitempty"`
+
+	// Steers lists every follow-up instruction the run has taken, oldest
+	// first. A run with none omits the field. The instruction and the
+	// continuation are also written to events.jsonl at the point the
+	// session started, which is where a reader of the transcript sees
+	// them; this is the summary a screen listing runs reads.
+	Steers []Steer `json:",omitempty"`
 
 	// At is the commit a retrospective run stood at. `sirdar triage --at`,
 	// `sirdar rca --at` and `sirdar fix --at` each check that commit out

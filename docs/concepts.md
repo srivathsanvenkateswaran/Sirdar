@@ -43,6 +43,10 @@ to `failed`, `blocked` (the agent asked a question, or hit a rate limit — cont
 `sirdar resume`), or `over_budget` (it ran past its turn, time, or cost budget). A key normally
 gets one triage run at intake and, later, one rca run once the fix lands.
 
+A finished run can be given a follow-up instruction with `sirdar steer RUN_ID "..."`. The same
+run goes back to `running`, its transcript grows in place, its usage keeps counting against the
+same caps, and its note is rendered again when the answer changes. See [Steer](steer.md).
+
 ## Register
 
 An append-only file in the workspace with one line per note produced, recording the triage

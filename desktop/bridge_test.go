@@ -33,6 +33,7 @@ var bridgeMethods = []string{
 	"AddGolden",
 	"ConfigSummary",
 	"Resume",
+	"Steer",
 	"Cancel",
 	"Register",
 	"Doctor",

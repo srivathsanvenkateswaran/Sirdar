@@ -143,6 +143,50 @@ func TestWriteStateReadStateRoundTrip(t *testing.T) {
 	}
 }
 
+// TestStateCarriesSteersAndElapsed is the record `sirdar steer` adds: the
+// instructions taken, who answered each, and the wall-clock time the
+// minute budget has to count against. A state without any of it writes
+// the same JSON it always did.
+func TestStateCarriesSteersAndElapsed(t *testing.T) {
+	root := t.TempDir()
+	now := time.Date(2026, 9, 15, 11, 30, 0, 0, time.UTC)
+	run, err := Create(root, "OMNI-1", now)
+	if err != nil {
+		t.Fatal(err)
+	}
+	plain := testState(filepath.Base(run.Dir), "OMNI-1", KindTriage, StatusCompleted, now)
+	if err := run.WriteState(plain); err != nil {
+		t.Fatal(err)
+	}
+	raw, err := os.ReadFile(filepath.Join(run.Dir, "state.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, absent := range []string{"Steers", "ElapsedSeconds"} {
+		if strings.Contains(string(raw), absent) {
+			t.Errorf("a state with no steer writes %q:\n%s", absent, raw)
+		}
+	}
+
+	steered := plain
+	steered.Steers = []Steer{{At: now, Text: "Now write the RCA from this", Continuation: "resume"}}
+	steered.Usage.ElapsedSeconds = 90.5
+	if err := run.WriteState(steered); err != nil {
+		t.Fatal(err)
+	}
+	got, err := run.ReadState()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got.Steers) != 1 || got.Steers[0].Text != steered.Steers[0].Text ||
+		got.Steers[0].Continuation != "resume" || !got.Steers[0].At.Equal(now) {
+		t.Fatalf("steers: %+v", got.Steers)
+	}
+	if got.Usage.ElapsedSeconds != 90.5 {
+		t.Fatalf("elapsed %v", got.Usage.ElapsedSeconds)
+	}
+}
+
 func TestOpenFindsRunByID(t *testing.T) {
 	root := t.TempDir()
 	now := time.Date(2026, 9, 10, 11, 30, 0, 0, time.UTC)
