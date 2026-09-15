@@ -15,7 +15,7 @@ rather than being silently ignored.
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
-| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
+| `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front`/`gorgias` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
 | `sources.*.command` | string | none (required for `exec`) | Path to the adapter executable |
 | `sources.*.orgId` | string | none (required for `zohodesk`) | Zoho Desk organisation id |
 | `sources.*.baseUrl` | string | none (required for `zohodesk`); optional override for `zendesk`; `https://rally1.rallydev.com` (default for `rally`) | Zoho Desk API base URL, an override for Zendesk's `https://{subdomain}.zendesk.com`, or the Rally subscription host |
@@ -31,6 +31,9 @@ rather than being silently ignored.
 | `sources.helpdesk.clientId` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client id |
 | `sources.helpdesk.clientSecret` | string | none (required for `helpscout`) | Credential reference to the Help Scout app's OAuth2 client secret |
 | `sources.helpdesk.accessToken` | string | none (required for `intercom` and `hubspot`) | Credential reference to an Intercom workspace access token or a HubSpot private-app token |
+| `sources.helpdesk.account` | string | none (one of `account`/`baseUrl` required for `gorgias`) | Gorgias account identifier, e.g. `acme` for `acme.gorgias.com` |
+| `sources.helpdesk.email` | string | none (required for `gorgias`; required with `apiToken` for `zendesk` basic auth) | The Gorgias login email sent as the HTTP Basic username; a plain address, not a credential reference |
+| `sources.helpdesk.apiKey` | string | none (required for `gorgias`) | Credential reference to a Gorgias API key, sent as the HTTP Basic password |
 | `sources.tracker.baseUrl` | string | none (required for `jira`) | Jira site URL (Cloud) or Data Center instance URL |
 | `sources.tracker.deployment` | string | `auto` | `jira` only: `cloud`, `datacenter`, or `auto` (probes `/rest/api/2/serverInfo`) |
 | `sources.tracker.email` | string | none (required for `jira` Cloud; required with `apiToken` for `zendesk` basic auth) | The Jira Cloud or Zendesk account email sent with `apiToken` as basic auth; a plain address, not a credential reference |
@@ -187,7 +190,8 @@ never returns more than it was asked for.
 
 ## Built-in helpdesks
 
-`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom`, `hubspot` and `front` are compiled into
+`zohodesk`, `zendesk`, `freshdesk`, `helpscout`, `intercom`, `hubspot`, `front` and `gorgias` are
+compiled into
 Sirdar; only `zohodesk` needs a separate "Zoho Desk OAuth" section below because of its
 refresh-token grant. Config load checks what each of the others cannot work without:
 
@@ -199,11 +203,14 @@ refresh-token grant. Config load checks what each of the others cannot work with
 | `intercom` | `accessToken` | A workspace access token from Intercom's Developer Hub |
 | `hubspot` | `accessToken` | A private-app token (`pat-na1-…`); HubSpot retired API keys in 2022 |
 | `front` | `token` | An API token from Settings → Developers; Front's OAuth flow is for multi-tenant apps |
+| `gorgias` | one of `account`/`baseUrl`, `email`, `apiKey` | HTTP Basic: the login `email` is the username, `apiKey` the password. `account` is the identifier alone, e.g. `acme` for `acme.gorgias.com` |
 
-The last four talk to one fixed vendor host each — `api.helpscout.net`, `api.intercom.io`,
-`api.hubapi.com`, `api2.frontapp.com` — so none of them takes a `baseUrl`. An Intercom workspace
-on the EU or AU data-residency host is not supported by this adapter yet; calls to the US host
-are proxied by Intercom, which works but is not what Intercom recommends.
+`helpscout`, `intercom`, `hubspot` and `front` talk to one fixed vendor host each —
+`api.helpscout.net`, `api.intercom.io`, `api.hubapi.com`, `api2.frontapp.com` — so none of them
+takes a `baseUrl`. `gorgias`, like `zendesk` and `freshdesk`, gives every account its own host, so
+it needs one named. An Intercom workspace on the EU or AU data-residency host is not supported by
+this adapter yet; calls to the US host are proxied by Intercom, which works but is not what
+Intercom recommends.
 
 ```yaml
 sources:
@@ -251,10 +258,20 @@ sources:
     token: env:FRONT_TOKEN
 ```
 
+```yaml
+sources:
+  helpdesk:
+    adapter: gorgias
+    account: acme
+    email: ops@acme.com
+    apiKey: env:GORGIAS_API_KEY
+```
+
 `sirdar doctor` prints one row per built-in helpdesk, from a single authenticated call — the
 signed-in user for `zendesk`, the signed-in agent for `freshdesk`, one page of one mailbox for
 `helpscout`, `/me` for `intercom`, the account details for `hubspot`, one page of one teammate
-for `front` — and names who the connection authenticates as, never the credential itself:
+for `front`, `/api/account` for `gorgias` — and names who the connection authenticates as, never
+the credential itself:
 
 ```
 [OK] sources.helpdesk (zendesk) — reachable as you@acme.com
@@ -263,12 +280,14 @@ for `front` — and names who the connection authenticates as, never the credent
 [OK] sources.helpdesk (intercom) — reachable as the workspace access token
 [OK] sources.helpdesk (hubspot) — reachable as the private app token
 [OK] sources.helpdesk (front) — reachable as the Front API token
+[OK] sources.helpdesk (gorgias) — reachable as ops@acme.com
 ```
 
 A Zendesk source authenticated with `oauthToken` instead of `email`/`apiToken` reports `reachable
-as oauth`, since there is no account email to show for that grant. The last four name the kind
-of grant rather than an account, because none of their probes returns an account identifier worth
-printing — the row itself is the proof the credential was accepted.
+as oauth`, since there is no account email to show for that grant. `helpscout`, `intercom`,
+`hubspot` and `front` name the kind of grant rather than an account, because none of their probes
+returns an account identifier worth printing — the row itself is the proof the credential was
+accepted.
 
 ## Credential references
 

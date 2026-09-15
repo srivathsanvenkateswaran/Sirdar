@@ -1763,6 +1763,20 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 	if names2 := credentialEnvNames(cfg2); !names2["FRESHDESK_KEY"] {
 		t.Error("FRESHDESK_KEY is not treated as a credential")
 	}
+
+	// Gorgias authenticates with the login email and an API key. The email
+	// is an identifier written literally in the config and stays where it
+	// is; the key is the password and is stripped like every other one.
+	cfg3 := &config.Config{Billing: "subscription"}
+	cfg3.Sources.Helpdesk = &config.SourceConfig{
+		Adapter: "gorgias",
+		Account: "acme",
+		Email:   "ops@acme.com",
+		APIKey:  "env:GORGIAS_KEY",
+	}
+	if names3 := credentialEnvNames(cfg3); !names3["GORGIAS_KEY"] {
+		t.Error("GORGIAS_KEY is not treated as a credential")
+	}
 }
 
 // TestFinalEndsTheSessionDeterministically is the D1 regression: the first

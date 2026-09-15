@@ -23,7 +23,7 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "gorgias" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
@@ -58,6 +58,14 @@ type SourceConfig struct {
 
 	// Freshdesk.
 	Domain string `yaml:"domain,omitempty"` // account host, e.g. "acme.freshdesk.com"
+
+	// Gorgias. Every account has its own host, so exactly one of account
+	// (the identifier alone, "acme" for acme.gorgias.com) or baseUrl (a
+	// bare https origin, for an account reached through a proxy) is
+	// required. Auth is HTTP Basic with the login email as the username —
+	// an identifier, not a secret, so it is written literally — and
+	// apiKey as the password.
+	Account string `yaml:"account,omitempty"`
 
 	// Help Scout. Its Mailbox API has no API-key mode: every call carries
 	// an OAuth2 token the adapter mints for itself from this pair, so both
@@ -832,6 +840,7 @@ var helpdeskOnlyAdapters = map[string]bool{
 	"intercom":  true,
 	"hubspot":   true,
 	"front":     true,
+	"gorgias":   true,
 }
 
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
@@ -914,6 +923,19 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	case "front":
 		if s.Token == "" {
 			return fmt.Errorf("config: %s.token: is required for adapter front", prefix)
+		}
+	case "gorgias":
+		switch {
+		case s.Account == "" && s.BaseURL == "":
+			return fmt.Errorf("config: %s: one of account or baseUrl is required for adapter gorgias", prefix)
+		case s.Account != "" && s.BaseURL != "":
+			return fmt.Errorf("config: %s: set account or baseUrl, not both", prefix)
+		}
+		if s.Email == "" {
+			return fmt.Errorf("config: %s.email: is required for adapter gorgias", prefix)
+		}
+		if s.APIKey == "" {
+			return fmt.Errorf("config: %s.apiKey: is required for adapter gorgias", prefix)
 		}
 	case "jira":
 		if s.BaseURL == "" {
