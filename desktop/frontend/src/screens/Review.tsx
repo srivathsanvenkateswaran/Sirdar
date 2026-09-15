@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { RunDiff, Ticket, Transport } from '../api/types'
 import { elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
-import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand } from '../lib/review'
+import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand, rekeyAfterDrop } from '../lib/review'
 import { LIVE, useRunFeed } from '../components/run/useRunFeed'
 import Button from '../ui/button'
 import DiffView, { hunkKey, parsePatch, type DiffMode, type HunkDecision } from '../ui/diff-view'
@@ -24,32 +24,6 @@ const MODES = [
 function fileWord(status: RunDiff['files'][number]['status'], reviewed: boolean): string {
   if (reviewed) return 'reviewed'
   return status === 'added' ? 'new' : status
-}
-
-/**
- * A hunk's decision survives a drop only if it still names the same hunk:
- * the hunks after the dropped one move up by one, and the dropped one is
- * gone.
- */
-function rekeyAfterDrop(
-  decisions: Record<string, HunkDecision>,
-  path: string,
-  dropped: number,
-): Record<string, HunkDecision> {
-  const next: Record<string, HunkDecision> = {}
-  for (const [key, decision] of Object.entries(decisions)) {
-    const at = key.lastIndexOf('\n')
-    const keyPath = key.slice(0, at)
-    const index = Number(key.slice(at + 1))
-    if (keyPath !== path) {
-      next[key] = decision
-    } else if (index < dropped) {
-      next[key] = decision
-    } else if (index > dropped) {
-      next[hunkKey(path, index - 1)] = decision
-    }
-  }
-  return next
 }
 
 /** The note a fix is filed against: the resolution note when there is one, the last note otherwise. */

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FixInfo, RunDiff, Transport } from '../../api/types'
 import { reasonOf } from '../../lib/format'
-import { OUTCOME_WORDS, type RunCheck } from '../../lib/review'
+import { OUTCOME_WORDS, rekeyAfterDrop, type RunCheck } from '../../lib/review'
 import Button from '../../ui/button'
 import DiffView, { hunkKey, type HunkDecision } from '../../ui/diff-view'
 import FixPanel from './FixPanel'
@@ -67,6 +67,9 @@ export default function ChangesPane({
       const d = await transport.runDiff(workspaceId, runId)
       if (mine !== generation.current) return
       setDiff(d)
+      // A re-read numbers the hunks afresh; a mark against the old numbering
+      // would name the wrong one.
+      setDecisions({})
       onLoaded?.(d)
     } catch (err: unknown) {
       if (mine !== generation.current) return
@@ -79,7 +82,6 @@ export default function ChangesPane({
   }, [transport, workspaceId, runId, onLoaded])
 
   useEffect(() => {
-    setDecisions({})
     setRefusal('')
     void load()
     return () => {
@@ -108,9 +110,8 @@ export default function ChangesPane({
         const after = await transport.dropHunk(workspaceId, runId, { path, hunk: index, etag: diff.etag })
         setDiff(after)
         onLoaded?.(after)
-        // The hunks below the dropped one move up by one, so a mark made
-        // against the old numbering would name the wrong hunk.
-        setDecisions({})
+        // The hunks below the dropped one move up by one; the marks follow.
+        setDecisions((prev) => rekeyAfterDrop(prev, path, index))
       } catch (err: unknown) {
         setRefusal(`${path} hunk ${index + 1}: ${withoutCode(err)}`)
         void load()

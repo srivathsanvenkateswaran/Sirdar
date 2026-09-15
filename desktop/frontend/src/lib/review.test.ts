@@ -3,6 +3,7 @@ import type { RunEvent } from '../api/types'
 import {
   changeTotals,
   checksFromEvents,
+  rekeyAfterDrop,
   describeTests,
   fixReport,
   judgeOutput,
@@ -246,6 +247,22 @@ describe('latestStep', () => {
       kind: 'tests',
       ok: false,
       detail: 'FAIL app 0.1s',
+    })
+  })
+})
+
+describe('rekeyAfterDrop', () => {
+  it('keeps other files, keeps hunks above the drop, moves the ones below up, and forgets the dropped one', () => {
+    const before = {
+      'a.go\n0': 'kept',
+      'a.go\n1': 'kept',
+      'a.go\n2': 'kept',
+      'b.go\n1': 'kept',
+    }
+    expect(rekeyAfterDrop(before, 'a.go', 1)).toEqual({
+      'a.go\n0': 'kept',
+      'a.go\n1': 'kept',
+      'b.go\n1': 'kept',
     })
   })
 })

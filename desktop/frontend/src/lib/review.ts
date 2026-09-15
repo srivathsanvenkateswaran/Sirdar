@@ -1,4 +1,5 @@
 import type { DiffFile, RunEvent } from '../api/types'
+import { hunkKey } from '../ui/diff-view/patch'
 import { inputSummary, toolInput } from './events'
 
 /**
@@ -411,6 +412,25 @@ export const OUTCOME_WORDS: Record<RunCheck['outcome'], string> = {
   ok: 'ok',
   failed: 'failed',
   ran: 'ran',
+}
+
+/**
+ * The hunk decisions that still name the same hunk after one was dropped:
+ * a decision on another file stays, one above the dropped hunk stays, one
+ * below it moves up by one, and the dropped hunk's own goes. Both the
+ * session's Changes pane and the Change review do this after a Drop, so it
+ * lives here once. The keys are `hunkKey(path, index)`.
+ */
+export function rekeyAfterDrop<T>(decisions: Record<string, T>, path: string, dropped: number): Record<string, T> {
+  const next: Record<string, T> = {}
+  for (const [key, decision] of Object.entries(decisions)) {
+    const at = key.lastIndexOf('\n')
+    const keyPath = key.slice(0, at)
+    const index = Number(key.slice(at + 1))
+    if (keyPath !== path || index < dropped) next[key] = decision
+    else if (index > dropped) next[hunkKey(path, index - 1)] = decision
+  }
+  return next
 }
 
 /** `2 files · +25 −6`, the rail's head, from the service's file list. */
