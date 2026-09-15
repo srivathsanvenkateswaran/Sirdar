@@ -37,6 +37,27 @@ The exclusion block is the read-only guarantee and is not optional; see
 The shell is the one tool that switches sides: allow-listed when the workspace named
 `permissions.bash` patterns and excluded when it did not.
 
+### What changes for `sirdar fix`
+
+A fix session is the one run that may write, and three tools move for it — `write_file`,
+`edit` and `replace` (the legacy alias `ToolNamesMigration` resolves onto `edit`). All three
+come off `--exclude-tools`, go onto `--allowed-tools`, and come off the settings file's
+`permissions.deny`. All three are needed: an excluded tool is never registered; an
+un-allowed one is refused by `denyUnlessAllowed` before any hook is consulted; and a
+settings-layer deny beats every allow. Getting two of the three right registers nothing,
+which is what the first live fix run did — its agent reported the edit it had been refused
+and the run still said "completed".
+
+Nothing else moves. `notebook_edit`, `monitor`, and the agent/skill/task family stay
+excluded in fix mode exactly as in triage, and the shell is still the workspace's
+`permissions.fixBash` list judged command by command by the hook.
+
+The writes are mediated, not trusted: each call reaches the PreToolUse hook and
+`FixPolicy.decideWrite` resolves its `file_path` against the worktree root, refusing
+anything outside it and anything under `.git/`, `.sirdar/` or the repository's
+`core.hooksPath`. Measured: the hook payload for both `write_file` and `edit` carries
+`file_path` (see the PreToolUse body below), which is what makes that check possible at all.
+
 The prompt goes in **on stdin** and stdin is then closed. `-p/--prompt` is deprecated in
 0.23.3 in favour of a positional argument, and both put the whole triage prompt on the
 command line; stdin has no length limit and is the documented third form

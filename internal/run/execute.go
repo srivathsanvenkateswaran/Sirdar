@@ -84,6 +84,13 @@ type execution struct {
 	schemaError string
 	malformed   int
 
+	// finalNarration is the last thing a terminal provider line said in
+	// prose rather than in JSON: a CLI's account of why it failed the run,
+	// or an agent's closing sentence. It is not an answer — answerDoc
+	// keeps it out of the validator — so it is held here and becomes the
+	// reason a run that never produced a document ended.
+	finalNarration string
+
 	// retrySession is set when the schema retry could not be sent on the
 	// running session and a fresh one was started to carry it; consume
 	// switches to it and keeps going. live is the session being read from
@@ -861,9 +868,12 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
-	doc := []byte(ev.Final)
-	if len(doc) == 0 {
-		doc = []byte(strings.TrimSpace(ev.Text))
+	doc, narration := answerDoc(ev)
+	if narration != "" {
+		// Kept for the failure reason below. It is the provider's own
+		// account of how the session ended, and it is the only account
+		// there is once the document turns out not to exist.
+		ex.finalNarration = narration
 	}
 
 	// An empty document is a turn that ended with nothing in it — all tool
@@ -931,9 +941,15 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	switch {
 	case empty && ex.emptyTurns >= maxEmptyTurns:
 		// Nothing was ever validated, so calling this a schema failure
-		// would name the wrong problem.
+		// would name the wrong problem. The provider's own last words go
+		// in the reason when it had any: "the agent ended the turn
+		// without an answer" is true of a CLI that failed the run for
+		// answering in prose, and says nothing an operator can act on.
 		ex.schemaError = firstProblem(err)
 		ex.failure = errEmptyAnswer.Error()
+		if ex.finalNarration != "" {
+			ex.failure += ": " + firstLine(ex.finalNarration)
+		}
 		sess.Cancel()
 		return
 	case !empty && ex.retried:

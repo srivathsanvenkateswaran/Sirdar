@@ -713,16 +713,40 @@ func TestNoTriageNoteIsRefused(t *testing.T) {
 
 // TestNoChangesIsAnError: an agent that reported a fix and edited nothing
 // has produced an empty commit, which is worse than a failure.
+//
+// The run record has to say so too. The session itself ran to the end and
+// wrote a valid report, so the runner called it completed — which left the
+// first live `provider: qwen` fix looking like a success next to an empty
+// branch, its agent's own summary explaining that every write had been
+// refused. The state is failed, and the summary is the reason.
 func TestNoChangesIsAnError(t *testing.T) {
 	w := newWorkspace(t, "triaged")
 	noGH(t)
 	deps := newDeps(w, &stubProvider{report: fixReport, t: t}) // no edit
-	_, err := Run(t.Context(), deps, "OMNI-1", Options{})
+	res, err := Run(t.Context(), deps, "OMNI-1", Options{})
 	if err == nil {
 		t.Fatal("a session that changed nothing was committed")
 	}
 	if !strings.Contains(err.Error(), "changed no files") {
 		t.Errorf("error %v", err)
+	}
+	if res.State.Status != store.StatusFailed {
+		t.Errorf("result status %q, want failed", res.State.Status)
+	}
+	if !strings.Contains(res.State.Reason, "changed no files") {
+		t.Errorf("result reason %q", res.State.Reason)
+	}
+
+	// And on disk, which is what `sirdar runs` and the desktop shell read.
+	_, state, err := store.Open(w.root, res.State.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if state.Status != store.StatusFailed {
+		t.Fatalf("run state %q reason %q, want failed", state.Status, state.Reason)
+	}
+	if !strings.Contains(state.Reason, "Stream the CSV export instead of buffering every row") {
+		t.Errorf("the reason does not carry the agent's summary: %q", state.Reason)
 	}
 }
 

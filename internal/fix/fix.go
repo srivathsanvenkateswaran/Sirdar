@@ -32,6 +32,7 @@ package fix
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -359,6 +360,18 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	commit, err := commitChanges(ctx, work, tn, res.Report)
 	if err != nil {
+		if errors.Is(err, errNoChanges) {
+			// The session ran to the end and wrote a report, so the
+			// runner called it completed — but a fix that changed no
+			// files did not do what a fix is for, and a run record
+			// saying "completed" next to an empty branch is the state
+			// that made the first live qwen fix look like a success.
+			// The agent's own summary is the reason, because it is
+			// where it says why it wrote nothing.
+			reason := "the agent changed no files: " + firstLine(res.Report.Summary)
+			markRunFailed(cfg.Root, out.State.RunID, reason, stderr, key)
+			res.State.Status, res.State.Reason = store.StatusFailed, reason
+		}
 		return res, err
 	}
 	res.Commit = commit
@@ -955,6 +968,12 @@ func BranchName(key, title string) string {
 
 // --- commit, push, pull request ---------------------------------------
 
+// errNoChanges is a fix session that ended with a report and an unchanged
+// tree. It is a sentinel because two things have to happen on it and only
+// one of them used to: the command fails, and the run record stops saying
+// "completed".
+var errNoChanges = errors.New("fix: the agent changed no files; nothing to commit")
+
 // commitChanges stages everything but .sirdar/ and commits it. The message
 // is the agent's summary as the subject and the note's root cause under it,
 // and it carries no attribution trailer of any kind: the change is the
@@ -973,7 +992,7 @@ func commitChanges(ctx context.Context, g git, tn triageNote, rep Report) (strin
 		return "", err
 	}
 	if err := g.run(ctx, "diff", "--cached", "--quiet"); err == nil {
-		return "", fmt.Errorf("fix: the agent changed no files; nothing to commit. Its summary was: %s", firstLine(rep.Summary))
+		return "", fmt.Errorf("%w. Its summary was: %s", errNoChanges, firstLine(rep.Summary))
 	}
 	subject, body := CommitMessage(tn, rep)
 	if err := g.run(ctx, "commit", "--no-verify", "-m", subject, "-m", body); err != nil {
