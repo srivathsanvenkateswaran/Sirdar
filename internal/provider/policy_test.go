@@ -410,7 +410,7 @@ func TestMCPWriteHeuristic(t *testing.T) {
 		{"mcp__grafana__query_loki_logs", false, "a named query with no write word"},
 		{"mcp__grafana__get_sift_analysis", false, "get"},
 		{"mcp__grafana__list_incidents", false, "list"},
-		{"mcp__claude_ai_Janus__my_worklog_month", false, "worklog is one word, not log"},
+		{"mcp__claude_ai_Janus__my_worklog_month", true, "worklog is one word, not log, but the tail default now denies a name with no read word at all"},
 		{"mcp__claude_ai_Zoho_Desk__getTicketConversations", false, "camelCase get"},
 		{"mcp__athena__find_backlinks", false, "find"},
 		{"mcp__grafana__find_slow_requests", false, "requests is not request"},
@@ -444,6 +444,64 @@ func TestMCPWriteHeuristic(t *testing.T) {
 		// word: this is the change from the earlier rule.
 		{"mcp__metabase__run_query", true, "run wins over query"},
 		{"mcp__oxo-mysql-stg__run_select", true, "run wins over select"},
+
+		// Round 1: the tail default flips. A name with no recognised read
+		// word is now a write, not an unseen approval. These are the
+		// reviewer's names, which used to fall through to allow for want
+		// of a verb the old lists recognised.
+		{"mcp__grafana__alerting_manage_rules", true, "manage is a write verb"},
+		{"mcp__claude_ai_Figma__use_figma", true, "use is a write verb"},
+		{"mcp__claude-in-chrome__form_input", true, "input is a write verb"},
+		{"mcp__claude-in-chrome__javascript_tool", true, "no write, passthrough or read word: denied by the tail default"},
+		{"mcp__grafana__generate_deeplink", true, "generate is a write verb"},
+		{"mcp__claude_ai_Tatak__next_departures", true, "no write, passthrough or read word: denied by the tail default"},
+
+		// Round 1: the rest of the new write verbs, each the only
+		// recognisable word in a name that used to fall through to allow.
+		{"mcp__x__enable_feature", true, "enable"},
+		{"mcp__x__disable_feature", true, "disable"},
+		{"mcp__x__start_job", true, "start"},
+		{"mcp__x__stop_job", true, "stop"},
+		{"mcp__x__grant_access", true, "grant"},
+		{"mcp__x__import_data", true, "import"},
+		{"mcp__x__restore_snapshot", true, "restore"},
+		{"mcp__x__rename_file", true, "rename"},
+		{"mcp__x__move_file", true, "move"},
+		{"mcp__x__drop_table", true, "drop"},
+		{"mcp__x__truncate_table", true, "truncate"},
+		{"mcp__x__submit_form", true, "submit"},
+		{"mcp__x__approve_request", true, "approve, though request alone would already be a passthrough"},
+		{"mcp__x__invite_member", true, "invite"},
+		{"mcp__x__share_document", true, "share"},
+		{"mcp__x__sync_repo", true, "sync"},
+		{"mcp__x__promote_release", true, "promote"},
+		{"mcp__x__scale_deployment", true, "scale"},
+		{"mcp__x__eval_expression", true, "eval"},
+
+		// Round 1: the new read words keep a name a read when it is the
+		// only word present alongside a noun the lists do not recognise.
+		{"mcp__grafana__check_datasources_health", false, "check and health are both read words"},
+		{"mcp__x__fetch_record", false, "fetch"},
+		{"mcp__x__view_dashboard", false, "view"},
+		{"mcp__x__lookup_user", false, "lookup"},
+		{"mcp__x__count_rows", false, "count"},
+		{"mcp__grafana__get_dashboard_summary", false, "summary, alongside get"},
+		{"mcp__x__list_labels", false, "labels, plural"},
+		{"mcp__grafana__list_prometheus_label_names", false, "label and names both read words"},
+		{"mcp__x__get_history", false, "history"},
+		{"mcp__x__analyze_trace", false, "analyze"},
+		{"mcp__x__analyse_trace", false, "analyse, the other spelling"},
+		{"mcp__x__suggest_fix", false, "suggest"},
+		{"mcp__x__explain_query_plan", false, "explain and query, both read; plan is neutral"},
+		{"mcp__x__diff_versions", false, "diff"},
+		{"mcp__x__blame_line", false, "blame"},
+		{"mcp__x__grep_logs", false, "grep"},
+		{"mcp__x__cat_file", false, "cat"},
+		{"mcp__x__tail_log", true, "tail is a read word but log is also a write verb, and a write word wins over a read word beside it"},
+		{"mcp__x__ls_dir", false, "ls"},
+		{"mcp__x__tree_view", false, "tree and view, both read"},
+		{"mcp__x__peek_queue", false, "peek"},
+		{"mcp__x__inspect_pod", false, "inspect"},
 	}
 
 	p := &PermissionPolicy{}

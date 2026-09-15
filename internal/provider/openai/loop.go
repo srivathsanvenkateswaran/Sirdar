@@ -153,12 +153,14 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	// session that silently started the triage again would spend the
 	// budget meant for one more answer.
 	var resumed []Message
+	var resumedTurns int
 	if spec.Resume != "" {
 		t, err := readTranscript(spec.Resume)
 		if err != nil {
 			return nil, err
 		}
 		resumed = t.Messages
+		resumedTurns = t.Turns
 	}
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -185,6 +187,12 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		// The resumed transcript already carries its system message; the
 		// spec's prompt is the new user turn on the end of it.
 		s.messages = resumed
+		// The transcript's turn count is the earlier session's, not this
+		// process's: seeding it here is what makes budget.maxTurns span
+		// the whole run rather than resetting on every resume. Without
+		// this, a session that spent its whole budget across two resumes
+		// could take up to 3x MaxTurns before the loop ever stopped it.
+		s.turns = resumedTurns
 	}
 	s.messages = append(s.messages, Message{Role: "user", Content: UserMessage(spec.Prompt, spec.Images)})
 

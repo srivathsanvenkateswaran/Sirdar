@@ -60,11 +60,19 @@ func printChecks(stdout io.Writer, checks []app.Check) int {
 		}
 		fmt.Fprintf(stdout, "%s %s — %s\n", mark, c.Name, c.Detail)
 	}
-	if warned > 0 {
+	// One summary line, not up to two: a report with both a failure and a
+	// warning used to print "N warned" followed by "M failed" on the next
+	// line, and a reader skimming for the last line saw only the failure
+	// count, missing that something also warned.
+	switch {
+	case failed > 0 && warned > 0:
+		fmt.Fprintf(stdout, "\n%d of %d checks failed, %d warned\n", failed, len(checks), warned)
+	case failed > 0:
+		fmt.Fprintf(stdout, "\n%d of %d checks failed\n", failed, len(checks))
+	case warned > 0:
 		fmt.Fprintf(stdout, "\n%d of %d checks warned\n", warned, len(checks))
 	}
 	if failed > 0 {
-		fmt.Fprintf(stdout, "\n%d of %d checks failed\n", failed, len(checks))
 		return 1
 	}
 	return 0

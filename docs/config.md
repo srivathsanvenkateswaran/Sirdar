@@ -165,7 +165,12 @@ register line keeps the company only.
 from a line's JSON when empty, so `register.jsonl` — append-only and long-lived — reads back
 unchanged for every line written before these columns existed. The wire shape the desktop app
 reads (`internal/app.RegisterRow`) carries `title` and `company` too, and the Register screen's
-own markdown export mirrors the CLI's table shape.
+own markdown export mirrors the CLI's table shape column for column: Issue holds the tracker
+key, Helpdesk and Tracker stay blank, Triage/RCA/Resolution are `[[wiki links]]` to whichever
+note was written (blank where none was), and Status is resolved once an RCA or resolution note
+exists, fix-pushed once a fix ran with neither, triaged before any of that — the same rule
+`registerEntry.status()` (`cmd/sirdar/cmd_register.go`) and `groupStatus()`
+(`desktop/frontend/src/lib/register.ts`) both apply.
 
 ## Built-in trackers
 
@@ -755,24 +760,38 @@ it reads.
 
 `permissions.mcp` is a list of globs matched against an MCP tool's full name, e.g.
 `mcp__grafana__query_*`. While the list is empty, an `mcp__*` tool is judged by its name alone,
-in three steps.
+in four steps.
 
 1. **A write word anywhere in the name denies it.** The name's own segment — everything after
-   the last `__` — is split on `_`, `-` and camelCase boundaries, and every word is tested
+   the last `__` — is split on `_`, `-`, `.` and camelCase boundaries, and every word is tested
    against `create`, `update`, `delete`, `remove`, `set`, `write`, `post`, `put`, `patch`,
    `send`, `add`, `insert`, `upsert`, `trigger`, `run`, `exec`, `execute`, `apply`,
    `transition`, `assign`, `log`, `upload`, `publish`, `install`, `restart`, `kill`, `pause`,
    `unpause`, `buy`, `purchase`, `reply`, `resolve`, `schedule`, `deploy`, `edit`, `change`,
-   `modify`, `merge`, `push`, `commit`, `save`, `revoke`, `reset`, `archive`, `cancel` and
-   `close`. The verb is wherever the server put it, so `mcp__athena__wiki_save` is denied on its
-   second word and `mcp__github__createPullRequest` on its camelCase first.
+   `modify`, `merge`, `push`, `commit`, `save`, `revoke`, `reset`, `archive`, `cancel`, `close`,
+   `manage`, `generate`, `enable`, `disable`, `start`, `stop`, `grant`, `import`, `restore`,
+   `rename`, `move`, `drop`, `truncate`, `submit`, `approve`, `invite`, `share`, `sync`,
+   `promote`, `scale`, `use`, `input` and `eval`. The verb is wherever the server put it, so
+   `mcp__athena__wiki_save` is denied on its second word, `mcp__github__createPullRequest` on
+   its camelCase first, and `mcp__grafana__alerting_manage_rules` on `manage` in the middle.
 2. **A generically named passthrough is denied too**, because its arguments decide what it does
    and its name cannot say: a word of `request`, `raw`, `graphql`, `sql`, `proxy` or
    `passthrough`, or a tool called nothing but `query`. `mcp__grafana__grafana_api_request` is
    the example that prompted this — it leads with no verb at all and takes a method and a path.
-3. **Only then does a read word make it a read**: `query`, `select`, `read`, `search`, `list`,
-   `get`, `find`, `describe`, `show`. So `read_query`, `list_tables` and `describe_table` on a
-   MySQL MCP server, and `mcp__grafana__query_loki_logs`, all go through.
+3. **A read word makes it a read**: `query`, `select`, `read`, `search`, `list`, `get`, `find`,
+   `describe`, `show`, `fetch`, `view`, `lookup`, `count`, `check`, `status`, `health`,
+   `summary`, `metadata`, `label`, `labels`, `names`, `values`, `history`, `analyze`, `analyse`,
+   `suggest`, `explain`, `diff`, `log`, `blame`, `grep`, `cat`, `head`, `tail`, `ls`, `tree`,
+   `peek`, `watch` and `inspect`. So `read_query`, `list_tables` and `describe_table` on a MySQL
+   MCP server, and `mcp__grafana__query_loki_logs`, all go through. (`log` is also a write word
+   above, and a write word wins beside a read one — see below — so `tail_log` is still denied.)
+4. **A name with none of the above is denied too.** A tool whose words match neither list —
+   `mcp__claude-in-chrome__javascript_tool`, `mcp__claude_ai_Figma__use_figma` before `use` was
+   added, a server's own invented noun — used to fall through and be approved for want of a
+   recognised verb. It is now denied the same as a write, which is also why a noun-form read
+   like `get_commit` or `get_log` is denied: `commit` and `log` are write words, and a write
+   word wins over the `get` beside it. A workspace that needs one of these names it in
+   `permissions.mcp`.
 
 A denial reads `MCP tool <name> looks like a write and is not in permissions.mcp`.
 

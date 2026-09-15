@@ -316,8 +316,15 @@ func TestLoopReadsRefusesCallsMCPAndSubmits(t *testing.T) {
 		PriceOutputPerMTok: 15,
 		MCPWorkspaceOnly:   true,
 	}, provider.SessionSpec{
-		Cwd:    root,
-		Policy: &provider.PermissionPolicy{BashAllow: []string{"git log*"}},
+		Cwd: root,
+		Policy: &provider.PermissionPolicy{
+			BashAllow: []string{"git log*"},
+			// mcp__fake__echo names neither a read nor a write verb, so
+			// since the round-1 fix to MCPLooksLikeWrite the heuristic
+			// denies it by default; list it explicitly, the way a
+			// workspace with an unrecognised tool name has to.
+			MCPAllow: []string{"mcp__fake__echo"},
+		},
 		Budget: provider.Budget{MaxTurns: 10},
 	})
 
@@ -1082,6 +1089,67 @@ func TestTranscriptIsTheResumeHandle(t *testing.T) {
 	}
 	if system != 1 {
 		t.Errorf("%d system messages in the resumed request, want 1", system)
+	}
+}
+
+// TestResumeSeedsTheTurnCounterFromTheTranscript is the round-1 fix: the
+// transcript's Turns field was written but never read back, so a resumed
+// session always started its own turn count at 0 and budget.MaxTurns
+// covered only the resumed half of the run, not the whole one. A session
+// that already spent its budget before the first resume could then spend
+// it again on every resume after.
+func TestResumeSeedsTheTurnCounterFromTheTranscript(t *testing.T) {
+	root, runDir := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "a.txt"), []byte("x\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	first := newChatServer(t, scripted(
+		toolCallReply("c1", "read_file", `{"path":"a.txt"}`, 100, 10),
+		toolCallReply("c2", submitNoteTool, `{"nope":1}`, 200, 20),
+	))
+	sess := newSession(t, first, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Prompt: "Triage OMNI-1.",
+		Budget: provider.Budget{MaxTurns: 10},
+	})
+	drain(t, sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	data, err := os.ReadFile(sess.Handle())
+	if err != nil {
+		t.Fatal(err)
+	}
+	var saved transcript
+	if err := json.Unmarshal(data, &saved); err != nil {
+		t.Fatalf("transcript is not valid JSON: %v", err)
+	}
+	if saved.Turns != 2 {
+		t.Fatalf("first session's transcript.Turns = %d, want 2", saved.Turns)
+	}
+
+	// The resume is given a budget the first session already spent. If the
+	// turn counter is not seeded from the transcript, the resumed session
+	// starts back at 0 and happily takes 2 more turns; seeded correctly,
+	// it is already over budget and must not send a single request.
+	second := newChatServer(t, scripted(toolCallReply("c3", submitNoteTool, noteJSON, 300, 30)))
+	retry := newSession(t, second, LoopConfig{}, provider.SessionSpec{
+		Cwd: root, RunDir: runDir, Resume: sess.Handle(),
+		Prompt: "Your previous answer did not match the schema. Reply again.",
+		Budget: provider.Budget{MaxTurns: 2},
+	})
+	events := drain(t, retry)
+	res, _ := retry.Wait()
+	if res.ExitErr == nil || !strings.Contains(res.ExitErr.Error(), "2 turns") {
+		t.Fatalf("Result.ExitErr = %v, want the over-budget error", res.ExitErr)
+	}
+	if got := len(second.captured()); got != 0 {
+		t.Errorf("the resumed session made %d chat requests, want 0: the turn budget from before the resume was already spent", got)
+	}
+	last := events[len(events)-2]
+	if last.Kind != provider.EvError || !strings.Contains(last.Text, "2 turns") {
+		t.Fatalf("last event = %+v, want the turn-budget error", last)
 	}
 }
 

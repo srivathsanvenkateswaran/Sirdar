@@ -264,7 +264,10 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 	}
 	p, ok := tracker.(pinger)
 	if !ok {
-		return Check{Name: name, OK: true, Detail: "configured (" + builtinEndpoint(sc) + ")"}
+		// This adapter has no Ping, so nothing here has actually reached
+		// the network yet: the config parsed and the credential resolved,
+		// but whether either is good is still unknown.
+		return warn(name, "configured, credential untested ("+builtinEndpoint(sc)+")")
 	}
 	if err := p.Ping(ctx); err != nil {
 		return Check{Name: name, Detail: err.Error()}
@@ -286,7 +289,10 @@ func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceCon
 	}
 	p, ok := hd.(pinger)
 	if !ok {
-		return Check{Name: name, OK: true, Detail: "configured"}
+		// Same as builtinProbe: no Ping means the config parsed and the
+		// credential resolved, but neither one has been tried against the
+		// network yet.
+		return warn(name, "configured, credential untested")
 	}
 	if err := p.Ping(ctx); err != nil {
 		return Check{Name: name, Detail: err.Error()}

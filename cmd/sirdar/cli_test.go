@@ -272,6 +272,14 @@ func TestDoctorWarningsDoNotFailTheRun(t *testing.T) {
 	if !strings.Contains(out.String(), "[XX] notes.dir") {
 		t.Errorf("the failing row should be marked [XX]:\n%s", out.String())
 	}
+	// One summary line naming both counts, not the warning count on one
+	// line and the failure count on the next.
+	if !strings.Contains(out.String(), "1 of 3 checks failed, 1 warned") {
+		t.Errorf("the summary should name both counts on one line:\n%s", out.String())
+	}
+	if strings.Contains(out.String(), "checks warned\n") {
+		t.Errorf("the warning count should not also print its own summary line:\n%s", out.String())
+	}
 }
 
 func TestCommandsWithoutWorkspace(t *testing.T) {

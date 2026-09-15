@@ -2,7 +2,7 @@ export type RunState = 'preparing'|'running'|'completed'|'failed'|'blocked'|'ove
 export type NoteKind = 'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: 'claude'|'codex'|'openai'|'acp'|'qwen'; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
-export interface RunSummary { runId: string; key: string; kind: 'triage'|'rca'; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+export interface RunSummary { runId: string; key: string; kind: 'triage'|'rca'|'fix'; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number } }
 export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown } }
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
