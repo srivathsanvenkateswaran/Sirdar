@@ -4,8 +4,8 @@
  * The search bar, the segmented control, the group label and the item rows
  * are the library's; this file is the frame the mock draws around them: a
  * column no wider than 880 sitting in the middle of the sheet, the row of
- * controls with Start pushed to its end, and the two chips that say which
- * playbook and which model the session will get.
+ * controls with Start pushed to its end, and the Playbook chip. The Model
+ * chip beside it is the library's model picker, drawn to the same measure.
  *
  * `docs/design/2026-09-15-screens/SessionEmpty.html` — `.centre`, `.col`,
  * `.start`, `.controls`, `.chip`, `.landed` — is where every measure below
@@ -93,10 +93,6 @@
   color: var(--sd-ink-3);
 }
 
-.new-session__chip .sd-mark {
-  margin-inline-start: calc(-1 * var(--sd-space-1));
-}
-
 /* Why Start is off, or why RCA and Fix are: one line under the controls. */
 .new-session__reason {
   margin: 0;
@@ -109,7 +105,7 @@
   color: var(--sd-st-failed);
 }
 
-/* The disclosure holding the one-off provider, model and dry-run overrides. */
+/* The disclosure holding the dry-run override; provider and model moved to the chip. */
 .new-session__more {
   font-size: var(--sd-text-meta);
   color: var(--sd-ink-2);
@@ -125,33 +121,6 @@
   gap: var(--sd-space-3);
   max-inline-size: 560px;
   padding-block-start: var(--sd-space-3);
-}
-
-.new-session__more-body .form-row {
-  display: flex;
-  gap: var(--sd-space-3);
-}
-
-.new-session__more-body .form-field {
-  display: grid;
-  flex: 1;
-  gap: var(--sd-space-1);
-}
-
-.new-session__more-body .form-field > label {
-  font-size: var(--sd-text-meta);
-  color: var(--sd-ink-2);
-}
-
-.new-session__more-body .form-field > select,
-.new-session__more-body .form-field > input {
-  min-block-size: var(--sd-control-h);
-  padding-inline: var(--sd-space-3);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-sm);
-  background: var(--sd-sheet);
-  color: var(--sd-ink);
-  font: inherit;
 }
 
 .new-session__landed {

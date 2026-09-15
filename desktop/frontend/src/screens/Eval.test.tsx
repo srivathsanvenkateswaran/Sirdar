@@ -331,17 +331,24 @@ describe('Eval run suite', () => {
     )
   })
 
-  it('passes the one-off provider and model picked in the Change dialog', async () => {
+  it('passes the one-off provider and model picked through Change', async () => {
     const { onStartEval } = mount({}, { defaultProvider: 'claude', defaultModel: 'sonnet' })
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
     expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
-    const dialog = screen.getByRole('dialog', { name: 'Provider' })
-    fireEvent.change(within(dialog).getByLabelText('Provider'), { target: { value: 'qwen' } })
-    fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: ' qwen3-coder ' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    // Change opens the same picker New session has, not a dialog of fields.
+    const change = screen.getByRole('button', { name: 'Change' })
+    expect(change).toHaveAttribute('aria-haspopup', 'dialog')
+    fireEvent.click(change)
+    const picker = screen.getByRole('dialog', { name: 'Provider and model' })
+    expect(within(picker).getByText('workspace default')).toBeInTheDocument()
+    fireEvent.click(within(picker).getByRole('option', { name: /qwen/ }))
+    fireEvent.change(within(picker).getByRole('textbox', { name: 'Other model' }), {
+      target: { value: ' qwen3-coder ' },
+    })
+    fireEvent.click(within(picker).getByRole('button', { name: 'Done' }))
     expect(screen.queryByRole('dialog')).toBeNull()
+    expect(change).toHaveFocus()
     expect(screen.getByText('qwen · qwen3-coder')).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2510' }))
@@ -357,14 +364,16 @@ describe('Eval run suite', () => {
     )
   })
 
-  it('Cancel in the Change dialog keeps the provider that was there', async () => {
-    mount({}, { defaultProvider: 'claude', defaultModel: 'sonnet' })
+  it('reads CLI default on the row when nothing names a model, and Escape keeps a choice', async () => {
+    mount({}, { defaultProvider: 'claude' })
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(screen.getByText('claude · CLI default')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: 'Change' }))
-    const dialog = screen.getByRole('dialog', { name: 'Provider' })
-    fireEvent.change(within(dialog).getByLabelText('Provider'), { target: { value: 'qwen' } })
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
-    expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+    const picker = screen.getByRole('dialog', { name: 'Provider and model' })
+    fireEvent.click(within(picker).getByRole('option', { name: /codex/ }))
+    fireEvent.keyDown(picker, { key: 'Escape' })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('codex · CLI default')).toBeInTheDocument()
   })
 
   it('is disabled with a reason while a suite this window started is running, and offers Cancel', async () => {
