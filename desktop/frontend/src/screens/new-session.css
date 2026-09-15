@@ -93,10 +93,6 @@
   color: var(--sd-ink-3);
 }
 
-.new-session__chip .sd-mark {
-  margin-inline-start: calc(-1 * var(--sd-space-1));
-}
-
 /* Why Start is off, or why RCA and Fix are: one line under the controls. */
 .new-session__reason {
   margin: 0;
