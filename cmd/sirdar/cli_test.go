@@ -300,6 +300,64 @@ func TestDoctorReportsBrokenWorkspace(t *testing.T) {
 	}
 }
 
+// TestAgyIsDisabledFromTheCommandLine covers the two ways an operator
+// meets the disabled provider: a workspace that still names it, which no
+// command but doctor will load, and `--provider agy` on a workspace that
+// does not.
+func TestAgyIsDisabledFromTheCommandLine(t *testing.T) {
+	const refusal = "provider agy is disabled: Google's Antigravity terms do not allow driving " +
+		"the CLI from another program; choose claude, codex, openai, acp, qwen or cursor"
+
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	chdir(t, root)
+
+	// The override is refused before any ticket is fetched, on a
+	// workspace whose own provider is perfectly fine.
+	_, errb := mustRun(t, 1, "triage", "OMNI-1", "--provider", "agy")
+	if !strings.Contains(errb, refusal) {
+		t.Errorf("triage --provider agy:\n%s\nwant %q", errb, refusal)
+	}
+	_, errb = mustRun(t, 1, "rca", "OMNI-1", "--provider", "agy")
+	if !strings.Contains(errb, refusal) {
+		t.Errorf("rca --provider agy:\n%s\nwant %q", errb, refusal)
+	}
+
+	// A workspace that names the provider does not load at all…
+	cfgPath := filepath.Join(root, ".sirdar", "config.yaml")
+	body, err := os.ReadFile(cfgPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	disabled := strings.Replace(string(body), "provider: claude", "provider: agy", 1)
+	if err := os.WriteFile(cfgPath, []byte(disabled), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, errb = mustRun(t, exitUsage, "triage", "OMNI-1")
+	if !strings.Contains(errb, refusal) {
+		t.Errorf("triage on a disabled workspace:\n%s\nwant %q", errb, refusal)
+	}
+
+	// …except under doctor, which is the command an operator runs to find
+	// out why, and answers with one row saying so.
+	out, errb := runCLI(t, "doctor")
+	if !strings.Contains(out, "[XX] agy — disabled (Antigravity terms)") {
+		t.Errorf("doctor on a disabled workspace:\n%s\nstderr:\n%s", out, errb)
+	}
+
+	// The acknowledgement brings the workspace back: the adapter is still
+	// in the tree and still drives the CLI for anybody who accepts the
+	// risk. The binary does not exist here, so the row fails — what
+	// matters is that it is the binary's row and not the refusal.
+	acked := strings.Replace(disabled, "provider: agy", "provider: agy\nagy:\n  acknowledgeTerms: true", 1)
+	if err := os.WriteFile(cfgPath, []byte(acked), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _ = runCLI(t, "doctor")
+	if strings.Contains(out, "disabled (Antigravity terms)") {
+		t.Errorf("doctor still reports the acknowledged provider disabled:\n%s", out)
+	}
+}
+
 // A warning is not a failure: a doctor run whose worst row only warns
 // prints [!!], says so in the summary, and still exits 0. The exit code is
 // what a CI gate reads, which is the whole point of the third state.
