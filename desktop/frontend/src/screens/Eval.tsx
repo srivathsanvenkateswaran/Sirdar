@@ -486,6 +486,7 @@ export default function Eval(props: {
     disabled: Boolean(disabledReason) || pending,
     busy: pending,
     title: disabledReason || 'Replay the picked keys through real runs',
+    placement: 'screen',
   })
 
   const json = latest ? JSON.stringify(latest.report, null, 2) : ''

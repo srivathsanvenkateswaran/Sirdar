@@ -1,0 +1,186 @@
+/*
+ * New session, on the sheet.
+ *
+ * The search bar, the segmented control, the group label and the item rows
+ * are the library's; this file is the frame the mock draws around them: a
+ * column no wider than 880 sitting in the middle of the sheet, the row of
+ * controls with Start pushed to its end, and the two chips that say which
+ * playbook and which model the session will get.
+ *
+ * `docs/design/2026-09-15-screens/SessionEmpty.html` — `.centre`, `.col`,
+ * `.start`, `.controls`, `.chip`, `.landed` — is where every measure below
+ * was read from. No shadow, no gradient, no colour of its own.
+ */
+
+.new-session {
+  display: flex;
+  flex: 1;
+  min-block-size: 0;
+  align-items: center;
+  justify-content: center;
+  padding-block: 40px;
+  padding-inline: var(--sd-space-7);
+  overflow-y: auto;
+}
+
+.new-session__col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-6);
+  inline-size: 100%;
+  max-inline-size: 880px;
+}
+
+.new-session__title {
+  margin: 0;
+  color: var(--sd-ink);
+  font-size: var(--sd-text-display-m);
+  font-weight: 500;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.new-session__start {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-4);
+}
+
+/* The link at the bar's inline end, drawn as words rather than a box. */
+.new-session__recent {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.new-session__recent:hover {
+  color: var(--sd-accent);
+}
+
+.new-session__controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-4);
+}
+
+.new-session__controls > .sd-button[data-variant='primary'] {
+  margin-inline-start: auto;
+}
+
+/* A chip: 32 tall, hairline border at pill radius, the label in the second
+   ink and the value in the ledger face. It states a fact; it is not a control. */
+.new-session__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-block-size: 32px;
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-ledger);
+  white-space: nowrap;
+}
+
+.new-session__chip .mono {
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+}
+
+.new-session__chip .sd-mark {
+  margin-inline-start: calc(-1 * var(--sd-space-1));
+}
+
+/* Why Start is off, or why RCA and Fix are: one line under the controls. */
+.new-session__reason {
+  margin: 0;
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+  color: var(--sd-ink-2);
+}
+
+.new-session__reason[data-tone='error'] {
+  color: var(--sd-st-failed);
+}
+
+/* The disclosure holding the one-off provider, model and dry-run overrides. */
+.new-session__more {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.new-session__more > summary {
+  inline-size: fit-content;
+  cursor: pointer;
+}
+
+.new-session__more-body {
+  display: grid;
+  gap: var(--sd-space-3);
+  max-inline-size: 560px;
+  padding-block-start: var(--sd-space-3);
+}
+
+.new-session__more-body .form-row {
+  display: flex;
+  gap: var(--sd-space-3);
+}
+
+.new-session__more-body .form-field {
+  display: grid;
+  flex: 1;
+  gap: var(--sd-space-1);
+}
+
+.new-session__more-body .form-field > label {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.new-session__more-body .form-field > select,
+.new-session__more-body .form-field > input {
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  font: inherit;
+}
+
+.new-session__landed {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.new-session__landed > .sd-group-label {
+  margin-block-end: var(--sd-space-1);
+}
+
+/* The line of facts under an item's title: key, source and age in the ledger. */
+.new-session__meta {
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+.new-session__empty {
+  margin: 0;
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-3);
+}
+
+@media (max-width: 720px) {
+  .new-session {
+    align-items: flex-start;
+    padding-block: var(--sd-space-5);
+    padding-inline: var(--sd-space-4);
+  }
+}

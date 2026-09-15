@@ -1,5 +1,8 @@
 # Antigravity CLI wire formats, captured 2026-09-15
 
+> **`provider: agy` is disabled** — Google's Antigravity terms do not allow driving the CLI from
+> another program. The adapter and this capture are retained for reference only.
+
 Captured against **Antigravity CLI `agy` 1.2.3** on macOS, driving the real binary with a real
 Google account (Google AI Pro) against `gemini-3.6-flash-low` at `--effort low`. Unlike
 `docs/research/09-qwen-wire-formats.md`, there is no stub backend here: every line below came

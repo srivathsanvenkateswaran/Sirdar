@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import Badge from '../ui/badge'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
@@ -138,7 +138,7 @@ function Section({
         </h2>
         <p className="lib-section__note">{note}</p>
       </div>
-      {children}
+      <div className="lib-section__body">{children}</div>
     </section>
   )
 }
@@ -167,83 +167,49 @@ export default function Library(): JSX.Element {
     columnId: 'key',
     direction: 'asc',
   })
-  const root = useRef<HTMLDivElement | null>(null)
-
-  const sections = [
-    { id: 'button', label: 'Button' },
-    { id: 'pill-nav', label: 'Pill nav' },
-    { id: 'segmented-control', label: 'Segmented' },
-    { id: 'card', label: 'Card' },
-    { id: 'status-badge', label: 'Status badge' },
-    { id: 'kanban-column', label: 'Column' },
-    { id: 'run-card', label: 'Run card' },
-    { id: 'event-row', label: 'Event row' },
-    { id: 'note-pane', label: 'Note pane' },
-    { id: 'data-table', label: 'Data table' },
-    { id: 'toast', label: 'Toast' },
-    { id: 'dialog', label: 'Dialog' },
-    { id: 'quota-chip', label: 'Quota chip' },
-    { id: 'hero-band', label: 'Hero band' },
-    { id: 'ambient', label: 'Ambient' },
-    { id: 'sidebar-nav-item', label: 'Sidebar row' },
-    { id: 'sidebar-footer-card', label: 'Sidebar footer' },
-    { id: 'modal-sheet', label: 'Modal sheet' },
-    { id: 'setting-row', label: 'Setting row' },
-    { id: 'heatmap', label: 'Heatmap' },
-    { id: 'badge', label: 'Badge' },
-    { id: 'provider-mark', label: 'Provider mark' },
-    { id: 'banner', label: 'Banner' },
-    { id: 'group-label', label: 'Group label' },
-    { id: 'item-row', label: 'Item row' },
-    { id: 'search-bar', label: 'Search bar' },
-    { id: 'stat-card', label: 'Stat card' },
-    { id: 'toggle', label: 'Toggle' },
-    { id: 'page-head', label: 'Page head' },
-    { id: 'kind-chip', label: 'Kind chip' },
-    { id: 'state-glyph', label: 'State glyph' },
-  ]
-
   return (
-    <div className="lib" ref={root}>
+    <div className="lib">
+      {/*
+       * The bar is outside the frame on purpose: the switches paint the
+       * specimens, not the page around them. It is read-only chrome — the
+       * primary buttons below are specimens, so nothing here publishes a
+       * primary action to the sidebar.
+       */}
       <header className="lib__bar">
-        <div className="lib__bar-row">
-          <h1 className="lib__title">Asset library</h1>
-          <p className="lib__lede">
-            Thirty-one components, every state, both themes, both directions. The switches
-            paint the specimens, not this page.
-          </p>
-        </div>
-        <div className="lib__controls">
-          <SegmentedControl
-            label="Theme"
-            options={[
-              { id: 'light', label: 'Light' },
-              { id: 'dark', label: 'Dark' },
-            ]}
-            value={theme}
-            onChange={(id) => setTheme(id as 'light' | 'dark')}
-          />
-          <SegmentedControl
-            label="Direction"
-            options={[
-              { id: 'ltr', label: 'Left to right' },
-              { id: 'rtl', label: 'Right to left' },
-            ]}
-            value={dir}
-            onChange={(id) => setDir(id as 'ltr' | 'rtl')}
-          />
-        </div>
-        <PillNav
-          label="Components"
-          items={sections}
-          onSelect={(id) => {
-            root.current?.querySelector(`#lib-${id}`)?.scrollIntoView({ block: 'start' })
-          }}
+        <PageHead
+          title="Library"
+          lede="Every component the app ships, at the size it ships at."
+          actions={
+            <>
+              <SegmentedControl
+                label="Theme"
+                options={[
+                  { id: 'light', label: 'Light' },
+                  { id: 'dark', label: 'Dark' },
+                ]}
+                value={theme}
+                onChange={(id) => setTheme(id as 'light' | 'dark')}
+              />
+              <SegmentedControl
+                label="Direction"
+                options={[
+                  { id: 'ltr', label: 'LTR' },
+                  { id: 'rtl', label: 'RTL' },
+                ]}
+                value={dir}
+                onChange={(id) => setDir(id as 'ltr' | 'rtl')}
+              />
+            </>
+          }
         />
       </header>
 
       <div className="lib__frame" data-theme={theme} dir={dir} data-testid="library-frame">
-        <Section id="button" name="Button" note="Only the primary variant may change anything.">
+        <Section
+          id="button"
+          name="Button"
+          note="One filled button per screen, and it is that screen's commit action."
+        >
           <div className="lib-row">
             <State label="Primary">
               <Button variant="primary">Start triage</Button>
@@ -334,6 +300,19 @@ export default function Library(): JSX.Element {
                 onChange={setSegment}
               />
             </State>
+            <State label="Four options, the most it takes">
+              <SegmentedControl
+                label="Kind"
+                options={[
+                  { id: 'triage', label: 'Triage' },
+                  { id: 'rca', label: 'RCA' },
+                  { id: 'fix', label: 'Fix' },
+                  { id: 'eval', label: 'Eval' },
+                ]}
+                value="fix"
+                onChange={() => {}}
+              />
+            </State>
             <State label="Disabled">
               <SegmentedControl
                 label="Provider"
@@ -360,7 +339,7 @@ export default function Library(): JSX.Element {
           </div>
         </Section>
 
-        <Section id="card" name="Card" note="The base box. No shadow, ever.">
+        <Section id="card" name="Card" note="The base box, with no shadow ever.">
           <div className="lib-row">
             <State label="Plain">
               <Card title="Doctor" meta="3 checks">
@@ -393,7 +372,7 @@ export default function Library(): JSX.Element {
         <Section
           id="status-badge"
           name="Status badge"
-          note="Six hues, and every one of them carries its word."
+          note="Every hue is paired with its word; the accent means a live run."
         >
           <div className="lib-row lib-row--tight">
             {EVERY_STATUS.map((status) => (
@@ -450,7 +429,7 @@ export default function Library(): JSX.Element {
         <Section
           id="run-card"
           name="Run card"
-          note="The Jira-shaped card: title, kind chip, state glyph and clock, key and provider mark. No reason, no cost."
+          note="Title up to two lines, the kind chip, then a footer with the state glyph and its word, a mono clock only while running or blocked, and the mono key with the provider's mark at the other end."
         >
           <div className="lib-row">
             <State label="Queued">
@@ -460,6 +439,18 @@ export default function Library(): JSX.Element {
                 status="queued"
                 title="Supplier price import rounds to the nearest riyal"
                 provider="cursor"
+                onOpen={() => {}}
+              />
+            </State>
+            <State label="Preparing, with the live edge">
+              <RunCard
+                runKey="SBX-9"
+                kind="rca"
+                status="preparing"
+                title="Refund on a split payment posts to the first card only"
+                provider="openai"
+                clock="0:08"
+                clockTitle="Started 8 seconds ago"
                 onOpen={() => {}}
               />
             </State>
@@ -515,6 +506,17 @@ export default function Library(): JSX.Element {
                 onOpen={() => {}}
               />
             </State>
+            <State label="Over budget, no clock however long it ran">
+              <RunCard
+                runKey="SBX-10"
+                kind="fix"
+                status="over_budget"
+                title="Nightly reconciliation double-counts voided receipts"
+                provider="codex"
+                clock="58:12"
+                onOpen={() => {}}
+              />
+            </State>
             <State label="No title from the tracker">
               <RunCard runKey="OMNI-2513" kind="eval" status="queued" provider="acp" onOpen={() => {}} />
             </State>
@@ -535,7 +537,7 @@ export default function Library(): JSX.Element {
         <Section
           id="event-row"
           name="Event row"
-          note="The ledger. Colour on the rail only, and always left to right."
+          note="Clock, verdict mark, then the tool and its one-line summary, with colour on the rail only."
         >
           <div className="lib-stream">
             {(Object.keys(EVENT_GLYPHS) as EventVariant[]).map((variant, i) => (
@@ -828,7 +830,7 @@ export default function Library(): JSX.Element {
         <Section
           id="setting-row"
           name="Setting row"
-          note="One setting, one control. A setting that needs two is two rows."
+          note="One setting and one control per row; a setting that needs two is two rows."
         >
           <div className="lib-col">
             <State label="A card of rows, with the pale control">
@@ -861,7 +863,7 @@ export default function Library(): JSX.Element {
         <Section
           id="heatmap"
           name="Heatmap"
-          note="Runs per day. No streak, no flame: a good week is a quiet week."
+          note="Runs per day, with no streak and no flame: a good week is a quiet week."
         >
           <div className="lib-col">
             <State label="Twelve weeks, with the bucket boundaries">
@@ -887,7 +889,7 @@ export default function Library(): JSX.Element {
         <Section
           id="badge"
           name="Badge"
-          note="A fact about the account. Run state is the status badge, with its word."
+          note="A fact about the account; run state is the status badge, with its word."
         >
           <div className="lib-row lib-row--tight">
             <State label="Plan">
@@ -925,7 +927,7 @@ export default function Library(): JSX.Element {
         <Section
           id="banner"
           name="Banner"
-          note="What just finished, in the hue it finished in. One per transcript."
+          note="What just finished, in the hue it finished in, one per transcript."
         >
           <div className="lib-col">
             <State label="Tests passed">
@@ -935,6 +937,14 @@ export default function Library(): JSX.Element {
               <Banner tone="done" title="Note filed">
                 notes/SBX-1-triage.md, 1.4k words
               </Banner>
+            </State>
+            <State label="Live, while a step is still running">
+              <Banner tone="live" title="Running the suite">
+                go test ./... started 12s ago
+              </Banner>
+            </State>
+            <State label="The lead alone, no separator">
+              <Banner tone="done" title="Branch created" />
             </State>
             <State label="The agent asked, with an answer button">
               <Banner
@@ -965,7 +975,7 @@ export default function Library(): JSX.Element {
         <Section
           id="group-label"
           name="Group label"
-          note="Tracked small capitals and a dashed rule. It names a group; it does not start a section."
+          note="Tracked small capitals and a dashed rule: it names a group rather than starting a section."
         >
           <div className="lib-col">
             <State label="With the rule">
@@ -1015,6 +1025,20 @@ export default function Library(): JSX.Element {
                 meta="SBX-6 · jira · rejected · cooldown 10m · 14 min ago"
               />
             </State>
+            <State label="Done, opens the session and keeps its own control">
+              <ItemRow
+                tone="done"
+                icon={<InboxIcon />}
+                title="Credit note lands on the wrong customer account"
+                meta="SBX-5 · zoho · done · note filed · 1 h ago"
+                openLabel="Open SBX-5"
+                onOpen={() => {}}
+                action={<Button size="sm">Open note</Button>}
+              />
+            </State>
+            <State label="Plain, no icon and no control">
+              <ItemRow title="Supplier price import rounds to the nearest riyal" meta="SBX-8 · jira" />
+            </State>
             <State label="Arabic, two lines">
               <ItemRow
                 icon={<InboxIcon />}
@@ -1043,6 +1067,15 @@ export default function Library(): JSX.Element {
                 aside="Enter to start"
               />
             </State>
+            <State label="The bar with a key typed, ready to start">
+              <SearchBar
+                label="Ticket key or URL"
+                value="OMNI-2510"
+                onChange={() => {}}
+                onSubmit={() => {}}
+                aside="Enter to start"
+              />
+            </State>
             <State label="The well">
               <SearchBar
                 variant="well"
@@ -1050,6 +1083,16 @@ export default function Library(): JSX.Element {
                 value={well}
                 onChange={setWell}
                 placeholder="Filter"
+              />
+            </State>
+            <State label="Disabled, native and not styled apart">
+              <SearchBar
+                variant="well"
+                label="Filter the board"
+                value=""
+                onChange={() => {}}
+                placeholder="Filter"
+                disabled
               />
             </State>
             <State label="Arabic">
@@ -1066,11 +1109,14 @@ export default function Library(): JSX.Element {
         <Section
           id="stat-card"
           name="Stat card"
-          note="A big figure, a grey label over it, one line under it. The card does no arithmetic."
+          note="A big figure, a grey label over it, one line under it, and no arithmetic of its own."
         >
           <div className="lib-row">
             <State label="Runs this week">
               <StatCard label="Runs this week" value="38" detail="12 more than last week" />
+            </State>
+            <State label="Nothing to count yet">
+              <StatCard label="Runs this week" value="—" detail="no run recorded" />
             </State>
             <State label="Spent">
               <StatCard label="Spent" value="$12.40" valueTitle="$12.4031" detail="this week" />
@@ -1084,7 +1130,11 @@ export default function Library(): JSX.Element {
           </div>
         </Section>
 
-        <Section id="toggle" name="Toggle" note="On or off. The knob travels the logical axis.">
+        <Section
+          id="toggle"
+          name="Toggle"
+          note="On or off, with the knob travelling the logical axis."
+        >
           <div className="lib-row lib-row--tight">
             <State label="Drive it">
               <Toggle label="Include the ticket title" checked={toggled} onChange={setToggled} />
@@ -1092,8 +1142,11 @@ export default function Library(): JSX.Element {
             <State label="Off">
               <Toggle label="Notify on failure" checked={false} onChange={() => {}} />
             </State>
-            <State label="Disabled">
+            <State label="Disabled, on">
               <Toggle label="Webhooks" checked disabled onChange={() => {}} />
+            </State>
+            <State label="Disabled, off">
+              <Toggle label="Slack" checked={false} disabled onChange={() => {}} />
             </State>
           </div>
         </Section>
@@ -1101,13 +1154,18 @@ export default function Library(): JSX.Element {
         <Section
           id="page-head"
           name="Page head"
-          note="The screen's name, a lede, and its actions. The serif on the settings heading only."
+          note="The screen's name, a lede and its actions, with the serif on the settings heading only."
         >
+          {/*
+           * Every specimen is an h2: the gallery's own head is the page's one
+           * h1, and the component draws the two levels the same.
+           */}
           <div className="lib-col">
-            <State label="A screen">
+            <State label="A screen, with its one filled action">
               <PageHead
                 title="Register"
                 lede="Every run, newest first."
+                level={2}
                 actions={
                   <>
                     <Button variant="pale">Filters</Button>
@@ -1116,11 +1174,14 @@ export default function Library(): JSX.Element {
                 }
               />
             </State>
+            <State label="The title alone">
+              <PageHead title="Providers" level={2} />
+            </State>
             <State label="The settings heading">
               <PageHead title="MCP servers" level={2} serif />
             </State>
             <State label="Arabic">
-              <PageHead title="اللوحة" lede="كل تذكرة في مسارها." />
+              <PageHead title="اللوحة" lede="كل تذكرة في مسارها." level={2} />
             </State>
           </div>
         </Section>
@@ -1128,7 +1189,7 @@ export default function Library(): JSX.Element {
         <Section
           id="kind-chip"
           name="Kind chip"
-          note="What a run is. Three fills, and the word is always there."
+          note="What a run is: three fills, and the word is always there."
         >
           <div className="lib-row lib-row--tight">
             <State label="Triage">
@@ -1139,6 +1200,9 @@ export default function Library(): JSX.Element {
             </State>
             <State label="Fix">
               <KindChip kind="fix" />
+            </State>
+            <State label="Unknown kind, verbatim in the triage fill">
+              <KindChip kind="eval" />
             </State>
           </div>
         </Section>

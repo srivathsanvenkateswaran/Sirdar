@@ -1,13 +1,87 @@
 /*
- * The Register screen's own three blocks: the activity grid above the table,
- * the day filter it writes, and the panel padding. Everything else on this
- * screen is the library's Data table and Heatmap.
+ * The Register screen: the page's own frame around the library's Page head,
+ * Stat card, Heatmap and Data table.
+ *
+ * Sizes are lifted from docs/design/2026-09-15-screens/Register.html: a
+ * 40/48/32 page inset, a 360px column of figures beside the heat card, a
+ * 24px band gap, and the table's own cells. Every colour is a token; nothing
+ * here casts a shadow.
  */
 
-.register-activity {
+.register {
   display: flex;
+  flex: 1;
   flex-direction: column;
-  gap: var(--sd-space-2);
+  min-block-size: 0;
+  padding-block: 40px var(--sd-space-6);
+  padding-inline: var(--sd-space-7);
+  overflow-y: auto;
+}
+
+.register-head {
+  margin-block-end: var(--sd-space-6);
+}
+
+/* ---------- the band: three figures beside the grid ---------- */
+
+.register-band {
+  display: flex;
+  gap: var(--sd-space-5);
+  margin-block-end: var(--sd-space-5);
+}
+
+.register-figs {
+  display: flex;
+  flex: 0 0 360px;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+}
+
+.register-heatcard {
+  flex: 1;
+  min-inline-size: 0;
+  padding: var(--sd-space-5);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-card-row);
+}
+
+.register-heatcard__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--sd-space-4);
+  margin-block-end: var(--sd-space-4);
+}
+
+.register-heatcard__title {
+  margin: 0;
+  font-size: var(--sd-text-title);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.register-heatcard__side {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-ledger);
+}
+
+/* Under 960px the figures go above the grid rather than beside it. */
+@media (max-width: 960px) {
+  .register-band {
+    flex-direction: column;
+  }
+
+  .register-figs {
+    flex-basis: auto;
+  }
+}
+
+/* ---------- the row between the band and the table ---------- */
+
+.register-toolbar {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
   margin-block-end: var(--sd-space-4);
 }
 
@@ -17,12 +91,147 @@
   font-size: var(--sd-text-meta);
 }
 
-.register-day__clear {
+.register-filters {
+  position: relative;
+}
+
+/* The filters, on a sheet under the button. A rule, not a shadow. */
+.register-popover {
+  position: absolute;
+  inset-block-start: calc(100% + var(--sd-space-2));
+  inset-inline-start: 0;
+  z-index: 2;
+  display: grid;
+  gap: var(--sd-space-3);
+  min-inline-size: 260px;
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+}
+
+.register-field {
+  display: grid;
+  gap: var(--sd-space-1);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.register-field select {
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink);
+  font: inherit;
+  font-size: var(--sd-text-body);
+}
+
+/* ---------- cells ---------- */
+
+.register-key {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-weight: 600;
+  unicode-bidi: isolate;
+}
+
+/* The key opens the run: a button that reads as the key, and underlines on hover. */
+.register-key--link {
   padding: 0;
   border: 0;
-  background: transparent;
-  color: var(--sd-accent);
+  background: none;
+  color: var(--sd-ink);
   font: inherit;
-  text-decoration: underline;
   cursor: pointer;
+}
+
+.register-key--link:hover {
+  color: var(--sd-accent);
+  text-decoration: underline;
+}
+
+.register-kind {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+}
+
+.register-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.register-when {
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+.register-none {
+  color: var(--sd-ink-3);
+}
+
+.register-chip {
+  display: inline-block;
+  padding-block: 3px;
+  padding-inline: 10px;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: 6px;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.register-chip[data-tone='done'] {
+  border-color: var(--sd-st-done);
+  color: var(--sd-st-done);
+}
+
+.register-chip[data-tone='blocked'] {
+  border-color: var(--sd-st-blocked);
+  color: var(--sd-st-blocked);
+}
+
+.register-chip[data-tone='failed'] {
+  border-color: var(--sd-st-failed);
+  color: var(--sd-st-failed);
+}
+
+.register-notes {
+  display: inline-flex;
+  gap: 5px;
+  vertical-align: middle;
+}
+
+.register-notes__dot {
+  display: block;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-rule-strong);
+}
+
+.register-notes__dot[data-on='true'] {
+  background: var(--sd-accent);
+}
+
+/* ---------- the states the screen can be in ---------- */
+
+.register-loading,
+.register-empty {
+  margin: 0;
+  max-inline-size: var(--sd-measure-prose);
+  color: var(--sd-ink-3);
+}
+
+.register-error {
+  margin: 0;
+  max-inline-size: var(--sd-measure-prose);
+  color: var(--sd-st-failed);
 }

@@ -29,7 +29,8 @@ binary);
 hook; `provider: cursor` drives the Cursor Agent CLI, read-only by Cursor's own
 execution mode rather than by a policy Sirdar enforces — a write or a command that
 completes anyway ends the session and fails the run, and `sirdar fix` is refused
-before it cuts a branch; `provider: agy` drives Google's Antigravity CLI against the
+before it cuts a branch; `provider: agy` is disabled (see the entry at the end of this
+section) but its adapter drives Google's Antigravity CLI against the
 operator's own Google account, triage and rca only — that CLI gives a parent process no
 way to mediate a tool call, so permissions are set for the session in a project file
 Sirdar writes under `~/.gemini/config/projects` and deletes when the run ends (a read
@@ -330,3 +331,12 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   instead of `origin/<base>` and skips the fetch, so a fix can be generated against the code the
   ticket was filed against. Together they are what a retrospective evaluation runs — many fixes
   against historical commits, none of which may reach a remote.
+- `provider: agy` is disabled. Google's Antigravity terms do not allow driving the CLI from
+  another program, and an account that does it can be banned, so config load refuses
+  `provider: agy` and so does `--provider agy` on `triage` and `rca`: `provider agy is disabled:
+  Google's Antigravity terms do not allow driving the CLI from another program; choose claude,
+  codex, openai, acp, qwen or cursor`. `sirdar doctor` reports the whole provider as one row,
+  `agy — disabled (Antigravity terms)`, instead of its binary, model and permission rows. The
+  adapter stays in the tree (`internal/provider/agy`) and `docs/research/10-antigravity-wire-formats.md`
+  is retained for reference. `agy.acknowledgeTerms: true` takes the refusal off — at your own
+  risk, and not recommended.

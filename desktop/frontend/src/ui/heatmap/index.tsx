@@ -53,6 +53,9 @@ const MONTHS = [
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 
+/** The rows, Monday first, as the mocks letter them. */
+const WEEKDAY_LETTERS = ['M', 'T', 'W', 'T', 'F', 'S', 'S']
+
 /** A date-only key, built without a Date so a timezone cannot shift a day. */
 function key(y: number, m: number, d: number): string {
   return `${y}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
@@ -71,17 +74,18 @@ export function cellName(date: string, count: number): string {
 }
 
 /**
- * The grid's days, oldest first, ending on `end` and running back far enough
- * to fill `weeks` columns from the start of that week.
+ * The grid's days, oldest first, ending on the Sunday that closes the week
+ * `end` falls in and running back far enough to fill `weeks` columns. Weeks
+ * run Monday to Sunday, as the mocks draw them and as ISO 8601 counts them.
  */
 function grid(days: HeatmapDay[], weeks: number, end?: string): { date: string; count: number }[] {
   const counts = new Map(days.map((d) => [d.date, d.count]))
   const last = end ?? days.map((d) => d.date).sort().at(-1) ?? ''
   const [y, m, d] = last ? last.split('-').map(Number) : []
   const anchor = y ? new Date(Date.UTC(y, m - 1, d)) : new Date()
-  // The grid ends on the last day of the week the anchor falls in, so the
-  // trailing column is a whole week and the weekday rows stay square.
-  anchor.setUTCDate(anchor.getUTCDate() + (6 - anchor.getUTCDay()))
+  // The grid ends on the Sunday of the anchor's week, so the trailing column
+  // is a whole week and the weekday rows stay square.
+  anchor.setUTCDate(anchor.getUTCDate() + ((7 - anchor.getUTCDay()) % 7))
   const total = weeks * 7
   const out: { date: string; count: number }[] = []
   for (let i = total - 1; i >= 0; i -= 1) {
@@ -89,6 +93,25 @@ function grid(days: HeatmapDay[], weeks: number, end?: string): { date: string; 
     day.setUTCDate(anchor.getUTCDate() - i)
     const id = key(day.getUTCFullYear(), day.getUTCMonth(), day.getUTCDate())
     out.push({ date: id, count: counts.get(id) ?? 0 })
+  }
+  return out
+}
+
+/**
+ * Which columns start a new month, and what to call them. A column is
+ * labelled when the Monday it starts on is in a different month from the
+ * Monday before it; the first column is never labelled, since there is
+ * nothing before it to differ from and a label on a ragged edge misleads.
+ */
+export function monthLabels(cells: { date: string }[]): { column: number; label: string }[] {
+  const out: { column: number; label: string }[] = []
+  const columns = Math.ceil(cells.length / 7)
+  for (let c = 1; c < columns; c += 1) {
+    const here = cells[c * 7]?.date.slice(0, 7)
+    const before = cells[(c - 1) * 7]?.date.slice(0, 7)
+    if (!here || here === before) continue
+    const month = Number(here.slice(5, 7))
+    out.push({ column: c, label: (MONTHS[month - 1] ?? here).slice(0, 3) })
   }
   return out
 }
@@ -105,7 +128,9 @@ function grid(days: HeatmapDay[], weeks: number, end?: string): { date: string; 
  * Colour is the summary and never the only copy of the fact. Every cell is a
  * button whose accessible name reads "14 September, 6 runs", the same string
  * is its tooltip, and the legend prints the bucket boundaries as numbers
- * rather than only More and Less.
+ * rather than only More and Less. The month row and the weekday letters are
+ * wayfinding for a sighted reader and are hidden from the accessible tree,
+ * where every cell already says its weekday and its date.
  */
 export default function Heatmap({
   days,
@@ -116,29 +141,42 @@ export default function Heatmap({
 }: HeatmapProps): JSX.Element {
   const cells = grid(days, weeks, endDate)
   const columns = Math.ceil(cells.length / 7)
+  const months = monthLabels(cells)
+  const track = { gridTemplateColumns: `repeat(${columns}, 14px)` }
 
   return (
     <section className="sd-heatmap" aria-label={label}>
-      <div className="sd-heatmap__scroll" tabIndex={0} role="group" aria-label={label}>
-        <div
-          className="sd-heatmap__grid"
-          style={{ gridTemplateColumns: `repeat(${columns}, 14px)` }}
-        >
-          {cells.map((cell) => {
-            const name = cellName(cell.date, cell.count)
-            const weekday = WEEKDAYS[new Date(`${cell.date}T00:00:00Z`).getUTCDay()] ?? ''
-            return (
-              <button
-                key={cell.date}
-                type="button"
-                className="sd-heatmap__cell"
-                data-heat={bucketOf(cell.count)}
-                title={name}
-                aria-label={weekday ? `${weekday} ${name}` : name}
-                onClick={() => onSelect?.(cell.date)}
-              />
-            )
-          })}
+      <div className="sd-heatmap__body">
+        <div className="sd-heatmap__weekdays" aria-hidden="true">
+          {WEEKDAY_LETTERS.map((letter, i) => (
+            <span key={i}>{letter}</span>
+          ))}
+        </div>
+        <div className="sd-heatmap__scroll" tabIndex={0} role="group" aria-label={label}>
+          <div className="sd-heatmap__months" aria-hidden="true" style={track}>
+            {months.map((m) => (
+              <span key={m.column} style={{ gridColumn: m.column + 1 }}>
+                {m.label}
+              </span>
+            ))}
+          </div>
+          <div className="sd-heatmap__grid" style={track}>
+            {cells.map((cell) => {
+              const name = cellName(cell.date, cell.count)
+              const weekday = WEEKDAYS[new Date(`${cell.date}T00:00:00Z`).getUTCDay()] ?? ''
+              return (
+                <button
+                  key={cell.date}
+                  type="button"
+                  className="sd-heatmap__cell"
+                  data-heat={bucketOf(cell.count)}
+                  title={name}
+                  aria-label={weekday ? `${weekday} ${name}` : name}
+                  onClick={() => onSelect?.(cell.date)}
+                />
+              )
+            })}
+          </div>
         </div>
       </div>
       <p className="sd-heatmap__legend">

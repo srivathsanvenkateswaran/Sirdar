@@ -146,6 +146,14 @@ func ProviderFor(cfg *config.Config, creds config.Resolver) (provider.Provider, 
 	case "qwen":
 		return qwenProvider(cfg, creds)
 	case "agy":
+		// The workspace's own config is refused at load, so what arrives
+		// here unacknowledged is `--provider agy` on triage or rca, the
+		// desktop picker or an HTTP start. Each of them replaces
+		// cfg.Provider after Validate has run, so the refusal has to be
+		// repeated at the point the adapter would be built.
+		if !cfg.AgyAcknowledged() {
+			return nil, config.ErrAgyDisabled
+		}
 		return agyProvider(cfg), nil
 	case "acp":
 		return acpProvider(cfg)

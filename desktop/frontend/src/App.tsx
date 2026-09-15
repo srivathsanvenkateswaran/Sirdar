@@ -1,13 +1,12 @@
-import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
 import Sidebar from './components/shell/Sidebar'
-import NewTriageDialog from './components/shell/NewTriageDialog'
 import { PrimaryActionProvider } from './components/shell/primaryAction'
 import { PAGE_ENTER_CLASS } from './ui/motion'
 import Toasts from './ui/toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
 import Library from './screens/Library'
-import NewSession from './screens/NewSession'
+import NewSession, { type SessionMode, type StartOverrides } from './screens/NewSession'
 import Register from './screens/Register'
 import Review from './screens/Review'
 import RunDetail from './screens/RunDetail'
@@ -24,6 +23,25 @@ import './components/shell/shell.css'
  * it, and an unhandled rejection would only reach the console.
  */
 function reported(): void {}
+
+/**
+ * A window that opened on nothing in particular, in a workspace with no runs
+ * yet, opens on New session: there is no board to read and no session to
+ * return to, and the one thing to do is start one. It is decided once, from
+ * the address the window opened with, so a reader who then goes to the board
+ * is not sent back; a link that names a screen is followed as written.
+ */
+function useFirstLaunch(store: AppStore, state: AppState): void {
+  const fresh = useRef(typeof window !== 'undefined' && window.location.hash === '')
+  const { loading, currentWorkspaceId, runsByWorkspace, screen } = state
+  useEffect(() => {
+    if (!fresh.current || loading || !currentWorkspaceId) return
+    const runs = runsByWorkspace[currentWorkspaceId]
+    if (!runs) return
+    fresh.current = false
+    if (runs.length === 0 && screen.name === 'board') store.navigate({ name: 'new' })
+  }, [store, loading, currentWorkspaceId, runsByWorkspace, screen])
+}
 
 /**
  * Keeps the address bar and the store's screen in step, both ways.
@@ -90,7 +108,6 @@ function Shell(): JSX.Element {
   const store = useStore()
   const state = useAppState()
   const libraryOn = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
-  const [triageOpen, setTriageOpen] = useState(false)
   const filterRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
@@ -98,6 +115,7 @@ function Shell(): JSX.Element {
   }, [store])
 
   useHashRoute(store, state)
+  useFirstLaunch(store, state)
 
   useEffect(() => {
     if (state.screen.name === 'library' && !libraryOn) store.navigate({ name: 'board' })
@@ -130,27 +148,18 @@ function Shell(): JSX.Element {
     [store],
   )
 
-  const openTriage = useCallback(() => {
-    if (state.workspaces.length === 0) {
-      store.toast('Add a workspace before starting a run.', 'error')
-      return
-    }
-    setTriageOpen(true)
-  }, [state.workspaces.length, store])
-
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
       if (e.metaKey || e.ctrlKey || e.altKey) return
-      if (e.key === 'Escape' && triageOpen) {
-        setTriageOpen(false)
-        return
-      }
-      // The settings modal owns Escape while it is open, and a shortcut that
-      // opened a second dialog on top of it would leave two modals up.
-      if (triageOpen || settingsOpen || isTyping(e.target)) return
+      // The settings modal owns the keyboard while it is open.
+      if (settingsOpen || isTyping(e.target)) return
       if (e.key === 'n') {
         e.preventDefault()
-        openTriage()
+        if (state.workspaces.length === 0) {
+          store.toast('Add a workspace before starting a run.', 'error')
+          return
+        }
+        navigate({ name: 'new' })
         return
       }
       if (e.key === '/' && shown.name === 'board') {
@@ -160,19 +169,40 @@ function Shell(): JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [openTriage, shown.name, triageOpen, settingsOpen])
+  }, [navigate, shown.name, settingsOpen, state.workspaces.length, store])
 
   // Every start goes through the store, which keeps the job id the run detail
   // screen's Cancel button needs. A start that fails rejects as well as
   // toasting, so the form that asked can show the reason beside its button;
   // the two call sites with no form behind them swallow it here instead, and
   // the toast is what the reader sees.
-  const startRCA = useCallback((key: string, opts?: RCAOptions) => store.startRCA(key, opts), [
-    store,
-  ])
-  const startFix = useCallback((key: string, opts?: FixOptions) => store.startFix(key, opts), [
-    store,
-  ])
+  const startRCA = useCallback(
+    async (key: string, opts?: RCAOptions) => {
+      await store.startRCA(key, opts)
+    },
+    [store],
+  )
+  const startFix = useCallback(
+    async (key: string, opts?: FixOptions) => {
+      await store.startFix(key, opts)
+    },
+    [store],
+  )
+  // New session's Start: the mode picks the store method, and the job id
+  // comes back so the screen can open the run the job produces.
+  const startSession = useCallback(
+    (mode: SessionMode, key: string, o: StartOverrides) => {
+      switch (mode) {
+        case 'rca':
+          return store.startRCA(key, { provider: o.provider, model: o.model })
+        case 'fix':
+          return store.startFix(key, { provider: o.provider, model: o.model, dryRun: o.dryRun })
+        default:
+          return store.startTriage([key], { provider: o.provider, model: o.model, dryRun: o.dryRun })
+      }
+    },
+    [store],
+  )
   const startEval = useCallback(
     (keys?: string[], opts?: EvalOptions) => store.startEval(keys, opts),
     [store],
@@ -182,7 +212,16 @@ function Shell(): JSX.Element {
   let screen
   switch (shown.name) {
     case 'new':
-      screen = <NewSession />
+      screen = (
+        <NewSession
+          transport={state.transport}
+          workspaceId={workspaceId}
+          workspace={currentWorkspace}
+          runs={runs}
+          onStart={startSession}
+          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+        />
+      )
       break
     case 'run':
       screen = (
@@ -203,7 +242,13 @@ function Shell(): JSX.Element {
       )
       break
     case 'register':
-      screen = <Register transport={state.transport} workspaceId={workspaceId} />
+      screen = (
+        <Register
+          transport={state.transport}
+          workspaceId={workspaceId}
+          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+        />
+      )
       break
     case 'eval':
       screen = (
@@ -229,6 +274,9 @@ function Shell(): JSX.Element {
     default:
       screen = (
         <Board
+          transport={state.transport}
+          workspaceId={workspaceId}
+          provider={currentWorkspace?.provider}
           tickets={tickets}
           runs={runs}
           queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
@@ -280,12 +328,6 @@ function Shell(): JSX.Element {
         currentWorkspaceId={workspaceId}
         onClose={closeSettings}
         onWorkspacesChanged={() => void store.refresh()}
-      />
-      <NewTriageDialog
-        open={triageOpen}
-        defaultProvider={currentWorkspace?.provider}
-        onClose={() => setTriageOpen(false)}
-        onSubmit={(keys, opts) => void store.startTriage(keys, opts).catch(reported)}
       />
       <Toasts toasts={state.toasts} onDismiss={dismissToast} />
     </div>

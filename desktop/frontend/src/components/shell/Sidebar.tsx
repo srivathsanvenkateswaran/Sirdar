@@ -239,18 +239,27 @@ export default function Sidebar(props: {
         }
         quotas={quota.length > 0 ? <QuotaMeter quota={quota} /> : undefined}
         action={
-          /*
-           * A screen that publishes its own commit action draws it in its
-           * page head, so New session steps down to a secondary button while
-           * that screen is up: one filled button per screen, and it is the
-           * one that spends the provider.
-           */
-          <Button
-            variant={primary ? 'secondary' : 'primary'}
-            onClick={() => onNavigate({ name: 'new' })}
-          >
-            New session
-          </Button>
+          primary && primary.placement !== 'screen' ? (
+            <Button
+              variant="primary"
+              busy={primary.busy}
+              shortcut={primary.shortcut}
+              disabled={primary.disabled}
+              title={primary.title}
+              onClick={primary.onRun}
+            >
+              {primary.label}
+            </Button>
+          ) : (
+            // Demoted to the bordered style while a screen draws its own
+            // filled button, so the window never has two.
+            <Button
+              variant={primary ? 'secondary' : 'primary'}
+              onClick={() => onNavigate({ name: 'new' })}
+            >
+              New session
+            </Button>
+          )
         }
       />
     </div>

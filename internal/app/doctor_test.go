@@ -245,6 +245,33 @@ func TestEveryDoctorRowCarriesALevel(t *testing.T) {
 	}
 }
 
+// TestDoctorReportsTheDisabledAgyProvider covers the report an operator
+// whose workspace still says `provider: agy` runs to find out what is
+// wrong: one row naming the provider and the reason, in place of the
+// binary, model and permission rows of a provider no run will reach.
+func TestDoctorReportsTheDisabledAgyProvider(t *testing.T) {
+	cfg := &config.Config{Root: t.TempDir(), Provider: "agy"}
+	rows := providerChecks(context.Background(), cfg)
+	if len(rows) != 1 {
+		t.Fatalf("provider rows = %+v, want exactly one", rows)
+	}
+	if rows[0].Name != "agy" || rows[0].Detail != "disabled (Antigravity terms)" {
+		t.Fatalf("row = %+v, want agy — disabled (Antigravity terms)", rows[0])
+	}
+	if rows[0].OK {
+		t.Fatal("the disabled row is OK; a workspace naming it cannot run")
+	}
+
+	// The acknowledgement brings the ordinary report back, which is what
+	// makes the row a statement about the refusal and not about the
+	// adapter, still in the tree and still working.
+	cfg.Agy = &config.AgyConfig{AcknowledgeTerms: true}
+	acked := providerChecks(context.Background(), cfg)
+	if len(acked) == 1 && acked[0].Detail == "disabled (Antigravity terms)" {
+		t.Fatal("the acknowledged workspace still reports the provider disabled")
+	}
+}
+
 // TestDoctorReportsTheMCPRow proves the row reaches the report both shells
 // print, not just the helper.
 func TestDoctorReportsTheMCPRow(t *testing.T) {
