@@ -1,14 +1,6 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type JSX,
-} from 'react'
-import type { FixStart, NoteKind, RunDetail, RunDiff, Transport } from '../api/types'
-import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type JSX } from 'react'
+import type { FixStart, NoteKind, RunDiff, Transport } from '../api/types'
+import { askedQuestion, elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
@@ -18,6 +10,7 @@ import Composer, { type ComposerMode } from '../components/run/Composer'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
 import ToolsPane, { toolCount } from '../components/run/ToolsPane'
+import { LIVE, TERMINAL, useRunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
@@ -40,15 +33,6 @@ function useRunJob(runId: string): string | undefined {
 }
 
 type Tab = 'changes' | 'note' | 'bundle' | 'tools'
-
-const LIVE = new Set(['preparing', 'running'])
-
-/**
- * The states a run does not come back from. `blocked` is not one of them: it
- * is waiting for an answer and resumes into `running`, so Cancel stays on
- * offer there and the artefacts are not asked for again.
- */
-const TERMINAL = new Set(['completed', 'failed', 'over_budget'])
 
 /** Keys typed into a field belong to that field, not to the window. */
 function isTyping(target: EventTarget | null): boolean {
@@ -80,9 +64,11 @@ export default function Session(props: {
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
 }): JSX.Element {
   const { transport, workspaceId, runId, title, onBack, onOpenReview, onStartFix } = props
-  const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [loadError, setLoadError] = useState('')
-  const [events, setEvents] = useState<IndexedEvent[]>([])
+  const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(
+    transport,
+    workspaceId,
+    runId,
+  )
   const [tab, setTab] = useState<Tab | null>(null)
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
@@ -92,112 +78,19 @@ export default function Session(props: {
   const [sent, setSent] = useState(0)
   const [changed, setChanged] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  /** Bumped when the run finishes, to re-ask for artefacts written at the end. */
-  const [artefacts, setArtefacts] = useState(0)
-  const seen = useRef<Set<number>>(new Set())
-  /** The status of the previous render, for spotting the run finishing. */
-  const wasStatus = useRef('')
   const jobId = useRunJob(runId)
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
   const terminal = TERMINAL.has(status)
 
-  // Subscribe before backfilling so nothing written between the two is lost;
-  // the index dedupe absorbs whatever the two deliveries have in common.
+  // What this screen holds about a run is about that run alone.
   useEffect(() => {
-    let cancelled = false
-    seen.current = new Set()
-    wasStatus.current = ''
-    setDetail(null)
-    setEvents([])
-    setLoadError('')
     setActionError('')
     setSteerRefusal('')
     setTab(null)
     setChanged(null)
-
-    const append = (index: number, event: IndexedEvent['event']) => {
-      if (seen.current.has(index)) return
-      seen.current.add(index)
-      setEvents((prev) => [...prev, { index, event }].sort((a, b) => a.index - b.index))
-    }
-
-    const unsubscribe = transport.subscribe((e) => {
-      if (cancelled) return
-      if (e.kind === 'run.event') {
-        if (e.runId !== runId) return
-        if (e.workspaceId && e.workspaceId !== workspaceId) return
-        append(e.index, e.event)
-        return
-      }
-      if (e.kind === 'run.updated' && e.run?.runId === runId) {
-        setDetail((prev) => (prev ? { ...prev, ...e.run } : prev))
-      }
-    })
-
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(reasonOf(err))
-      })
-
-    transport
-      .events(workspaceId, runId, 0)
-      .then(({ events: backfill, next }) => {
-        if (cancelled) return
-        // The watcher and Service.Events both number events from 1, and
-        // `next` is the index of the last line in this page. Numbering the
-        // backfill from zero would leave the last line sharing no index with
-        // the live event that repeats it, and the stream would show it twice.
-        const first = Math.max(1, next - backfill.length + 1)
-        backfill.forEach((event, i) => append(first + i, event))
-      })
-      .catch(() => {
-        // The detail request already reports an unreadable run; an empty event
-        // log is normal for one that has not written a line yet.
-      })
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [transport, workspaceId, runId])
-
-  /*
-   * A run opened while it was still working keeps whatever it had at the time.
-   * The note, the fix result and the rest of state.json are written as the run
-   * finishes, so a screen that only asked on mount went on saying "No note yet"
-   * for a run that had one, and the reader had to leave and come back.
-   *
-   * `run.updated` patches the status into `detail` as the store sees it move,
-   * so the moment it turns terminal is visible here: ask for the run again,
-   * and bump the counter the artefact panes read so they ask too.
-   */
-  useEffect(() => {
-    const before = wasStatus.current
-    wasStatus.current = status
-    if (!LIVE.has(before) || !TERMINAL.has(status)) return
-
-    let cancelled = false
-    setArtefacts((n) => n + 1)
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch(() => {
-        // The header already carries the finished status from the event; a
-        // re-read that fails leaves the screen as it was rather than blanking
-        // a run the reader is looking at.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [status, transport, workspaceId, runId])
+  }, [runId])
 
   // A refusal is about the run as it was; once the run moves it no longer holds.
   useEffect(() => {
@@ -504,7 +397,7 @@ export default function Session(props: {
               runId={runId}
               checks={checks}
               fix={detail.fix}
-              reload={artefacts}
+              reload={finished}
               onLoaded={onDiffLoaded}
               onOpenReview={onOpenReview}
               onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
@@ -518,7 +411,7 @@ export default function Session(props: {
               workspaceId={workspaceId}
               runId={runId}
               kinds={noteKinds}
-              reload={artefacts}
+              reload={finished}
             />
           ) : null}
           {shownTab === 'bundle' ? (
