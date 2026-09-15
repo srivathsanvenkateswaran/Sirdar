@@ -394,7 +394,12 @@ func builtinEndpoint(sc *config.SourceConfig) string {
 	case "linear":
 		return linear.DefaultEndpoint
 	case "servicenow":
-		return servicenow.ResolveBaseURL(sc.Instance, sc.BaseURL)
+		// A doctor row is display only: an instance invalid enough that
+		// ResolveBaseURL refuses it is reported as configured-but-empty
+		// here, and New — called when the client is actually built —
+		// is what surfaces the real error.
+		base, _ := servicenow.ResolveBaseURL(sc.Instance, sc.BaseURL)
+		return base
 	case "rally":
 		if sc.BaseURL == "" {
 			return config.RallyDefaultBaseURL
@@ -542,6 +547,7 @@ func newServiceNow(sc *config.SourceConfig, creds config.Resolver, hc *http.Clie
 		Username:   sc.Username,
 		Password:   password,
 		OAuthToken: oauthToken,
+		DateFormat: sc.DateFormat,
 	}, hc)
 }
 

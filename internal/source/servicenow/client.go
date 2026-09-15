@@ -29,7 +29,9 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -63,6 +65,12 @@ const maxJSONBody = 8 << 20
 // per-instance by the customer's own admin, so there is no published
 // number to reason about — only the header the instance sends.
 const maxRetryAfter = httpx.MaxRetryAfter
+
+// maxSweepRetryWait bounds the total time one paginated sweep (List,
+// journalEntries or attachmentRefs) spends waiting out 429s across every
+// page it reads — see retryBudget. It is a var so a test can shrink it
+// rather than waiting out 90 real seconds.
+var maxSweepRetryWait = 90 * time.Second
 
 // maxRedirects bounds how far a same-host redirect chain is followed
 // before a request is abandoned.
@@ -120,6 +128,15 @@ type Config struct {
 	// OAuthToken is an OAuth 2.0 access token, sent as a bearer header.
 	// It is the alternative to Username/Password, never a companion to it.
 	OAuthToken string
+
+	// DateFormat resolves the one ambiguity a display-value timestamp can
+	// carry: a dashed date like "03-04-2024" reads as either the 3rd of
+	// April or the 4th of March, and only the operator knows which their
+	// instance means. Empty (the default) reads only the unambiguous
+	// layouts — ISO's yyyy-first order needs no guess — so a dashed date
+	// simply will not parse until this names DateFormatMDY or
+	// DateFormatDMY.
+	DateFormat string
 }
 
 // Client talks to one ServiceNow instance. It implements source.Helpdesk
@@ -144,6 +161,53 @@ type Client struct {
 	// the id it was called with ("" for List, which is about no one
 	// ticket).
 	warnings httpx.Warnings
+
+	// dateFormat is DateFormatMDY, DateFormatDMY or "" (unambiguous
+	// layouts only) — see Config.DateFormat.
+	dateFormat string
+
+	// records caches fetchRecord's result per input id for this client's
+	// lifetime — see fetchRecord.
+	records recordCache
+}
+
+// maxCachedRecords bounds recordCache so a long triage run over many
+// distinct tickets cannot grow it without limit; a run over that many
+// tickets simply re-fetches the oldest ones, the same cost paid before
+// caching existed.
+const maxCachedRecords = 256
+
+// recordCache is fetchRecord's per-client cache, keyed by the exact id
+// string the caller passed in. Safe for concurrent use, since nothing else
+// here promises a client is used from one goroutine at a time.
+type recordCache struct {
+	mu    sync.Mutex
+	order []string
+	m     map[string]record
+}
+
+func (c *recordCache) get(id string) (record, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	rec, ok := c.m[id]
+	return rec, ok
+}
+
+func (c *recordCache) put(id string, rec record) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.m == nil {
+		c.m = map[string]record{}
+	}
+	if _, exists := c.m[id]; !exists {
+		if len(c.order) >= maxCachedRecords {
+			evict := c.order[0]
+			c.order = c.order[1:]
+			delete(c.m, evict)
+		}
+		c.order = append(c.order, id)
+	}
+	c.m[id] = rec
 }
 
 var (
@@ -153,25 +217,74 @@ var (
 	_ source.Warner   = trackerView{}
 )
 
+// bareInstancePattern is what an instance name given without a host or a
+// scheme must match: letters, digits and hyphens only. It is what stops
+// "acme/x" from being read as a path and silently glued onto the
+// service-now.com suffix as "https://acme/x.service-now.com" — a request
+// that would carry the live credential to a host named "acme".
+var bareInstancePattern = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9-]*$`)
+
 // ResolveBaseURL returns the request target for an instance name and an
 // optional override, so the wiring layer and doctor can name the endpoint
 // without building a client. An instance given as a bare name gets the
-// service-now.com host; one given as a host is used as it stands.
-func ResolveBaseURL(instance, baseURL string) string {
+// service-now.com host; one given as a host or a full URL is validated as
+// one.
+//
+// Every credentialed request this adapter makes goes to exactly the host
+// this returns, so the validation here is what stands between a
+// misconfigured instance and a leaked Authorization header: userinfo in
+// the resolved URL ("acme.service-now.com@evil.com" resolves to host
+// evil.com with "acme.service-now.com" read as a username), a path, a
+// query or a fragment, or a scheme other than https, are all rejected
+// rather than silently carried into the request target.
+func ResolveBaseURL(instance, baseURL string) (string, error) {
 	if b := strings.TrimRight(strings.TrimSpace(baseURL), "/"); b != "" {
-		return b
+		return validateBaseURL(b)
 	}
 	name := strings.TrimRight(strings.TrimSpace(instance), "/")
 	if name == "" {
-		return ""
+		return "", nil
 	}
 	if strings.Contains(name, "://") {
-		return name
+		return validateBaseURL(name)
 	}
 	if strings.Contains(name, ".") {
-		return "https://" + name
+		return validateBaseURL("https://" + name)
 	}
-	return "https://" + name + instanceSuffix
+	if !bareInstancePattern.MatchString(name) {
+		return "", fmt.Errorf("servicenow: invalid instance %q: must be a bare name (letters, digits, hyphens), a host, or a full https URL", name)
+	}
+	return "https://" + name + instanceSuffix, nil
+}
+
+// validateBaseURL parses raw and rejects everything about it except a bare
+// https://host — no userinfo, no path beyond "/", no query, no fragment.
+// It returns the URL rebuilt from its own scheme and host, so nothing
+// about the input's formatting survives into the request target.
+func validateBaseURL(raw string) (string, error) {
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("servicenow: invalid base URL %q: %w", raw, err)
+	}
+	if u.Host == "" {
+		return "", fmt.Errorf("servicenow: base URL %q has no host", raw)
+	}
+	if !strings.EqualFold(u.Scheme, "https") {
+		return "", fmt.Errorf("servicenow: base URL %q must use https", raw)
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("servicenow: base URL %q must not carry a username or password", raw)
+	}
+	if u.Path != "" && u.Path != "/" {
+		return "", fmt.Errorf("servicenow: base URL %q must not carry a path", raw)
+	}
+	if u.RawQuery != "" {
+		return "", fmt.Errorf("servicenow: base URL %q must not carry a query", raw)
+	}
+	if u.Fragment != "" {
+		return "", fmt.Errorf("servicenow: base URL %q must not carry a fragment", raw)
+	}
+	return "https://" + u.Host, nil
 }
 
 // New validates cfg and returns a Client. hc may be nil, in which case a
@@ -188,13 +301,23 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		return nil, &source.Error{Code: source.Auth, Message: "servicenow: no credentials configured: set username and password, or oauthToken"}
 	}
 
-	base := ResolveBaseURL(cfg.Instance, cfg.BaseURL)
+	base, rerr := ResolveBaseURL(cfg.Instance, cfg.BaseURL)
+	if rerr != nil {
+		return nil, &source.Error{Code: source.Internal, Message: rerr.Error()}
+	}
 	if base == "" {
 		return nil, &source.Error{Code: source.Internal, Message: "servicenow: instance is required"}
 	}
 	trust, terr := httpx.NewTrust(base)
 	if terr != nil {
 		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("servicenow: invalid instance %q", firstNonEmpty(cfg.BaseURL, cfg.Instance))}
+	}
+
+	dateFormat := strings.ToLower(strings.TrimSpace(cfg.DateFormat))
+	switch dateFormat {
+	case "", DateFormatMDY, DateFormatDMY:
+	default:
+		return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("servicenow: dateFormat must be %q or %q, got %q", DateFormatMDY, DateFormatDMY, cfg.DateFormat)}
 	}
 
 	client := hc
@@ -210,7 +333,8 @@ func New(cfg Config, hc *http.Client) (*Client, error) {
 		// so a response that tries to redirect any of them — an attachment
 		// download as much as a table read carrying the live Authorization
 		// header — off the instance host is refused uniformly.
-		hc: httpx.Client(client, trust, maxRedirects),
+		hc:         httpx.Client(client, trust, maxRedirects),
+		dateFormat: dateFormat,
 	}
 	if bearer {
 		c.authHeader = "Bearer " + cfg.OAuthToken
@@ -271,7 +395,7 @@ func (c *Client) Ping(ctx context.Context) error {
 	q.Set("sysparm_limit", "1")
 	q.Set("sysparm_fields", "sys_id")
 	var out tableResponse
-	return c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &out)
+	return c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &out, nil)
 }
 
 // tableResponse is the Table API's envelope: everything comes back under
@@ -286,9 +410,37 @@ type singleResponse struct {
 	Result record `json:"result"`
 }
 
+// retryBudget bounds how long one paginated sweep — List, journalEntries
+// or attachmentRefs — spends waiting out 429s in total, across every page.
+// Each individual wait is already capped at maxRetryAfter by doRaw, but
+// that is a per-page cap: without a sweep-wide budget too, an instance
+// that 429s every page could still hold a 20-page sweep for pages times
+// maxRetryAfter — ten minutes, for the page cap this adapter uses.
+// nil means no sweep budget, which is doRaw's original behaviour: Ping and
+// a single record lookup are not sweeps and keep it.
+type retryBudget struct{ remaining time.Duration }
+
+// newRetryBudget starts a budget with d to spend across an entire sweep.
+func newRetryBudget(d time.Duration) *retryBudget { return &retryBudget{remaining: d} }
+
+// take reports whether d may be spent from the budget, deducting it when
+// it may. A nil budget always allows it, preserving doRaw's behaviour for
+// a caller that passed none.
+func (b *retryBudget) take(d time.Duration) bool {
+	if b == nil {
+		return true
+	}
+	if d > b.remaining {
+		return false
+	}
+	b.remaining -= d
+	return true
+}
+
 // get issues one authenticated GET and decodes a 2xx JSON body into out.
-func (c *Client) get(ctx context.Context, path string, query url.Values, out any) error {
-	raw, err := c.doRaw(ctx, path, query)
+// budget may be nil for a call that is not part of a paginated sweep.
+func (c *Client) get(ctx context.Context, path string, query url.Values, out any, budget *retryBudget) error {
+	raw, err := c.doRaw(ctx, path, query, budget)
 	if err != nil {
 		return err
 	}
@@ -303,8 +455,9 @@ func (c *Client) get(ctx context.Context, path string, query url.Values, out any
 
 // doRaw issues one authenticated GET against path, retrying exactly once
 // when the instance answers 429 with a Retry-After short enough to wait
-// out.
-func (c *Client) doRaw(ctx context.Context, path string, query url.Values) ([]byte, error) {
+// out — and, when budget is non-nil, short enough that the sweep has not
+// already spent its total allowance on earlier pages.
+func (c *Client) doRaw(ctx context.Context, path string, query url.Values, budget *retryBudget) ([]byte, error) {
 	u := c.baseURL + path
 	if len(query) > 0 {
 		u += "?" + query.Encode()
@@ -329,7 +482,7 @@ func (c *Client) doRaw(ctx context.Context, path string, query url.Values) ([]by
 		resp.Body.Close()
 
 		if resp.StatusCode == http.StatusTooManyRequests && attempt == 0 {
-			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok {
+			if d, ok := httpx.RetryAfter(resp.Header, maxRetryAfter); ok && budget.take(d) {
 				if err := httpx.SleepCtx(ctx, d); err != nil {
 					return nil, &source.Error{Code: source.Internal, Message: fmt.Sprintf("servicenow: GET %s: %v", path, err)}
 				}
@@ -423,15 +576,30 @@ func isSysID(id string) bool {
 }
 
 // fetchRecord resolves an id — a sys_id or a record number, whichever the
-// operator has to hand — to the record itself.
+// operator has to hand — to the record itself, caching the result for the
+// client's lifetime: Get, Threads and Attachments are called one after
+// another for the same ticket, and without this each one would re-fetch
+// the identical record from the Table API.
 func (c *Client) fetchRecord(ctx context.Context, id string) (record, error) {
 	id = strings.TrimSpace(id)
 	if id == "" {
 		return nil, &source.Error{Code: source.NotFound, Message: "servicenow: empty record id"}
 	}
+	if rec, ok := c.records.get(id); ok {
+		return rec, nil
+	}
+	rec, err := c.fetchRecordUncached(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	c.records.put(id, rec)
+	return rec, nil
+}
+
+func (c *Client) fetchRecordUncached(ctx context.Context, id string) (record, error) {
 	if isSysID(id) {
 		var resp singleResponse
-		if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table)+"/"+url.PathEscape(id), recordParams(), &resp); err != nil {
+		if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table)+"/"+url.PathEscape(id), recordParams(), &resp, nil); err != nil {
 			return nil, err
 		}
 		if len(resp.Result) == 0 {
@@ -440,11 +608,21 @@ func (c *Client) fetchRecord(ctx context.Context, id string) (record, error) {
 		return resp.Result, nil
 	}
 
+	// A record number is looked up by an exact-match encoded query rather
+	// than fetched by path, so it cannot be allowed to carry the query's
+	// own control characters: silently stripping "^" or "," the way a list
+	// filter's value is stripped would risk matching a record other than
+	// the one the caller asked for, under the id they typed. Rejecting is
+	// the only answer that cannot return the wrong ticket's data.
+	if i := strings.IndexAny(id, "^,"); i >= 0 {
+		return nil, &source.Error{Code: source.NotFound, Message: fmt.Sprintf("servicenow: record id contains the invalid character %q", id[i])}
+	}
+
 	q := recordParams()
-	q.Set("sysparm_query", "number="+encodedValue(id))
+	q.Set("sysparm_query", "number="+id)
 	q.Set("sysparm_limit", "1")
 	var resp tableResponse
-	if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &resp); err != nil {
+	if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &resp, nil); err != nil {
 		return nil, err
 	}
 	if len(resp.Result) == 0 {

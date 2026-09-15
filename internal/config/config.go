@@ -80,6 +80,11 @@ type SourceConfig struct {
 	Table    string `yaml:"table,omitempty"`    // default "incident"
 	Username string `yaml:"username,omitempty"` // literal login name, not a credential ref
 	Password string `yaml:"password,omitempty"` // credential ref
+	// DateFormat resolves a dashed display-value timestamp's month/day
+	// ambiguity: "mdy" or "dmy". Empty (the default) parses only the
+	// unambiguous layouts, so a dashed date simply will not parse until
+	// this names one.
+	DateFormat string `yaml:"dateFormat,omitempty"`
 
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
@@ -937,6 +942,11 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 			return fmt.Errorf("config: %s: both username and password are required for basic auth", prefix)
 		case !basic && !bearer:
 			return fmt.Errorf("config: %s: one of username + password or oauthToken is required for adapter servicenow", prefix)
+		}
+		switch strings.ToLower(strings.TrimSpace(s.DateFormat)) {
+		case "", "mdy", "dmy":
+		default:
+			return fmt.Errorf("config: %s.dateFormat: must be mdy or dmy, got %q", prefix, s.DateFormat)
 		}
 	case "jira":
 		if s.BaseURL == "" {

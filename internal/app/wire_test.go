@@ -362,13 +362,18 @@ func TestNewBuiltinServiceNowBothAuthModes(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			var mu sync.Mutex
 			var gotAuth, gotPath string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// servicenow.New refuses a non-https base URL, so the double
+			// is a TLS server; the built-in client trusts it through
+			// http.DefaultTransport, which newBuiltinHelpdesk's own
+			// *http.Client picks up implicitly.
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				mu.Lock()
 				gotAuth, gotPath = r.Header.Get("Authorization"), r.URL.Path
 				mu.Unlock()
 				w.Write([]byte(`{"result":[]}`))
 			}))
 			defer srv.Close()
+			withDefaultTransport(t, srv.Client().Transport)
 
 			sc := serviceNowSource(srv.URL, tt.bearer)
 			hd, err := newBuiltinHelpdesk(sc, envResolver(builtinCreds))

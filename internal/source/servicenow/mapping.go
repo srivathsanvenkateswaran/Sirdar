@@ -11,6 +11,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/htmltext"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/source/httpx"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
@@ -50,34 +51,92 @@ func (r record) str(key string) string {
 	return strings.Trim(strings.TrimSpace(string(raw)), `"`)
 }
 
-// timeLayouts covers the timestamp formats a ServiceNow instance serves.
-// The first is the platform's own "yyyy-MM-dd HH:mm:ss"; the RFC 3339
-// variants cover a proxy or a scoped API that answers in the web format.
-var timeLayouts = []string{
+// baseTimeLayouts are the timestamp formats a ServiceNow instance serves
+// that need no guess about which of two numbers is the month: the
+// platform's own "yyyy-MM-dd HH:mm:ss", the RFC 3339 variants a proxy or a
+// scoped API might answer in, the plain "yyyy/MM/dd" date some list views
+// render, and "dd.MM.yyyy HH:mm:ss" — the dotted form is day-first
+// everywhere it is used, so it carries no ambiguity to resolve.
+var baseTimeLayouts = []string{
 	"2006-01-02 15:04:05",
 	"2006-01-02T15:04:05Z07:00",
 	time.RFC3339Nano,
 	time.RFC3339,
+	"2006/01/02",
+	"02.01.2006 15:04:05",
 }
 
-// parseTime reads a ServiceNow timestamp, yielding the zero time for an
-// empty or unrecognised value rather than failing a whole ticket over a
-// date. A naive timestamp is read as UTC: with
-// sysparm_display_value=true the instance renders it in the integration
-// user's display timezone and names no offset, so an instance whose
-// integration user is not on UTC will be off by that offset — which is why
-// the adapter docs ask for a UTC integration user.
-func parseTime(s string) time.Time {
+// DateFormat values pick the one ambiguous layout to add to the search: a
+// dashed "03-04-2024 10:00:00" is the 3rd of April read one way and the
+// 4th of March the other, and no amount of layout-guessing settles that —
+// only the operator, who knows how their instance is configured, can. Left
+// unset (the default), the adapter reads only the unambiguous layouts
+// above, which is what "default ISO" means in practice: a dashed
+// month/day-first timestamp simply will not parse until dateFormat names
+// which reading to use.
+const (
+	DateFormatMDY = "mdy" // MM-dd-yyyy HH:mm:ss
+	DateFormatDMY = "dmy" // dd-MM-yyyy HH:mm:ss
+)
+
+// timeLayouts returns the layouts this client tries, in order, for its
+// configured dateFormat.
+func (c *Client) timeLayouts() []string {
+	switch c.dateFormat {
+	case DateFormatMDY:
+		return append(append([]string{}, baseTimeLayouts...), "01-02-2006 15:04:05")
+	case DateFormatDMY:
+		return append(append([]string{}, baseTimeLayouts...), "02-01-2006 15:04:05")
+	default:
+		return baseTimeLayouts
+	}
+}
+
+// timeParser reads every timestamp on the record(s) behind one Get,
+// Threads or List call. A non-empty value that fails to match any
+// configured layout is not worth a warning per field — a record with three
+// stale timestamps, or a List page of two hundred records from a
+// misconfigured instance, would drown the bundle in copies of the same
+// complaint — so only the first offender is kept, and the caller turns it
+// into one warning at the end of the call.
+type timeParser struct {
+	c      *Client
+	failed string // first raw value that matched no layout, "" if none yet
+}
+
+func (c *Client) newTimeParser() *timeParser { return &timeParser{c: c} }
+
+// parse reads one timestamp, yielding the zero time for an empty or
+// unrecognised value rather than failing a whole ticket over a date. A
+// naive timestamp is read as UTC: with sysparm_display_value=true the
+// instance renders it in the integration user's display timezone and
+// names no offset, so an instance whose integration user is not on UTC
+// will be off by that offset — which is why the adapter docs ask for a
+// UTC integration user.
+func (p *timeParser) parse(s string) time.Time {
 	s = strings.TrimSpace(s)
 	if s == "" {
 		return time.Time{}
 	}
-	for _, layout := range timeLayouts {
+	for _, layout := range p.c.timeLayouts() {
 		if t, err := time.Parse(layout, s); err == nil {
 			return t.UTC()
 		}
 	}
+	if p.failed == "" {
+		p.failed = s
+	}
 	return time.Time{}
+}
+
+// warn appends the one warning this parser earned, if any, to warnings.
+func (p *timeParser) warn(warnings *[]string) {
+	if p.failed == "" {
+		return
+	}
+	*warnings = append(*warnings, fmt.Sprintf(
+		"servicenow: timestamp %q did not match a configured date layout and was left unset; set dateFormat (mdy or dmy) if this instance renders MM-dd-yyyy or dd-MM-yyyy dates",
+		p.failed))
 }
 
 // asText renders a field that may carry HTML. A journal entry is normally
@@ -127,10 +186,15 @@ func (c *Client) Get(ctx context.Context, id string) (ticket.HelpdeskTicket, err
 	if err != nil {
 		return ticket.HelpdeskTicket{}, err
 	}
-	return c.mapHelpdesk(rec), nil
+	tp := c.newTimeParser()
+	t := c.mapHelpdesk(rec, tp)
+	var warnings []string
+	tp.warn(&warnings)
+	c.addWarnings(id, warnings)
+	return t, nil
 }
 
-func (c *Client) mapHelpdesk(r record) ticket.HelpdeskTicket {
+func (c *Client) mapHelpdesk(r record, tp *timeParser) ticket.HelpdeskTicket {
 	sysID := r.str("sys_id")
 	return ticket.HelpdeskTicket{
 		ID:       firstNonEmpty(r.str("number"), sysID),
@@ -147,8 +211,8 @@ func (c *Client) mapHelpdesk(r record) ticket.HelpdeskTicket {
 		// rather than repeating the name as if it were an identifier.
 		CustomerID: r.str("company.sys_id"),
 		URL:        c.recordURL(sysID),
-		CreatedAt:  parseTime(firstNonEmpty(r.str("opened_at"), r.str("sys_created_on"))),
-		UpdatedAt:  parseTime(r.str("sys_updated_on")),
+		CreatedAt:  tp.parse(firstNonEmpty(r.str("opened_at"), r.str("sys_created_on"))),
+		UpdatedAt:  tp.parse(r.str("sys_updated_on")),
 		Fields:     fieldsOf(r),
 	}
 }
@@ -160,10 +224,15 @@ func (c *Client) getTracker(ctx context.Context, key string) (ticket.TrackerTick
 	if err != nil {
 		return ticket.TrackerTicket{}, err
 	}
-	return c.mapTracker(rec), nil
+	tp := c.newTimeParser()
+	t := c.mapTracker(rec, tp)
+	var warnings []string
+	tp.warn(&warnings)
+	c.addWarnings(key, warnings)
+	return t, nil
 }
 
-func (c *Client) mapTracker(r record) ticket.TrackerTicket {
+func (c *Client) mapTracker(r record, tp *timeParser) ticket.TrackerTicket {
 	sysID := r.str("sys_id")
 	return ticket.TrackerTicket{
 		Key:         firstNonEmpty(r.str("number"), sysID),
@@ -179,8 +248,8 @@ func (c *Client) mapTracker(r record) ticket.TrackerTicket {
 		// sources.helpdesk still gets the conversation, because the wiring
 		// layer picks up this client's helpdesk view for the same id.
 		HelpdeskRef: firstNonEmpty(r.str("number"), sysID),
-		CreatedAt:   parseTime(firstNonEmpty(r.str("opened_at"), r.str("sys_created_on"))),
-		UpdatedAt:   parseTime(r.str("sys_updated_on")),
+		CreatedAt:   tp.parse(firstNonEmpty(r.str("opened_at"), r.str("sys_created_on"))),
+		UpdatedAt:   tp.parse(r.str("sys_updated_on")),
 		Fields:      fieldsOf(r),
 	}
 }
@@ -237,6 +306,7 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 
 	caller := rec.str("caller_id")
 	callerUser := rec.str("caller_id.user_name")
+	tp := c.newTimeParser()
 
 	msgs := make(ticket.Thread, 0, len(entries)+1)
 	if body := asText(firstNonEmpty(rec.str("description"), rec.str("short_description"))); strings.TrimSpace(body) != "" {
@@ -248,7 +318,7 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 			role = ticket.RoleCustomer
 		}
 		msgs = append(msgs, ticket.Message{
-			At:     parseTime(firstNonEmpty(rec.str("opened_at"), rec.str("sys_created_on"))),
+			At:     tp.parse(firstNonEmpty(rec.str("opened_at"), rec.str("sys_created_on"))),
 			Author: author,
 			Role:   role,
 			Text:   body,
@@ -260,7 +330,12 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 		if strings.TrimSpace(text) == "" {
 			continue
 		}
-		author := e.createdBy
+		// A work note with no sys_created_by (a scripted entry, or a
+		// field this instance will not serve) still needs an author: the
+		// note template has no blank-author case, and " (internal)" on
+		// its own reads as a rendering bug rather than an anonymous
+		// internal note.
+		author := firstNonEmpty(e.createdBy, "agent")
 		role := ticket.RoleAgent
 		if e.element == fieldWorkNotes {
 			author += " (internal)"
@@ -268,13 +343,14 @@ func (c *Client) Threads(ctx context.Context, id string) (ticket.Thread, error) 
 			role = ticket.RoleCustomer
 		}
 		msgs = append(msgs, ticket.Message{
-			At:     parseTime(e.createdOn),
+			At:     tp.parse(e.createdOn),
 			Author: author,
 			Role:   role,
 			Text:   text,
 		})
 	}
 
+	tp.warn(&warnings)
 	c.addWarnings(id, warnings)
 	return msgs, nil
 }
@@ -302,6 +378,7 @@ func (c *Client) journalEntries(ctx context.Context, sysID string, warnings *[]s
 		return nil, nil
 	}
 	var out []journalEntry
+	budget := newRetryBudget(maxSweepRetryWait)
 	offset := 0
 	for page := 0; ; page++ {
 		if page >= maxJournalPages {
@@ -317,7 +394,7 @@ func (c *Client) journalEntries(ctx context.Context, sysID string, warnings *[]s
 		q.Set("sysparm_offset", strconv.Itoa(offset))
 
 		var resp tableResponse
-		if err := c.get(ctx, "/api/now/table/"+journalTable, q, &resp); err != nil {
+		if err := c.get(ctx, "/api/now/table/"+journalTable, q, &resp, budget); err != nil {
 			if len(out) > 0 {
 				// Some of the feed is in hand; keep it and say so rather
 				// than throwing away what was read.
@@ -352,7 +429,7 @@ func (c *Client) list(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	// List is about no one ticket, so its warnings file under the empty
 	// key: WarningsFor("") is how a caller reads them back.
 	var warnings []string
-	limit, capped := limitOf(f.Limit)
+	limit, capped := httpx.Limit(f.Limit, defaultListResults, maxListResults)
 	if capped {
 		warnings = append(warnings, fmt.Sprintf("servicenow: list limit %d capped at %d", f.Limit, maxListResults))
 	}
@@ -363,25 +440,34 @@ func (c *Client) list(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	}
 
 	var out []ticket.TrackerTicket
+	tp := c.newTimeParser()
+	budget := newRetryBudget(maxSweepRetryWait)
 	offset := 0
 	for page := 0; len(out) < limit; page++ {
 		if page >= maxListPages {
 			warnings = append(warnings, fmt.Sprintf("servicenow: list stopped at the %d-page cap after %d records", maxListPages, len(out)))
 			break
 		}
-		want := pageSize(limit - len(out))
+		want := httpx.PageSize(limit-len(out), listPageSize)
 		q := recordParams()
 		q.Set("sysparm_query", query)
 		q.Set("sysparm_limit", strconv.Itoa(want))
 		q.Set("sysparm_offset", strconv.Itoa(offset))
 
 		var resp tableResponse
-		if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &resp); err != nil {
+		if err := c.get(ctx, "/api/now/table/"+url.PathEscape(c.table), q, &resp, budget); err != nil {
+			if len(out) > 0 {
+				// Some records are already in hand; keep them and say so
+				// rather than throwing away a whole page's worth of reads
+				// over a later page's rate limit.
+				warnings = append(warnings, fmt.Sprintf("servicenow: list page %d: %v", page+1, err))
+				break
+			}
 			c.addWarnings("", warnings)
 			return nil, err
 		}
 		for _, r := range resp.Result {
-			out = append(out, c.mapTracker(r))
+			out = append(out, c.mapTracker(r, tp))
 		}
 		// Offset pagination has no end-of-results signal of its own: a
 		// page shorter than the one asked for is the end.
@@ -393,28 +479,9 @@ func (c *Client) list(ctx context.Context, f source.ListFilter) ([]ticket.Tracke
 	if len(out) > limit {
 		out = out[:limit]
 	}
+	tp.warn(&warnings)
 	c.addWarnings("", warnings)
 	return out, nil
-}
-
-// limitOf applies the adapter contract's List bounds.
-func limitOf(requested int) (int, bool) {
-	if requested <= 0 {
-		return defaultListResults, false
-	}
-	if requested > maxListResults {
-		return maxListResults, true
-	}
-	return requested, false
-}
-
-// pageSize is how many records to ask for next: never more than the page
-// this adapter reads in, never more than the caller still wants.
-func pageSize(want int) int {
-	if want <= 0 || want > listPageSize {
-		return listPageSize
-	}
-	return want
 }
 
 // buildQuery turns a ListFilter into a ServiceNow encoded query. An unset

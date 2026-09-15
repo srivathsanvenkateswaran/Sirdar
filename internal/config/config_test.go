@@ -754,6 +754,13 @@ func TestValidateServiceNow(t *testing.T) {
 			block: "    adapter: servicenow\n    instance: acme\n    username: sirdar.integration\n    password: hunter2\n",
 			want:  "sources.helpdesk.password",
 		},
+		{name: "dateFormat mdy", block: basic + "    dateFormat: mdy\n"},
+		{name: "dateFormat dmy", block: basic + "    dateFormat: DMY\n"},
+		{
+			name:  "dateFormat unknown",
+			block: basic + "    dateFormat: ymd\n",
+			want:  "sources.helpdesk.dateFormat",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

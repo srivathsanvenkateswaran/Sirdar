@@ -66,11 +66,13 @@ func listEnvelope(t *testing.T, single []byte) []byte {
 	return out
 }
 
-// newTestClient starts a server and returns a client pointed at it with
-// basic auth.
+// newTestClient starts a TLS server — New refuses a non-https base URL,
+// same as it refuses one for a live instance — and returns a client
+// pointed at it with basic auth, using the server's own client so its
+// self-signed certificate is trusted.
 func newTestClient(t *testing.T, h http.HandlerFunc) (*Client, *httptest.Server) {
 	t.Helper()
-	srv := httptest.NewServer(h)
+	srv := httptest.NewTLSServer(h)
 	t.Cleanup(srv.Close)
 	c, err := New(Config{Instance: "acme", BaseURL: srv.URL, Username: testUser, Password: testPassword}, srv.Client())
 	if err != nil {
@@ -158,9 +160,56 @@ func TestResolveBaseURL(t *testing.T) {
 		{"https://acme.service-now.com", "", "https://acme.service-now.com"},
 	}
 	for _, tt := range tests {
-		if got := ResolveBaseURL(tt.instance, tt.base); got != tt.want {
+		got, err := ResolveBaseURL(tt.instance, tt.base)
+		if err != nil {
+			t.Errorf("ResolveBaseURL(%q, %q) unexpected error: %v", tt.instance, tt.base, err)
+			continue
+		}
+		if got != tt.want {
 			t.Errorf("ResolveBaseURL(%q, %q) = %q, want %q", tt.instance, tt.base, got, tt.want)
 		}
+	}
+}
+
+// TestResolveBaseURLRejectsHostileForms is the round-1 finding: every
+// credentialed request goes to exactly the host ResolveBaseURL names, so a
+// resolved URL carrying userinfo, a path, a query or a fragment, or a
+// non-bare instance name, must be refused rather than silently used —
+// otherwise "acme.service-now.com@evil.com" sends the live Authorization
+// header to evil.com, and "acme/x" glues a path onto the service-now.com
+// suffix as if it were a host.
+func TestResolveBaseURLRejectsHostileForms(t *testing.T) {
+	tests := []struct{ name, instance, base string }{
+		{"userinfo smuggles the credential to another host", "acme.service-now.com@evil.com", ""},
+		{"userinfo in an explicit scheme", "https://acme.service-now.com@evil.com", ""},
+		{"userinfo in a baseUrl override", "acme", "https://user:pass@proxy.example.com"},
+		{"bare instance carries a path separator", "acme/x", ""},
+		{"bare instance carries a colon", "acme:8443", ""},
+		{"resolved URL carries a path", "https://acme.service-now.com/api/now", ""},
+		{"baseUrl carries a path", "acme", "https://proxy.example.com/table"},
+		{"resolved URL carries a query", "https://acme.service-now.com?x=1", ""},
+		{"resolved URL carries a fragment", "https://acme.service-now.com#frag", ""},
+		{"non-https scheme", "http://acme.service-now.com", ""},
+		{"baseUrl is non-https", "acme", "http://proxy.example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ResolveBaseURL(tt.instance, tt.base)
+			if err == nil {
+				t.Fatalf("ResolveBaseURL(%q, %q) = %q, want an error", tt.instance, tt.base, got)
+			}
+		})
+	}
+}
+
+// TestNewRejectsHostileInstance proves the same protection holds where a
+// client is actually built, not only inside ResolveBaseURL's own tests:
+// New must refuse a credentialed client rather than build one that would
+// send the configured password to a host the operator did not name.
+func TestNewRejectsHostileInstance(t *testing.T) {
+	_, err := New(Config{Instance: "acme.service-now.com@evil.com", Username: testUser, Password: testPassword}, nil)
+	if err == nil {
+		t.Fatal("New with a userinfo-carrying instance must fail")
 	}
 }
 
@@ -177,7 +226,7 @@ func TestAuthHeaderReachesTheWire(t *testing.T) {
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			var got string
-			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				got = r.Header.Get("Authorization")
 				w.Write([]byte(`{"result":[]}`))
 			}))
@@ -281,6 +330,71 @@ func TestGetByNumberQueriesTheTable(t *testing.T) {
 	}
 }
 
+// TestGetByNumberRejectsInvalidCharacters is the round-1 finding at
+// client.go ~444: a record number carrying the encoded-query separator
+// "^" or the IN-list separator "," used to be silently stripped before the
+// lookup, which risks matching a different record than the one the caller
+// typed. It must be rejected instead, naming the character, and the
+// request must never reach the wire.
+func TestGetByNumberRejectsInvalidCharacters(t *testing.T) {
+	for _, tt := range []struct{ id, char string }{
+		{"INC001^activeSELECT=true", "'^'"},
+		{"INC001,INC002", "','"},
+	} {
+		t.Run(tt.id, func(t *testing.T) {
+			var called bool
+			c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+				called = true
+				w.Write([]byte(`{"result":[]}`))
+			})
+			_, err := c.Get(context.Background(), tt.id)
+			if err == nil {
+				t.Fatal("want an error for a record id carrying an encoded-query control character")
+			}
+			if !strings.Contains(err.Error(), tt.char) {
+				t.Errorf("error should name the invalid character %s: %v", tt.char, err)
+			}
+			if called {
+				t.Error("an invalid id must not reach the wire")
+			}
+		})
+	}
+}
+
+// TestFetchRecordIsCachedForTheClientsLifetime is the round-1 finding at
+// client.go ~10 in the original report: Get, Threads and Attachments are
+// called one after another for the same ticket, and without a cache each
+// one re-fetches the identical record.
+func TestFetchRecordIsCachedForTheClientsLifetime(t *testing.T) {
+	var recordFetches int
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/now/table/sys_journal_field"):
+			w.Write([]byte(`{"result":[]}`))
+		case strings.HasPrefix(r.URL.Path, "/api/now/attachment"):
+			w.Write([]byte(`{"result":[]}`))
+		default:
+			recordFetches++
+			w.Write(mustRead(t, "incident.json"))
+		}
+	})
+
+	if _, err := c.Get(context.Background(), testSysID); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Threads(context.Background(), testSysID); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	dir := t.TempDir()
+	if _, err := c.Attachments(context.Background(), testSysID, dir); err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+
+	if recordFetches != 1 {
+		t.Errorf("record was fetched %d times across Get+Threads+Attachments, want 1", recordFetches)
+	}
+}
+
 func TestGetMissingRecordIsNotFound(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"result":[]}`))
@@ -380,6 +494,40 @@ func TestThreadsRolesAndOrder(t *testing.T) {
 		if th[i].At.Before(th[i-1].At) {
 			t.Fatalf("thread is out of order at %d: %s before %s", i, th[i].At, th[i-1].At)
 		}
+	}
+}
+
+// TestThreadsWorkNoteWithNoAuthorFallsBackToAgent is the round-1 finding at
+// mapping.go ~266: a work note with an empty sys_created_by used to render
+// as " (internal)" — no name before the suffix — which reads as a
+// rendering bug rather than an anonymous internal note.
+func TestThreadsWorkNoteWithNoAuthorFallsBackToAgent(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasPrefix(r.URL.Path, "/api/now/table/sys_journal_field"):
+			w.Write([]byte(`{"result":[
+				{"sys_id":"j1","element":"work_notes","element_id":"` + testSysID + `","value":"internal note","sys_created_on":"2026-09-10 09:00:00","sys_created_by":""}
+			]}`))
+		default:
+			w.Write(mustRead(t, "incident.json"))
+		}
+	})
+
+	th, err := c.Threads(context.Background(), testSysID)
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	var note *ticket.Message
+	for i := range th {
+		if th[i].Text == "internal note" {
+			note = &th[i]
+		}
+	}
+	if note == nil {
+		t.Fatalf("the work note is missing from the thread: %+v", th)
+	}
+	if note.Author != "agent (internal)" {
+		t.Errorf("author = %q, want %q", note.Author, "agent (internal)")
 	}
 }
 
@@ -585,6 +733,41 @@ func TestAttachmentHTMLBodyIsRefused(t *testing.T) {
 	}
 }
 
+// TestDownloadHonoursSendCredential is the round-1 finding at
+// attachments.go ~67: Attachments checked Trust.CheckRaw's fetch result
+// before downloading but discarded sendCredential, so download always sent
+// the Authorization header to any fetchable host. This adapter's own Trust
+// never actually grants fetch without also granting sendCredential — it
+// has no fetch-only CDN tier — but download itself has to honour the flag
+// it is given, in case that ever changes.
+func TestDownloadHonoursSendCredential(t *testing.T) {
+	var gotAuth string
+	var sawAuth bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotAuth = r.Header.Get("Authorization")
+		sawAuth = r.Header.Get("Authorization") != ""
+		w.Write([]byte("file-bytes"))
+	}))
+	t.Cleanup(srv.Close)
+
+	c := &Client{authHeader: wantBasicHeader(), hc: srv.Client()}
+
+	dir := t.TempDir()
+	if _, err := c.download(context.Background(), srv.URL+"/f", filepath.Join(dir, "f"), false); err != nil {
+		t.Fatalf("download (sendCredential=false): %v", err)
+	}
+	if sawAuth {
+		t.Errorf("Authorization header %q reached the wire despite sendCredential=false", gotAuth)
+	}
+
+	if _, err := c.download(context.Background(), srv.URL+"/f", filepath.Join(dir, "f2"), true); err != nil {
+		t.Fatalf("download (sendCredential=true): %v", err)
+	}
+	if !sawAuth || gotAuth != wantBasicHeader() {
+		t.Errorf("Authorization = %q, want it sent when sendCredential=true", gotAuth)
+	}
+}
+
 // --- List ---
 
 func TestListPagesAndCapsTheLimit(t *testing.T) {
@@ -704,6 +887,78 @@ func TestRateLimitWithoutRetryAfterIsReported(t *testing.T) {
 	}
 }
 
+// TestJournalSweepTruncatesWhenTheRetryBudgetIsExhausted is the round-1
+// finding at client.go ~331: each page's own 429 retry is already capped
+// at maxRetryAfter, but a paginated sweep reading many pages could still
+// spend pages * maxRetryAfter waiting in total. The first journal page
+// here is retried once and succeeds; the retry budget is sized so the
+// second page's own Retry-After would overspend it, so that page must not
+// be retried at all — the sweep truncates with a warning naming the page,
+// keeping what the first page already returned.
+func TestJournalSweepTruncatesWhenTheRetryBudgetIsExhausted(t *testing.T) {
+	orig := maxSweepRetryWait
+	maxSweepRetryWait = 1500 * time.Millisecond
+	t.Cleanup(func() { maxSweepRetryWait = orig })
+
+	var mu sync.Mutex
+	attempts := map[string]int{}
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasPrefix(r.URL.Path, "/api/now/table/sys_journal_field") {
+			w.Write(mustRead(t, "incident.json"))
+			return
+		}
+		offset := r.URL.Query().Get("sysparm_offset")
+		mu.Lock()
+		attempts[offset]++
+		n := attempts[offset]
+		mu.Unlock()
+
+		if n == 1 {
+			// Every page 429s once — the budget decides whether it gets
+			// retried.
+			w.Header().Set("Retry-After", "1")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		if offset != "0" {
+			t.Errorf("offset %s was retried; the budget should have refused it", offset)
+			w.Write([]byte(`{"result":[]}`))
+			return
+		}
+		var entries []string
+		for i := 0; i < journalPageSize; i++ {
+			entries = append(entries, fmt.Sprintf(
+				`{"sys_id":"j%d","element":"comments","element_id":"%s","value":"note %d","sys_created_on":"2026-09-10 09:00:00","sys_created_by":"agent"}`,
+				i, testSysID, i))
+		}
+		w.Write([]byte(`{"result":[` + strings.Join(entries, ",") + `]}`))
+	})
+
+	start := time.Now()
+	th, err := c.Threads(context.Background(), testSysID)
+	elapsed := time.Since(start)
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if elapsed > 5*time.Second {
+		t.Errorf("Threads took %s; the exhausted budget should stop the sweep well short of a second real wait", elapsed)
+	}
+	// The description, plus the one full journal page that got its retry.
+	if len(th) != journalPageSize+1 {
+		t.Fatalf("got %d messages, want %d (description + one full journal page)", len(th), journalPageSize+1)
+	}
+	warnings := c.WarningsFor(testSysID)
+	var truncated bool
+	for _, w := range warnings {
+		if strings.Contains(w, "journal page 2") {
+			truncated = true
+		}
+	}
+	if !truncated {
+		t.Errorf("warnings = %v, want one naming the truncated page", warnings)
+	}
+}
+
 func TestOversizedBodyIsRefused(t *testing.T) {
 	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(`{"result":{"sys_id":"`))
@@ -720,6 +975,110 @@ func TestOversizedBodyIsRefused(t *testing.T) {
 	}
 	if !strings.Contains(serr.Message, "read body") {
 		t.Errorf("error = %v, want the body ceiling", serr)
+	}
+}
+
+// --- dateFormat / timestamp parsing ---
+
+// TestParseTimeUnambiguousLayouts covers the round-1 additions to
+// baseTimeLayouts — none of them need a dateFormat to read correctly.
+func TestParseTimeUnambiguousLayouts(t *testing.T) {
+	c, _ := New(Config{Instance: "acme", Username: testUser, Password: testPassword}, nil)
+	tp := c.newTimeParser()
+	tests := []struct {
+		in   string
+		want time.Time
+	}{
+		{"2024-03-04 10:00:00", time.Date(2024, 3, 4, 10, 0, 0, 0, time.UTC)},
+		{"2024/03/04", time.Date(2024, 3, 4, 0, 0, 0, 0, time.UTC)},
+		{"04.03.2024 10:00:00", time.Date(2024, 3, 4, 10, 0, 0, 0, time.UTC)},
+		{"2024-03-04T10:00:00Z", time.Date(2024, 3, 4, 10, 0, 0, 0, time.UTC)},
+	}
+	for _, tt := range tests {
+		got := tp.parse(tt.in)
+		if !got.Equal(tt.want) {
+			t.Errorf("parse(%q) = %s, want %s", tt.in, got, tt.want)
+		}
+	}
+	if tp.failed != "" {
+		t.Errorf("unambiguous layouts must not fail: %q", tp.failed)
+	}
+}
+
+// TestDateFormatResolvesTheAmbiguousDashedDate is the round-1 finding:
+// "03-04-2024" is the 3rd of April read one way and the 4th of March the
+// other, and dateFormat is what picks.
+func TestDateFormatResolvesTheAmbiguousDashedDate(t *testing.T) {
+	const ambiguous = "03-04-2024 10:00:00"
+
+	unset, err := New(Config{Instance: "acme", Username: testUser, Password: testPassword}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if got := unset.newTimeParser().parse(ambiguous); !got.IsZero() {
+		t.Errorf("with no dateFormat, a dashed date must not parse: got %s", got)
+	}
+
+	mdy, err := New(Config{Instance: "acme", Username: testUser, Password: testPassword, DateFormat: DateFormatMDY}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if want := time.Date(2024, 3, 4, 10, 0, 0, 0, time.UTC); !mdy.newTimeParser().parse(ambiguous).Equal(want) {
+		t.Errorf("mdy: parse(%q) = %s, want %s (March 4th)", ambiguous, mdy.newTimeParser().parse(ambiguous), want)
+	}
+
+	dmy, err := New(Config{Instance: "acme", Username: testUser, Password: testPassword, DateFormat: DateFormatDMY}, nil)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	if want := time.Date(2024, 4, 3, 10, 0, 0, 0, time.UTC); !dmy.newTimeParser().parse(ambiguous).Equal(want) {
+		t.Errorf("dmy: parse(%q) = %s, want %s (April 3rd)", ambiguous, dmy.newTimeParser().parse(ambiguous), want)
+	}
+}
+
+// TestNewRejectsUnknownDateFormat covers config.go's dateFormat enum at
+// the adapter boundary too, so a typo fails at wiring time rather than
+// silently falling back to the unambiguous-only default.
+func TestNewRejectsUnknownDateFormat(t *testing.T) {
+	_, err := New(Config{Instance: "acme", Username: testUser, Password: testPassword, DateFormat: "ymd"}, nil)
+	if err == nil {
+		t.Fatal("New with an unknown dateFormat must fail")
+	}
+}
+
+// TestUnparseableTimestampWarnsOncePerCall is the round-1 finding at
+// mapping.go ~70-81: parseTime used to fail silently, so a display-value
+// date in a layout the adapter does not know about vanished with no trace.
+// It must now warn — but only once per call, even when every record on a
+// List page carries the same bad format.
+func TestUnparseableTimestampWarnsOncePerCall(t *testing.T) {
+	c, _ := newTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Write([]byte(`{"result":[
+			{"sys_id":"a1b2c3d4e5f60718293a4b5c6d7e8f91","number":"INC0000001","opened_at":"not-a-date","sys_updated_on":"not-a-date"},
+			{"sys_id":"a1b2c3d4e5f60718293a4b5c6d7e8f92","number":"INC0000002","opened_at":"not-a-date","sys_updated_on":"not-a-date"}
+		]}`))
+	})
+	got, err := c.list(context.Background(), source.ListFilter{})
+	if err != nil {
+		t.Fatalf("list: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("got %d tickets, want 2", len(got))
+	}
+	for _, tk := range got {
+		if !tk.CreatedAt.IsZero() {
+			t.Errorf("%s: CreatedAt = %s, want the zero time", tk.Key, tk.CreatedAt)
+		}
+	}
+	warnings := c.WarningsFor("")
+	count := 0
+	for _, w := range warnings {
+		if strings.Contains(w, "not-a-date") {
+			count++
+		}
+	}
+	if count != 1 {
+		t.Errorf("got %d timestamp warnings across %d records, want exactly 1: %v", count, len(got), warnings)
 	}
 }
 

@@ -64,7 +64,8 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		// never sees the credential. The warning names the host and
 		// nothing else: the rest of the URL is response-supplied text
 		// headed for a log.
-		if fetch, _, _ := c.trust.CheckRaw(r.DownloadURL); !fetch {
+		fetch, sendCredential, _ := c.trust.CheckRaw(r.DownloadURL)
+		if !fetch {
 			host := httpx.HostOf(r.DownloadURL)
 			warnings = append(warnings, fmt.Sprintf("servicenow: attachment host not trusted: %s", host))
 			failures = append(failures, fmt.Errorf("attachment %s: host not trusted: %s", r.ID, host))
@@ -77,7 +78,7 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 		}
 		filename := fmt.Sprintf("%d-%s", i+1, name)
 
-		ct, derr := c.download(ctx, r.DownloadURL, filepath.Join(dir, filename))
+		ct, derr := c.download(ctx, r.DownloadURL, filepath.Join(dir, filename), sendCredential)
 		if derr != nil {
 			warnings = append(warnings, fmt.Sprintf("servicenow: download attachment %s (%s): %v", r.ID, name, derr))
 			failures = append(failures, fmt.Errorf("attachment %s: %w", r.ID, derr))
@@ -109,6 +110,7 @@ func (c *Client) attachmentRefs(ctx context.Context, sysID string, warnings *[]s
 		return nil, nil
 	}
 	var out []attachmentRef
+	budget := newRetryBudget(maxSweepRetryWait)
 	offset := 0
 	for page := 0; ; page++ {
 		if page >= maxAttachmentPages {
@@ -121,7 +123,7 @@ func (c *Client) attachmentRefs(ctx context.Context, sysID string, warnings *[]s
 		q.Set("sysparm_offset", strconv.Itoa(offset))
 
 		var resp tableResponse
-		if err := c.get(ctx, "/api/now/attachment", q, &resp); err != nil {
+		if err := c.get(ctx, "/api/now/attachment", q, &resp, budget); err != nil {
 			if len(out) > 0 {
 				*warnings = append(*warnings, fmt.Sprintf("servicenow: attachment list page %d: %v", page+1, err))
 				return out, nil
@@ -172,12 +174,21 @@ func pickMIME(declared, served string) string {
 // expected — an instance behind SSO answers an unauthenticated attachment
 // request with the sign-in form, and writing that to disk under the
 // attachment's name is how a login page ends up in an evidence bundle.
-func (c *Client) download(ctx context.Context, rawURL, destPath string) (string, error) {
+//
+// sendCredential is the caller's already-made trust decision — Trust.Check
+// or Trust.CheckRaw's second return — for exactly this URL: the
+// Authorization header is attached only when it is true, so a host that
+// may be fetched but may not see the credential (a fetch-only CDN tier,
+// were one ever configured here) never receives it, however this method is
+// called.
+func (c *Client) download(ctx context.Context, rawURL, destPath string, sendCredential bool) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return "", err
 	}
-	c.setHeaders(req)
+	if sendCredential {
+		c.setHeaders(req)
+	}
 	req.Header.Set("Accept", "*/*")
 
 	// An untrusted hop stops the chain rather than failing it, so the 3xx

@@ -562,6 +562,7 @@ sources:
     instance: acme                     # acme.service-now.com
     username: sirdar.integration       # literal, not a credential ref
     password: env:SERVICENOW_PASSWORD
+    # dateFormat: mdy                  # only if the instance serves dashed dates
 ```
 
 ServiceNow is the one built-in that serves either role. The same incident
@@ -587,11 +588,24 @@ vanity domain or a proxy. `table` defaults to `incident` and can name
 `sc_task` or `sn_customerservice_case` instead, though the field set this
 adapter asks for is the ITSM one.
 
+Every credentialed request goes to exactly the host this resolves to, so
+it is validated rather than used as typed: a bare `instance` may only be
+letters, digits and hyphens (`acme/x` or `acme.service-now.com@evil.com`
+are both refused rather than turned into a request against `acme` or
+`evil.com`), and a host or a full URL — from either `instance` or
+`baseUrl` — must be plain `https://host` with no userinfo, path, query or
+fragment. A workspace that fails this check gets the error at load time,
+not a credential sent to a host nobody named.
+
 **Get.** Reads `GET /api/now/table/{table}/{sys_id}` when the id is a
 sys_id (32 hex characters) and
 `GET /api/now/table/{table}?sysparm_query=number={id}` when it is a record
-number, so `INC0010023` and the sys_id behind it both work. Every record
-request carries `sysparm_display_value=true` and
+number, so `INC0010023` and the sys_id behind it both work. A record
+number carrying the encoded-query separator `^` or the IN-list separator
+`,` is refused, naming the character, rather than looked up with the
+character silently dropped — querying under a *different* id than the one
+the caller typed would return the wrong ticket's data as if it were the
+right one. Every record request carries `sysparm_display_value=true` and
 `sysparm_exclude_reference_link=true`, so `caller_id` arrives as
 "Abel Tuter" rather than as the sys_id it stores. `Subject` is
 `short_description`, `Status` is `state`, `Channel` is `contact_type`,
@@ -599,7 +613,9 @@ request carries `sysparm_display_value=true` and
 `urgency`, `impact`, `assignment_group`, `close_notes` and the caller's
 email travel in `Fields`. The URL is
 `{base}/nav_to.do?uri={table}.do?sys_id={sys_id}` — the record's own API
-link is not what an operator wants to click.
+link is not what an operator wants to click. The fetched record is cached
+per id for the client's lifetime, so Get, Threads and Attachments called
+one after another for the same ticket cost one Table API call, not three.
 
 **Threads.** The record's own `description` comes first, as the caller's
 words when there is a caller and as staff content when there is not — an
@@ -613,7 +629,10 @@ guess: a **work note** never reaches the caller, so it is `agent` with the
 `customer` when the entry's `sys_created_by` is the caller (matched against
 the dot-walked `caller_id.user_name`, then the display name). An
 unrecognised author is `agent`, which is the safer default — a message
-wrongly attributed to the customer reads as the customer's own words.
+wrongly attributed to the customer reads as the customer's own words. A
+work note with no `sys_created_by` at all (a scripted entry, or a field
+the instance will not serve) is authored `agent (internal)` rather than
+just ` (internal)`.
 
 **Attachments.** `GET /api/now/attachment` filtered to
 `table_name={table}^table_sys_id={sys_id}`, then each row's `download_link`
@@ -635,11 +654,19 @@ for `me`), `state={status}` or `active=true` when no status was named, and
 time, default 100 records and a hard 200.
 
 **Known limitations.**
-- **Timestamps carry no offset.** With `sysparm_display_value=true` the
-  instance renders them in the integration user's display timezone and
-  names no zone, and this adapter reads a naive timestamp as UTC. An
-  integration user on any other timezone shifts every time in the bundle by
-  that offset — hence the UTC integration user above.
+- **Timestamps carry no offset, and a dashed date needs `dateFormat`.**
+  With `sysparm_display_value=true` the instance renders timestamps in the
+  integration user's display timezone and names no zone, and this adapter
+  reads a naive timestamp as UTC — hence the UTC integration user above.
+  It recognises `yyyy-MM-dd HH:mm:ss`, the RFC 3339 forms, `yyyy/MM/dd` and
+  `dd.MM.yyyy HH:mm:ss` on its own, but a dashed `MM-dd-yyyy` vs
+  `dd-MM-yyyy` is genuinely ambiguous ("03-04-2024" is the 3rd of April
+  read one way and the 4th of March the other) and is resolved by the
+  optional `dateFormat: mdy` or `dateFormat: dmy` config field — left
+  unset (the default), a dashed date simply will not parse. A timestamp
+  that fails every layout is left unset and warned about once per call,
+  however many timestamps on the record or the page failed, naming the
+  value that did not parse.
 - **`CustomerID` is dot-walked or empty.** A reference field in display
   mode carries no id, so the company's sys_id comes from
   `company.sys_id`; an instance that will not serve the dot-walk leaves
@@ -653,15 +680,22 @@ time, default 100 records and a hard 200.
 - **A filter value cannot carry `^`.** The encoded-query syntax has no
   escape sequence, so a value containing the separator would start a
   condition of its own; it is stripped and the run gets a warning rather
-  than a silently different working set.
-- Journal and attachment pagination stop at 20 pages each, list at 20 too,
-  with a warning naming the cap — offset pagination has no
-  end-of-results signal beyond a short page, and a miscounting instance
-  should cost a warning rather than an endless sweep.
+  than a silently different working set. A record id looked up by number
+  is held to a stricter rule — see Get above — because there the caller
+  meant one specific ticket.
+- Journal, attachment and list pagination stop at 20 pages each, with a
+  warning naming the cap — offset pagination has no end-of-results signal
+  beyond a short page, and a miscounting instance should cost a warning
+  rather than an endless sweep. A page that runs into a 429 partway
+  through a sweep keeps whatever earlier pages already returned and warns,
+  rather than discarding it.
 - Rate limits are set per instance by the customer's own admin, so there is
-  no published number to code against: a 429 is retried once after
-  honouring `Retry-After` up to 30 seconds, and reported as rate-limited
-  otherwise.
+  no published number to code against: each page's own 429 is retried once
+  after honouring `Retry-After` up to 30 seconds, and one paginated sweep
+  (a journal, an attachment list, or a tracker list) spends at most 90
+  seconds total waiting out 429s across every page it reads — a later
+  page whose wait would overspend that budget is not retried, and the
+  sweep truncates with a warning instead of running unbounded.
 - The field names, the journal-table shape and the dot-walks are standard
   ServiceNow platform behaviour but were not all confirmable against a live
   documentation page; `docs/research/adapters/servicenow.md` records which

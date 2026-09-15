@@ -133,6 +133,7 @@ sources:
     # username: sirdar.integration            # literal login name, not a secret
     # password: keychain:servicenow-password  # basic auth, instead of oauthToken
     # oauthToken: keychain:servicenow-oauth-token  # instead of username + password
+    # dateFormat: mdy                         # or dmy; only if the instance serves dashed dates
     #
     # ServiceNow is the one built-in that serves either role: the same
     # incident is the customer's ticket and the work item, so the same
