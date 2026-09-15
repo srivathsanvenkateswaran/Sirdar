@@ -170,7 +170,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .pbody .card-title{margin:0;line-height:28px}
 .pfoot{display:flex;align-items:center;justify-content:flex-end;gap:12px;min-height:72px;padding:0 40px;border-top:1px solid var(--sd-rule)}
 /* setting rows: .srow.tall from _base, made border-box so a row is the stated 104px */
-.srow{box-sizing:border-box}
+.srow{box-sizing:border-box;padding:8px 0}
 .srow .lab{display:flex;align-items:center;gap:10px;line-height:1.5}
 .srow .help{line-height:20px}
 .srow .val.pvrow{display:flex}
@@ -203,14 +203,16 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .call:first-child{border-top:0}
 .call .mono{font-size:14px;color:var(--sd-ink-2)}
 .call .t{text-align:right;color:var(--sd-ink-3)}
-/* providers table: 56px rows, the provider mark before its name */
+/* providers table: 44px rows, the provider mark before its name */
 .tbl{display:flex;flex-direction:column}
-.tr{display:grid;grid-template-columns:104px 222px 104px 82px minmax(0,1fr) auto;column-gap:10px;align-items:center;box-sizing:border-box;min-height:56px;border-top:1px solid var(--sd-rule-faint);font-size:15px;line-height:1.3}
-.tr:first-child{min-height:32px;border-top:0;color:var(--sd-ink-3);font-size:13.5px}
+.tr{display:grid;grid-template-columns:118px 168px 150px 82px minmax(0,1fr) auto;column-gap:10px;align-items:center;box-sizing:border-box;min-height:44px;border-top:1px solid var(--sd-rule-faint);font-size:15px;line-height:1.25}
+.tr:first-child{min-height:28px;border-top:0;color:var(--sd-ink-3);font-size:13.5px}
 .tr .pvrow .pn{font-size:15px}
 .tr .hue{color:var(--sd-st-blocked)}
 .tr .dim{color:var(--sd-ink-3)}
 /* the session sheet behind the scrim — the Session page at the v2 scale; only the edges show around the modal */
+.topbar>*{flex:0 0 auto;white-space:nowrap}
+.topbar .title{flex:1 1 auto}
 .body{display:grid;grid-template-columns:minmax(0,1fr) 480px;flex:1;min-height:0}
 .left{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
 .right{display:flex;flex-direction:column;min-width:0;min-height:0}
@@ -407,8 +409,8 @@ body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
       <div class="pbody">
         <div class="card">
           <h2 class="card-title">Default for new sessions</h2>
-          <div class="srow tall"><div class="k"><div class="lab">Provider</div><div class="val pvrow"><span class="pv" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span><span>claude · sonnet · subscription login</span></div></div><span class="btn pale wide ctl">Change</span></div>
-          <div class="srow tall"><div class="k"><div class="lab">Billing <span class="fact">subscription</span></div><div class="val">Subscription: the API key is stripped from the agent's environment</div></div></div>
+          <div class="srow"><div class="k"><div class="lab">Provider</div><div class="val pvrow"><span class="pv" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span><span>claude · sonnet · subscription login</span></div></div><span class="btn pale ctl">Change</span></div>
+          <div class="srow"><div class="k"><div class="lab">Billing <span class="fact">subscription</span></div><div class="val">Subscription: the API key is stripped from the agent's environment</div></div></div>
         </div>
         <div class="card">
           <h2 class="card-title">Installed</h2>
@@ -417,7 +419,10 @@ body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
             <div class="tr"><span class="pvrow"><span class="pv" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6 5.6 18.4"/></svg></span><span class="pn">claude</span></span><span>Claude Code CLI · stream-json</span><span>signed in</span><span>yes</span><span>every call mediated</span><span class="btn pale small">Check</span></div>
             <div class="tr"><span class="pvrow"><span class="pv" data-p="codex" title="Codex"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7.8 4.5v9L12 21l-7.8-4.5v-9z"/><circle cx="12" cy="12" r="3"/></svg></span><span class="pn">codex</span></span><span>app-server JSON-RPC</span><span>signed in (free)</span><span>yes</span><span>every call mediated</span><span class="btn pale small">Check</span></div>
             <div class="tr"><span class="pvrow"><span class="pv" data-p="copilot" title="GitHub Copilot"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="10" rx="5"/><circle cx="9" cy="13" r="1.2" fill="currentColor"/><circle cx="15" cy="13" r="1.2" fill="currentColor"/></svg></span><span class="pn">copilot</span></span><span>Agent Client Protocol</span><span>signed in</span><span>yes</span><span>every call mediated</span><span class="btn pale small">Check</span></div>
+            <div class="tr"><span class="pvrow"><span class="pv" data-p="opencode" title="OpenCode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 7l5 5-5 5M12 17h7"/></svg></span><span class="pn">opencode</span></span><span>Agent Client Protocol</span><span>signed in</span><span>yes</span><span>every call mediated</span><span class="btn pale small">Check</span></div>
             <div class="tr"><span class="pvrow"><span class="pv" data-p="qwen" title="Qwen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17a4 4 0 0 1-.5-8A5.5 5.5 0 0 1 17 8.5 4 4 0 0 1 17 17z"/></svg></span><span class="pn">qwen</span></span><span>Qwen Code CLI</span><span>signed in</span><span class="dim">in progress</span><span>hook + tool exclusion</span><span class="btn pale small">Check</span></div>
+            <div class="tr"><span class="pvrow"><span class="pv" data-p="cursor" title="Cursor"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M5 3l14 8-6 1.5L9.5 19z"/></svg></span><span class="pn">cursor</span></span><span>cursor-agent · ask mode</span><span>free plan, auto model</span><span class="hue">refused</span><span>completed write ends the run</span><span class="btn pale small">Check</span></div>
+            <div class="tr"><span class="pvrow"><span class="pv" data-p="antigravity" title="Antigravity"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2c.6 5.4 4.6 9.4 10 10-5.4.6-9.4 4.6-10 10-.6-5.4-4.6-9.4-10-10 5.4-.6 9.4-4.6 10-10z"/></svg></span><span class="pn">antigravity</span></span><span>agy · plan mode</span><span>signed in</span><span class="hue">refused</span><span>completed write ends the run</span><span class="btn pale small">Check</span></div>
           </div>
         </div>
       </div>
