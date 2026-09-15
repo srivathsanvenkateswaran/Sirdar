@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>Sirdar screens · Settings: MCP servers</title>
+<title>Sirdar walkthrough · Settings: MCP servers</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
 :root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -65,6 +65,20 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
 .tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
 /* settings modal over a dimmed session — shared by Settings and Providers */
 .app{position:relative}
 .scrim{position:absolute;inset:0;z-index:2;display:flex;align-items:center;justify-content:center;background:var(--sd-scrim)}
@@ -91,13 +105,9 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .row .val[data-hue="blocked"]{color:var(--sd-st-blocked)}
 .row .val.pats{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin-top:2px}
 .row .ctl{flex:none}
-.toggle{position:relative;flex:none;width:32px;height:18px;border-radius:999px;background:var(--sd-ink)}
-.toggle::after{content:"";position:absolute;top:2px;right:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-sheet)}
 .pat{display:inline-flex;align-items:center;min-height:22px;padding:0 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;background:var(--sd-surface);color:var(--sd-ink);font-family:var(--sd-font-mono);font-size:11px;line-height:1.5}
 .inp{display:inline-flex;align-items:center;box-sizing:border-box;min-height:24px;padding:0 8px;border:1px solid var(--sd-rule);border-radius:8px;background:var(--sd-sunk);color:var(--sd-ink);font-family:var(--sd-font-mono);font-size:11px;line-height:1.5}
 .caret{display:inline-block;width:1px;height:12px;margin-left:1px;background:var(--sd-ink);vertical-align:-2px}
-.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;box-sizing:border-box;min-height:28px;padding:0 8px 0 10px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);font-family:var(--sd-font-mono);font-size:12px}
-.sel svg{width:14px;height:14px;flex:none;color:var(--sd-ink-3)}
 .trow{display:flex;align-items:center;gap:8px;margin:0 16px;padding:10px 0}
 .trow+.trow{border-top:1px solid var(--sd-rule-faint)}
 .trow .verdict{display:flex;flex:1;align-items:center;gap:8px;font-size:11.5px;color:var(--sd-ink-3)}
@@ -122,7 +132,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .you .say{padding:8px 12px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface);font-size:13px;line-height:1.5;max-width:70ch}
 .turn{display:flex;align-items:center;gap:10px;margin:12px 16px 4px;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
 .turn .line{flex:1;height:1px;background:var(--sd-rule)}
-.ev{display:grid;grid-template-columns:3.3rem 1.4rem minmax(0,1fr);column-gap:8px;margin:0 16px}
+.ev{display:grid;grid-template-columns:3.3rem 2.2rem minmax(0,1fr);column-gap:8px;margin:0 16px}
 .ev .at{padding-top:3px;font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
 .ev .mark{padding:3px 0 3px 8px;border-left:2px solid var(--sd-rule);font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.5;color:var(--sd-ink-3)}
 .ev .main{min-width:0;padding:2px 16px 2px 0;line-height:1.45}
@@ -172,8 +182,22 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .call .mono{font-size:11.5px;color:var(--sd-ink-2)}
 .call .t{text-align:right;color:var(--sd-ink-3)}
   </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
 </head>
 <body>
+<div class="demo-bar"><span class="step">7 of 10</span><span class="name">Settings: MCP servers</span><span class="what">Which servers a run gets and which of their tools it may call. Opens as a modal over the session.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Eval.html">Back</a><a href="ToolTester.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the sidebar's Settings row.</div>
 <div class="app">
 <div class="sidebar">
   <div class="brand">SIRDAR</div>
@@ -218,7 +242,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
         <div class="ev" data-v="allow"><span class="at">00:05</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Read</span><span class="sum">app/ledger.go · 212 lines</span></div></div></div>
         <div class="ev" data-v="allow"><span class="at">00:06</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Grep</span><span class="sum">"Return" app/ · 4 matches</span></div></div></div>
         <div class="ev" data-v="allow"><span class="at">00:09</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Bash</span><span class="sum">go test ./app/... · ok 0.8s</span></div></div></div>
-        <div class="ev"><span class="at">00:31</span><span class="mark">·</span><div class="main"><div class="said">The double count is in <code>ApplyMovement</code>: a Return is applied as a receipt on line 91 and then again by the adjustment branch on line 98, which was added for partial returns and never guarded. I will guard the second branch on <code>m.Partial</code> and cover both paths in the test.</div></div></div>
+        <div class="ev"><span class="at">00:31</span><span class="mark">·</span><div class="main"><div class="said">The double count is in <code>ApplyMovement</code>: a Return is applied as a receipt on line 89 and then again by the adjustment branch on line 91, which was added for partial returns and never guarded. I will guard the second branch on <code>m.Partial</code> and cover both paths in the test.</div></div></div>
         <div class="turn"><span>turn 2</span><span class="line"></span><span>00:34</span></div>
         <div class="ev" data-v="write"><span class="at">00:35</span><span class="mark">edit</span><div class="main"><div class="line1"><span class="tool">Edit</span><span class="sum">app/ledger.go · +4 −6 · inside the worktree</span></div></div></div>
         <div class="ev" data-v="write"><span class="at">00:52</span><span class="mark">edit</span><div class="main"><div class="line1"><span class="tool">Write</span><span class="sum">app/ledger_test.go · +21 · inside the worktree</span></div></div></div>
@@ -246,13 +270,13 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
         <div class="hunk"><span>@@ -88,12 +88,10 @@ func (l *Ledger) ApplyMovement(m Movement)</span><span class="acts"><span class="btn pale">Keep</span><span class="btn ghost">Drop</span></span></div>
         <div class="dl"><span class="n">88</span><span class="c">    case Return:</span></div>
         <div class="dl"><span class="n">89</span><span class="c">        l.onHand[m.SKU] += m.Qty</span></div>
-        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust the reserved count</span></div>
+        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust reserved</span></div>
         <div class="dl" data-t="del"><span class="n">91</span><span class="c">-       l.adjust(m.SKU, m.Qty)</span></div>
         <div class="dl" data-t="del"><span class="n">92</span><span class="c">-       if m.Partial {</span></div>
         <div class="dl" data-t="del"><span class="n">93</span><span class="c">-           l.reserved[m.SKU] -= m.Qty</span></div>
         <div class="dl" data-t="del"><span class="n">94</span><span class="c">-       }</span></div>
-        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation; a full one</span></div>
-        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // is already counted by the receipt above</span></div>
+        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation;</span></div>
+        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // a full one is counted by the receipt</span></div>
         <div class="dl" data-t="add"><span class="n">92</span><span class="c">+       if m.Partial {</span></div>
         <div class="dl" data-t="add"><span class="n">93</span><span class="c">+           l.reserved[m.SKU] -= m.Qty</span></div>
         <div class="dl"><span class="n">94</span><span class="c">        }</span></div>
@@ -282,7 +306,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
       <div class="g">
         <div class="gl">This app</div>
         <div class="r">Reading</div>
-        <div class="r">Design library</div>
+        <div class="r">Library</div>
         <div class="r">About</div>
       </div>
       <div class="mfoot">v0.9.2 · synced 2 min ago</div>
@@ -300,7 +324,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
         </div>
         <div class="card">
           <div class="ct">What a run may call</div>
-          <div class="row"><div class="k"><div class="name">Workspace servers only</div><div class="val">The run sees .mcp.json and nothing from your global config</div></div><span class="toggle ctl"></span></div>
+          <div class="row"><div class="k"><div class="name">Workspace servers only</div><div class="val">The run sees .mcp.json and nothing from your global config</div></div><span class="toggle ctl" data-on="true"></span></div>
           <div class="row"><div class="k"><div class="name">Allowed tool patterns</div><div class="val pats"><span class="pat">mcp__grafana__query_*</span><span class="pat">mcp__metabase__list_*</span><span class="inp">mcp__mysql-readonly__read_*<span class="caret"></span></span></div><div class="val">Everything else is denied by name: write words (create, update, delete, send, run) and generic passthroughs.</div></div><span class="btn pale ctl">Add</span></div>
         </div>
       </div>
@@ -309,5 +333,21 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
   </div>
 </div>
 </div>
+<script>
+(function(){
+  var map={"Providers": "Providers.html", "Try a tool": "ToolTester.html", "MCP servers": "Settings.html", "Cancel": "Session.html", "Save": "Session.html", "Close": "Session.html"}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); if(map[t]) link(el,map[t]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
 </body>
 </html>

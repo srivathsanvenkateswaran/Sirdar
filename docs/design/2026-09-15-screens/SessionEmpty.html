@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>Sirdar screens · New session</title>
+<title>Sirdar walkthrough · New session</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
 :root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -65,6 +65,20 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
 .tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
 .centre{display:flex;flex:1;min-height:0;align-items:center;justify-content:center;padding:24px 32px}
 .col{display:flex;flex-direction:column;gap:20px;width:100%;max-width:640px}
 .col .h-serif{padding-left:2px}
@@ -73,10 +87,6 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .composer .bar{display:flex;align-items:center;gap:6px;padding:6px 8px 8px;flex-wrap:wrap}
 .chip{display:inline-flex;align-items:center;gap:6px;min-height:24px;padding:0 8px;border:1px solid var(--sd-rule);border-radius:999px;font-size:11px;color:var(--sd-ink-2);background:transparent}
 .chip .mono{color:var(--sd-ink-3)}
-.seg{display:inline-flex;align-items:center;min-height:24px;border:1px solid var(--sd-rule);border-radius:999px;overflow:hidden;font-size:11px;color:var(--sd-ink-2)}
-.seg span{padding:0 10px;line-height:22px;border-left:1px solid var(--sd-rule)}
-.seg span:first-child{border-left:0}
-.seg span[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink);font-weight:500}
 .composer .bar .primary{margin-left:auto;min-height:28px}
 .kbd{padding:0 4px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:10.5px;line-height:1.5;opacity:.6}
 .landed{display:flex;flex-direction:column}
@@ -87,8 +97,22 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .row .src,.row .age{font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
 .row .btn{min-height:24px;padding:2px 10px;font-size:12px}
   </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
 </head>
 <body>
+<div class="demo-bar"><span class="step">1 of 10</span><span class="name">New session</span><span class="what">Where every piece of work starts: paste a ticket or pick one that landed, choose triage, RCA or fix, and start.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Session.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the sidebar's New session button, or on first launch.</div>
 <div class="app">
 <div class="sidebar">
   <div class="brand">SIRDAR</div>
@@ -133,13 +157,29 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
       </div>
       <div class="landed">
         <div class="lbl">Or pick from what landed</div>
-        <div class="row"><span class="key">SBX-5</span><span class="t">Invoice 2026-0412 total differs from its line items after a discount</span><span class="src">zendesk</span><span class="age">2h</span><span class="btn pale">Triage</span></div>
-        <div class="row"><span class="key">SBX-7</span><span class="t">Credit note is not applied to the customer balance</span><span class="src">jira</span><span class="age">6h</span><span class="btn pale">Triage</span></div>
-        <div class="row"><span class="key">SBX-8</span><span class="t">Stocktake import rejects rows with a trailing comma</span><span class="src">zendesk</span><span class="age">yesterday</span><span class="btn pale">Triage</span></div>
+        <div class="row"><span class="key">SBX-6</span><span class="t">Barcode lookup returns the discontinued variant</span><span class="src">jira</span><span class="age">2h</span><span class="btn pale">Triage</span></div>
+        <div class="row"><span class="key">SBX-7</span><span class="t">Monthly statement shows a paid invoice as overdue</span><span class="src">jira</span><span class="age">6h</span><span class="btn pale">Triage</span></div>
+        <div class="row"><span class="key">SBX-8</span><span class="t">Supplier price import rounds to the nearest riyal</span><span class="src">zendesk</span><span class="age">yesterday</span><span class="btn pale">Triage</span></div>
       </div>
     </div>
   </div>
 </div>
 </div>
+<script>
+(function(){
+  var map={"Start": "Session.html", "Triage": "Session.html"}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); if(map[t]) link(el,map[t]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
 </body>
 </html>

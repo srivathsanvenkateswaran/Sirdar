@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>Sirdar screens · Register</title>
+<title>Sirdar walkthrough · Register</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
 :root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -65,6 +65,20 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
 .tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
 .reg{display:flex;flex:1;flex-direction:column;gap:16px;min-height:0;padding:16px}
 .reghead{display:flex;flex-direction:column;gap:4px}
 .lede{color:var(--sd-ink-3)}
@@ -80,9 +94,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .heat .legend{display:flex;align-items:center;gap:12px;margin-top:4px}
 .heat .legend span{display:inline-flex;align-items:center;gap:5px}
 .bar{display:flex;align-items:center;gap:8px}
-.sel{display:inline-flex;align-items:center;gap:6px;min-height:28px;padding:4px 8px 4px 10px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);font-size:13px}
 .sel .lab{color:var(--sd-ink-3)}
-.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
 .bar .stats{margin-left:auto}
 .tbl{min-height:0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);overflow:hidden}
 .tbl table{width:100%;border-collapse:collapse}
@@ -95,18 +107,28 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tbl td.kind{font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .tbl td.when{font-family:var(--sd-font-mono);font-size:11.5px;font-variant-numeric:tabular-nums;color:var(--sd-ink-2)}
 .tbl td.none{color:var(--sd-ink-3)}
-.chip-o{display:inline-flex;align-items:center;min-height:18px;padding:0 7px;border:1px solid var(--sd-rule-strong);border-radius:999px;font-size:10.5px;line-height:16px;color:var(--sd-ink-2)}
-.chip-o[data-v="confirmed"]{border-color:var(--sd-st-done);color:var(--sd-st-done)}
-.chip-o[data-v="partial"]{border-color:var(--sd-st-blocked);color:var(--sd-st-blocked)}
-.chip-o[data-v="wrong"]{border-color:var(--sd-st-failed);color:var(--sd-st-failed)}
 .notes{display:inline-flex;gap:4px;vertical-align:middle}
 .notes i{display:block;width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong)}
 .notes i[data-on="true"]{background:var(--sd-accent)}
 .tbl tr.detail td{padding:0 12px 8px;border-top:0;font-size:11.5px;color:var(--sd-ink-2)}
 .tbl tr.detail td .mono{color:var(--sd-ink-3)}
   </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
 </head>
 <body>
+<div class="demo-bar"><span class="step">5 of 10</span><span class="name">Register</span><span class="what">Every run ever, with the day it happened above the table. Read-only: it has no commit action of its own.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Board.html">Back</a><a href="Eval.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the sidebar. Click a row to open that run's session.</div>
 <div class="app">
 <div class="sidebar">
   <div class="brand">SIRDAR</div>
@@ -161,22 +183,38 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
       <table>
         <thead><tr><th>Key</th><th>Kind</th><th>State</th><th>Provider</th><th class="num">Turns</th><th class="num">Cost</th><th class="num">Mins</th><th>Confidence</th><th>Verdict</th><th>Notes</th><th>When</th></tr></thead>
         <tbody>
-          <tr><td class="key">SBX-4</td><td class="kind">triage</td><td><span class="badge" data-s="running">running</span></td><td>claude</td><td class="num">6</td><td class="num">$0.07</td><td class="num">2</td><td class="none">—</td><td class="none">—</td><td><span class="notes"><i data-on="false"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">15 Sep 09:41</td></tr>
-          <tr><td class="key">SBX-1</td><td class="kind">fix</td><td><span class="badge" data-s="blocked">blocked</span></td><td>claude</td><td class="num">23</td><td class="num">$0.41</td><td class="num">4</td><td><span class="chip-o">high</span></td><td class="none">—</td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="false"></i></span></td><td class="when">15 Sep 09:12</td></tr>
-          <tr><td class="key">SBX-1</td><td class="kind">rca</td><td><span class="badge" data-s="completed">completed</span></td><td>claude</td><td class="num">14</td><td class="num">$0.22</td><td class="num">3</td><td><span class="chip-o">high</span></td><td><span class="chip-o" data-v="confirmed">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="false"></i></span></td><td class="when">15 Sep 08:40</td></tr>
-          <tr><td class="key">SBX-1</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">9</td><td class="num">$0.11</td><td class="num">2</td><td><span class="chip-o">high</span></td><td><span class="chip-o" data-v="confirmed">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 17:05</td></tr>
-          <tr><td class="key">SBX-3</td><td class="kind">rca</td><td><span class="badge" data-s="failed">failed</span></td><td>qwen</td><td class="num">4</td><td class="num">$0.03</td><td class="num">6</td><td class="none">—</td><td class="none">—</td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 16:20</td></tr>
-          <tr class="detail"><td colspan="11">stalled: no activity for 6m</td></tr>
-          <tr><td class="key">SBX-3</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>copilot</td><td class="num">11</td><td class="num">$0.09</td><td class="num">3</td><td><span class="chip-o">medium</span></td><td><span class="chip-o" data-v="partial">partial</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 15:48</td></tr>
-          <tr><td class="key">SBX-2</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>claude</td><td class="num">8</td><td class="num">$0.12</td><td class="num">2</td><td><span class="chip-o">low</span></td><td><span class="chip-o" data-v="wrong">wrong</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 14:31</td></tr>
-          <tr><td class="key">SBX-8</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>cursor</td><td class="num">7</td><td class="num">$0.08</td><td class="num">2</td><td><span class="chip-o">medium</span></td><td class="none">—</td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 11:56</td></tr>
-          <tr><td class="key">SBX-9</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">10</td><td class="num">$0.10</td><td class="num">3</td><td><span class="chip-o">high</span></td><td><span class="chip-o" data-v="confirmed">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 10:20</td></tr>
-          <tr><td class="key">SBX-5</td><td class="kind">resolution</td><td><span class="badge" data-s="done">done</span></td><td>claude</td><td class="num">12</td><td class="num">$0.18</td><td class="num">4</td><td><span class="chip-o">high</span></td><td><span class="chip-o" data-v="confirmed">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="true"></i></span></td><td class="when">11 Sep 16:02</td></tr>
+          <tr><td class="key">SBX-4</td><td class="kind">triage</td><td><span class="badge" data-s="running">running</span></td><td>claude</td><td class="num">6</td><td class="num">$0.08</td><td class="num">2</td><td class="none">—</td><td class="none">—</td><td><span class="notes"><i data-on="false"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">15 Sep 09:41</td></tr>
+          <tr><td class="key">SBX-1</td><td class="kind">fix</td><td><span class="badge" data-s="blocked">blocked</span></td><td>claude</td><td class="num">23</td><td class="num">$0.41</td><td class="num">4</td><td><span class="chip-outline">high</span></td><td class="none">—</td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="false"></i></span></td><td class="when">15 Sep 09:12</td></tr>
+          <tr><td class="key">SBX-1</td><td class="kind">rca</td><td><span class="badge" data-s="completed">completed</span></td><td>claude</td><td class="num">14</td><td class="num">$0.22</td><td class="num">3</td><td><span class="chip-outline">high</span></td><td><span class="chip-outline" data-tone="done">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="false"></i></span></td><td class="when">15 Sep 08:40</td></tr>
+          <tr><td class="key">SBX-1</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">9</td><td class="num">$0.11</td><td class="num">2</td><td><span class="chip-outline">high</span></td><td><span class="chip-outline" data-tone="done">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 17:05</td></tr>
+          <tr><td class="key">SBX-6</td><td class="kind">triage</td><td><span class="badge" data-s="failed">failed</span></td><td>qwen</td><td class="num">0</td><td class="num">$0.00</td><td class="num">1</td><td class="none">—</td><td class="none">—</td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 16:20</td></tr>
+          <tr class="detail"><td colspan="11">jira timed out after 30s</td></tr>
+          <tr><td class="key">SBX-3</td><td class="kind">rca</td><td><span class="badge" data-s="completed">completed</span></td><td>copilot</td><td class="num">21</td><td class="num">$0.52</td><td class="num">6</td><td><span class="chip-outline">medium</span></td><td><span class="chip-outline" data-tone="blocked">partial</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 15:48</td></tr>
+          <tr><td class="key">SBX-2</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">8</td><td class="num">$0.12</td><td class="num">3</td><td><span class="chip-outline">low</span></td><td><span class="chip-outline" data-tone="failed">wrong</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 14:31</td></tr>
+          <tr><td class="key">SBX-9</td><td class="kind">rca</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">19</td><td class="num">$0.31</td><td class="num">4</td><td><span class="chip-outline">high</span></td><td><span class="chip-outline" data-tone="done">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 11:56</td></tr>
+          <tr><td class="key">SBX-9</td><td class="kind">triage</td><td><span class="badge" data-s="completed">completed</span></td><td>codex</td><td class="num">10</td><td class="num">$0.10</td><td class="num">3</td><td><span class="chip-outline">high</span></td><td><span class="chip-outline" data-tone="done">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="false"></i><i data-on="false"></i></span></td><td class="when">14 Sep 10:20</td></tr>
+          <tr><td class="key">SBX-5</td><td class="kind">fix</td><td><span class="badge" data-s="done">done</span></td><td>claude</td><td class="num">29</td><td class="num">$0.77</td><td class="num">9</td><td><span class="chip-outline">high</span></td><td><span class="chip-outline" data-tone="done">confirmed</span></td><td><span class="notes"><i data-on="true"></i><i data-on="true"></i><i data-on="true"></i></span></td><td class="when">11 Sep 16:02</td></tr>
         </tbody>
       </table>
     </div>
   </div>
 </div>
 </div>
+<script>
+(function(){
+  var map={}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); if(map[t]) link(el,map[t]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
 </body>
 </html>

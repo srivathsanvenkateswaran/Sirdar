@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>Sirdar screens · Change review</title>
+<title>Sirdar walkthrough · Change review</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
 :root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -65,6 +65,20 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
 .tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
 .rv{display:grid;grid-template-columns:240px minmax(0,1fr) 320px;flex:1;min-height:0}
 .rail{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
 .railhead{padding:10px 16px 6px;font-size:11.5px;color:var(--sd-ink-3)}
@@ -79,9 +93,6 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .checks .ok{color:var(--sd-st-done)}
 .diffcol{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
 .dtool{display:flex;align-items:center;gap:12px;min-height:36px;padding:4px 16px;border-bottom:1px solid var(--sd-rule)}
-.seg{display:inline-flex;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);overflow:hidden}
-.seg span{padding:2px 10px;font-size:11.5px;line-height:20px;color:var(--sd-ink-3)}
-.seg span[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink);font-weight:500}
 .dtool .path{font-size:11.5px;color:var(--sd-ink-2)}
 .diff{flex:1;min-height:0;overflow:hidden;font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.55}
 .hunk{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px;background:var(--sd-sunk);color:var(--sd-ink-3);border-top:1px solid var(--sd-rule);border-bottom:1px solid var(--sd-rule)}
@@ -109,8 +120,22 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .foot2 .stats{margin-left:0}
 .foot2 .btn.ghost{margin-left:auto}
   </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
 </head>
 <body>
+<div class="demo-bar"><span class="step">3 of 10</span><span class="name">Change review</span><span class="what">The full-width review before a fix becomes a branch: keep or drop each hunk, read the checks and what the agent said, then create the branch.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Session.html">Back</a><a href="Board.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the Changes tab or Create branch on a session.</div>
 <div class="app">
 <div class="sidebar">
   <div class="brand">SIRDAR</div>
@@ -150,7 +175,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
     <div class="rail">
       <div class="railhead">2 files · <span class="mono"><span class="add">+25</span> <span class="del">−6</span></span></div>
       <div class="file" data-on="true"><span class="path">app/ledger.go</span><span class="add">+4</span><span class="del">−6</span><span class="rev">reviewed</span></div>
-      <div class="file"><span class="path">app/ledger_test.go</span><span class="add">+21</span><span class="rev">new</span></div>
+      <div class="file"><span class="path">app/ledger_test.go</span><span class="add">+21</span><span class="del">−0</span><span class="rev">new</span></div>
       <div class="railsec">Checks</div>
       <div class="checks"><span><span class="ok">ok</span>  go build ./...</span><span><span class="ok">ok</span>  go vet ./...</span><span><span class="ok">ok</span>  go test · 12 passed · 1.2s</span></div>
     </div>
@@ -160,13 +185,13 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
         <div class="hunk"><span>@@ -88,12 +88,10 @@ func (l *Ledger) ApplyMovement(m Movement)</span><span class="acts"><span class="btn pale" data-on="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>Kept</span><span class="btn ghost">Drop</span></span></div>
         <div class="dl"><span class="n">88</span><span class="c">    case Return:</span></div>
         <div class="dl"><span class="n">89</span><span class="c">        l.onHand[m.SKU] += m.Qty</span></div>
-        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust the reserved count</span></div>
+        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust reserved</span></div>
         <div class="dl" data-t="del"><span class="n">91</span><span class="c">-       l.adjust(m.SKU, m.Qty)</span></div>
         <div class="dl" data-t="del"><span class="n">92</span><span class="c">-       if m.Partial {</span></div>
         <div class="dl" data-t="del"><span class="n">93</span><span class="c">-           l.reserved[m.SKU] -= m.Qty</span></div>
         <div class="dl" data-t="del"><span class="n">94</span><span class="c">-       }</span></div>
-        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation; a full one</span></div>
-        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // is already counted by the receipt above</span></div>
+        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation;</span></div>
+        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // a full one is counted by the receipt</span></div>
         <div class="dl" data-t="add"><span class="n">92</span><span class="c">+       if m.Partial {</span></div>
         <div class="dl" data-t="add"><span class="n">93</span><span class="c">+           l.reserved[m.SKU] -= m.Qty</span></div>
         <div class="dl"><span class="n">94</span><span class="c">        }</span></div>
@@ -213,5 +238,21 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
   </div>
 </div>
 </div>
+<script>
+(function(){
+  var map={"Back to session": "Session.html", "Create branch sirdar/SBX-1": "Board.html", "Discard worktree": "Session.html", "Kept": "Review.html", "Keep": "Review.html", "Drop": "Review.html"}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); if(map[t]) link(el,map[t]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
 </body>
 </html>

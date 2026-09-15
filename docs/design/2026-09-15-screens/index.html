@@ -1,32 +1,62 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sirdar screens · contact sheet</title>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sirdar walkthrough</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
 <style>
-body{margin:0;padding:32px;background:#F2EEE0;color:#17181C;font:14px/1.5 Inter,-apple-system,system-ui,sans-serif}
+body{margin:0;padding:40px 32px 64px;background:#F2EEE0;color:#17181C;font:14px/1.5 Inter,-apple-system,system-ui,sans-serif}
 h1{margin:0 0 8px;font-family:Newsreader,Georgia,serif;font-size:32px;font-weight:400}
-.note{max-width:68ch;color:#4A4E58}.note p{margin:0 0 8px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:32px;margin-top:24px}
-.tile{display:block;color:inherit;text-decoration:none}
-.frame{position:relative;width:100%;aspect-ratio:1440/900;border:1px solid #E3DFD1;border-radius:12px;overflow:hidden;background:#FFFDF7}
-.frame iframe{position:absolute;inset:0;width:1440px;height:900px;border:0;transform-origin:0 0;transform:scale(calc(100% / 1440 * 1));pointer-events:none}
-.cap{display:flex;justify-content:space-between;gap:12px;padding:8px 4px 0;font-weight:500}
-.cap .file{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:400;color:#676B74}
-</style>
-<script>
-function fit(){document.querySelectorAll('.frame').forEach(f=>{const s=f.clientWidth/1440;f.querySelector('iframe').style.transform='scale('+s+')'})}
-addEventListener('load',fit);addEventListener('resize',fit);
-</script></head><body>
-<h1>Sirdar screens</h1>
-<div class="note"><p>Sirdar screens for review. Every value comes from the shipped tokens (paper ground, one serif per screen, mono for evidence, one filled button per screen). Ticket SBX-1 is the sandbox ticket; every name, key and server is fabricated.</p><p>Row 1: the session surface (live, blocked on a question; empty), the queue. Row 2: change review before a branch, the register, eval. Row 3: settings (MCP servers, providers, the tool tester), the component library.</p><p>Mark anything: wording, density, what is missing, what should go.</p><p>Click a tile to open the screen at full size (1440×900).</p></div>
-<div class="grid">
-<a class="tile" href="Session.html"><div class="frame"><iframe src="Session.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Session</span><span class="file">Session.html</span></div></a>
-<a class="tile" href="SessionEmpty.html"><div class="frame"><iframe src="SessionEmpty.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>New session</span><span class="file">SessionEmpty.html</span></div></a>
-<a class="tile" href="Board.html"><div class="frame"><iframe src="Board.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Board</span><span class="file">Board.html</span></div></a>
-<a class="tile" href="Review.html"><div class="frame"><iframe src="Review.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Change review</span><span class="file">Review.html</span></div></a>
-<a class="tile" href="Register.html"><div class="frame"><iframe src="Register.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Register</span><span class="file">Register.html</span></div></a>
-<a class="tile" href="Eval.html"><div class="frame"><iframe src="Eval.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Eval</span><span class="file">Eval.html</span></div></a>
-<a class="tile" href="Settings.html"><div class="frame"><iframe src="Settings.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: MCP servers</span><span class="file">Settings.html</span></div></a>
-<a class="tile" href="Providers.html"><div class="frame"><iframe src="Providers.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: Providers</span><span class="file">Providers.html</span></div></a>
-<a class="tile" href="Library.html"><div class="frame"><iframe src="Library.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Library</span><span class="file">Library.html</span></div></a>
-<a class="tile" href="ToolTester.html"><div class="frame"><iframe src="ToolTester.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: Try a tool</span><span class="file">ToolTester.html</span></div></a>
+.lede{max-width:68ch;color:#4A4E58;margin:0 0 28px}
+.flow{display:grid;grid-template-columns:1fr 1fr;gap:24px 48px;max-width:1240px}
+ol{list-style:none;margin:0;padding:0;display:grid;gap:12px}
+.step{display:grid;grid-template-columns:32px 1fr;gap:2px 14px;padding:14px 16px;border:1px solid #E3DFD1;border-radius:12px;background:#FFFDF7;color:inherit;text-decoration:none}
+.step:hover{border-color:#3B3AA6}
+.step .n{grid-row:1/4;font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:12px;color:#676B74;padding-top:3px}
+.step .t{font-weight:600}
+.step .w{color:#4A4E58}
+.step .f{color:#676B74;font-size:12px}
+.map{border:1px solid #E3DFD1;border-radius:12px;background:#FFFDF7;padding:20px 24px;align-self:start;position:sticky;top:24px}
+.map h2{margin:0 0 12px;font-family:Newsreader,Georgia,serif;font-size:22px;font-weight:400}
+.map p{color:#4A4E58;margin:12px 0 0;max-width:52ch}
+</style></head><body>
+<h1>Sirdar walkthrough</h1>
+<p class="lede">Ten screens, in the order a support engineer meets them. Every page has a guide bar with Back and Next, and a "Show links" box that outlines what you can click: sidebar rows, cards, table rows, tabs and buttons all go to the screen they would open in the app. Ticket SBX-1 is the sandbox ticket; every name is fabricated.</p>
+<div class="flow">
+<ol>
+<li><a class="step" href="SessionEmpty.html"><span class="n">1</span><span class="t">New session</span><span class="w">Where every piece of work starts: paste a ticket or pick one that landed, choose triage, RCA or fix, and start.</span><span class="f">From the sidebar's New session button, or on first launch.</span></a></li>
+<li><a class="step" href="Session.html"><span class="n">2</span><span class="t">Session</span><span class="w">The harness surface. The agent's transcript on the left, its changes on the right, and the composer at the bottom for answering its question or steering it. Here the run is blocked on a question.</span><span class="f">From Start on a new session, from a card on the Board, a row in the Register, or a recent session in the sidebar.</span></a></li>
+<li><a class="step" href="Review.html"><span class="n">3</span><span class="t">Change review</span><span class="w">The full-width review before a fix becomes a branch: keep or drop each hunk, read the checks and what the agent said, then create the branch.</span><span class="f">From the Changes tab or Create branch on a session.</span></a></li>
+<li><a class="step" href="Board.html"><span class="n">4</span><span class="t">Board</span><span class="w">Every run as a lane by state, and the inbound strip that says which tickets the webhooks started, skipped or rejected.</span><span class="f">From the sidebar. Click any card to open its session.</span></a></li>
+<li><a class="step" href="Register.html"><span class="n">5</span><span class="t">Register</span><span class="w">Every run ever, with the day it happened above the table. Read-only: it has no commit action of its own.</span><span class="f">From the sidebar. Click a row to open that run's session.</span></a></li>
+<li><a class="step" href="Eval.html"><span class="n">6</span><span class="t">Eval</span><span class="w">Run the golden set again and compare the agent's answers with what a person did.</span><span class="f">From the sidebar. Run suite queues the runs, which then appear on the Board.</span></a></li>
+<li><a class="step" href="Settings.html"><span class="n">7</span><span class="t">Settings: MCP servers</span><span class="w">Which servers a run gets and which of their tools it may call. Opens as a modal over the session.</span><span class="f">From the sidebar's Settings row.</span></a></li>
+<li><a class="step" href="ToolTester.html"><span class="n">8</span><span class="t">Settings: Try a tool</span><span class="w">Call one MCP tool by hand, see the verdict Sirdar's permission rules give it, and read the result.</span><span class="f">From the Try a tool row in the settings nav.</span></a></li>
+<li><a class="step" href="Providers.html"><span class="n">9</span><span class="t">Settings: Providers</span><span class="w">Every installed coding-agent CLI, its sign-in state, whether it may run a fix, and how its read-only guard works.</span><span class="f">From the Providers row in the settings nav.</span></a></li>
+<li><a class="step" href="Library.html"><span class="n">10</span><span class="t">Library</span><span class="w">The component gallery: every piece the screens are built from, at the size it ships at.</span><span class="f">From the sidebar.</span></a></li>
+</ol>
+<aside class="map"><h2>How the screens connect</h2>
+<svg viewBox="0 0 560 420" width="100%" style="display:block;font:12px Inter,-apple-system,system-ui,sans-serif">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="#4A4E58"/></marker></defs>
+<style>.b{fill:#FFFDF7;stroke:#C9C4B2} .b:hover{stroke:#3B3AA6} .t{fill:#17181C;font-weight:600} .l{fill:#676B74;font-size:10.5px} .e{stroke:#4A4E58;fill:none;marker-end:url(#a)} .hub{fill:#E4E0FF;stroke:#3B3AA6}</style>
+<a href="SessionEmpty.html"><rect class="b" x="20" y="20" width="120" height="40" rx="8"/><text class="t" x="80" y="45" text-anchor="middle">New session</text></a>
+<a href="Session.html"><rect class="b hub" x="220" y="20" width="120" height="40" rx="8"/><text class="t" x="280" y="45" text-anchor="middle">Session</text></a>
+<a href="Review.html"><rect class="b" x="420" y="20" width="120" height="40" rx="8"/><text class="t" x="480" y="45" text-anchor="middle">Change review</text></a>
+<a href="Board.html"><rect class="b" x="20" y="150" width="120" height="40" rx="8"/><text class="t" x="80" y="175" text-anchor="middle">Board</text></a>
+<a href="Register.html"><rect class="b" x="220" y="150" width="120" height="40" rx="8"/><text class="t" x="280" y="175" text-anchor="middle">Register</text></a>
+<a href="Eval.html"><rect class="b" x="420" y="150" width="120" height="40" rx="8"/><text class="t" x="480" y="175" text-anchor="middle">Eval</text></a>
+<a href="Settings.html"><rect class="b" x="20" y="290" width="150" height="40" rx="8"/><text class="t" x="95" y="315" text-anchor="middle">Settings: MCP servers</text></a>
+<a href="ToolTester.html"><rect class="b" x="200" y="290" width="150" height="40" rx="8"/><text class="t" x="275" y="315" text-anchor="middle">Settings: Try a tool</text></a>
+<a href="Providers.html"><rect class="b" x="380" y="290" width="160" height="40" rx="8"/><text class="t" x="460" y="315" text-anchor="middle">Settings: Providers</text></a>
+<a href="Library.html"><rect class="b" x="20" y="370" width="120" height="40" rx="8"/><text class="t" x="80" y="395" text-anchor="middle">Library</text></a>
+<path class="e" d="M140 40 H218"/><text class="l" x="179" y="34" text-anchor="middle">Start</text>
+<path class="e" d="M340 40 H418"/><text class="l" x="379" y="34" text-anchor="middle">Changes</text>
+<path class="e" d="M500 60 V90 H320 V62"/><text class="l" x="410" y="86" text-anchor="middle">Back to session</text>
+<path class="e" d="M80 150 V110 H260 V62"/><text class="l" x="170" y="106" text-anchor="middle">a card opens its session</text>
+<path class="e" d="M300 150 V62"/><text class="l" x="306" y="128">a row opens its session</text>
+<path class="e" d="M480 150 V132 H140 V148"/><text class="l" x="290" y="146" text-anchor="end">Run suite queues runs on the Board</text>
+<text class="l" x="280" y="250" text-anchor="middle">Settings opens from the sidebar as a modal over whatever is behind it</text>
+<path class="e" d="M170 310 H198"/><path class="e" d="M350 310 H378"/>
+<text class="l" x="280" y="350" text-anchor="middle">the modal's own nav switches page; Cancel or Close returns to the session</text>
+<text class="l" x="160" y="395">from the sidebar, like Board, Register and Eval</text>
+</svg>
+<p>One rule the mocks obey everywhere: exactly one filled black button per screen, and it is that screen's commit action. Start, Answer, Create branch, Run suite, Call, Save. A read-only screen has none of its own.</p>
+</aside>
 </div></body></html>

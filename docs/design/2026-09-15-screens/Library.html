@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=1440">
-<title>Sirdar screens · Library</title>
+<title>Sirdar walkthrough · Library</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
   <style>
 :root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
@@ -65,23 +65,33 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
 .tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
 .icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
 .lbar{display:flex;align-items:flex-end;gap:24px;padding:12px 24px;border-bottom:1px solid var(--sd-rule);background:var(--sd-surface)}
 .ltxt{display:flex;flex-direction:column;gap:4px}
 .lede{color:var(--sd-ink-3);font-size:13px}
 .ctrls{display:flex;gap:8px;margin-left:auto;padding-bottom:2px}
-.seg{display:inline-flex;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);overflow:hidden}
-.seg span{min-height:26px;padding:3px 12px;color:var(--sd-ink-3);font-size:12px;font-weight:500;line-height:1.4}
-.seg span+span{border-left:1px solid var(--sd-rule-strong)}
-.seg span[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
 .gallery{display:flex;flex:1;flex-direction:column;min-height:0;background:var(--sd-shell);overflow:hidden}
 .gsec{display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:24px;padding:10px 24px;border-bottom:1px solid var(--sd-rule)}
 .gsec:last-child{border-bottom:0}
+/* section names stay in the serif: the shipped gallery sets them that way */
 .gname{margin:0;font-family:var(--sd-font-display);font-size:18px;font-weight:400;line-height:1.25}
 .gnote{margin-top:4px;color:var(--sd-ink-2);font-size:12px;line-height:1.45}
 .sps{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
 .sp{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
 .lab{font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
-.btn.filled{border-color:var(--sd-primary);background:var(--sd-primary);color:var(--sd-primary-ink)}
 .btn[data-disabled="true"]{opacity:.45}
 .card{border-radius:12px;background:var(--sd-card-row)}
 .runcard{display:flex;flex-direction:column;gap:6px;width:260px;padding:10px 12px;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);box-sizing:border-box}
@@ -125,8 +135,22 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
 .qc[data-level="warn"] .fill{background:var(--sd-st-blocked)}.qc[data-level="warn"] .pct{color:var(--sd-st-blocked)}
 .qc[data-level="over"] .fill{background:var(--sd-st-failed)}.qc[data-level="over"] .pct{color:var(--sd-st-failed);font-weight:600}
   </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
 </head>
 <body>
+<div class="demo-bar"><span class="step">10 of 10</span><span class="name">Library</span><span class="what">The component gallery: every piece the screens are built from, at the size it ships at.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Providers.html">Back</a></div><div class="demo-from"><b>Reached from:</b> From the sidebar.</div>
 <div class="app">
 <div class="sidebar">
   <div class="brand">SIRDAR</div>
@@ -152,7 +176,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
       <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
       <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
     </div>
-    <div class="primary" data-sb="new">New session</div>
+    <div class="btn" data-sb="new">New session</div>
   </div>
 </div>
 <div class="sheet">
@@ -168,7 +192,7 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
       <div><h2 class="gname">Button</h2><div class="gnote">One filled button per screen, and it is that screen's commit action.</div></div>
       <div class="sps">
         <div class="sp"><span class="lab">default</span><span class="btn">Create branch</span></div>
-        <div class="sp"><span class="lab">primary</span><span class="btn filled">Run suite</span></div>
+        <div class="sp"><span class="lab">primary</span><span class="primary">Run suite</span></div>
         <div class="sp"><span class="lab">ghost</span><span class="btn ghost">Cancel</span></div>
         <div class="sp"><span class="lab">pale</span><span class="btn pale">Change</span></div>
         <div class="sp"><span class="lab">disabled</span><span class="btn" data-disabled="true">Create branch</span></div>
@@ -191,15 +215,15 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
         <div class="sp"><span class="lab">at rest</span>
           <div class="runcard">
             <div class="r1"><span class="key">SBX-3</span><span class="kind">rca</span><span class="badge" data-s="completed">completed</span></div>
-            <div class="t">Stock count export skips products with zero on hand</div>
-            <div class="stats"><span class="stat">codex</span><span class="stat"><b>02:10</b></span><span class="stat"><b>$0.19</b></span></div>
+            <div class="t">Stock count export skips products with a zero price</div>
+            <div class="stats"><span class="stat">copilot</span><span class="stat"><b>06:30</b></span><span class="stat"><b>$0.52</b></span></div>
           </div>
         </div>
         <div class="sp"><span class="lab">live</span>
           <div class="runcard" data-live="true">
             <div class="r1"><span class="key">SBX-4</span><span class="kind">triage</span><span class="badge" data-s="running">running</span></div>
-            <div class="t">Invoice total drops the VAT line when a discount is applied</div>
-            <div class="stats"><span class="stat">claude · <b>sonnet</b></span><span class="stat"><b>01:48</b></span><span class="stat"><b>$0.12</b></span></div>
+            <div class="t">Reorder reminder fires twice for the same product</div>
+            <div class="stats"><span class="stat">claude · <b>sonnet</b></span><span class="stat"><b>01:47</b></span><span class="stat"><b>$0.08</b></span></div>
           </div>
         </div>
       </div>
@@ -239,5 +263,21 @@ a{color:#3B3AA6}a:hover{color:#2B2A80}
   </div>
 </div>
 </div>
+<script>
+(function(){
+  var map={}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); if(map[t]) link(el,map[t]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
 </body>
 </html>
