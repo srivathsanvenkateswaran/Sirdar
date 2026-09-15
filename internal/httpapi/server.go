@@ -83,6 +83,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/events", s.runEvents)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/note", s.note)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/diff", s.runDiff)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/diff/drop", s.dropHunk)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/rca", s.startRCA)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)

@@ -94,7 +94,8 @@ type FixInfo struct {
 	Deviation string `json:"deviation,omitempty"`
 }
 
-// EventPayload mirrors the payload internal/run writes to events.jsonl.
+// EventPayload mirrors the payload internal/run writes to events.jsonl,
+// and the one internal/fix writes for a "review" event.
 type EventPayload struct {
 	Tool     string          `json:"tool,omitempty"`
 	Decision string          `json:"decision,omitempty"`
@@ -102,6 +103,15 @@ type EventPayload struct {
 	Turns    int             `json:"turns,omitempty"`
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
+
+	// Action, Path and Hunk carry a "review" event: what a person did to
+	// the fix commit after the session ended. Hunk is a pointer because
+	// its zero is a real index — the first hunk of a file is the one most
+	// often dropped — and omitting it would say a hunk was dropped
+	// without saying which.
+	Action string `json:"action,omitempty"`
+	Path   string `json:"path,omitempty"`
+	Hunk   *int   `json:"hunk,omitempty"`
 }
 
 // RunEvent is one line of a run's events.jsonl.
@@ -109,6 +119,41 @@ type RunEvent struct {
 	T       string       `json:"t"`
 	Kind    string       `json:"kind"`
 	Payload EventPayload `json:"payload"`
+}
+
+// DiffFile is one file in a fix run's change, with the counts a file list
+// shows beside it. Status is "added", "modified", "deleted" or "renamed";
+// a renamed file is named by the path it now has.
+type DiffFile struct {
+	Path      string `json:"path"`
+	Status    string `json:"status"`
+	Additions int    `json:"additions"`
+	Deletions int    `json:"deletions"`
+}
+
+// RunDiff is one fix run's change as a reviewer reads it: what it is
+// against, where it lives, the file list, and the unified patch.
+//
+// Worktree is where the run committed and WorktreePresent whether that
+// directory is still there — a change is readable either way, but only a
+// worktree that is still there can have a hunk dropped out of it. Pushed
+// says the branch has left the machine, which closes the drop too.
+type RunDiff struct {
+	Base            string     `json:"base"`
+	Head            string     `json:"head"`
+	Branch          string     `json:"branch"`
+	Worktree        string     `json:"worktree"`
+	WorktreePresent bool       `json:"worktreePresent"`
+	Pushed          bool       `json:"pushed"`
+	Files           []DiffFile `json:"files"`
+	Patch           string     `json:"patch"`
+	// Truncated says the patch was cut at 2 MiB. The file list is whole
+	// either way: it is the counts, not the text.
+	Truncated bool `json:"truncated,omitempty"`
+	// ETag is a hash of the patch this call computed. A drop carries it
+	// back, so a hunk index cannot be applied to a patch other than the
+	// one it was read from.
+	ETag string `json:"etag"`
 }
 
 // Ticket is one queue row: the tracker record plus the newest run for it.

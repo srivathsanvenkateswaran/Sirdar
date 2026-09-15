@@ -25,7 +25,33 @@ export interface RunDetail extends RunSummary { promptPath: string; bundleDir: s
  * whose `gh` call failed, both push the branch and record no URL.
  */
 export interface FixInfo { branch?: string; base?: string; commit?: string; prUrl?: string; pushed?: boolean; deviation?: string }
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown } }
+/**
+ * A 'review' event's payload carries what a person did to the fix commit
+ * after the session ended — `action: 'drop'` with the file and the 0-based
+ * hunk index within that file. Every other kind carries the agent's fields.
+ */
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; action?: string; path?: string; hunk?: number } }
+/** One file in a fix run's change. A renamed file is named by the path it now has. */
+export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
+/**
+ * A fix run's change as a reviewer reads it. `worktreePresent` and `pushed`
+ * are what decide whether a hunk can still be dropped: the change is readable
+ * once the worktree is gone or the branch has been pushed, but not editable.
+ *
+ * `truncated` is set when the patch was cut at 2 MiB; the file list is whole
+ * either way. `etag` hashes the patch and must be handed back to drop a hunk,
+ * so an index read from one patch can never be applied to another.
+ *
+ * It is the body of `GET /api/workspaces/{id}/runs/{runId}/diff`, and of
+ * `POST .../diff/drop`, which answers with the change as it stands after the
+ * hunk it was given was reverted out of the commit. No screen reads it yet;
+ * the shape is pinned here because the Go side's test pins it too.
+ */
+export interface RunDiff {
+  base: string; head: string; branch: string;
+  worktree: string; worktreePresent: boolean; pushed: boolean;
+  files: DiffFile[]; patch: string; truncated?: boolean; etag: string
+}
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
