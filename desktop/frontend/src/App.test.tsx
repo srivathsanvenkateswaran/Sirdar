@@ -15,6 +15,9 @@ afterEach(() => {
   } catch {
     // Nothing to reset.
   }
+  // The window's address is now part of the shell's state; a test that ends on
+  // Settings would otherwise open the next one there.
+  window.history.replaceState(null, '', window.location.pathname)
 })
 
 function mount(transport: FakeTransport) {
@@ -257,6 +260,101 @@ describe('Eval tab', () => {
         { ws: 'ws1', keys: undefined, opts: { provider: undefined, model: undefined } },
       ]),
     )
+  })
+})
+
+/*
+ * The window's address. Navigation is state the store holds, and the hash is a
+ * second spelling of it, so a screen can be linked to and the Back button does
+ * what it looks as though it does.
+ */
+describe('Deep links', () => {
+  const at = (hash: string) => window.history.replaceState(null, '', hash)
+
+  it.each([
+    ['#/register', 'Register'],
+    ['#/eval', 'Eval'],
+    ['#/settings', 'Settings'],
+  ])('%s opens that screen straight away', async (hash, tab) => {
+    at(hash)
+    mount(seeded())
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: tab })).toHaveAttribute('aria-current', 'page'),
+    )
+  })
+
+  it('#/runs/<ws>/<id> opens the run, on the workspace the link names', async () => {
+    at('#/runs/ws2/r9')
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1', name: 'omni' }), workspace({ id: 'ws2', name: 'ledger' })],
+    })
+    const { store: s } = mount(transport)
+
+    await waitFor(() => expect(s.getState().screen).toEqual({ name: 'run', runId: 'r9' }))
+    expect(s.getState().currentWorkspaceId).toBe('ws2')
+    expect(await screen.findByRole('button', { name: 'Back' })).toBeInTheDocument()
+    await waitFor(() => expect(transport.calls.runs).toContain('ws2'))
+  })
+
+  // A workspace this install does not have cannot be switched to; the screen
+  // still opens, on whichever one is current, rather than showing nothing.
+  it('follows a run link naming an unknown workspace as far as it can', async () => {
+    at('#/runs/ws-gone/r9')
+    const { store: s } = mount(seeded())
+
+    await waitFor(() => expect(s.getState().screen).toEqual({ name: 'run', runId: 'r9' }))
+    expect(s.getState().currentWorkspaceId).toBe('ws1')
+    await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r9'))
+  })
+
+  it('a hash naming nothing opens the board, and says so', async () => {
+    at('#/nowhere')
+    const { store: s } = mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    expect(s.getState().screen).toEqual({ name: 'board' })
+    // The address catches up with the screen, rather than describing one that
+    // is not up.
+    await waitFor(() => expect(window.location.hash).toBe('#/'))
+  })
+
+  it('the header buttons write the address they navigate to', async () => {
+    mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+    await waitFor(() => expect(window.location.hash).toBe('#/'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/register'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/settings'))
+
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/'))
+  })
+
+  it('opening a run card writes a link to that run', async () => {
+    const { container } = mount(seeded())
+    await waitFor(() =>
+      expect(within(lane(container, 'gathering')).getByText('OMNI-1')).toBeInTheDocument(),
+    )
+
+    fireEvent.click(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ }))
+    await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r1'))
+  })
+
+  // Back, in a browser or in the desktop webview, is a hashchange.
+  it('follows the address back to where it was', async () => {
+    const { store: s } = mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
+    await waitFor(() => expect(window.location.hash).toBe('#/eval'))
+
+    at('#/')
+    fireEvent(window, new HashChangeEvent('hashchange'))
+    await waitFor(() => expect(s.getState().screen).toEqual({ name: 'board' }))
   })
 })
 

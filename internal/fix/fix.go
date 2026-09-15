@@ -46,6 +46,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
 )
 
 // approvedStatuses are the triage-note statuses a fix may start from.
@@ -72,6 +73,19 @@ type Options struct {
 	// AcceptDeviation allows the push when the agent reported doing
 	// something other than the note's Proposed Fix.
 	AcceptDeviation bool
+
+	// At cuts the fix branch from this commit instead of from
+	// origin/<base>, so a fix can be generated against the code as it
+	// stood when the ticket was filed rather than against today's tip.
+	// Anything `git rev-parse` accepts will do: a sha, a tag, HEAD~12.
+	At string
+
+	// Local stops the flow at the commit. Nothing is pushed, no pull
+	// request is opened, the worktree is kept, and the commit's unified
+	// diff is written to fix.diff in the run directory. It is what a
+	// retrospective evaluation runs: the fix has to be produced and read,
+	// and must not reach anybody's remote.
+	Local bool
 }
 
 // Report is the agent's JSON answer.
@@ -124,8 +138,17 @@ type Result struct {
 	// Worktree is the linked worktree the session ran in, empty in
 	// in-place mode. It is still on disk when the result carries a
 	// Blocked reason or an error; on the success path it has been removed
-	// by the time the caller sees this.
+	// by the time the caller sees this — unless the run was local, which
+	// keeps it.
 	Worktree string
+
+	// Local says the run stopped at the commit: nothing was pushed and no
+	// pull request was opened. DiffPath is the commit's unified diff, in
+	// the run directory, and At is the commit the branch was cut from when
+	// --at named one.
+	Local    bool
+	DiffPath string
+	At       string
 
 	DryRun bool
 }
@@ -143,7 +166,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	if cfg == nil {
 		return Result{}, fmt.Errorf("fix: no workspace configuration")
 	}
-	res := Result{Key: key, DryRun: o.DryRun}
+	res := Result{Key: key, DryRun: o.DryRun, Local: o.Local}
 	stderr := deps.Stderr
 	if stderr == nil {
 		stderr = io.Discard
@@ -183,16 +206,28 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 			return res, err
 		}
 		if ok {
+			// --local means the same thing on a rerun as it did on the
+			// first run: the commit stays where it is. Accepting a
+			// deviation there is accepting the diff, not authorising a
+			// push nobody asked for.
+			if o.Local {
+				return acceptedLocal(ctx, g, cfg, key, prior, rep, stderr)
+			}
 			return pushReviewed(ctx, g, cfg, key, tn, prior, rep, o, stderr)
 		}
 	}
 
 	inPlace := cfg.Fix.InPlace
-	base, branch, err := prepareBranch(ctx, g, key, tn, o, inPlace)
+	base, branch, start, err := prepareBranch(ctx, g, key, tn, o, inPlace)
 	if err != nil {
 		return res, err
 	}
 	res.Base, res.Branch = base, branch
+	if o.At != "" {
+		// start is what --at resolved to, so the result and the run state
+		// name the commit itself rather than whatever shorthand was typed.
+		res.At = start
+	}
 
 	// Where the session will stand. In-place mode moves the operator's own
 	// HEAD onto the branch; otherwise the branch is checked out into a
@@ -201,19 +236,19 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	runID := ""
 	work := g
 	if inPlace {
-		if err := g.run(ctx, "checkout", "-B", branch, "origin/"+base); err != nil {
+		if err := g.run(ctx, "checkout", "-B", branch, start); err != nil {
 			return res, err
 		}
-		fmt.Fprintf(stderr, "[%s] branch %s from origin/%s\n", key, branch, base)
+		fmt.Fprintf(stderr, "[%s] branch %s from %s\n", key, branch, start)
 	} else {
 		runID = store.NewRunID(time.Now())
 		res.Worktree = worktreePath(cfg.Root, runID)
-		if err := addWorktree(ctx, g, res.Worktree, branch, base); err != nil {
+		if err := addWorktree(ctx, g, res.Worktree, branch, start); err != nil {
 			return res, err
 		}
 		work = git{dir: res.Worktree}
-		fmt.Fprintf(stderr, "[%s] branch %s from origin/%s in %s\n",
-			key, branch, base, relToRoot(cfg.Root, res.Worktree))
+		fmt.Fprintf(stderr, "[%s] branch %s from %s in %s\n",
+			key, branch, start, relToRoot(cfg.Root, res.Worktree))
 	}
 
 	// The third confinement layer, and the only one that does not depend on
@@ -236,10 +271,11 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.Fix(ctx, key, runner.FixOptions{
-		Options: runner.Options{Model: o.Model, DryRun: o.DryRun},
+		Options: runner.Options{Model: o.Model, DryRun: o.DryRun, At: res.At},
 		Prompt:  text,
 		Branch:  branch,
 		Base:    base,
+		Local:   o.Local,
 		Root:    res.Worktree,
 		RunID:   runID,
 	})
@@ -302,6 +338,17 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	recordCommit(cfg.Root, out.State.RunID, branch, base, commit, stderr, key)
 	res.State.Fix.Branch, res.State.Fix.Base, res.State.Fix.Commit = branch, base, commit
 
+	// The diff is written before the deviation gate, not after it: a local
+	// run that stopped on a deviation is exactly the one whose diff
+	// somebody is about to read.
+	if o.Local {
+		res.DiffPath = writeDiff(ctx, work, cfg.Root, out.State.RunID, commit, stderr, key)
+		recordFixState(cfg.Root, out.State.RunID, stderr, key, func(s *store.State) {
+			s.Fix.Local, s.Fix.DiffPath, s.Fix.Worktree = true, res.DiffPath, res.Worktree
+		})
+		res.State.Fix.Local, res.State.Fix.DiffPath = true, res.DiffPath
+	}
+
 	appendRegister(cfg.Root, key, out.State, tn)
 
 	if dev := strings.TrimSpace(res.Report.DeviationFromNote); dev != "" && !o.AcceptDeviation {
@@ -318,6 +365,15 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		return res, nil
 	}
 
+	// A local run ends here. Nothing leaves the machine, so there is no
+	// push, no pull request and no note moved to fix-pushed — and the
+	// worktree stays, because the commit and the diff in it are the whole
+	// output.
+	if o.Local {
+		fmt.Fprintf(stderr, "[%s] local: %s is on %s and was not pushed\n", key, short(commit), branch)
+		return res, nil
+	}
+
 	if err := publish(ctx, work, cfg, key, tn, o, &res, stderr); err != nil {
 		return res, err
 	}
@@ -328,13 +384,65 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	return res, nil
 }
 
-// relToRoot renders a path under the workspace for a progress line.
-func relToRoot(root, path string) string {
-	rel, err := filepath.Rel(root, path)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return path
+// writeDiff puts the commit's unified diff in the run directory as
+// fix.diff and returns its path. A failure is reported and otherwise
+// ignored: the commit exists either way, and the diff is a convenience for
+// whoever reads it next — `git show` on the branch says the same thing.
+func writeDiff(ctx context.Context, g git, root, runID, commit string, stderr io.Writer, key string) string {
+	patch, err := g.patch(ctx, commit)
+	if err != nil {
+		fmt.Fprintf(stderr, "[%s] the diff for %s was not written: %v\n", key, short(commit), err)
+		return ""
 	}
-	return rel
+	rn, _, err := store.Open(root, runID)
+	if err != nil {
+		fmt.Fprintf(stderr, "[%s] the diff for %s was not written: %v\n", key, short(commit), err)
+		return ""
+	}
+	path := filepath.Join(rn.Dir, "fix.diff")
+	if err := os.WriteFile(path, []byte(strings.TrimRight(patch, "\n")+"\n"), 0o644); err != nil {
+		fmt.Fprintf(stderr, "[%s] the diff for %s was not written: %v\n", key, short(commit), err)
+		return ""
+	}
+	return path
+}
+
+// acceptedLocal is `--accept-deviation --local` on a rerun: the human has
+// read the commit the previous run left and said yes to it, and yes means
+// the diff, not a push. Nothing is published; the result names the commit,
+// the diff and the worktree it is all sitting in, exactly as the first run
+// did.
+func acceptedLocal(ctx context.Context, g git, cfg *config.Config, key string, prior store.State, rep Report, stderr io.Writer) (Result, error) {
+	res := Result{
+		Key:      key,
+		Branch:   prior.Fix.Branch,
+		Base:     prior.Fix.Base,
+		At:       prior.At,
+		RunID:    prior.RunID,
+		State:    prior,
+		Report:   rep,
+		Commit:   prior.Fix.Commit,
+		Local:    true,
+		DiffPath: prior.Fix.DiffPath,
+		Worktree: safeWorktree(cfg.Root, prior.Fix.Worktree, stderr, key),
+	}
+	work := g
+	if isWorktree(res.Worktree) {
+		work = git{dir: res.Worktree}
+	} else {
+		res.Worktree = ""
+	}
+	if res.DiffPath == "" {
+		res.DiffPath = writeDiff(ctx, work, cfg.Root, prior.RunID, res.Commit, stderr, key)
+	}
+	recordFixState(cfg.Root, prior.RunID, stderr, key, func(s *store.State) {
+		s.Fix.Local, s.Fix.DiffPath = true, res.DiffPath
+		s.Fix.Deviation = ""
+	})
+	res.State.Fix.Local, res.State.Fix.DiffPath, res.State.Fix.Deviation = true, res.DiffPath, ""
+	fmt.Fprintf(stderr, "[%s] local: %s on %s is the commit run %s made; it stays where it is\n",
+		key, short(res.Commit), res.Branch, prior.RunID)
+	return res, nil
 }
 
 // publish is everything after the commit: the push, the pull request, and
@@ -623,10 +731,16 @@ func loadPlaybooks(dir string, stderr io.Writer) []prompt.Playbook {
 
 // --- git preflight ----------------------------------------------------
 
-// prepareBranch runs the preflight and settles the base and branch names.
-// Every refusal here happens before an agent process exists. It does not
-// check anything out: the caller does that, into the operator's own tree or
-// into a worktree of the run's own.
+// prepareBranch runs the preflight and settles the base, the branch name
+// and the start point the branch is cut from. Every refusal here happens
+// before an agent process exists. It does not check anything out: the
+// caller does that, into the operator's own tree or into a worktree of the
+// run's own.
+//
+// The start point is origin/<base> ordinarily and the commit --at names
+// when it names one. --at also skips the fetch: the start point is already
+// in this repository, and a retrospective fix has no business updating the
+// operator's remote-tracking refs on its way past.
 //
 // The dirty-tree refusal applies to in-place mode alone. It exists because
 // a fix commits everything in the tree it stands in, and in-place mode
@@ -634,36 +748,55 @@ func loadPlaybooks(dir string, stderr io.Writer) []prompt.Playbook {
 // session put there, so uncommitted work elsewhere in the repository is
 // neither swept up nor a reason to refuse — which is the point of the
 // worktree.
-func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Options, inPlace bool) (string, string, error) {
+func prepareBranch(ctx context.Context, g git, key string, tn triageNote, o Options, inPlace bool) (string, string, string, error) {
 	if err := g.run(ctx, "rev-parse", "--is-inside-work-tree"); err != nil {
-		return "", "", fmt.Errorf("fix: the workspace is not a git repository")
+		return "", "", "", fmt.Errorf("fix: the workspace is not a git repository")
 	}
 	if inPlace {
 		clean, status, err := g.clean(ctx)
 		if err != nil {
-			return "", "", err
+			return "", "", "", err
 		}
 		if !clean {
-			return "", "", dirtyTreeError(status)
+			return "", "", "", dirtyTreeError(status)
 		}
 	}
-	if err := g.run(ctx, "fetch", "origin"); err != nil {
-		return "", "", err
+
+	at := ""
+	if o.At != "" {
+		var err error
+		if at, err = worktree.ResolveCommit(ctx, g.wt(), o.At); err != nil {
+			return "", "", "", fmt.Errorf("fix: --at %s: %w", o.At, err)
+		}
+	} else if err := g.run(ctx, "fetch", "origin"); err != nil {
+		return "", "", "", err
 	}
 
+	// The base is the branch the pull request targets. A local run opens
+	// none, so a repository whose origin has no discernible default — a
+	// retrospective clone, a repository with no remote at all — is no
+	// reason to refuse one, as long as --at said where to start.
 	base := o.Base
-	var err error
 	if base == "" {
-		base, err = g.defaultBranch(ctx)
-		if err != nil {
-			return "", "", err
+		resolved, err := g.defaultBranch(ctx)
+		switch {
+		case err == nil:
+			base = resolved
+		case o.Local && at != "":
+		default:
+			return "", "", "", err
 		}
 	}
 	branch := BranchName(key, tn.doc.Title)
-	if branch == base {
-		return "", "", fmt.Errorf("fix: the fix branch would be %s, which is the base branch; a fix never commits to the default branch", base)
+	if base != "" && branch == base {
+		return "", "", "", fmt.Errorf("fix: the fix branch would be %s, which is the base branch; a fix never commits to the default branch", base)
 	}
-	return base, branch, nil
+
+	start := at
+	if start == "" {
+		start = "origin/" + base
+	}
+	return base, branch, start, nil
 }
 
 // dirtyTreeError explains the refusal, and says the useful thing in the
@@ -774,17 +907,20 @@ func commitChanges(ctx context.Context, g git, tn triageNote, rep Report) (strin
 
 // CommitMessage renders the commit subject and body.
 func CommitMessage(tn triageNote, rep Report) (string, string) {
-	subject := "fix: " + firstLine(rep.Summary)
+	line, rest := summarySubject(rep.Summary)
+	subject := "fix: " + line
 
 	var b strings.Builder
+	if rest != "" {
+		b.WriteString(rest + "\n\n")
+	}
 	if cause := strings.TrimSpace(tn.doc.RootCause.Hypothesis); cause != "" {
 		b.WriteString("Root cause: " + oneLine(cause) + "\n\n")
 	}
-	b.WriteString(strings.TrimSpace(rep.Summary))
 	if len(rep.FilesChanged) > 0 {
-		b.WriteString("\n\nFiles: " + strings.Join(rep.FilesChanged, ", "))
+		b.WriteString("Files: " + strings.Join(rep.FilesChanged, ", "))
 	}
-	return subject, b.String()
+	return subject, collapseBlankLines(strings.TrimSpace(b.String()))
 }
 
 // pullRequestText renders the pull request's title and body: the symptom,
@@ -797,7 +933,8 @@ func CommitMessage(tn triageNote, rep Report) (string, string) {
 // who have no business with that ticket; the title says what broke without
 // quoting whoever reported it.
 func pullRequestText(key string, tn triageNote, rep Report, includeComplaint bool) (string, string) {
-	title := fmt.Sprintf("[%s] fix: %s", key, firstLine(rep.Summary))
+	line, rest := summarySubject(rep.Summary)
+	title := fmt.Sprintf("[%s] fix: %s", key, line)
 
 	symptom := fallback(tn.doc.Title, "See the triage note.")
 	if includeComplaint {
@@ -810,7 +947,11 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 	b.WriteString("## Root cause\n\n")
 	b.WriteString(fallback(tn.doc.RootCause.Hypothesis, "See the triage note.") + "\n\n")
 	b.WriteString("## Fix\n\n")
-	b.WriteString(strings.TrimSpace(rep.Summary) + "\n")
+	b.WriteString(line)
+	if rest != "" {
+		b.WriteString("\n\n" + rest)
+	}
+	b.WriteString("\n")
 	if len(rep.FilesChanged) > 0 {
 		b.WriteString("\nFiles changed:\n")
 		for _, f := range rep.FilesChanged {
@@ -823,10 +964,10 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 			b.WriteString("- `" + t.Command + "` — " + t.Result + "\n")
 		}
 	}
-	if risks := strings.TrimSpace(rep.Risks); risks != "" && !strings.EqualFold(risks, "none") {
+	if risks := cleanAgentText(rep.Risks); risks != "" && !strings.EqualFold(risks, "none") {
 		b.WriteString("\nRisks: " + risks + "\n")
 	}
-	if dev := strings.TrimSpace(rep.DeviationFromNote); dev != "" {
+	if dev := cleanAgentText(rep.DeviationFromNote); dev != "" {
 		b.WriteString("\n**Deviation from the triage note:** " + dev + "\n")
 	}
 
@@ -844,7 +985,7 @@ func pullRequestText(key string, tn triageNote, rep Report, includeComplaint boo
 	if !wrote {
 		b.WriteString("- Triage note: " + filepath.Base(tn.path()) + "\n")
 	}
-	return title, b.String()
+	return title, collapseBlankLines(b.String())
 }
 
 // openPR creates the pull request with `gh`, returning its URL. A missing
@@ -941,6 +1082,97 @@ func firstLine(s string) string {
 
 func oneLine(s string) string {
 	return strings.Join(strings.Fields(s), " ")
+}
+
+// subjectMaxLen is the git convention for a commit subject line; the same
+// cap applies to the summary line a pull request title is built from.
+const subjectMaxLen = 72
+
+// summarySubject turns an agent's raw JSON summary into a subject line and
+// whatever body text follows it.
+//
+// An agent occasionally reports a multi-line summary as a JSON string with
+// a doubled backslash before the n (or r-n), which json.Unmarshal decodes
+// into the two literal characters \ and n rather than a line break;
+// unescapeNewlines turns both that and any real line break into the same
+// separator so the two cases are handled alike. The first non-empty line
+// becomes the subject, capped at subjectMaxLen characters on a word
+// boundary with nothing appended in its place. Every following line becomes
+// the returned body text, with any AI attribution trailer stripped and runs
+// of 3 or more blank lines collapsed to one.
+func summarySubject(s string) (subject, body string) {
+	lines := strings.Split(unescapeNewlines(s), "\n")
+
+	i := 0
+	for i < len(lines) && strings.TrimSpace(lines[i]) == "" {
+		i++
+	}
+	if i >= len(lines) {
+		return "", ""
+	}
+	subject = capLine(strings.TrimSpace(lines[i]), subjectMaxLen)
+	body = collapseBlankLines(stripAIAttribution(strings.Join(lines[i+1:], "\n")))
+	return subject, strings.TrimSpace(body)
+}
+
+// cleanAgentText applies the same unescaping and attribution stripping as
+// summarySubject to a single free-text field the agent wrote, such as
+// Report.Risks or Report.DeviationFromNote.
+func cleanAgentText(s string) string {
+	return strings.TrimSpace(collapseBlankLines(stripAIAttribution(unescapeNewlines(s))))
+}
+
+// unescapeNewlines normalizes real CRLF/CR line endings to \n and turns the
+// literal two- and four-character escape sequences \r\n and \n — the shape
+// a doubled backslash survives json.Unmarshal as — into real line breaks
+// too.
+func unescapeNewlines(s string) string {
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, `\r\n`, "\n")
+	s = strings.ReplaceAll(s, `\n`, "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return s
+}
+
+// capLine cuts s to at most max characters at the last word boundary at or
+// before the limit, appending nothing. A line with no space to cut on is
+// hard-cut at max.
+func capLine(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	cut := s[:max]
+	if i := strings.LastIndexByte(cut, ' '); i > 0 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ")
+}
+
+// stripAIAttribution removes any line that opens with an AI attribution
+// trailer — Co-Authored-By: or Generated with — from text the agent wrote;
+// the commit and the pull request it produces are the reviewing engineer's,
+// not the agent's.
+func stripAIAttribution(s string) string {
+	lines := strings.Split(s, "\n")
+	kept := lines[:0]
+	for _, l := range lines {
+		low := strings.ToLower(strings.TrimSpace(l))
+		if strings.HasPrefix(low, "co-authored-by:") || strings.HasPrefix(low, "generated with") {
+			continue
+		}
+		kept = append(kept, l)
+	}
+	return strings.Join(kept, "\n")
+}
+
+// collapseBlankLines reduces any run of 3 or more consecutive newlines to
+// exactly 2, so a blank line between paragraphs survives but a longer gap
+// left by stripped or unescaped lines does not.
+func collapseBlankLines(s string) string {
+	for strings.Contains(s, "\n\n\n") {
+		s = strings.ReplaceAll(s, "\n\n\n", "\n\n")
+	}
+	return s
 }
 
 func short(sha string) string {

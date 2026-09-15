@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../api/types'
 import {
   askedQuestion,
+  DEFAULT_FILTER,
   filterTurns,
+  FOLD_MIN,
+  foldSystem,
   groupTurns,
   inputSummary,
   offsetLabel,
@@ -225,5 +228,82 @@ describe('askedQuestion', () => {
 
   it('is empty for any other reason', () => {
     expect(askedQuestion('budget exhausted')).toBe('')
+  })
+})
+
+describe('foldSystem', () => {
+  const delta = (text: string) => ev('stream_event', { text })
+
+  it('collapses a run of stream events into one row', () => {
+    const rows = foldSystem(
+      indexed([
+        ev('assistant_text', { text: 'looking' }),
+        delta('a'),
+        delta('b'),
+        delta('c'),
+        ev('tool_started', { tool: 'Bash' }),
+      ]),
+    )
+
+    expect(rows.map((r) => r.kind)).toEqual(['event', 'fold', 'event'])
+    const fold = rows[1]
+    if (fold.kind !== 'fold') throw new Error('expected a fold')
+    expect(fold.items).toHaveLength(3)
+    // The fold is keyed and timed by the first line it stands for.
+    expect(fold.index).toBe(1)
+  })
+
+  it('leaves a run too short to be worth hiding as its own rows', () => {
+    const rows = foldSystem(indexed([delta('a'), delta('b'), ev('usage', { turns: 1 })]))
+    expect(rows.map((r) => r.kind)).toEqual(['event', 'event', 'event'])
+    expect(FOLD_MIN).toBeGreaterThan(2)
+  })
+
+  it('folds each run separately, so a turn keeps its shape', () => {
+    const rows = foldSystem(
+      indexed([
+        delta('a'),
+        delta('b'),
+        delta('c'),
+        ev('tool_finished', { tool: 'Bash' }),
+        delta('d'),
+        delta('e'),
+        delta('f'),
+      ]),
+    )
+    expect(rows.map((r) => r.kind)).toEqual(['fold', 'event', 'fold'])
+  })
+
+  it('folds nothing the agent actually did', () => {
+    const rows = foldSystem(
+      indexed([
+        ev('tool_started', { tool: 'Read' }),
+        ev('permission', { decision: 'deny' }),
+        ev('assistant_text', { text: 'hm' }),
+        ev('error', { text: 'boom' }),
+        ev('final', {}),
+      ]),
+    )
+    expect(rows.every((r) => r.kind === 'event')).toBe(true)
+  })
+
+  it('keeps every line it hides, in order', () => {
+    const events = indexed([delta('a'), delta('b'), delta('c'), delta('d')])
+    const rows = foldSystem(events)
+    expect(rows).toHaveLength(1)
+    const fold = rows[0]
+    if (fold.kind !== 'fold') throw new Error('expected a fold')
+    expect(fold.items).toEqual(events)
+  })
+
+  it('is empty for an empty turn', () => {
+    expect(foldSystem([])).toEqual([])
+  })
+})
+
+describe('DEFAULT_FILTER', () => {
+  // "All" is the raw file; a provider that streams deltas makes it unreadable.
+  it('opens the stream on the tool calls', () => {
+    expect(DEFAULT_FILTER).toBe('tools')
   })
 })

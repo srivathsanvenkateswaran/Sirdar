@@ -38,8 +38,16 @@
         "helpdeskUrl": { "type": "string" },
         "priority": { "type": "string" },
         "service": { "type": "string" },
-        "customer": { "type": "string" },
-        "customerId": { "type": "string" }
+        "customer": {
+          "type": "string",
+          "description": "The customer's name exactly as the bundle's Customer line gives it, verbatim. Do not append a domain, CompanyID, or company code — those go in customerIds."
+        },
+        "customerId": { "type": "string" },
+        "customerIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer."
+        }
       }
     },
     "title": { "type": "string" },

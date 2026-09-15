@@ -135,7 +135,7 @@ type RetroResult struct {
 	Key        string    `json:"key"`
 	BaseCommit string    `json:"baseCommit,omitempty"`
 	AsOf       time.Time `json:"asOf,omitempty"`
-	PRUrls     []string  `json:"prUrls,omitempty"`
+	PRURLs     []string  `json:"prUrls,omitempty"`
 	// Reason is why this key has less in it than the others: a bundle
 	// that would not load, a stage that failed, a build without `--at`.
 	Reason string `json:"reason,omitempty"`
@@ -243,7 +243,7 @@ func replayRetro(ctx context.Context, d RetroDeps, root, key string, o RetroOpti
 		res.Reason = err.Error()
 		return res
 	}
-	res.BaseCommit, res.AsOf, res.PRUrls = retro.BaseCommit, retro.AsOf, retro.PRUrls
+	res.BaseCommit, res.AsOf, res.PRURLs = retro.BaseCommit, retro.AsOf, retro.PRURLs
 
 	prDiff, err := retro.ReadDiff()
 	if err != nil {

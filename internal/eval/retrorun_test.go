@@ -62,7 +62,7 @@ func newRetroGolden(t *testing.T, keys ...string) string {
 			Key:        key,
 			AsOf:       time.Date(2026, 3, 1, 9, 0, 0, 0, time.UTC),
 			BaseCommit: "abc123",
-			PRUrls:     []string{"https://github.com/acme/repo/pull/7"},
+			PRURLs:     []string{"https://github.com/acme/repo/pull/7"},
 			PRDiff:     "pr.diff",
 			PRFiles:    []string{"internal/export/csv.go", "internal/export/pool.go"},
 			Redacted:   Redacted{PRLinks: 2, CommentsDropped: 5},

@@ -20,7 +20,7 @@
   --lane: #f2f2f0;
   --ink: #191a1c;
   --ink-2: #5b5f66;
-  --ink-3: #8b9099;
+  --ink-3: #686d75;
   --rule: #e2e2df;
   --rule-strong: #cbcbc6;
   --accent: #4340c8;
@@ -48,6 +48,22 @@
 
 
 
+  /*
+   * `components/panels.css` and `components/run/run.css` were written against
+   * a shorter set of names — --bg, --fg, --muted, --border, --line — and carry
+   * a light-theme literal as each one's fallback. Nothing defined those names,
+   * so every rule in those two files used its fallback: in the dark theme that
+   * painted Register rows, Eval values and the Settings headings in #16181d on
+   * a #131418 paper (a ratio of 1.04:1). They are aliases, and a custom
+   * property substitutes where it is used, so one definition here follows the
+   * palette into whichever theme is active.
+   */
+  --bg: var(--surface);
+  --fg: var(--ink);
+  --muted: var(--ink-3);
+  --border: var(--rule);
+  --line: var(--rule);
+
   --radius: 3px;
   --gutter: 12px;
   color-scheme: light;
@@ -60,7 +76,7 @@
     --lane: #0e0f12;
     --ink: #e6e8ec;
     --ink-2: #9aa0aa;
-    --ink-3: #6d737d;
+    --ink-3: #868c96;
     --rule: #2a2d34;
     --rule-strong: #3d424b;
     --accent: #9b98ff;
@@ -82,7 +98,7 @@
   --lane: #0e0f12;
   --ink: #e6e8ec;
   --ink-2: #9aa0aa;
-  --ink-3: #6d737d;
+  --ink-3: #868c96;
   --rule: #2a2d34;
   --rule-strong: #3d424b;
   --accent: #9b98ff;

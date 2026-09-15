@@ -54,7 +54,8 @@ Title: Refund stuck in pending
 Priority: P2
 Tracker URL: https://tracker.example.com/browse/OMNI-2510
 Helpdesk URL: https://desk.example.com/tickets/88213
-Customer: Acme Corp (CUST-77)
+Customer: Acme Corp
+Customer ID: CUST-77
 Bundle directory: /bundles/OMNI-2510
 
 Files:
@@ -73,7 +74,7 @@ Files:
 
 # Output
 
-- ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer.
+- ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead.
 - title is a one-line summary of the issue.
 - complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.
 - complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.
@@ -127,8 +128,16 @@ Files:
         "helpdeskUrl": { "type": "string" },
         "priority": { "type": "string" },
         "service": { "type": "string" },
-        "customer": { "type": "string" },
-        "customerId": { "type": "string" }
+        "customer": {
+          "type": "string",
+          "description": "The customer's name exactly as the bundle's Customer line gives it, verbatim. Do not append a domain, CompanyID, or company code — those go in customerIds."
+        },
+        "customerId": { "type": "string" },
+        "customerIds": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer."
+        }
       }
     },
     "title": { "type": "string" },
