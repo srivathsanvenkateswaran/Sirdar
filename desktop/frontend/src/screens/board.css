@@ -1,197 +1,175 @@
 /*
- * The board, on the sheet.
+ * The board, on the sheet, in the frame of the 2026-09-15 Board mock.
  *
- * The lanes themselves are the library's Kanban column and the cards are its
- * Run card and Card; what is left here is the frame around them — the filter
- * bar, the horizontally scrolling row of lanes, and the inbound strip.
+ * The lanes are the library's Kanban column and the cards its Run card; the
+ * head is the Page head, the well the Search bar, and "Landed today" a Group
+ * label over Item rows. What is left here is the frame around them: the page
+ * padding, the second row of well, quick filters and status line, the
+ * horizontally scrolling row of lanes that bleeds to the sheet's edge, and
+ * the three-column grid of deliveries under it.
  *
- * No shadow and no gradient. A lane separates from its neighbour with a 1px
- * hairline, which is why the board reads at a glance.
+ * No shadow and no gradient. Every value comes from the tokens or is a
+ * measure lifted from the mock and used once.
  */
 
 .board {
   display: flex;
-  flex-direction: column;
   flex: 1;
+  flex-direction: column;
   min-block-size: 0;
+  /* The mock's page: 40 above, 48 at the sides, 32 below. */
+  padding-block: 40px var(--sd-space-6);
+  padding-inline: var(--sd-space-7);
+  overflow-y: auto;
 }
 
-.board-bar {
+/* ---------- row 2: the well, the quick filters, the status line ---------- */
+
+.board-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: var(--sd-space-3);
-  padding-block: var(--sd-space-2);
-  padding-inline: var(--sd-gutter);
-  border-block-end: 1px solid var(--sd-rule);
+  gap: 20px;
+  margin-block-start: var(--sd-space-5);
 }
 
-.filter {
-  display: flex;
+.board-quick {
+  display: inline-flex;
   align-items: center;
-  gap: var(--sd-space-2);
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  cursor: pointer;
 }
 
-.filter-input {
-  inline-size: 240px;
-  max-inline-size: 46vw;
-  min-block-size: 28px;
-  padding-block: var(--sd-space-1);
-  padding-inline: var(--sd-space-2);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-sm);
-  background: var(--sd-sunk);
-  color: var(--sd-ink);
-  font: inherit;
+.board-quick > svg {
+  inline-size: 16px;
+  block-size: 16px;
+  transition: transform var(--sd-dur-1) ease;
+}
+
+.board-quick > svg[data-open='true'] {
+  transform: rotate(180deg);
 }
 
 .board-status {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
+  margin: 0;
+  margin-inline-start: auto;
   color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
-.lanes {
+.board-status > b {
+  color: var(--sd-ink-2);
+  font-weight: 500;
+}
+
+/* The inline row Filters and Quick filters both open. */
+.board-filters {
   display: flex;
-  flex: 1;
-  min-block-size: 0;
-  gap: 1px;
-  overflow-x: auto;
-  background: var(--sd-rule);
-  border-block-end: 1px solid var(--sd-rule);
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-4);
+  margin-block-start: var(--sd-space-4);
 }
 
-/* ---------- inbound deliveries ---------- */
+.board-filters__note {
+  margin: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+/* ---------- the lanes ---------- */
 
 /*
- * A tracker fires on every field change, so most deliveries do nothing. The
- * strip exists for the case that is otherwise invisible: telling a hook that
- * never arrives apart from one that arrives and is filtered out.
+ * Six wells at 248 are wider than the sheet, so the row scrolls sideways and
+ * bleeds to the sheet's edge: the negative end margin is the page padding
+ * given back, and the padding inside it is what keeps the last well off the
+ * edge when the row is scrolled to its end.
  */
-.inbound {
-  flex: 0 0 auto;
-  max-block-size: 27vh;
-  overflow-y: auto;
-  padding-block: var(--sd-space-2) var(--sd-space-3);
-  padding-inline: var(--sd-gutter);
-  border-block-start: 1px solid var(--sd-rule);
-  background: var(--sd-sheet);
-}
-
-.inbound-head {
+.board-lanes {
   display: flex;
-  align-items: baseline;
-  gap: var(--sd-space-2);
-  margin: 0 0 var(--sd-space-1);
-  font-size: var(--sd-text-body);
-  font-weight: 600;
+  flex: 1 0 auto;
+  gap: var(--sd-space-4);
+  min-block-size: 0;
+  max-block-size: 60vh;
+  margin-block-start: var(--sd-space-5);
+  margin-inline-end: calc(-1 * var(--sd-space-7));
+  padding-inline-end: var(--sd-space-7);
+  overflow-x: auto;
 }
 
-.inbound-count {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
-  font-variant-numeric: tabular-nums;
-  color: var(--sd-ink-3);
-}
+/* ---------- landed today ---------- */
 
-.inbound-empty {
-  margin: 0;
-  max-inline-size: 72ch;
-  font-size: var(--sd-text-meta);
-  line-height: 1.45;
-  color: var(--sd-ink-3);
-}
-
-.inbound-list {
+.board-landed {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
+  gap: 14px;
+  margin-block-start: var(--sd-space-5);
 }
 
-.inbound-row {
+.board-landed__items {
   display: grid;
-  grid-template-columns: minmax(64px, auto) minmax(78px, auto) minmax(56px, auto) 1fr auto;
-  gap: var(--sd-space-2);
-  align-items: baseline;
-  padding-block: 3px;
-  border-block-end: 1px solid var(--sd-rule);
-  font-size: var(--sd-text-meta);
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--sd-space-3);
 }
 
-.inbound-row:last-child {
-  border-block-end: 0;
-}
-
-.inbound-source {
-  font-weight: 600;
-}
-
-.inbound-key {
-  font-size: var(--sd-text-meta);
-  color: var(--sd-ink-2);
-}
-
-/* The outcome is the only coloured thing in the row, so it reads first. */
-.inbound-outcome {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-micro);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--sd-st-queue);
-}
-
-.inbound-row[data-outcome='started'] .inbound-outcome { color: var(--sd-st-live); }
-.inbound-row[data-outcome='skipped'] .inbound-outcome { color: var(--sd-st-blocked); }
-.inbound-row[data-outcome='rejected'] .inbound-outcome { color: var(--sd-st-failed); }
-
-.inbound-why {
-  color: var(--sd-ink-2);
-}
-
-.inbound-at {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-micro);
-  font-variant-numeric: tabular-nums;
+.board-landed__empty {
+  margin: 0;
+  max-inline-size: 72ch;
   color: var(--sd-ink-3);
-}
-
-/* ---------- the ticket card's own three strings ---------- */
-
-.ticket-key {
-  font-family: var(--sd-font-mono);
-  font-weight: 600;
-}
-
-.ticket-status {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-micro);
-  color: var(--sd-ink-3);
-}
-
-.ticket-at {
-  font-family: var(--sd-font-mono);
   font-size: var(--sd-text-meta);
+  line-height: 1.45;
+}
+
+.board-landed__key {
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
   font-variant-numeric: tabular-nums;
   unicode-bidi: isolate;
-  color: var(--sd-ink-2);
 }
+
+/* The outcome is the one coloured word in the line, and the rail says the
+   same thing; the reason beside it is what the colour means. */
+.board-landed__outcome {
+  font-weight: 500;
+}
+
+.board-landed__outcome[data-outcome='started'] { color: var(--sd-st-live); }
+.board-landed__outcome[data-outcome='skipped'] { color: var(--sd-st-blocked); }
+.board-landed__outcome[data-outcome='rejected'] { color: var(--sd-st-failed); }
 
 /* ---------- narrow windows ---------- */
 
 @media (max-width: 720px) {
-  .lanes {
+  .board {
+    padding-inline: var(--sd-space-4);
+  }
+
+  .board-lanes {
     flex-direction: column;
+    max-block-size: none;
+    margin-inline-end: 0;
+    padding-inline-end: 0;
     overflow-x: hidden;
-    overflow-y: auto;
   }
 
-  .inbound-row {
-    grid-template-columns: 1fr auto;
+  .board-landed__items {
+    grid-template-columns: 1fr;
   }
+}
 
-  .inbound-why {
-    grid-column: 1 / -1;
+@media (prefers-reduced-motion: reduce) {
+  .board-quick > svg {
+    transition-duration: 1ms;
   }
 }
