@@ -1,0 +1,444 @@
+/*
+ * The settings modal's own blocks: the server list, the providers table, the
+ * tool tester, the chips and the doctor list. Everything else on these pages
+ * is the library's Modal sheet, Setting row, Toggle, Badge, Segmented control
+ * and Provider mark. Sizes come from docs/design/2026-09-15-screens/
+ * Settings.html, ToolTester.html and Providers.html; every value below reads
+ * a token, and src/styles.library.test.ts checks that.
+ */
+
+.settings {
+  padding-block-end: var(--sd-space-4);
+}
+
+/* ---------- footer ---------- */
+
+/* The line that says why Save is disabled, leading the footer's buttons. */
+.settings-foot-note {
+  margin: 0;
+  margin-inline-end: auto;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+}
+
+/* ---------- shared ---------- */
+
+.settings-mono {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+/* A sentence under a card's rows, in the third ink. */
+.settings-note {
+  margin: 0;
+  padding-block: var(--sd-space-2) var(--sd-space-1);
+  max-inline-size: 76ch;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+}
+
+/* The pattern chips: mono, 28 tall, on the surface with a strong rule. */
+.settings-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  padding-block: 2px;
+}
+
+.settings-chip {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 28px;
+  padding-inline: 10px;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: 6px;
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.5;
+}
+
+/*
+ * A verdict: the word in its hue, outlined. "allowed" is the done hue,
+ * "denied" the failed one, and the word is always printed.
+ */
+.settings-verdict {
+  display: inline-block;
+  padding-block: 3px;
+  padding-inline: 10px;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: 6px;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.settings-verdict[data-verdict='allowed'] {
+  border-color: var(--sd-st-done);
+  color: var(--sd-st-done);
+}
+
+.settings-verdict[data-verdict='denied'] {
+  border-color: var(--sd-st-failed);
+  color: var(--sd-st-failed);
+}
+
+/* A status word carried with its hue: sign-in, a server's connection. */
+.settings-status[data-level='fail'] {
+  color: var(--sd-st-failed);
+}
+
+.settings-status[data-level='warn'] {
+  color: var(--sd-st-blocked);
+}
+
+.settings-status[data-level='ok'] {
+  color: var(--sd-ink-2);
+}
+
+.settings-status[data-level='none'] {
+  color: var(--sd-ink-3);
+}
+
+.settings-hue {
+  color: var(--sd-st-blocked);
+}
+
+/* A provider's mark before its name, in a row or a cell. */
+.settings-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.settings-provider__name {
+  font-weight: 500;
+}
+
+/* ---------- General ---------- */
+
+.settings-add {
+  display: flex;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-3);
+}
+
+.settings-add__input {
+  flex: 1;
+  max-inline-size: 420px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+}
+
+/* The doctor list: the CLI's own marks, one row per check. */
+.settings-doctor {
+  list-style: none;
+  margin: 0;
+  margin-block-start: var(--sd-space-2);
+  padding: 0;
+}
+
+.settings-doctor__row {
+  display: flex;
+  gap: var(--sd-space-2);
+  align-items: baseline;
+  padding-block: 4px;
+  border-block-start: 1px solid var(--sd-rule-faint);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-doctor__mark {
+  inline-size: 24px;
+  flex: 0 0 auto;
+  font-family: var(--sd-font-mono);
+  font-weight: 600;
+}
+
+.settings-doctor__row[data-level='ok'] .settings-doctor__mark {
+  color: var(--sd-st-done);
+}
+
+.settings-doctor__row[data-level='warn'] .settings-doctor__mark {
+  color: var(--sd-st-blocked);
+}
+
+.settings-doctor__row[data-level='fail'] .settings-doctor__mark {
+  color: var(--sd-st-failed);
+}
+
+.settings-doctor__name {
+  flex: 0 0 160px;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.settings-doctor__detail {
+  color: var(--sd-ink-3);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- MCP servers ---------- */
+
+/* 56-tall list rows, one control each, hairlines between. */
+.settings-servers {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-server {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr) auto;
+  column-gap: var(--sd-space-4);
+  align-items: center;
+  min-block-size: 56px;
+  padding-block: var(--sd-space-1);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.settings-server:first-child {
+  border-block-start: 0;
+}
+
+.settings-server__name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-inline-size: 0;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.settings-server__status {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+  color: var(--sd-ink-2);
+  overflow-wrap: anywhere;
+}
+
+.settings-server__note {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-warnings {
+  margin: 0;
+  margin-block-start: var(--sd-space-2);
+  padding-inline-start: var(--sd-space-4);
+  color: var(--sd-st-blocked);
+  font-size: var(--sd-text-meta);
+}
+
+/* ---------- Try a tool ---------- */
+
+.settings-tester {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-3) 0;
+}
+
+.settings-tester__selects {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-3);
+}
+
+/* A select drawn as the mock's picker: 40 tall, strong rule, chevron trailing. */
+.settings-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  inline-size: 220px;
+  max-inline-size: 100%;
+  min-block-size: var(--sd-control-h);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+}
+
+.settings-select--wide {
+  inline-size: 320px;
+}
+
+.settings-select__input {
+  inline-size: 100%;
+  min-block-size: calc(var(--sd-control-h) - 2px);
+  padding-block: 0;
+  padding-inline: 14px 36px;
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: transparent;
+  color: inherit;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  appearance: none;
+}
+
+.settings-select > svg {
+  position: absolute;
+  inset-inline-end: 14px;
+  inline-size: 16px;
+  block-size: 16px;
+  color: var(--sd-ink-3);
+  pointer-events: none;
+}
+
+.settings-textarea {
+  inline-size: 100%;
+  padding-block: 10px;
+  padding-inline: 14px;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.settings-verdict-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-verdict-line > .sd-button {
+  margin-inline-start: auto;
+}
+
+/* The result well: sunk, mono, tabular. */
+.settings-well {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-3);
+  padding-inline: 14px;
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-well__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+}
+
+.settings-well__took {
+  margin-inline-start: auto;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.settings-well__body {
+  margin: 0;
+  max-block-size: 320px;
+  overflow: auto;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Recent calls: 48-tall rows, the time trailing. */
+.settings-calls {
+  display: flex;
+  flex-direction: column;
+  padding-block-start: var(--sd-space-1);
+}
+
+.settings-call {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 120px 88px 64px;
+  column-gap: var(--sd-space-4);
+  align-items: center;
+  min-block-size: 48px;
+  border-block-start: 1px solid var(--sd-rule-faint);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+.settings-call:first-child {
+  border-block-start: 0;
+}
+
+.settings-call__time {
+  color: var(--sd-ink-3);
+  text-align: end;
+}
+
+/* ---------- Providers ---------- */
+
+/* 44-tall rows, the mark before the name; the head row 28 in the third ink. */
+.settings-table {
+  display: flex;
+  flex-direction: column;
+  overflow-x: auto;
+}
+
+.settings-table__row {
+  display: grid;
+  grid-template-columns: 118px 168px 150px 82px minmax(0, 1fr) auto;
+  column-gap: 10px;
+  align-items: center;
+  min-inline-size: 720px;
+  min-block-size: 44px;
+  border-block-start: 1px solid var(--sd-rule-faint);
+  font-size: var(--sd-text-meta);
+  line-height: 1.25;
+}
+
+.settings-table__head {
+  min-block-size: 28px;
+  border-block-start: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-ledger);
+}
+
+.settings-table__button {
+  min-block-size: 32px;
+  padding-inline: var(--sd-space-3);
+  font-size: var(--sd-text-ledger);
+}
+
+/* Under 720px the table rows stack their cells rather than scrolling. */
+@media (max-width: 720px) {
+  .settings-server {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .settings-server__status {
+    grid-column: 1 / -1;
+  }
+
+  .settings-select,
+  .settings-select--wide {
+    inline-size: 100%;
+  }
+
+  .settings-call {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 2px;
+    padding-block: var(--sd-space-2);
+  }
+}
