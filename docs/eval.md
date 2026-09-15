@@ -308,7 +308,9 @@ sirdar eval --retro OMNI-1 OMNI-2      just these
   --rubric                             add one provider call per key that reads both diffs
 ```
 
-Three sessions, at most, per key:
+Three sessions, at most, per key. They are the ordinary commands, not an imitation of them:
+`sirdar triage --at`, `sirdar fix --local --at` and `sirdar rca --at`, each against the same
+`baseCommit`, each in a linked worktree of its own under `.sirdar/worktrees/<run-id>`.
 
 1. **Triage** at the base commit, from the as-of bundle. It is an eval-marked run like any other
    replay: the note stays in the run directory, nothing is filed, and no register row is written.
@@ -318,9 +320,16 @@ Three sessions, at most, per key:
 3. **RCA**, only with `--with-rca`, and blind — it is never given the pull request URL, because an
    RCA shown the answer is not measuring anything.
 
+Stages two and three are handed the run id of stage one's note, rather than looking one up. The
+newest-triage-note lookup skips eval runs on purpose — that is what stops a replay becoming what
+tomorrow's real fix reads — so the retro's own note is invisible to it, and the only way to work
+from that note is to name it. The fix run is eval-marked too, which is why it appends no register
+row either.
+
 `--retro` always exits 0. There is no threshold a retro passes or fails, and an exit code would
 invite one to be invented. A key whose bundle will not load, whose triage went nowhere, or whose
-build has no `--at` is a row with a reason printed under the table; the other keys still score.
+`baseCommit` is not in this repository is a row with a reason printed under the table; the other
+keys still score.
 
 ### The golden entry
 
@@ -334,7 +343,7 @@ A retro key is an ordinary golden entry with two more files in it:
   pr.diff         the unified diff of the merged pull request
 ```
 
-`sirdar golden add KEY --retro --pr URL` writes both. `baseCommit` is what every session in the
+`sirdar golden add KEY --retro --pr URL` writes both, as above. `baseCommit` is what every session in the
 retro stands at; `prFiles` is the list the score compares against, and a `retro.json` that carries
 none falls back to the paths in `pr.diff` itself. `redacted` counts what the as-of capture took
 out — PR links, later comments — so a reader can tell how much of the ticket the agent was

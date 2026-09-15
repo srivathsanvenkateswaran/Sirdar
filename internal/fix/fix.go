@@ -86,6 +86,26 @@ type Options struct {
 	// retrospective evaluation runs: the fix has to be produced and read,
 	// and must not reach anybody's remote.
 	Local bool
+
+	// TriageNote is the note this fix implements, named outright, instead
+	// of the newest completed triage note for the key. TriageRunID names
+	// the same thing by its run.
+	//
+	// A retrospective evaluation needs both to be sayable. Its triage is
+	// an eval run, so its note stays in the run directory and is skipped
+	// by store.LatestNote on purpose — an eval's note must never be what a
+	// real fix reads — and the only way for the evaluation to hand the fix
+	// the note it has just produced is to name it.
+	TriageNote  string
+	TriageRunID string
+
+	// Eval marks the fix as a scored replay rather than a change somebody
+	// asked for. The run is flagged eval in its state and no register row
+	// is appended: the register is the audit index of tickets actually
+	// worked, and a measurement is not one of them. It carries no weight
+	// anywhere else — the branch, the commit, the guard and the diff are
+	// exactly what an ordinary --local run produces.
+	Eval bool
 }
 
 // Report is the agent's JSON answer.
@@ -172,7 +192,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		stderr = io.Discard
 	}
 
-	tn, err := loadTriage(cfg.Root, key)
+	tn, err := loadTriage(cfg.Root, key, o)
 	if err != nil {
 		return res, err
 	}
@@ -271,7 +291,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.Fix(ctx, key, runner.FixOptions{
-		Options: runner.Options{Model: o.Model, DryRun: o.DryRun, At: res.At},
+		Options: runner.Options{Model: o.Model, DryRun: o.DryRun, At: res.At, Eval: o.Eval},
 		Prompt:  text,
 		Branch:  branch,
 		Base:    base,
@@ -349,7 +369,9 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		res.State.Fix.Local, res.State.Fix.DiffPath = true, res.DiffPath
 	}
 
-	appendRegister(cfg.Root, key, out.State, tn)
+	if !o.Eval {
+		appendRegister(cfg.Root, key, out.State, tn)
+	}
 
 	if dev := strings.TrimSpace(res.Report.DeviationFromNote); dev != "" && !o.AcceptDeviation {
 		// The worktree stays. The commit in it is what the operator is
@@ -660,13 +682,21 @@ func (t triageNote) path() string {
 	return t.runPath
 }
 
-// loadTriage finds the newest completed triage run for key and reads both
-// copies of the note it produced.
-func loadTriage(root, key string) (triageNote, error) {
+// loadTriage reads the triage note this fix implements, and the copy of it
+// in the notes directory when there is one.
+//
+// Ordinarily that is the newest completed triage run for the key, which is
+// what "approved" means: a person read the note that is there now and ran
+// this command. A caller that already knows which run it means says so —
+// see Options.TriageRunID and Options.TriageNote — because the newest note
+// is not always the right one. A retrospective evaluation makes its own
+// triage and marks it `eval`, which keeps it out of store.LatestNote
+// deliberately, so nothing else would ever find it.
+func loadTriage(root, key string, o Options) (triageNote, error) {
 	var t triageNote
-	runPath, err := store.LatestNote(root, key, store.KindTriage)
+	runPath, err := namedTriageNote(root, key, o)
 	if err != nil {
-		return t, fmt.Errorf("fix: no completed triage note for %s; run `sirdar triage %s` first", key, key)
+		return t, err
 	}
 	t.runPath = runPath
 	t.filedPath = filedCopy(root, runPath)
@@ -684,6 +714,41 @@ func loadTriage(root, key string) (triageNote, error) {
 		_ = json.Unmarshal(doc, &t.doc)
 	}
 	return t, nil
+}
+
+// namedTriageNote settles which triage note a fix starts from.
+//
+// Options.TriageNote names the file outright, Options.TriageRunID names the
+// run whose note.md to take, and neither means the newest completed triage
+// note for the key. The two explicit forms are checked on disk here rather
+// than failing later on an unreadable file: a caller that named the wrong
+// run should hear it before a branch is cut.
+func namedTriageNote(root, key string, o Options) (string, error) {
+	if path := strings.TrimSpace(o.TriageNote); path != "" {
+		if _, err := os.Stat(path); err != nil {
+			return "", fmt.Errorf("fix: the triage note named for %s is not readable: %w", key, err)
+		}
+		return path, nil
+	}
+	if runID := strings.TrimSpace(o.TriageRunID); runID != "" {
+		rn, state, err := store.Open(root, runID)
+		if err != nil {
+			return "", fmt.Errorf("fix: the triage run named for %s could not be read: %w", key, err)
+		}
+		if state.Key != key || state.Kind != store.KindTriage {
+			return "", fmt.Errorf("fix: run %s is a %s run for %s, not a triage of %s", runID, state.Kind, state.Key, key)
+		}
+		path := filepath.Join(rn.Dir, "note.md")
+		if _, err := os.Stat(path); err != nil {
+			return "", fmt.Errorf("fix: run %s left no triage note: %w", runID, err)
+		}
+		return path, nil
+	}
+	path, err := store.LatestNote(root, key, store.KindTriage)
+	if err != nil {
+		return "", fmt.Errorf("fix: no completed triage note for %s; run `sirdar triage %s` first", key, key)
+	}
+	return path, nil
 }
 
 // filedCopy locates the notes-directory copy of a triage note from the run

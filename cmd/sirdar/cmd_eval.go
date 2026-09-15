@@ -19,8 +19,8 @@ func cmdEval(args []string, stdout, stderr io.Writer) int {
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
 	concurrency := fs.Int("concurrency", 0, "keys replayed at once (default from config)")
-	retro := fs.Bool("retro", false, "replay each key at the commit its fix branched from and score against the merged pull request")
-	withRCA := fs.Bool("with-rca", false, "add a blind RCA run to each retro key (--retro only)")
+	retro := fs.Bool("retro", false, "replay each key at the commit its fix branched from — triage, then a local fix — and score what came back against the merged pull request")
+	withRCA := fs.Bool("with-rca", false, "add a blind RCA run to each retro key, a third session (--retro only)")
 	rubric := fs.Bool("rubric", false, "ask the provider once per key whether the two diffs are the same change (--retro only)")
 	keys, ok := parseFlags(fs, args, 0, -1, stderr)
 	if !ok {

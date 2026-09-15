@@ -147,9 +147,9 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	// An rca run reviews a triage note, so refuse before doing any work
 	// when there is none.
 	if kind == store.KindRCA {
-		notePath, err := store.LatestNote(cfg.Root, key, store.KindTriage)
+		notePath, err := rcaTriageNote(cfg.Root, key, rca)
 		if err != nil {
-			return p, fmt.Errorf("no triage note for %s; run triage first", key)
+			return p, err
 		}
 		p.triageNotePath = notePath
 		p.triageNoteCopy, p.triageLink = triageNoteCopy(cfg.Root, notePath)
@@ -200,6 +200,27 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return p, err
 	}
 	return p, nil
+}
+
+// rcaTriageNote settles which triage note an rca run reviews: the one
+// RCAOptions.TriageNote names when it names one, else the newest completed
+// triage note for the key. A named note is checked here, before a ticket is
+// fetched, so a caller that named the wrong file hears it as that rather
+// than as an unreadable path halfway through preparation.
+func rcaTriageNote(root, key string, rca *RCAOptions) (string, error) {
+	if rca != nil {
+		if path := strings.TrimSpace(rca.TriageNote); path != "" {
+			if _, err := os.Stat(path); err != nil {
+				return "", fmt.Errorf("run: the triage note named for %s is not readable: %w", key, err)
+			}
+			return path, nil
+		}
+	}
+	path, err := store.LatestNote(root, key, store.KindTriage)
+	if err != nil {
+		return "", fmt.Errorf("no triage note for %s; run triage first", key)
+	}
+	return path, nil
 }
 
 // checkoutAt puts this run in a linked worktree of the workspace checked

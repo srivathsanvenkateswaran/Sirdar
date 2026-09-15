@@ -109,6 +109,7 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 		Model:     model,
 		StartedAt: now,
 		UpdatedAt: now,
+		Eval:      o.Eval,
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes

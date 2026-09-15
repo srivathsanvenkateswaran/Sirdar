@@ -350,7 +350,7 @@ func TestRunRetroStopsAtAFailedTriageButKeepsWhatItScored(t *testing.T) {
 	}
 }
 
-func TestRunRetroReportsABuildWithoutTheAtFlag(t *testing.T) {
+func TestRunRetroReportsAStageTheRunnerCannotPerform(t *testing.T) {
 	root := newRetroGolden(t, "OMNI-1")
 	f := newFakeRunner(t)
 	f.triageErr = ErrNotSupported

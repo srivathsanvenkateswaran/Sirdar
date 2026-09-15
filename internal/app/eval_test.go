@@ -291,10 +291,10 @@ func TestLatestRetroWithoutOneIsNil(t *testing.T) {
 	}
 }
 
-// A retro job runs against the keys that carry a retro.json, and a build
-// without retro-b's flags reports that on the row rather than scoring a
-// run that stood at the wrong commit.
-func TestStartRetroEvalReportsAnUnsupportedBuild(t *testing.T) {
+// A retro job runs against the keys that carry a retro.json, and a golden
+// set where no key does says so by name rather than reporting an empty
+// table.
+func TestStartRetroEvalReportsAGoldenSetWithNoRetroEntry(t *testing.T) {
 	root, golden := newWorkspace(t), t.TempDir()
 	svc := newEvalService(t, root, golden)
 	events, unsubscribe := svc.Subscribe()

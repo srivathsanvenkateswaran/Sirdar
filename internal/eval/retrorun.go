@@ -16,10 +16,11 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
 
-// ErrNotSupported is what a stage returns on a build that cannot run it —
-// `--at` and `fix --local` are the retro-b half of this feature, and a
-// binary built before they landed says so plainly rather than silently
-// scoring a run that stood at the wrong commit.
+// ErrNotSupported is what a RetroRunner returns for a stage it cannot
+// perform at all. The workspace runner performs all three, so nothing in
+// this binary returns it today; it stays because the alternative for a
+// runner that cannot run a stage is to score a session that stood at the
+// wrong commit, which is the one failure that would look like a result.
 var ErrNotSupported = errors.New("not supported on this build")
 
 // Stage is one run a retro made: the ordinary run state, plus where the run
@@ -137,7 +138,8 @@ type RetroResult struct {
 	AsOf       time.Time `json:"asOf,omitempty"`
 	PRURLs     []string  `json:"prUrls,omitempty"`
 	// Reason is why this key has less in it than the others: a bundle
-	// that would not load, a stage that failed, a build without `--at`.
+	// that would not load, a commit the repository does not have, a stage
+	// that failed.
 	Reason string `json:"reason,omitempty"`
 
 	Triage *Stage    `json:"triage,omitempty"`
@@ -168,9 +170,10 @@ type RetroReport struct {
 // what comes back against the change that fixed it.
 //
 // It is a measurement, not a gate. Nothing here fails the command: a key
-// whose bundle will not load, whose triage went nowhere, or whose build
-// cannot run a fix at a commit is a row with a reason on it, because the
-// table is the output and one broken key should not cost the others theirs.
+// whose bundle will not load, whose triage went nowhere, or whose base
+// commit this repository does not have is a row with a reason on it,
+// because the table is the output and one broken key should not cost the
+// others theirs.
 func RunRetro(ctx context.Context, d RetroDeps, keys []string, o RetroOptions) (RetroReport, error) {
 	if d.Runner == nil {
 		return RetroReport{}, fmt.Errorf("eval: no runner for a retro replay")
