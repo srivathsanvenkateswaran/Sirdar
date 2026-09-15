@@ -185,6 +185,24 @@ describe('Session', () => {
     expect(f.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
   })
 
+  it('always names the model in the topbar, and says so when the run has not reported one', async () => {
+    const f = fake({ detail: { ...RUN, model: '' } })
+    renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(screen.getByText('model unknown')).toHaveClass('session-provider-model')
+    expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
+  })
+
+  it('keeps the composer Model chip read-only: a steer resumes the same session', async () => {
+    const f = fake()
+    renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    const chip = screen.getByRole('button', { name: /^Model claude · claude-haiku-4-5/ })
+    expect(chip).toBeDisabled()
+    expect(chip).toHaveAttribute('title', expect.stringContaining('A steer resumes the same session'))
+    expect(screen.getByText('claude · claude-haiku-4-5')).toBeInTheDocument()
+  })
+
   it('appends a subscribed run.event for this run and ignores another run', async () => {
     const f = fake()
     renderSession(f)
