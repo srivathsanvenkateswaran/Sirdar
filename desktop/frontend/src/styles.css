@@ -385,6 +385,99 @@ kbd {
   color: var(--ink-3);
 }
 
+/* ---------- inbound deliveries ---------- */
+
+/*
+ * A tracker fires on every field change, so most deliveries do nothing. The
+ * strip exists for the case that is otherwise invisible: telling a hook that
+ * never arrives apart from one that arrives and is filtered out.
+ */
+.inbound {
+  flex: 0 0 auto;
+  max-height: 27vh;
+  overflow-y: auto;
+  padding: 7px var(--gutter) 9px;
+  border-top: 1px solid var(--rule);
+  background: var(--surface);
+}
+
+.inbound-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 5px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.inbound-head .lane-count {
+  color: var(--ink-3);
+}
+
+.inbound-empty {
+  margin: 0;
+  max-width: 72ch;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--ink-3);
+}
+
+.inbound-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.inbound-row {
+  display: grid;
+  grid-template-columns: minmax(64px, auto) minmax(78px, auto) minmax(56px, auto) 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  padding: 3px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 11.5px;
+}
+
+.inbound-row:last-child {
+  border-bottom: 0;
+}
+
+.inbound-source {
+  font-weight: 600;
+}
+
+.inbound-key {
+  font-size: 11px;
+  color: var(--ink-2);
+}
+
+/* The outcome is the only coloured thing in the row, so it reads first. */
+.inbound-outcome {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--st-queue);
+}
+
+.inbound-row[data-outcome="started"] .inbound-outcome { color: var(--st-live); }
+.inbound-row[data-outcome="skipped"] .inbound-outcome { color: var(--st-blocked); }
+.inbound-row[data-outcome="rejected"] .inbound-outcome { color: var(--st-failed); }
+
+.inbound-why {
+  color: var(--ink-2);
+}
+
+.inbound-at {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-3);
+}
+
 /* ---------- cards ---------- */
 
 .card {
@@ -677,5 +770,13 @@ kbd {
 
   .lane-body {
     overflow: visible;
+  }
+
+  .inbound-row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .inbound-why {
+    grid-column: 1 / -1;
   }
 }

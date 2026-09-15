@@ -1,6 +1,9 @@
 import type {
   AppEvent,
   Check,
+  ConfigSummary,
+  EvalReport,
+  GoldenEntry,
   Quota,
   RegisterRow,
   RunDetail,
@@ -15,7 +18,10 @@ import type {
 /** Calls the fake recorded, so a test can assert what the UI asked for. */
 export interface TransportCalls {
   startTriage: { ws: string; keys: string[]; opts?: unknown }[]
-  startRCA: { ws: string; key: string }[]
+  startRCA: { ws: string; key: string; opts?: unknown }[]
+  startFix: { ws: string; key: string; opts?: unknown }[]
+  startEval: { ws: string; keys?: string[]; opts?: unknown }[]
+  addGolden: { ws: string; key?: string; runId?: string }[]
   runs: string[]
   queue: string[]
 }
@@ -81,17 +87,36 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
 }
 
 /** An in-memory Transport for tests; every method resolves. */
+/** A workspace that notifies nowhere and serves no inbound hooks. */
+export function emptyConfigSummary(): ConfigSummary {
+  return {
+    notify: { enabled: false, on: [], includeTitle: false, destinations: [] },
+    webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
+  }
+}
+
 export function createFakeTransport(seed: {
   workspaces?: Workspace[]
   runs?: RunSummary[]
   tickets?: Ticket[]
   quota?: Quota[]
+  golden?: GoldenEntry[]
+  reports?: EvalReport[]
+  configSummary?: ConfigSummary
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
   let queueError: Error | null = null
   const handlers = new Set<(e: AppEvent) => void>()
-  const calls: TransportCalls = { startTriage: [], startRCA: [], runs: [], queue: [] }
+  const calls: TransportCalls = {
+    startTriage: [],
+    startRCA: [],
+    startFix: [],
+    startEval: [],
+    addGolden: [],
+    runs: [],
+    queue: [],
+  }
 
   const fake: FakeTransport = {
     calls,
@@ -137,10 +162,25 @@ export function createFakeTransport(seed: {
       calls.startTriage.push({ ws, keys, opts })
       return { jobId: `job-${calls.startTriage.length}` }
     },
-    startRCA: async (ws, key) => {
-      calls.startRCA.push({ ws, key })
+    startRCA: async (ws, key, opts) => {
+      calls.startRCA.push({ ws, key, opts })
       return { jobId: 'job-rca' }
     },
+    startFix: async (ws, key, opts) => {
+      calls.startFix.push({ ws, key, opts })
+      return { jobId: `job-fix-${calls.startFix.length}` }
+    },
+    startEval: async (ws, keys, opts) => {
+      calls.startEval.push({ ws, keys, opts })
+      return { jobId: 'job-eval' }
+    },
+    evalReports: async () => seed.reports ?? ([] as EvalReport[]),
+    golden: async () => seed.golden ?? ([] as GoldenEntry[]),
+    addGolden: async (ws, o) => {
+      calls.addGolden.push({ ws, ...o })
+      return { key: o.key ?? 'OMNI-1', dir: '/golden/OMNI-1', bundleDir: '/golden/OMNI-1/bundle', assertions: 0, hasExpectedNote: false }
+    },
+    configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
     resume: async () => ({ jobId: 'job-resume' }),
     cancel: async () => {},
     register: async () => [] as RegisterRow[],

@@ -3,6 +3,7 @@ import type { Screen } from '../../store/appStore'
 const TABS: { name: Screen['name']; label: string }[] = [
   { name: 'board', label: 'Board' },
   { name: 'register', label: 'Register' },
+  { name: 'eval', label: 'Eval' },
   { name: 'settings', label: 'Settings' },
 ]
 

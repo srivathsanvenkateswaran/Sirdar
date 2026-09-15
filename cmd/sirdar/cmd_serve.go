@@ -32,10 +32,14 @@ const serveShutdownTimeout = 5 * time.Second
 // app embeds, served from this binary over loopback.
 func cmdServe(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("serve", stderr,
-		"usage: sirdar serve [--addr 127.0.0.1:7777] [--open] [--workspace PATH] [--allow-remote]")
+		"usage: sirdar serve [--addr 127.0.0.1:7777] [--open] [--workspace PATH] [--golden DIR] [--allow-remote]")
 	addr := fs.String("addr", "127.0.0.1:7777", "address to listen on")
 	openBrowser := fs.Bool("open", false, "open the UI in the default browser")
 	workspace := fs.String("workspace", "", "workspace to register (default: the one the working directory is in)")
+	// The golden set is named once, here, and never by a request: it holds
+	// real customers' bundles, and a caller who could name the directory
+	// could read any bundle on the machine through the eval routes.
+	golden := fs.String("golden", "", "golden set the eval routes replay (default ~/.sirdar/golden)")
 	allowRemote := fs.Bool("allow-remote", false, "permit a non-loopback address (there is no authentication)")
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
@@ -77,7 +81,7 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := interruptible()
 	defer stop()
 
-	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr)})
+	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr), GoldenDir: *golden})
 	svc.Start(ctx)
 	defer svc.Stop()
 

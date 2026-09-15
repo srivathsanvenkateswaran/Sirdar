@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRunJob, resetRunJobs } from '../lib/jobs'
-import { createAppStore, isQueueUnsupported, type AppStore } from './appStore'
+import { createAppStore, INBOUND_LIMIT, isQueueUnsupported, type AppStore } from './appStore'
 import { createFakeTransport, run, ticket, workspace } from './fakeTransport'
 
 let store: AppStore | null = null
@@ -226,7 +226,9 @@ describe('createAppStore', () => {
     await settle()
 
     await store.startRCA('OMNI-1', { prUrl: 'https://github.com/acme/api/pull/12' })
-    expect(transport.calls.startRCA).toEqual([{ ws: 'ws1', key: 'OMNI-1' }])
+    expect(transport.calls.startRCA).toEqual([
+      { ws: 'ws1', key: 'OMNI-1', opts: { prUrl: 'https://github.com/acme/api/pull/12' } },
+    ])
     expect(store.getState().toasts[0]?.text).toBe('Root cause analysis started for OMNI-1.')
 
     transport.emit({
@@ -280,6 +282,130 @@ describe('createAppStore', () => {
     const quota = store.getState().quota
     expect(quota).toHaveLength(2)
     expect(quota.find((q) => q.provider === 'claude')?.usedPercent).toBe(40)
+  })
+
+  it('startFix forwards the flags and pairs its job with the run', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startFix('OMNI-1', { base: 'main', provider: 'codex' })
+    expect(transport.calls.startFix).toEqual([
+      { ws: 'ws1', key: 'OMNI-1', opts: { base: 'main', provider: 'codex' } },
+    ])
+    expect(store.getState().toasts.at(-1)?.text).toBe('Fix started for OMNI-1.')
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-fix', key: 'OMNI-1', kind: 'fix', startedAt: nowISO() }),
+    })
+    expect(getRunJob('r-fix')).toBe('job-fix-1')
+  })
+
+  it('an accepted deviation says it is publishing, not starting over', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startFix('OMNI-1', { acceptDeviation: true })
+    expect(store.getState().toasts.at(-1)?.text).toBe('Publishing the reviewed commit for OMNI-1.')
+  })
+
+  it('toasts when a fix cannot start, and refuses an empty key', async () => {
+    const transport = createFakeTransport()
+    transport.startFix = async () => {
+      throw new Error('the triage note for OMNI-1 is not approved')
+    }
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startFix('')
+    expect(store.getState().toasts.at(-1)?.text).toBe('Enter a ticket key.')
+
+    await store.startFix('OMNI-1')
+    expect(store.getState().toasts.at(-1)?.text).toBe(
+      'Fix did not start. the triage note for OMNI-1 is not approved',
+    )
+  })
+
+  it('startEval says whether it is running the whole set or a selection', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startEval()
+    expect(transport.calls.startEval).toEqual([{ ws: 'ws1', keys: undefined, opts: undefined }])
+    expect(store.getState().toasts.at(-1)?.text).toBe('Eval started for the whole golden set.')
+
+    await store.startEval(['OMNI-1'], { provider: 'openai' })
+    expect(store.getState().toasts.at(-1)?.text).toBe('Eval started for OMNI-1.')
+
+    await store.startEval(['OMNI-1', 'OMNI-2'])
+    expect(store.getState().toasts.at(-1)?.text).toBe('Eval started for 2 keys.')
+  })
+
+  it('toasts when an eval cannot start', async () => {
+    const transport = createFakeTransport()
+    transport.startEval = async () => {
+      throw new Error('no golden bundles')
+    }
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await store.startEval()
+    expect(store.getState().toasts.at(-1)?.text).toBe('Eval did not start. no golden bundles')
+  })
+
+  it('hook.received lands in the inbound list, newest first, and toasts', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-1', outcome: 'started' })
+    transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-2', outcome: 'filtered' })
+
+    const { inbound, toasts } = store.getState()
+    expect(inbound.map((d) => d.key)).toEqual(['OMNI-2', 'OMNI-1'])
+    expect(inbound[0]?.outcome).toBe('filtered')
+    expect(toasts.at(-1)?.text).toBe(
+      "Webhook from jira \u00b7 OMNI-2 did not match this workspace's filter.",
+    )
+    expect(toasts.at(-1)?.tone).toBe('info')
+  })
+
+  it('a rejected delivery is an error toast, and a delivery with no key names only its source', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    transport.emit({ kind: 'hook.received', source: 'zoho', outcome: 'ignored' })
+    expect(store.getState().toasts.at(-1)?.text).toBe('Webhook from zoho named no ticket.')
+    expect(store.getState().inbound[0]?.key).toBe('')
+
+    transport.emit({ kind: 'hook.received', source: 'zoho', key: 'OMNI-3', outcome: 'rejected' })
+    expect(store.getState().toasts.at(-1)?.tone).toBe('error')
+  })
+
+  it('the inbound list is capped, so a chatty tracker cannot grow it without end', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    for (let i = 0; i < INBOUND_LIMIT + 5; i += 1) {
+      transport.emit({ kind: 'hook.received', source: 'jira', key: `OMNI-${i}`, outcome: 'skipped' })
+    }
+    const { inbound } = store.getState()
+    expect(inbound).toHaveLength(INBOUND_LIMIT)
+    expect(inbound[0]?.key).toBe(`OMNI-${INBOUND_LIMIT + 4}`)
   })
 })
 

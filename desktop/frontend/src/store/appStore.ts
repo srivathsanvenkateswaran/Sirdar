@@ -1,5 +1,6 @@
 import type {
   AppEvent,
+  HookOutcome,
   Quota,
   RunSummary,
   Ticket,
@@ -14,6 +15,7 @@ export type Screen =
   | { name: 'board' }
   | { name: 'run'; runId: string }
   | { name: 'register' }
+  | { name: 'eval' }
   | { name: 'settings' }
 
 export interface Toast {
@@ -21,6 +23,23 @@ export interface Toast {
   tone: 'info' | 'error'
   text: string
 }
+
+/**
+ * One inbound webhook delivery, as the Board's Inbound panel lists it. The
+ * tracker fires on every field change, so most deliveries are skipped or
+ * filtered; seeing them is how a hook that never arrives is told apart from
+ * one that arrives and is dropped.
+ */
+export interface InboundDelivery {
+  id: number
+  source: string
+  key: string
+  outcome: HookOutcome
+  at: string
+}
+
+/** How many deliveries the Inbound panel keeps. */
+export const INBOUND_LIMIT = 50
 
 export interface AppState {
   transport: Transport
@@ -33,6 +52,8 @@ export interface AppState {
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
   toasts: Toast[]
+  /** Inbound webhook deliveries, newest first. */
+  inbound: InboundDelivery[]
   /** True until `init()` has finished its first pass, so the board can say so. */
   loading: boolean
 }
@@ -46,6 +67,23 @@ export interface TriageOptions {
 export interface RCAOptions {
   prUrl?: string
   resolution?: string
+  provider?: string
+  model?: string
+}
+
+export interface FixOptions {
+  dryRun?: boolean
+  noPr?: boolean
+  base?: string
+  acceptDeviation?: boolean
+  provider?: string
+  model?: string
+}
+
+export interface EvalOptions {
+  provider?: string
+  model?: string
+  concurrency?: number
 }
 
 /**
@@ -80,6 +118,8 @@ export interface AppStore {
   navigate(screen: Screen): void
   startTriage(keys: string[], opts?: TriageOptions): Promise<void>
   startRCA(key: string, opts?: RCAOptions): Promise<void>
+  startFix(key: string, opts?: FixOptions): Promise<void>
+  startEval(keys?: string[], opts?: EvalOptions): Promise<void>
   refresh(): Promise<void>
   toast(text: string, tone?: Toast['tone']): void
   dismissToast(id: number): void
@@ -114,6 +154,23 @@ function writeStoredWorkspace(id: string): void {
 export function isQueueUnsupported(err: unknown): boolean {
   const message = err instanceof Error ? err.message : String(err ?? '')
   return /\b501\b|unsupported|not implemented/i.test(message)
+}
+
+/** What a delivery's toast says: who sent it, about what, and what came of it. */
+export function inboundText(entry: { source: string; key: string; outcome: HookOutcome }): string {
+  const what = entry.key ? `${entry.source} · ${entry.key}` : entry.source
+  switch (entry.outcome) {
+    case 'started':
+      return `Webhook from ${what} started a triage.`
+    case 'skipped':
+      return `Webhook from ${what} was skipped; that key is busy or in its cooldown.`
+    case 'filtered':
+      return `Webhook from ${what} did not match this workspace's filter.`
+    case 'ignored':
+      return `Webhook from ${entry.source} named no ticket.`
+    default:
+      return `Webhook from ${what} was rejected.`
+  }
 }
 
 function errorText(err: unknown): string {
@@ -151,6 +208,7 @@ export function createAppStore(transport: Transport): AppStore {
     queueUnsupported: {},
     quota: [],
     toasts: [],
+    inbound: [],
     loading: true,
   }
 
@@ -158,6 +216,7 @@ export function createAppStore(transport: Transport): AppStore {
   const pending: PendingJob[] = []
   let unsubscribe: (() => void) | null = null
   let toastSeq = 0
+  let inboundSeq = 0
   let disposed = false
   let started = false
 
@@ -289,6 +348,19 @@ export function createAppStore(transport: Transport): AppStore {
         void loadRuns(event.workspaceId)
         return
       }
+      case 'hook.received': {
+        inboundSeq += 1
+        const entry: InboundDelivery = {
+          id: inboundSeq,
+          source: event.source,
+          key: event.key ?? '',
+          outcome: event.outcome,
+          at: new Date().toISOString(),
+        }
+        set({ inbound: [entry, ...state.inbound].slice(0, INBOUND_LIMIT) })
+        toast(inboundText(entry), event.outcome === 'rejected' ? 'error' : 'info')
+        return
+      }
       // `run.event` is a per-line firehose; Run detail subscribes for itself.
       default:
         return
@@ -363,6 +435,54 @@ export function createAppStore(transport: Transport): AppStore {
         void loadRuns(workspaceId)
       } catch (err) {
         if (!disposed) toast(`Triage did not start. ${errorText(err)}`, 'error')
+      }
+    },
+
+    async startFix(key, opts) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return
+      }
+      if (!key) {
+        toast('Enter a ticket key.', 'error')
+        return
+      }
+      const askedAt = Date.now()
+      try {
+        const started = await transport.startFix(workspaceId, key, opts)
+        if (disposed) return
+        track(started?.jobId ?? '', workspaceId, [key], askedAt)
+        toast(
+          opts?.acceptDeviation
+            ? `Publishing the reviewed commit for ${key}.`
+            : `Fix started for ${key}.`,
+        )
+        void loadRuns(workspaceId)
+      } catch (err) {
+        if (!disposed) toast(`Fix did not start. ${errorText(err)}`, 'error')
+      }
+    },
+
+    async startEval(keys, opts) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return
+      }
+      const askedAt = Date.now()
+      try {
+        const started = await transport.startEval(workspaceId, keys, opts)
+        if (disposed) return
+        track(started?.jobId ?? '', workspaceId, keys ?? [], askedAt)
+        toast(
+          keys && keys.length > 0
+            ? `Eval started for ${keys.length === 1 ? keys[0] : `${keys.length} keys`}.`
+            : 'Eval started for the whole golden set.',
+        )
+        void loadRuns(workspaceId)
+      } catch (err) {
+        if (!disposed) toast(`Eval did not start. ${errorText(err)}`, 'error')
       }
     },
 

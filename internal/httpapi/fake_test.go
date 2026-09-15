@@ -32,6 +32,10 @@ type fake struct {
 	checks     []Check
 	quotas     []Quota
 
+	golden  []GoldenEntry
+	reports []EvalReport
+	summary ConfigSummary
+
 	// Failures to inject.
 	queueUnsupported bool
 	queueErr         error
@@ -49,6 +53,11 @@ type fake struct {
 	gotTriage    TriageOptions
 	gotRCAKey    string
 	gotRCA       RCAOptions
+	gotFixKey    string
+	gotFix       FixOptions
+	gotEvalKeys  []string
+	gotEval      EvalOptions
+	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
 	gotCancelled JobID
 
@@ -92,6 +101,7 @@ func newFake() *fake {
 		prompt:   "# Prompt\n\nYou are triaging OMNI-2510.\n",
 		register: []RegisterRow{{Key: "OMNI-2510", Kind: "triage", RunID: knownRun, Date: "2026-09-10", Provider: "claude", Model: "sonnet", Service: "payments", Classification: "bug", Confidence: "high", Severity: "P1", Turns: 7, CostUSD: 0.42, TriageVerdict: "held", NotePath: "/notes/OMNI-2510-triage.md"}},
 		checks:   []Check{{Name: "claude cli", OK: true, Detail: "1.2.3"}},
+		golden:   []GoldenEntry{{Key: "OMNI-2510", Dir: "/golden/OMNI-2510", BundleDir: "/golden/OMNI-2510/bundle", Assertions: 3, HasExpectedNote: true}},
 		quotas:   []Quota{{Provider: "claude", ObservedAt: "2026-09-10T12:00:00Z", FiveHour: &QuotaWindow{Utilization: 0.31, ResetsAt: "2026-09-10T15:00:00Z"}}},
 	}
 }
@@ -260,6 +270,57 @@ func (f *fake) hooks() []hookCall {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	return append([]hookCall(nil), f.gotHooks...)
+}
+
+func (f *fake) StartFix(_ context.Context, wsID, key string, o FixOptions) (JobID, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	f.gotFixKey, f.gotFix = key, o
+	f.mu.Unlock()
+	return knownJob, nil
+}
+
+func (f *fake) StartEval(_ context.Context, wsID string, keys []string, o EvalOptions) (JobID, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return "", err
+	}
+	f.mu.Lock()
+	f.gotEvalKeys, f.gotEval = keys, o
+	f.mu.Unlock()
+	return knownJob, nil
+}
+
+func (f *fake) EvalReports(wsID string) ([]EvalReport, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	return f.reports, nil
+}
+
+func (f *fake) Golden(wsID string) ([]GoldenEntry, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	return f.golden, nil
+}
+
+func (f *fake) AddGolden(wsID, key, runID string) (GoldenEntry, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return GoldenEntry{}, err
+	}
+	f.mu.Lock()
+	f.gotGolden.Key, f.gotGolden.RunID = key, runID
+	f.mu.Unlock()
+	return f.golden[0], nil
+}
+
+func (f *fake) ConfigSummary(wsID string) (ConfigSummary, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return ConfigSummary{}, err
+	}
+	return f.summary, nil
 }
 
 func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobID, error) {

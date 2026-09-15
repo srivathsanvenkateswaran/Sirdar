@@ -73,10 +73,19 @@ type State struct {
 	// the branch it targets, and the commit it produced. The commit is
 	// what a `--accept-deviation` rerun looks for — it pushes the commit a
 	// human read rather than starting a second agent session over it.
+	//
+	// Deviation is what the agent reported doing instead of the note's
+	// Proposed Fix, when it reported anything: the run stops before the
+	// push and a person decides. PRURL is filled in once the branch has
+	// been pushed and a pull request opened for it. Both are recorded
+	// here rather than only in the command's return value because a
+	// desktop shell reads the run directory, not the CLI's stdout.
 	Fix struct {
-		Branch string `json:",omitempty"`
-		Base   string `json:",omitempty"`
-		Commit string `json:",omitempty"`
+		Branch    string `json:",omitempty"`
+		Base      string `json:",omitempty"`
+		Commit    string `json:",omitempty"`
+		Deviation string `json:",omitempty"`
+		PRURL     string `json:",omitempty"`
 	} `json:",omitempty"`
 }
 

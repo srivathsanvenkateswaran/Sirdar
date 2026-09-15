@@ -241,6 +241,13 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	if dev := strings.TrimSpace(res.Report.DeviationFromNote); dev != "" && !o.AcceptDeviation {
 		res.Blocked = dev
+		// The deviation goes into the run state as well as into the
+		// command's output: a desktop shell reads the run directory, and
+		// the review that unblocks this commit happens there too.
+		recordFixState(cfg.Root, out.State.RunID, stderr, key, func(s *store.State) {
+			s.Fix.Deviation = dev
+		})
+		res.State.Fix.Deviation = dev
 		return res, nil
 	}
 
@@ -282,6 +289,17 @@ func publish(ctx context.Context, g git, cfg *config.Config, key string, tn tria
 	}
 
 	res.NotesUpdated = updateNotes(tn, res.PRURL, res.Commit, stderr, key)
+
+	// What the push produced is recorded on the run that made the commit —
+	// which on an --accept-deviation rerun is the earlier run, not a new
+	// one — so the screen showing that run says the work has left the
+	// machine.
+	if res.RunID != "" {
+		recordFixState(cfg.Root, res.RunID, stderr, key, func(s *store.State) {
+			s.Fix.PRURL = res.PRURL
+		})
+		res.State.Fix.PRURL = res.PRURL
+	}
 	return nil
 }
 
@@ -359,12 +377,22 @@ func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn
 // made, and failing the command here would only make it look as though it
 // were not.
 func recordCommit(root, runID, branch, base, commit string, stderr io.Writer, key string) {
+	recordFixState(root, runID, stderr, key, func(s *store.State) {
+		s.Fix.Branch, s.Fix.Base, s.Fix.Commit = branch, base, commit
+	})
+}
+
+// recordFixState applies mutate to a fix run's own state.json. A failure is
+// reported and otherwise ignored: whatever the state was to record has
+// already happened, and failing the command here would only make it look as
+// though it had not.
+func recordFixState(root, runID string, stderr io.Writer, key string, mutate func(*store.State)) {
 	rn, state, err := store.Open(root, runID)
 	if err != nil {
 		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
 		return
 	}
-	state.Fix.Branch, state.Fix.Base, state.Fix.Commit = branch, base, commit
+	mutate(&state)
 	if err := rn.WriteState(state); err != nil {
 		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
 	}

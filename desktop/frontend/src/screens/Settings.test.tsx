@@ -30,6 +30,12 @@ function fakeTransport(overrides: Partial<Transport> = {}): Transport {
     prompt: notImplemented,
     startTriage: notImplemented,
     startRCA: notImplemented,
+    startFix: notImplemented,
+    startEval: notImplemented,
+    evalReports: notImplemented,
+    golden: notImplemented,
+    addGolden: notImplemented,
+    configSummary: notImplemented,
     resume: notImplemented,
     cancel: notImplemented,
     register: notImplemented,
@@ -184,5 +190,67 @@ describe('the reading-direction toggle', () => {
 
     fireEvent.click(screen.getByLabelText(RTL_LABEL))
     expect(prefersRTL()).toBe(false)
+  })
+})
+
+describe('the notify and webhooks summary', () => {
+  const summary = {
+    notify: {
+      enabled: true,
+      on: ['completed'],
+      includeTitle: false,
+      destinations: [{ type: 'slack' as const, credential: 'env' }],
+    },
+    webhooks: {
+      enabled: true,
+      cooldown: '10m0s',
+      match: { assignee: 'me' },
+      sources: [{ name: 'jira', auth: 'secret' as const, credential: 'keychain' }],
+    },
+  }
+
+  it('reads the summary for the workspace on screen and shows it redacted', async () => {
+    const configSummary = vi.fn().mockResolvedValue(summary)
+    render(
+      <Settings
+        transport={fakeTransport({ configSummary })}
+        workspaces={[workspace]}
+        currentWorkspaceId="ws1"
+        onWorkspacesChanged={() => {}}
+      />,
+    )
+
+    await screen.findByRole('region', { name: 'Notifications and webhooks' })
+    expect(configSummary).toHaveBeenCalledWith('ws1')
+    expect(await screen.findByText('env: reference')).toBeInTheDocument()
+    expect(screen.getByText('keychain: reference')).toBeInTheDocument()
+    expect(screen.getByText(/Posts on completed/)).toBeInTheDocument()
+    expect(screen.getByText(/only tickets assigned to me/)).toBeInTheDocument()
+  })
+
+  it('asks for nothing when no workspace is selected', () => {
+    const configSummary = vi.fn()
+    render(
+      <Settings
+        transport={fakeTransport({ configSummary })}
+        workspaces={[]}
+        onWorkspacesChanged={() => {}}
+      />,
+    )
+    expect(configSummary).not.toHaveBeenCalled()
+    expect(screen.queryByRole('region', { name: 'Notifications and webhooks' })).toBeNull()
+  })
+
+  it('shows why the summary could not be read instead of an empty panel', async () => {
+    const configSummary = vi.fn().mockRejectedValue(new Error('no such workspace'))
+    render(
+      <Settings
+        transport={fakeTransport({ configSummary })}
+        workspaces={[workspace]}
+        currentWorkspaceId="ws1"
+        onWorkspacesChanged={() => {}}
+      />,
+    )
+    expect(await screen.findByText('no such workspace')).toBeInTheDocument()
   })
 })

@@ -3,10 +3,11 @@ import Header from './components/shell/Header'
 import NewTriageDialog from './components/shell/NewTriageDialog'
 import Toasts from './components/shell/Toast'
 import Board from './screens/Board'
+import Eval from './screens/Eval'
 import Register from './screens/Register'
 import RunDetail from './screens/RunDetail'
 import Settings from './screens/Settings'
-import type { Screen } from './store/appStore'
+import type { EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
 
 /** Keys typed into a field belong to that field, not to the window. */
@@ -65,10 +66,16 @@ export default function App(): JSX.Element {
     return () => window.removeEventListener('keydown', onKeyDown)
   }, [openTriage, state.screen.name, triageOpen])
 
-  // Both starts go through the store, which keeps the job id the run detail
+  // Every start goes through the store, which keeps the job id the run detail
   // screen's Cancel button needs.
-  const startRCA = useCallback(
-    (key: string, opts?: { prUrl?: string; resolution?: string }) => store.startRCA(key, opts),
+  const startRCA = useCallback((key: string, opts?: RCAOptions) => store.startRCA(key, opts), [
+    store,
+  ])
+  const startFix = useCallback((key: string, opts?: FixOptions) => store.startFix(key, opts), [
+    store,
+  ])
+  const startEval = useCallback(
+    (keys?: string[], opts?: EvalOptions) => store.startEval(keys, opts),
     [store],
   )
 
@@ -80,19 +87,32 @@ export default function App(): JSX.Element {
           transport={state.transport}
           workspaceId={workspaceId}
           runId={state.screen.runId}
+          defaultProvider={currentWorkspace?.provider}
           onBack={() => navigate({ name: 'board' })}
           onStartRCA={startRCA}
+          onStartFix={startFix}
         />
       )
       break
     case 'register':
       screen = <Register transport={state.transport} workspaceId={workspaceId} />
       break
+    case 'eval':
+      screen = (
+        <Eval
+          transport={state.transport}
+          workspaceId={workspaceId}
+          defaultProvider={currentWorkspace?.provider}
+          onStartEval={startEval}
+        />
+      )
+      break
     case 'settings':
       screen = (
         <Settings
           transport={state.transport}
           workspaces={state.workspaces}
+          currentWorkspaceId={workspaceId}
           onWorkspacesChanged={() => void store.refresh()}
         />
       )
@@ -104,6 +124,7 @@ export default function App(): JSX.Element {
           runs={runs}
           queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
           loading={state.loading}
+          inbound={state.inbound}
           filterRef={filterRef}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
           onTriage={(keys) => void store.startTriage(keys)}

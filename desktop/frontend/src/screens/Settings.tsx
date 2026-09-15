@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import type { Check, Transport, Workspace } from '../api/types'
+import type { Check, ConfigSummary, Transport, Workspace } from '../api/types'
 import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
+import ConfigSummaryPanel from '../components/shell/ConfigSummaryPanel'
 import '../components/panels.css'
 
 
@@ -24,9 +25,11 @@ const CONFIRM_MS = 5000
 export default function Settings(props: {
   transport: Transport
   workspaces: Workspace[]
+  /** The workspace whose notify and webhooks blocks are summarised. */
+  currentWorkspaceId?: string
   onWorkspacesChanged: () => void
 }): JSX.Element {
-  const { transport, workspaces, onWorkspacesChanged } = props
+  const { transport, workspaces, currentWorkspaceId, onWorkspacesChanged } = props
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -37,6 +40,8 @@ export default function Settings(props: {
   const [confirming, setConfirming] = useState('')
   const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const rtl = useSyncExternalStore(subscribePreferRTL, prefersRTL, () => false)
+  const [summary, setSummary] = useState<ConfigSummary | null>(null)
+  const [summaryError, setSummaryError] = useState('')
 
 
   useEffect(() => {
@@ -54,6 +59,27 @@ export default function Settings(props: {
       cancelled = true
     }
   }, [transport])
+
+  useEffect(() => {
+    if (!currentWorkspaceId) {
+      setSummary(null)
+      return
+    }
+    let cancelled = false
+    setSummary(null)
+    setSummaryError('')
+    transport
+      .configSummary(currentWorkspaceId)
+      .then((got) => {
+        if (!cancelled) setSummary(got)
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setSummaryError(err instanceof Error ? err.message : String(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [transport, currentWorkspaceId])
 
   function disarm(): void {
     if (confirmTimer.current) clearTimeout(confirmTimer.current)
@@ -189,6 +215,10 @@ export default function Settings(props: {
         </form>
         {addError && <p className="form-error">{addError}</p>}
       </section>
+
+      {currentWorkspaceId ? (
+        <ConfigSummaryPanel summary={summary} error={summaryError} />
+      ) : null}
 
       <section className="settings-reading">
         <h2 className="panel-heading">Reading</h2>

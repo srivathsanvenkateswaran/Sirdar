@@ -71,6 +71,12 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/rca", s.startRCA)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/eval", s.startEval)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/eval", s.evalReports)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/golden", s.golden)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/resume", s.resume)
 	s.mux.HandleFunc("POST /api/jobs/{jobId}/cancel", s.cancel)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/register", s.register)
@@ -241,6 +247,9 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "keys must list at least one ticket key")
 		return
 	}
+	if !validProvider(w, body.Provider) {
+		return
+	}
 	id, err := s.svc.StartTriage(r.Context(), r.PathValue("id"), body.Keys, TriageOptions{
 		Provider: body.Provider, Model: body.Model, DryRun: body.DryRun,
 	})
@@ -256,6 +265,8 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		Key        string `json:"key"`
 		PRURL      string `json:"prUrl"`
 		Resolution string `json:"resolution"`
+		Provider   string `json:"provider"`
+		Model      string `json:"model"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -264,8 +275,12 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "key is required")
 		return
 	}
+	if !validProvider(w, body.Provider) {
+		return
+	}
 	id, err := s.svc.StartRCA(r.Context(), r.PathValue("id"), body.Key, RCAOptions{
 		PRURL: body.PRURL, Resolution: body.Resolution,
+		Provider: body.Provider, Model: body.Model,
 	})
 	if err != nil {
 		s.fail(w, err)

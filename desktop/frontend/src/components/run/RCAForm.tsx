@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import ProviderFields from './ProviderFields'
 
 /**
  * Starts a root-cause run on the same key. Both fields are optional: the PR and
@@ -9,17 +10,21 @@ export default function RCAForm({
   runKey,
   pending,
   error,
+  defaultProvider,
   onStart,
   onCancel,
 }: {
   runKey: string
   pending: boolean
   error: string
-  onStart: (o: { prUrl: string; resolution: string }) => void
+  defaultProvider?: string
+  onStart: (o: { prUrl: string; resolution: string; provider: string; model: string }) => void
   onCancel: () => void
 }) {
   const [prUrl, setPrUrl] = useState('')
   const [resolution, setResolution] = useState('')
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
 
   return (
     <form
@@ -27,7 +32,12 @@ export default function RCAForm({
       aria-label="Start RCA"
       onSubmit={(e) => {
         e.preventDefault()
-        onStart({ prUrl: prUrl.trim(), resolution: resolution.trim() })
+        onStart({
+          prUrl: prUrl.trim(),
+          resolution: resolution.trim(),
+          provider,
+          model: model.trim(),
+        })
       }}
     >
       <p className="form-question">Root-cause run for {runKey}</p>
@@ -53,6 +63,15 @@ export default function RCAForm({
           />
         </div>
       </div>
+      <ProviderFields
+        idPrefix="rca"
+        provider={provider}
+        model={model}
+        defaultProvider={defaultProvider}
+        disabled={pending}
+        onProvider={setProvider}
+        onModel={setModel}
+      />
       <div className="form-row" style={{ marginTop: 8 }}>
         <button type="submit" className="run-btn run-btn--primary" disabled={pending}>
           {pending ? 'Starting…' : 'Start RCA'}

@@ -185,3 +185,120 @@ describe('Header', () => {
     expect(s.getState().screen).toEqual({ name: 'settings' })
   })
 })
+
+describe('Eval tab', () => {
+  it('opens the Eval screen from the nav and draws the golden set and the last report', async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1', name: 'omni' })],
+      golden: [
+        {
+          key: 'OMNI-2510',
+          dir: '/golden/OMNI-2510',
+          bundleDir: '/golden/OMNI-2510/bundle',
+          assertions: 2,
+          hasExpectedNote: true,
+        },
+      ],
+      reports: [
+        {
+          path: '/work/.sirdar/eval/20260910-1200.json',
+          at: '2026-09-10T12:00:00Z',
+          provider: 'claude',
+          model: 'sonnet',
+          goldenDir: '/golden',
+          results: [
+            {
+              key: 'OMNI-2510',
+              runId: 'r1',
+              state: 'completed',
+              turns: 5,
+              costUsd: 0.3,
+              minutes: 2,
+              schemaValid: true,
+              checks: [],
+              passed: 2,
+              total: 2,
+            },
+          ],
+        },
+      ],
+    })
+    const { store: s } = mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
+    expect(s.getState().screen).toEqual({ name: 'eval' })
+
+    expect(await screen.findByRole('checkbox', { name: 'OMNI-2510' })).toBeInTheDocument()
+    expect(screen.getByText('2 assertions')).toBeInTheDocument()
+    expect(screen.getByRole('table')).toBeInTheDocument()
+  })
+
+  it('starts an eval through the store, so the job id is tracked like every other start', async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1', name: 'omni' })],
+      golden: [
+        {
+          key: 'OMNI-2510',
+          dir: '/golden/OMNI-2510',
+          bundleDir: '/golden/OMNI-2510/bundle',
+          assertions: 2,
+          hasExpectedNote: true,
+        },
+      ],
+    })
+    mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Run eval on the whole set' }))
+    await waitFor(() =>
+      expect(transport.calls.startEval).toEqual([
+        { ws: 'ws1', keys: undefined, opts: { provider: undefined, model: undefined } },
+      ]),
+    )
+  })
+})
+
+describe('Inbound deliveries', () => {
+  it('a hook.received lands on the board and raises a toast', async () => {
+    const transport = seeded()
+    mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    const panel = screen.getByRole('region', { name: 'Inbound' })
+    expect(within(panel).getByText(/No webhook delivery has arrived/)).toBeInTheDocument()
+
+    transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-9', outcome: 'started' })
+
+    await waitFor(() =>
+      expect(within(panel).getByText('started a triage')).toBeInTheDocument(),
+    )
+    expect(within(panel).getByText('OMNI-9')).toBeInTheDocument()
+    expect(screen.getByText(/Webhook from jira .* started a triage\./)).toBeInTheDocument()
+  })
+})
+
+describe('Settings', () => {
+  it("summarises the current workspace's notify and webhooks blocks", async () => {
+    const transport = createFakeTransport({
+      workspaces: [workspace({ id: 'ws1', name: 'omni' })],
+      configSummary: {
+        notify: {
+          enabled: true,
+          on: ['completed'],
+          includeTitle: false,
+          destinations: [{ type: 'slack', credential: 'env' }],
+        },
+        webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
+      },
+    })
+    mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
+    const panel = await screen.findByRole('region', { name: 'Notifications and webhooks' })
+    expect(within(panel).getByText('env: reference')).toBeInTheDocument()
+    expect(within(panel).getByText(/Inbound webhooks are off/)).toBeInTheDocument()
+  })
+})

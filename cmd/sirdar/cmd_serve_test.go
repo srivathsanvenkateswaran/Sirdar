@@ -53,6 +53,24 @@ func TestServeWithoutWorkspace(t *testing.T) {
 	}
 }
 
+// TestServeAcceptsAGoldenDir keeps `sirdar serve` level with `sirdar eval`:
+// the golden set the UI's eval routes replay is named on the command line,
+// once, and never by a request.
+func TestServeAcceptsAGoldenDir(t *testing.T) {
+	t.Chdir(t.TempDir())
+	var out, errb bytes.Buffer
+	if code := run([]string{"serve", "--addr", "127.0.0.1:0", "--golden", t.TempDir()}, &out, &errb); code != 2 {
+		t.Fatalf("exit %d, want 2 (stderr %q)", code, errb.String())
+	}
+	// It stopped on the missing workspace, which means --golden parsed.
+	if strings.Contains(errb.String(), "not defined") {
+		t.Fatalf("--golden is not a serve flag: %q", errb.String())
+	}
+	if !strings.Contains(errb.String(), ".sirdar/config.yaml") {
+		t.Fatalf("stderr %q", errb.String())
+	}
+}
+
 func TestServeRejectsUnknownFlag(t *testing.T) {
 	var out, errb bytes.Buffer
 	if code := run([]string{"serve", "--port", "7777"}, &out, &errb); code != 2 {
