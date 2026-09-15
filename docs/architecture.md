@@ -9,11 +9,11 @@ desktop app observes a run. For adapter and provider detail, see `docs/adapters.
 
 | Package | Role |
 |---|---|
-| `cmd/sirdar` | The CLI entry point: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`. Wires config, sources, providers, and the store together per command. |
+| `cmd/sirdar` | The CLI entry point: `init`, `doctor`, `triage`, `rca`, `resume`, `steer`, `runs`, `register`, `serve`. Wires config, sources, providers, and the store together per command. |
 | `internal/app` | The service layer the desktop app (and `sirdar serve`) binds to: workspace registration, run listing/detail, a filesystem `Watcher` that polls run directories and turns changes into events, budget/quota helpers. |
 | `internal/httpapi` | The HTTP+SSE server `sirdar serve` runs: a JSON API over `internal/app.Service` plus `/api/events`, an SSE stream of the watcher's fan-out channel. Embeds the built frontend under `ui/`. |
-| `internal/run` | The triage/RCA run loop: `prepare` (fetch ticket, build the bundle and prompt), `execute` (drive a provider session, stream events, enforce budgets, handle the schema-retry turn), `pool` (bounded concurrency across `sirdar triage KEY...`). |
-| `internal/provider` | The `Provider`/`Session` contract every agent backend implements (`provider.go`), plus the shared `PermissionPolicy` and command-matching logic (`policy.go`) all three providers are judged by. |
+| `internal/run` | The triage/RCA run loop: `prepare` (fetch ticket, build the bundle and prompt), `execute` (drive a provider session, stream events, enforce budgets, handle the schema-retry turn), `pool` (bounded concurrency across `sirdar triage KEY...`), `steer` (continue a finished run with a follow-up instruction on the same run record; `docs/steer.md`). |
+| `internal/provider` | The `Provider`/`Session` contract every agent backend implements (`provider.go`), plus the shared `PermissionPolicy` and command-matching logic (`policy.go`) all three providers are judged by, and the optional `FixSupport` and `Steerable` capability contracts a provider declares refusals through. |
 | `internal/provider/claude` | Spawns the `claude` CLI in stream-json mode, translates its output into `provider.Event`s, and runs permission decisions through a `--permission-prompt-tool stdio` hook. |
 | `internal/provider/codex` | Spawns `codex app-server` and speaks its JSON-RPC protocol over stdio. |
 | `internal/provider/openai` | Sirdar's own agent loop against any OpenAI-compatible Chat Completions endpoint: no CLI spawned, `internal/agenttools` supplies the tool set, `internal/mcpclient` supplies MCP tools. |
@@ -42,6 +42,10 @@ A run moves through `preparing → running → completed`, or off to `failed`, `
 3. **Terminal state**: `completed` writes `result.json` and the rendered `note.md` (copied to the
    configured notes directory); `blocked` means the agent asked a question or hit a rate limit and
    is continued with `sirdar resume RUN_ID`; `failed` and `over_budget` end the run without a note.
+4. **Steered** (`internal/run/steer.go`, optional): `sirdar steer RUN_ID "..."` takes a finished
+   run back to `running` on the same record — the provider resumes the recorded handle or opens
+   a fresh session primed with the note, the transcript says which — and ends it again through
+   the same terminal states, with usage summed over every session (`docs/steer.md`).
 
 Each run gets its own directory, `.sirdar/runs/<KEY>/<run-id>/`, holding `bundle/`, `prompt.md`,
 `events.jsonl`, `result.json` (on success), `note.md` (on success), and `state.json` throughout.
