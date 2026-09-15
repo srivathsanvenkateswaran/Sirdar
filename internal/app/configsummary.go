@@ -2,6 +2,7 @@ package app
 
 import (
 	"net/url"
+	"path/filepath"
 	"sort"
 	"strings"
 
@@ -18,8 +19,75 @@ import (
 // "file", "cmd" — which says where the secret comes from and names
 // neither it nor the variable holding it.
 type ConfigSummary struct {
-	Notify   NotifySummary   `json:"notify"`
-	Webhooks WebhooksSummary `json:"webhooks"`
+	General     GeneralSummary     `json:"general"`
+	Budget      BudgetSummary      `json:"budget"`
+	Permissions PermissionsSummary `json:"permissions"`
+	Notes       NotesSummary       `json:"notes"`
+	MCP         MCPSummary         `json:"mcp"`
+	Notify      NotifySummary      `json:"notify"`
+	Webhooks    WebhooksSummary    `json:"webhooks"`
+}
+
+// GeneralSummary is the top of the config file as the General page shows
+// it: what the workspace is called, where it is, and which provider a new
+// session gets. ConfigPath is the file every other row on the page points
+// the operator at, since the app reads it and never writes it.
+type GeneralSummary struct {
+	Workspace  string `json:"workspace"`
+	Root       string `json:"root"`
+	ConfigPath string `json:"configPath"`
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+	// Billing is "subscription" or "api".
+	Billing string `json:"billing"`
+	// NotesLanguage and CustomerLanguage are the resolved codes, so a
+	// workspace that named neither reads "en" and "auto" rather than blank.
+	NotesLanguage    string `json:"notesLanguage"`
+	CustomerLanguage string `json:"customerLanguage"`
+	// RTLMarkup says whether the embedded templates wrap a right-to-left
+	// paragraph in a <div dir="rtl"> block.
+	RTLMarkup bool `json:"rtlMarkup"`
+}
+
+// BudgetSummary is the budget block with the stall timeout resolved: an
+// unset stallMinutes reads as the default and 0 as "off".
+type BudgetSummary struct {
+	MaxTurns     int     `json:"maxTurns"`
+	MaxMinutes   int     `json:"maxMinutes"`
+	MaxUSD       float64 `json:"maxUsd"`
+	StallMinutes int     `json:"stallMinutes"`
+}
+
+// PermissionsSummary is every allow-list a session is judged by. They are
+// patterns an operator wrote, never credentials, and an empty list is
+// reported as an empty list so the page can say what empty means for it.
+type PermissionsSummary struct {
+	Bash     []string `json:"bash"`
+	FixBash  []string `json:"fixBash"`
+	Fetch    []string `json:"fetch"`
+	ReadAlso []string `json:"readAlso"`
+	MCP      []string `json:"mcp"`
+}
+
+// NotesSummary is where notes go and what they are called. Templates is
+// empty for a workspace on the embedded defaults.
+type NotesSummary struct {
+	Dir       string        `json:"dir"`
+	Templates string        `json:"templates,omitempty"`
+	Filenames NoteFilenames `json:"filenames"`
+}
+
+// NoteFilenames is the pattern each kind of note is filed under.
+type NoteFilenames struct {
+	Triage     string `json:"triage"`
+	RCA        string `json:"rca"`
+	Resolution string `json:"resolution"`
+}
+
+// MCPSummary is the one MCP setting that is not a server: whether a
+// session sees the workspace's .mcp.json alone.
+type MCPSummary struct {
+	WorkspaceOnly bool `json:"workspaceOnly"`
 }
 
 // NotifySummary is the notify block with its destinations flattened into
@@ -102,9 +170,73 @@ func (s *Service) ConfigSummary(wsID string) (ConfigSummary, error) {
 // exported so the redaction can be tested against a config built by hand.
 func SummariseConfig(cfg *config.Config) ConfigSummary {
 	return ConfigSummary{
-		Notify:   summariseNotify(cfg.Notify),
-		Webhooks: summariseWebhooks(&cfg.Webhooks),
+		General:     summariseGeneral(cfg),
+		Budget:      summariseBudget(cfg),
+		Permissions: summarisePermissions(cfg),
+		Notes:       summariseNotes(cfg),
+		MCP:         MCPSummary{WorkspaceOnly: cfg.WorkspaceOnlyMCP()},
+		Notify:      summariseNotify(cfg.Notify),
+		Webhooks:    summariseWebhooks(&cfg.Webhooks),
 	}
+}
+
+func summariseGeneral(cfg *config.Config) GeneralSummary {
+	out := GeneralSummary{
+		Workspace:        cfg.Workspace,
+		Root:             cfg.Root,
+		Provider:         string(cfg.Provider),
+		Model:            cfg.Model,
+		Billing:          cfg.Billing,
+		NotesLanguage:    cfg.NotesLanguage(),
+		CustomerLanguage: cfg.CustomerLanguage(),
+		RTLMarkup:        cfg.RTLMarkup(),
+	}
+	if cfg.Root != "" {
+		out.ConfigPath = filepath.Join(cfg.Root, ".sirdar", "config.yaml")
+	}
+	return out
+}
+
+func summariseBudget(cfg *config.Config) BudgetSummary {
+	return BudgetSummary{
+		MaxTurns:     cfg.Budget.MaxTurns,
+		MaxMinutes:   cfg.Budget.MaxMinutes,
+		MaxUSD:       cfg.Budget.MaxUSD,
+		StallMinutes: cfg.StallMinutes(),
+	}
+}
+
+func summarisePermissions(cfg *config.Config) PermissionsSummary {
+	return PermissionsSummary{
+		Bash:     listOf(cfg.Permissions.Bash),
+		FixBash:  listOf(cfg.Permissions.FixBash),
+		Fetch:    listOf(cfg.Permissions.Fetch),
+		ReadAlso: listOf(cfg.Permissions.ReadAlso),
+		MCP:      listOf(cfg.Permissions.MCP),
+	}
+}
+
+func summariseNotes(cfg *config.Config) NotesSummary {
+	out := NotesSummary{}
+	if cfg.Notes.Dir != "" {
+		out.Dir = cfg.ExpandPath(cfg.Notes.Dir)
+	}
+	if cfg.Notes.Templates != "" {
+		out.Templates = cfg.ExpandPath(cfg.Notes.Templates)
+	}
+	out.Filenames = NoteFilenames{
+		Triage:     cfg.Notes.Filenames.Triage,
+		RCA:        cfg.Notes.Filenames.RCA,
+		Resolution: cfg.Notes.Filenames.Resolution,
+	}
+	return out
+}
+
+// listOf copies a list so the summary owns it, and turns a nil into an
+// empty list: the frontend maps over every one of these.
+func listOf(in []string) []string {
+	out := make([]string, 0, len(in))
+	return append(out, in...)
 }
 
 func summariseNotify(n *config.NotifyConfig) NotifySummary {

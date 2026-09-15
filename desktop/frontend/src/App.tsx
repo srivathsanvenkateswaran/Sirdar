@@ -314,7 +314,7 @@ function Shell(): JSX.Element {
         runs={runs}
         inboundCount={state.inbound?.length ?? 0}
         onSelectWorkspace={(id) => store.setWorkspace(id)}
-        onAddWorkspace={() => navigate({ name: 'settings', page: 'workspaces' })}
+        onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}
         onNavigate={navigate}
       />
       <main className="main">

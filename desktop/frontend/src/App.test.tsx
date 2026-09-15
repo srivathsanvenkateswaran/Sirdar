@@ -2,7 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { createAppStore, type AppStore } from './store/appStore'
-import { createFakeTransport, run, ticket, workspace, type FakeTransport } from './store/fakeTransport'
+import {
+  configSummary,
+  createFakeTransport,
+  run,
+  ticket,
+  workspace,
+  type FakeTransport,
+} from './store/fakeTransport'
 import { StoreProvider } from './store/useAppStore'
 
 let store: AppStore | null = null
@@ -286,7 +293,7 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
-    expect(s.getState().screen).toEqual({ name: 'settings', page: 'workspaces' })
+    expect(s.getState().screen).toEqual({ name: 'settings', page: 'general' })
   })
 })
 
@@ -519,7 +526,7 @@ describe('Settings', () => {
   it("summarises the current workspace's notify and webhooks blocks", async () => {
     const transport = createFakeTransport({
       workspaces: [workspace({ id: 'ws1', name: 'omni' })],
-      configSummary: {
+      configSummary: configSummary({
         notify: {
           enabled: true,
           on: ['completed'],
@@ -527,18 +534,18 @@ describe('Settings', () => {
           destinations: [{ type: 'slack', credential: 'env' }],
         },
         webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
-      },
+      }),
     })
     mount(transport)
     await screen.findByRole('heading', { name: 'Start with a ticket' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    // Settings is a modal with its own secondary nav; the summary is one page
+    // Settings is a modal with its own secondary nav; the summary is two pages
     // of it and the board stays painted behind the scrim.
-    expect(await screen.findByRole('dialog', { name: 'Workspaces' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
-    const panel = await screen.findByRole('region', { name: 'Notifications and webhooks' })
-    expect(within(panel).getByText('env: reference')).toBeInTheDocument()
-    expect(within(panel).getByText(/Inbound webhooks are off/)).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: 'General' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Notifications' }))
+    expect(await screen.findByText(/env: reference/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Webhooks' }))
+    expect(await screen.findByText(/there is no \/hooks endpoint/)).toBeInTheDocument()
   })
 })

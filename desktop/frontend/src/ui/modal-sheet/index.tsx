@@ -6,6 +6,8 @@ import './ModalSheet.css'
 export interface ModalNavItem {
   id: string
   label: string
+  /** An inline stroke SVG on the 24 grid, drawn at 18px before the label. */
+  icon?: ReactNode
 }
 
 export interface ModalNavGroup {
@@ -146,7 +148,12 @@ export default function ModalSheet({
                     aria-current={item.id === current ? 'page' : undefined}
                     onClick={() => onSelect(item.id)}
                   >
-                    {item.label}
+                    {item.icon && (
+                      <span className="sd-modal__nav-icon" aria-hidden="true">
+                        {item.icon}
+                      </span>
+                    )}
+                    <span>{item.label}</span>
                   </button>
                 ))}
               </div>

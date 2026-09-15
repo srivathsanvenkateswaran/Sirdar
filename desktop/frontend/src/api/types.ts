@@ -168,7 +168,22 @@ export interface RetroReport {
  * 'file', 'cmd' — and never as the reference, the variable name, or the
  * secret.
  */
-export interface ConfigSummary { notify: NotifySummary; webhooks: WebhooksSummary }
+export interface ConfigSummary {
+  general: GeneralSummary; budget: BudgetSummary; permissions: PermissionsSummary;
+  notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary
+}
+/** The top of config.yaml: the workspace, where it is, and the provider a new session gets. `configPath` is the file the Settings rows point at. */
+export interface GeneralSummary {
+  workspace: string; root: string; configPath: string; provider: string; model: string; billing: string;
+  notesLanguage: string; customerLanguage: string; rtlMarkup: boolean
+}
+/** The budget block, with `stallMinutes` resolved: 0 is off, an unset key is the default. */
+export interface BudgetSummary { maxTurns: number; maxMinutes: number; maxUsd: number; stallMinutes: number }
+/** Every allow-list a session is judged by. Patterns an operator wrote, never credentials. */
+export interface PermissionsSummary { bash: string[]; fixBash: string[]; fetch: string[]; readAlso: string[]; mcp: string[] }
+/** Where notes go and what they are called. `templates` is absent on the embedded defaults. */
+export interface NotesSummary { dir: string; templates?: string; filenames: { triage: string; rca: string; resolution: string } }
+export interface MCPSummary { workspaceOnly: boolean }
 export interface NotifySummary { enabled: boolean; on: string[]; includeTitle: boolean; destinations: NotifyDestination[] }
 export interface NotifyDestination { type: 'slack'|'teams'|'generic'; credential?: string; target?: string; headers?: string[]; signed?: boolean }
 export interface WebhooksSummary { enabled: boolean; cooldown: string; match: WebhookMatchSummary; sources: WebhookSourceSummary[] }
@@ -226,4 +241,11 @@ export interface Transport {
   subscribe(handler: (e: AppEvent) => void): () => void;
   /** Desktop build version, e.g. "1.2.3" or "dev". Only the Wails transport implements it. */
   version?(): Promise<string>;
+  /**
+   * Opens the workspace's `.sirdar/config.yaml` in whatever the desktop
+   * associates with it. Only the Wails transport implements it: a browser
+   * served by `sirdar serve` cannot open a file on the operator's machine,
+   * and Settings copies the path there instead.
+   */
+  openConfig?(ws: string): Promise<void>;
 }
