@@ -181,17 +181,43 @@ type sessionModes struct {
 	} `json:"availableModes"`
 }
 
-// has reports whether id is one of the modes the session advertised.
-func (m *sessionModes) has(id string) bool {
+// modeKey reduces a mode id to the word it is recognised by. ACP mode ids
+// are opaque strings, and some agents make them URLs: every one of GitHub
+// Copilot's is a link into the protocol's own session-modes page
+// (`https://agentclientprotocol.com/protocol/session-modes#plan`), where
+// the only part that names the mode is the fragment. So the key is what
+// follows the last "#", or failing that the last "/", or the whole id when
+// it has neither — which is every agent that names its modes plainly.
+func modeKey(id string) string {
+	if i := strings.LastIndex(id, "#"); i >= 0 {
+		id = id[i+1:]
+	}
+	if i := strings.LastIndex(id, "/"); i >= 0 {
+		id = id[i+1:]
+	}
+	return id
+}
+
+// match returns the agent's own id for the mode called want, or "" when
+// the session advertised no such mode. A whole-id match wins over a key
+// one, so an agent that offers both `plan` and a URL ending in `#plan` is
+// taken at its plainer word; the id that comes back is always the agent's,
+// verbatim, since that is the only string session/set_mode accepts.
+func (m *sessionModes) match(want string) string {
 	if m == nil {
-		return false
+		return ""
 	}
 	for _, mode := range m.AvailableModes {
-		if mode.ID == id {
-			return true
+		if mode.ID == want {
+			return mode.ID
 		}
 	}
-	return false
+	for _, mode := range m.AvailableModes {
+		if strings.EqualFold(modeKey(mode.ID), want) {
+			return mode.ID
+		}
+	}
+	return ""
 }
 
 // ids lists the advertised mode ids, for an error that has to say what was
@@ -424,11 +450,12 @@ func modesOf(result json.RawMessage, init initializeResult) *sessionModes {
 	return init.Modes
 }
 
-// readOnlyModeIDs are the ids agents give a mode that refuses writes, in
-// the order they are preferred. kimi and Gemini CLI call it `plan`; the
+// readOnlyModeIDs are the words agents use for a mode that refuses writes,
+// in the order they are preferred. kimi and Gemini CLI call it `plan`; the
 // Copilot and Cursor spikes each had their own spelling, which is why more
 // than one is matched and why acp.mode exists for an agent that matches
-// none of them.
+// none of them. These are matched against an agent's mode ids by modeKey,
+// not only whole, so Copilot's URL ids resolve too.
 var readOnlyModeIDs = []string{"plan", "read-only", "readonly", "read_only", "ask"}
 
 // editModeIDs are the ids for the mode a `sirdar fix` session needs: one
@@ -481,20 +508,27 @@ func (s *session) selectMode(modes *sessionModes, raw json.RawMessage) {
 	switch {
 	case s.modeWanted != "":
 		chosen = s.modeWanted
-		if offered && !modes.has(chosen) {
-			s.emit(provider.Event{
-				Kind: provider.EvError,
-				Text: fmt.Sprintf("acp: acp.mode is %q, which this agent does not offer (it offers %s); "+
-					"no mode was selected and the session runs in %q",
-					chosen, strings.Join(modes.ids(), ", "), modes.CurrentModeID),
-				Raw: raw,
-			})
-			return
+		if offered {
+			// acp.mode is written by a person, so it is the bare word
+			// even where the agent's own id is a URL; what goes back on
+			// the wire has to be the agent's id.
+			resolved := modes.match(chosen)
+			if resolved == "" {
+				s.emit(provider.Event{
+					Kind: provider.EvError,
+					Text: fmt.Sprintf("acp: acp.mode is %q, which this agent does not offer (it offers %s); "+
+						"no mode was selected and the session runs in %q",
+						chosen, strings.Join(modes.ids(), ", "), modes.CurrentModeID),
+					Raw: raw,
+				})
+				return
+			}
+			chosen = resolved
 		}
 	case offered:
 		for _, id := range want {
-			if modes.has(id) {
-				chosen = id
+			if resolved := modes.match(id); resolved != "" {
+				chosen = resolved
 				break
 			}
 		}

@@ -1111,6 +1111,49 @@ func TestReadOnlyRunSelectsThePlanMode(t *testing.T) {
 	}
 }
 
+// TestModeIDsThatAreURLsAreMatchedOnTheirLastSegment: Copilot's mode ids
+// are URLs into the ACP session-modes page
+// (`…/session-modes#plan`), so an adapter that only compares whole ids
+// finds no read-only mode in a list that plainly has one. The id sent back
+// is still the agent's own, verbatim — it is the only string
+// session/set_mode accepts.
+func TestModeIDsThatAreURLsAreMatchedOnTheirLastSegment(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-modes-url.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	const plan = "https://agentclientprotocol.com/protocol/session-modes#plan"
+	if got := modeSent(t, res); got != plan {
+		t.Errorf("session/set_mode modeId = %q, want %q", got, plan)
+	}
+	if !systemText(evs, "acp mode "+plan+" selected for this read-only session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestConfiguredModeIsResolvedToTheAgentsOwnID: acp.mode is written by a
+// person, so it is the bare word even where the agent's id is a URL. The
+// adapter has to send the agent's id, not the word.
+func TestConfiguredModeIsResolvedToTheAgentsOwnID(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{Mode: "autopilot"}, "script-modes-url.jsonl", cwd, nil)
+
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	const autopilot = "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+	if got := modeSent(t, res); got != autopilot {
+		t.Errorf("session/set_mode modeId = %q, want %q", got, autopilot)
+	}
+}
+
 // TestFixRunSelectsAnEditMode is the other half: a fix session may write,
 // so it must not be put in the mode that refuses to.
 func TestFixRunSelectsAnEditMode(t *testing.T) {

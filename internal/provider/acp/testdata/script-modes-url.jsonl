@@ -1,0 +1,12 @@
+// GitHub Copilot's live session/new reply (2026-09-15): every mode id is a
+// URL into the ACP session-modes page, and the mode's own name is only the
+// fragment.
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"copilot","version":"1.0.83"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-u","modes":{"currentModeId":"https://agentclientprotocol.com/protocol/session-modes#agent","availableModes":[{"id":"https://agentclientprotocol.com/protocol/session-modes#agent","name":"Agent","description":"Default agent mode for conversational interactions"},{"id":"https://agentclientprotocol.com/protocol/session-modes#plan","name":"Plan","description":"Plan mode for creating and executing multi-step plans"},{"id":"https://agentclientprotocol.com/protocol/session-modes#autopilot","name":"Autopilot","description":"Autonomous mode that enables allow-all and runs until task completion without user interaction (experimental)"}]}}}
+{"$expect":"session/set_mode"}
+{"$reply":{}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"URL moded\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}
