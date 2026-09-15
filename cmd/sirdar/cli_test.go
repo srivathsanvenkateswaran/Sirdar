@@ -112,19 +112,32 @@ func TestTriageThenRCA(t *testing.T) {
 	if !strings.Contains(out, "OMNI-1") || !strings.Contains(out, "RUN_ID") {
 		t.Errorf("runs table:\n%s", out)
 	}
+	// Neither workspace configured a model, so "claude-fake-5" can only
+	// have come from the fake CLI's own init line.
+	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "claude-fake-5") {
+		t.Errorf("runs table does not name the model that answered:\n%s", out)
+	}
 
 	out, _ = mustRun(t, 0, "runs", "OMNI-1", "--json")
-	var rows []struct{ RunID, Key, Kind, State string }
+	var rows []struct{ RunID, Key, Kind, State, Model string }
 	if err := json.Unmarshal([]byte(out), &rows); err != nil {
 		t.Fatalf("runs --json: %v\n%s", err, out)
 	}
 	if len(rows) != 2 {
 		t.Errorf("want a triage and an rca run, got %d: %+v", len(rows), rows)
 	}
+	for _, row := range rows {
+		if row.Model != "claude-fake-5" {
+			t.Errorf("runs --json row %+v does not carry the reported model", row)
+		}
+	}
 
 	out, _ = mustRun(t, 0, "register")
 	if !strings.Contains(out, "OMNI-1") {
 		t.Errorf("register table:\n%s", out)
+	}
+	if !strings.Contains(out, "MODEL") || !strings.Contains(out, "claude-fake-5") {
+		t.Errorf("register table does not name the model that answered:\n%s", out)
 	}
 
 	out, _ = mustRun(t, 0, "register", "--markdown")

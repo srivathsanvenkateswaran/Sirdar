@@ -14,7 +14,9 @@ IFS= read -r _prompt || true
 
 doc=${SIRDAR_FAKE_DOC:?SIRDAR_FAKE_DOC must name a note document}
 
-echo '{"type":"system","subtype":"init","session_id":"fake-session"}'
+# The init line names the model, the way the real CLI does: the workspace
+# configures none, so this is the only place the run learns what answered.
+echo '{"type":"system","subtype":"init","session_id":"fake-session","model":"claude-fake-5"}'
 printf '%s' '{"type":"result","subtype":"success","is_error":false,"num_turns":3,"session_id":"fake-session","result":"done","total_cost_usd":0.02,"usage":{"input_tokens":1200,"output_tokens":800},"structured_output":'
 tr -d '\n' < "$doc"
 printf '%s\n' '}'
