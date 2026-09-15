@@ -1,6 +1,7 @@
 package qwen
 
 import (
+	"bytes"
 	"encoding/json"
 	"strings"
 	"time"
@@ -89,6 +90,11 @@ func decode(raw []byte) []provider.Event {
 		final.Text = l.Result
 		if len(l.StructuredResult) > 0 && string(l.StructuredResult) != "null" {
 			final.Final = l.StructuredResult
+		} else if doc := jsonObject(l.Result); len(doc) > 0 {
+			// No structured_result, but the result string is the answer.
+			// The success path always carries both; this is the build
+			// that stringified one without echoing the object.
+			final.Final = doc
 		}
 		if l.IsError {
 			// A failed result still carries the session's totals, so it
@@ -304,4 +310,65 @@ func warningEvent(text string) provider.Event {
 	ev := newEvent(provider.EvSystem, raw)
 	ev.Text = text
 	return ev
+}
+
+// jsonObject finds the outermost complete JSON object in s and returns it
+// compacted, or nil when s carries none.
+//
+// This is the recovery path for a model that answers the schema in prose
+// instead of calling structured_output. Qwen Code 0.23.3 enforces
+// --json-schema by failing the run in that case — the result line carries
+// no structured_result, no result string, and an English sentence under
+// error.message — so the answer itself survives only in the assistant's
+// last text block. Observed against qwen-plus-character on a Qwen OAuth
+// login, which produced a complete, schema-shaped JSON document as plain
+// text on both the first turn and the resumed retry.
+//
+// The scan is brace-balanced and string-aware rather than a regexp,
+// because a note's own fields carry braces and quotes; a leading code
+// fence or a sentence before the object is skipped by starting again at
+// the next '{' when the first candidate does not parse.
+func jsonObject(s string) json.RawMessage {
+	for i := strings.IndexByte(s, '{'); i >= 0; {
+		if end, ok := objectEnd(s[i:]); ok {
+			var compact bytes.Buffer
+			candidate := s[i : i+end]
+			if json.Valid([]byte(candidate)) && json.Compact(&compact, []byte(candidate)) == nil {
+				return json.RawMessage(compact.Bytes())
+			}
+		}
+		next := strings.IndexByte(s[i+1:], '{')
+		if next < 0 {
+			return nil
+		}
+		i += 1 + next
+	}
+	return nil
+}
+
+// objectEnd returns the offset just past the '}' that closes the object
+// starting at s[0], ignoring braces inside string literals and after a
+// backslash. ok is false when the object is never closed.
+func objectEnd(s string) (int, bool) {
+	depth, inString, escaped := 0, false, false
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		switch {
+		case escaped:
+			escaped = false
+		case inString && c == '\\':
+			escaped = true
+		case c == '"':
+			inString = !inString
+		case inString:
+		case c == '{':
+			depth++
+		case c == '}':
+			depth--
+			if depth == 0 {
+				return i + 1, true
+			}
+		}
+	}
+	return 0, false
 }

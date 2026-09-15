@@ -1,6 +1,8 @@
 package run
 
 import (
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 
@@ -98,4 +100,93 @@ func TestStripSchemaEchoOnValidDocumentIsANoOp(t *testing.T) {
 	if ok {
 		t.Error("a document with no schema-metadata keys should report ok=false")
 	}
+}
+
+func TestCoerceNullStrings(t *testing.T) {
+	const schema = `{
+	  "type": "object",
+	  "properties": {
+	    "title": { "type": "string" },
+	    "note":  { "type": ["string", "null"] },
+	    "count": { "type": "integer" },
+	    "tags":  { "type": "array", "items": { "type": "string" } },
+	    "fix":   { "type": "object", "properties": { "sql": { "type": "string" } } }
+	  }
+	}`
+
+	for _, tc := range []struct {
+		name   string
+		doc    string
+		want   string
+		fields []string
+	}{
+		{
+			name:   "a nested null string",
+			doc:    `{"title":"x","fix":{"sql":null}}`,
+			want:   `{"fix":{"sql":""},"title":"x"}`,
+			fields: []string{"fix.sql"},
+		},
+		{
+			name:   "a null inside an array of strings",
+			doc:    `{"tags":["a",null]}`,
+			want:   `{"tags":["a",""]}`,
+			fields: []string{"tags[1]"},
+		},
+		{
+			name:   "several at once",
+			doc:    `{"title":null,"fix":{"sql":null}}`,
+			want:   `{"fix":{"sql":""},"title":""}`,
+			fields: []string{"fix.sql", "title"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cleaned, fields, ok := coerceNullStrings([]byte(schema), []byte(tc.doc))
+			if !ok {
+				t.Fatal("no coercion")
+			}
+			if string(cleaned) != tc.want {
+				t.Fatalf("cleaned = %s, want %s", cleaned, tc.want)
+			}
+			sort.Strings(fields)
+			if !reflect.DeepEqual(fields, tc.fields) {
+				t.Fatalf("fields = %v, want %v", fields, tc.fields)
+			}
+		})
+	}
+
+	// What must be left alone: a field the schema already lets be null, a
+	// null the schema types as something other than a string, a field the
+	// schema never declared, and a document with no nulls at all.
+	for _, tc := range []struct {
+		name string
+		doc  string
+	}{
+		{"a schema-sanctioned null", `{"note":null}`},
+		{"a null that is not a string field", `{"count":null}`},
+		{"an undeclared field", `{"extra":null}`},
+		{"nothing to do", `{"title":"x","fix":{"sql":"select 1"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, _, ok := coerceNullStrings([]byte(schema), []byte(tc.doc)); ok {
+				t.Fatal("coerced something it should not have")
+			}
+		})
+	}
+
+	t.Run("a large integer keeps its digits", func(t *testing.T) {
+		const big = `{"count":123456789012345678,"title":null}`
+		cleaned, _, ok := coerceNullStrings([]byte(schema), []byte(big))
+		if !ok {
+			t.Fatal("no coercion")
+		}
+		if !strings.Contains(string(cleaned), "123456789012345678") {
+			t.Fatalf("cleaned = %s", cleaned)
+		}
+	})
+
+	t.Run("a document that is not an object", func(t *testing.T) {
+		if _, _, ok := coerceNullStrings([]byte(schema), []byte(`"just a string"`)); ok {
+			t.Fatal("coerced a non-object")
+		}
+	})
 }
