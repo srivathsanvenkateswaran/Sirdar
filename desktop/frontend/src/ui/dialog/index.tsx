@@ -27,6 +27,34 @@ export function focusable(root: HTMLElement): HTMLElement[] {
 }
 
 /**
+ * Makes everything outside `node` inert while a modal is up, and answers with
+ * the undo.
+ *
+ * `aria-modal` tells a screen reader the rest of the window is off limits; it
+ * tells a pointer and a Tab key nothing, and the focus trap only catches Tab.
+ * The `inert` attribute is what actually closes the board behind the scrim to
+ * clicks, focus and the accessibility tree. It goes on every sibling of every
+ * ancestor of the modal rather than on one app root: the modal is rendered
+ * in place, inside the screen that opened it, so inerting that root would
+ * inert the modal itself. Only the elements this call marked are unmarked
+ * again, so an element inert for its own reasons stays so.
+ */
+export function inertOutside(node: HTMLElement): () => void {
+  const marked: Element[] = []
+  for (let child: Element = node; child.parentElement; child = child.parentElement) {
+    for (const sibling of child.parentElement.children) {
+      if (sibling === child || sibling.hasAttribute('inert')) continue
+      if (sibling.tagName === 'SCRIPT' || sibling.tagName === 'STYLE') continue
+      sibling.setAttribute('inert', '')
+      marked.push(sibling)
+    }
+  }
+  return () => {
+    for (const el of marked) el.removeAttribute('inert')
+  }
+}
+
+/**
  * A modal question: start a run, add a workspace, confirm a fix.
  *
  * Focus moves into the dialog when it opens, stays inside it while it is
@@ -52,10 +80,14 @@ export default function Dialog({
   useEffect(() => {
     if (!open) return
     opener.current = document.activeElement as HTMLElement | null
+    const scrim = panel.current?.parentElement
+    const release = scrim ? inertOutside(scrim) : () => {}
     const first = panel.current ? focusable(panel.current)[0] : null
     ;(first ?? panel.current)?.focus()
     return () => {
-      // Back to the button that asked the question.
+      // The window is let back in before focus goes back to the button that
+      // asked the question: an inert element cannot take focus.
+      release()
       opener.current?.focus?.()
     }
   }, [open])

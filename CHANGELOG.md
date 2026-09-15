@@ -62,6 +62,21 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- The UI wave landed at `cccdc55`: the desktop app and `sirdar serve` are now the
+  session-first surface the reviewed mocks in `docs/design/2026-09-15-screens` drew, on the
+  16px register and the `src/ui` component library. Eight screens — Board, New session,
+  Session (the live transcript with a composer that answers a blocked run or steers a finished
+  one, and a Changes pane with Keep/Drop per hunk), Change review, Register, Eval, Settings
+  (a modal: config read back, providers with doctor's word on each, MCP servers, Try a tool)
+  and the Library — over one `Transport` that both the HTTP+SSE client and the Wails bridge
+  implement, and one fake the tests run against. Every run link carries its workspace
+  (`#/runs/<workspaceId>/<runId>`). The two build paths are `make ui` for the frontend
+  `sirdar serve` embeds and `make desktop` (`wails build`) for the app.
+- The fix round after it: runs carry the ticket's title (`title` on `RunSummary`, read off the
+  run's bundle or its note), the theme opens light unless a choice is stored, a modal makes
+  the window behind it `inert`, the HTTP event stream reports itself lost and the window
+  resyncs when it is back, every eval job can be cancelled from the Eval screen, and the dead
+  `panels.css`, `RCAForm` and `FixForm` are gone.
 - A read is now judged on where it looks, not on the tool's name. `Read`, `Glob`, `Grep`, `LS`
   and the same tools under each provider's own names were approved unseen, so a triage session
   could open any file on the machine — a live run read a skill file out of the operator's home

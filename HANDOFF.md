@@ -9,7 +9,7 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs` (including `runs diff`), `register`, `mcp`, `steer`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP with fix/eval/golden routes, a provider picker, an inbound-delivery panel and a read-only config summary — the diff, steer and MCP routes are on the HTTP API but not yet on the frontend's `Transport`. Seven providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent — Copilot CLI, OpenCode and Kimi are the three driven live, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook), `cursor` (Cursor Agent CLI, `internal/provider/cursor`), `agy` (Google's Antigravity CLI, `internal/provider/agy`, **disabled** — Google's terms do not allow driving it from another program, and the adapter is kept for reference only); the table under Providers below says what each one's read-only guarantee rests on and whether it can fix or be steered. Reads are confined to the workspace, the run directory and its bundle, widened only by `permissions.readAlso`. Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). `sirdar runs diff` and the diff-review API (per-hunk drop with an amend, `docs/fix.md`). `sirdar mcp list/tools/call` and the matching serve routes, answering what a run's MCP access would be without starting one (`docs/config.md`, "Checking it"). `sirdar steer` continuing a finished run in place (`docs/steer.md`). Static screen mocks for the whole desktop UI, reviewed but not built (`docs/design/2026-09-15-screens`). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs` (including `runs diff`), `register`, `mcp`, `steer`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP: the UI wave landed at `cccdc55` — eight screens (Board, New session, Session with the live transcript, composer and Changes pane, Change review, Register, Eval, the Settings modal with providers, MCP servers and Try a tool, and the Library) on the `src/ui` component library, over one `Transport` the HTTP+SSE client, the Wails bridge and the test fake all implement; `make ui` stages the frontend `sirdar serve` embeds, `make desktop` (`wails build`) makes the app. Seven providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent — Copilot CLI, OpenCode and Kimi are the three driven live, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook), `cursor` (Cursor Agent CLI, `internal/provider/cursor`), `agy` (Google's Antigravity CLI, `internal/provider/agy`, **disabled** — Google's terms do not allow driving it from another program, and the adapter is kept for reference only); the table under Providers below says what each one's read-only guarantee rests on and whether it can fix or be steered. Reads are confined to the workspace, the run directory and its bundle, widened only by `permissions.readAlso`. Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). `sirdar runs diff` and the diff-review API (per-hunk drop with an amend, `docs/fix.md`). `sirdar mcp list/tools/call` and the matching serve routes, answering what a run's MCP access would be without starting one (`docs/config.md`, "Checking it"). `sirdar steer` continuing a finished run in place (`docs/steer.md`). The screen mocks the UI was built from (`docs/design/2026-09-15-screens`) and the design it was built to (`docs/superpowers/specs/2026-09-15-ui-build-design.md`). Research + plans in `docs/`. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -275,34 +275,51 @@ workspace can start a session with it.
   rows, cards with a pale fill) and pinned the two motions the app is allowed — content rising
   8px over 320ms on navigation, the settings modal scaling from 0.98 over 300ms — both frozen
   under reduced motion. Every value comes from the shipped tokens
-  (`desktop/frontend/src/styles/tokens.css`). Reviewed, nothing built from it yet.
+  (`desktop/frontend/src/styles/tokens.css`). Built from, screen by screen, on the day: see
+  the UI paragraph under Next steps.
 
 ## Next steps, in order
 
-The UI is the next build, and it is now designed rather than guessed at. Its foundation landed
-on the `ui-foundation` branch on 2026-09-15: the tokens are re-based to the mocks' 16px register
-(Figtree first, `--sd-text-ledger` for the mono, `--sd-control-h`, `--sd-sidebar-w`,
-`--sd-nav-row-h`, `--sd-radius-sheet`), the shell is the 248px sidebar with Recent sessions and
-the Plan-usage footer, the routes `#/new`, `#/runs/<ws>/<id>/review` and `#/settings/<page>`
-resolve (the first two to placeholders), the page and modal entrances live in `src/ui/motion`,
-`src/ui` holds thirty-one components (ten new: ProviderMark, Banner, GroupLabel, ItemRow,
-SearchBar, StatCard, Toggle, PageHead, KindChip, StateGlyph; the rest at the v2 sizes, and the
-run card in its Jira shape), and `Transport` carries `runDiff`, `dropHunk`, `steer`,
-`mcpServers`, `mcpTools` and `mcpCall` on HTTP, Wails and the fake alike, with the three MCP
-methods bound in `desktop/bridge.go`. What comes next is the screens themselves, one agent per
-screen, each importing from `src/ui` and reading its data through the widened transport:
+The UI wave landed on `main` at `cccdc55` on 2026-09-15, built from the reviewed mocks one
+screen per branch on top of `ui-foundation` (the tokens on the mocks' 16px register, the 248px
+sidebar with Recent sessions and the Plan-usage footer, `src/ui/motion`, thirty-two `src/ui`
+components each with a `SPEC.md` mirrored under `docs/design/library`, and `Transport` carrying
+`runDiff`, `dropHunk`, `steer`, `mcpServers`, `mcpTools` and `mcpCall` on HTTP, Wails and the
+fake alike). What is there now:
 
-1. Build the desktop screens from the reviewed mocks in `docs/design/2026-09-15-screens`, in
-   round 2's register. The session surface is the piece with no equivalent in the shipped app —
-   transcript with tool rows, the agent's question, a composer that answers or steers, and a
-   Changes pane carrying the diff and the per-hunk Keep/Drop of the review screen. Then MCP
-   settings and the tool tester (`sirdar mcp list/tools/call` given a face), and the provider
-   marks: fix support and the read-only guard per provider, which the Providers artboard lays
-   out and which the Providers table above is the content for.
-2. ~~Widen the frontend `Transport` first.~~ Done on `ui-foundation`: `runDiff`, `dropHunk`,
-   `steer`, `mcpServers`, `mcpTools` and `mcpCall` are on `Transport`, both real transports and
-   `store/fakeTransport.ts` (which answers a two-file sample diff and a filesystem MCP server
-   with three judged tools), so every screen in item 1 can be built and tested against them.
+- **Screens**: Board (`#/`), New session (`#/new`), Session (`#/runs/<ws>/<id>`: the live
+  transcript with tool rows, permission decisions and the agent's question; a composer that
+  answers a blocked run or steers a finished one; Note, Bundle, Tools and, on a fix, a Changes
+  pane with Keep/Drop per hunk), Change review (`#/runs/<ws>/<id>/review`), Register, Eval, the
+  Settings modal (`#/settings/<page>`: config read back, Providers with doctor's word on each,
+  MCP servers with Test, Try a tool) and the Library (`#/library`, behind its switch). A run
+  link names its workspace because a run id means nothing without one; the design spec was
+  amended to say so.
+- **Data**: only through `Transport`. `src/store/appStore.ts` subscribes to the event stream
+  before its first read, pairs each started job with the run it produces (and keeps every eval
+  job for the Eval screen's Cancel), and, on the HTTP transport, reports the stream lost and
+  resyncs runs, queue and quota when it is back. `RunSummary` carries the ticket `title`, read
+  by `internal/app` off the run's bundle or its note.
+- **Preferences**: theme (light by default; System and Dark are choices, stored), reading
+  direction and the library switch live in localStorage, never in the config file.
+- **Build**: `make ui` (`npm ci && npm run build` under `desktop/frontend`, staged where
+  `internal/httpapi` embeds it) for `sirdar serve`; `make desktop` (`wails build`) for the app;
+  `make desktop-dev` for the live shell. Checks from `desktop/frontend`: `npx tsc --noEmit`,
+  `npx vitest run`, `npm run check-specs`.
+- **Rules the code keeps**: only `--sd-*` tokens in stylesheets (`styles.library.test.ts` fails
+  on a hex), logical properties, one filled primary per screen through
+  `useProvidePrimaryAction` (Settings publishes its disabled Save so the sidebar's New session
+  steps down), status never colour alone, a modal makes the window behind it `inert`.
+
+Next:
+
+1. Live verification of the UI against a real workspace: a run watched end to end in the
+   Session screen, a fix reviewed and a hunk dropped, Try a tool against the OXO.APIs servers.
+   Nothing in the wave has been driven by a person against a real run yet; the fake transport
+   is what every screen test runs on.
+2. Pushing a fix branch from the app, once there is an API for it: the review footer shows the
+   branch and the CLI line that pushes it until then. Editing `config.yaml` from the app is
+   deliberately out of scope; every settings row opens the file instead.
 3. `acp-r3` is in flight (5 commits off `main`): selecting a session mode through
    `configOptions` when an agent lists no modes, matching mode ids by the last segment of a URL
    id, one summary line per `available_commands_update` instead of the whole catalogue,

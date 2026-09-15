@@ -32,7 +32,6 @@ function css(path: string): string {
 
 const TOKENS = css('styles/tokens.css')
 const SHELL = css('styles.css')
-const PANELS = css('components/panels.css')
 
 /** The declarations of the `{ … }` block a selector opens, by property name. */
 function block(source: string, selector: string, from = 0): Record<string, string> {
@@ -447,7 +446,8 @@ describe('palette contrast', () => {
 /*
  * The migration, finished.
  *
- * `panels.css` and `run.css` were written against a shorter set of names —
+ * `panels.css` (since deleted: nothing imported it once the screens moved to
+ * `src/ui`) and `run.css` were written against a shorter set of names —
  * --bg, --fg, --muted, --border, --line — and carried a light-theme literal as
  * each one's fallback. Nothing defined those names, so every rule in those
  * files used its fallback: in the dark theme that painted Register rows, Eval
@@ -498,10 +498,7 @@ describe('the token migration', () => {
   })
 
   it.each(LEGACY)('no stylesheet reads --%s any more', (name) => {
-    for (const [file, source] of [
-      ['styles.css', SHELL],
-      ['components/panels.css', PANELS],
-    ] as const) {
+    for (const [file, source] of [['styles.css', SHELL]] as const) {
       // A fallback is what made the old names dangerous, so both spellings of
       // a read are refused: `var(--x)` and `var(--x, #literal)`.
       const reads = new RegExp(`var\\(\\s*--${name}\\s*[,)]`)

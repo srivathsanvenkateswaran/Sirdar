@@ -62,6 +62,25 @@ describe('Dialog', () => {
     expect(opener).toHaveFocus()
   })
 
+  it('closes the rest of the window to clicks and focus while it is open, and reopens it after', () => {
+    const outside = document.createElement('nav')
+    outside.innerHTML = '<button type="button">Board</button>'
+    document.body.append(outside)
+    render(<Harness />)
+    expect(outside).not.toHaveAttribute('inert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'New triage' }))
+    expect(outside).toHaveAttribute('inert')
+    // The opener is a sibling of the dialog inside the render container, so it is closed off too.
+    expect(screen.getByRole('button', { name: 'New triage' })).toHaveAttribute('inert')
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('inert')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(outside).not.toHaveAttribute('inert')
+    expect(screen.getByRole('button', { name: 'New triage' })).not.toHaveAttribute('inert')
+    outside.remove()
+  })
+
   it('closes on Escape', () => {
     const onClose = vi.fn()
     render(<Dialog open title="Start a triage" onClose={onClose} children={<p>Keys</p>} />)

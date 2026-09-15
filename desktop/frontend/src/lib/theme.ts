@@ -1,10 +1,16 @@
 /**
- * The window's theme: the system's, or light or dark by choice.
+ * The window's theme: light by default, or the system's or dark by choice.
  *
  * `styles/tokens.css` answers `prefers-color-scheme` on its own, so "system"
- * is the absence of a choice: no attribute on the root, and the media query
- * decides. A choice stamps `data-theme` on the root element, which the same
- * file reads ahead of the media query in either direction.
+ * is the absence of a stamp: no attribute on the root, and the media query
+ * decides. Light and dark stamp `data-theme` on the root element, which the
+ * same file reads ahead of the media query in either direction.
+ *
+ * Light is the default because it is what the person this was built for
+ * asked for, and a window that opened dark on a dark desktop was a surprise.
+ * Every choice is stored, System included, so a stored preference always
+ * wins over the default: choosing System and reloading does not fall back to
+ * light.
  *
  * It is a preference of this person and this browser, like the reading
  * direction and the design-library switch: it says nothing about the
@@ -14,6 +20,9 @@
 export type Theme = 'system' | 'light' | 'dark'
 
 export const THEMES: readonly Theme[] = ['system', 'light', 'dark']
+
+/** What the window opens on when nothing has been chosen. */
+export const DEFAULT_THEME: Theme = 'light'
 
 const KEY = 'sirdar.theme'
 
@@ -27,9 +36,9 @@ function isTheme(value: unknown): value is Theme {
 function read(): Theme {
   try {
     const stored = globalThis.localStorage?.getItem(KEY)
-    return isTheme(stored) ? stored : 'system'
+    return isTheme(stored) ? stored : DEFAULT_THEME
   } catch {
-    return 'system'
+    return DEFAULT_THEME
   }
 }
 
@@ -55,8 +64,7 @@ export function setTheme(value: Theme): void {
   if (current === value) return
   current = value
   try {
-    if (value === 'system') globalThis.localStorage?.removeItem(KEY)
-    else globalThis.localStorage?.setItem(KEY, value)
+    globalThis.localStorage?.setItem(KEY, value)
   } catch {
     // A preference that cannot be remembered still holds this session.
   }

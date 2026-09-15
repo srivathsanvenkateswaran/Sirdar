@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import type { Check, CheckLevel, MCPVerdict, Transport } from '../../api/types'
+import { reasonOf } from '../../lib/format'
 
 /** How long the copy control says "Copied" before it goes back to offering. */
 const COPIED_MS = 2000
@@ -43,7 +44,7 @@ export function OpenConfig({
       try {
         await transport.openConfig!(workspaceId!)
       } catch (err) {
-        setFailure(err instanceof Error ? err.message : String(err))
+        setFailure(reasonOf(err))
       }
       return
     }
@@ -136,10 +137,6 @@ export type Loaded<T> =
   | { status: 'loading' }
   | { status: 'done'; data: T }
   | { status: 'error'; message: string }
-
-export function message(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
 
 /** The last path segment, for a file named in a row. */
 export function basename(path: string): string {

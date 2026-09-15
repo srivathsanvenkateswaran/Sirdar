@@ -107,6 +107,15 @@ export function percent(value: number | undefined): string {
 }
 
 /**
+ * The reason a call failed, as one line for a screen to show: an Error's
+ * message, or whatever else was thrown, stringified. Every catch that shows a
+ * reason reads it through here rather than spelling the same ternary itself.
+ */
+export function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
+}
+
+/**
  * Splits a free-text key list on commas, spaces and newlines, trims, and drops
  * duplicates while keeping the order the engineer typed.
  */

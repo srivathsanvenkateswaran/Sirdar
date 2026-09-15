@@ -192,10 +192,16 @@ export function usage(over: Partial<Usage> = {}): Usage {
   return { turns: 3, inputTokens: 1200, outputTokens: 400, costUsd: 0.12, ...over }
 }
 
+/**
+ * A run as the service lists it. The title is empty by default, the way a
+ * run whose bundle and note have gone reads, so a test that wants the card's
+ * titled shape passes one in.
+ */
 export function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
     runId: 'r1',
     key: 'OMNI-1',
+    title: '',
     kind: 'triage',
     status: 'completed',
     provider: 'claude',
