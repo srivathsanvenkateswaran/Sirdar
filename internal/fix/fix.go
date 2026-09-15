@@ -44,6 +44,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	runner "github.com/srivathsanvenkateswaran/sirdar/internal/run"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
@@ -190,6 +191,17 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	stderr := deps.Stderr
 	if stderr == nil {
 		stderr = io.Discard
+	}
+
+	// Before anything at all, and in particular before git: a provider
+	// that cannot run a write session has to be refused while the
+	// workspace is still exactly as the operator left it. The refusal
+	// used to come from the provider's own Start, by which point this
+	// function had fetched the default branch, cut a fix branch from it
+	// and added a linked worktree under .sirdar/worktrees/ — all of it
+	// left behind for a session that was never going to start.
+	if err := provider.RefuseFix(deps.Provider); err != nil {
+		return res, err
 	}
 
 	tn, err := loadTriage(cfg.Root, key, o)

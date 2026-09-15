@@ -318,7 +318,7 @@ func TestValidateOpenAI(t *testing.T) {
 		{
 			"an unknown provider",
 			"workspace: demo\nprovider: gemini\n",
-			"claude, codex, openai, acp or qwen",
+			"claude, codex, openai, acp, qwen or agy",
 		},
 		{
 			"acp with no block",
@@ -1075,6 +1075,69 @@ func TestValidateQwen(t *testing.T) {
 			"unused block on another provider",
 			"workspace: demo\nprovider: claude\nqwen:\n  model: m\n",
 			"",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, c.body))
+			switch {
+			case c.want == "" && err != nil:
+				t.Fatalf("Load: %v", err)
+			case c.want == "":
+			case err == nil:
+				t.Fatalf("want an error mentioning %q, got none", c.want)
+			case !strings.Contains(err.Error(), c.want):
+				t.Fatalf("error = %v, want it to mention %q", err, c.want)
+			}
+		})
+	}
+}
+
+func TestValidateAgy(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{
+			// No block at all is the ordinary case: the CLI runs against
+			// the Google account the operator already signed it in to.
+			"no block", "workspace: demo\nprovider: agy\n", "",
+		},
+		{
+			"a whole block",
+			"workspace: demo\nprovider: agy\nagy:\n  path: ~/.local/bin/agy\n  model: gemini-3.6-flash-low\n  effort: low\n",
+			"",
+		},
+		{"effort medium", "workspace: demo\nprovider: agy\nagy:\n  effort: medium\n", ""},
+		{"effort high", "workspace: demo\nprovider: agy\nagy:\n  effort: high\n", ""},
+		{
+			// The CLI would reject this at argument-parse time, halfway
+			// through a triage sweep; catching it at load is cheaper.
+			"an effort the CLI does not take",
+			"workspace: demo\nprovider: agy\nagy:\n  effort: maximum\n",
+			"agy.effort",
+		},
+		{
+			// An agy block left behind while the workspace runs on claude
+			// is still checked, the same way an unused qwen block is.
+			"unused block on another provider",
+			"workspace: demo\nprovider: claude\nagy:\n  effort: nope\n",
+			"agy.effort",
+		},
+		{
+			// billing: api is the switch that leaves an API key in the
+			// agent's environment. The agy adapter strips GEMINI_API_KEY
+			// unconditionally, so the word would be accepted and ignored
+			// — a billing mode that looks chosen and honoured and is
+			// neither.
+			"api billing has no meaning here",
+			"workspace: demo\nprovider: agy\nbilling: api\n",
+			"billing: api has no meaning on provider agy",
+		},
+		{"subscription billing is the one that fits", "workspace: demo\nprovider: agy\nbilling: subscription\n", ""},
+		{
+			// The same key on the provider it was built for is untouched.
+			"api billing on claude is unaffected",
+			"workspace: demo\nprovider: claude\nbilling: api\n", "",
 		},
 	}
 	for _, c := range cases {

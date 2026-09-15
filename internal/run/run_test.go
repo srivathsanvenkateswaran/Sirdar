@@ -2928,6 +2928,103 @@ func TestStallReasonNamesTheWindowInMinutes(t *testing.T) {
 	}
 }
 
+// --- read-only breaches -----------------------------------------------
+
+// breachEvent is what provider agy raises when a triage session finished a
+// write: the first line is the run's terminal reason, the rest is the
+// explanation the event log keeps.
+func breachEvent(reason string) provider.Event {
+	return provider.Event{
+		Kind: provider.EvBreach,
+		Text: reason + "\na triage session completed a write agy should have refused",
+		Tool: "write_to_file",
+		Raw:  json.RawMessage(`{"event":"step_update"}`),
+	}
+}
+
+// TestBreachEndsTheRunAndFilesNothing is what makes the read-only claim
+// honest. A breach used to arrive as one more EvError, which the run layer
+// counts towards its malformed-line threshold and otherwise ignores — so a
+// session that had watched a write complete went on to file its note and
+// its register row, both asserting a run that wrote nothing.
+func TestBreachEndsTheRunAndFilesNothing(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+		finalEvent(triageDoc),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", out.State.Status, out.State.Reason)
+	}
+	if out.State.Reason != "read-only breach: write_to_file /work/src/a.go" {
+		t.Errorf("reason %q: the breach's first line is the run's reason", out.State.Reason)
+	}
+
+	// No note, anywhere: not in the notes directory, not in the register.
+	if entries, err := os.ReadDir(filepath.Join(cfg.Root, "notes")); err == nil && len(entries) > 0 {
+		t.Errorf("a breached run filed %d note(s)", len(entries))
+	}
+	if _, err := os.Stat(filepath.Join(cfg.Root, ".sirdar", "register.jsonl")); !os.IsNotExist(err) {
+		rows, _ := store.ReadRegister(cfg.Root)
+		t.Errorf("a breached run wrote %d register row(s)", len(rows))
+	}
+
+	// And the session was stopped rather than left to finish its turn.
+	if p.session(0).cancelCount() == 0 {
+		t.Error("the session was not cancelled on the breach")
+	}
+}
+
+// TestBreachIsNotCountedAsAMalformedLine: the malformed-line counter
+// exists so a run survives a few bad lines. A breach is the opposite kind
+// of event and must not need ten of itself to be believed.
+func TestBreachIsNotCountedAsAMalformedLine(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		breachEvent("read-only breach: run_command touch x"),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := outs[0].State.Reason; got != "read-only breach: run_command touch x" {
+		t.Fatalf("reason %q, want the breach and not a malformed-line count", got)
+	}
+}
+
+// TestBreachAfterTheNoteStillFailsTheRun: a note that landed first is not
+// a reprieve. The guarantee it was written under did not hold, so the run
+// is failed rather than completed with a warning, which is how every other
+// late arrival — a bad exit, an expired budget — is treated.
+func TestBreachAfterTheNoteStillFailsTheRun(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "agy", script: replay(
+		finalEvent(triageDoc),
+		breachEvent("read-only breach: write_to_file /work/src/a.go"),
+	)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	r.CloseGrace = 50 * time.Millisecond
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusFailed {
+		t.Fatalf("status %q reason %q, want failed", outs[0].State.Status, outs[0].State.Reason)
+	}
+}
+
 // TestEmptyFinalFailsWithoutCallingItASchemaError covers a fix session that
 // ends its turn with nothing in it — the ACP failure the Copilot sandbox
 // run hit. Nothing was ever validated, so neither the retry nor the run's
