@@ -1,4 +1,4 @@
-.PHONY: build test vet ui desktop desktop-dev serve release-snapshot dist-desktop version
+.PHONY: build test vet ui desktop desktop-dev serve release-snapshot dist-desktop version tokens check-tokens site
 
 # `wails` is installed with `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`,
 # which puts it in $(go env GOPATH)/bin. Override WAILS if it is not on PATH.
@@ -49,3 +49,22 @@ release-snapshot:
 dist-desktop: desktop
 	mkdir -p dist
 	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" .
+
+# Design tokens. desktop/frontend/src/styles/tokens.css is the source; the
+# landing site and the docs site each read a byte-identical copy of it. Run
+# this after touching the source, and commit the copies alongside it.
+TOKENS_SRC := desktop/frontend/src/styles/tokens.css
+
+tokens:
+	cp $(TOKENS_SRC) site/tokens.css
+	@# The docs site gets the same copy once it is wired up to read one
+	@# (docs/design/01-tokens.md, section 5). Until that file exists this is a no-op.
+	@if [ -f docs/stylesheets/tokens.css ]; then cp $(TOKENS_SRC) docs/stylesheets/tokens.css; fi
+
+# Fails if a copy has drifted from the source. CI runs this.
+check-tokens:
+	./scripts/check-tokens.sh
+
+# Preview the landing page. No build step: site/ is the deliverable.
+site:
+	python3 -m http.server 8000 --directory site

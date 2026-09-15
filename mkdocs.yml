@@ -4,6 +4,8 @@ repo_url: https://github.com/srivathsanvenkateswaran/Sirdar
 repo_name: srivathsanvenkateswaran/Sirdar
 edit_uri: edit/main/docs/
 docs_dir: docs
+# site/ holds the landing page, so the docs build goes elsewhere.
+site_dir: .mkdocs-site
 use_directory_urls: true
 
 theme:
