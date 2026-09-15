@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, type KeyboardEvent, type ReactNode } from 'react'
-import { focusable } from '../dialog'
+import { focusable, inertOutside } from '../dialog'
 import { MODAL_ENTER_CLASS, SCRIM_ENTER_CLASS } from '../motion'
 import './ModalSheet.css'
 
@@ -64,17 +64,24 @@ export default function ModalSheet({
   navLabel = 'Settings sections',
 }: ModalSheetProps): JSX.Element | null {
   const panel = useRef<HTMLDivElement | null>(null)
+  const heading = useRef<HTMLHeadingElement | null>(null)
   const opener = useRef<HTMLElement | null>(null)
   const titleId = useId()
 
   useEffect(() => {
     if (!open) return
     opener.current = document.activeElement as HTMLElement | null
-    const first = panel.current ? focusable(panel.current)[0] : null
-    ;(first ?? panel.current)?.focus()
+    const scrim = panel.current?.parentElement
+    const release = scrim ? inertOutside(scrim) : () => {}
+    // Focus lands on the page heading, so a screen reader announces where it
+    // is before the nav is offered; the first nav row is one Tab away. A
+    // reader landing on "General" would hear a row with no page around it.
+    ;(heading.current ?? panel.current)?.focus()
     return () => {
-      // Back to the nav row that opened it, which is what the app-shell
-      // language asks for by name.
+      // The window is let back in first, then focus goes back to the nav row
+      // that opened it, which is what the app-shell language asks for by
+      // name; an inert element cannot take focus.
+      release()
       opener.current?.focus?.()
     }
   }, [open])
@@ -163,7 +170,7 @@ export default function ModalSheet({
         </nav>
 
         <div className="sd-modal__panel">
-          <h2 className="sd-modal__title" id={titleId}>
+          <h2 className="sd-modal__title" id={titleId} ref={heading} tabIndex={-1}>
             {title}
           </h2>
           <div className="sd-modal__body">{children}</div>

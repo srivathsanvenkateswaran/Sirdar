@@ -47,7 +47,7 @@ where the measurements come from.
 | rest | Open, scrim down, focus inside. |
 | hover | Nav rows take `--sd-nav-hover`. The sheet itself does not respond. |
 | active / pressed | n/a on the sheet. |
-| focus-visible | Every control keeps the app's ring; focus moves to the first control when the modal opens and cannot leave until it closes. |
+| focus-visible | Every control keeps the app's ring; focus moves to the page heading when the modal opens and cannot leave until it closes. |
 | disabled | n/a on the sheet. The footer's commit button is passed in disabled until something has changed. |
 | loading | n/a. A page that is still fetching says so in its own body; the sheet does not blank. |
 | error | n/a on the sheet. |
@@ -86,9 +86,13 @@ where the measurements come from.
 
 ## Accessibility
 
-`role="dialog"` with `aria-modal="true"`, labelled by the page heading. Escape
-closes, Tab cycles inside the sheet in both directions, and focus returns to
-the opener on close. The secondary nav is a `nav` with its own name and its
+`role="dialog"` with `aria-modal="true"`, labelled by the page heading. Focus
+lands on that heading when the sheet opens (it carries `tabindex="-1"`), so a
+screen reader says which page it is on before the nav is offered, and the
+first nav row is one Tab away. Escape closes, Tab cycles inside the sheet in
+both directions, and focus returns to the opener on close. Everything outside
+the sheet is `inert` while it is open, the way Dialog does it and through the
+same helper. The secondary nav is a `nav` with its own name and its
 rows are buttons carrying `aria-current="page"`; ArrowDown and ArrowUp move
 within it and wrap, and the row that gains the selection gains focus with it.
 Contrast: heading and current row `--sd-ink` at **15.70:1** light and
@@ -98,6 +102,11 @@ motion: the scrim and the sheet both cross-fade at 1ms with no scale, which is
 the answer `03-desktop-app.md` section 11 states.
 
 ## Changelog
+
+### 2026-09-15 (inert, heading focus)
+The window behind the sheet is `inert` while it is open, and focus lands on
+the page heading rather than the first nav row: a reader that landed on
+"General" heard a row with no page around it.
 
 ### 2026-09-15 (nav icons)
 A nav item may carry an `icon`, drawn at 18px before its label in

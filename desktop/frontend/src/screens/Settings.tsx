@@ -76,6 +76,9 @@ const ALIASES: Record<string, string> = { workspaces: 'general' }
 /** The pages whose values are this browser's, not the workspace's. */
 const APP_PAGES = new Set(['reading', 'library', 'about'])
 
+/** Why Save is disabled, on the button and on the action the sidebar reads. */
+const SAVE_TITLE = 'Nothing on this page is written by the app'
+
 /** A payload with the workspace it was read for. */
 interface Tagged<T> {
   ws: string
@@ -226,22 +229,33 @@ export default function Settings(props: {
 
   const tester = useToolTester(transport, currentWorkspaceId, inventory)
 
-  // Call is the one filled button while Try a tool is up, so the sidebar's
-  // New session steps down for it; the button itself is drawn on the page,
-  // which is what `placement: 'screen'` tells the footer. Every other page
-  // has Save, disabled.
+  // The modal's filled button is the window's one: Call while Try a tool is
+  // up, the footer's Save (disabled, since nothing here is written by the
+  // app) on every other page. Both are drawn in the modal itself, which is
+  // what `placement: 'screen'` tells the sidebar, so its New session steps
+  // down to the bordered style either way. Publishing nothing on the Save
+  // pages left two filled buttons on the window: the sidebar's, and a
+  // disabled Save that is filled all the same.
   const tools = open && page === 'tools'
   useProvidePrimaryAction(
-    tools
-      ? {
-          label: 'Call',
-          onRun: tester.call,
-          disabled: !tester.canCall,
-          busy: tester.calling,
-          title: tester.problem || undefined,
-          placement: 'screen',
-        }
-      : null,
+    !open
+      ? null
+      : tools
+        ? {
+            label: 'Call',
+            onRun: tester.call,
+            disabled: !tester.canCall,
+            busy: tester.calling,
+            title: tester.problem || undefined,
+            placement: 'screen',
+          }
+        : {
+            label: 'Save',
+            onRun: () => {},
+            disabled: true,
+            title: SAVE_TITLE,
+            placement: 'screen',
+          },
   )
 
   const inventoryState: InventoryState = { inventory, connecting, tested }
@@ -308,7 +322,7 @@ export default function Settings(props: {
       <Button variant="ghost" onClick={onClose}>
         Cancel
       </Button>
-      <Button variant="primary" disabled title="Nothing on this page is written by the app">
+      <Button variant="primary" disabled title={SAVE_TITLE}>
         Save
       </Button>
     </>

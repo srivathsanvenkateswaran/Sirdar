@@ -138,6 +138,9 @@ describe('Save', () => {
       go(label)
       const save = screen.getByRole('button', { name: 'Save' })
       expect(save).toBeDisabled()
+      // Published as the window's one filled button, drawn here, so the
+      // sidebar's New session steps down rather than making two.
+      expect(screen.getByTestId('primary')).toHaveTextContent('Save (disabled) on the screen')
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
       expect(
         screen.getByText(/Settings are read from \.sirdar\/config\.yaml|These apply as they are switched/),
@@ -511,9 +514,24 @@ describe('Try a tool', () => {
   })
 
   it('publishes Call as the primary action, drawn on the screen, so New session steps down', async () => {
-    open({ page: 'tools' })
+    const { rerender } = open({ page: 'tools' })
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Call on the screen'))
     go('About')
+    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Save (disabled) on the screen'))
+    // Closed, the modal publishes nothing and the sidebar's button is filled again.
+    rerender(
+      <PrimaryActionProvider>
+        <Settings
+          open={false}
+          transport={transportWith()}
+          workspaces={[WORKSPACE]}
+          currentWorkspaceId="ws1"
+          onClose={() => {}}
+          onWorkspacesChanged={() => {}}
+        />
+        <PrimaryProbe />
+      </PrimaryActionProvider>,
+    )
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('New session'))
   })
 })
