@@ -13,6 +13,7 @@ import { askedQuestion, elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
+import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
 import BundleView from '../components/run/BundleView'
 import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../components/run/Composer'
@@ -67,6 +68,21 @@ function isTyping(target: EventTarget | null): boolean {
  * state from there: Answer while the agent is waiting on a question, Steer
  * once the run has finished, disabled with the reason in between.
  */
+/**
+ * What the topbar's stats say when the window is too narrow to draw them
+ * all: "claude · sonnet · 4 turns", as the stats' title.
+ */
+export function statsTitle(detail: {
+  provider: string
+  model?: string
+  usage?: { turns?: number }
+}): string {
+  const turns = detail.usage?.turns ?? 0
+  return [detail.provider, detail.model, `${turns} ${turns === 1 ? 'turn' : 'turns'}`]
+    .filter(Boolean)
+    .join(' · ')
+}
+
 export default function Session(props: {
   transport: Transport
   workspaceId: string
@@ -98,6 +114,9 @@ export default function Session(props: {
   const [now, setNow] = useState(() => Date.now())
   const jobId = useRunJob(runId)
   const tabsId = useId()
+  // Under 1200 the topbar keeps the clock and the cost; the provider, the
+  // model and the turn count move into the stats' title.
+  const compact = useMediaQuery(BELOW_STANDARD)
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
@@ -384,18 +403,26 @@ export default function Session(props: {
         <span className="session-title" title={title} dir="auto">
           {title ?? ''}
         </span>
-        <div className="session-stats">
-          <span className="session-stat session-provider">
-            <ProviderMark provider={detail.provider} size="sm" />
-            <span className="session-provider-name">{detail.provider}</span>
-            {detail.model ? <span className="session-provider-model">{detail.model}</span> : null}
-          </span>
+        <div
+          className="session-stats"
+          data-compact={compact ? 'true' : undefined}
+          title={compact ? statsTitle(detail) : undefined}
+        >
+          {compact ? null : (
+            <span className="session-stat session-provider">
+              <ProviderMark provider={detail.provider} size="sm" />
+              <span className="session-provider-name">{detail.provider}</span>
+              {detail.model ? <span className="session-provider-model">{detail.model}</span> : null}
+            </span>
+          )}
           <span className="session-stat">
             <b>{elapsed(detail, now)}</b>
           </span>
-          <span className="session-stat">
-            <b>{detail.usage?.turns ?? 0}</b> {detail.usage?.turns === 1 ? 'turn' : 'turns'}
-          </span>
+          {compact ? null : (
+            <span className="session-stat">
+              <b>{detail.usage?.turns ?? 0}</b> {detail.usage?.turns === 1 ? 'turn' : 'turns'}
+            </span>
+          )}
           <span className="session-stat">
             <b>{costOrUnknown(detail.usage?.costUsd, live)}</b>
           </span>

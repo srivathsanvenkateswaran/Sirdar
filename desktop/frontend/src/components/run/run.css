@@ -130,9 +130,11 @@
 
 /* -------------------------------------------------------------------- body */
 
+/* The mock's 480 pane at 1440, giving way to 38% of the window and never
+   under 360, so the transcript keeps its measure on a MacBook. */
 .session-body {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 480px;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 38vw, 480px);
   flex: 1;
   min-block-size: 0;
 }
@@ -152,21 +154,29 @@
   min-block-size: 0;
 }
 
-@media (max-width: 1100px) {
-  .session-body {
-    grid-template-columns: minmax(0, 1fr) minmax(320px, 40%);
+/* Compact (under 1200): the topbar keeps the clock and the cost; Session.tsx
+   drops the provider and the turns into the stats' title. */
+@media (max-width: 1199px) {
+  .session-topbar {
+    gap: var(--sd-space-3);
+    padding-inline: var(--sd-space-5);
   }
 }
 
-@media (max-width: 900px) {
+/*
+ * Under 1100 the panes stack, transcript first, and the pane takes 45vh.
+ * The composer sits at the foot of the transcript at its 96px minimum
+ * whatever the height: the stream is what gives way.
+ */
+@media (max-width: 1099px) {
   .session-body {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 45vh;
   }
 
   .session-left {
     border-inline-end: 0;
     border-block-end: 1px solid var(--sd-rule);
-    max-block-size: 60vh;
   }
 }
 
