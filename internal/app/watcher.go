@@ -209,7 +209,7 @@ func (w *Watcher) check(r *watchedRun, path string, now time.Time) {
 	if active(previous) && !active(r.status) {
 		r.flushUntil = now.Add(flushGrace)
 	}
-	summary := SummaryOf(state)
+	summary := SummaryAt(r.dir, state)
 	w.sink(Event{Kind: KindRunUpdated, WorkspaceID: r.wsID, Run: &summary})
 }
 

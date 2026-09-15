@@ -231,10 +231,20 @@ export function createHTTPTransport(): Transport {
         source.addEventListener(kind, listener as EventListener)
         listeners.push([kind, listener])
       }
+      // The browser reconnects a dropped EventSource by itself, firing
+      // `error` on the way down and `open` on the way back. Nothing sent in
+      // between reaches the window, so both are reported: the store says the
+      // stream is lost, and resyncs when it is back.
+      const onOpen = () => handler({ kind: 'live', state: 'open' })
+      const onError = () => handler({ kind: 'live', state: 'lost' })
+      source.addEventListener('open', onOpen)
+      source.addEventListener('error', onError)
       return () => {
         for (const [kind, listener] of listeners) {
           source.removeEventListener(kind, listener as EventListener)
         }
+        source.removeEventListener('open', onOpen)
+        source.removeEventListener('error', onError)
         source.close()
       }
     },

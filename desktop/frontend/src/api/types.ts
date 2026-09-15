@@ -12,7 +12,14 @@ export type Provider = (typeof PROVIDERS)[number];
 export type NoteKind = ''|'triage'|'rca'|'resolution';
 export interface Workspace { id: string; name: string; root: string; provider: Provider; model: string; notesDir: string; billing: string }
 export interface Usage { turns: number; inputTokens: number; outputTokens: number; costUsd: number }
-export interface RunSummary { runId: string; key: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
+/**
+ * `title` is the ticket's, read off the run directory by the service: the
+ * bundle's tracker title or helpdesk subject, else the first note's own title,
+ * else ''. A card shows it over the key; with no title the key is the title.
+ * The wire always carries it; it is optional here so a literal built in a test
+ * need not spell an empty one.
+ */
+export interface RunSummary { runId: string; key: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`
@@ -199,7 +206,14 @@ export type AppEvent =
   | { kind: 'quota.updated'; quota: Quota }
   | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
   | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
-  | { kind: 'log'; text: string };
+  | { kind: 'log'; text: string }
+  /**
+   * The transport's own word on the stream, never sent by the service: 'lost'
+   * when the event source drops (it retries on its own), 'open' when it is
+   * back. The store resyncs runs and queue on the way back, since whatever
+   * happened in between was never delivered.
+   */
+  | { kind: 'live'; state: 'open' | 'lost' };
 /** The one-off overrides every start accepts; empty means the workspace's own. */
 export interface Overrides { provider?: string; model?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }

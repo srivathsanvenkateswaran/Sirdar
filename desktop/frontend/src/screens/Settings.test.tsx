@@ -11,6 +11,7 @@ import {
   configSummary,
   createFakeTransport,
   mcpInventory,
+  mcpTools,
   workspace as sampleWorkspace,
   type FakeTransport,
 } from '../store/fakeTransport'
@@ -137,6 +138,9 @@ describe('Save', () => {
       go(label)
       const save = screen.getByRole('button', { name: 'Save' })
       expect(save).toBeDisabled()
+      // Published as the window's one filled button, drawn here, so the
+      // sidebar's New session steps down rather than making two.
+      expect(screen.getByTestId('primary')).toHaveTextContent('Save (disabled) on the screen')
       expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
       expect(
         screen.getByText(/Settings are read from \.sirdar\/config\.yaml|These apply as they are switched/),
@@ -261,6 +265,18 @@ describe('General', () => {
   })
 })
 
+describe('Workspaces', () => {
+  it('keeps the row and says why when a removal is refused', async () => {
+    const removeWorkspace = vi.fn().mockRejectedValue(new Error('a run is in progress'))
+    const { onWorkspacesChanged } = open({}, transportWith({ removeWorkspace }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove omni' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Confirm remove omni' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Could not remove: a run is in progress')
+    expect(screen.getByRole('button', { name: 'Remove omni' })).toBeInTheDocument()
+    expect(onWorkspacesChanged).not.toHaveBeenCalled()
+  })
+})
+
 describe('Providers', () => {
   it('shows the default provider with its mark and lists every provider with its facts', async () => {
     open({ page: 'providers' })
@@ -274,6 +290,14 @@ describe('Providers', () => {
     // agy is off under Google's Antigravity terms, with or without doctor.
     expect(within(table).getByText('disabled')).toHaveAttribute('title', 'disabled (Antigravity terms)')
     expect(within(table).getByText('disabled (Antigravity terms)')).toBeInTheDocument()
+  })
+
+  it('prints only the parts the config names when the model is empty', async () => {
+    const summary = configSummary()
+    summary.general.model = ''
+    open({ page: 'providers' }, transportWith({}, { configSummary: summary }))
+    expect(await screen.findByText('claude · subscription')).toBeInTheDocument()
+    expect(screen.queryByText(/· ·/)).toBeNull()
   })
 
   it('reads the agy row doctor emits for a workspace that still names it', async () => {
@@ -441,6 +465,17 @@ describe('Try a tool', () => {
     expect(screen.getByText('57ms')).toBeInTheDocument()
   })
 
+  it('opens on the first tool a run could call, not the first in the list', async () => {
+    const tools = mcpTools('filesystem')
+    tools.tools.reverse() // write_file, denied, now heads the list
+    open({ page: 'tools' }, transportWith({}, { mcpTools: { filesystem: tools } }))
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    expect(toolSelect.options[0].value).toBe('write_file')
+    expect(toolSelect.value).toBe('list_directory')
+    expect(screen.getByText('allowed')).toBeInTheDocument()
+  })
+
   it('shows a denied verdict as the answer, without an error', async () => {
     const transport = transportWith()
     open({ page: 'tools' }, transport)
@@ -479,9 +514,24 @@ describe('Try a tool', () => {
   })
 
   it('publishes Call as the primary action, drawn on the screen, so New session steps down', async () => {
-    open({ page: 'tools' })
+    const { rerender } = open({ page: 'tools' })
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Call on the screen'))
     go('About')
+    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Save (disabled) on the screen'))
+    // Closed, the modal publishes nothing and the sidebar's button is filled again.
+    rerender(
+      <PrimaryActionProvider>
+        <Settings
+          open={false}
+          transport={transportWith()}
+          workspaces={[WORKSPACE]}
+          currentWorkspaceId="ws1"
+          onClose={() => {}}
+          onWorkspacesChanged={() => {}}
+        />
+        <PrimaryProbe />
+      </PrimaryActionProvider>,
+    )
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('New session'))
   })
 })

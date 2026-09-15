@@ -26,8 +26,8 @@ import SettingRow, { SettingCard } from '../ui/setting-row'
 import SidebarFooterCard from '../ui/sidebar-footer-card'
 import SidebarNavItem from '../ui/sidebar-nav-item'
 import StatCard from '../ui/stat-card'
-import StateGlyph, { STATE_WORDS, type GlyphState } from '../ui/state-glyph'
-import StatusBadge, { PriorityBadge, STATUS_WORDS, type SdStatus } from '../ui/status-badge'
+import StateGlyph, { type GlyphState } from '../ui/state-glyph'
+import StatusBadge, { PriorityBadge, STATE_WORDS, type SdStatus } from '../ui/status-badge'
 import Toasts from '../ui/toast'
 import Toggle from '../ui/toggle'
 import './library.css'
@@ -376,7 +376,7 @@ export default function Library(): JSX.Element {
         >
           <div className="lib-row lib-row--tight">
             {EVERY_STATUS.map((status) => (
-              <State key={status} label={STATUS_WORDS[status]}>
+              <State key={status} label={STATE_WORDS[status]}>
                 <StatusBadge status={status} />
               </State>
             ))}

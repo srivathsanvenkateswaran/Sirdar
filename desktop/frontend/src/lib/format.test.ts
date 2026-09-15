@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { duration, elapsedSince, parseKeys, percent, relativeTime, tokens, usd, reasonOf } from './format'
+import { duration, elapsedSince, parseKeys, percent, reasonOf, relativeTime, tokens, usd } from './format'
 
 const NOW = Date.parse('2026-09-10T12:00:00Z')
 
@@ -63,6 +63,14 @@ describe('percent', () => {
   })
 })
 
+describe('reasonOf', () => {
+  it('reads the message off an Error and stringifies anything else', () => {
+    expect(reasonOf(new Error('no such job'))).toBe('no such job')
+    expect(reasonOf('refused')).toBe('refused')
+    expect(reasonOf(404)).toBe('404')
+  })
+})
+
 describe('parseKeys', () => {
   it('splits on commas, spaces and newlines and drops repeats', () => {
     expect(parseKeys('OMNI-1, OMNI-2 OMNI-3\nOMNI-1')).toEqual(['OMNI-1', 'OMNI-2', 'OMNI-3'])
@@ -75,9 +83,9 @@ describe('parseKeys', () => {
 })
 
 describe('reasonOf', () => {
-  it('reads the message off an Error and shows anything else as it came', () => {
-    expect(reasonOf(new Error('conflict: the change moved'))).toBe('conflict: the change moved')
-    expect(reasonOf('offline')).toBe('offline')
-    expect(reasonOf(42)).toBe('42')
+  it('reads the message off an Error and the text of anything else', () => {
+    expect(reasonOf(new Error('tracker is down'))).toBe('tracker is down')
+    expect(reasonOf('refused')).toBe('refused')
+    expect(reasonOf(404)).toBe('404')
   })
 })

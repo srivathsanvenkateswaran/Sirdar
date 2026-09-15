@@ -33,13 +33,13 @@ and what the backend already offers. Nothing here widens what a run may do.
    Triage / RCA / Fix, playbook, model and workspace chips, Start. "Landed today" lists the
    queue (`queue()` filtered to the user) as item rows with a Triage button each.
    Start calls `startTriage` / `startRCA` / `startFix` and opens the run.
-2. **Session** (`#/run/<id>`): the run's transcript on the left with a banner for the last
+2. **Session** (`#/runs/<workspaceId>/<runId>`): the run's transcript on the left with a banner for the last
    finished step (tests passed, note filed, blocked question), the composer at the bottom:
    Answer while blocked (`resume`), Steer once finished (`steer`), disabled while running
    with Cancel in the topbar. The right pane has Changes (fix runs: `runDiff`, Keep/Drop per
    hunk via `dropHunk`, checks from the run's events, the branch name), Note, Bundle, Tools.
    The topbar shows key, kind, state badge, title, provider mark, model, clock, turns, cost.
-3. **Change review** (`#/run/<id>/review`): the same diff full width with the file rail,
+3. **Change review** (`#/runs/<workspaceId>/<runId>/review`): the same diff full width with the file rail,
    checks, what the agent said (the fix summary), and the resolution note; the footer names
    the worktree and base. Create branch is shown only when the run can be pushed by an API;
    until then the footer shows the branch name and the CLI line that pushes it.
@@ -59,6 +59,16 @@ and what the backend already offers. Nothing here widens what a run may do.
    server; Try a tool runs `mcpTools` and `mcpCall` live and shows the verdict and result;
    Providers lists every provider with sign-in, fix support and guard from `doctor`.
 8. **Library** (`#/library`): the gallery, restyled, with the new components added.
+
+### Routes
+
+Every screen is a hash the address bar shows and the Back button walks: `#/`, `#/new`,
+`#/register`, `#/eval`, `#/library`, `#/settings/<page>`. A run link is
+`#/runs/<workspaceId>/<runId>` (with `/review` for the change) rather than the `#/run/<id>`
+an earlier draft of this file said: a run id means nothing without its workspace, and a link
+followed into the wrong repository would show a run that is not there. `src/lib/routes.ts` is
+the one place the spelling lives, and this file was amended to match it rather than the code
+to match the draft.
 
 ### Transport
 

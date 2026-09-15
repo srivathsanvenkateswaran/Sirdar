@@ -12,7 +12,12 @@ afterEach(() => {
 })
 
 const TICKETS = [
-  ticket({ key: 'OMNI-9', title: 'Statement export times out', assignee: 'sri' }),
+  ticket({
+    key: 'OMNI-9',
+    title: 'Statement export times out',
+    assignee: 'sri',
+    url: 'https://acme.atlassian.net/browse/OMNI-9',
+  }),
   ticket({ key: 'OMNI-1', title: 'Login loop after reset', assignee: 'sri' }),
   ticket({ key: 'OMNI-3', title: 'Invoice total drops the VAT line', assignee: 'someone-else' }),
 ]
@@ -88,15 +93,52 @@ describe('Board', () => {
     expect(within(lane(container, 'triaged')).getByText('completed')).toBeInTheDocument()
   })
 
-  it('draws the queued ticket as a card whose name says a click starts a triage', () => {
+  it('draws the queued ticket as a link to the tracker, with Triage a button of its own', () => {
     const { container, onTriage } = mount()
-    const card = within(lane(container, 'queue')).getByRole('button', {
-      name: 'Start triage of OMNI-9: Statement export times out',
-    })
+    const queue = within(lane(container, 'queue'))
+    const card = queue.getByRole('link', { name: 'OMNI-9: Statement export times out, queued' })
+    expect(card).toHaveAttribute('href', 'https://acme.atlassian.net/browse/OMNI-9')
     expect(within(card).getByText('queued')).toBeInTheDocument()
     expect(within(card).getByText('triage')).toBeInTheDocument()
+
+    // The card's body spends nothing; only the button starts the run.
     fireEvent.click(card)
+    expect(onTriage).not.toHaveBeenCalled()
+    fireEvent.click(queue.getByRole('button', { name: 'Triage OMNI-9' }))
     expect(onTriage).toHaveBeenCalledWith(['OMNI-9'])
+  })
+
+  it('draws a queued ticket with no tracker page as a plain card, still with its Triage button', () => {
+    const { container, onTriage } = mount({ tickets: [ticket({ key: 'OMNI-8', title: 'No URL', url: '' })] })
+    const queue = within(lane(container, 'queue'))
+    expect(queue.queryByRole('link')).toBeNull()
+    expect(queue.getAllByRole('button')).toHaveLength(1)
+    fireEvent.click(queue.getByRole('button', { name: 'Triage OMNI-8' }))
+    expect(onTriage).toHaveBeenCalledWith(['OMNI-8'])
+  })
+
+  it('titles a run card from the run itself, and shows the key once when nothing names it', () => {
+    const { container } = mount({
+      tickets: [],
+      runs: [
+        run({ runId: 'r1', key: 'OMNI-1', status: 'running', title: 'Login loop after reset' }),
+        run({ runId: 'r6', key: 'OMNI-6', status: 'running' }),
+      ],
+    })
+    const gathering = within(lane(container, 'gathering'))
+    expect(gathering.getByRole('button', { name: 'OMNI-1: Login loop after reset, running' })).toBeInTheDocument()
+    const bare = gathering.getByRole('button', { name: 'OMNI-6, running' })
+    expect(within(bare).getAllByText('OMNI-6')).toHaveLength(1)
+    expect(bare.querySelector('.sd-run-card__key')).toBeNull()
+  })
+
+  it('prefers the run’s own title to the tracker’s', () => {
+    const { container } = mount({
+      runs: [run({ runId: 'r1', key: 'OMNI-1', status: 'running', title: 'What the bundle recorded' })],
+    })
+    expect(
+      within(lane(container, 'gathering')).getByRole('button', { name: 'OMNI-1: What the bundle recorded, running' }),
+    ).toBeInTheDocument()
   })
 
   it('opens the run when its card is clicked', () => {
@@ -218,7 +260,7 @@ describe('Board', () => {
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
   })
 
-  it('lists the landed deliveries with the outcome coloured and the reason in the meta line', () => {
+  it('lists the day’s deliveries with the outcome coloured and the reason in the meta line', () => {
     vi.useFakeTimers()
     vi.setSystemTime(new Date('2026-09-10T09:07:00Z'))
     const { container, onOpenRun } = mount({
@@ -229,7 +271,7 @@ describe('Board', () => {
       ],
     })
 
-    const landed = screen.getByRole('region', { name: 'Landed today' })
+    const landed = screen.getByRole('region', { name: 'Deliveries today' })
     const rows = landed.querySelectorAll('.sd-item')
     expect(rows).toHaveLength(3)
 

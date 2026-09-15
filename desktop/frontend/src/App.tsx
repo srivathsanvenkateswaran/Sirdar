@@ -229,6 +229,7 @@ function Shell(): JSX.Element {
           workspaceId={workspaceId}
           runId={runId}
           title={title}
+          notesDir={currentWorkspace?.notesDir}
           onBack={() => navigate({ name: 'board' })}
           onOpenReview={() => navigate({ name: 'review', runId })}
           onStartFix={startFix}

@@ -376,17 +376,79 @@ describe('createAppStore', () => {
     expect(store.getState().keylessJobs).toEqual([])
   })
 
-  it('an eval over named keys is paired with its runs, not held as keyless', async () => {
+  /*
+   * An eval over named keys is many runs on a screen that shows none of
+   * them, so the Eval screen keeps Cancel for the job as a whole, and each
+   * run is still paired with it for Run detail.
+   */
+  it('an eval over named keys is paired with its runs and still cancellable as a job', async () => {
     const transport = createFakeTransport()
     store = createAppStore(transport)
     await store.init()
     await settle()
 
     await store.startEval(['OMNI-1'])
-    expect(store.getState().keylessJobs).toEqual([])
+    expect(store.getState().keylessJobs.map((j) => j.label)).toEqual(['Eval of OMNI-1'])
 
     transport.emit({ kind: 'run.updated', workspaceId: 'ws1', run: run({ runId: 'r9', key: 'OMNI-1', startedAt: nowISO() }) })
     expect(getRunJob('r9')).toBeTruthy()
+
+    await store.startEval(['OMNI-1', 'OMNI-2'])
+    expect(store.getState().keylessJobs.map((j) => j.label)).toEqual(['Eval of OMNI-1', 'Eval of 2 keys'])
+
+    // A triage is only ever the runs it produces.
+    await store.startTriage(['OMNI-3'])
+    expect(store.getState().keylessJobs).toHaveLength(2)
+  })
+
+  it('subscribes before the first read and lets init be tried again after a failure', async () => {
+    const transport = createFakeTransport()
+    let attempts = 0
+    const workspaces = transport.workspaces
+    transport.workspaces = async () => {
+      attempts += 1
+      if (attempts === 1) throw new Error('the service is not up yet')
+      return workspaces()
+    }
+    store = createAppStore(transport)
+    await store.init()
+    expect(transport.subscriberCount()).toBe(1)
+    expect(store.getState().loading).toBe(false)
+    expect(store.getState().toasts.at(-1)?.text).toContain('the service is not up yet')
+
+    await store.init()
+    await settle()
+    expect(attempts).toBe(2)
+    expect(store.getState().currentWorkspaceId).toBe('ws1')
+    // One stream across both attempts.
+    expect(transport.subscriberCount()).toBe(1)
+  })
+
+  it('says when the stream is lost and resyncs when it is back', async () => {
+    const transport = createFakeTransport()
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    const runsBefore = transport.calls.runs.length
+    const queueBefore = transport.calls.queue.length
+
+    transport.emit({ kind: 'live', state: 'lost' })
+    expect(store.getState().liveUpdates).toBe('lost')
+    expect(store.getState().toasts.at(-1)?.text).toBe('Live updates lost; reconnecting.')
+    // The browser retries and reports every failed attempt; one word is enough.
+    transport.emit({ kind: 'live', state: 'lost' })
+    expect(store.getState().toasts.filter((t) => t.text.startsWith('Live updates lost'))).toHaveLength(1)
+
+    transport.emit({ kind: 'live', state: 'open' })
+    await settle()
+    expect(store.getState().liveUpdates).toBe('live')
+    expect(transport.calls.runs.length).toBe(runsBefore + 1)
+    expect(transport.calls.queue.length).toBe(queueBefore + 1)
+
+    // An open on a stream that was never lost — the first one — reads nothing again.
+    transport.emit({ kind: 'live', state: 'open' })
+    await settle()
+    expect(transport.calls.runs.length).toBe(runsBefore + 1)
   })
 
   it('job.finished releases a keyless job', async () => {

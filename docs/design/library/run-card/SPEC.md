@@ -11,7 +11,10 @@ A run as the board shows it, in the Jira-shaped anatomy of the 2026-09-15
 screens round: the ticket's title first, a kind chip under it, and a footer
 of the state's glyph and word (with a clock while the run is live or waiting)
 and, at the other end, the key in the ledger face beside the provider's mark.
-The whole card opens the session.
+The whole card opens the session; a card for a queued ticket, which has no
+session yet, is a link to the ticket in the tracker instead, and the control
+that would start a paid run is drawn beside the card by the board, never as
+the card's own click.
 
 Built. `desktop/frontend/src/ui/run-card/`. It is drawn by
 `components/cards/RunCard.tsx`, which does the clock arithmetic the component
@@ -21,18 +24,23 @@ session's.
 
 ## Anatomy
 
-- `button.sd-run-card[data-status][data-live]` — the card: `--sd-sheet` fill,
+- `.sd-run-card[data-status][data-live]` — the card: `--sd-sheet` fill,
   1px `--sd-rule` border, radius 6px, `padding-block: 14px`, `padding-inline:
-  16px`, a column aligned to the start.
+  16px`, a column aligned to the start. A `button` when `onOpen` is given, an
+  `a[target=_blank]` when `href` is, and a `div` with neither; the pointer
+  cursor and the hover border belong to the two that do something.
 - `span.sd-run-card__title` — `dir="auto"`, `--sd-text-body` (16px) at
   weight 400, `line-height: 1.35`, clamped to two lines. No key above it.
 - `span.sd-run-card__kind` — the kind chip (`src/ui/kind-chip`), 10px under
   the title.
 - `span.sd-run-card__foot` — flex, space-between, 12px under the chip. On the
-  leading side the state glyph (`src/ui/state-glyph`) with its word in the
-  state's hue and, on a live or blocked run only, the mono clock. On the
-  trailing side `__who`: `__key` (mono, `--sd-text-ledger`, 500,
-  `--sd-ink-3`, `dir="ltr"`) and the provider mark at `sm`.
+  leading side `__state`: the state glyph (`src/ui/state-glyph`) with its
+  word in the state's hue and, on a live or blocked run only, the mono
+  clock; it is the side that gives way when the card is narrow, cut with an
+  ellipsis. On the trailing side `__who`, which never shrinks: `__key`
+  (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`) and
+  the provider mark at `sm`. The key is left out of the foot when it is
+  already the title.
 
 ## States
 
@@ -45,7 +53,7 @@ session's.
 | disabled | n/a. Every run can be opened, including a failed one. |
 | loading | `queued`: the dashed ring and the word, no clock. |
 | error | `failed` and `over_budget`: the cross and the word in `--sd-st-failed`. The reason is in the session, not on the card. |
-| empty | A run whose tracker has no title shows the key as its title, rather than an empty first line. |
+| empty | A run whose tracker has no title shows the key as its title, once: the foot's key is left out, since a card that said the key twice was a card with nothing else to say. |
 | selected | n/a today. |
 | live | `preparing` and `running` take `border-inline-start: 2px solid var(--sd-accent)`, the play glyph in `--sd-st-live`, and the clock. Nothing else on the board wears the accent. |
 | blocked | The question glyph in `--sd-st-blocked` and the clock: how long a person has been asked. |
@@ -83,17 +91,27 @@ radius and the 14px block padding are the mock's; one component uses each.
 
 ## Accessibility
 
-Native `button` with `aria-label` of `"<key>: <title>"`, because the visible
-title is clamped and the key alone does not say what the run is about; `label`
-overrides it for the one card whose click is not an open — the board's queued
-ticket, which starts a triage, and says so. State
-is carried by the glyph's word, kind by the chip's word, provider by the
-mark's `aria-label`; none of the three is colour alone. Contrast: title
+Native `button` (or `a`) with `aria-label` of `"<key>: <title>, <state>"` —
+`"<key>, <state>"` when there is no title — because the visible title is
+clamped, the key alone does not say what the run is about, and the state is
+the one fact a reader scanning a lane by name needs before deciding to open
+it; `label` overrides it when the default does not say what the click does.
+State is carried by the glyph's word, kind by the chip's word, provider by
+the mark's `aria-label`; none of the three is colour alone. Contrast: title
 `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3` **5.25:1**, the state
 hues **4.84:1** or more (blocked, the tightest) in light. Reduced motion:
 only the hover border transitions.
 
 ## Changelog
+
+### 2026-09-15 (fix round)
+The accessible name ends in the state's word. A card with no title shows the
+key once, as the title, and leaves it out of the foot. The foot's key no
+longer wraps: `__who` keeps its width and the state side is the one cut. The
+card is a `button` only while `onOpen` is given; `href` makes it a link to
+the tracker, opened in the browser, and neither makes it a plain box. The
+board's queued ticket is now the link, with Triage a separate button beside
+it, so no card body starts a paid run.
 
 ### 2026-09-15 (Board build)
 `label` joins the props: an accessible-name override for a card whose click

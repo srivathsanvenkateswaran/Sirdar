@@ -86,8 +86,8 @@ Reduced motion: nothing moves.
 ## Changelog
 
 ### 2026-09-15 (fix round)
-Owns the vocabulary. `STATE_WORDS` replaces the capitalised `STATUS_WORDS`
-(kept as an alias for the Library page); the words are the mocks' lowercase
+Owns the vocabulary. `STATE_WORDS` replaces the capitalised `STATUS_WORDS`;
+the words are the mocks' lowercase
 ones, `blocked` no longer reads "Needs input", and `done` joins the states with
 its own hue. `detail` appends what a state means on one screen; `stateWord()`
 resolves a status string. The state glyph reads this map instead of its own.

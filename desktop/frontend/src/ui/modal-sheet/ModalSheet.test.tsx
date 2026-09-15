@@ -101,7 +101,7 @@ describe('ModalSheet', () => {
     expect(onSelect).toHaveBeenLastCalledWith('identity')
   })
 
-  it('moves focus into the sheet and returns it to the opener on close', () => {
+  it('moves focus to the page heading, closes the window behind it, and gives focus back on close', () => {
     const opener = document.createElement('button')
     document.body.append(opener)
     opener.focus()
@@ -118,8 +118,11 @@ describe('ModalSheet', () => {
         <p>General settings</p>
       </ModalSheet>,
     )
-    expect(document.activeElement).toBe(screen.getByRole('button', { name: 'General' }))
+    expect(document.activeElement).toBe(screen.getByRole('heading', { name: 'Settings' }))
+    expect(opener).toHaveAttribute('inert')
+    expect(screen.getByRole('dialog')).not.toHaveAttribute('inert')
     unmount()
+    expect(opener).not.toHaveAttribute('inert')
     expect(document.activeElement).toBe(opener)
     opener.remove()
   })

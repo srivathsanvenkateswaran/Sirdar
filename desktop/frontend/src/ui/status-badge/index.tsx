@@ -37,12 +37,6 @@ export const STATE_WORDS: Record<SdStatus, string> = {
   over_budget: 'over budget',
 }
 
-/**
- * The same map under the name the Library page still imports it by. New code
- * reads `STATE_WORDS`; this alias goes when that page switches.
- */
-export const STATUS_WORDS = STATE_WORDS
-
 /** True for a state the map knows, so a string off the wire can be shown by its word. */
 export function isSdStatus(status: string): status is SdStatus {
   return Object.prototype.hasOwnProperty.call(STATE_WORDS, status)

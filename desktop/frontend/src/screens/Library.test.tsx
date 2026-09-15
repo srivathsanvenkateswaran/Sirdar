@@ -184,12 +184,13 @@ describe('the asset library', () => {
 
     it('shows every run state as its own badge', () => {
       for (const word of [
-        'Queued',
-        'Preparing',
-        'Running',
-        'Needs input',
-        'Completed',
-        'Over budget',
+        'queued',
+        'preparing',
+        'running',
+        'blocked',
+        'completed',
+        'done',
+        'over budget',
       ])
         expect(within(frame()).getAllByText(word).length).toBeGreaterThan(0)
     })
@@ -217,10 +218,9 @@ describe('the asset library', () => {
       const overBudget = within(frame()).getByRole('button', { name: /^SBX-10: / })
       expect(within(overBudget).getByText('over budget')).toBeInTheDocument()
       expect(within(overBudget).queryByText('58:12')).toBeNull()
-      // A run with no title from the tracker shows its key as the title.
-      expect(
-        within(frame()).getByRole('button', { name: 'OMNI-2513: OMNI-2513' }),
-      ).toBeInTheDocument()
+      // A run with no title from the tracker shows its key as the title, once.
+      const bare = within(frame()).getByRole('button', { name: /^OMNI-2513, / })
+      expect(within(bare).getAllByText('OMNI-2513')).toHaveLength(1)
     })
 
     it('shows the banner in every tone, and the lead alone without a separator', () => {

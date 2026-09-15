@@ -10,15 +10,6 @@ const MINUTE = 60 * SECOND
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
 
-/**
- * The words a failure is shown by. A rejection is an `Error` almost always,
- * but a transport can reject with a string and a thrown literal is not
- * unheard of, and either would read as `[object Object]` in a sentence.
- */
-export function reasonOf(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
-
 /** Parses an RFC 3339 timestamp; returns NaN for empty or unparseable input. */
 export function parseTime(value: string | undefined): number {
   if (!value) return Number.NaN
@@ -113,6 +104,15 @@ export function percent(value: number | undefined): string {
   if (typeof value !== 'number' || !Number.isFinite(value)) return ''
   const scaled = value <= 1 ? value * 100 : value
   return `${Math.round(scaled)}%`
+}
+
+/**
+ * The reason a call failed, as one line for a screen to show: an Error's
+ * message, or whatever else was thrown, stringified. Every catch that shows a
+ * reason reads it through here rather than spelling the same ternary itself.
+ */
+export function reasonOf(err: unknown): string {
+  return err instanceof Error ? err.message : String(err)
 }
 
 /**

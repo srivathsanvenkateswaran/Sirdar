@@ -1,8 +1,9 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import type { MCPCallResult, MCPInventory, MCPToolList, Transport } from '../../api/types'
+import { reasonOf } from '../../lib/format'
 import Button from '../../ui/button'
 import { SettingCard } from '../../ui/setting-row'
-import { message, VerdictChip, type Loaded } from './shared'
+import { VerdictChip, type Loaded } from './shared'
 
 /** One hand-run call, kept for the session. */
 export interface RecentCall {
@@ -30,6 +31,15 @@ export interface ToolTester {
   recent: RecentCall[]
   call: () => void
   canCall: boolean
+}
+
+/**
+ * The tool a fresh listing selects: the first one a run could call. A server
+ * whose first tool is a write would otherwise open on a denied verdict, and
+ * the point of the page is to see something come back.
+ */
+export function firstAllowed(list: MCPToolList): string {
+  return (list.tools.find((t) => t.verdict === 'allowed') ?? list.tools[0])?.name ?? ''
 }
 
 /**
@@ -70,7 +80,7 @@ export function useToolTester(
     const cached = listed.current[server]
     if (cached) {
       setTools({ status: 'done', data: cached })
-      setTool((t) => (cached.tools.some((x) => x.name === t) ? t : (cached.tools[0]?.name ?? '')))
+      setTool((t) => (cached.tools.some((x) => x.name === t) ? t : firstAllowed(cached)))
       return
     }
     let cancelled = false
@@ -81,10 +91,10 @@ export function useToolTester(
         if (cancelled) return
         listed.current[server] = data
         setTools({ status: 'done', data })
-        setTool(data.tools[0]?.name ?? '')
+        setTool(firstAllowed(data))
       })
       .catch((err: unknown) => {
-        if (!cancelled) setTools({ status: 'error', message: message(err) })
+        if (!cancelled) setTools({ status: 'error', message: reasonOf(err) })
       })
     return () => {
       cancelled = true
@@ -120,7 +130,7 @@ export function useToolTester(
         setResult(got)
         setRecent((r) => [{ at, server, tool, result: got }, ...r].slice(0, 20))
       })
-      .catch((err: unknown) => setFailure(message(err)))
+      .catch((err: unknown) => setFailure(reasonOf(err)))
       .finally(() => setCalling(false))
   }
 

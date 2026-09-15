@@ -55,13 +55,13 @@ func TestWireFieldNames(t *testing.T) {
 
 	summary := SummaryOf(state)
 	wantKeys(t, "RunSummary", summary,
-		"runId", "key", "kind", "status", "provider", "model",
+		"runId", "key", "title", "kind", "status", "provider", "model",
 		"startedAt", "updatedAt", "reason", "usage", "notes")
 	wantKeys(t, "Usage", summary.Usage, "turns", "inputTokens", "outputTokens", "costUsd")
 
 	detail := DetailOf("/root", state)
 	wantKeys(t, "RunDetail", detail,
-		"runId", "key", "kind", "status", "provider", "model",
+		"runId", "key", "title", "kind", "status", "provider", "model",
 		"startedAt", "updatedAt", "reason", "usage", "notes",
 		"promptPath", "bundleDir", "warnings", "handle", "budget")
 	wantKeys(t, "Budget", detail.Budget, "maxTurns", "maxMinutes", "maxUsd")
