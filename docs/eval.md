@@ -19,6 +19,7 @@ sirdar eval OMNI-1 OMNI-2        just these
 sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]
 sirdar golden add KEY --retro --pr URL [--pr URL...] [--as-of RFC3339] [--golden DIR] [--force]
 sirdar golden list [--golden DIR]
+sirdar golden migrate [KEY...] [--golden DIR]
 ```
 
 Exit code is 1 if any key failed an assertion or produced a note that did not validate, so the
@@ -46,6 +47,22 @@ customer conversations, names and attachments. `sirdar golden add` refuses a gol
 that sits inside a git work tree for that reason — the next `git add -A` would publish it, and
 a repository's history is not somewhere you can take a customer's conversation back out of.
 `--force` overrides the refusal for a repository you are certain may hold it.
+
+### Migrating a pre-eval golden set
+
+An older `bundle/` split had a key's files directly under its directory — `OMNI-1234/ticket.json`
+rather than `OMNI-1234/bundle/ticket.json`. `sirdar eval` cannot read that layout and says so by
+name rather than reporting an empty golden set:
+
+```
+eval: ~/.sirdar/golden holds no golden bundles `sirdar eval` can read; 2 in the pre-eval layout
+(files directly under the key, not under bundle/): OMNI-1234, OMNI-1240 — run `sirdar golden
+migrate` to fix them, or `sirdar golden migrate KEY` for one at a time
+```
+
+`sirdar golden migrate` moves a key's bundle files into `bundle/` in place; `expected.json` and
+`expected.md`, a human's own files, are left exactly where they are. With no key named it
+migrates every entry still in the old layout.
 
 Building an entry is two steps. Triage the ticket for real, then:
 
@@ -92,8 +109,12 @@ not exist is a failure, with "no value at ..." as the reason.
 `_contains` is deliberately loose. Writing `"Domain/Inventory.API/"` says the note should have
 pointed into that area, which is a claim that survives the next refactor; writing
 `"Domain/Inventory.API/Export/Csv.cs:412"` says it should have cited one line, which stops being
-true the moment somebody adds an import. The generated skeleton already strips the `:line` off
-the references it copies, for the same reason.
+true the moment somebody adds an import. The generated skeleton already strips a code reference
+down to its bare file path for the same reason — no line number, no line range, and no
+parenthetical annotation an agent tacked on: `Domain/Fin.Logic/Models/FinReportModel.cs:253-282
+(default branch: main)` becomes `Domain/Fin.Logic/Models/FinReportModel.cs`. An annotation is
+free text the agent will not phrase the same way twice, so keeping it verbatim in the assertion
+would make `_contains` a substring check that can never match.
 
 Every failure is printed under the table with the value that was actually there:
 

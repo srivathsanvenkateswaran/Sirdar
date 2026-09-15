@@ -29,11 +29,18 @@ export default function NoteView({
   workspaceId,
   runId,
   kinds,
+  reload = 0,
 }: {
   transport: Transport
   workspaceId: string
   runId: string
   kinds: NoteKind[]
+  /**
+   * Changes when the run finishes. A note only exists once the run has
+   * written it, so a screen opened mid-run asks again rather than leaving
+   * "No note yet" up for a run that has one.
+   */
+  reload?: number
 }) {
   const [notes, setNotes] = useState<Note[] | null>(null)
   const [error, setError] = useState('')
@@ -63,7 +70,7 @@ export default function NoteView({
     return () => {
       cancelled = true
     }
-  }, [transport, workspaceId, runId, wanted])
+  }, [transport, workspaceId, runId, wanted, reload])
 
   if (notes === null) return <div className="pane pane-empty">Loading note…</div>
   if (notes.length === 0) return <div className="pane pane-empty">{error}</div>

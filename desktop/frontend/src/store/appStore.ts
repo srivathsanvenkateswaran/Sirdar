@@ -134,6 +134,12 @@ export interface AppStore {
   init(): Promise<void>
   setWorkspace(id: string): void
   navigate(screen: Screen): void
+  /**
+   * Opens what a deep link names, in one step. `setWorkspace` sends the window
+   * back to the board, which is right for the switcher and wrong for a link
+   * that names both a workspace and a screen inside it.
+   */
+  openRoute(screen: Screen, workspaceId?: string): void
   startTriage(keys: string[], opts?: TriageOptions): Promise<void>
   startRCA(key: string, opts?: RCAOptions): Promise<void>
   startFix(key: string, opts?: FixOptions): Promise<void>
@@ -458,6 +464,17 @@ export function createAppStore(transport: Transport): AppStore {
 
     navigate(screen) {
       set({ screen })
+    },
+
+    openRoute(screen, workspaceId) {
+      // A link into a workspace this install does not have is followed as far
+      // as it can be: the screen opens on whichever workspace is current.
+      const known = workspaceId && state.workspaces.some((w) => w.id === workspaceId)
+      const next = known ? (workspaceId as string) : state.currentWorkspaceId
+      const moved = next !== state.currentWorkspaceId
+      if (moved) writeStoredWorkspace(next)
+      set({ currentWorkspaceId: next, screen })
+      if (moved) void loadWorkspace(next)
     },
 
     async startTriage(keys, opts) {

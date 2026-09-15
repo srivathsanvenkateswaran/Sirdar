@@ -105,6 +105,43 @@ func Keys(root string) ([]string, error) {
 	return keys, nil
 }
 
+// IsLegacyEntry reports whether dir — one entry of a golden set, e.g.
+// "<golden>/OMNI-1234" — holds a bundle in the pre-eval layout: its files
+// directly under dir rather than under "dir/bundle/". That was never a
+// layout `sirdar eval` read; it is what an older `golden add`, or a bundle
+// copied in by hand before the bundle/ split, leaves behind.
+func IsLegacyEntry(dir string) bool {
+	if fileExists(filepath.Join(dir, "bundle", "ticket.json")) {
+		return false
+	}
+	return fileExists(filepath.Join(dir, "ticket.json"))
+}
+
+// LegacyKeys lists every entry under root that holds a bundle in the
+// pre-eval layout, sorted. It is how `sirdar eval` and `sirdar golden
+// migrate` tell a golden set that is merely empty from one that is stuck in
+// the layout eval cannot read.
+func LegacyKeys(root string) ([]string, error) {
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("eval: read golden set %s: %w", root, err)
+	}
+	var keys []string
+	for _, e := range entries {
+		if !e.IsDir() || strings.HasPrefix(e.Name(), ".") {
+			continue
+		}
+		if IsLegacyEntry(filepath.Join(root, e.Name())) {
+			keys = append(keys, e.Name())
+		}
+	}
+	sort.Strings(keys)
+	return keys, nil
+}
+
 // Load reads one key's golden entry. A missing expected.json is not an
 // error: a bundle on its own still scores the two things that need no human
 // answer, whether the note validated and whether the run completed.
@@ -112,6 +149,10 @@ func Load(root, key string) (Golden, error) {
 	g := Golden{Key: key, Dir: filepath.Join(root, key)}
 	g.BundleDir = filepath.Join(g.Dir, "bundle")
 	if _, err := os.Stat(filepath.Join(g.BundleDir, "ticket.json")); err != nil {
+		if IsLegacyEntry(g.Dir) {
+			return g, fmt.Errorf("eval: %s holds a bundle in the pre-eval layout (files directly under %s "+
+				"rather than under bundle/); run `sirdar golden migrate %s` to fix it", key, g.Dir, key)
+		}
 		return g, fmt.Errorf("eval: %s has no bundle: %w", key, err)
 	}
 	if path := filepath.Join(g.Dir, "expected.md"); fileExists(path) {
@@ -195,4 +236,69 @@ func copyTree(src, dst string) error {
 		}
 		return os.WriteFile(target, data, 0o644)
 	})
+}
+
+// legacyTopLevelFiles are the names `sirdar golden migrate` leaves where
+// they are: files a human writes at a golden entry's top level in both the
+// pre-eval and current layouts.
+var legacyTopLevelFiles = map[string]bool{
+	"expected.json": true,
+	"expected.md":   true,
+}
+
+// Migrated reports what `sirdar golden migrate` did for one key.
+type Migrated struct {
+	Key       string
+	Dir       string
+	BundleDir string
+	// Moved is what was relocated into bundle/, relative to Dir, sorted.
+	Moved []string
+}
+
+// Migrate moves one golden entry out of the pre-eval layout: a bundle's
+// files sitting directly under "<golden>/<KEY>/" are relocated under
+// "<golden>/<KEY>/bundle/", which is the layout `sirdar eval` and `sirdar
+// golden list` require. expected.json and expected.md — a human's files —
+// are left exactly where they are; every other entry directly under the
+// key's directory is treated as part of the bundle and moved.
+//
+// It refuses a key that is not in the pre-eval layout: one with no
+// ticket.json at its top level, or one that already has a bundle/ticket.json
+// (migrating it again would silently merge two bundles together).
+func Migrate(goldenRoot, key string) (Migrated, error) {
+	root := ExpandDir(goldenRoot)
+	dir := filepath.Join(root, key)
+	m := Migrated{Key: key, Dir: dir, BundleDir: filepath.Join(dir, "bundle")}
+
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return m, fmt.Errorf("eval: %s is not a golden entry", dir)
+	}
+	if fileExists(filepath.Join(m.BundleDir, "ticket.json")) {
+		return m, fmt.Errorf("eval: %s already has a bundle/ticket.json; nothing to migrate", dir)
+	}
+	if !fileExists(filepath.Join(dir, "ticket.json")) {
+		return m, fmt.Errorf("eval: %s has no ticket.json at its top level; it is not in the pre-eval layout", dir)
+	}
+
+	if err := os.MkdirAll(m.BundleDir, 0o755); err != nil {
+		return m, fmt.Errorf("eval: create %s: %w", m.BundleDir, err)
+	}
+
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return m, fmt.Errorf("eval: read %s: %w", dir, err)
+	}
+	for _, e := range entries {
+		name := e.Name()
+		if name == "bundle" || legacyTopLevelFiles[name] || strings.HasPrefix(name, ".") {
+			continue
+		}
+		from, to := filepath.Join(dir, name), filepath.Join(m.BundleDir, name)
+		if err := os.Rename(from, to); err != nil {
+			return m, fmt.Errorf("eval: move %s to %s: %w", from, to, err)
+		}
+		m.Moved = append(m.Moved, name)
+	}
+	sort.Strings(m.Moved)
+	return m, nil
 }

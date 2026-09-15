@@ -19,12 +19,30 @@ import (
 // produced it.
 type Meta struct {
 	Key, TrackerURL, HelpdeskID, HelpdeskURL, Customer, CustomerID string
-	Date, DateReported                                             string // YYYY-MM-DD
-	Priority, Service                                              string
-	RunID, Provider                                                string
-	Links                                                          struct {
+	// CustomerIDs holds identifiers beyond CustomerID that the agent found
+	// — a domain, a company code, an account number — comma-joined. It
+	// exists so ticket.customer can stay the bundle's plain name verbatim
+	// (see prompt.triageFieldGuidance) instead of the agent folding an
+	// identifier into it.
+	CustomerIDs        string
+	Date, DateReported string // YYYY-MM-DD
+	Priority, Service  string
+	RunID, Provider    string
+	Links              struct {
 		Triage, RCA, Resolution string // wiki-link targets (file stems)
 	}
+	// SkippedAttachments lists what the bundle could not make available to
+	// the session — over the size cap, or a type it cannot open — sourced
+	// from the bundle's attachment manifest rather than the agent's
+	// answer, so the note always says what evidence went unread even when
+	// the agent's own account of it is thin.
+	SkippedAttachments []SkippedAttachment
+}
+
+// SkippedAttachment is one attachment a note's "Attachments not reviewed"
+// section names.
+type SkippedAttachment struct {
+	Name, Type, Size, Reason string
 }
 
 // Renderer renders notes from Go text/template files. TemplatesDir, when
@@ -193,6 +211,7 @@ func sampleFor(kind Kind) ([]byte, Meta, error) {
 		HelpdeskURL:  "https://helpdesk.example/12345",
 		Customer:     "Example Corp",
 		CustomerID:   "cust-1",
+		CustomerIDs:  "domain-42",
 		Date:         "2026-09-10",
 		DateReported: "2026-09-01",
 		Priority:     "high",

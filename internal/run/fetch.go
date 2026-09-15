@@ -287,11 +287,19 @@ func (f *Fetcher) keepReadableAttachments(b *ticket.Bundle, bundleDir string, at
 		mimeType := attachmentMIME(a)
 		switch {
 		case size > max:
-			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) is over the %s limit and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size), humanBytes(max)))
+			reason := fmt.Sprintf("over the %s limit", humanBytes(max))
+			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) is %s and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), reason))
+			b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
+				Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
+			})
 		case !readableMIME(mimeType):
-			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) cannot be opened in this session and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size)))
+			reason := "cannot be opened in this session"
+			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) %s and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), reason))
+			b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
+				Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
+			})
 		default:
 			kept = append(kept, a)
 			continue

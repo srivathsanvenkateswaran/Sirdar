@@ -257,6 +257,11 @@ func truncate(s string, max int) string {
 	return s + "…"
 }
 
+// readableMIME, attachmentMIME, baseMIME, keepReadableAttachments and
+// humanBytes live in fetch.go: the bundle-fetch extraction gave the
+// Fetcher its own copies of this logic, so prepare.go does not keep a
+// second set.
+
 // warn records a warning in both places it has to appear: the prompt the
 // agent reads, and the run state a human reads afterwards.
 func (p *prepared) warn(b *ticket.Bundle, msg string) {

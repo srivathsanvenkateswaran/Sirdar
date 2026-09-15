@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -184,17 +185,13 @@ func Skeleton(doc []byte) ([]byte, error) {
 	return append(data, '\n'), nil
 }
 
-// refFiles strips the ":line" from each "path:line" reference and drops
+// refFiles reduces each rootCause.codeRefs entry to its file path and drops
 // duplicates, keeping the order the note listed them in.
 func refFiles(refs []string) []string {
 	seen := map[string]bool{}
 	var out []string
 	for _, ref := range refs {
-		file := ref
-		if i := strings.LastIndex(ref, ":"); i > 0 {
-			file = ref[:i]
-		}
-		file = strings.TrimSpace(file)
+		file := refFile(ref)
 		if file == "" || seen[file] {
 			continue
 		}
@@ -202,4 +199,28 @@ func refFiles(refs []string) []string {
 		out = append(out, file)
 	}
 	return out
+}
+
+// codeRefLineSuffix matches a trailing ":123" or ":123-456" line reference
+// at the end of a code reference, once any parenthetical annotation has
+// already been stripped.
+var codeRefLineSuffix = regexp.MustCompile(`:\d+(-\d+)?$`)
+
+// refFile reduces one rootCause.codeRefs entry to a bare file path. An
+// agent's code reference is free text, not just "path:line": it routinely
+// reads "path.cs:253-282 (default branch)" or "path.cs:253-282 (default
+// branch: main)". The annotation is stripped first — cutting at the last
+// ":" in the whole string, as a naive implementation once did, cuts inside
+// an annotation that itself contains a colon, leaving a mangled path like
+// "FinReportModel.cs:253-282 (default branch" that can never appear as a
+// substring of a real codeRefs entry. Only once the annotation is gone is
+// a trailing line or line-range suffix removed.
+func refFile(ref string) string {
+	file := strings.TrimSpace(ref)
+	if i := strings.Index(file, " ("); i >= 0 {
+		file = file[:i]
+	}
+	file = strings.TrimSpace(file)
+	file = codeRefLineSuffix.ReplaceAllString(file, "")
+	return strings.TrimSpace(file)
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  DEFAULT_FILTER,
   FILTERS,
   filterTurns,
   groupTurns,
@@ -30,7 +31,7 @@ export default function EventStream({
   startedAt: string | undefined
   live: boolean
 }) {
-  const [filter, setFilter] = useState<Filter>('all')
+  const [filter, setFilter] = useState<Filter>(DEFAULT_FILTER)
   const [showJump, setShowJump] = useState(false)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const stick = useRef(true)
@@ -96,7 +97,12 @@ export default function EventStream({
             </p>
           ) : (
             shown.map((turn) => (
-              <TurnGroup key={turn.n} turn={turn} startedAt={startedAt} />
+              <TurnGroup
+                key={turn.n}
+                turn={turn}
+                startedAt={startedAt}
+                fold={filter === 'all'}
+              />
             ))
           )}
         </div>
