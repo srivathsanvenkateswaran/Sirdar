@@ -87,6 +87,92 @@ func TestStartEvalRejectsBadBodies(t *testing.T) {
 	}
 }
 
+func TestStartEvalCarriesTheRetroFlags(t *testing.T) {
+	f := newFake()
+	w := do(t, f, "POST", "/api/workspaces/"+knownWS+"/eval",
+		`{"keys":["OMNI-1"],"retro":true,"withRca":true,"rubric":true}`)
+
+	decodeJSON(t, w, 202, nil)
+	want := EvalOptions{Retro: true, WithRCA: true, Rubric: true}
+	if f.gotEval != want {
+		t.Fatalf("options %+v, want %+v", f.gotEval, want)
+	}
+}
+
+func TestLatestRetroIsCamelCase(t *testing.T) {
+	f := newFake()
+	passed := true
+	f.retro = &RetroReport{
+		Path: "/repos/oxo-apis/.sirdar/eval/20260915T090000Z-retro.json",
+		RetroReport: eval.RetroReport{
+			At: time.Date(2026, 9, 15, 9, 0, 0, 0, time.UTC), Provider: "claude", Model: "sonnet",
+			GoldenDir: "/golden", Rubric: true,
+			Results: []eval.RetroResult{{
+				Key: "OMNI-2510", BaseCommit: "abc123", CostUSD: 3.75,
+				Triage: &eval.Stage{RunID: knownRun, State: "completed"},
+				Fix:    &eval.FixStage{Stage: eval.Stage{RunID: "fix-1", State: "completed"}, Commit: "deadbee"},
+				TriageScore: &eval.TriageScore{
+					Classification:      "code",
+					Confidence:          "high",
+					CodeRefsPathOverlap: eval.Fraction{Matched: 1, Total: 2, Score: 0.5},
+					PRFilesHit:          eval.Fraction{Matched: 2, Total: 3, Score: 0.67},
+				},
+				FixScore: &eval.FixScore{
+					FilesJaccard: eval.Jaccard{Intersection: 1, Union: 2, Score: 0.5},
+					HunkOverlap:  eval.Fraction{Matched: 1, Total: 2, Score: 0.5},
+					BuildPassed:  &passed,
+				},
+				Rubric: &eval.Rubric{SameRootCause: true, Verdict: "partial", Reasoning: "half the change"},
+			}},
+		},
+	}
+	w := do(t, f, "GET", "/api/workspaces/"+knownWS+"/eval/retro/latest", "")
+
+	var got map[string]any
+	decodeJSON(t, w, 200, &got)
+	for _, k := range []string{"path", "at", "provider", "goldenDir", "results", "rubric"} {
+		if _, ok := got[k]; !ok {
+			t.Errorf("the report has no %q: %v", k, got)
+		}
+	}
+	rows, ok := got["results"].([]any)
+	if !ok || len(rows) != 1 {
+		t.Fatalf("results %v", got["results"])
+	}
+	row := rows[0].(map[string]any)
+	for _, k := range []string{"key", "baseCommit", "costUsd", "triage", "fix", "triageScore", "fixScore", "rubric"} {
+		if _, ok := row[k]; !ok {
+			t.Errorf("the row has no %q: %v", k, row)
+		}
+	}
+	score := row["triageScore"].(map[string]any)
+	if _, ok := score["codeRefsPathOverlap"]; !ok {
+		t.Errorf("the triage score has no codeRefsPathOverlap: %v", score)
+	}
+	fix := row["fixScore"].(map[string]any)
+	for _, k := range []string{"filesJaccard", "hunkOverlap", "linesAdded", "buildPassed"} {
+		if _, ok := fix[k]; !ok {
+			t.Errorf("the fix score has no %q: %v", k, fix)
+		}
+	}
+}
+
+// A workspace that has never run a retro is not a 404: the screen shows
+// the section empty, and a 404 would be indistinguishable from a bad id.
+func TestLatestRetroIsNullWhenThereIsNone(t *testing.T) {
+	w := do(t, newFake(), "GET", "/api/workspaces/"+knownWS+"/eval/retro/latest", "")
+	if w.Code != 200 {
+		t.Fatalf("status %d", w.Code)
+	}
+	if body := strings.TrimSpace(w.Body.String()); body != "null" {
+		t.Errorf("body %q, want null", body)
+	}
+}
+
+func TestLatestRetroUnknownWorkspace(t *testing.T) {
+	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/eval/retro/latest", ""), 404, "not_found")
+}
+
 func TestEvalReportsAreCamelCase(t *testing.T) {
 	f := newFake()
 	f.reports = []EvalReport{{

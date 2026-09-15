@@ -4,6 +4,7 @@ import type {
   ConfigSummary,
   EvalReport,
   GoldenEntry,
+  RetroReport,
   Quota,
   RegisterRow,
   RunDetail,
@@ -139,6 +140,8 @@ export function createHTTPTransport(): Transport {
         ...(o ?? {}),
       }),
     evalReports: (ws) => getJSON<EvalReport[]>(`/workspaces/${encodeURIComponent(ws)}/eval`),
+    latestRetro: (ws) =>
+      getJSON<RetroReport | null>(`/workspaces/${encodeURIComponent(ws)}/eval/retro/latest`),
     golden: (ws) => getJSON<GoldenEntry[]>(`/workspaces/${encodeURIComponent(ws)}/golden`),
     addGolden: (ws, o) =>
       postJSON<GoldenEntry>(`/workspaces/${encodeURIComponent(ws)}/golden`, o),
@@ -224,9 +227,17 @@ interface BridgeBindings {
   StartEval(
     ws: string,
     keys: string[],
-    o: { provider: string; model: string; concurrency: number },
+    o: {
+      provider: string
+      model: string
+      concurrency: number
+      retro: boolean
+      withRca: boolean
+      rubric: boolean
+    },
   ): Promise<string>
   EvalReports(ws: string): Promise<EvalReport[] | null>
+  LatestRetro(ws: string): Promise<RetroReport | null>
   Golden(ws: string): Promise<GoldenEntry[] | null>
   AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
   ConfigSummary(ws: string): Promise<ConfigSummary>
@@ -305,9 +316,13 @@ export function createWailsTransport(): Transport {
         provider: o?.provider ?? '',
         model: o?.model ?? '',
         concurrency: o?.concurrency ?? 0,
+        retro: o?.retro ?? false,
+        withRca: o?.withRca ?? false,
+        rubric: o?.rubric ?? false,
       }),
     }),
     evalReports: async (ws) => list(await bridge().EvalReports(ws)),
+    latestRetro: async (ws) => (await bridge().LatestRetro(ws)) ?? null,
     golden: async (ws) => list(await bridge().Golden(ws)),
     addGolden: (ws, o) => bridge().AddGolden(ws, o.key ?? '', o.runId ?? ''),
     configSummary: (ws) => bridge().ConfigSummary(ws),

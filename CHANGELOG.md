@@ -91,6 +91,14 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
+- Added `sirdar eval --retro`, which replays a golden key at the commit its fix branched from —
+  triage from the as-of bundle, then `fix --local` from that triage note, and a blind RCA behind
+  `--with-rca` — and scores what came back against the pull request a human merged: the note's
+  code references against the files the change touched, the agent's own diff against the
+  pull request's by file overlap and by hunk, and, behind `--rubric`, one extra provider call
+  answering a fixed JSON rubric. It exits 0 whatever the table says, because a retro is a
+  measurement and not a gate; the report lands in `.sirdar/eval/<ts>-retro.json` and the Eval
+  screen's Retro section reads the last one (`docs/eval.md`).
 - Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory

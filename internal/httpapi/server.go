@@ -88,6 +88,7 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/eval", s.startEval)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/eval", s.evalReports)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/eval/retro/latest", s.latestRetro)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/golden", s.golden)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)

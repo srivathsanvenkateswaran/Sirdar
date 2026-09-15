@@ -222,6 +222,16 @@ type EvalOptions struct {
 	Provider    string `json:"provider"`
 	Model       string `json:"model"`
 	Concurrency int    `json:"concurrency"`
+
+	// Retro replays each key at the commit its fix branched from and
+	// scores what comes back against the pull request that fixed it,
+	// rather than against the assertions a human wrote. Only the golden
+	// keys carrying a retro.json can be replayed this way.
+	Retro bool `json:"retro"`
+	// WithRCA adds the blind RCA stage to a retro, and Rubric the one
+	// judged provider call. Both are ignored without Retro.
+	WithRCA bool `json:"withRca"`
+	Rubric  bool `json:"rubric"`
 }
 
 // JobOutcome is one key's result in a finished job.

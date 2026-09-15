@@ -3,6 +3,7 @@ import type {
   Check,
   ConfigSummary,
   EvalReport,
+  RetroReport,
   GoldenEntry,
   Quota,
   RegisterRow,
@@ -103,6 +104,7 @@ export function createFakeTransport(seed: {
   quota?: Quota[]
   golden?: GoldenEntry[]
   reports?: EvalReport[]
+  retro?: RetroReport | null
   configSummary?: ConfigSummary
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
@@ -177,6 +179,7 @@ export function createFakeTransport(seed: {
       return { jobId: 'job-eval' }
     },
     evalReports: async () => seed.reports ?? ([] as EvalReport[]),
+    latestRetro: async () => seed.retro ?? null,
     golden: async () => seed.golden ?? ([] as GoldenEntry[]),
     addGolden: async (ws, o) => {
       calls.addGolden.push({ ws, ...o })
