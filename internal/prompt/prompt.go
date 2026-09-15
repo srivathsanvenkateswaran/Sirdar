@@ -73,11 +73,11 @@ const auditRuleLine = "Audit rule: fill only what the PR or the resolution text 
 // triageFieldGuidance gives one sentence of guidance per top-level field of
 // the triage schema, drawn from the spec's field descriptions.
 var triageFieldGuidance = []string{
-	"ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead.",
+	"ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead, or null when there are none.",
 	"title is a one-line summary of the issue.",
 	"complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.",
-	"complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.",
-	"customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date.",
+	"complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; null only when the complaint was already written in the note's language.",
+	"customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date; null when a reply draft does not apply.",
 
 	"timeline lists each event with its time, role, and summary, including what L1 already told the customer.",
 	"reproSteps lists the steps that reproduce the issue.",
@@ -94,7 +94,7 @@ var triageFieldGuidance = []string{
 var rcaFieldGuidance = []string{
 	"rca.title is a one-line title for the root cause analysis.",
 	"rca.summary is 3 to 5 sentences a manager can read alone.",
-	"rca.customerSummary is what happened and what was done, as {language, text} in the customer's language, for the support agent to relay; it states what is already true and promises nothing further.",
+	"rca.customerSummary is what happened and what was done, as {language, text} in the customer's language, for the support agent to relay; it states what is already true and promises nothing further, or null when there is nothing to relay yet.",
 
 	"rca.impact states customers affected, records affected, financial impact, first occurrence, detection, and time to detect.",
 	"rca.timeline lists each event with its time and the evidence for it.",

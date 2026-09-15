@@ -17,10 +17,11 @@ Rules:
 7. Translate faithfully into the note's language: preserve tone and urgency, and quote the
    original wording where the exact phrase matters. Keep the customer's own text as well as
    the translation — put it in `complaintOriginal`, verbatim, in the language it was written
-   in. Write anything the customer will read (a reply draft, a summary the support agent
-   relays) in the customer's language, and invent no commitments in it: no fix, no cause, no
-   date, no compensation, nothing the ticket does not already record as promised. A polite
-   acknowledgement that the issue is being looked into is the most it may offer.
+   in; null only when the complaint was already written in the note's language. Write anything
+   the customer will read (a reply draft, a summary the support agent relays) in the customer's
+   language, and invent no commitments in it: no fix, no cause, no date, no compensation,
+   nothing the ticket does not already record as promised. A polite acknowledgement that the
+   issue is being looked into is the most it may offer.
 8. Every segment of a Bash command is checked against the allow-list separately, so a
    pipeline or a compound command is allowed only if `rg foo`, `head -50` and everything
    else between `|`, `&&` and `;` are each allowed on their own.

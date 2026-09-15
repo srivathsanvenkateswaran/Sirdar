@@ -8,10 +8,13 @@
     "priority": "high",
     "service": "omni",
     "customer": "شركة",
-    "customerId": "4561"
+    "customerId": "4561",
+    "customerIds": null
   },
   "title": "Export fails for large orders",
   "complaint": "The customer reports that exporting an order does nothing and no file arrives.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [
     { "at": "2026-09-10T08:30:00+03:00", "role": "customer", "summary": "Reported that the export does not work." },
     { "at": "2026-09-10T09:30:00+03:00", "role": "agent", "summary": "L1 told the customer they would check." }
