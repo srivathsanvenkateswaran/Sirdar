@@ -1,0 +1,11 @@
+// OpenCode sends available_commands_update once per turn carrying the
+// host's whole skill catalogue, description and all. Four entries here
+// stand in for the 31 the live capture had.
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"opencode","version":"1.2.0"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-k"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-k","update":{"sessionUpdate":"available_commands_update","availableCommands":[{"name":"claude-usage-dashboard","description":"Build a modern, interactive dashboard of the user's own Claude Code token and cost usage from local logs, parsed with ccusage. LONG-DESCRIPTION-MARKER."},{"name":"customize-opencode","description":"Use ONLY when the user is editing or creating opencode's own configuration."},{"name":"find-skills","description":"Helps users discover and install agent skills."},{"name":"unslop","description":"Remove AI writing patterns from prose."}]}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-k","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Commanded\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

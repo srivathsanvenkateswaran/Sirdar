@@ -1,6 +1,7 @@
 package run
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -1527,6 +1528,94 @@ func TestRetriageOverwritesTheKeysNote(t *testing.T) {
 	// With nothing filed, the run keeps its own copy of the note.
 	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// TestArchivedNoteDoesNotBlockFiling: a vault keeps old notes, and the
+// place it keeps them is a folder inside the notes directory. Walking that
+// directory recursively found `notes/previous/OMNI-1 ….md`, read its
+// `resolved` status and refused to file this run's note at all — the run
+// passed, the note landed only in the run directory, and the operator got
+// one warning buried in the state file. A note lives at the configured
+// filename pattern, so that is the only directory the lookup reads.
+func TestArchivedNoteDoesNotBlockFiling(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	notesDir := filepath.Join(cfg.Root, "notes")
+	archive := filepath.Join(notesDir, "previous")
+	if err := os.MkdirAll(archive, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	archived := filepath.Join(archive, "OMNI-1 export-fails-for-large-orders.md")
+	if err := os.WriteFile(archived, []byte("---\ntags: [triage]\nstatus: resolved\n---\n\n# Last quarter\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+
+	notePath := filepath.Join(notesDir, "OMNI-1 export-fails-for-large-orders.md")
+	if _, err := os.Stat(notePath); err != nil {
+		t.Fatalf("the note was not filed beside the archive: %v", err)
+	}
+	if body := readFile(t, archived); !strings.Contains(body, "# Last quarter") {
+		t.Fatalf("the archived note was rewritten:\n%s", body)
+	}
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, "previous") {
+			t.Errorf("the archived note was treated as this key's note: %q", w)
+		}
+	}
+}
+
+// TestRefusedFilingIsSaidAtTheEndOfTheRun: the one warning that decides
+// where a run's note is readable has to reach the operator's terminal, not
+// only the state file. It names the note and the status that stopped it.
+func TestRefusedFilingIsSaidAtTheEndOfTheRun(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+	var progress bytes.Buffer
+	r.Stderr = &progress
+
+	notePath := filepath.Join(cfg.Root, "notes", "OMNI-1 export-fails-for-large-orders.md")
+	if err := os.MkdirAll(filepath.Dir(notePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(notePath, []byte("---\ntags: [triage]\nstatus: resolved\n---\n\n# Human's own note\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if body := readFile(t, notePath); !strings.Contains(body, "# Human's own note") {
+		t.Fatalf("the resolved note was overwritten:\n%s", body)
+	}
+	said := progress.String()
+	if !strings.Contains(said, notePath) || !strings.Contains(said, `"resolved"`) {
+		t.Errorf("the run said %q, want a line naming %s and its status", said, notePath)
+	}
+	if !strings.Contains(said, "warning") {
+		t.Errorf("the line does not read as a warning: %q", said)
+	}
+	warned := false
+	for _, w := range out.State.Warnings {
+		if strings.Contains(w, notePath) && strings.Contains(w, `"resolved"`) {
+			warned = true
+		}
+	}
+	if !warned {
+		t.Errorf("the refusal was not recorded on the run: %v", out.State.Warnings)
 	}
 }
 

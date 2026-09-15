@@ -483,6 +483,53 @@ func TestGitFlagsArePositionScoped(t *testing.T) {
 	}
 }
 
+// TestInertGlobalGitFlagsDoNotBreakTheMatch: an agent that has learnt to
+// write `git --no-pager diff` — every coding agent has, because a pager on
+// a pipe hangs the turn — was being refused by a workspace that allow-lists
+// `git diff*`, since the flag sits between the two words the pattern
+// spells. Those flags change how git prints and nothing about what it
+// reads or writes, so they come off before the segment is matched.
+func TestInertGlobalGitFlagsDoNotBreakTheMatch(t *testing.T) {
+	root := t.TempDir()
+	allow := []string{"git diff*", "git log*"}
+
+	for _, cmd := range []string{
+		"git --no-pager diff -- x",
+		"git --no-optional-locks diff --stat",
+		"git --no-pager --no-optional-locks log --oneline",
+		"git -c color.ui=false diff",
+		"git -c color.ui=never --no-pager log -1",
+		"git -c core.pager=cat diff HEAD~1",
+		"git -ccolor.ui=false diff",
+	} {
+		if ok, reason := MatchCommand(root, allow, cmd); !ok {
+			t.Errorf("MatchCommand refused %q: %s", cmd, reason)
+		}
+	}
+
+	// What must still fail, because each of these does change what the
+	// command does: a different repository, a different work tree, a
+	// config key that is not cosmetic, and a pager that is a program.
+	for _, cmd := range []string{
+		"git -C /tmp diff",
+		"git --git-dir=/tmp/x diff",
+		"git --work-tree=/tmp/x diff",
+		"git -c core.hooksPath=x diff",
+		"git -c core.pager=evil diff",
+		"git -c color.ui=$(id) diff",
+	} {
+		if ok, _ := MatchCommand(root, allow, cmd); ok {
+			t.Errorf("MatchCommand allowed %q", cmd)
+		}
+	}
+
+	// The normalisation is git's alone: another program's identically
+	// spelled flag is still part of the segment that has to match.
+	if ok, _ := MatchCommand(root, []string{"hub diff*"}, "hub --no-pager diff"); ok {
+		t.Error("MatchCommand stripped --no-pager from a command that is not git")
+	}
+}
+
 // TestHooksPathReadsTheRepositoryConfiguration is the per-run half of the
 // reservation: where the directory comes from.
 func TestHooksPathReadsTheRepositoryConfiguration(t *testing.T) {

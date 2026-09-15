@@ -51,6 +51,12 @@ type prepared struct {
 	service  string
 	notePath string
 
+	// noteRefused says the notes directory already held this key's triage
+	// note with a status a person had moved on, so nothing was filed and
+	// the run's note is readable only in the run directory. It is said
+	// again when the run ends, where an operator will see it.
+	noteRefused string
+
 	// rca runs only: the triage note under review, the copy of it in the
 	// notes directory (may be empty), and the wiki-link stem of that copy.
 	triageNotePath string

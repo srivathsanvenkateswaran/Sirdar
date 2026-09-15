@@ -1,0 +1,12 @@
+// OpenCode's live session/new reply (2026-09-15): no `modes` block at all,
+// and the session mode is one entry of `configOptions` instead. The model
+// option beside it is trimmed to two values; everything else is verbatim.
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"opencode","version":"1.2.0"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-c","configOptions":[{"id":"model","name":"Model","category":"model","type":"select","currentValue":"opencode/big-pickle","options":[{"value":"opencode/big-pickle","name":"OpenCode Zen/Big Pickle"},{"value":"opencode/claude-opus-5","name":"OpenCode Zen/Claude Opus 5"}]},{"id":"mode","name":"Session Mode","category":"mode","type":"select","currentValue":"build","options":[{"value":"build","name":"build","description":"The default agent. Executes tools based on configured permissions."},{"value":"plan","name":"plan","description":"Plan mode. Disallows all edit tools."}]}]}}
+{"$expect":"session/set_config_option"}
+{"$reply":{}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-c","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Config moded\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

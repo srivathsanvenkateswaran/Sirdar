@@ -1066,16 +1066,74 @@ func TestEmptyFinalSaysTheTurnEndedWithoutAnAnswer(t *testing.T) {
 		t.Fatalf("Wait: %v", err)
 	}
 
+	// While the turn was ending it was a warning — nothing had yet said
+	// the run would not recover. Nothing did, so the run also carries the
+	// error.
+	if !systemText(evs, emptyTurnText) {
+		t.Errorf("the empty turn was not warned about; system events = %+v", only(evs, provider.EvSystem))
+	}
 	errs := only(evs, provider.EvError)
 	if len(errs) != 1 {
 		t.Fatalf("error events: %+v", errs)
 	}
-	if errs[0].Text != "acp: the agent ended the turn without an answer" {
+	if errs[0].Text != emptyTurnText {
 		t.Fatalf("error text %q", errs[0].Text)
 	}
 	finals := only(evs, provider.EvFinal)
 	if len(finals) != 1 || strings.TrimSpace(finals[0].Text) != "" || len(finals[0].Final) != 0 {
 		t.Fatalf("final events: %+v", finals)
+	}
+}
+
+// TestEmptyTurnsAreWarningsOnceTheRunRecovers: Copilot ended two turns
+// with nothing to say before answering properly on the third. The run
+// passed and filed a good note, and used to carry two EvError lines for
+// it — which a person reading the run afterwards has to explain away. An
+// empty turn is only an error if it is how the run ends.
+func TestEmptyTurnsAreWarningsOnceTheRunRecovers(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-empty-then-final.jsonl", cwd, nil)
+
+	var (
+		final    json.RawMessage
+		warnings int
+		errTexts []string
+	)
+	for ev := range sess.Events() {
+		switch ev.Kind {
+		case provider.EvSystem:
+			if ev.Text == emptyTurnText {
+				warnings++
+			}
+		case provider.EvError:
+			errTexts = append(errTexts, ev.Text)
+		case provider.EvFinal:
+			if len(ev.Final) > 0 {
+				final = ev.Final
+				continue
+			}
+			// The runner's own answer to a note that did not validate.
+			if err := sess.Send(context.Background(), "Reply with the JSON object only."); err != nil {
+				t.Errorf("Send: %v", err)
+			}
+		}
+	}
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	if len(errTexts) != 0 {
+		t.Errorf("a run that recovered carries error events: %v", errTexts)
+	}
+	if warnings != 2 {
+		t.Errorf("empty-turn warnings = %d, want 2", warnings)
+	}
+	if string(final) != `{"title":"Third time","ok":true}` {
+		t.Errorf("final = %s", final)
+	}
+	if string(res.Final) != string(final) {
+		t.Errorf("Result.Final = %s", res.Final)
 	}
 }
 
@@ -1162,6 +1220,49 @@ func TestReadOnlyRunSelectsThePlanMode(t *testing.T) {
 	}
 }
 
+// TestModeIDsThatAreURLsAreMatchedOnTheirLastSegment: Copilot's mode ids
+// are URLs into the ACP session-modes page
+// (`…/session-modes#plan`), so an adapter that only compares whole ids
+// finds no read-only mode in a list that plainly has one. The id sent back
+// is still the agent's own, verbatim — it is the only string
+// session/set_mode accepts.
+func TestModeIDsThatAreURLsAreMatchedOnTheirLastSegment(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-modes-url.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	const plan = "https://agentclientprotocol.com/protocol/session-modes#plan"
+	if got := modeSent(t, res); got != plan {
+		t.Errorf("session/set_mode modeId = %q, want %q", got, plan)
+	}
+	if !systemText(evs, "acp mode "+plan+" selected for this read-only session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestConfiguredModeIsResolvedToTheAgentsOwnID: acp.mode is written by a
+// person, so it is the bare word even where the agent's id is a URL. The
+// adapter has to send the agent's id, not the word.
+func TestConfiguredModeIsResolvedToTheAgentsOwnID(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{Mode: "autopilot"}, "script-modes-url.jsonl", cwd, nil)
+
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	const autopilot = "https://agentclientprotocol.com/protocol/session-modes#autopilot"
+	if got := modeSent(t, res); got != autopilot {
+		t.Errorf("session/set_mode modeId = %q, want %q", got, autopilot)
+	}
+}
+
 // TestFixRunSelectsAnEditMode is the other half: a fix session may write,
 // so it must not be put in the mode that refuses to.
 func TestFixRunSelectsAnEditMode(t *testing.T) {
@@ -1198,6 +1299,102 @@ func TestConfiguredModeOverridesTheChoice(t *testing.T) {
 	}
 }
 
+// configOptionSet returns the configId and value the provider asked for on
+// session/set_config_option, or two empty strings when it sent none.
+func configOptionSet(t *testing.T, res provider.Result) (string, string) {
+	t.Helper()
+	for _, line := range stderrLines(t, res) {
+		rest, ok := strings.CutPrefix(line, "STDIN: ")
+		if !ok {
+			continue
+		}
+		var msg inbound
+		if err := json.Unmarshal([]byte(rest), &msg); err != nil || msg.Method != "session/set_config_option" {
+			continue
+		}
+		var params struct {
+			ConfigID string `json:"configId"`
+			Value    string `json:"value"`
+		}
+		if err := json.Unmarshal(msg.Params, &params); err != nil {
+			t.Fatalf("session/set_config_option params: %v", err)
+		}
+		return params.ConfigID, params.Value
+	}
+	return "", ""
+}
+
+// TestReadOnlyRunSelectsPlanThroughAConfigOption: OpenCode advertises no
+// availableModes at all — its session mode is one entry of the
+// session/new reply's configOptions, set with session/set_config_option
+// rather than session/set_mode. A read-only run has to find `plan` there
+// too, or it runs in `build`, which executes tools.
+func TestReadOnlyRunSelectsPlanThroughAConfigOption(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-config-option-mode.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	id, value := configOptionSet(t, res)
+	if id != "mode" || value != "plan" {
+		t.Errorf("session/set_config_option configId=%q value=%q, want mode/plan", id, value)
+	}
+	if got := modeSent(t, res); got != "" {
+		t.Errorf("session/set_mode was sent (%q) to an agent that advertised no modes", got)
+	}
+	methods := sentMethods(t, res)
+	set, prompt := indexOf(methods, "session/set_config_option"), indexOf(methods, "session/prompt")
+	if set < 0 || prompt < 0 || set > prompt {
+		t.Errorf("methods = %v, want session/set_config_option before session/prompt", methods)
+	}
+	if !systemText(evs, "acp mode plan selected for this read-only session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+	if systemText(evs, "offers no session modes") {
+		t.Errorf("the no-modes notice was emitted for an agent whose modes are a config option")
+	}
+}
+
+// TestFixRunSelectsBuildThroughAConfigOption is the other half: the mode a
+// fix session needs is OpenCode's `build`, the one that may execute tools.
+func TestFixRunSelectsBuildThroughAConfigOption(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{}, "script-config-option-mode.jsonl", cwd, fixPolicy(cwd))
+
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	id, value := configOptionSet(t, res)
+	if id != "mode" || value != "build" {
+		t.Errorf("session/set_config_option configId=%q value=%q, want mode/build", id, value)
+	}
+	if !systemText(evs, "acp mode build selected for this fix session") {
+		t.Errorf("the chosen mode was not recorded; system events = %+v", only(evs, provider.EvSystem))
+	}
+}
+
+// TestConfiguredModeOverridesAConfigOptionValue: acp.mode is the escape
+// hatch on this path too.
+func TestConfiguredModeOverridesAConfigOptionValue(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawnWith(t, Config{Mode: "build"}, "script-config-option-mode.jsonl", cwd, nil)
+
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if _, value := configOptionSet(t, res); value != "build" {
+		t.Errorf("session/set_config_option value = %q, want the configured build", value)
+	}
+}
+
 // TestAgentWithNoModesIsSaidOnce: most ACP agents expose no modes at all,
 // and the run should say so rather than pretending a mode was set.
 func TestAgentWithNoModesIsSaidOnce(t *testing.T) {
@@ -1230,6 +1427,51 @@ func indexOf(values []string, want string) int {
 		}
 	}
 	return -1
+}
+
+// TestAvailableCommandsAreSummarisedNotStored: OpenCode re-sends the host's
+// whole slash-command catalogue on every update — 31 entries with their
+// descriptions, about 15 KiB a time — and the event log kept every byte of
+// it, which is how one run finished with 1300-odd system events. The run
+// needs to know the catalogue changed and roughly what is in it; it does
+// not need the bodies.
+func TestAvailableCommandsAreSummarisedNotStored(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-commands.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	var found provider.Event
+	for _, ev := range only(evs, provider.EvSystem) {
+		if strings.Contains(ev.Text, "available commands") {
+			if found.Text != "" {
+				t.Fatalf("more than one summary: %q and %q", found.Text, ev.Text)
+			}
+			found = ev
+		}
+	}
+	if found.Text == "" {
+		t.Fatalf("no summary; system events = %+v", only(evs, provider.EvSystem))
+	}
+	for _, want := range []string{"4", "claude-usage-dashboard", "customize-opencode", "find-skills"} {
+		if !strings.Contains(found.Text, want) {
+			t.Errorf("summary %q does not name %q", found.Text, want)
+		}
+	}
+	// The fourth name and every description stay off the event.
+	if strings.Contains(found.Text, "unslop") {
+		t.Errorf("summary %q lists more than the first three names", found.Text)
+	}
+	whole := found.Text + string(found.Raw)
+	if strings.Contains(whole, "LONG-DESCRIPTION-MARKER") {
+		t.Errorf("a command body was stored on the event: %s", whole)
+	}
+	if len(found.Raw) > 512 {
+		t.Errorf("the summary's raw payload is %d bytes: %s", len(found.Raw), found.Raw)
+	}
 }
 
 // --- tool calls nobody approved ---

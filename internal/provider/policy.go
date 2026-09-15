@@ -439,7 +439,12 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 	if len(segments) == 0 {
 		return false, "empty command"
 	}
-	for _, segment := range segments {
+	for _, original := range segments {
+		// The inert global git flags come off first, so every check below
+		// — the flag denials as much as the allow-list itself — reads the
+		// command git will actually carry out. The operator's own text is
+		// what a denial quotes back, because that is what they wrote.
+		segment := normaliseGitFlags(original)
 		if construct := ShellConstruct(segment); construct != "" {
 			return false, quote(segment) + " uses " + construct +
 				"; a read-only run allows no redirection or " +
@@ -462,7 +467,7 @@ func MatchCommand(root string, allow []string, command string, extraReserved ...
 			}
 		}
 		if !matched {
-			return false, quote(segment) + " is not in the allow-list; " +
+			return false, quote(original) + " is not in the allow-list; " +
 				"every segment of a pipeline or compound command has to match"
 		}
 		if escape := escapesRoot(root, extraReserved, segment); escape != "" {
@@ -688,6 +693,114 @@ func gitDenial(segment string) string {
 	return ""
 }
 
+// inertGitFlags are git's own global options that change how it prints and
+// nothing about what it reads, writes or runs. --no-pager is the one every
+// coding agent has learnt to pass, because git's pager on a pipe hangs the
+// turn; --no-optional-locks is what a read-only probe passes so it does not
+// touch the index.
+var inertGitFlags = map[string]bool{
+	"--no-pager":          true,
+	"--no-optional-locks": true,
+}
+
+// inertGitConfig reports whether a `-c key=value` pair is one of the
+// cosmetic settings, which is a much narrower question than whether the key
+// is cosmetic. `core.pager` names a program git will run, so only the two
+// values that run no program at all are inert; `color.ui` only takes git's
+// own colour words, and anything else under either key keeps the -c that
+// gitDenial then refuses.
+func inertGitConfig(pair string) bool {
+	key, value, ok := strings.Cut(pair, "=")
+	if !ok {
+		return false
+	}
+	switch strings.ToLower(key) {
+	case "color.ui":
+		switch strings.ToLower(value) {
+		case "false", "true", "never", "always", "auto":
+			return true
+		}
+	case "core.pager":
+		return value == "cat" || value == ""
+	}
+	return false
+}
+
+// normaliseGitFlags removes the inert global flags from a git segment, so
+// that `git --no-pager diff -- x` is matched against the allow-list as
+// `git diff -- x` and a workspace that allow-listed `git diff*` gets what
+// it asked for. Everything else is left exactly where it stood, including
+// the flags that do change what the command does: -C, --git-dir and
+// --work-tree point git at another repository, so they stay in the segment
+// and fail the match (and gitDenial) as before.
+//
+// The removal is by byte range rather than by re-joining tokens, so a
+// segment with nothing to strip comes back identical and one that is
+// stripped keeps its quoting, spacing and everything after the subcommand.
+func normaliseGitFlags(segment string) string {
+	toks := spanTokens(segment)
+	i := 0
+	if i < len(toks) && (toks[i].text == "env" || strings.HasSuffix(toks[i].text, "/env")) {
+		i++
+	}
+	for i < len(toks) {
+		if _, _, ok := envAssignment(toks[i].text); !ok {
+			break
+		}
+		i++
+	}
+	if i >= len(toks) || !isGit(toks[i].text) {
+		return segment
+	}
+
+	var drop []tokenSpan
+	for j := i + 1; j < len(toks); j++ {
+		tok := toks[j].text
+		if !strings.HasPrefix(tok, "-") {
+			break // the subcommand: git takes no global options after it
+		}
+		switch {
+		case inertGitFlags[tok]:
+			drop = append(drop, toks[j])
+		case tok == "-c":
+			// -c always takes the next token, inert or not; skipping it
+			// either way keeps a config pair from being read as the
+			// subcommand.
+			if j+1 < len(toks) {
+				if inertGitConfig(toks[j+1].text) {
+					drop = append(drop, toks[j], toks[j+1])
+				}
+				j++
+			}
+		case strings.HasPrefix(tok, "-c") && inertGitConfig(tok[2:]):
+			drop = append(drop, toks[j])
+		}
+	}
+	if len(drop) == 0 {
+		return segment
+	}
+	return cutSpans(segment, drop)
+}
+
+// cutSpans removes the given byte ranges from s, together with the
+// whitespace in front of each, leaving one separator between what is left.
+// The spans must be in order and must not overlap, which is how
+// normaliseGitFlags collects them.
+func cutSpans(s string, spans []tokenSpan) string {
+	var b strings.Builder
+	prev := 0
+	for _, span := range spans {
+		start := span.start
+		for start > prev && isBlank(s[start-1]) {
+			start--
+		}
+		b.WriteString(s[prev:start])
+		prev = span.end
+	}
+	b.WriteString(s[prev:])
+	return b.String()
+}
+
 // envAssignment reports whether tok has the NAME=value shape a shell
 // accepts in front of a program name — an identifier (letters, digits and
 // underscore, not starting with a digit) followed by "=" — and, when it
@@ -798,18 +911,44 @@ func withinRoot(root, path string) bool {
 // with their quotes removed, which is as much of the shell's own word
 // splitting as a policy needs to see the paths in a command.
 func argTokens(segment string) []string {
+	spans := spanTokens(segment)
+	out := make([]string, 0, len(spans))
+	for _, span := range spans {
+		out = append(out, span.text)
+	}
+	return out
+}
+
+// tokenSpan is one argument of a segment: its unquoted text, and the byte
+// range of the segment it came from, so an edit can put the segment back
+// together without re-quoting anything.
+type tokenSpan struct {
+	text  string
+	start int
+	end   int
+}
+
+// spanTokens is argTokens with the offsets kept.
+func spanTokens(segment string) []tokenSpan {
 	var (
-		out   []string
+		out   []tokenSpan
 		cur   strings.Builder
 		quote = byte(0)
 		open  bool
+		start int
 	)
-	flush := func() {
+	flush := func(end int) {
 		if open {
-			out = append(out, cur.String())
+			out = append(out, tokenSpan{text: cur.String(), start: start, end: end})
 		}
 		cur.Reset()
 		open = false
+	}
+	begin := func(i int) {
+		if !open {
+			start = i
+			open = true
+		}
 	}
 	for i := 0; i < len(segment); i++ {
 		ch := segment[i]
@@ -819,23 +958,23 @@ func argTokens(segment string) []string {
 				quote = 0
 				continue
 			}
+			begin(i)
 			cur.WriteByte(ch)
-			open = true
 		case ch == '\'' || ch == '"':
+			begin(i)
 			quote = ch
-			open = true
 		case ch == '\\' && i+1 < len(segment):
+			begin(i)
 			i++
 			cur.WriteByte(segment[i])
-			open = true
 		case ch == ' ' || ch == '\t':
-			flush()
+			flush(i)
 		default:
+			begin(i)
 			cur.WriteByte(ch)
-			open = true
 		}
 	}
-	flush()
+	flush(len(segment))
 	return out
 }
 

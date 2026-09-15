@@ -130,9 +130,14 @@ triage notes under `Triage/`, and `RCA/{key} RCA {slug}.md` / `Resolutions/{key}
 do the same for RCA and resolution notes. Sirdar creates any missing subdirectory when it writes
 the note. A segment that is empty (including the one a leading `/` produces) or exactly `..` is
 dropped rather than followed, so a pattern can't write outside `notes.dir`; re-triage still finds
-and overwrites a triage note filed this way, searching `notes.dir` recursively (skipping
-dot-directories such as `.obsidian`) for a match by key and frontmatter tag rather than by exact
-path. `provider`, `billing`, and `concurrency` are validated at load time: an unrecognised
+and overwrites a triage note filed this way, matching by key and frontmatter tag rather than by
+exact path. That lookup reads one directory — the one the pattern itself names — and does not
+descend into it. A vault keeps its old notes in a folder, and `notes/previous/OMNI-1 ….md` used
+to be found, read for its status and taken as reason to file nothing at all. When a note *is*
+found there with a status a person has moved on from, the run leaves it alone as before, keeps
+its own copy in the run directory, and says so on its last line: `[KEY] warning <path> has
+status "resolved" and was left unchanged; this run's note was not filed`. The same line is
+recorded on the run. `provider`, `billing`, and `concurrency` are validated at load time: an unrecognised
 `provider` or `billing` value, or a `concurrency` below 1, fails config load with a message
 naming the offending key. Budget values must all be greater than zero. A configured source's
 adapter-specific fields are required only for that adapter; `sources.tracker` and
@@ -750,6 +755,18 @@ appear:
   core.hooksPath=/tmp/h status` installs a hook directory for every git command that follows and
   is refused, while `git grep -c foo` (counts matches) and `git rev-parse --git-dir` (prints a
   path) reuse the same short flag after the subcommand for an unrelated meaning and are allowed.
+
+Four global git options go the other way and are taken *off* the command before it is matched at
+all, because they change how git prints and nothing about what it reads, writes or runs:
+`--no-pager`, `--no-optional-locks`, and `-c color.ui=…` / `-c core.pager=…` for the values that
+run no program (git's own colour words, and `cat` or nothing for the pager). Every coding agent
+has learnt to type `git --no-pager diff`, since git's pager on a pipe hangs the turn, and a
+workspace that allow-listed `git diff*` was refusing it over a word in the middle. So `git
+--no-pager diff -- x` is matched as `git diff -- x`, and `git -c color.ui=false log` as `git
+log`. Nothing else is stripped: `-C`, `--git-dir` and `--work-tree` point git at a different
+repository, `-c core.hooksPath=…` installs a hook, and `-c core.pager=evil` names a program to
+run — each stays in the command and is refused by the rules above. The denial an operator reads
+quotes the command they actually wrote.
 
 A `GIT_*` environment variable reaches the same configuration as those flags — `GIT_DIR`,
 `GIT_WORK_TREE` and the rest — so an assignment naming one is refused wherever it appears ahead
@@ -2156,8 +2173,8 @@ So Sirdar selects one:
 
 - a **triage or rca** session takes the first of `plan`, `read-only`, `readonly`, `read_only`,
   `ask` the agent offers;
-- a **`sirdar fix`** session takes the first of `default`, `edit`, since it has to be able to
-  write;
+- a **`sirdar fix`** session takes the first of `default`, `edit`, `build`, since it has to be
+  able to write;
 - **`acp.mode`** overrides both, for an agent whose read-only mode is spelled something else.
   An id the agent does not offer is reported as an error and no mode is set.
 
@@ -2166,6 +2183,32 @@ session`), and it is sent even when the agent says it is already current, so the
 under was set by this client rather than inferred. An agent that offers no modes says so once,
 and an agent that offers modes but none Sirdar recognises names what it offered — that is the
 signal to set `acp.mode`.
+
+**A mode id may be a URL.** ACP mode ids are opaque strings, and GitHub Copilot's are links into
+the protocol's own documentation:
+`https://agentclientprotocol.com/protocol/session-modes#plan`, and likewise `#agent` and
+`#autopilot`. The words above are therefore matched against the last fragment or path segment of
+an id as well as against the whole of it, so Copilot's plan mode is found. What goes back on the
+wire is always the agent's own id, verbatim — it is the only string `session/set_mode` accepts —
+and that full id is what the system event names. `acp.mode` is matched the same way, so the bare
+word is what to write there.
+
+**Some agents have no modes and a config option instead.** ACP's newer session config-options
+mechanism is meant to replace session modes, and OpenCode has already moved: its `session/new`
+reply carries no `availableModes` at all, and the session mode is one entry of `configOptions`
+(`{id: "mode", category: "mode", currentValue: "build", options: [{value: "build"}, {value:
+"plan"}]}`). Where an agent lists no modes but offers a config option called `mode`, Sirdar
+picks from its values by the same words and sets it with `session/set_config_option`
+(`configId`, `value`) instead — `plan` for a triage or rca session, `build` for a `sirdar fix`
+one. An agent that exposes both is driven through `session/set_mode`, which is the older call
+and the one more captures confirm. Other config options — the model, the thinking tier — are
+left alone.
+
+Sirdar does not declare the `session.configOptions` client capability at `initialize`. OpenCode
+sends its config options regardless, which is the only agent this path has been read off; an
+agent that withholds them until the capability is declared would fall back to the "offers no
+session modes" notice. The value parameter's name is read off the protocol docs rather than
+watched on a live refusal, unlike `configId`, which a kimi capture confirmed by name.
 
 This is defence in depth, not the guarantee. The guarantee is still that every
 `session/request_permission` is answered by the run's permission policy.

@@ -500,6 +500,14 @@ func (r *Runner) finish(ctx context.Context, p *prepared, status store.Status, r
 		}
 	}
 
+	// Last line of the run, after the progress view and whatever the
+	// status write had to say. A note that did not reach the notes
+	// directory is the one warning that changes where a person has to go
+	// looking, and it was only ever written into the state file.
+	if p.noteRefused != "" {
+		fmt.Fprintf(r.stderr(), "[%s] warning %s\n", p.state.Key, p.noteRefused)
+	}
+
 	row.Key = p.state.Key
 	row.State = string(status)
 	row.RunID = p.state.RunID
