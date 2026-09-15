@@ -1102,7 +1102,8 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 		t.Fatalf("fixBash = %v, want the default list", cfg.Permissions.FixBash)
 	}
 	for _, want := range []string{"git status*", "git diff*", "git log*", "git show*", "git grep*", "git blame*",
-		"dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
+		"dotnet build*", "dotnet test*", "npm test*", "npx tsc --noEmit*", "go build*", "go test*", "go vet*",
+		"gofmt -l*", "make *"} {
 		var found bool
 		for _, got := range cfg.Permissions.FixBash {
 			if got == want {
@@ -1130,7 +1131,8 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 		}
 	}
 	for _, wanted := range []string{"git status --porcelain", "git diff HEAD", "git log --oneline -20",
-		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./..."} {
+		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./...",
+		"go vet ./...", "gofmt -l .", "npx tsc --noEmit"} {
 		if ok, reason := provider.MatchCommand("", cfg.Permissions.FixBash, wanted); !ok {
 			t.Errorf("the default fixBash list refuses %q: %s", wanted, reason)
 		}

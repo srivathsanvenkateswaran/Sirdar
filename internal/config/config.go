@@ -252,8 +252,11 @@ var DefaultFixBash = []string{
 	"dotnet build*",
 	"dotnet test*",
 	"npm test*",
+	"npx tsc --noEmit*",
 	"go build*",
 	"go test*",
+	"go vet*",
+	"gofmt -l*",
 	"make *",
 }
 
