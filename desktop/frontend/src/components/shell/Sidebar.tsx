@@ -5,6 +5,7 @@ import type { Screen } from '../../store/appStore'
 import Button from '../../ui/button'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
 import SidebarNavItem from '../../ui/sidebar-nav-item'
+import { STATUS_WORDS } from '../../ui/status-badge'
 import QuotaMeter from '../QuotaMeter'
 import {
   BoardIcon,
@@ -88,8 +89,9 @@ function rowOf(screen: Screen): NavName {
  *
  * A row is the key in the ledger face and the kind beside it, with a dot that
  * says only whether the run is live or waiting on a person: the two states a
- * reader would open a session for. Everything else about a run is on the
- * board and in the session itself.
+ * reader would open a session for. The accessible name says the same two in
+ * the badge's own words, and the ticket's title is the row's tooltip.
+ * Everything else about a run is on the board and in the session itself.
  */
 function RecentSessions({
   runs,
@@ -108,13 +110,15 @@ function RecentSessions({
       {recent.map((run) => {
         const live = run.status === 'preparing' || run.status === 'running'
         const blocked = run.status === 'blocked'
+        const word = live || blocked ? `, ${STATUS_WORDS[run.status].toLowerCase()}` : ''
         return (
           <button
             key={run.runId}
             type="button"
             className="sd-recent-row"
             aria-current={run.runId === currentRunId ? 'page' : undefined}
-            aria-label={`${run.key} ${run.kind}${live ? ', running' : blocked ? ', needs input' : ''}`}
+            aria-label={`${run.key} ${run.kind}${word}`}
+            title={run.title || undefined}
             onClick={() => onOpen(run.runId)}
           >
             <span

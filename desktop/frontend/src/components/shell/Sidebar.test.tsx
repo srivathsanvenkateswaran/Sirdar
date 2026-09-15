@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
 import { run } from '../../store/fakeTransport'
+import { STATUS_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
 import Sidebar, { recentRuns } from './Sidebar'
 
@@ -140,7 +141,14 @@ describe('the sidebar nav', () => {
 
 describe('recent sessions', () => {
   const runs = [
-    run({ runId: 'r1', key: 'OMNI-1', kind: 'triage', status: 'running', updatedAt: '2026-09-10T09:05:00Z' }),
+    run({
+      runId: 'r1',
+      key: 'OMNI-1',
+      kind: 'triage',
+      status: 'running',
+      title: 'Login loop after reset',
+      updatedAt: '2026-09-10T09:05:00Z',
+    }),
     run({ runId: 'r2', key: 'OMNI-2', kind: 'fix', status: 'blocked', updatedAt: '2026-09-10T09:04:00Z' }),
     run({ runId: 'r3', key: 'OMNI-3', kind: 'rca', status: 'completed', updatedAt: '2026-09-10T09:03:00Z' }),
     run({ runId: 'r4', key: 'OMNI-4', kind: 'triage', status: 'completed', updatedAt: '2026-09-10T09:02:00Z' }),
@@ -151,18 +159,29 @@ describe('recent sessions', () => {
     expect(recentRuns(runs.slice().reverse()).map((r) => r.runId)).toEqual(['r1', 'r2', 'r3', 'r4'])
   })
 
-  it('lists them with their key and kind, and says which is live or waiting', () => {
+  it('lists them with their key and kind, and says which is live or waiting in the badge’s words', () => {
     setShowLibrary(false)
     mount({ runs })
     const recent = screen.getByRole('navigation', { name: 'Recent sessions' })
     const rows = within(recent).getAllByRole('button')
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
-      'OMNI-1 triage, running',
-      'OMNI-2 fix, needs input',
+      `OMNI-1 triage, ${STATUS_WORDS.running.toLowerCase()}`,
+      `OMNI-2 fix, ${STATUS_WORDS.blocked.toLowerCase()}`,
       'OMNI-3 rca',
       'OMNI-4 triage',
     ])
     expect(within(recent).queryByText('OMNI-5')).toBeNull()
+  })
+
+  it('carries the ticket’s title as the row’s tooltip, when the run knows it', () => {
+    setShowLibrary(false)
+    mount({ runs })
+    const recent = screen.getByRole('navigation', { name: 'Recent sessions' })
+    expect(within(recent).getByRole('button', { name: /OMNI-1/ })).toHaveAttribute(
+      'title',
+      'Login loop after reset',
+    )
+    expect(within(recent).getByRole('button', { name: /OMNI-2/ })).not.toHaveAttribute('title')
   })
 
   it('marks the open run and opens another on click', () => {
