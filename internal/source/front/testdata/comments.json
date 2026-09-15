@@ -1,0 +1,31 @@
+{
+  "_pagination": {"next": null},
+  "_links": {"self": "https://api2.frontapp.com/conversations/cnv_1/comments"},
+  "_results": [
+    {
+      "_links": {"self": "https://api2.frontapp.com/comments/com_1"},
+      "id": "com_1",
+      "author": {
+        "id": "tea_grace",
+        "email": "grace@example.com",
+        "username": "grace",
+        "first_name": "Grace",
+        "last_name": "Hopper",
+        "type": "user"
+      },
+      "body": "Card processor is rate limiting us.",
+      "posted_at": 1788000900.378,
+      "is_pinned": true,
+      "attachments": [
+        {
+          "id": "fil_note",
+          "filename": "",
+          "url": "",
+          "content_type": "text/plain",
+          "size": 11,
+          "metadata": {"is_inline": false, "cid": ""}
+        }
+      ]
+    }
+  ]
+}

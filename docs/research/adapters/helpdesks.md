@@ -452,8 +452,8 @@ OAuth 2.0 for public/multi-tenant apps
   `assignee` (teammate object), `recipient` (contact handle + role), `tags`, `is_private`,
   `created_at`/`updated_at` (Unix), `ticket_ids`, `_links.related` pointers to `messages` and
   `comments` ([Conversations](https://dev.frontapp.com/reference/conversations)). No first-class
-  priority field confirmed — Front models urgency via tags/custom fields; needs a live-tenant
-  check.
+  priority field — confirmed absent from the schema, not just undocumented; see `front.md` for
+  the live-tenant-grade source.
 - Thread: Front deliberately splits the thread into two resources rather than one feed with a
   flag. `GET /conversations/{id}/messages` — customer-facing, externally sent/received content:
   `id`, `type`, `is_inbound` (bool), `is_draft`, `created_at`, `author`, `recipients`,
@@ -463,14 +463,16 @@ OAuth 2.0 for public/multi-tenant apps
   ([Messages](https://dev.frontapp.com/reference/messages),
   [Comments](https://dev.frontapp.com/reference/comments)). Sirdar's adapter merges both, sorts
   by timestamp, and maps `messages` with `is_inbound: true` → customer/public, `is_inbound:
-  false` → agent/public, all `comments` → agent/private. No documented `system` author — status-
-  change/assignment events live in a separate `events` sub-resource, not either feed
-  (**unverified** whether that's worth surfacing).
+  false` → agent/public, all `comments` → agent/private. The author-type enum (`front.md`)
+  confirms which outbound authors are Front acting on its own rather than a person, and that is
+  where the adapter's `system` role comes from; status-change/assignment events still live in a
+  separate `events` sub-resource, not either feed, and the adapter deliberately leaves that feed
+  unsurfaced (see `front.md`, "Not used").
 - Attachment: attachment objects carry a `url` (plus `metadata.cid` for inline images),
-  authenticated the same way as any other API call — no separate pre-signed/unauthenticated
-  scheme confirmed. Message-level file downloads also work via
-  `https://api2.frontapp.com/download/{file_id}`. The dedicated attachments schema page 404'd on
-  direct fetch — re-verify before finalizing.
+  authenticated the same way as any other API call — confirmed, not just pattern-matched from
+  other vendors: `front.md` cites Front's own "Download attachment" reference page, which
+  requires the bearer header and the `attachments:read` scope. Message-level file downloads also
+  work via `https://api2.frontapp.com/download/{file_id}`.
 
 **Pagination.** Cursor: `limit` (default 50, max 100), opaque `page_token`; response carries
 `_pagination.next` as a ready-to-use full URL or `null` — trust `next`, don't infer end-of-list
@@ -787,11 +789,12 @@ never a literal, per the existing rule in `docs/config.md`.
   `developer.salesforce.com` (this session's fetches were all blocked). `CaseComment.IsPublished`,
   `EmailMessage.Incoming`, the JWT-bearer-only auth guidance, and the rate-limit figures are all
   standard Salesforce platform knowledge but none were confirmed live here.
-- **Attachment-URL auth requirements are unconfirmed for three vendors**: Freshdesk/Freshservice
+- **Attachment-URL auth requirements are unconfirmed for two vendors**: Freshdesk/Freshservice
   (`attachment_url` — Basic-auth-protected or pre-signed?), HubSpot (`fileId`-derived URL —
-  Bearer-protected or pre-signed?), Front (message-level `url` — same question). Each is a
-  five-minute check against a trial/sandbox account and should happen before the corresponding
-  adapter ships, not be assumed from the pattern of other vendors.
+  Bearer-protected or pre-signed?). Each is a five-minute check against a trial/sandbox account
+  and should happen before the corresponding adapter ships, not be assumed from the pattern of
+  other vendors. Front's own version of this question is settled — see `front.md`, "Attachment
+  download is authenticated, not pre-signed".
 - **MCP servers are moving targets and not adapter-relevant either way.** Zendesk (announced May
   2026, client early access from June), HubSpot (beta since May 2025, a claimed April 2026 GA
   unconfirmed), Freshdesk/Freshservice (separate EAP programs), Intercom, Front, and Atlassian all
