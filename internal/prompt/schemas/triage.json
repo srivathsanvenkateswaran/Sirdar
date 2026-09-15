@@ -7,6 +7,8 @@
     "ticket",
     "title",
     "complaint",
+    "complaintOriginal",
+    "customerReplyDraft",
     "timeline",
     "reproSteps",
     "rootCause",
@@ -28,7 +30,8 @@
         "priority",
         "service",
         "customer",
-        "customerId"
+        "customerId",
+        "customerIds"
       ],
       "properties": {
         "key": { "type": "string" },
@@ -44,23 +47,31 @@
         },
         "customerId": { "type": "string" },
         "customerIds": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": { "type": "string" },
-          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer."
+          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer. Null when there are none."
         }
       }
     },
     "title": { "type": "string" },
     "complaint": { "type": "string" },
-    "complaintOriginal": { "type": "string" },
+    "complaintOriginal": {
+      "type": ["string", "null"],
+      "description": "Null when the complaint was already written in the note's language."
+    },
     "customerReplyDraft": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["language", "text"],
-      "properties": {
-        "language": { "type": "string", "minLength": 2 },
-        "text": { "type": "string" }
-      }
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["language", "text"],
+          "properties": {
+            "language": { "type": "string", "minLength": 2 },
+            "text": { "type": "string" }
+          }
+        },
+        { "type": "null" }
+      ]
     },
     "timeline": {
 

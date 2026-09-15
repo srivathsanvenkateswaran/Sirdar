@@ -20,9 +20,11 @@ import (
 // --- fixtures ---------------------------------------------------------
 
 const triageDoc = `{
-  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"Acme","customerId":"4561"},
+  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"Acme","customerId":"4561","customerIds":null},
   "title": "Export fails for large orders",
   "complaint": "The export fails for large orders.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [{"at":"2026-09-10T08:30:00+03:00","role":"customer","summary":"Reported the export failing."}],
   "reproSteps": ["Request a CSV export for a 600-line order."],
   "rootCause": {"hypothesis":"The export job times out.","confidence":"medium","evidence":[{"source":"logs","query":"service:export level:error","finding":"Timeout after 30s."}],"codeRefs":["Domain/Inventory.API/Export/Csv.cs:42"]},

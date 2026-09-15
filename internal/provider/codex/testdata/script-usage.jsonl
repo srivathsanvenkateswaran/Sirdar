@@ -1,0 +1,23 @@
+// The token-usage notifications of the 20260915T100935Z-3864 triage,
+// copied from its events.jsonl. Six model round-trips over one user turn,
+// and the run recorded Turns=1: the counter moved on turn/completed, which
+// arrives once. The last of the six is followed by a seventh carrying an
+// empty "last" — a refresh of figures already counted, which must not
+// advance the count.
+{"$expect":"initialize"}
+{"$reply":{"userAgent":"codex/0.154.0 (fake)","codexHome":"/tmp/.codex","platformOs":"macos"}}
+{"$expect":"thread/start"}
+{"$reply":{"thread":{"id":"th-u","sessionId":"th-u","cwd":"/work"},"model":"gpt-5.6-luna","approvalPolicy":"untrusted"}}
+{"$expect":"turn/start"}
+{"$reply":{"turn":{"id":"tn-u","items":[],"status":"inProgress"}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":22362,"inputTokens":21266,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":1096,"reasoningOutputTokens":98},"last":{"totalTokens":22362,"inputTokens":21266,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":1096,"reasoningOutputTokens":98},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":54593,"inputTokens":53428,"cachedInputTokens":20224,"cacheWriteInputTokens":0,"outputTokens":1165,"reasoningOutputTokens":108},"last":{"totalTokens":32231,"inputTokens":32162,"cachedInputTokens":20224,"cacheWriteInputTokens":0,"outputTokens":69,"reasoningOutputTokens":10},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":86901,"inputTokens":85683,"cachedInputTokens":51712,"cacheWriteInputTokens":0,"outputTokens":1218,"reasoningOutputTokens":126},"last":{"totalTokens":32308,"inputTokens":32255,"cachedInputTokens":31488,"cacheWriteInputTokens":0,"outputTokens":53,"reasoningOutputTokens":18},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":120497,"inputTokens":118214,"cachedInputTokens":83200,"cacheWriteInputTokens":0,"outputTokens":2283,"reasoningOutputTokens":175},"last":{"totalTokens":33596,"inputTokens":32531,"cachedInputTokens":31488,"cacheWriteInputTokens":0,"outputTokens":1065,"reasoningOutputTokens":49},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":154239,"inputTokens":151852,"cachedInputTokens":114688,"cacheWriteInputTokens":0,"outputTokens":2387,"reasoningOutputTokens":240},"last":{"totalTokens":33742,"inputTokens":33638,"cachedInputTokens":31488,"cacheWriteInputTokens":0,"outputTokens":104,"reasoningOutputTokens":65},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":189788,"inputTokens":186125,"cachedInputTokens":147200,"cacheWriteInputTokens":0,"outputTokens":3663,"reasoningOutputTokens":515},"last":{"totalTokens":35549,"inputTokens":34273,"cachedInputTokens":32512,"cacheWriteInputTokens":0,"outputTokens":1276,"reasoningOutputTokens":275},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"thread/tokenUsage/updated","params":{"threadId":"th-u","turnId":"tn-u","tokenUsage":{"total":{"totalTokens":189788,"inputTokens":186125,"cachedInputTokens":147200,"cacheWriteInputTokens":0,"outputTokens":3663,"reasoningOutputTokens":515},"last":{"totalTokens":0,"inputTokens":0,"cachedInputTokens":0,"cacheWriteInputTokens":0,"outputTokens":0,"reasoningOutputTokens":0},"modelContextWindow":258400}}}
+{"jsonrpc":"2.0","method":"item/completed","params":{"item":{"type":"agentMessage","id":"msg_1","text":"{\"done\":true}","phase":"final_answer"},"threadId":"th-u","turnId":"tn-u"}}
+// turn/completed carries no usage of its own in 0.154, and no cost figure
+// appears anywhere on this wire.
+{"jsonrpc":"2.0","method":"turn/completed","params":{"threadId":"th-u","turn":{"id":"tn-u","status":"completed","error":null,"items":[],"startedAt":1789466976,"completedAt":1789467062,"durationMs":86000}}}

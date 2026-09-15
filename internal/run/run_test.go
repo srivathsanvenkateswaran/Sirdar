@@ -46,9 +46,11 @@ func sampleBundle() ticket.Bundle {
 }
 
 const triageDoc = `{
-  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"شركة","customerId":"4561"},
+  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"شركة","customerId":"4561","customerIds":null},
   "title": "Export fails for large orders",
   "complaint": "The export fails for large orders. It has happened every day this week.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [{"at":"2026-09-10T08:30:00+03:00","role":"customer","summary":"Reported the export failing."}],
   "reproSteps": ["Request a CSV export for a 600-line order."],
   "rootCause": {"hypothesis":"The export job times out.","confidence":"medium","evidence":[{"source":"logs","query":"service:export level:error","finding":"Timeout after 30s."}],"codeRefs":["internal/export/csv.go:42"]},
@@ -62,6 +64,7 @@ const rcaDoc = `{
   "rca": {
     "title": "Export times out on large orders",
     "summary": "The export buffered every row before writing. Large orders exceeded the request timeout. Streaming the rows fixes it.",
+    "customerSummary": null,
     "impact": {"customersAffected":"1","recordsAffected":"n/a","financialImpact":"none","firstOccurrence":"2026-06-01","detection":"customer report","timeToDetect":"months"},
     "timeline": [{"at":"2026-09-10T08:30:00+03:00","event":"Customer reported the failure.","evidence":"ticket 555"}],
     "rootCause": {"description":"The handler buffers all rows.","codeRefs":["internal/export/csv.go:42"],"offendingCode":"rows := make([][]string, 0)","mechanism":"Nothing is flushed until encoding finishes."},
@@ -616,8 +619,8 @@ func TestFrontmatterCustomerMismatchStillWarns(t *testing.T) {
 func TestFrontmatterCustomerIDsRendered(t *testing.T) {
 	cfg := newWorkspace(t)
 	doc := strings.Replace(triageDoc,
-		`"customer":"شركة","customerId":"4561"`,
-		`"customer":"شركة","customerId":"4561","customerIds":["domain-42","code-7"]`, 1)
+		`"customerId":"4561","customerIds":null`,
+		`"customerId":"4561","customerIds":["domain-42","code-7"]`, 1)
 	if doc == triageDoc {
 		t.Fatal("the fixture's ticket field did not change")
 	}

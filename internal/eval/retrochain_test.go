@@ -76,9 +76,11 @@ func WriteCSV(rows []string) string {
 // reference points at the file the merged pull request in fact changed,
 // which is what makes the triage columns non-zero.
 const chainTriageDoc = `{
-  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"Acme","customerId":"4561"},
+  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"Acme","customerId":"4561","customerIds":null},
   "title": "Export fails for large orders",
   "complaint": "The export fails for large orders.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [{"at":"2026-09-10T08:30:00+03:00","role":"customer","summary":"Reported the export failing."}],
   "reproSteps": ["Request a CSV export for a 600-line order."],
   "rootCause": {"hypothesis":"WriteCSV concatenates every row before returning.","confidence":"high","evidence":[{"source":"code","query":"WriteCSV","finding":"The whole file is built in one string."}],"codeRefs":["export/csv.go:4"]},
@@ -531,6 +533,7 @@ const chainRCADoc = `{
   "rca": {
     "title": "Export times out on large orders",
     "summary": "WriteCSV concatenated every row before returning. Large orders exceeded the request timeout. Building the output incrementally fixes it.",
+    "customerSummary": null,
     "impact": {"customersAffected":"1","recordsAffected":"n/a","financialImpact":"none","firstOccurrence":"2026-06-01","detection":"customer report","timeToDetect":"months"},
     "timeline": [{"at":"2026-09-10T08:30:00+03:00","event":"Customer reported the failure.","evidence":"ticket 555"}],
     "rootCause": {"description":"WriteCSV builds the whole file in one string.","codeRefs":["export/csv.go:4"],"offendingCode":"all += r","mechanism":"Nothing is written until the loop ends."},
