@@ -11,6 +11,7 @@ package run
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -23,6 +24,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
 )
 
 // Fetcher assembles one ticket bundle from the sources a workspace
@@ -39,6 +41,15 @@ type Fetcher struct {
 	// attachments only they pointed at are dropped, and every
 	// pull-request reference is redacted. See ticket.ApplyAsOf.
 	AsOf time.Time
+
+	// Env is the base environment a transcription command's child process
+	// is filtered down from; os.Environ() when nil. It has no effect
+	// unless the workspace configured attachments.transcribe.
+	Env []string
+
+	// Now is the clock a transcription batch's budget is measured
+	// against; time.Now when nil.
+	Now func() time.Time
 
 	// warnings is what this fetch has to tell the operator. It is a
 	// superset of the bundle's own warnings: the cutoff's counts go here
@@ -156,7 +167,7 @@ func (f *Fetcher) fetchBundle(ctx context.Context, key, bundleDir string) (ticke
 		if err != nil {
 			f.warn(&b, fmt.Sprintf("attachments for helpdesk ticket %s could not be downloaded: %v", helpdeskID, err))
 		} else {
-			b.Attachments = f.keepReadableAttachments(&b, bundleDir, atts)
+			b.Attachments = f.keepReadableAttachments(ctx, &b, bundleDir, atts)
 		}
 		// A helpdesk that downloaded some attachments and not others
 		// returns no error at all, so ask it what it skipped: the agent
@@ -230,6 +241,10 @@ func (f *Fetcher) applyHelpdeskRefFallback(b *ticket.Bundle, tt *ticket.TrackerT
 // labelled with a type nobody can read — is evidence the session cannot
 // reach, and is better named in a warning than left in the bundle for it
 // to hunt for a transcoder over.
+//
+// Audio is the one type with a second chance: a workspace that configured
+// attachments.transcribe has the file turned into text before this
+// judgement is final (see keepReadableAttachments).
 func readableMIME(mime string) bool {
 	switch {
 	case mime == "":
@@ -267,12 +282,23 @@ func baseMIME(t string) string {
 }
 
 // keepReadableAttachments enforces the size cap and the type allow-list on
-// what the helpdesk downloaded. A file that fails either is deleted from
-// the bundle — leaving it there means the session can still read 17 MB of
-// mp4 into its context — and named, with its size, in a warning the prompt
-// and the run state both carry.
-func (f *Fetcher) keepReadableAttachments(b *ticket.Bundle, bundleDir string, atts []ticket.Attachment) []ticket.Attachment {
+// what the helpdesk downloaded, and, for audio, gives the workspace's
+// transcription command a chance to turn a file the session cannot open
+// into one it can. A file that fails is deleted from the bundle — leaving
+// it there means the session can still read 17 MB of mp4 into its context
+// — and named, with its size and a reason, in a warning the prompt and the
+// run state both carry, and in the bundle's SkippedAttachments list the
+// note's "Attachments not reviewed" section renders from.
+//
+// A transcribed voice note stays in the bundle beside its transcript. It
+// is still unreadable, but it is now the source of a quotation in the
+// note, and an engineer who wants to check that quotation has to be able
+// to listen to it.
+func (f *Fetcher) keepReadableAttachments(ctx context.Context, b *ticket.Bundle, bundleDir string, atts []ticket.Attachment) []ticket.Attachment {
 	max := f.Config.AttachmentMaxBytes()
+	tx := f.transcriber(b)
+	cappedReported := false
+
 	kept := make([]ticket.Attachment, 0, len(atts))
 	for _, a := range atts {
 		path := a.Path
@@ -285,25 +311,49 @@ func (f *Fetcher) keepReadableAttachments(b *ticket.Bundle, bundleDir string, at
 		}
 
 		mimeType := attachmentMIME(a)
+		var reason string
 		switch {
 		case size > max:
-			reason := fmt.Sprintf("over the %s limit", humanBytes(max))
+			reason = fmt.Sprintf("over the %s limit", humanBytes(max))
 			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) is %s and was not kept; its contents are unread",
 				a.Name, mimeType, humanBytes(size), reason))
-			b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
-				Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
-			})
-		case !readableMIME(mimeType):
-			reason := "cannot be opened in this session"
-			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) %s and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size), reason))
-			b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
-				Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
-			})
-		default:
+		case readableMIME(mimeType):
 			kept = append(kept, a)
 			continue
+		case tx != nil && a.Path != "" && tx.Handles(a.Name, mimeType):
+			res, err := tx.Run(ctx, path)
+			if err == nil {
+				if err := f.writeTranscript(bundleDir, &a, res); err != nil {
+					reason = "transcribed, but the transcript could not be written"
+					f.warn(b, fmt.Sprintf("attachment %q was transcribed but the transcript could not be written: %v; its contents are unread", a.Name, err))
+					break
+				}
+				kept = append(kept, a)
+				continue
+			}
+			if errors.Is(err, transcribe.ErrOverCap) {
+				// One line for the cap, however many files follow it:
+				// the per-file warnings below already name each one.
+				if !cappedReported {
+					f.warn(b, fmt.Sprintf("transcription stopped: %v; the audio after this point is unread", err))
+					cappedReported = true
+				}
+				reason = "not transcribed before the transcription budget ran out"
+				f.warn(b, fmt.Sprintf("attachment %q (%s, %s) was not transcribed and was not kept; its contents are unread",
+					a.Name, mimeType, humanBytes(size)))
+				break
+			}
+			reason = fmt.Sprintf("could not be transcribed: %v", err)
+			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) could not be transcribed and was not kept; its contents are unread: %v",
+				a.Name, mimeType, humanBytes(size), err))
+		default:
+			reason = "cannot be opened in this session"
+			f.warn(b, fmt.Sprintf("attachment %q (%s, %s) %s and was not kept; its contents are unread",
+				a.Name, mimeType, humanBytes(size), reason))
 		}
+		b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
+			Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
+		})
 		if path != "" {
 			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
 				fmt.Fprintf(f.stderr(), "remove attachment %s: %v\n", path, err)
@@ -314,6 +364,47 @@ func (f *Fetcher) keepReadableAttachments(b *ticket.Bundle, bundleDir string, at
 		return nil
 	}
 	return kept
+}
+
+// transcriber builds this fetch's audio transcriber, or nil when the
+// workspace configured none. A command that cannot be turned into an argv
+// is a warning and no transcription: config validation already refuses
+// one, so this is the hand-built Fetcher a test or an embedder assembles.
+func (f *Fetcher) transcriber(b *ticket.Bundle) *transcribe.Transcriber {
+	opts, ok := f.Config.TranscribeOptions()
+	if !ok {
+		return nil
+	}
+	opts.Env = f.Env
+	opts.Now = f.Now
+	tx, err := transcribe.New(opts)
+	if err != nil {
+		f.warn(b, fmt.Sprintf("attachments.transcribe.command is unusable, so no audio was transcribed: %v", err))
+		return nil
+	}
+	return tx
+}
+
+// writeTranscript files one transcript beside its audio in the bundle and
+// records it on the attachment, so the manifest, the prompt and the
+// rendered conversation all point at the same file. The transcript is
+// capped at the workspace's attachments.maxBytes, the same limit every
+// other kept attachment answers to: transcribe.Transcriber already bounds
+// what it holds in memory to 4 MiB, but a workspace that configured a
+// smaller attachments.maxBytes should not get a bundle file bigger than
+// what everything else in it is held to.
+func (f *Fetcher) writeTranscript(bundleDir string, a *ticket.Attachment, res transcribe.Result) error {
+	rel := a.Path + ".transcript.txt"
+	body := transcribe.Header(a.Name, res) + "\n\n" + res.Text + "\n"
+	if max := f.Config.AttachmentMaxBytes(); max > 0 && int64(len(body)) > max {
+		body = truncate(body, int(max)) + "\n"
+	}
+	if err := os.WriteFile(filepath.Join(bundleDir, rel), []byte(body), 0o644); err != nil {
+		return err
+	}
+	a.Transcript = rel
+	a.TranscriptLanguage = res.Language
+	return nil
 }
 
 // humanBytes renders a byte count the way a warning should read.
