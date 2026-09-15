@@ -457,6 +457,23 @@ function shellQuote(arg: string): string {
 }
 
 /**
+ * A filed note as the reader would name it: its path relative to the notes
+ * directory when that is known and the note is under it, its file name
+ * otherwise. The absolute path is the machine's business; a banner saying
+ * "Note filed" wants the name the note has in the vault.
+ */
+export function noteName(path: string, notesDir?: string): string {
+  if (!path) return ''
+  if (notesDir) {
+    const dir = notesDir.replace(/[\\/]+$/, '')
+    if (dir && path.startsWith(dir) && /[\\/]/.test(path.charAt(dir.length))) {
+      return path.slice(dir.length + 1)
+    }
+  }
+  return path.split(/[\\/]/).pop() || path
+}
+
+/**
  * The kind of note a path names, from the file name the run's filename
  * pattern gave it. The defaults in `internal/config` are `{key} {slug}.md`
  * for a triage note, `{key} RCA {slug}.md` and `{key} RES {slug}.md` for the

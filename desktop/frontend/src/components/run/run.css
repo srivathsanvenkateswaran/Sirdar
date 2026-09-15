@@ -238,6 +238,22 @@
   unicode-bidi: isolate;
 }
 
+/* The one control over the transcript: everything, or what the agent did. */
+.stream-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sd-space-2);
+  margin-block-end: var(--sd-space-2);
+  margin-inline: var(--sd-space-5);
+}
+
+.stream-head__label {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-3);
+}
+
 .stream-scroll {
   flex: 1;
   min-block-size: 0;

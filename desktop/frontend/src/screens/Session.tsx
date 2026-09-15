@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState, useSyncExternalStore, type J
 import type { FixStart, NoteKind, RunDiff, Transport } from '../api/types'
 import { askedQuestion, elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
-import { checksFromEvents, describeTests, latestStep } from '../lib/review'
+import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import BundleView from '../components/run/BundleView'
 import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
@@ -16,7 +16,7 @@ import Banner from '../ui/banner'
 import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
 import ProviderMark from '../ui/provider-mark'
-import StatusBadge, { type SdStatus } from '../ui/status-badge'
+import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
 /**
@@ -57,13 +57,15 @@ export default function Session(props: {
   runId: string
   /** The ticket's title, when the tracker's queue lists it. */
   title?: string
+  /** The workspace's notes directory, so a filed note is named as the vault names it. */
+  notesDir?: string
   onBack: () => void
   /** Opens the change review for this run. */
   onOpenReview: () => void
   /** Reruns the fix with the deviation accepted; the shell owns the job. */
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, runId, title, onBack, onOpenReview, onStartFix } = props
+  const { transport, workspaceId, runId, title, notesDir, onBack, onOpenReview, onStartFix } = props
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(
     transport,
     workspaceId,
@@ -297,11 +299,23 @@ export default function Session(props: {
       </Banner>
     )
   } else if (step?.kind === 'note') {
-    banner = (
-      <Banner tone="ok" title="Note filed">
-        {notePath ? <span className="banner-path">{notePath}</span> : 'the note is under Note'}
-      </Banner>
-    )
+    // The run's final event. A fix run ends in a commit, not a note; say
+    // which, and on which branch. A triage or RCA run ends in a filed note.
+    if (isFix) {
+      banner = detail.fix?.commit ? (
+        <Banner tone="ok" title="Fix committed">
+          <span className="banner-path">{detail.fix.branch || detail.fix.commit.slice(0, 12)}</span>
+        </Banner>
+      ) : (
+        <Banner tone="ok" title="Run finished" />
+      )
+    } else {
+      banner = (
+        <Banner tone="ok" title="Note filed">
+          {notePath ? <span className="banner-path">{noteName(notePath, notesDir)}</span> : null}
+        </Banner>
+      )
+    }
   }
 
   return (
@@ -349,6 +363,11 @@ export default function Session(props: {
           </Button>
         )}
       </header>
+
+      {/* The state, for a screen reader, as it moves; the badge is what a sighted reader watches. */}
+      <span className="visually-hidden" aria-live="polite">
+        {`Run ${stateWord(detail.status)}`}
+      </span>
 
       {actionError && pending !== 'accept' && mode.kind !== 'answer' && mode.kind !== 'steer' ? (
         <p className="session-failed-line" role="alert">
