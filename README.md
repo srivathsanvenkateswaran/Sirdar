@@ -189,6 +189,7 @@ a hook only becomes code the machine runs at the next commit or push.
 ## Fix flow
 
 `sirdar fix KEY` is the only part of Sirdar that writes anything, and it is gated on a person.
+See `docs/fix.md` for the full flow, the per-provider confinement, and `permissions.fixBash`.
 
 **The gate is the triage note.** The command refuses to start unless the note's frontmatter
 `status` is `triaged` or `fix-approved`. There is no separate approval record: running the
@@ -285,7 +286,7 @@ Sirdar talks to trackers and helpdesks through adapters. Several ship built into
 | Kind | Supported |
 |---|---|
 | Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally, ServiceNow |
-| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub, ServiceNow (more planned, see `docs/research/adapters/helpdesks.md`) |
+| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, ServiceNow (more planned, see `docs/research/adapters/helpdesks.md`) |
 
 ServiceNow appears on both rows because one incident is both records: configure it under
 `sources.tracker`, `sources.helpdesk`, or leave it under the tracker and let the same client

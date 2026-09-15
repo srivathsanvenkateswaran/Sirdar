@@ -23,11 +23,12 @@ already being paid for; `provider: openai` runs Sirdar's own agent loop against 
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
 
-Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, and
-Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk, and
-Freshdesk. Anything else — an internal tracker, a different helpdesk — is a separate
-executable speaking a small line-delimited JSON protocol over stdin/stdout, so its
-credentials and vendor-specific code never touch Sirdar's core.
+Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
+and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
+Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, and ServiceNow. Anything
+else — an internal tracker, a different helpdesk — is a separate executable speaking a small
+line-delimited JSON protocol over stdin/stdout, so its credentials and vendor-specific
+code never touch Sirdar's core.
 
 A Wails v2 desktop app under `desktop/` sharing the same React frontend that
 `sirdar serve` serves over HTTP; the desktop build talks to the core in-process
@@ -69,6 +70,15 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   yourself, posting a metadata-only digest (never the note's content) with a timestamped HMAC
   signature (`docs/notifications.md`).
 - Added three more built-in helpdesk adapters: Help Scout, Intercom, and HubSpot Service Hub.
+- Added a built-in Front helpdesk adapter, read-only over an API token (`token: env:FRONT_TOKEN`).
+  It merges Front's two thread resources — `messages`, which is what was sent to and received
+  from the customer, and `comments`, the teammate notes Front keeps internal — into one ordered
+  thread, follows each feed's `_pagination.next` under a page cap, and downloads attachments from
+  Front's own authenticated `/download/{id}` endpoint.
+- Added a built-in Gorgias helpdesk adapter (`adapter: gorgias`): per-account host from
+  `account` or `baseUrl`, HTTP Basic with the login `email` and an `apiKey` credential
+  reference, the cursor-paginated `/api/messages` feed as the thread, and attachment
+  downloads that send the key only to the configured account host.
 - Added a built-in ServiceNow adapter, the first that serves either role: one incident is both
   the customer's ticket and the work item, so the same block works under `sources.tracker` or
   `sources.helpdesk`. It reads the Table API for the record, `sys_journal_field` for the
@@ -81,7 +91,7 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
-  (`docs/eval.md`).
+  (`docs/fix.md`).
 - Added `provider: qwen`, a native Qwen Code adapter: every non-read tool is excluded, and an
   authenticated loopback PreToolUse hook fails closed, so the workspace stays read-only even
   though the run is untrusted.

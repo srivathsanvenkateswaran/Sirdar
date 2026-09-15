@@ -127,6 +127,15 @@ sources:
     # adapter: hubspot
     # accessToken: keychain:hubspot-private-app-token # private-app token, pat-na1-...
     #
+    # adapter: front
+    # token: keychain:front-api-token                 # API token, Settings -> Developers
+    #
+    # adapter: gorgias
+    # account: acme                           # acme.gorgias.com
+    # baseUrl: ""                             # optional override, e.g. a proxy
+    # email: you@acme.com                     # basic auth username; the login email
+    # apiKey: keychain:gorgias-api-key        # basic auth password
+    #
     # adapter: servicenow
     # instance: acme                          # acme.service-now.com
     # table: incident                         # or sc_task, sn_customerservice_case
