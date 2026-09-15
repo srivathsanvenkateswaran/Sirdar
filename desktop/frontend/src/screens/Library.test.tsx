@@ -66,7 +66,7 @@ describe('the asset library', () => {
 
   it('lays the specimens out right to left on demand', () => {
     render(<Library />)
-    fireEvent.click(screen.getByRole('radio', { name: 'Right to left' }))
+    fireEvent.click(screen.getByRole('radio', { name: 'RTL' }))
     expect(frame()).toHaveAttribute('dir', 'rtl')
   })
 

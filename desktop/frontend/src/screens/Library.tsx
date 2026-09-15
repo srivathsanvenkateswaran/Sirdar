@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import Badge from '../ui/badge'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
@@ -138,7 +138,7 @@ function Section({
         </h2>
         <p className="lib-section__note">{note}</p>
       </div>
-      {children}
+      <div className="lib-section__body">{children}</div>
     </section>
   )
 }
@@ -167,78 +167,40 @@ export default function Library(): JSX.Element {
     columnId: 'key',
     direction: 'asc',
   })
-  const root = useRef<HTMLDivElement | null>(null)
-
-  const sections = [
-    { id: 'button', label: 'Button' },
-    { id: 'pill-nav', label: 'Pill nav' },
-    { id: 'segmented-control', label: 'Segmented' },
-    { id: 'card', label: 'Card' },
-    { id: 'status-badge', label: 'Status badge' },
-    { id: 'kanban-column', label: 'Column' },
-    { id: 'run-card', label: 'Run card' },
-    { id: 'event-row', label: 'Event row' },
-    { id: 'note-pane', label: 'Note pane' },
-    { id: 'data-table', label: 'Data table' },
-    { id: 'toast', label: 'Toast' },
-    { id: 'dialog', label: 'Dialog' },
-    { id: 'quota-chip', label: 'Quota chip' },
-    { id: 'hero-band', label: 'Hero band' },
-    { id: 'ambient', label: 'Ambient' },
-    { id: 'sidebar-nav-item', label: 'Sidebar row' },
-    { id: 'sidebar-footer-card', label: 'Sidebar footer' },
-    { id: 'modal-sheet', label: 'Modal sheet' },
-    { id: 'setting-row', label: 'Setting row' },
-    { id: 'heatmap', label: 'Heatmap' },
-    { id: 'badge', label: 'Badge' },
-    { id: 'provider-mark', label: 'Provider mark' },
-    { id: 'banner', label: 'Banner' },
-    { id: 'group-label', label: 'Group label' },
-    { id: 'item-row', label: 'Item row' },
-    { id: 'search-bar', label: 'Search bar' },
-    { id: 'stat-card', label: 'Stat card' },
-    { id: 'toggle', label: 'Toggle' },
-    { id: 'page-head', label: 'Page head' },
-    { id: 'kind-chip', label: 'Kind chip' },
-    { id: 'state-glyph', label: 'State glyph' },
-  ]
-
   return (
-    <div className="lib" ref={root}>
+    <div className="lib">
+      {/*
+       * The bar is outside the frame on purpose: the switches paint the
+       * specimens, not the page around them. It is read-only chrome — the
+       * primary buttons below are specimens, so nothing here publishes a
+       * primary action to the sidebar.
+       */}
       <header className="lib__bar">
-        <div className="lib__bar-row">
-          <h1 className="lib__title">Asset library</h1>
-          <p className="lib__lede">
-            Thirty-one components, every state, both themes, both directions. The switches
-            paint the specimens, not this page.
-          </p>
-        </div>
-        <div className="lib__controls">
-          <SegmentedControl
-            label="Theme"
-            options={[
-              { id: 'light', label: 'Light' },
-              { id: 'dark', label: 'Dark' },
-            ]}
-            value={theme}
-            onChange={(id) => setTheme(id as 'light' | 'dark')}
-          />
-          <SegmentedControl
-            label="Direction"
-            options={[
-              { id: 'ltr', label: 'Left to right' },
-              { id: 'rtl', label: 'Right to left' },
-            ]}
-            value={dir}
-            onChange={(id) => setDir(id as 'ltr' | 'rtl')}
-          />
-        </div>
-        <PillNav
-          label="Components"
-          items={sections}
-          onSelect={(id) => {
-            root.current?.querySelector(`#lib-${id}`)?.scrollIntoView({ block: 'start' })
-          }}
+        <PageHead
+          title="Library"
+          lede="Every component the app ships, at the size it ships at."
+          actions={
+            <>
+              <SegmentedControl
+                label="Theme"
+                options={[
+                  { id: 'light', label: 'Light' },
+                  { id: 'dark', label: 'Dark' },
+                ]}
+                value={theme}
+                onChange={(id) => setTheme(id as 'light' | 'dark')}
+              />
+              <SegmentedControl
+                label="Direction"
+                options={[
+                  { id: 'ltr', label: 'LTR' },
+                  { id: 'rtl', label: 'RTL' },
+                ]}
+                value={dir}
+                onChange={(id) => setDir(id as 'ltr' | 'rtl')}
+              />
+            </>
+          }
         />
       </header>
 
