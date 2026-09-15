@@ -355,3 +355,15 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   adapter stays in the tree (`internal/provider/agy`) and `docs/research/10-antigravity-wire-formats.md`
   is retained for reference. `agy.acknowledgeTerms: true` takes the refusal off — at your own
   risk, and not recommended.
+- A run now records the model that actually answered it. Every adapter that is told one on the
+  wire reports it on the system event its first line becomes — Claude Code's `system`/`init`,
+  Codex's `thread/start` result, Qwen's and Cursor's init lines, agy's, and an ACP agent's
+  `model` config option when it advertises one — and a run whose configuration named no model,
+  or named an alias like `sonnet`, replaces `state.json`'s `Model` with the reported id and
+  keeps the configured value in the new `ModelRequested`. The write happens while the run is
+  still going, so the desktop's `run.updated` carries it and the Session topbar stops reading
+  "model unknown" halfway through a run. `sirdar runs` has a `MODEL` column (and `model` in its
+  `--json` rows), `sirdar register` has one too, and the register line each run appends already
+  carried `Model`, which now names the model that wrote the note. A later session on the same
+  run — a steer, a resume — asks for `ModelRequested` again, so a workspace that configured an
+  alias on purpose keeps getting one.

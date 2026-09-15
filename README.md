@@ -185,8 +185,15 @@ prompt.md                 exactly what was sent to the agent
 events.jsonl              raw provider events, one per line
 result.json               validated note JSON (absent on failure)
 note.md                   rendered note, also copied to the notes directory
-state.json                run kind, state, provider, budgets, timings
+state.json                run kind, state, provider, model, budgets, timings
 ```
+
+`state.json`'s `Model` is the model that answered, not the one that was asked for: providers
+report the id they resolved on their first line (Claude Code's `system`/`init`, Codex's
+`thread/start` result, Qwen's and Cursor's init lines; an ACP agent only when it advertises a
+`model` config option), and a run configured with no model, or with an alias like `sonnet`,
+records what came back. The configured value is kept in `ModelRequested`, and is what a later
+session on the same run asks for again.
 
 An `rca` run's bundle also carries the triage note being reviewed, the `--resolution` text, and,
 when `--pr` is given and `gh` is available, the PR's title, body, and diff.
