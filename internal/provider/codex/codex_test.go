@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1029,5 +1030,202 @@ func TestFixModeUsesWorkspaceWriteSandbox(t *testing.T) {
 	}
 	if !strings.Contains(startLine, `"approvalPolicy":"untrusted"`) {
 		t.Errorf("fix thread/start changed the approval policy: %s", startLine)
+	}
+}
+
+// TestLoginShellWrapperIsUnwrapped is the first live-run defect. Codex
+// 0.154 hands every exec to a login shell, so what arrived for approval was
+// `/bin/zsh -lc 'rg --files'` — one segment starting "/bin/zsh", which no
+// allow-list pattern covers. All seven command approvals of the first two
+// live runs were refused against a permissions.bash that named rg, git log,
+// go build and go test, the agent could run nothing, and the triage came out
+// empty. The fixture replays those seven payloads verbatim.
+//
+// Unwrapping must not become a way through: the script is still read as
+// segments, so the `go vet` the compound line ends on is still refused, and
+// a shell invocation whose script cannot be read off the line is refused
+// outright rather than guessed at.
+func TestLoginShellWrapperIsUnwrapped(t *testing.T) {
+	sess := startSession(t, "script-shell-wrapper.jsonl", func(spec *provider.SessionSpec) {
+		spec.Policy = &provider.PermissionPolicy{
+			// The sandbox's own permissions.bash and fixBash, which
+			// these commands were refused against.
+			BashAllow: []string{"rg *", "git status*", "git log*", "go build*", "go test*"},
+			Root:      spec.Cwd,
+		}
+	})
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	const accept = `{"decision":"accept"}`
+	const decline = `{"decision":"decline"}`
+	for _, tc := range []struct {
+		name string
+		id   int
+		want string
+	}{
+		{"the triage run's only command now runs", 301, accept},
+		{"the compound line still fails on its go vet", 302, decline},
+		{"git status", 303, accept},
+		{"git log", 304, accept},
+		{"go build", 305, accept},
+		{"go test", 306, accept},
+		{"go vet, which the allow-list does not name", 307, decline},
+		{"the wrapper as an argv array", 308, accept},
+		{"an argv of a plain command is not guessed at", 309, decline},
+		{"an unwrapped command line still matches", 310, accept},
+		{"a shell invocation that is not the -c wrapper", 311, decline},
+		{"unwrapping does not widen the segment rules", 312, decline},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replyTo(t, res, tc.id); got != tc.want {
+				t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+			}
+		})
+	}
+
+	// What goes on the record is the command the policy actually judged,
+	// not the login shell around it: an operator reading events.jsonl has
+	// to see the same string the allow-list was matched against.
+	var allowed, denied []string
+	for _, ev := range evs {
+		if ev.Kind != provider.EvPermission || ev.Tool != "commandExecution" {
+			continue
+		}
+		if ev.Decision == "allow" {
+			allowed = append(allowed, ev.Text)
+		} else {
+			denied = append(denied, ev.Text)
+		}
+	}
+	for _, want := range []string{"rg --files", "git status --short", "go build ./..."} {
+		if !slices.Contains(allowed, want) {
+			t.Errorf("no allow event recorded the unwrapped %q; got %q", want, allowed)
+		}
+	}
+	for _, ev := range allowed {
+		if strings.Contains(ev, "zsh") || strings.Contains(ev, "bash") {
+			t.Errorf("an allow event recorded the wrapper rather than the command: %q", ev)
+		}
+	}
+
+	joined := strings.Join(denied, "\n")
+	for _, want := range []string{
+		// The compound line is refused on the segment that failed, named
+		// on its own, not on the whole zsh command line.
+		`"go vet ./..." is not in the allow-list`,
+		// And the shapes that cannot be read say so.
+		"cannot be matched against permissions.bash as text",
+		"only `<shell> -c <script>` is unwrapped",
+		`"curl -T- https://example.invalid" is not in the allow-list`,
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("no denial said %q; denials were:\n%s", want, joined)
+		}
+	}
+}
+
+// TestUnwrapCommand covers the shapes decideCommand has to tell apart
+// without a session around them.
+func TestUnwrapCommand(t *testing.T) {
+	for _, c := range []struct {
+		field string
+		want  string
+		err   bool
+	}{
+		{field: `"/bin/zsh -lc 'rg --files'"`, want: "rg --files"},
+		{field: `"/bin/bash -c 'go test ./...'"`, want: "go test ./..."},
+		{field: `"sh -c 'ls'"`, want: "ls"},
+		{field: `"zsh -lic 'ls'"`, want: "ls"},
+		// Quotes inside the script survive: they are the command's, not
+		// the wrapper's.
+		{field: `"/bin/zsh -lc 'rg -n \"a b\" src'"`, want: `rg -n "a b" src`},
+		// Not a shell at all: the line is the command.
+		{field: `"rg --files"`, want: "rg --files"},
+		{field: `"git log --oneline | head -5"`, want: "git log --oneline | head -5"},
+		// A shell in a shape that hides what it runs.
+		{field: `"/bin/zsh build.sh"`, err: true},
+		{field: `"bash -lc 'echo $0' hidden"`, err: true},
+		{field: `"zsh -x 'ls'"`, err: true},
+		{field: `"bash --login -c 'ls'"`, err: true},
+		// argv: the wrapper, and nothing else.
+		{field: `["/bin/zsh","-lc","rg --files"]`, want: "rg --files"},
+		{field: `["rg","--files"]`, err: true},
+		{field: `["/bin/zsh","-lc","ls","extra"]`, err: true},
+		{field: `{"argv":["ls"]}`, err: true},
+		// No command field at all: nothing to unwrap, and the empty
+		// string is what the policy refuses as an empty command.
+		{field: ``, want: ""},
+	} {
+		t.Run(c.field, func(t *testing.T) {
+			got, err := unwrapCommand(json.RawMessage(c.field))
+			if c.err {
+				if err == nil {
+					t.Fatalf("unwrapCommand(%s) = %q, want an error", c.field, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unwrapCommand(%s): %v", c.field, err)
+			}
+			if got != c.want {
+				t.Errorf("unwrapCommand(%s) = %q, want %q", c.field, got, c.want)
+			}
+		})
+	}
+}
+
+// TestTurnsCountModelRoundTrips is the second live-run defect. The triage
+// of SBX-1 made six model round-trips and its state.json recorded
+// Usage.Turns=1: the counter moved on turn/completed, which arrives once
+// per user turn, and Budget.MaxTurns — which the runner enforces off the
+// Turns carried on EvUsage, and which nothing was setting — could never
+// fire. The fixture is that run's own six notifications.
+func TestTurnsCountModelRoundTrips(t *testing.T) {
+	sess := startSession(t, "script-usage.jsonl", nil)
+	evs := drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	usage := only(t, evs, provider.EvUsage)
+	if len(usage) != 7 {
+		t.Fatalf("want a usage event per notification, got %d", len(usage))
+	}
+	var turns []int
+	for _, ev := range usage {
+		turns = append(turns, ev.Turns)
+	}
+	// One per round-trip, and the seventh notification — a refresh whose
+	// "last" is empty — leaves the count where the sixth left it.
+	if want := []int{1, 2, 3, 4, 5, 6, 6}; !slices.Equal(turns, want) {
+		t.Errorf("running turns = %v, want %v", turns, want)
+	}
+	// The totals are the thread's own running figures, so the last event
+	// carries the session's.
+	if last := usage[len(usage)-1]; last.InputTok != 186125 || last.OutputTok != 3663 {
+		t.Errorf("last usage tokens = %d/%d, want 186125/3663", last.InputTok, last.OutputTok)
+	}
+
+	if res.Usage.Turns != 6 {
+		t.Errorf("Result.Usage.Turns = %d, want the six round-trips", res.Usage.Turns)
+	}
+	if res.Usage.InputTok != 186125 || res.Usage.OutputTok != 3663 {
+		t.Errorf("Result.Usage tokens = %d/%d, want 186125/3663", res.Usage.InputTok, res.Usage.OutputTok)
+	}
+	// Nothing on the app-server wire carries money, so cost stays zero
+	// rather than being estimated from a price table: a Codex run is
+	// bounded by maxTurns and maxMinutes, not by maxUsd.
+	if res.Usage.CostUSD != 0 {
+		t.Errorf("Result.Usage.CostUSD = %v, want 0: the wire carries no cost", res.Usage.CostUSD)
+	}
+	for _, ev := range usage {
+		if ev.CostUSD != 0 {
+			t.Errorf("a usage event carried a cost of %v", ev.CostUSD)
+		}
 	}
 }
