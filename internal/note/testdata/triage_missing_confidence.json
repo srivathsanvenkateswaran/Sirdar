@@ -8,10 +8,13 @@
     "priority": "high",
     "service": "omni",
     "customer": "Example Corp",
-    "customerId": "cust-1"
+    "customerId": "cust-1",
+    "customerIds": null
   },
   "title": "Sample issue for template checks",
   "complaint": "Customer reports the export fails for orders over 500 lines.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [
     {
       "at": "2026-09-01T10:00:00Z",

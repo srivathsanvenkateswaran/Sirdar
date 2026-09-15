@@ -17,10 +17,11 @@ Rules:
 7. Translate faithfully into the note's language: preserve tone and urgency, and quote the
    original wording where the exact phrase matters. Keep the customer's own text as well as
    the translation — put it in `complaintOriginal`, verbatim, in the language it was written
-   in. Write anything the customer will read (a reply draft, a summary the support agent
-   relays) in the customer's language, and invent no commitments in it: no fix, no cause, no
-   date, no compensation, nothing the ticket does not already record as promised. A polite
-   acknowledgement that the issue is being looked into is the most it may offer.
+   in; null only when the complaint was already written in the note's language. Write anything
+   the customer will read (a reply draft, a summary the support agent relays) in the customer's
+   language, and invent no commitments in it: no fix, no cause, no date, no compensation,
+   nothing the ticket does not already record as promised. A polite acknowledgement that the
+   issue is being looked into is the most it may offer.
 8. Every segment of a Bash command is checked against the allow-list separately, so a
    pipeline or a compound command is allowed only if `rg foo`, `head -50` and everything
    else between `|`, `&&` and `;` are each allowed on their own.
@@ -79,11 +80,11 @@ Files:
 
 # Output
 
-- ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead.
+- ticket identifies the record: key, title, tracker and helpdesk URLs, priority, service, and customer. Copy ticket.customer verbatim from the bundle's Customer line — no domain, CompanyID, or company code appended; any such identifiers belong in ticket.customerIds instead, or null when there are none.
 - title is a one-line summary of the issue.
 - complaint is the customer's complaint translated faithfully into the note's language, preserving tone and urgency.
-- complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; omit it only when the complaint was already written in the note's language.
-- customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date.
+- complaintOriginal is that same complaint verbatim in the language the customer wrote it in, unedited and untranslated; null only when the complaint was already written in the note's language.
+- customerReplyDraft is a short, polite status update the engineer could send the customer, as {language, text} in the customer's language: it acknowledges the issue and says it is being investigated, and it promises no fix, no cause and no date; null when a reply draft does not apply.
 - timeline lists each event with its time, role, and summary, including what L1 already told the customer.
 - reproSteps lists the steps that reproduce the issue.
 - rootCause states the hypothesis, a confidence level (high, medium, low, or unknown), the evidence for it, and any code references.
@@ -102,6 +103,8 @@ Files:
     "ticket",
     "title",
     "complaint",
+    "complaintOriginal",
+    "customerReplyDraft",
     "timeline",
     "reproSteps",
     "rootCause",
@@ -123,7 +126,8 @@ Files:
         "priority",
         "service",
         "customer",
-        "customerId"
+        "customerId",
+        "customerIds"
       ],
       "properties": {
         "key": { "type": "string" },
@@ -139,23 +143,31 @@ Files:
         },
         "customerId": { "type": "string" },
         "customerIds": {
-          "type": "array",
+          "type": ["array", "null"],
           "items": { "type": "string" },
-          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer."
+          "description": "Any customer identifiers beyond customerId that appear in the bundle or that you resolved yourself — domain, company code, account number — one string per identifier. Never append these to customer. Null when there are none."
         }
       }
     },
     "title": { "type": "string" },
     "complaint": { "type": "string" },
-    "complaintOriginal": { "type": "string" },
+    "complaintOriginal": {
+      "type": ["string", "null"],
+      "description": "Null when the complaint was already written in the note's language."
+    },
     "customerReplyDraft": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["language", "text"],
-      "properties": {
-        "language": { "type": "string", "minLength": 2 },
-        "text": { "type": "string" }
-      }
+      "anyOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["language", "text"],
+          "properties": {
+            "language": { "type": "string", "minLength": 2 },
+            "text": { "type": "string" }
+          }
+        },
+        { "type": "null" }
+      ]
     },
     "timeline": {
 

@@ -530,6 +530,82 @@ func TestProseFinalIsRetriedWithASecondPrompt(t *testing.T) {
 	}
 }
 
+// TestSchemaEchoFinalIsRetriedWithASecondPrompt covers the failure this
+// package saw live under provider: acp (GitHub Copilot over ACP, which has
+// no --json-schema wire enforcement): the agent's first answer is a valid
+// JSON object, but it carries the schema's own "$schema" and "title" keys
+// alongside the real fields, exactly the shape the sandbox evidence
+// recorded. ACP itself does not validate against the schema — it only
+// extracts the object — so jsonObject hands that shape through as the
+// turn's Final untouched, and it is internal/run's job to notice, strip
+// the echoed keys and, when that alone is not enough, retry with the
+// sharpened instruction. This test plays the runner's side of that retry
+// by hand, the way TestProseFinalIsRetriedWithASecondPrompt plays it for a
+// prose answer, and checks the session carries a second prompt through and
+// returns a clean final.
+func TestSchemaEchoFinalIsRetriedWithASecondPrompt(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-schema-echo-retry.jsonl", cwd, nil)
+
+	const sharpened = "Your previous answer did not match the schema: (root): additional properties " +
+		"'$schema', 'title' not allowed. Reply again with the corrected JSON object only. " +
+		"Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+
+	var (
+		finals  []json.RawMessage
+		sendErr error
+	)
+	for ev := range sess.Events() {
+		if ev.Kind != provider.EvFinal || len(ev.Final) == 0 {
+			continue
+		}
+		finals = append(finals, ev.Final)
+		if len(finals) == 1 {
+			// This is what internal/run's handleFinal does once
+			// stripSchemaEcho and a revalidation still leave the note
+			// invalid: send the sharpened retry on the running session.
+			sendErr = sess.Send(context.Background(), sharpened)
+		}
+	}
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	if sendErr != nil {
+		t.Fatalf("Send: %v", sendErr)
+	}
+	if len(finals) != 2 {
+		t.Fatalf("finals = %d, want 2", len(finals))
+	}
+	if !strings.Contains(string(finals[0]), `"$schema"`) || !strings.Contains(string(finals[0]), `"title"`) {
+		t.Errorf("first final = %s, want it to carry the echoed schema keys", finals[0])
+	}
+	if strings.Contains(string(finals[1]), `"$schema"`) || strings.Contains(string(finals[1]), `"title"`) {
+		t.Errorf("second final = %s, want no echoed schema keys", finals[1])
+	}
+	if string(res.Final) != string(finals[1]) {
+		t.Errorf("Result.Final = %s, want the second final", res.Final)
+	}
+
+	prompts := 0
+	for _, line := range res.StderrTail {
+		if strings.Contains(line, `"method":"session/prompt"`) {
+			prompts++
+		}
+	}
+	if prompts != 2 {
+		t.Errorf("sent %d session/prompt requests, want 2", prompts)
+	}
+
+	// The initial prompt already carries the sharpened, ACP-only answer
+	// instruction: this provider has no wire enforcement to fall back on,
+	// so the first ask has to be as explicit as the retry.
+	initial := findSent(t, res, "session/prompt")
+	if !strings.Contains(initial, "no `$schema`, no `title`") {
+		t.Errorf("initial session/prompt = %s, want the sharpened answer instruction", initial)
+	}
+}
+
 func TestCancelEndsTheTurn(t *testing.T) {
 	cwd := workspace(t)
 	sess := spawn(t, "script-cancel.jsonl", cwd, nil)

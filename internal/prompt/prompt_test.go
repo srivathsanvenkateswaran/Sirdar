@@ -2,6 +2,7 @@ package prompt
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -390,11 +391,14 @@ func TestRCAPromptCarriesTheCustomerSummaryField(t *testing.T) {
 	mustContain(t, got, `"customerSummary"`)
 }
 
-// TestTriageSchemaKeepsTheBilingualFieldsOptional guards the reason they
-// are optional: a ticket already written in the note's language has no
-// original to keep, and a run that answers a question rather than drafting
-// a reply should not be failed by the validator for it.
-func TestTriageSchemaKeepsTheBilingualFieldsOptional(t *testing.T) {
+// TestTriageSchemaKeepsTheBilingualFieldsNullable guards the reason they
+// are optional in effect: a ticket already written in the note's language
+// has no original to keep, and a run that answers a question rather than
+// drafting a reply should not be failed by the validator for it. OpenAI's
+// strict structured output forbids omitting a property from `required`, so
+// optionality here is expressed the other way round: the key is required,
+// but its value may be null.
+func TestTriageSchemaKeepsTheBilingualFieldsNullable(t *testing.T) {
 	var schema struct {
 		Required   []string                   `json:"required"`
 		Properties map[string]json.RawMessage `json:"properties"`
@@ -403,13 +407,188 @@ func TestTriageSchemaKeepsTheBilingualFieldsOptional(t *testing.T) {
 		t.Fatalf("unmarshal triage schema: %v", err)
 	}
 	for _, field := range []string{"complaintOriginal", "customerReplyDraft"} {
-		if _, ok := schema.Properties[field]; !ok {
+		raw, ok := schema.Properties[field]
+		if !ok {
 			t.Fatalf("triage schema has no %q property", field)
 		}
-		for _, r := range schema.Required {
-			if r == field {
-				t.Fatalf("triage schema requires %q; it must stay optional", field)
+		if !contains(schema.Required, field) {
+			t.Fatalf("triage schema does not require %q; strict mode requires every property to be listed, nullable or not", field)
+		}
+		if !allowsNull(t, raw) {
+			t.Fatalf("triage schema's %q does not allow null, so it can never be left unset", field)
+		}
+	}
+}
+
+// TestRCASchemaKeepsTheCustomerSummaryNullable is the RCA-side counterpart
+// of TestTriageSchemaKeepsTheBilingualFieldsNullable: an RCA with nothing
+// yet to relay to the customer must still validate.
+func TestRCASchemaKeepsTheCustomerSummaryNullable(t *testing.T) {
+	var schema struct {
+		Properties struct {
+			RCA struct {
+				Required   []string                   `json:"required"`
+				Properties map[string]json.RawMessage `json:"properties"`
+			} `json:"rca"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(RCASchema, &schema); err != nil {
+		t.Fatalf("unmarshal rca schema: %v", err)
+	}
+	raw, ok := schema.Properties.RCA.Properties["customerSummary"]
+	if !ok {
+		t.Fatal("rca schema has no rca.customerSummary property")
+	}
+	if !contains(schema.Properties.RCA.Required, "customerSummary") {
+		t.Fatal("rca schema does not require rca.customerSummary; strict mode requires every property to be listed, nullable or not")
+	}
+	if !allowsNull(t, raw) {
+		t.Fatal("rca schema's rca.customerSummary does not allow null, so it can never be left unset")
+	}
+}
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+// allowsNull reports whether a property's raw schema permits a JSON null:
+// either a `"type": [..., "null"]` list, or a `oneOf` branch of
+// `{"type": "null"}` — the two shapes used across internal/prompt/schemas.
+func allowsNull(t *testing.T, raw json.RawMessage) bool {
+	t.Helper()
+	var typed struct {
+		Type  json.RawMessage   `json:"type"`
+		OneOf []json.RawMessage `json:"anyOf"`
+	}
+	if err := json.Unmarshal(raw, &typed); err != nil {
+		t.Fatalf("unmarshal property schema: %v", err)
+	}
+	if len(typed.Type) > 0 {
+		var types []string
+		if err := json.Unmarshal(typed.Type, &types); err == nil {
+			for _, ty := range types {
+				if ty == "null" {
+					return true
+				}
 			}
+		}
+	}
+	for _, branch := range typed.OneOf {
+		var b struct {
+			Type string `json:"type"`
+		}
+		if err := json.Unmarshal(branch, &b); err == nil && b.Type == "null" {
+			return true
+		}
+	}
+	return false
+}
+
+// --- OpenAI strict structured output ---
+
+// TestSchemasAreStrictValid walks every schema under internal/prompt/schemas
+// and asserts the two rules OpenAI's strict structured output (Codex's
+// --json-schema / output schema, and the openai provider's strict mode)
+// enforces on every object subschema, recursively through properties,
+// items, oneOf/anyOf/allOf, and definitions:
+//
+//  1. additionalProperties is exactly false.
+//  2. required lists exactly the keys in properties — no more, no less —
+//     so a genuinely optional field must be expressed as a required,
+//     nullable field instead of an absent one.
+//
+// This regression-guards OMNI's codex failure: "'required' is required to
+// be supplied and to be an array including every key in properties.
+// Missing 'customerIds'."
+func TestSchemasAreStrictValid(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema []byte
+	}{
+		{"triage.json", TriageSchema},
+		{"rca.json", RCASchema},
+		{"fix.json", FixSchema},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			var doc any
+			if err := json.Unmarshal(tc.schema, &doc); err != nil {
+				t.Fatalf("unmarshal %s: %v", tc.name, err)
+			}
+			walkStrictSchema(t, tc.name, "$", doc)
+		})
+	}
+}
+
+// walkStrictSchema recursively checks node (and everything reachable from
+// it) against the strict-mode rules TestSchemasAreStrictValid documents.
+func walkStrictSchema(t *testing.T, file, path string, node any) {
+	t.Helper()
+	obj, ok := node.(map[string]any)
+	if !ok {
+		return
+	}
+
+	if props, ok := obj["properties"].(map[string]any); ok {
+		if ap, hasAP := obj["additionalProperties"]; !hasAP || ap != false {
+			t.Errorf("%s: %s: additionalProperties = %v, want false", file, path, ap)
+		}
+
+		required := map[string]bool{}
+		if reqRaw, ok := obj["required"].([]any); ok {
+			for _, r := range reqRaw {
+				if s, ok := r.(string); ok {
+					required[s] = true
+				}
+			}
+		} else {
+			t.Errorf("%s: %s: no required array", file, path)
+		}
+
+		for key := range props {
+			if !required[key] {
+				t.Errorf("%s: %s: property %q is missing from required", file, path, key)
+			}
+		}
+		for key := range required {
+			if _, ok := props[key]; !ok {
+				t.Errorf("%s: %s: required %q names no property", file, path, key)
+			}
+		}
+
+		for key, val := range props {
+			walkStrictSchema(t, file, path+"."+key, val)
+		}
+	}
+
+	if items, ok := obj["items"]; ok {
+		walkStrictSchema(t, file, path+"[]", items)
+	}
+	for _, key := range []string{"anyOf", "anyOf", "allOf"} {
+		if list, ok := obj[key].([]any); ok {
+			for i, sub := range list {
+				walkStrictSchema(t, file, fmt.Sprintf("%s.%s[%d]", path, key, i), sub)
+			}
+		}
+	}
+	if defs, ok := obj["definitions"].(map[string]any); ok {
+		for name, def := range defs {
+			walkStrictSchema(t, file, path+".definitions."+name, def)
+		}
+	}
+}
+
+// TestSchemasUseNoOneOf pins the second strict-mode rule OpenAI enforces:
+// oneOf is rejected outright; a nullable object is expressed with anyOf.
+func TestSchemasUseNoOneOf(t *testing.T) {
+	for name, raw := range map[string][]byte{"triage": TriageSchema, "rca": RCASchema, "fix": FixSchema} {
+		if strings.Contains(string(raw), `"oneOf"`) {
+			t.Errorf("%s schema uses oneOf, which strict structured output rejects; use anyOf", name)
 		}
 	}
 }

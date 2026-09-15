@@ -6,7 +6,7 @@
   "required": ["rca", "resolution"],
   "definitions": {
     "evidenceEntry": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
           "additionalProperties": false,
@@ -35,6 +35,7 @@
       "required": [
         "title",
         "summary",
+        "customerSummary",
         "impact",
         "timeline",
         "rootCause",
@@ -56,13 +57,18 @@
         "title": { "type": "string" },
         "summary": { "type": "string" },
         "customerSummary": {
-          "type": "object",
-          "additionalProperties": false,
-          "required": ["language", "text"],
-          "properties": {
-            "language": { "type": "string", "minLength": 2 },
-            "text": { "type": "string" }
-          }
+          "anyOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["language", "text"],
+              "properties": {
+                "language": { "type": "string", "minLength": 2 },
+                "text": { "type": "string" }
+              }
+            },
+            { "type": "null" }
+          ]
         },
 
         "impact": {
@@ -256,7 +262,7 @@
         "whatWasWrong": { "type": "string" },
         "whatWeChanged": { "type": "string" },
         "codeChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,
@@ -285,7 +291,7 @@
           ]
         },
         "dataChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,

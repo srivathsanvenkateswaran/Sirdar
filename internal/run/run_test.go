@@ -14,6 +14,7 @@ import (
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -46,9 +47,11 @@ func sampleBundle() ticket.Bundle {
 }
 
 const triageDoc = `{
-  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"شركة","customerId":"4561"},
+  "ticket": {"key":"OMNI-1","title":"Export fails","trackerUrl":"https://t/OMNI-1","helpdeskId":"555","helpdeskUrl":"https://h/555","priority":"high","service":"omni","customer":"شركة","customerId":"4561","customerIds":null},
   "title": "Export fails for large orders",
   "complaint": "The export fails for large orders. It has happened every day this week.",
+  "complaintOriginal": null,
+  "customerReplyDraft": null,
   "timeline": [{"at":"2026-09-10T08:30:00+03:00","role":"customer","summary":"Reported the export failing."}],
   "reproSteps": ["Request a CSV export for a 600-line order."],
   "rootCause": {"hypothesis":"The export job times out.","confidence":"medium","evidence":[{"source":"logs","query":"service:export level:error","finding":"Timeout after 30s."}],"codeRefs":["internal/export/csv.go:42"]},
@@ -62,6 +65,7 @@ const rcaDoc = `{
   "rca": {
     "title": "Export times out on large orders",
     "summary": "The export buffered every row before writing. Large orders exceeded the request timeout. Streaming the rows fixes it.",
+    "customerSummary": null,
     "impact": {"customersAffected":"1","recordsAffected":"n/a","financialImpact":"none","firstOccurrence":"2026-06-01","detection":"customer report","timeToDetect":"months"},
     "timeline": [{"at":"2026-09-10T08:30:00+03:00","event":"Customer reported the failure.","evidence":"ticket 555"}],
     "rootCause": {"description":"The handler buffers all rows.","codeRefs":["internal/export/csv.go:42"],"offendingCode":"rows := make([][]string, 0)","mechanism":"Nothing is flushed until encoding finishes."},
@@ -616,8 +620,8 @@ func TestFrontmatterCustomerMismatchStillWarns(t *testing.T) {
 func TestFrontmatterCustomerIDsRendered(t *testing.T) {
 	cfg := newWorkspace(t)
 	doc := strings.Replace(triageDoc,
-		`"customer":"شركة","customerId":"4561"`,
-		`"customer":"شركة","customerId":"4561","customerIds":["domain-42","code-7"]`, 1)
+		`"customerId":"4561","customerIds":null`,
+		`"customerId":"4561","customerIds":["domain-42","code-7"]`, 1)
 	if doc == triageDoc {
 		t.Fatal("the fixture's ticket field did not change")
 	}
@@ -2488,6 +2492,123 @@ func TestFixRunNeedsAPrompt(t *testing.T) {
 	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
 	if _, err := r.Fix(context.Background(), "OMNI-1", FixOptions{}); err == nil {
 		t.Fatal("a fix run with no prompt was accepted")
+	}
+}
+
+// TestSchemaEchoIsStrippedWithoutARetry replays the exact shape a
+// provider: acp fix session answered with in the sandbox evidence
+// (SBX-1/20260915T102406Z-77e5): a complete report that also carries the
+// fix schema's own "$schema" and "title" root keys. The run must recover
+// it on the first turn, with no retry spent and no trace of the echoed
+// keys in the filed report.
+func TestSchemaEchoIsStrippedWithoutARetry(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "acp", script: replay(finalEvent(realEvidenceFixAnswer))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{Prompt: "implement the fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if sends := p.session(0).sentTexts(); len(sends) != 0 {
+		t.Errorf("sent %v, want no retry", sends)
+	}
+	doc, err := FixReport(cfg.Root, "OMNI-1", out.State.RunID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(doc), "$schema") || strings.Contains(string(doc), `"title"`) {
+		t.Errorf("filed report still carries a schema-metadata key: %s", doc)
+	}
+	if !strings.Contains(string(doc), "double-counted") {
+		t.Errorf("filed report lost the answer's own content: %s", doc)
+	}
+}
+
+// TestSchemaRetrySharpensForProvidersWithoutWireEnforcement covers a first
+// answer the echo strip cannot fully recover (it is short two required
+// fields as well as carrying $schema/title): provider: acp gets the
+// sharpened retry wording, since ACP has no --json-schema equivalent to
+// fall back on, and a provider that does gets the plain one.
+func TestSchemaRetrySharpensForProvidersWithoutWireEnforcement(t *testing.T) {
+	const incomplete = `{"$schema":"http://json-schema.org/draft-07/schema#","title":"Sirdar Fix Report","summary":"x","filesChanged":[]}`
+	const complete = `{"summary":"x","filesChanged":[],"testsRun":[],"risks":"none","deviationFromNote":""}`
+
+	for _, tc := range []struct {
+		provider  string
+		sharpened bool
+	}{
+		{"acp", true},
+		{"claude", false},
+	} {
+		t.Run(tc.provider, func(t *testing.T) {
+			cfg := newWorkspace(t)
+			p := &stubProvider{name: tc.provider, script: func(_ provider.SessionSpec, s *stubSession) {
+				defer s.finish()
+				if !s.emit(finalEvent(incomplete)) {
+					return
+				}
+				select {
+				case <-s.sendCh:
+				case <-s.cancelled:
+					return
+				}
+				s.emit(finalEvent(complete))
+			}}
+			r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+			out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{Prompt: "implement the fix"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if out.State.Status != store.StatusCompleted {
+				t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+			}
+			sends := p.session(0).sentTexts()
+			if len(sends) != 1 {
+				t.Fatalf("sends: %v", sends)
+			}
+			const wantSharp = "Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence."
+			if strings.Contains(sends[0], wantSharp) != tc.sharpened {
+				t.Errorf("send = %q, want sharpened=%v", sends[0], tc.sharpened)
+			}
+		})
+	}
+}
+
+// TestSchemaItselfFailsWithAClearerReason covers a session that answers
+// with its own JSON Schema — a root "properties" object — rather than a
+// document shaped by it. There is nothing to reconstruct there, so the run
+// must fail with a reason that says so plainly instead of the raw
+// additionalProperties dump every schema keyword would otherwise produce.
+func TestSchemaItselfFailsWithAClearerReason(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{name: "acp", script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		if !s.emit(finalEvent(string(prompt.FixSchema))) {
+			return
+		}
+		select {
+		case <-s.sendCh:
+		case <-s.cancelled:
+			return
+		}
+		s.emit(finalEvent(string(prompt.FixSchema)))
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	out, err := r.Fix(context.Background(), "OMNI-1", FixOptions{Prompt: "implement the fix"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.State.Status != store.StatusFailed {
+		t.Fatalf("status %q", out.State.Status)
+	}
+	if !strings.Contains(out.State.Reason, "the agent's answer is the JSON Schema itself") {
+		t.Fatalf("reason %q", out.State.Reason)
 	}
 }
 
