@@ -117,7 +117,7 @@ function Published(): JSX.Element {
   // A span, not an <output>: that element has the status role the banner uses.
   return (
     <span data-testid="published">
-      {action ? `${action.label}${action.inline ? ' inline' : ''}${action.disabled ? ' disabled' : ''}` : 'none'}
+      {action ? `${action.label}${action.placement === 'screen' ? ' inline' : ''}${action.disabled ? ' disabled' : ''}` : 'none'}
     </span>
   )
 }
@@ -384,10 +384,9 @@ describe('Session', () => {
       await waitFor(() => expect(tab).toHaveTextContent('Changes2'))
       expect(f.transport.calls.runDiff).toEqual([{ ws: 'ws1', runId: RUN.runId }])
 
-      const changes = screen.getByRole('region', { name: 'Changes' })
-      expect(within(changes).getAllByRole('listitem')).toHaveLength(2)
-      // The row, and the file's own head above its hunks.
-      expect(within(changes).getAllByText('internal/export/statement_test.go')).toHaveLength(2)
+      // One article per file, each headed by its path.
+      expect(screen.getAllByRole('article')).toHaveLength(2)
+      expect(screen.getByRole('article', { name: 'internal/export/statement_test.go' })).toBeInTheDocument()
 
       const checks = screen.getByRole('list', { name: 'Checks' })
       expect(within(checks).getAllByRole('listitem')).toHaveLength(2)
@@ -402,9 +401,7 @@ describe('Session', () => {
     it('Drop hands the hunk and the etag to dropHunk and draws the change that comes back', async () => {
       const f = fake({ detail: FIX })
       renderSession(f)
-      await screen.findByRole('region', { name: 'Changes' })
-
-      const first = await screen.findByRole('region', { name: /@@ -41,7 \+41,9 @@/ })
+      const first = await screen.findByRole('region', { name: 'internal/export/statement.go hunk 1' })
       fireEvent.click(within(first).getByRole('button', { name: 'Drop' }))
 
       await waitFor(() =>
@@ -413,8 +410,9 @@ describe('Session', () => {
         ]),
       )
       // The fake reverts the first hunk and moves the etag; the pane shows what came back.
-      await waitFor(() => expect(screen.queryByRole('region', { name: /@@ -41,7 \+41,9 @@/ })).toBeNull())
-      expect(screen.getByRole('region', { name: /@@ -88,3 \+90,6 @@/ })).toBeInTheDocument()
+      await waitFor(() => expect(screen.queryByText(/@@ -41,7 \+41,9 @@/)).toBeNull())
+      expect(screen.getByText(/@@ -88,3 \+90,6 @@/)).toBeInTheDocument()
+      expect(screen.queryByRole('region', { name: 'internal/export/statement.go hunk 2' })).toBeNull()
     })
 
     it('shows a refused Drop under its hunk and reads the diff again', async () => {
@@ -423,11 +421,11 @@ describe('Session', () => {
         throw new Error('conflict: the diff has changed since it was read; read it again')
       })
       renderSession(f)
-      const first = await screen.findByRole('region', { name: /@@ -41,7 \+41,9 @@/ })
+      const first = await screen.findByRole('region', { name: 'internal/export/statement.go hunk 1' })
       fireEvent.click(within(first).getByRole('button', { name: 'Drop' }))
 
-      expect(await within(first).findByRole('alert')).toHaveTextContent(
-        'the diff has changed since it was read; read it again',
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        'internal/export/statement.go hunk 1: the diff has changed since it was read; read it again',
       )
       await waitFor(() => expect(f.transport.calls.runDiff).toHaveLength(2))
     })
@@ -435,8 +433,7 @@ describe('Session', () => {
     it('Keep marks the hunk and says the file is reviewed once every hunk is', async () => {
       const f = fake({ detail: FIX })
       renderSession(f)
-      await screen.findByRole('region', { name: 'Changes' })
-      const test = await screen.findByRole('region', { name: /@@ -12,0 \+13,9 @@/ })
+      const test = await screen.findByRole('region', { name: 'internal/export/statement_test.go hunk 1' })
       fireEvent.click(within(test).getByRole('button', { name: 'Keep' }))
       expect(within(test).getByRole('button', { name: 'Kept' })).toHaveAttribute('aria-pressed', 'true')
       // A new file keeps its own word; the kept mark shows on the button.

@@ -1,4 +1,4 @@
-import { useId, type FormEvent, type InputHTMLAttributes, type ReactNode } from 'react'
+import { useId, type FormEvent, type InputHTMLAttributes, type ReactNode, type Ref } from 'react'
 import './SearchBar.css'
 
 export type SearchBarVariant = 'bar' | 'well'
@@ -18,6 +18,8 @@ export interface SearchBarProps
   aside?: ReactNode
   /** Enter submits, when the field starts something. */
   onSubmit?: (value: string) => void
+  /** Reaches the input itself, for a shortcut that puts the cursor in it. */
+  inputRef?: Ref<HTMLInputElement>
 }
 
 /** lucide `search` at stroke 1.5. */
@@ -54,6 +56,7 @@ export default function SearchBar({
   variant = 'bar',
   aside,
   onSubmit,
+  inputRef,
   placeholder,
   ...rest
 }: SearchBarProps): JSX.Element {
@@ -74,6 +77,7 @@ export default function SearchBar({
       </span>
       <input
         {...rest}
+        ref={inputRef}
         id={id}
         type="search"
         className="sd-search__input"

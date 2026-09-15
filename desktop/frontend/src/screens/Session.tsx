@@ -8,9 +8,9 @@ import {
   type JSX,
 } from 'react'
 import type { FixStart, NoteKind, RunDetail, RunDiff, Transport } from '../api/types'
-import { checksFrom, describeTests, latestStep } from '../lib/checks'
 import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
 import { costOrUnknown } from '../lib/format'
+import { checksFromEvents, describeTests, latestStep } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import BundleView from '../components/run/BundleView'
 import ChangesPane, { reasonOf } from '../components/run/ChangesPane'
@@ -255,8 +255,9 @@ export default function Session(props: {
   const isFix = detail?.kind === 'fix'
   const shownTab: Tab = tab ?? (isFix ? 'changes' : 'note')
 
-  const checks = useMemo(() => checksFrom(events), [events])
-  const step = useMemo(() => latestStep(events), [events])
+  const runEvents = useMemo(() => events.map((e) => e.event), [events])
+  const checks = useMemo(() => checksFromEvents(runEvents), [runEvents])
+  const step = useMemo(() => latestStep(runEvents), [runEvents])
   const tools = useMemo(() => toolCount(events), [events])
 
   const onDiffLoaded = useCallback((diff: RunDiff | null) => {
@@ -391,7 +392,7 @@ export default function Session(props: {
           busy: sendBusy,
           shortcut: '⌘↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
-          inline: true,
+          placement: 'screen',
         }
       : null,
   )

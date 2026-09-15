@@ -31,13 +31,13 @@ export interface PrimaryAction {
   shortcut?: string
   title?: string
   /**
-   * The screen draws the filled button itself, beside the input it commits
-   * — the session's Answer sits in the composer, because a commit button a
-   * window away from its own text box is one nobody presses on purpose.
-   * The footer then draws New session demoted to a plain button rather
-   * than a second filled one, so the screen still has exactly one.
+   * Where the filled button is drawn. `footer` (the default) hands it to the
+   * sidebar. `screen` means the screen draws it itself, in the place the
+   * mock puts it — the New session screen's Start sits beside its controls —
+   * and the footer's New session steps down to the bordered style so the
+   * window still has one filled button.
    */
-  inline?: boolean
+  placement?: 'footer' | 'screen'
 }
 
 interface Slot {
@@ -82,10 +82,10 @@ export function useProvidePrimaryAction(action: PrimaryAction | null): void {
   const busy = action?.busy ?? false
   const shortcut = action?.shortcut
   const title = action?.title
-  const inline = action?.inline ?? false
+  const placement = action?.placement
 
   useEffect(() => {
-    publish(label ? { label, onRun: run, disabled, busy, shortcut, title, inline } : null)
+    publish(label ? { label, onRun: run, disabled, busy, shortcut, title, placement } : null)
     return () => publish(null)
-  }, [publish, run, label, disabled, busy, shortcut, title, inline])
+  }, [publish, run, label, disabled, busy, shortcut, title, placement])
 }

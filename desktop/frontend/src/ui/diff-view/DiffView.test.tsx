@@ -1,115 +1,122 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import { parsePatch } from '../../lib/diff'
 import { diff, SAMPLE_PATCH } from '../../store/fakeTransport'
 import DiffView, { hunkKey } from './index'
 
-const FILES = parsePatch(SAMPLE_PATCH)
-const META = diff().files
-
-/** One rendered diff line, by its exact text — tabs included, which the default matcher folds. */
-function line(scope: HTMLElement, text: string): HTMLElement {
-  const found = [...scope.querySelectorAll<HTMLElement>('.sd-diff__c')].find(
-    (el) => el.textContent === text,
-  )
-  if (!found) throw new Error(`no diff line reads ${JSON.stringify(text)}`)
-  return found
-}
-
 describe('DiffView', () => {
-  it('lists every file with its counts and status word, and every hunk with its lines', () => {
-    render(<DiffView files={FILES} meta={META} />)
-    const rows = screen.getAllByRole('listitem')
-    expect(rows).toHaveLength(2)
-    expect(rows[0]).toHaveTextContent('internal/export/statement.go')
-    expect(rows[0]).toHaveTextContent('+9')
-    expect(rows[0]).toHaveTextContent('−2')
-    expect(rows[1]).toHaveTextContent('new')
-    expect(rows[0]).toHaveAttribute('aria-current', 'true')
+  it('draws every file, hunk and line of the patch with its number and mark', () => {
+    render(<DiffView patch={SAMPLE_PATCH} />)
+    expect(screen.getByRole('article', { name: 'internal/export/statement.go' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('article', { name: 'internal/export/statement_test.go' }),
+    ).toBeInTheDocument()
+    expect(screen.getAllByRole('region')).toHaveLength(3)
 
-    const hunk = screen.getByRole('region', {
-      name: '@@ -41,7 +41,9 @@ func (e *Exporter) page(ctx context.Context, n int) error {',
-    })
-    expect(line(hunk, '-\tconn := e.pool.Get()').closest('.sd-diff__line')).toHaveAttribute(
-      'data-t',
-      'del',
-    )
-    expect(line(hunk, '+\tdefer conn.Release()').closest('.sd-diff__line')).toHaveAttribute(
-      'data-t',
-      'add',
-    )
-    expect(line(hunk, ' \trows, err := conn.Query(ctx, statementPage, n)').closest('.sd-diff__line')).not.toHaveAttribute('data-t')
+    const first = screen.getByRole('region', { name: 'internal/export/statement.go hunk 1' })
+    const rows = within(first).getAllByRole('row')
+    expect(rows[0]).toHaveAttribute('data-type', 'del')
+    expect(within(rows[0]).getAllByRole('cell')[0]).toHaveTextContent('41')
+    expect(within(rows[0]).getAllByRole('cell')[1].textContent).toBe('−\tconn := e.pool.Get()')
+    expect(rows[2]).toHaveAttribute('data-type', 'add')
+    expect(within(rows[2]).getAllByRole('cell')[0]).toHaveTextContent('41')
+    expect(within(rows[2]).getAllByRole('cell')[1].textContent).toMatch(/^\+/)
+    expect(rows[7]).toHaveAttribute('data-type', 'context')
   })
 
-  it('offers Keep and Drop on each hunk and says which hunk was pressed', () => {
+  it('shows the counts and status on each file header, from the patch alone', () => {
+    render(<DiffView patch={SAMPLE_PATCH} />)
+    const file = screen.getByRole('article', { name: 'internal/export/statement_test.go' })
+    expect(within(file).getByText('+9')).toBeInTheDocument()
+    expect(within(file).queryByText('−0')).not.toBeInTheDocument()
+    // The sample patch has no `/dev/null` side, so on its own it reads as modified.
+    expect(within(file).getByText('modified')).toBeInTheDocument()
+    const first = screen.getByRole('article', { name: 'internal/export/statement.go' })
+    expect(within(first).getByText('+8')).toBeInTheDocument()
+    expect(within(first).getByText('−2')).toBeInTheDocument()
+  })
+
+  it('takes status and counts from the service\'s file list when it is given one', () => {
+    render(<DiffView patch={SAMPLE_PATCH} files={diff().files} />)
+    const file = screen.getByRole('article', { name: 'internal/export/statement_test.go' })
+    expect(within(file).getByText('new')).toBeInTheDocument()
+    const first = screen.getByRole('article', { name: 'internal/export/statement.go' })
+    expect(within(first).getByText('+9')).toBeInTheDocument()
+    expect(within(first).getByText('modified')).toBeInTheDocument()
+  })
+
+  it('draws no buttons on a read-only change', () => {
+    render(<DiffView patch={SAMPLE_PATCH} />)
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
+  })
+
+  it('offers Keep and Drop per hunk and reports which one was pressed', () => {
     const onKeep = vi.fn()
     const onDrop = vi.fn()
-    render(<DiffView files={FILES} onKeep={onKeep} onDrop={onDrop} />)
-
-    const second = screen.getByRole('region', { name: /@@ -88,3 \+90,6 @@/ })
-    fireEvent.click(within(second).getByRole('button', { name: 'Keep' }))
-    expect(onKeep).toHaveBeenCalledWith('internal/export/statement.go', 1)
-
+    render(<DiffView patch={SAMPLE_PATCH} editable onKeep={onKeep} onDrop={onDrop} />)
+    expect(screen.getAllByRole('button', { name: 'Keep' })).toHaveLength(3)
+    const second = screen.getByRole('region', { name: 'internal/export/statement.go hunk 2' })
     fireEvent.click(within(second).getByRole('button', { name: 'Drop' }))
     expect(onDrop).toHaveBeenCalledWith('internal/export/statement.go', 1)
+    const test = screen.getByRole('region', { name: 'internal/export/statement_test.go hunk 1' })
+    fireEvent.click(within(test).getByRole('button', { name: 'Keep' }))
+    expect(onKeep).toHaveBeenCalledWith('internal/export/statement_test.go', 0)
   })
 
-  it('reads Kept once a hunk is kept, and the file reads reviewed once all of its hunks are', () => {
-    const kept = new Set([
-      hunkKey('internal/export/statement.go', 0),
-      hunkKey('internal/export/statement.go', 1),
-    ])
-    render(<DiffView files={FILES} meta={META} kept={kept} onKeep={() => {}} />)
-    const first = screen.getByRole('region', { name: /@@ -41,7/ })
-    expect(within(first).getByRole('button', { name: 'Kept' })).toHaveAttribute('aria-pressed', 'true')
-    expect(screen.getAllByRole('listitem')[0]).toHaveTextContent('reviewed')
-    expect(screen.getAllByRole('listitem')[1]).toHaveTextContent('new')
-  })
-
-  it('shows a refusal under the hunk it was for, and a busy Drop while one is in flight', () => {
-    const key = hunkKey('internal/export/statement.go', 0)
+  it('shows a kept hunk as Kept, pressed', () => {
     render(
       <DiffView
-        files={FILES}
-        onDrop={() => {}}
-        dropping={hunkKey('internal/export/statement_test.go', 0)}
-        refusals={{ [key]: 'conflict: the diff has changed since it was read; read it again' }}
+        patch={SAMPLE_PATCH}
+        editable
+        decisions={{ [hunkKey('internal/export/statement.go', 0)]: 'kept' }}
       />,
     )
-    const first = screen.getByRole('region', { name: /@@ -41,7/ })
-    expect(within(first).getByRole('alert')).toHaveTextContent('the diff has changed since it was read')
-    const test = screen.getByRole('region', { name: /@@ -12,0/ })
-    expect(within(test).getByRole('button', { name: 'Dropping…' })).toHaveAttribute('aria-disabled', 'true')
+    const kept = screen.getByRole('button', { name: 'Kept' })
+    expect(kept).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getAllByRole('button', { name: 'Keep' })).toHaveLength(2)
   })
 
-  it('disables Drop with the reason on a change that can no longer be edited', () => {
+  it('waits on the hunk whose drop is in flight and leaves the others live', () => {
     render(
       <DiffView
-        files={FILES}
-        onDrop={() => {}}
-        editable={false}
-        readOnlyReason="The branch has been pushed; drop nothing here."
+        patch={SAMPLE_PATCH}
+        editable
+        dropping={hunkKey('internal/export/statement.go', 0)}
       />,
     )
-    const drop = screen.getAllByRole('button', { name: 'Drop' })[0]
-    expect(drop).toBeDisabled()
-    expect(drop).toHaveAttribute('title', 'The branch has been pushed; drop nothing here.')
+    const first = screen.getByRole('region', { name: 'internal/export/statement.go hunk 1' })
+    expect(within(first).getByRole('button', { name: 'Dropping…' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
+    expect(within(first).getByRole('button', { name: 'Keep' })).toBeDisabled()
+    expect(screen.getAllByRole('button', { name: 'Drop' })).toHaveLength(2)
   })
 
-  it('says when there is no change, and when the patch was cut', () => {
-    const { unmount } = render(<DiffView files={[]} />)
-    expect(screen.getByText('No change to show.')).toBeInTheDocument()
-    unmount()
-    render(<DiffView files={FILES} truncated />)
-    expect(screen.getByText(/cut at the size cap/)).toBeInTheDocument()
+  it('says so instead of drawing a split view', () => {
+    render(<DiffView patch={SAMPLE_PATCH} mode="split" />)
+    expect(screen.getByText(/Split view is next/)).toBeInTheDocument()
+    expect(screen.queryByRole('article')).not.toBeInTheDocument()
   })
 
-  it('stays left to right inside an Arabic pane', () => {
-    render(
+  it('says the change is empty rather than drawing nothing', () => {
+    render(<DiffView patch="" />)
+    expect(screen.getByText('The change is empty.')).toBeInTheDocument()
+  })
+
+  it('marks the active file and notes a truncated patch', () => {
+    render(<DiffView patch={SAMPLE_PATCH} activePath="internal/export/statement_test.go" truncated />)
+    expect(
+      screen.getByRole('article', { name: 'internal/export/statement_test.go' }),
+    ).toHaveAttribute('data-active', 'true')
+    expect(screen.getByRole('status')).toHaveTextContent('cut at its size limit')
+  })
+
+  it('is always left-to-right', () => {
+    const { container } = render(
       <div dir="rtl">
-        <DiffView files={FILES} label="التغييرات" />
+        <DiffView patch={SAMPLE_PATCH} />
       </div>,
     )
-    expect(screen.getByRole('region', { name: 'التغييرات' })).toHaveAttribute('dir', 'ltr')
+    expect(container.querySelector('.sd-diff')).toHaveAttribute('dir', 'ltr')
   })
 })

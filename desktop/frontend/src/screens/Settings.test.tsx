@@ -1,297 +1,521 @@
 // @vitest-environment jsdom
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { Check, Transport, Workspace } from '../api/types'
+import type { Check, Transport } from '../api/types'
+import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
+import { resetShowLibrary, showLibrary } from '../lib/library'
 import { prefersRTL, resetPreferRTL, setPreferRTL } from '../lib/rtl'
-import Settings, { CONFIG_DOCS_URL } from './Settings'
+import { resetTheme, theme } from '../lib/theme'
+import {
+  configSummary,
+  createFakeTransport,
+  mcpInventory,
+  workspace as sampleWorkspace,
+  type FakeTransport,
+} from '../store/fakeTransport'
+import Settings, { CONFIG_DOCS_URL, SETTINGS_GROUPS } from './Settings'
+import { RTL_LABEL } from './settings/AppPages'
 
-const RTL_LABEL = 'Prefer right-to-left layout for Arabic content'
+const WORKSPACE = sampleWorkspace({ id: 'ws1', name: 'omni', root: '/repos/omni' })
 
-/**
- * Settings is a modal sheet with its own secondary nav now, so a case that
- * wants a page says which one. Workspaces is the page it opens on.
- */
-function go(page: string): void {
-  fireEvent.click(screen.getByRole('button', { name: page }))
-}
+/** The whole doctor report the sample workspace gives, provider rows first. */
+const DOCTOR: Check[] = [
+  { name: 'config', ok: true, level: 'ok', detail: '/repos/omni/.sirdar/config.yaml' },
+  { name: 'claude --version', ok: true, level: 'ok', detail: '1.0.0' },
+  { name: 'claude auth status', ok: true, level: 'ok', detail: 'logged in as sri' },
+  { name: 'claude environment', ok: true, level: 'ok', detail: '' },
+  { name: 'mcp', ok: true, level: 'warn', detail: 'no workspace .mcp.json' },
+  { name: 'notes.dir', ok: false, level: 'fail', detail: 'not writable' },
+]
 
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
   localStorage.clear()
   resetPreferRTL()
+  resetShowLibrary()
+  resetTheme()
 })
 
-
-function fakeTransport(overrides: Partial<Transport> = {}): Transport {
-  const notImplemented = () => Promise.reject(new Error('not used by Settings'))
-  return {
-    workspaces: notImplemented,
-    addWorkspace: notImplemented,
-    removeWorkspace: notImplemented,
-    queue: notImplemented,
-    runs: notImplemented,
-    run: notImplemented,
-    events: notImplemented,
-    note: notImplemented,
-    prompt: notImplemented,
-    startTriage: notImplemented,
-    startRCA: notImplemented,
-    startFix: notImplemented,
-    startEval: notImplemented,
-    evalReports: notImplemented,
-    latestRetro: notImplemented,
-    golden: notImplemented,
-    addGolden: notImplemented,
-    configSummary: notImplemented,
-    resume: notImplemented,
-    cancel: notImplemented,
-    steer: notImplemented,
-    runDiff: notImplemented,
-    dropHunk: notImplemented,
-    mcpServers: notImplemented,
-    mcpTools: notImplemented,
-    mcpCall: notImplemented,
-    register: notImplemented,
-    doctor: notImplemented,
-    quota: notImplemented,
-    subscribe: () => () => {},
-    ...overrides,
-  }
+/** A transport over the fake, with whatever a case wants overridden. */
+function transportWith(over: Partial<Transport> = {}, seed: Parameters<typeof createFakeTransport>[0] = {}): FakeTransport {
+  const fake = createFakeTransport({ workspaces: [WORKSPACE], configSummary: configSummary(), ...seed })
+  return Object.assign(fake, over)
 }
 
-const workspace: Workspace = {
-  id: 'ws1',
-  name: 'sirdar',
-  root: '/repos/sirdar',
-  provider: 'claude',
-  model: 'sonnet',
-  notesDir: '.sirdar/notes',
-  billing: 'subscription',
+/** What the sidebar's footer would draw: the screen's published primary action. */
+function PrimaryProbe(): JSX.Element {
+  const action = usePrimaryAction()
+  return (
+    <output data-testid="primary">
+      {action
+        ? `${action.label}${action.disabled ? ' (disabled)' : ''} on the ${action.placement ?? 'footer'}`
+        : 'New session'}
+    </output>
+  )
 }
 
-describe('Settings', () => {
-  it('calls addWorkspace and the callback on submit', async () => {
-    const addWorkspace = vi.fn().mockResolvedValue(workspace)
-    const onWorkspacesChanged = vi.fn()
-    const transport = fakeTransport({ addWorkspace })
+function open(
+  props: Partial<React.ComponentProps<typeof Settings>> = {},
+  transport: Transport = transportWith(),
+) {
+  const onClose = vi.fn()
+  const onSelectPage = vi.fn()
+  const onWorkspacesChanged = vi.fn()
+  const view = render(
+    <PrimaryActionProvider>
+      <Settings
+        open
+        transport={transport}
+        workspaces={[WORKSPACE]}
+        currentWorkspaceId="ws1"
+        onClose={onClose}
+        onSelectPage={onSelectPage}
+        onWorkspacesChanged={onWorkspacesChanged}
+        {...props}
+      />
+      <PrimaryProbe />
+    </PrimaryActionProvider>,
+  )
+  return { ...view, onClose, onSelectPage, onWorkspacesChanged }
+}
 
-    render(<Settings open onClose={() => {}} transport={transport} workspaces={[]} onWorkspacesChanged={onWorkspacesChanged} />)
+/** Opens a page by its nav row. */
+function go(page: string): void {
+  fireEvent.click(within(screen.getByRole('navigation')).getByRole('button', { name: page }))
+}
 
-    fireEvent.change(screen.getByLabelText('Workspace path'), {
-      target: { value: '/repos/sirdar' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: 'Add workspace' }))
-
-    await waitFor(() => expect(addWorkspace).toHaveBeenCalledWith('/repos/sirdar'))
-    await waitFor(() => expect(onWorkspacesChanged).toHaveBeenCalled())
+describe('the settings nav', () => {
+  it('lists the twelve pages in two groups, General first', () => {
+    open()
+    const nav = screen.getByRole('navigation', { name: 'Settings sections' })
+    expect(within(nav).getByText('Settings')).toBeInTheDocument()
+    expect(within(nav).getByText('This app')).toBeInTheDocument()
+    expect(
+      SETTINGS_GROUPS.flatMap((g) => g.items.map((i) => i.id)),
+    ).toEqual([
+      'general', 'providers', 'budgets', 'mcp', 'tools', 'permissions', 'notes',
+      'notifications', 'webhooks', 'reading', 'library', 'about',
+    ])
+    expect(screen.getByRole('dialog', { name: 'General' })).toBeInTheDocument()
+    expect(within(nav).getByRole('button', { name: 'General' })).toHaveAttribute('aria-current', 'page')
   })
 
-  it('shows the error message when addWorkspace fails', async () => {
-    const addWorkspace = vi.fn().mockRejectedValue(new Error('bad path'))
-    const transport = fakeTransport({ addWorkspace })
+  it('opens the page the address names and tells the address about a chosen one', () => {
+    const { onSelectPage } = open({ page: 'budgets' })
+    expect(screen.getByRole('dialog', { name: 'Budgets' })).toBeInTheDocument()
 
-    render(<Settings open onClose={() => {}} transport={transport} workspaces={[]} onWorkspacesChanged={vi.fn()} />)
-
-    fireEvent.change(screen.getByLabelText('Workspace path'), { target: { value: '/nope' } })
-    fireEvent.click(screen.getByRole('button', { name: 'Add workspace' }))
-
-    expect(await screen.findByText('bad path')).toBeInTheDocument()
+    go('Permissions')
+    expect(onSelectPage).toHaveBeenCalledWith('permissions')
+    expect(screen.getByRole('dialog', { name: 'Permissions' })).toBeInTheDocument()
   })
 
-  it('renders doctor rows as OK/!!/XX with detail', async () => {
-    const checks: Check[] = [
-      { name: 'config', ok: true, level: 'ok', detail: 'valid' },
-      { name: 'mcp', ok: true, level: 'warn', detail: 'no MCP tools' },
-      { name: 'git', ok: false, level: 'fail', detail: 'not a repo' },
-    ]
-    const doctor = vi.fn().mockResolvedValue(checks)
-    const transport = fakeTransport({ doctor })
+  it('falls back to General for a page it does not have, and maps the old workspaces address there', () => {
+    const { unmount } = open({ page: 'nope' })
+    expect(screen.getByRole('dialog', { name: 'General' })).toBeInTheDocument()
+    unmount()
+    open({ page: 'workspaces' })
+    expect(screen.getByRole('dialog', { name: 'General' })).toBeInTheDocument()
+  })
 
-    render(<Settings open onClose={() => {}} transport={transport} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+  it('names the version in the nav foot when the bridge reports one, and just Sirdar otherwise', async () => {
+    const { unmount } = open({}, transportWith({ version: async () => '0.9.2' }))
+    expect(await screen.findByText('Sirdar v0.9.2')).toBeInTheDocument()
+    unmount()
+    open({}, transportWith())
+    expect(screen.getByText('Sirdar')).toBeInTheDocument()
+    expect(screen.queryByText(/Sirdar v/)).toBeNull()
+  })
+})
 
+describe('Save', () => {
+  it.each(SETTINGS_GROUPS.flatMap((g) => g.items.map((i) => i.label)).filter((l) => l !== 'Try a tool'))(
+    'is disabled on %s, with a footer note saying why',
+    (label) => {
+      open()
+      go(label)
+      const save = screen.getByRole('button', { name: 'Save' })
+      expect(save).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+      expect(
+        screen.getByText(/Settings are read from \.sirdar\/config\.yaml|These apply as they are switched/),
+      ).toBeInTheDocument()
+    },
+  )
+
+  it('is absent on Try a tool, where Call is the page\'s own commit', async () => {
+    open()
+    go('Try a tool')
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
+    await screen.findByRole('button', { name: 'Call' })
+  })
+
+  it('Cancel and Close both close the modal', () => {
+    const { onClose } = open()
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onClose).toHaveBeenCalledTimes(1)
+    go('Try a tool')
+    fireEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(onClose).toHaveBeenCalledTimes(2)
+  })
+})
+
+describe('General', () => {
+  it('reads the workspace, root, notes directory and language off the config summary', async () => {
+    open()
+    expect(await screen.findByText('/repos/omni/notes')).toBeInTheDocument()
+    // The name and the root appear on the Workspace card and on the registry below it.
+    expect(screen.getAllByText('omni').length).toBeGreaterThan(1)
+    expect(screen.getAllByText('/repos/omni').length).toBeGreaterThan(1)
+    expect(screen.getByText("Notes in en, customer replies in the ticket's own language")).toBeInTheDocument()
+  })
+
+  it('offers to copy the config path where the transport cannot open files', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(navigator, { clipboard: { writeText } })
+    open()
+    const copy = await screen.findByRole('button', { name: 'Copy config path: Root' })
+    fireEvent.click(copy)
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith('/repos/omni/.sirdar/config.yaml'))
+    expect(await screen.findByText('Copied')).toBeInTheDocument()
+  })
+
+  it('opens the config through the bridge where the transport can', async () => {
+    const openConfig = vi.fn().mockResolvedValue(undefined)
+    open({}, transportWith({ openConfig }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Open config: Root' }))
+    await waitFor(() => expect(openConfig).toHaveBeenCalledWith('ws1'))
+  })
+
+  it('switches the theme live and remembers it', () => {
+    open()
+    fireEvent.click(screen.getByRole('radio', { name: 'Dark' }))
+    expect(theme()).toBe('dark')
+    expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(screen.getByText('Dark', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
+  })
+
+  it('runs doctor and lists the rows with the CLI\'s own marks', async () => {
+    const doctor = vi.fn().mockResolvedValue(DOCTOR)
+    open({}, transportWith({ doctor }))
     fireEvent.click(screen.getByRole('button', { name: 'Run doctor' }))
-
-    expect(await screen.findByText('OK')).toBeInTheDocument()
+    expect(await screen.findByText('6 checks read')).toBeInTheDocument()
     expect(screen.getByText('!!')).toBeInTheDocument()
     expect(screen.getByText('XX')).toBeInTheDocument()
-    expect(screen.getByText('no MCP tools')).toBeInTheDocument()
-    expect(screen.getByText('not a repo')).toBeInTheDocument()
+    expect(screen.getByText('not writable')).toBeInTheDocument()
     expect(doctor).toHaveBeenCalledWith('ws1')
   })
 
-  // A relative docs path resolves against the asset server, which answers
-  // with the app's own index.html, so the link has to be the absolute one.
-  it('links the configuration reference at GitHub, on the About page', () => {
-    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
-
-    go('About')
-    const link = screen.getByRole('link', { name: 'docs/config.md' })
-    expect(link).toHaveAttribute('href', CONFIG_DOCS_URL)
+  it('shows why the summary could not be read instead of an empty page', async () => {
+    open({}, transportWith({ configSummary: vi.fn().mockRejectedValue(new Error('no such workspace')) }))
+    expect(await screen.findByText('no such workspace')).toBeInTheDocument()
   })
 
-  it("shows the workspace's billing mode as a badge", () => {
-    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[workspace]} onWorkspacesChanged={vi.fn()} />)
+  it('asks for nothing and says so when no workspace is selected', () => {
+    const configSummarySpy = vi.fn()
+    open({ currentWorkspaceId: undefined, workspaces: [] }, transportWith({ configSummary: configSummarySpy }))
+    expect(configSummarySpy).not.toHaveBeenCalled()
+    expect(screen.getByText(/Choose a workspace from the switcher/)).toBeInTheDocument()
+  })
 
-    expect(screen.getByText('Billing')).toBeInTheDocument()
-    expect(screen.getByText('subscription')).toBeInTheDocument()
+  it('registers a workspace and reports the failure when it cannot', async () => {
+    const addWorkspace = vi.fn().mockResolvedValue(WORKSPACE)
+    const { onWorkspacesChanged } = open({}, transportWith({ addWorkspace }))
+    fireEvent.change(screen.getByLabelText('Workspace path'), { target: { value: '/repos/sirdar' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add workspace' }))
+    await waitFor(() => expect(addWorkspace).toHaveBeenCalledWith('/repos/sirdar'))
+    await waitFor(() => expect(onWorkspacesChanged).toHaveBeenCalled())
+
+    addWorkspace.mockRejectedValueOnce(new Error('bad path'))
+    fireEvent.change(screen.getByLabelText('Workspace path'), { target: { value: '/nope' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Add workspace' }))
+    expect(await screen.findByText('bad path')).toBeInTheDocument()
   })
 
   // window.confirm blocks the whole webview, run stream included, so the
-  // button arms itself instead.
-  it('removes a workspace only on the second press', async () => {
+  // button arms itself instead and disarms after five seconds.
+  it('removes a workspace only on the second press, and disarms on its own', async () => {
     const removeWorkspace = vi.fn().mockResolvedValue(undefined)
-    const onWorkspacesChanged = vi.fn()
-    const transport = fakeTransport({ removeWorkspace })
+    const { onWorkspacesChanged, unmount } = open({}, transportWith({ removeWorkspace }))
 
-    render(
-      <Settings
-        open
-        onClose={() => {}}
-        transport={transport}
-        workspaces={[workspace]}
-        onWorkspacesChanged={onWorkspacesChanged}
-      />,
-    )
-
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove omni' }))
     expect(removeWorkspace).not.toHaveBeenCalled()
-
-    const armed = await screen.findByRole('button', { name: 'Confirm remove' })
-    fireEvent.click(armed)
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm remove omni' }))
     await waitFor(() => expect(removeWorkspace).toHaveBeenCalledWith('ws1'))
     await waitFor(() => expect(onWorkspacesChanged).toHaveBeenCalled())
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument()
-  })
-
-  it('disarms the remove button after five seconds', async () => {
-    const removeWorkspace = vi.fn().mockResolvedValue(undefined)
-    const { unmount } = render(
-      <Settings
-        open
-        onClose={() => {}}
-        transport={fakeTransport({ removeWorkspace })}
-        workspaces={[workspace]}
-        onWorkspacesChanged={vi.fn()}
-      />,
-    )
 
     vi.useFakeTimers()
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Remove omni' }))
     await vi.waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Confirm remove' })).toBeInTheDocument(),
+      expect(screen.getByRole('button', { name: 'Confirm remove omni' })).toBeInTheDocument(),
     )
-
     act(() => vi.advanceTimersByTime(5000))
-    expect(screen.getByRole('button', { name: 'Remove' })).toBeInTheDocument()
-    expect(removeWorkspace).not.toHaveBeenCalled()
+    expect(screen.getByRole('button', { name: 'Remove omni' })).toBeInTheDocument()
+    expect(removeWorkspace).toHaveBeenCalledTimes(1)
 
-    // And the timer does not outlive the screen.
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }))
-    expect(vi.getTimerCount()).toBeGreaterThan(0)
+    fireEvent.click(screen.getByRole('button', { name: 'Remove omni' }))
     unmount()
     expect(vi.getTimerCount()).toBe(0)
   })
 })
 
-describe('the reading-direction toggle', () => {
-  it('starts off and turns the preference on when pressed', () => {
-    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
+describe('Providers', () => {
+  it('shows the default provider with its mark and lists every provider with its facts', async () => {
+    open({ page: 'providers' })
+    expect(await screen.findByText('claude · sonnet · subscription')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Providers' })
+    expect(within(table).getAllByRole('row')).toHaveLength(8)
+    expect(within(table).getByText('Claude Code CLI · stream-json')).toBeInTheDocument()
+    expect(within(table).getAllByText('refused')).toHaveLength(2)
+    expect(within(table).getAllByText('every call mediated')).toHaveLength(4)
+    expect(within(table).getAllByText('not checked')).toHaveLength(6)
+    // agy is off under Google's Antigravity terms, with or without doctor.
+    expect(within(table).getByText('disabled')).toHaveAttribute('title', 'disabled (Antigravity terms)')
+    expect(within(table).getByText('disabled (Antigravity terms)')).toBeInTheDocument()
+  })
 
-    go('Reading')
-    const toggle = screen.getByLabelText(RTL_LABEL)
-    expect(toggle).not.toBeChecked()
+  it('reads the agy row doctor emits for a workspace that still names it', async () => {
+    const doctor = vi.fn().mockResolvedValue([
+      { name: 'agy', ok: false, level: 'fail', detail: 'disabled (Antigravity terms)' },
+    ] satisfies Check[])
+    open(
+      { page: 'providers', workspaces: [{ ...WORKSPACE, provider: 'agy' }] },
+      transportWith({ doctor }, { configSummary: configSummary({ general: { ...configSummary().general, provider: 'agy' } }) }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Check agy' }))
+    const table = screen.getByRole('table', { name: 'Providers' })
+    const cell = await within(table).findByText('disabled')
+    expect(cell).toHaveAttribute('data-level', 'fail')
+    expect(cell).toHaveAttribute('title', 'disabled (Antigravity terms)')
+    expect(within(table).getAllByText('not checked')).toHaveLength(6)
+  })
 
+  it('Check re-runs doctor and fills the sign-in column from its rows', async () => {
+    const doctor = vi.fn().mockResolvedValue(DOCTOR)
+    open({ page: 'providers' }, transportWith({ doctor }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Check claude' }))
+    expect(doctor).toHaveBeenCalledWith('ws1')
+    const table = screen.getByRole('table', { name: 'Providers' })
+    expect(await within(table).findByText('signed in')).toHaveAttribute('title', 'logged in as sri')
+    // Doctor only looked at the workspace's own provider; agy stays disabled.
+    expect(within(table).getAllByText('not checked')).toHaveLength(5)
+  })
+
+  it('reads a failing login as failed, with the row that failed', async () => {
+    const doctor = vi.fn().mockResolvedValue([
+      { name: 'claude auth status', ok: false, level: 'fail', detail: 'not logged in' },
+    ] satisfies Check[])
+    open({ page: 'providers' }, transportWith({ doctor }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Check codex' }))
+    const cell = await screen.findByText('failed')
+    expect(cell).toHaveAttribute('data-level', 'fail')
+    expect(cell).toHaveAttribute('title', 'claude auth status: not logged in')
+  })
+})
+
+describe('Budgets, Permissions and Notes', () => {
+  it('reads the caps off the summary', async () => {
+    open({ page: 'budgets' })
+    expect(await screen.findByText('20 turns')).toBeInTheDocument()
+    expect(screen.getByText('20 minutes')).toBeInTheDocument()
+    expect(screen.getByText('2.00 USD')).toBeInTheDocument()
+    expect(screen.getByText('6 minutes of silence')).toBeInTheDocument()
+  })
+
+  it('shows the allow-lists as chips and says what an empty one means', async () => {
+    open({ page: 'permissions' })
+    // git status* is on both the bash and the fix-bash lists.
+    expect(await screen.findAllByText('git status*')).toHaveLength(2)
+    expect(screen.getByText('npm test*')).toBeInTheDocument()
+    expect(screen.getByText(/every web fetch is denied/)).toBeInTheDocument()
+    expect(screen.getByText(/reads stay inside the workspace/)).toBeInTheDocument()
+  })
+
+  it('shows the note filenames, the template source and the rtl markup', async () => {
+    open({ page: 'notes' })
+    expect(await screen.findByText('{{key}}-triage.md')).toBeInTheDocument()
+    expect(screen.getByText('Embedded defaults')).toBeInTheDocument()
+    expect(screen.getByText(/On: a right-to-left paragraph is wrapped/)).toBeInTheDocument()
+  })
+})
+
+describe('Notifications and Webhooks', () => {
+  it('reads the summary redacted: schemes, never references', async () => {
+    open({ page: 'notifications' })
+    expect(await screen.findByText('completed, failed')).toBeInTheDocument()
+    expect(screen.getByText('env: reference')).toBeInTheDocument()
+    expect(screen.getByText(/Secrets are never shown/)).toBeInTheDocument()
+
+    go('Webhooks')
+    expect(await screen.findByText('10m0s')).toBeInTheDocument()
+    expect(screen.getByText('only tickets assigned to me')).toBeInTheDocument()
+    expect(screen.getByText(/signed deliveries · keychain: reference/)).toBeInTheDocument()
+  })
+
+  it('says when a workspace posts nowhere and serves no hooks', async () => {
+    open(
+      { page: 'notifications' },
+      transportWith({}, {
+        configSummary: configSummary({
+          notify: { enabled: false, on: [], includeTitle: false, destinations: [] },
+          webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
+        }),
+      }),
+    )
+    expect(await screen.findByText('This workspace posts nothing')).toBeInTheDocument()
+    go('Webhooks')
+    expect(await screen.findByText(/there is no \/hooks endpoint/)).toBeInTheDocument()
+  })
+})
+
+describe('MCP servers', () => {
+  it('lists the servers without reaching them, then Test connects and fills in the counts', async () => {
+    const transport = transportWith()
+    open({ page: 'mcp' }, transport)
+    expect(await screen.findByText('filesystem')).toBeInTheDocument()
+    expect(screen.getByText('zoho')).toBeInTheDocument()
+    expect(screen.getByText('stdio')).toBeInTheDocument()
+    expect(screen.getByText('http')).toBeInTheDocument()
+    expect(transport.calls.mcpServers).toEqual([{ ws: 'ws1', connect: false }])
+    expect(screen.getByText('workspace · .mcp.json')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Test filesystem' }))
+    expect(await screen.findByText('3 tools · connected in 412ms')).toBeInTheDocument()
+    expect(transport.calls.mcpServers).toEqual([
+      { ws: 'ws1', connect: false },
+      { ws: 'ws1', connect: true },
+    ])
+    const failed = screen.getByText('failed · dial tcp: connection refused')
+    expect(failed).toHaveAttribute('data-level', 'fail')
+    expect(screen.getByRole('button', { name: 'Retry zoho' })).toBeInTheDocument()
+  })
+
+  it('shows the workspaceOnly switch read-only and the allowed patterns as chips', async () => {
+    open({ page: 'mcp' })
+    const toggle = await screen.findByRole('switch', { name: 'Workspace servers only' })
+    expect(toggle).toBeDisabled()
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
+    expect(screen.getByText('mcp__filesystem__read_*')).toBeInTheDocument()
+    expect(screen.getByText(/Everything else is denied by name/)).toBeInTheDocument()
+  })
+
+  it('says when there are no servers, and when the listing failed', async () => {
+    const { unmount } = open(
+      { page: 'mcp' },
+      transportWith({}, { mcp: mcpInventory({ servers: [], warnings: ['no .mcp.json'] }) }),
+    )
+    expect(await screen.findByText(/No MCP servers/)).toBeInTheDocument()
+    expect(screen.getByText('no .mcp.json')).toBeInTheDocument()
+    unmount()
+
+    open({ page: 'mcp' }, transportWith({ mcpServers: vi.fn().mockRejectedValue(new Error('config is invalid')) }))
+    expect(await screen.findByText('config is invalid')).toBeInTheDocument()
+  })
+})
+
+describe('Try a tool', () => {
+  it('lists the first server\'s tools with their verdicts and calls an allowed one', async () => {
+    const transport = transportWith()
+    open({ page: 'tools' }, transport)
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    expect(transport.calls.mcpTools).toEqual([{ ws: 'ws1', server: 'filesystem' }])
+    expect(screen.getByText('allowed')).toBeInTheDocument()
+    expect(screen.getByText('permissions.mcp · matches mcp__filesystem__read_*')).toBeInTheDocument()
+
+    fireEvent.change(screen.getByLabelText('Arguments, as JSON'), {
+      target: { value: '{"path": "README.md"}' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }))
+    await waitFor(() =>
+      expect(transport.calls.mcpCall).toEqual([
+        { ws: 'ws1', server: 'filesystem', tool: 'read_file', args: { path: 'README.md' } },
+      ]),
+    )
+    expect(await screen.findByText('took 57ms')).toBeInTheDocument()
+    expect(screen.getByText(/"path": "README.md"/, { selector: 'pre' })).toBeInTheDocument()
+    // Kept for the session.
+    expect(screen.getByText('filesystem · read_file')).toBeInTheDocument()
+    expect(screen.getByText('57ms')).toBeInTheDocument()
+  })
+
+  it('shows a denied verdict as the answer, without an error', async () => {
+    const transport = transportWith()
+    open({ page: 'tools' }, transport)
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    fireEvent.change(toolSelect, { target: { value: 'write_file' } })
+    expect(screen.getByText('denied')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }))
+    await waitFor(() => expect(transport.calls.mcpCall).toHaveLength(1))
+    // The reason is the verdict line's before the call and the well's after it.
+    expect(await screen.findAllByText(/the tool name reads as a write/)).toHaveLength(2)
+    expect(screen.getAllByText('denied').length).toBeGreaterThan(1)
+    expect(screen.queryByRole('alert')).toBeNull()
+  })
+
+  it('refuses to call with arguments that are not a JSON object', async () => {
+    const transport = transportWith()
+    open({ page: 'tools' }, transport)
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    fireEvent.change(screen.getByLabelText('Arguments, as JSON'), { target: { value: '{nope' } })
+    expect(screen.getByText('Arguments are not valid JSON')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Call' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }))
+    expect(transport.calls.mcpCall).toEqual([])
+  })
+
+  it('reports a call the transport could not make', async () => {
+    const transport = transportWith({ mcpCall: vi.fn().mockRejectedValue(new Error('server went away')) })
+    open({ page: 'tools' }, transport)
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('server went away')
+  })
+
+  it('publishes Call as the primary action, drawn on the screen, so New session steps down', async () => {
+    open({ page: 'tools' })
+    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Call on the screen'))
+    go('About')
+    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('New session'))
+  })
+})
+
+describe('This app', () => {
+  it('flips the reading direction and remembers it', () => {
+    open({ page: 'reading' })
+    const toggle = screen.getByRole('switch', { name: RTL_LABEL })
+    expect(toggle).toHaveAttribute('aria-checked', 'false')
     fireEvent.click(toggle)
-    expect(toggle).toBeChecked()
     expect(prefersRTL()).toBe(true)
+    fireEvent.click(toggle)
+    expect(prefersRTL()).toBe(false)
   })
 
   it('comes back checked for an engineer who set it last time', () => {
     setPreferRTL(true)
-    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
-    go('Reading')
-    expect(screen.getByLabelText(RTL_LABEL)).toBeChecked()
+    open({ page: 'reading' })
+    expect(screen.getByRole('switch', { name: RTL_LABEL })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('turns the preference off again', () => {
-    setPreferRTL(true)
-    render(<Settings open onClose={() => {}} transport={fakeTransport()} workspaces={[]} onWorkspacesChanged={() => {}} />)
-
-    go('Reading')
-    fireEvent.click(screen.getByLabelText(RTL_LABEL))
-    expect(prefersRTL()).toBe(false)
-  })
-})
-
-describe('the notify and webhooks summary', () => {
-  const summary = {
-    notify: {
-      enabled: true,
-      on: ['completed'],
-      includeTitle: false,
-      destinations: [{ type: 'slack' as const, credential: 'env' }],
-    },
-    webhooks: {
-      enabled: true,
-      cooldown: '10m0s',
-      match: { assignee: 'me' },
-      sources: [{ name: 'jira', auth: 'secret' as const, credential: 'keychain' }],
-    },
-  }
-
-  it('reads the summary for the workspace on screen and shows it redacted', async () => {
-    const configSummary = vi.fn().mockResolvedValue(summary)
-    render(
-      <Settings
-        open
-        onClose={() => {}}
-        transport={fakeTransport({ configSummary })}
-        workspaces={[workspace]}
-        currentWorkspaceId="ws1"
-        onWorkspacesChanged={() => {}}
-      />,
-    )
-
-    go('Notifications')
-    await screen.findByRole('region', { name: 'Notifications and webhooks' })
-    expect(configSummary).toHaveBeenCalledWith('ws1')
-    expect(await screen.findByText('env: reference')).toBeInTheDocument()
-    expect(screen.getByText('keychain: reference')).toBeInTheDocument()
-    expect(screen.getByText(/Posts on completed/)).toBeInTheDocument()
-    expect(screen.getByText(/only tickets assigned to me/)).toBeInTheDocument()
+  it('flips the design library switch', () => {
+    open({ page: 'library' })
+    const toggle = screen.getByRole('switch', { name: 'Show the design library' })
+    const before = showLibrary()
+    fireEvent.click(toggle)
+    expect(showLibrary()).toBe(!before)
   })
 
-  it('asks for nothing when no workspace is selected', () => {
-    const configSummary = vi.fn()
-    render(
-      <Settings
-        open
-        onClose={() => {}}
-        transport={fakeTransport({ configSummary })}
-        workspaces={[]}
-        onWorkspacesChanged={() => {}}
-      />,
-    )
-    expect(configSummary).not.toHaveBeenCalled()
-    go('Notifications')
-    expect(screen.queryByRole('region', { name: 'Notifications and webhooks' })).toBeNull()
-  })
-
-  it('shows why the summary could not be read instead of an empty panel', async () => {
-    const configSummary = vi.fn().mockRejectedValue(new Error('no such workspace'))
-    render(
-      <Settings
-        open
-        onClose={() => {}}
-        transport={fakeTransport({ configSummary })}
-        workspaces={[workspace]}
-        currentWorkspaceId="ws1"
-        onWorkspacesChanged={() => {}}
-      />,
-    )
-    go('Notifications')
-    expect(await screen.findByText('no such workspace')).toBeInTheDocument()
+  // A relative docs path resolves against the asset server, which answers
+  // with the app's own index.html, so the link has to be the absolute one.
+  it('links the configuration reference at GitHub, on the About page', async () => {
+    open({ page: 'about' }, transportWith({ version: async () => '0.9.2' }))
+    expect(screen.getByRole('link', { name: 'docs/config.md' })).toHaveAttribute('href', CONFIG_DOCS_URL)
+    expect(await screen.findByText('v0.9.2')).toBeInTheDocument()
   })
 })

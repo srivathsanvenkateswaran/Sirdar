@@ -1,9 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { FixInfo, RunDiff, Transport } from '../../api/types'
-import type { Check } from '../../lib/checks'
-import { parsePatch } from '../../lib/diff'
+import { OUTCOME_WORDS, type Check } from '../../lib/review'
 import Button from '../../ui/button'
-import DiffView, { hunkKey } from '../../ui/diff-view'
+import DiffView, { hunkKey, type HunkDecision } from '../../ui/diff-view'
 import FixPanel from './FixPanel'
 
 /** Strips the HTTP code the transport prefixes, so the reader gets the reason alone. */
@@ -19,8 +18,8 @@ export function reasonOf(err: unknown): string {
  * Drop hands the hunk and the diff's etag to the service, which reverts it
  * out of the commit and answers with the change as it stands after; that
  * answer replaces what is drawn. A refusal — the etag moved, the branch was
- * pushed — is shown under the hunk it was for, and the diff is read again so
- * the next Drop is judged against what is there now.
+ * pushed — is shown above the diff naming the hunk it was for, and the diff
+ * is read again so the next Drop is judged against what is there now.
  */
 export default function ChangesPane({
   transport,
@@ -54,10 +53,9 @@ export default function ChangesPane({
   const [diff, setDiff] = useState<RunDiff | null>(null)
   const [loadError, setLoadError] = useState('')
   const [loading, setLoading] = useState(true)
-  const [kept, setKept] = useState<Set<string>>(() => new Set())
+  const [decisions, setDecisions] = useState<Record<string, HunkDecision>>({})
   const [dropping, setDropping] = useState<string | undefined>()
-  const [refusals, setRefusals] = useState<Record<string, string>>({})
-
+  const [refusal, setRefusal] = useState('')
   /** Which read is the current one; an older read that lands late is ignored. */
   const generation = useRef(0)
 
@@ -81,8 +79,8 @@ export default function ChangesPane({
   }, [transport, workspaceId, runId, onLoaded])
 
   useEffect(() => {
-    setKept(new Set())
-    setRefusals({})
+    setDecisions({})
+    setRefusal('')
     void load()
     return () => {
       // Whatever is in flight belongs to a run this pane no longer shows.
@@ -90,14 +88,12 @@ export default function ChangesPane({
     }
   }, [load, reload])
 
-  const files = useMemo(() => (diff ? parsePatch(diff.patch) : []), [diff])
-
   const keep = useCallback((path: string, index: number) => {
-    setKept((prev) => {
-      const next = new Set(prev)
+    setDecisions((prev) => {
       const key = hunkKey(path, index)
-      if (next.has(key)) next.delete(key)
-      else next.add(key)
+      const next = { ...prev }
+      if (next[key] === 'kept') delete next[key]
+      else next[key] = 'kept'
       return next
     })
   }, [])
@@ -107,20 +103,16 @@ export default function ChangesPane({
       if (!diff) return
       const key = hunkKey(path, index)
       setDropping(key)
-      setRefusals((prev) => {
-        const next = { ...prev }
-        delete next[key]
-        return next
-      })
+      setRefusal('')
       try {
         const after = await transport.dropHunk(workspaceId, runId, { path, hunk: index, etag: diff.etag })
         setDiff(after)
         onLoaded?.(after)
         // The hunks below the dropped one move up by one, so a mark made
         // against the old numbering would name the wrong hunk.
-        setKept(new Set())
+        setDecisions({})
       } catch (err: unknown) {
-        setRefusals((prev) => ({ ...prev, [key]: reasonOf(err) }))
+        setRefusal(`${path} hunk ${index + 1}: ${reasonOf(err)}`)
         void load()
       } finally {
         setDropping(undefined)
@@ -131,12 +123,12 @@ export default function ChangesPane({
 
   const editable = Boolean(diff && diff.worktreePresent && !diff.pushed)
   const readOnlyReason = !diff
-    ? undefined
+    ? ''
     : diff.pushed
       ? 'The branch has been pushed; the change can be read but not edited.'
       : !diff.worktreePresent
         ? 'The worktree is gone; the change can be read but not edited.'
-        : undefined
+        : ''
 
   return (
     <div className="changes">
@@ -144,31 +136,35 @@ export default function ChangesPane({
         <p className="pane-empty changes-note">Reading the change…</p>
       ) : loadError && !diff ? (
         <p className="pane-empty changes-note">{loadError}</p>
-      ) : (
-        <DiffView
-          files={files}
-          meta={diff?.files}
-          kept={kept}
-          dropping={dropping}
-          refusals={refusals}
-          editable={editable}
-          readOnlyReason={readOnlyReason}
-          truncated={diff?.truncated}
-          onKeep={keep}
-          onDrop={(path, index) => void drop(path, index)}
-        />
-      )}
+      ) : diff ? (
+        <div className="changes-diff">
+          {refusal ? (
+            <p className="changes-refused" role="alert">
+              {refusal}
+            </p>
+          ) : null}
+          {readOnlyReason ? <p className="pane-empty changes-note">{readOnlyReason}</p> : null}
+          <DiffView
+            patch={diff.patch}
+            files={diff.files}
+            editable={editable}
+            decisions={decisions}
+            dropping={dropping}
+            truncated={diff.truncated}
+            onKeep={keep}
+            onDrop={(path, index) => void drop(path, index)}
+          />
+        </div>
+      ) : null}
 
       {checks.length > 0 ? (
         <div className="checks" role="list" aria-label="Checks">
           {checks.map((check, i) => (
-            <span key={i} role="listitem" className="check" data-ok={check.ok === undefined ? undefined : String(check.ok)}>
-              <span className="check-word">
-                {check.ok === undefined ? '…' : check.ok ? 'ok' : 'FAIL'}
-              </span>
+            <span key={i} role="listitem" className="check" data-outcome={check.outcome}>
+              <span className="check-word">{OUTCOME_WORDS[check.outcome]}</span>
               <span className="check-command">{check.command}</span>
-              {check.detail && check.detail !== 'ok' ? (
-                <span className="check-detail"> · {check.detail}</span>
+              {check.result && check.result !== 'ok' ? (
+                <span className="check-detail"> · {check.result}</span>
               ) : null}
             </span>
           ))}

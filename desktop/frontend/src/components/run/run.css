@@ -616,11 +616,28 @@ section:first-child > .turn-rule {
   color: var(--sd-ink-3);
 }
 
-.check[data-ok='true'] .check-word {
+.check[data-outcome='ok'] .check-word {
   color: var(--sd-st-done);
 }
 
-.check[data-ok='false'] .check-word {
+.check[data-outcome='failed'] .check-word {
+  color: var(--sd-st-failed);
+}
+
+.changes-diff {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  overflow: auto;
+}
+
+.changes-refused {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: var(--sd-text-meta);
   color: var(--sd-st-failed);
 }
 

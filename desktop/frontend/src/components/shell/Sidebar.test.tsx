@@ -236,26 +236,25 @@ describe('the sidebar footer', () => {
 
     const { onNavigate } = mount()
     expect(screen.queryByRole('button', { name: /Run eval/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    const filled = screen.getByRole('button', { name: 'New session' })
+    expect(filled).toHaveAttribute('data-variant', 'primary')
+    fireEvent.click(filled)
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 
-  // The session's Answer sits in the composer, beside the text it commits.
-  // The footer then keeps New session, demoted, so the window still has
-  // exactly one filled button.
-  it('demotes New session while a screen draws its own filled button inline', () => {
+  it('demotes New session to the bordered style while a screen draws its own filled button', () => {
     setShowLibrary(false)
 
-    function Publisher(): null {
-      useProvidePrimaryAction({ label: 'Answer', onRun: () => {}, inline: true })
+    function OnScreen(): null {
+      useProvidePrimaryAction({ label: 'Start', onRun: () => {}, placement: 'screen' })
       return null
     }
 
-    const { onNavigate } = mount({}, <Publisher />)
-    expect(screen.queryByRole('button', { name: /Answer/ })).toBeNull()
-    const demoted = screen.getByRole('button', { name: 'New session' })
-    expect(demoted).toHaveAttribute('data-variant', 'secondary')
-    fireEvent.click(demoted)
+    const { onNavigate } = mount({}, <OnScreen />)
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'New session' })
+    expect(button).toHaveAttribute('data-variant', 'secondary')
+    fireEvent.click(button)
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 

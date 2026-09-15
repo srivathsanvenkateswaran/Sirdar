@@ -239,11 +239,7 @@ export default function Sidebar(props: {
         }
         quotas={quota.length > 0 ? <QuotaMeter quota={quota} /> : undefined}
         action={
-          primary?.inline ? (
-            // The screen is drawing its own filled button; this one steps
-            // down so the window still has one.
-            <Button onClick={() => onNavigate({ name: 'new' })}>New session</Button>
-          ) : primary ? (
+          primary && primary.placement !== 'screen' ? (
             <Button
               variant="primary"
               busy={primary.busy}
@@ -255,7 +251,12 @@ export default function Sidebar(props: {
               {primary.label}
             </Button>
           ) : (
-            <Button variant="primary" onClick={() => onNavigate({ name: 'new' })}>
+            // Demoted to the bordered style while a screen draws its own
+            // filled button, so the window never has two.
+            <Button
+              variant={primary ? 'secondary' : 'primary'}
+              onClick={() => onNavigate({ name: 'new' })}
+            >
               New session
             </Button>
           )

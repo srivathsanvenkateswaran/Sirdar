@@ -92,7 +92,7 @@ kbd {
 /* ---------- fields ---------- */
 
 /*
- * Shared by the New triage dialog, the RCA and fix forms and the resume box.
+ * Shared by the RCA and fix forms and the resume box.
  * A field is a label, a control and one line of help, and the control sits in
  * the sunk well so an input reads as somewhere to type rather than as another
  * card.
@@ -149,10 +149,4 @@ kbd {
   gap: 7px;
   font-size: var(--sd-text-body);
   color: var(--sd-ink-2);
-}
-
-.triage-form {
-  display: grid;
-  gap: var(--sd-space-3);
-  min-inline-size: 0;
 }

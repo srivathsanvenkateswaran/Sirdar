@@ -1,79 +1,88 @@
-import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import type { Check, CheckLevel, ConfigSummary, Transport, Workspace } from '../api/types'
-import { showLibrary, setShowLibrary, subscribeShowLibrary } from '../lib/library'
-import { prefersRTL, setPreferRTL, subscribePreferRTL } from '../lib/rtl'
-import ConfigSummaryPanel from '../components/shell/ConfigSummaryPanel'
-import Badge from '../ui/badge'
+import { useCallback, useEffect, useState } from 'react'
+import type { ConfigSummary, MCPInventory, Transport, Workspace } from '../api/types'
+import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import Button from '../ui/button'
 import ModalSheet, { type ModalNavGroup } from '../ui/modal-sheet'
-import SettingRow, { SettingCard } from '../ui/setting-row'
-import '../components/panels.css'
+import { AboutPage, LibraryPage, ReadingPage } from './settings/AppPages'
+import {
+  BudgetsPage,
+  NotesPage,
+  NotificationsPage,
+  PermissionsPage,
+  WebhooksPage,
+} from './settings/ConfigPages'
+import GeneralPage from './settings/GeneralPage'
+import {
+  AboutIcon,
+  BudgetsIcon,
+  CloudCheckIcon,
+  GeneralIcon,
+  LibraryIcon,
+  NotesIcon,
+  NotificationsIcon,
+  PermissionsIcon,
+  ProvidersIcon,
+  ReadingIcon,
+  ServersIcon,
+  ToolIcon,
+  WebhooksIcon,
+} from './settings/icons'
+import MCPPage, { type InventoryState } from './settings/MCPPage'
+import ProvidersPage from './settings/ProvidersPage'
+import { message, type DoctorState, type Loaded } from './settings/shared'
+import ToolsPage, { useToolTester } from './settings/ToolsPage'
+import './settings/settings.css'
 
-type DoctorState =
-  | { status: 'loading' }
-  | { status: 'done'; checks: Check[] }
-  | { status: 'error'; message: string }
-
-/** The mark each doctor level prints, matching `sirdar doctor`'s own. */
-const MARKS: Record<CheckLevel, string> = { ok: 'OK', warn: '!!', fail: 'XX' }
+export { CONFIG_DOCS_URL } from './settings/AppPages'
 
 /**
- * A row's level. Older payloads carry only `ok`, so a check with no level
- * is read off the bool — and a warning, which has `ok` true, is never
- * mistaken for a failure.
- */
-function levelOf(c: Check): CheckLevel {
-  return c.level ?? (c.ok ? 'ok' : 'fail')
-}
-
-/**
- * The configuration reference, on GitHub. A relative `docs/config.md` resolves
- * against the asset server the bundle is loaded from, which serves the app's
- * own index.html for it — so the link led back to Sirdar rather than to the
- * documentation.
- */
-export const CONFIG_DOCS_URL =
-  'https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/config.md'
-
-/** How long a Remove button stays armed before it goes back to asking. */
-const CONFIRM_MS = 5000
-
-/**
- * The pages, in two groups.
- *
- * `03-desktop-app.md` section 6 sketches the reference's own groups (General,
- * Providers, Budgets, Sources, Eval; Identity, Keys, Data and privacy). Sirdar
- * has none of those pages: its providers, budgets and sources live in the
- * workspace's `.sirdar/config.yaml`, which this app reads and never writes. So
- * the groups are what Sirdar actually has — what belongs to the workspace, and
- * what belongs to this copy of the app — rather than five empty pages named
- * after somebody else's product.
+ * The pages, in two groups: what belongs to the workspace, read from its
+ * `.sirdar/config.yaml` and from doctor, and what belongs to this copy of
+ * the app. The ids are the `#/settings/<page>` addresses.
  */
 export const SETTINGS_GROUPS: ModalNavGroup[] = [
   {
-    label: 'Workspace',
+    label: 'Settings',
     items: [
-      { id: 'workspaces', label: 'Workspaces' },
-      { id: 'notifications', label: 'Notifications' },
+      { id: 'general', label: 'General', icon: <GeneralIcon /> },
+      { id: 'providers', label: 'Providers', icon: <ProvidersIcon /> },
+      { id: 'budgets', label: 'Budgets', icon: <BudgetsIcon /> },
+      { id: 'mcp', label: 'MCP servers', icon: <ServersIcon /> },
+      { id: 'tools', label: 'Try a tool', icon: <ToolIcon /> },
+      { id: 'permissions', label: 'Permissions', icon: <PermissionsIcon /> },
+      { id: 'notes', label: 'Notes', icon: <NotesIcon /> },
+      { id: 'notifications', label: 'Notifications', icon: <NotificationsIcon /> },
+      { id: 'webhooks', label: 'Webhooks', icon: <WebhooksIcon /> },
     ],
   },
   {
     label: 'This app',
     items: [
-      { id: 'reading', label: 'Reading' },
-      { id: 'library', label: 'Design library' },
-      { id: 'about', label: 'About' },
+      { id: 'reading', label: 'Reading', icon: <ReadingIcon /> },
+      { id: 'library', label: 'Library', icon: <LibraryIcon /> },
+      { id: 'about', label: 'About', icon: <AboutIcon /> },
     ],
   },
 ]
 
-const TITLES: Record<string, string> = {
-  workspaces: 'Workspaces',
-  notifications: 'Notifications',
-  reading: 'Reading',
-  library: 'Design library',
-  about: 'About',
+const TITLES: Record<string, string> = Object.fromEntries(
+  SETTINGS_GROUPS.flatMap((g) => g.items.map((item) => [item.id, item.label])),
+)
+
+/** Addresses the modal used to have, so an old link still opens a page. */
+const ALIASES: Record<string, string> = { workspaces: 'general' }
+
+/** The pages whose values are this browser's, not the workspace's. */
+const APP_PAGES = new Set(['reading', 'library', 'about'])
+
+/** A payload with the workspace it was read for. */
+interface Tagged<T> {
+  ws: string
+  state: T
 }
+
+const IDLE = { status: 'idle' } as const
+const untagged = { ws: '', state: IDLE }
 
 export default function Settings(props: {
   open: boolean
@@ -83,7 +92,7 @@ export default function Settings(props: {
   onSelectPage?: (page: string) => void
   transport: Transport
   workspaces: Workspace[]
-  /** The workspace whose notify and webhooks blocks are summarised. */
+  /** The workspace whose config and servers are shown. */
   currentWorkspaceId?: string
   onClose: () => void
   onWorkspacesChanged: () => void
@@ -98,28 +107,40 @@ export default function Settings(props: {
     onSelectPage,
   } = props
   // The page comes from the address when a link named one (`#/settings/<page>`)
-  // and from here otherwise. A page the modal does not have falls back to the
-  // first, so a stale link opens the modal rather than an empty panel.
-  const [localPage, setLocalPage] = useState('workspaces')
-  const wanted = props.page && props.page in TITLES ? props.page : localPage
-  const page = wanted in TITLES ? wanted : 'workspaces'
+  // and from the reader's last choice otherwise; a new address wins over an
+  // old choice. A page the modal does not have falls back to the first, so a
+  // stale link opens the modal rather than an empty panel.
+  const named = props.page ? (ALIASES[props.page] ?? props.page) : undefined
+  const addressed = named && named in TITLES ? named : undefined
+  const [localPage, setLocalPage] = useState(addressed ?? 'general')
+  useEffect(() => {
+    if (addressed) setLocalPage(addressed)
+  }, [addressed])
+  const page = localPage in TITLES ? localPage : 'general'
   function setPage(id: string): void {
     setLocalPage(id)
     onSelectPage?.(id)
   }
-  const [root, setRoot] = useState('')
-  const [adding, setAdding] = useState(false)
-  const [addError, setAddError] = useState<string | null>(null)
-  const [doctor, setDoctor] = useState<Record<string, DoctorState>>({})
+
   /** Desktop build version, when the transport exposes one (Wails only). */
   const [version, setVersion] = useState<string | null>(null)
-  /** The workspace whose Remove button is armed, if any. */
-  const [confirming, setConfirming] = useState('')
-  const confirmTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const rtl = useSyncExternalStore(subscribePreferRTL, prefersRTL, () => false)
-  const library = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
-  const [summary, setSummary] = useState<ConfigSummary | null>(null)
-  const [summaryError, setSummaryError] = useState('')
+  /*
+   * Everything the workspace pages show is tagged with the workspace it was
+   * read for, and read as idle under any other: a doctor report or a server
+   * list from one repository is a wrong answer under another's name, and
+   * tagging is what makes that true without an effect that has to run first.
+   */
+  const ws = currentWorkspaceId ?? ''
+  const [summaryFor, setSummary] = useState<Tagged<Loaded<ConfigSummary>>>(untagged)
+  const [doctorFor, setDoctor] = useState<Tagged<DoctorState>>(untagged)
+  const [inventoryFor, setInventory] = useState<Tagged<Loaded<MCPInventory>>>(untagged)
+  const [testedFor, setTested] = useState('')
+  const summary = summaryFor.ws === ws ? summaryFor.state : IDLE
+  const doctor = doctorFor.ws === ws ? doctorFor.state : IDLE
+  const inventory = inventoryFor.ws === ws ? inventoryFor.state : IDLE
+  const tested = testedFor === ws
+  const [connecting, setConnecting] = useState(false)
+  const workspace = workspaces.find((w) => w.id === currentWorkspaceId)
 
   useEffect(() => {
     let cancelled = false
@@ -130,254 +151,167 @@ export default function Settings(props: {
       })
       .catch(() => {
         // The HTTP transport has no Version to fail; the Wails one rarely
-        // does either. Either way the About page just omits the version.
+        // does either. Either way the footer just omits the version.
       })
     return () => {
       cancelled = true
     }
   }, [transport])
 
+  // The config summary is read once the modal is open on a workspace, and
+  // re-read when the modal opens again: the file may have been edited in
+  // between, which is the whole way settings change.
   useEffect(() => {
-    if (!currentWorkspaceId) {
-      setSummary(null)
-      return
-    }
+    if (!open || !ws) return
     let cancelled = false
-    setSummary(null)
-    setSummaryError('')
+    setSummary({ ws, state: { status: 'loading' } })
     transport
-      .configSummary(currentWorkspaceId)
-      .then((got) => {
-        if (!cancelled) setSummary(got)
+      .configSummary(ws)
+      .then((data) => {
+        if (!cancelled) setSummary({ ws, state: { status: 'done', data } })
       })
       .catch((err: unknown) => {
-        if (!cancelled) setSummaryError(err instanceof Error ? err.message : String(err))
+        if (!cancelled) setSummary({ ws, state: { status: 'error', message: message(err) } })
       })
     return () => {
       cancelled = true
     }
-  }, [transport, currentWorkspaceId])
+  }, [transport, ws, open])
 
-  function disarm(): void {
-    if (confirmTimer.current) clearTimeout(confirmTimer.current)
-    confirmTimer.current = null
-  }
+  // The server listing is read the first time a page that needs it is shown.
+  // Without `connect` it is a read of two config files, cheap enough to do
+  // on arrival; reaching the servers waits for Test. The answer is kept only
+  // while the listing is still the one that was asked for: a Test that
+  // finished first, or a workspace change, wins over it.
+  const needsInventory = open && (page === 'mcp' || page === 'tools')
+  useEffect(() => {
+    if (!needsInventory || !ws || inventory.status !== 'idle') return
+    setInventory({ ws, state: { status: 'loading' } })
+    const still = (prev: Tagged<Loaded<MCPInventory>>) =>
+      prev.ws === ws && prev.state.status === 'loading'
+    transport
+      .mcpServers(ws, false)
+      .then((data) => {
+        setInventory((prev) => (still(prev) ? { ws, state: { status: 'done', data } } : prev))
+      })
+      .catch((err: unknown) => {
+        setInventory((prev) =>
+          still(prev) ? { ws, state: { status: 'error', message: message(err) } } : prev,
+        )
+      })
+  }, [transport, ws, needsInventory, inventory.status])
 
-  useEffect(() => disarm, [])
+  const runDoctor = useCallback(() => {
+    if (!ws) return
+    setDoctor({ ws, state: { status: 'loading' } })
+    transport
+      .doctor(ws)
+      .then((checks) => setDoctor({ ws, state: { status: 'done', checks } }))
+      .catch((err: unknown) => setDoctor({ ws, state: { status: 'error', message: message(err) } }))
+  }, [transport, ws])
 
-  async function handleAdd(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault()
-    const path = root.trim()
-    if (!path) return
-    setAdding(true)
-    setAddError(null)
-    try {
-      await transport.addWorkspace(path)
-      setRoot('')
-      onWorkspacesChanged()
-    } catch (err) {
-      setAddError(err instanceof Error ? err.message : String(err))
-    } finally {
-      setAdding(false)
-    }
-  }
+  const testServers = useCallback(() => {
+    if (!ws || connecting) return
+    setConnecting(true)
+    transport
+      .mcpServers(ws, true)
+      .then((data) => {
+        setInventory({ ws, state: { status: 'done', data } })
+        setTested(ws)
+      })
+      .catch((err: unknown) => setInventory({ ws, state: { status: 'error', message: message(err) } }))
+      .finally(() => setConnecting(false))
+  }, [transport, ws, connecting])
 
-  /**
-   * Removing a workspace takes two presses. A native `confirm()` blocks the
-   * webview's whole event loop — the run stream included — so the button arms
-   * itself instead and disarms again after CONFIRM_MS.
-   */
-  async function handleRemove(ws: Workspace) {
-    disarm()
-    if (confirming !== ws.id) {
-      setConfirming(ws.id)
-      confirmTimer.current = setTimeout(() => setConfirming(''), CONFIRM_MS)
-      return
-    }
-    setConfirming('')
-    await transport.removeWorkspace(ws.id)
-    onWorkspacesChanged()
-  }
+  const tester = useToolTester(transport, currentWorkspaceId, inventory)
 
-  async function handleDoctor(ws: Workspace) {
-    setDoctor((d) => ({ ...d, [ws.id]: { status: 'loading' } }))
-    try {
-      const checks = await transport.doctor(ws.id)
-      setDoctor((d) => ({ ...d, [ws.id]: { status: 'done', checks } }))
-    } catch (err) {
-      setDoctor((d) => ({
-        ...d,
-        [ws.id]: { status: 'error', message: err instanceof Error ? err.message : String(err) },
-      }))
-    }
-  }
-
-  const workspacesPage = (
-    <>
-      {workspaces.length === 0 ? (
-        <p className="empty-state">No workspaces registered yet. Add one below.</p>
-      ) : (
-        workspaces.map((ws) => {
-          const d = doctor[ws.id]
-          return (
-            <SettingCard key={ws.id} heading={ws.name}>
-              <SettingRow
-                label="Repository"
-                value={<span className="mono">{ws.root}</span>}
-                control={
-                  <button
-                    type="button"
-                    className="sd-setting-button"
-                    onClick={() => handleRemove(ws)}
-                    title={
-                      confirming === ws.id
-                        ? `Sirdar stops watching ${ws.root}. Nothing on disk is deleted.`
-                        : `Remove ${ws.name} from the workspace list`
-                    }
-                  >
-                    {confirming === ws.id ? 'Confirm remove' : 'Remove'}
-                  </button>
-                }
-              />
-              <SettingRow label="Provider" value={`${ws.provider} / ${ws.model}`} />
-              <SettingRow label="Notes" value={ws.notesDir} />
-              <SettingRow label="Billing" value={<Badge title="Billing mode">{ws.billing}</Badge>} />
-              <SettingRow
-                label="Checks"
-                value={
-                  d?.status === 'done'
-                    ? `${d.checks.length} ${d.checks.length === 1 ? 'check' : 'checks'} read`
-                    : 'Not run in this session'
-                }
-                control={
-                  <button
-                    type="button"
-                    className="sd-setting-button"
-                    onClick={() => handleDoctor(ws)}
-                    disabled={d?.status === 'loading'}
-                  >
-                    {d?.status === 'loading' ? 'Running doctor…' : 'Run doctor'}
-                  </button>
-                }
-              />
-              {d?.status === 'error' && <p className="form-error">{d.message}</p>}
-              {d?.status === 'done' && (
-                <ul className="doctor-list">
-                  {d.checks.map((c) => (
-                    <li key={c.name} className={`doctor-check doctor-check--${levelOf(c)}`}>
-                      <span className="doctor-check__mark mono">{MARKS[levelOf(c)]}</span>
-                      <span className="doctor-check__name">{c.name}</span>
-                      <span className="doctor-check__detail">{c.detail}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SettingCard>
-          )
-        })
-      )}
-
-      <SettingCard heading="Add workspace">
-        <form className="add-workspace-form" onSubmit={handleAdd}>
-          <input
-            type="text"
-            className="sd-setting-input"
-            placeholder="/path/to/repo"
-            value={root}
-            onChange={(e) => setRoot(e.target.value)}
-            aria-label="Workspace path"
-          />
-          {/*
-            The one filled button on this page. Registering a repository is the
-            only thing Settings commits; everything else here applies as it is
-            switched.
-          */}
-          <Button type="submit" variant="primary" disabled={adding || !root.trim()}>
-            {adding ? 'Adding…' : 'Add workspace'}
-          </Button>
-        </form>
-        {addError && <p className="form-error">{addError}</p>}
-      </SettingCard>
-    </>
-  )
-
-  const notificationsPage = currentWorkspaceId ? (
-    <ConfigSummaryPanel summary={summary} error={summaryError} />
-  ) : (
-    <p className="empty-state">
-      Choose a workspace from the switcher to see its notify and webhook blocks.
-    </p>
-  )
-
-  const readingPage = (
-    <SettingCard heading="Note pane">
-      <SettingRow
-        label="Reading direction"
-        value={rtl ? 'Right to left' : 'Each block from its own first letter'}
-        help="Notes mix an English body with the customer's own Arabic, and each block is laid out from its own first letter either way. This lays the whole note pane out right to left. It is remembered in this browser and changes nothing in the workspace or in the note on disk; the run's event log stays left to right, where paths and tool names are readable."
-        control={
-          <label className="settings-toggle">
-            <input type="checkbox" checked={rtl} onChange={(e) => setPreferRTL(e.target.checked)} />
-            <span>Prefer right-to-left layout for Arabic content</span>
-          </label>
+  // Call is the one filled button while Try a tool is up, so the sidebar's
+  // New session steps down for it; the button itself is drawn on the page,
+  // which is what `placement: 'screen'` tells the footer. Every other page
+  // has Save, disabled.
+  const tools = open && page === 'tools'
+  useProvidePrimaryAction(
+    tools
+      ? {
+          label: 'Call',
+          onRun: tester.call,
+          disabled: !tester.canCall,
+          busy: tester.calling,
+          title: tester.problem || undefined,
+          placement: 'screen',
         }
-      />
-    </SettingCard>
+      : null,
   )
 
-  const libraryPage = (
-    <SettingCard heading="Design library">
-      <SettingRow
-        label="Show the design library"
-        value={library ? 'On' : 'Off'}
-        help={
-          <>
-            Adds a Library row and the <code>#/library</code> address, where every interface
-            component is shown in each of its states, in both themes and in both reading
-            directions. It is for whoever is building the interface; it changes nothing about a
-            run. On by default in a development build.
-          </>
-        }
-        control={
-          <label className="settings-toggle">
-            <input
-              type="checkbox"
-              checked={library}
-              onChange={(e) => setShowLibrary(e.target.checked)}
-            />
-            <span>Show the design library</span>
-          </label>
-        }
-      />
-    </SettingCard>
-  )
-
-  const aboutPage = (
-    <SettingCard heading="About">
-      <SettingRow label="Sirdar desktop" value={version ? `v${version}` : 'version unknown'} />
-      <SettingRow
-        label="Configuration reference"
-        value={
-          <a href={CONFIG_DOCS_URL} target="_blank" rel="noreferrer noopener">
-            docs/config.md
-          </a>
-        }
-      />
-      <SettingRow
-        label="Credentials"
-        value="Never stored by Sirdar"
-        help="Sirdar runs your own installed agent CLI with your login."
-      />
-    </SettingCard>
-  )
+  const inventoryState: InventoryState = { inventory, connecting, tested }
+  const configProps = { transport, currentWorkspaceId, summary }
 
   const pages: Record<string, JSX.Element> = {
-    workspaces: workspacesPage,
-    notifications: notificationsPage,
-    reading: readingPage,
-    library: libraryPage,
-    about: aboutPage,
+    general: (
+      <GeneralPage
+        transport={transport}
+        workspaces={workspaces}
+        currentWorkspaceId={currentWorkspaceId}
+        summary={summary}
+        doctor={doctor}
+        onRunDoctor={runDoctor}
+        onWorkspacesChanged={onWorkspacesChanged}
+      />
+    ),
+    providers: (
+      <ProvidersPage
+        transport={transport}
+        workspace={workspace}
+        currentWorkspaceId={currentWorkspaceId}
+        summary={summary}
+        doctor={doctor}
+        onRunDoctor={runDoctor}
+      />
+    ),
+    budgets: <BudgetsPage {...configProps} />,
+    mcp: (
+      <MCPPage
+        transport={transport}
+        currentWorkspaceId={currentWorkspaceId}
+        summary={summary}
+        state={inventoryState}
+        onTest={testServers}
+      />
+    ),
+    tools: <ToolsPage currentWorkspaceId={currentWorkspaceId} inventory={inventory} tester={tester} />,
+    permissions: <PermissionsPage {...configProps} />,
+    notes: <NotesPage {...configProps} />,
+    notifications: <NotificationsPage {...configProps} />,
+    webhooks: <WebhooksPage {...configProps} />,
+    reading: <ReadingPage />,
+    library: <LibraryPage />,
+    about: <AboutPage version={version} />,
   }
+
+  /*
+   * The footer. Save is disabled on every page: nothing here has an API to
+   * write through yet, and the note says where the values come from. Try a
+   * tool has its own commit button in the page, so its footer only closes.
+   */
+  const footer = tools ? (
+    <Button variant="ghost" onClick={onClose}>
+      Close
+    </Button>
+  ) : (
+    <>
+      <p className="settings-foot-note">
+        {APP_PAGES.has(page)
+          ? 'These apply as they are switched.'
+          : 'Settings are read from .sirdar/config.yaml'}
+      </p>
+      <Button variant="ghost" onClick={onClose}>
+        Cancel
+      </Button>
+      <Button variant="primary" disabled title="Nothing on this page is written by the app">
+        Save
+      </Button>
+    </>
+  )
 
   return (
     <ModalSheet
@@ -387,8 +321,17 @@ export default function Settings(props: {
       current={page}
       onSelect={setPage}
       onClose={onClose}
-      navFooter={<>Sirdar desktop{version ? ` v${version}` : ''}</>}
-      footer={<Button onClick={onClose}>Close</Button>}
+      navFooter={
+        <>
+          <span>{version ? `Sirdar v${version}` : 'Sirdar'}</span>
+          {version && (
+            <span title="Version reported by the desktop bridge">
+              <CloudCheckIcon />
+            </span>
+          )}
+        </>
+      }
+      footer={footer}
     >
       <div className="settings">{pages[page]}</div>
     </ModalSheet>

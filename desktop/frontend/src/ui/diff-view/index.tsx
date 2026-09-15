@@ -1,211 +1,248 @@
-import { useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import type { DiffFile } from '../../api/types'
-import { lineNumber, type FilePatch } from '../../lib/diff'
 import Button from '../button'
+import { hunkKey, parsePatch, type DiffHunk, type DiffLine, type PatchFile } from './patch'
 import './DiffView.css'
 
-/** The key a hunk is remembered by: the file's path and the hunk's 0-based index in it. */
-export function hunkKey(path: string, index: number): string {
-  return `${path}#${index}`
-}
+export { hunkKey, parsePatch } from './patch'
+export type { DiffHunk, DiffLine, DiffLineType, PatchFile } from './patch'
+
+export type DiffMode = 'unified' | 'split'
+
+/** What a reviewer has said about one hunk. A hunk with no entry is undecided. */
+export type HunkDecision = 'kept'
 
 export interface DiffViewProps {
-  /** The patch, already read into files and hunks by `lib/diff`. */
-  files: FilePatch[]
-  /** The service's own file list, for each row's status word and its counts. */
-  meta?: DiffFile[]
-  /** Hunks a person has marked Keep, by `hunkKey`. */
-  kept?: ReadonlySet<string>
-  /** The hunk whose Drop is in flight, by `hunkKey`. */
-  dropping?: string
-  /** Why a Drop was refused, by `hunkKey`; shown under the hunk it was for. */
-  refusals?: Readonly<Record<string, string>>
-  /** False once the change can no longer be edited: Drop is shown, disabled, with the reason. */
+  /** The unified patch, as `Transport.runDiff` answers it. */
+  patch: string
+  /**
+   * The service's own file list, from the same answer. When given, a file's
+   * status and counts come from here rather than from the patch text: the
+   * list is whole even when the patch was cut, and it is what the rail shows.
+   */
+  files?: DiffFile[]
+  /** `unified` is the diff; `split` is a stub until the side-by-side view is built. */
+  mode?: DiffMode
+  /**
+   * Keep and Drop are drawn only while the change can still be edited — the
+   * worktree is present and the branch is not pushed. A read-only diff shows
+   * no buttons rather than buttons that would be refused.
+   */
   editable?: boolean
-  /** Why the change is not editable, as Drop's title. */
-  readOnlyReason?: string
-  onKeep?: (path: string, index: number) => void
-  onDrop?: (path: string, index: number) => void
-  /** True when the patch was cut at the service's size cap; the file list is whole either way. */
+  /** Per-hunk decisions, keyed by `hunkKey(path, index)`. */
+  decisions?: Record<string, HunkDecision>
+  /** The hunk whose drop is in flight, by key; its buttons wait. */
+  dropping?: string
+  onKeep?: (path: string, hunk: number) => void
+  onDrop?: (path: string, hunk: number) => void
+  /** The file to scroll into view, when the rail picks one. */
+  activePath?: string
+  /** Set when the service cut the patch at its size limit: the file list is whole, the text is not. */
   truncated?: boolean
-  /** Names the region for a screen reader. */
-  label?: string
-  /** Something to draw under the diff, inside the scroll: the checks, a note. */
-  children?: ReactNode
 }
 
 function CheckIcon(): JSX.Element {
   return (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false">
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
       <path d="m5 12 5 5 9-10" />
     </svg>
   )
 }
 
-/** The word at the end of a file row: what the file is, or that its hunks are all kept. */
-function statusWord(file: FilePatch, meta: DiffFile | undefined, kept: ReadonlySet<string>): string {
-  switch (meta?.status) {
-    case 'added':
-      return 'new'
-    case 'deleted':
-      return 'deleted'
-    case 'renamed':
-      return 'renamed'
-    default:
-  }
-  if (file.hunks.length > 0 && file.hunks.every((h) => kept.has(hunkKey(file.path, h.index)))) {
-    return 'reviewed'
-  }
-  return ''
+/** The mark the reader sees before the text: the same one git prints. */
+const MARKS: Record<DiffLine['type'], string> = { add: '+', del: '−', context: ' ', meta: '' }
+
+function Line({ line }: { line: DiffLine }): JSX.Element {
+  const number = line.type === 'add' ? line.newNo : line.oldNo
+  return (
+    <div className="sd-diff__line" data-type={line.type} role="row">
+      <span className="sd-diff__no" role="cell">
+        {number ?? ''}
+      </span>
+      <span className="sd-diff__code" role="cell">
+        <span className="sd-diff__mark" aria-hidden="true">
+          {MARKS[line.type]}
+        </span>
+        {line.text}
+      </span>
+    </div>
+  )
+}
+
+function Hunk({
+  file,
+  hunk,
+  editable,
+  decision,
+  dropping,
+  onKeep,
+  onDrop,
+}: {
+  file: PatchFile
+  hunk: DiffHunk
+  editable: boolean
+  decision?: HunkDecision
+  dropping: boolean
+  onKeep?: (path: string, hunk: number) => void
+  onDrop?: (path: string, hunk: number) => void
+}): JSX.Element {
+  const kept = decision === 'kept'
+  return (
+    <section className="sd-diff__hunk" aria-label={`${file.path} hunk ${hunk.index + 1}`}>
+      <header className="sd-diff__hunkhead">
+        <span className="sd-diff__header">{hunk.header}</span>
+        {editable && (
+          <span className="sd-diff__acts">
+            <Button
+              variant="pale"
+              size="sm"
+              icon={kept ? <CheckIcon /> : undefined}
+              aria-pressed={kept}
+              disabled={dropping}
+              onClick={() => onKeep?.(file.path, hunk.index)}
+            >
+              {kept ? 'Kept' : 'Keep'}
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              busy={dropping}
+              onClick={() => onDrop?.(file.path, hunk.index)}
+            >
+              {dropping ? 'Dropping…' : 'Drop'}
+            </Button>
+          </span>
+        )}
+      </header>
+      <div className="sd-diff__lines" role="table" aria-label={`Lines of hunk ${hunk.index + 1}`}>
+        {hunk.lines.map((line, i) => (
+          <Line key={i} line={line} />
+        ))}
+      </div>
+    </section>
+  )
+}
+
+/** The word the file header carries beside its counts. */
+const STATUS_WORDS: Record<PatchFile['status'], string> = {
+  added: 'new',
+  modified: 'modified',
+  deleted: 'deleted',
+  renamed: 'renamed',
 }
 
 /**
- * A fix run's change as a reviewer reads it: the file rows above, the hunks
- * below, and Keep or Drop on every hunk.
+ * A fix run's change, file by file and hunk by hunk, with Keep and Drop on
+ * each hunk.
  *
- * Keep is a mark the reader makes for themself — it changes nothing on disk,
- * and the file row says "reviewed" once every hunk in it is kept. Drop is the
- * one control here that changes something: it hands the hunk to the service,
- * which reverts it out of the commit, and the diff that comes back replaces
- * this one. Both stay on the hunk they belong to rather than in a toolbar,
- * so what a click does is never a question of which hunk was selected.
+ * It draws what the service answered and nothing more: the patch is parsed
+ * here so the screen does not have to, and a hunk's index in this view is the
+ * index the service reverts. Adds and deletions are tinted and also marked —
+ * the `+` and `−` git prints — so the change reads without its colour.
  *
- * The rows and the lines are `dir="ltr"`: a path or a line of code read
- * right to left is a different path, and a different line.
+ * Keep is a decision the reader files; Drop is a call the screen makes. The
+ * view holds neither: it shows the decisions it is handed and asks for the
+ * drops it is asked for, so the session's Changes pane and the review screen
+ * can share it while keeping their own state.
  */
 export default function DiffView({
-  files,
-  meta = [],
-  kept = new Set<string>(),
+  patch,
+  files: listed,
+  mode = 'unified',
+  editable = false,
+  decisions = {},
   dropping,
-  refusals = {},
-  editable = true,
-  readOnlyReason,
   onKeep,
   onDrop,
+  activePath,
   truncated = false,
-  label = 'Changes',
-  children,
 }: DiffViewProps): JSX.Element {
-  const [current, setCurrent] = useState(0)
-  const body = useRef<HTMLDivElement | null>(null)
-  const metaByPath = new Map(meta.map((m) => [m.path, m]))
+  const files = useMemo(() => {
+    const parsed = parsePatch(patch)
+    if (!listed) return parsed
+    return parsed.map((file) => {
+      const own = listed.find((f) => f.path === file.path)
+      return own
+        ? { ...file, status: own.status, additions: own.additions, deletions: own.deletions }
+        : file
+    })
+  }, [patch, listed])
+  const root = useRef<HTMLDivElement | null>(null)
 
-  function show(i: number): void {
-    setCurrent(i)
-    const target = body.current?.querySelector<HTMLElement>(`[data-file-index="${i}"]`)
-    target?.scrollIntoView({ block: 'start' })
+  useEffect(() => {
+    if (!activePath || !root.current) return
+    const target = root.current.querySelector<HTMLElement>(
+      `[data-path="${CSS.escape(activePath)}"]`,
+    )
+    // jsdom draws nothing, so it has no scrollIntoView to call.
+    target?.scrollIntoView?.({ block: 'start' })
+  }, [activePath, files])
+
+  if (mode === 'split') {
+    return (
+      <div className="sd-diff sd-diff--stub" ref={root}>
+        <p className="sd-diff__stub">Split view is next. Unified shows the change today.</p>
+      </div>
+    )
   }
 
   if (files.length === 0) {
     return (
-      <div className="sd-diff" role="region" aria-label={label} dir="ltr">
-        <p className="sd-diff__empty">No change to show.</p>
-        {children}
+      <div className="sd-diff sd-diff--stub" ref={root}>
+        <p className="sd-diff__stub">The change is empty.</p>
       </div>
     )
   }
 
   return (
-    <div className="sd-diff" role="region" aria-label={label} dir="ltr">
-      <div className="sd-diff__files" role="list">
-        {files.map((file, i) => {
-          const m = metaByPath.get(file.path)
-          const additions = m?.additions ?? file.additions
-          const deletions = m?.deletions ?? file.deletions
-          const word = statusWord(file, m, kept)
-          return (
-            <button
-              key={file.path || i}
-              type="button"
-              role="listitem"
-              className="sd-diff__file"
-              data-on={i === current ? 'true' : undefined}
-              aria-current={i === current ? 'true' : undefined}
-              onClick={() => show(i)}
-            >
-              <span className="sd-diff__path">{file.path || '(unnamed)'}</span>
-              <span className="sd-diff__add">+{additions}</span>
-              <span className="sd-diff__del">−{deletions}</span>
-              {word ? <span className="sd-diff__word">{word}</span> : null}
-            </button>
-          )
-        })}
-      </div>
-
-      <div className="sd-diff__body" ref={body}>
-        {files.map((file, i) => (
-          <section
-            key={file.path || i}
-            className="sd-diff__filesec"
-            data-file-index={i}
-            aria-label={file.path || '(unnamed)'}
-          >
-            {files.length > 1 ? (
-              <div className="sd-diff__filehead">
-                <span>{file.path || '(unnamed)'}</span>
-                <span className="sd-diff__add">+{file.additions}</span>
-                <span className="sd-diff__del">−{file.deletions}</span>
-              </div>
-            ) : null}
-            {file.hunks.map((hunk) => {
-              const key = hunkKey(file.path, hunk.index)
-              const isKept = kept.has(key)
-              const refusal = refusals[key]
-              return (
-                <section key={key} className="sd-diff__hunksec" aria-label={hunk.header}>
-                  <div className="sd-diff__hunk">
-                    <span className="sd-diff__header">{hunk.header}</span>
-                    {onKeep || onDrop ? (
-                      <span className="sd-diff__acts">
-                        <Button
-                          variant="pale"
-                          size="sm"
-                          aria-pressed={isKept}
-                          icon={isKept ? <CheckIcon /> : undefined}
-                          onClick={() => onKeep?.(file.path, hunk.index)}
-                        >
-                          {isKept ? 'Kept' : 'Keep'}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          busy={dropping === key}
-                          disabled={!editable}
-                          title={editable ? undefined : readOnlyReason}
-                          onClick={() => onDrop?.(file.path, hunk.index)}
-                        >
-                          {dropping === key ? 'Dropping…' : 'Drop'}
-                        </Button>
-                      </span>
-                    ) : null}
-                  </div>
-                  {refusal ? (
-                    <p className="sd-diff__refused" role="alert">
-                      {refusal}
-                    </p>
-                  ) : null}
-                  {hunk.lines.map((line, n) => (
-                    <div key={n} className="sd-diff__line" data-t={line.kind === 'context' ? undefined : line.kind}>
-                      <span className="sd-diff__n" aria-hidden="true">
-                        {lineNumber(line) ?? ''}
-                      </span>
-                      <span className="sd-diff__c">
-                        {line.kind === 'add' ? '+' : line.kind === 'del' ? '-' : ' '}
-                        {line.text}
-                      </span>
-                    </div>
-                  ))}
-                </section>
-              )
-            })}
-          </section>
-        ))}
-        {truncated ? (
-          <p className="sd-diff__note">The patch was cut at the size cap; the file list above is whole.</p>
-        ) : null}
-        {children}
-      </div>
+    <div className="sd-diff" ref={root} dir="ltr">
+      {files.map((file) => (
+        <article
+          key={file.path}
+          className="sd-diff__file"
+          data-path={file.path}
+          data-active={file.path === activePath ? 'true' : undefined}
+          aria-label={file.path}
+        >
+          <header className="sd-diff__filehead">
+            <span className="sd-diff__path">{file.path}</span>
+            <span className="sd-diff__counts">
+              {file.additions > 0 && <span className="sd-diff__add">+{file.additions}</span>}
+              {file.deletions > 0 && <span className="sd-diff__del">−{file.deletions}</span>}
+            </span>
+            <span className="sd-diff__status">{STATUS_WORDS[file.status]}</span>
+          </header>
+          {file.hunks.map((hunk) => {
+            const key = hunkKey(file.path, hunk.index)
+            return (
+              <Hunk
+                key={key}
+                file={file}
+                hunk={hunk}
+                editable={editable}
+                decision={decisions[key]}
+                dropping={dropping === key}
+                onKeep={onKeep}
+                onDrop={onDrop}
+              />
+            )
+          })}
+        </article>
+      ))}
+      {truncated && (
+        <p className="sd-diff__stub" role="status">
+          The patch was cut at its size limit. Every file is listed; not every line is shown.
+        </p>
+      )}
     </div>
   )
 }

@@ -2,7 +2,14 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { afterEach, describe, expect, it } from 'vitest'
 import App from './App'
 import { createAppStore, type AppStore } from './store/appStore'
-import { createFakeTransport, run, ticket, workspace, type FakeTransport } from './store/fakeTransport'
+import {
+  configSummary,
+  createFakeTransport,
+  run,
+  ticket,
+  workspace,
+  type FakeTransport,
+} from './store/fakeTransport'
 import { StoreProvider } from './store/useAppStore'
 
 let store: AppStore | null = null
@@ -57,7 +64,7 @@ describe('Board', () => {
     const { container } = mount(seeded())
 
     await screen.findByRole('heading', { name: /Queue/ })
-    for (const name of ['Queue', 'Gathering', 'Needs input', 'Triaged', 'Done', 'Failed']) {
+    for (const name of ['Queue', 'Gathering', 'Blocked', 'Triaged', 'Done', 'Failed']) {
       expect(screen.getByRole('heading', { name: new RegExp(name) })).toBeInTheDocument()
     }
 
@@ -91,17 +98,40 @@ describe('Board', () => {
     expect(s.getState().screen).toEqual({ name: 'run', runId: 'r1' })
   })
 
+  // A queued ticket is drawn as a card like every other, and the one thing a
+  // card does is get clicked; for a ticket with no run behind it that click is
+  // the triage, and the card's name says so.
   it('a queue card starts triage for its own key', async () => {
     const transport = seeded()
     const { container } = mount(transport)
     await waitFor(() => expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument())
 
-    fireEvent.click(within(lane(container, 'queue')).getByRole('button', { name: 'Triage' }))
+    fireEvent.click(
+      within(lane(container, 'queue')).getByRole('button', { name: /Start triage of OMNI-9/ }),
+    )
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
         { ws: 'ws1', keys: ['OMNI-9'], opts: undefined },
       ]),
     )
+  })
+
+  it('moves a card between lanes as the watcher reports the run', async () => {
+    const transport = seeded()
+    const { container } = mount(transport)
+    await waitFor(() => expect(within(lane(container, 'gathering')).getByText('OMNI-1')).toBeInTheDocument())
+
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r1', key: 'OMNI-1', status: 'blocked', updatedAt: '2026-09-10T09:06:00Z' }),
+    })
+
+    await waitFor(() =>
+      expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument(),
+    )
+    expect(within(lane(container, 'gathering')).queryByRole('button', { name: /OMNI-1/ })).toBeNull()
+    expect(screen.getByRole('region', { name: 'Blocked (2)' })).toBeInTheDocument()
   })
 
   it('filters cards by key or title, and `/` puts the cursor in the box', async () => {
@@ -133,46 +163,113 @@ describe('Board', () => {
   })
 })
 
-describe('New triage', () => {
-  it('opens with `n`, parses a mixed key list and starts triage', async () => {
+describe('New session', () => {
+  it('opens with `n`, starts a triage for the key, and opens the run the job produces', async () => {
     const transport = seeded()
-    mount(transport)
+    const { store: s } = mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
 
     fireEvent.keyDown(window, { key: 'n' })
-    const dialog = await screen.findByRole('dialog', { name: 'New triage' })
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await waitFor(() => expect(window.location.hash).toBe('#/new'))
+    // The screen draws its own filled Start; the footer's New session steps
+    // down to the bordered style so the window has one filled button.
+    expect(screen.getByRole('button', { name: 'New session' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    )
 
-    const keys = within(dialog).getByLabelText('Ticket keys')
-    fireEvent.change(keys, { target: { value: 'OMNI-11, OMNI-12 OMNI-13\nOMNI-11' } })
-    expect(within(dialog).getByText(/3 keys: OMNI-11 OMNI-12 OMNI-13/)).toBeInTheDocument()
-
-    fireEvent.change(within(dialog).getByLabelText('Provider'), { target: { value: 'codex' } })
-    fireEvent.click(within(dialog).getByLabelText(/Dry run/))
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Start triage' }))
-
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ticket key or URL' }), {
+      target: { value: 'https://acme.atlassian.net/browse/OMNI-11' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
         {
           ws: 'ws1',
-          keys: ['OMNI-11', 'OMNI-12', 'OMNI-13'],
-          opts: { provider: 'codex', model: undefined, dryRun: true },
+          keys: ['OMNI-11'],
+          opts: { provider: undefined, model: undefined, dryRun: undefined },
         },
       ]),
     )
-    expect(screen.queryByRole('dialog')).toBeNull()
+
+    // The runner writes the run; the store pairs it with the job and the
+    // screen opens it.
+    transport.emit({
+      kind: 'run.updated',
+      workspaceId: 'ws1',
+      run: run({ runId: 'r-11', key: 'OMNI-11', status: 'preparing', startedAt: new Date().toISOString() }),
+    })
+    await waitFor(() => expect(s.getState().screen).toEqual({ name: 'run', runId: 'r-11' }))
   })
 
-  it('closes on escape without starting anything', async () => {
+  it('starts an RCA and a fix through the store, on a key with a triage note', async () => {
     const transport = seeded()
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
 
-    fireEvent.keyDown(window, { key: 'n' })
-    await screen.findByRole('dialog', { name: 'New triage' })
-    fireEvent.keyDown(window, { key: 'Escape' })
+    const bar = screen.getByRole('searchbox', { name: 'Ticket key or URL' })
+    fireEvent.change(bar, { target: { value: 'OMNI-2' } })
+    fireEvent.click(screen.getByRole('radio', { name: 'RCA' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
+    await waitFor(() => expect(transport.calls.startRCA).toEqual([{ ws: 'ws1', key: 'OMNI-2', opts: { provider: undefined, model: undefined } }]))
 
-    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-    expect(transport.calls.startTriage).toEqual([])
+    // The RCA's job is still waiting on its run; end it so Fix can go.
+    transport.emit({ kind: 'job.finished', jobId: 'job-rca', workspaceId: 'ws1', outcomes: [] })
+    await screen.findByText('The job ended before a session started.')
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
+    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
+    await waitFor(() =>
+      expect(transport.calls.startFix).toEqual([
+        { ws: 'ws1', key: 'OMNI-2', opts: { provider: undefined, model: undefined, dryRun: undefined } },
+      ]),
+    )
+  })
+
+  it('refuses RCA and Fix for a key with no triage note, and says why', async () => {
+    mount(seeded())
+    await screen.findByRole('heading', { name: /Queue/ })
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Ticket key or URL' }), {
+      target: { value: 'OMNI-9' },
+    })
+    expect(screen.getByRole('radio', { name: 'RCA' })).toBeDisabled()
+    expect(screen.getByRole('radio', { name: 'Fix' })).toBeDisabled()
+    expect(screen.getByRole('status')).toHaveTextContent('RCA and Fix need a triage note for OMNI-9 first.')
+  })
+
+  it('lists what landed from the queue, and a row starts its own triage', async () => {
+    const transport = seeded()
+    mount(transport)
+    await screen.findByRole('heading', { name: /Queue/ })
+    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+
+    expect(await screen.findByRole('heading', { name: 'Landed today' })).toBeInTheDocument()
+    fireEvent.click(await screen.findByRole('button', { name: 'Triage OMNI-9' }))
+    await waitFor(() =>
+      expect(transport.calls.startTriage).toEqual([
+        { ws: 'ws1', keys: ['OMNI-9'], opts: { provider: undefined, model: undefined, dryRun: undefined } },
+      ]),
+    )
+  })
+
+  it('opens on New session when a fresh window finds a workspace with no runs', async () => {
+    const { store: s } = mount(
+      createFakeTransport({ workspaces: [workspace({ id: 'ws1', name: 'omni' })] }),
+    )
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    expect(s.getState().screen).toEqual({ name: 'new' })
+    await waitFor(() => expect(window.location.hash).toBe('#/new'))
+
+    // Decided once: the board stays the board afterwards.
+    fireEvent.click(screen.getByRole('button', { name: 'Board' }))
+    await screen.findByRole('heading', { name: /Queue/ })
+    expect(s.getState().screen).toEqual({ name: 'board' })
   })
 })
 
@@ -182,7 +279,7 @@ describe('Sidebar', () => {
       workspaces: [workspace({ id: 'ws1', name: 'omni' }), workspace({ id: 'ws2', name: 'billing' })],
     })
     mount(transport)
-    await screen.findByRole('heading', { name: /Queue/ })
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
 
     // The switcher is a popover in the sidebar footer now, not a select.
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
@@ -196,7 +293,7 @@ describe('Sidebar', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
     fireEvent.click(screen.getByRole('button', { name: 'Add workspace…' }))
-    expect(s.getState().screen).toEqual({ name: 'settings', page: 'workspaces' })
+    expect(s.getState().screen).toEqual({ name: 'settings', page: 'general' })
   })
 })
 
@@ -238,13 +335,13 @@ describe('Eval tab', () => {
       ],
     })
     const { store: s } = mount(transport)
-    await screen.findByRole('heading', { name: /Queue/ })
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
     expect(s.getState().screen).toEqual({ name: 'eval' })
 
     expect(await screen.findByRole('checkbox', { name: 'OMNI-2510' })).toBeInTheDocument()
-    expect(screen.getByText('2 assertions')).toBeInTheDocument()
+    expect(screen.getByText(/2 assertions/)).toBeInTheDocument()
     expect(screen.getByRole('table')).toBeInTheDocument()
   })
 
@@ -262,17 +359,26 @@ describe('Eval tab', () => {
       ],
     })
     mount(transport)
-    await screen.findByRole('heading', { name: /Queue/ })
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
 
-    // Eval's commit action is the sidebar footer's button, and publishing it
-    // is an effect, so it lands a commit after the screen that published it.
-    const start = await screen.findByRole('button', { name: /Run eval on the whole set/ })
+    // Run suite lives in the page head and runs the keys that were ticked;
+    // the sidebar's New session steps down while this screen is up.
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    const start = screen.getByRole('button', { name: 'Run suite' })
     await waitFor(() => expect(start).not.toBeDisabled())
+    expect(screen.getByRole('button', { name: 'New session' })).toHaveAttribute(
+      'data-variant',
+      'secondary',
+    )
     fireEvent.click(start)
     await waitFor(() =>
       expect(transport.calls.startEval).toEqual([
-        { ws: 'ws1', keys: undefined, opts: { provider: undefined, model: undefined } },
+        {
+          ws: 'ws1',
+          keys: ['OMNI-2510'],
+          opts: { provider: undefined, model: undefined, retro: false },
+        },
       ]),
     )
   })
@@ -367,7 +473,7 @@ describe('Deep links', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
     await waitFor(() => expect(window.location.hash).toBe('#/new'))
-    expect(screen.getByRole('heading', { name: 'New session' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Start with a ticket' })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
     await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r1'))
@@ -403,15 +509,16 @@ describe('Inbound deliveries', () => {
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
 
-    const panel = screen.getByRole('region', { name: 'Inbound' })
+    const panel = screen.getByRole('region', { name: 'Landed today' })
     expect(within(panel).getByText(/No webhook delivery has arrived/)).toBeInTheDocument()
 
     transport.emit({ kind: 'hook.received', source: 'jira', key: 'OMNI-9', outcome: 'started' })
 
-    await waitFor(() =>
-      expect(within(panel).getByText('started a triage')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(within(panel).getByText('started')).toBeInTheDocument())
+    // The row is titled by the ticket, keyed in the meta line, and toned live.
+    expect(within(panel).getByText('Statement export times out')).toBeInTheDocument()
     expect(within(panel).getByText('OMNI-9')).toBeInTheDocument()
+    expect(panel.querySelector('.sd-item')).toHaveAttribute('data-tone', 'live')
     expect(screen.getByText(/Webhook from jira .* started a triage\./)).toBeInTheDocument()
   })
 })
@@ -420,7 +527,7 @@ describe('Settings', () => {
   it("summarises the current workspace's notify and webhooks blocks", async () => {
     const transport = createFakeTransport({
       workspaces: [workspace({ id: 'ws1', name: 'omni' })],
-      configSummary: {
+      configSummary: configSummary({
         notify: {
           enabled: true,
           on: ['completed'],
@@ -428,18 +535,18 @@ describe('Settings', () => {
           destinations: [{ type: 'slack', credential: 'env' }],
         },
         webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
-      },
+      }),
     })
     mount(transport)
-    await screen.findByRole('heading', { name: /Queue/ })
+    await screen.findByRole('heading', { name: 'Start with a ticket' })
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
-    // Settings is a modal with its own secondary nav; the summary is one page
+    // Settings is a modal with its own secondary nav; the summary is two pages
     // of it and the board stays painted behind the scrim.
-    expect(await screen.findByRole('dialog', { name: 'Workspaces' })).toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: 'Notifications' }))
-    const panel = await screen.findByRole('region', { name: 'Notifications and webhooks' })
-    expect(within(panel).getByText('env: reference')).toBeInTheDocument()
-    expect(within(panel).getByText(/Inbound webhooks are off/)).toBeInTheDocument()
+    const dialog = await screen.findByRole('dialog', { name: 'General' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Notifications' }))
+    expect(await screen.findByText(/env: reference/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Webhooks' }))
+    expect(await screen.findByText(/there is no \/hooks endpoint/)).toBeInTheDocument()
   })
 })

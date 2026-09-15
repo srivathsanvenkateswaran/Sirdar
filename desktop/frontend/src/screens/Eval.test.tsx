@@ -1,39 +1,18 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import type { AppEvent, EvalReport, GoldenEntry, RetroReport, Transport } from '../api/types'
+import type { AppEvent, EvalReport, GoldenEntry, Quota, RetroReport, Transport } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
-import Eval, { jaccard, pct } from './Eval'
+import Eval, { estimate, jaccard, latestOf, pct, retroState, when } from './Eval'
 
 /**
- * The sidebar footer, as far as these cases are concerned.
- *
- * Eval's one commit action is published to the shell rather than drawn on the
- * screen, because `03-desktop-app.md` section 8 puts every screen's filled
- * button in the sidebar footer. The screen is still what decides what it says
- * and what it does, so this stands in for the footer and draws it.
+ * What the sidebar sees. Eval draws Run suite in its own page head; what it
+ * publishes to the shell is only there so New session steps down while the
+ * screen is up. This slot records that the publication happened.
  */
-/**
- * The published action, once the footer has caught up.
- *
- * Publishing is an effect, so the footer's button lands one commit after the
- * screen that published it — which is true in the app as well, and is why
- * every case that presses it waits for it rather than reading it the moment
- * the golden set appears.
- */
-async function primary(name: string | RegExp): Promise<HTMLElement> {
-  const button = await screen.findByRole('button', { name })
-  await waitFor(() => expect(button).not.toBeDisabled())
-  return button
-}
-
-function PrimaryActionSlot(): JSX.Element | null {
+function PublishedProbe(): JSX.Element | null {
   const action = usePrimaryAction()
   if (!action) return null
-  return (
-    <button type="button" disabled={action.disabled} onClick={action.onRun}>
-      {action.label}
-    </button>
-  )
+  return <span data-testid="published">{action.label}</span>
 }
 
 const GOLDEN: GoldenEntry[] = [
@@ -43,6 +22,7 @@ const GOLDEN: GoldenEntry[] = [
     bundleDir: '/golden/OMNI-2510/bundle',
     assertions: 3,
     hasExpectedNote: true,
+    hasRetro: true,
   },
   {
     key: 'OMNI-2511',
@@ -105,8 +85,8 @@ const RETRO: RetroReport = {
       key: 'OMNI-2510',
       baseCommit: 'abc123',
       costUsd: 3.75,
-      triage: { runId: 't1', state: 'completed', costUsd: 1.25 },
-      fix: { runId: 'f1', state: 'completed', costUsd: 2.5, commit: 'deadbee' },
+      triage: { runId: 't1', state: 'completed', costUsd: 1.25, turns: 12, minutes: 2 },
+      fix: { runId: 'f1', state: 'completed', costUsd: 2.5, commit: 'deadbee', turns: 14, minutes: 3.5 },
       triageScore: {
         classification: 'code',
         confidence: 'high',
@@ -115,7 +95,7 @@ const RETRO: RetroReport = {
         missedFiles: ['internal/export/pool.go'],
       },
       fixScore: {
-        filesJaccard: { intersection: 1, union: 2, score: 0.5 },
+        filesJaccard: { intersection: 1, union: 3, score: 1 / 3 },
         hunkOverlap: { matched: 1, total: 2, score: 0.5 },
         linesAdded: { agent: 2, pr: 4 },
         linesRemoved: { agent: 1, pr: 3 },
@@ -133,12 +113,27 @@ const RETRO: RetroReport = {
   ],
 }
 
+const QUOTA: Quota[] = [
+  {
+    provider: 'claude',
+    observedAt: '2026-09-15T09:00:00Z',
+    fiveHour: { utilization: 0.4, resetsAt: '2026-09-15T13:00:00Z' },
+  },
+]
+
 function fakeTransport(over: Partial<Transport> = {}) {
   let handler: ((e: AppEvent) => void) | undefined
   const transport = {
     golden: vi.fn(async () => GOLDEN),
     evalReports: vi.fn(async () => [REPORT]),
     latestRetro: vi.fn(async () => RETRO),
+    addGolden: vi.fn(async (_ws: string, o: { key?: string }) => ({
+      key: o.key ?? 'OMNI-1',
+      dir: '/golden/x',
+      bundleDir: '/golden/x/bundle',
+      assertions: 0,
+      hasExpectedNote: false,
+    })),
     subscribe: vi.fn((h: (e: AppEvent) => void) => {
       handler = h
       return () => {}
@@ -150,26 +145,36 @@ function fakeTransport(over: Partial<Transport> = {}) {
 
 function mount(
   over: Partial<Transport> = {},
-  defaultProvider?: string,
-  extra: { jobs?: { jobId: string; label: string }[]; onCancelJob?: (id: string) => Promise<void> } = {},
+  extra: {
+    defaultProvider?: string
+    defaultModel?: string
+    quota?: Quota[]
+    jobs?: { jobId: string; label: string }[]
+    onCancelJob?: (id: string) => Promise<void>
+    onStartEval?: (keys?: string[], opts?: unknown) => Promise<void>
+  } = {},
 ) {
-  const onStartEval = vi.fn()
+  const onStartEval = extra.onStartEval ?? vi.fn(async () => {})
   const { transport, emit } = fakeTransport(over)
   render(
     <PrimaryActionProvider>
       <Eval
         transport={transport}
         workspaceId="ws1"
-        defaultProvider={defaultProvider}
+        defaultProvider={extra.defaultProvider}
+        defaultModel={extra.defaultModel}
+        quota={extra.quota}
         jobs={extra.jobs}
         onStartEval={onStartEval}
         onCancelJob={extra.onCancelJob}
       />
-      <PrimaryActionSlot />
+      <PublishedProbe />
     </PrimaryActionProvider>,
   )
   return { transport, emit, onStartEval }
 }
+
+const runSuite = () => screen.getByRole('button', { name: 'Run suite' })
 
 describe('pct', () => {
   it('renders a fraction the way the CLI table does, and a dash for nothing', () => {
@@ -192,134 +197,63 @@ describe('jaccard', () => {
   })
 })
 
-describe('Eval retro section', () => {
-  it('draws the last retro report against the change a human merged', async () => {
-    mount()
-    const table = await screen.findByRole('table', {
-      name: 'Each key against the change a human merged',
-    })
-    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
-    const cells = within(row).getAllByRole('cell')
-    expect(cells.map((c) => c.textContent)).toEqual([
-      // As above: the Data table draws the key as a cell, not a row header.
-      'OMNI-2510',
-      'code',
-      'high',
-      '1/2 50%',
-      '2/3 67%',
-      '1/2 50%',
-      '1/2 50%',
-      'yes',
-      'partial',
-      '$3.75',
-    ])
-    expect(screen.getByText(/20260915T090000Z-retro\.json/)).toBeInTheDocument()
+describe('estimate', () => {
+  it('counts five minutes a key and names the window only when a quota exists', () => {
+    expect(estimate(5, undefined, false)).toBe('5 selected · about 25 min')
+    expect(estimate(5, QUOTA[0], false)).toBe('5 selected · about 25 min · within the 5h window')
+    expect(
+      estimate(2, { ...QUOTA[0], fiveHour: { utilization: 1, resetsAt: '' } }, false),
+    ).toBe('2 selected · about 10 min · the 5h window is used up')
   })
 
-  it('names the files the note never found and the rubric it was given', async () => {
-    mount()
-    await screen.findByText('internal/export/pool.go')
-    expect(screen.getByText(/rubric partial — half the change/)).toBeInTheDocument()
-  })
-
-  it('says why a key has no scores', async () => {
-    mount()
-    await screen.findByText('triage: failed — provider exited 1')
-  })
-
-  it('points at the command when the workspace has run no retro', async () => {
-    mount({ latestRetro: vi.fn(async () => null) })
-    await screen.findByText(/No retro has been recorded/)
-    expect(screen.getByText('sirdar eval --retro')).toBeInTheDocument()
+  it('says so when nothing is picked or a suite is already running', () => {
+    expect(estimate(0, QUOTA[0], false)).toBe('Nothing selected')
+    expect(estimate(3, QUOTA[0], true)).toBe('A suite is running · 3 selected')
   })
 })
 
-describe('Eval', () => {
-  it('lists the golden set with how much a human has written about each key', async () => {
+describe('when', () => {
+  it('renders the day, month and time, and the raw stamp when it does not parse', () => {
+    expect(when('2026-09-15T09:33:00')).toBe('15 Sep 09:33')
+    expect(when('not a date')).toBe('not a date')
+  })
+})
+
+describe('latestOf', () => {
+  it('picks the newer of the plain and retro reports, whichever shape it is', () => {
+    expect(latestOf([REPORT], RETRO)?.kind).toBe('retro')
+    expect(latestOf([REPORT], null)?.kind).toBe('plain')
+    expect(latestOf([], RETRO)?.kind).toBe('retro')
+    expect(latestOf([], null)).toBeNull()
+    expect(latestOf([{ ...REPORT, at: '2026-09-16T00:00:00Z' }], RETRO)?.kind).toBe('plain')
+  })
+})
+
+describe('retroState', () => {
+  it('is failed when any stage failed, done when every stage completed', () => {
+    expect(retroState(RETRO.results[0])).toBe('completed')
+    expect(retroState(RETRO.results[1])).toBe('failed')
+    expect(retroState({ key: 'X', costUsd: 0, reason: 'no retro.json' })).toBe('failed')
+    expect(retroState({ key: 'X', costUsd: 0 })).toBe('queued')
+  })
+})
+
+describe('Eval golden set', () => {
+  it('lists every key with what a human wrote about it and whether it replays as a retro', async () => {
     mount()
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-    expect(screen.getByText('3 assertions')).toBeInTheDocument()
-    expect(screen.getByText('expected.md')).toBeInTheDocument()
-    expect(screen.getByText('1 assertion')).toBeInTheDocument()
-    expect(screen.getByText('no expected.md')).toBeInTheDocument()
+    expect(screen.getByText(/3 assertions · expected\.md/)).toBeInTheDocument()
+    expect(screen.getByText(/1 assertion · no expected\.md/)).toBeInTheDocument()
+    expect(screen.getByText('retro')).toBeInTheDocument()
+    expect(screen.getByText('plain')).toBeInTheDocument()
   })
 
-  it('draws the score table of the newest report', async () => {
-    mount()
-    // Scoped to this table: the Retro section below has a row for the
-    // same key.
-    const table = await screen.findByRole('table', { name: 'Score per key' })
-    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
-    const cells = within(row).getAllByRole('cell')
-    expect(cells.map((c) => c.textContent)).toEqual([
-      // The key is a cell of its own now: the Data table draws every column
-      // the same way, rather than making the first one a row header.
-      'OMNI-2510',
-      'completed',
-      '7',
-      '$0.42',
-      '3.5',
-      'yes',
-      '3/3',
-      '4/5 80%',
-      '2/2 100%',
-    ])
-    expect(screen.getByText(/\/work\/\.sirdar\/eval\/20260910-1200\.json/)).toBeInTheDocument()
-  })
-
-  it('says why a key failed and which assertion did not hold', async () => {
-    mount()
-    await screen.findByText('provider exited 1')
-    expect(screen.getByText(/wanted P1, got P3/)).toBeInTheDocument()
-  })
-
-  it('runs the whole set when nothing is picked', async () => {
-    const { onStartEval } = mount()
-    fireEvent.click(await primary('Run eval on the whole set'))
-    await waitFor(() => expect(onStartEval).toHaveBeenCalledWith(undefined, {
-      provider: undefined,
-      model: undefined,
-    }))
-  })
-
-  it('runs only the keys that were ticked, with the one-off provider and model', async () => {
-    const { onStartEval } = mount({}, 'claude')
-    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-
-    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2511' }))
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'qwen' } })
-    fireEvent.change(screen.getByLabelText('Model'), { target: { value: ' qwen3-coder ' } })
-
-    fireEvent.click(await primary('Run eval on 1 key'))
-    await waitFor(() =>
-      expect(onStartEval).toHaveBeenCalledWith(['OMNI-2511'], {
-        provider: 'qwen',
-        model: 'qwen3-coder',
-      }),
-    )
-    expect(screen.getByRole('option', { name: 'Workspace default (claude)' })).toBeInTheDocument()
-  })
-
-  it('reloads the table when a job finishes, because that is when the report is written', async () => {
-    const { transport, emit } = mount()
-    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-    expect(transport.evalReports).toHaveBeenCalledTimes(1)
-
-    emit({ kind: 'job.finished', jobId: 'job-1', workspaceId: 'ws1', outcomes: [] })
-    await waitFor(() => expect(transport.evalReports).toHaveBeenCalledTimes(2))
-  })
-
-  it('points at the two ways to add a bundle when the set is empty, and offers no run', async () => {
+  it('says how to add a bundle when the set is empty, and offers no run', async () => {
     mount({ golden: vi.fn(async () => [] as GoldenEntry[]) })
     await screen.findByText(/No golden bundles yet/)
     expect(screen.getByText('sirdar golden add KEY')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Run eval on the whole set' })).toBeDisabled()
-  })
-
-  it('says where reports are written when the workspace has none', async () => {
-    mount({ evalReports: vi.fn(async () => [] as EvalReport[]) })
-    await screen.findByText(/No eval has been recorded/)
-    expect(screen.getByText('.sirdar/eval')).toBeInTheDocument()
+    expect(runSuite()).toBeDisabled()
+    expect(runSuite()).toHaveAttribute('title', 'Select at least one key')
   })
 
   it('shows the reason the golden set could not be read', async () => {
@@ -327,59 +261,267 @@ describe('Eval', () => {
     await screen.findByText('no such workspace')
   })
 
-  /*
-   * An eval over the whole set names no key, so no run ever claims its job and
-   * Run detail's Cancel can never reach it. Without a button here, the only
-   * way to stop one was to quit the app and let the jobs be cancelled on
-   * shutdown — after it had spent a session per bundle.
-   */
-  it('offers Cancel for a whole-set eval this window started', async () => {
-    const onCancelJob = vi.fn(async () => {})
-    mount({}, undefined, {
-      jobs: [{ jobId: 'job-4', label: 'Eval of the whole golden set' }],
-      onCancelJob,
-    })
-    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+  it('says it is loading before the set arrives', () => {
+    mount({ golden: vi.fn(() => new Promise<GoldenEntry[]>(() => {})) })
+    expect(screen.getByText('Loading the golden set…')).toBeInTheDocument()
+  })
+})
 
-    fireEvent.click(screen.getByRole('button', { name: /Cancel eval of the whole golden set/i }))
+describe('Eval run suite', () => {
+  it('is disabled with a reason until a key is picked, then counts the estimate', async () => {
+    mount({}, { quota: QUOTA, defaultProvider: 'claude' })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(runSuite()).toBeDisabled()
+    expect(runSuite()).toHaveAttribute('title', 'Select at least one key')
+    expect(screen.getByText('Nothing selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2510' }))
+    expect(runSuite()).not.toBeDisabled()
+    expect(screen.getByText('1 selected · about 5 min · within the 5h window')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2511' }))
+    expect(screen.getByText('2 selected · about 10 min · within the 5h window')).toBeInTheDocument()
+  })
+
+  it('leaves the window clause out when no quota has been read', async () => {
+    mount()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    expect(screen.getByText('1 selected · about 5 min')).toBeInTheDocument()
+  })
+
+  it('publishes its action so the sidebar steps down while the screen is up', async () => {
+    mount()
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Run suite'))
+  })
+
+  it('runs the picked retro keys with the options, as a retro', async () => {
+    const { onStartEval } = mount()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    // The rubric is on by default; the RCA step is off. Flip both.
+    fireEvent.click(screen.getByRole('switch', { name: 'Score with a rubric' }))
+    fireEvent.click(screen.getByRole('switch', { name: 'Include the RCA step' }))
+
+    fireEvent.click(runSuite())
+    await waitFor(() =>
+      expect(onStartEval).toHaveBeenCalledWith(['OMNI-2510'], {
+        provider: undefined,
+        model: undefined,
+        retro: true,
+        rubric: false,
+        withRca: true,
+      }),
+    )
+  })
+
+  it('runs a plain replay when a picked key has no retro, and the retro options stay out', async () => {
+    const { onStartEval } = mount()
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2511' }))
+    expect(screen.getByRole('switch', { name: 'Score with a rubric' })).toBeDisabled()
+
+    fireEvent.click(runSuite())
+    await waitFor(() =>
+      expect(onStartEval).toHaveBeenCalledWith(['OMNI-2510', 'OMNI-2511'], {
+        provider: undefined,
+        model: undefined,
+        retro: false,
+      }),
+    )
+  })
+
+  it('passes the one-off provider and model picked in the Change dialog', async () => {
+    const { onStartEval } = mount({}, { defaultProvider: 'claude', defaultModel: 'sonnet' })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    const dialog = screen.getByRole('dialog', { name: 'Provider' })
+    fireEvent.change(within(dialog).getByLabelText('Provider'), { target: { value: 'qwen' } })
+    fireEvent.change(within(dialog).getByLabelText('Model'), { target: { value: ' qwen3-coder ' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('qwen · qwen3-coder')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(runSuite())
+    await waitFor(() =>
+      expect(onStartEval).toHaveBeenCalledWith(['OMNI-2510'], {
+        provider: 'qwen',
+        model: 'qwen3-coder',
+        retro: true,
+        rubric: true,
+        withRca: false,
+      }),
+    )
+  })
+
+  it('Cancel in the Change dialog keeps the provider that was there', async () => {
+    mount({}, { defaultProvider: 'claude', defaultModel: 'sonnet' })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    fireEvent.click(screen.getByRole('button', { name: 'Change' }))
+    const dialog = screen.getByRole('dialog', { name: 'Provider' })
+    fireEvent.change(within(dialog).getByLabelText('Provider'), { target: { value: 'qwen' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+  })
+
+  it('is disabled with a reason while a suite this window started is running, and offers Cancel', async () => {
+    const onCancelJob = vi.fn(async () => {})
+    mount({}, { jobs: [{ jobId: 'job-4', label: 'Eval of the whole golden set' }], onCancelJob })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(runSuite()).toBeDisabled()
+    expect(runSuite()).toHaveAttribute('title', 'A suite is already running')
+    expect(screen.getByText('A suite is running · 0 selected')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel suite' }))
     await waitFor(() => expect(onCancelJob).toHaveBeenCalledWith('job-4'))
   })
 
-  it('offers no Cancel when this window has no eval running', async () => {
-    mount()
-    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-    expect(screen.queryByRole('button', { name: /^Cancel/i })).toBeNull()
+  it('stays disabled after a start until the job finishes, then reloads the report', async () => {
+    const { transport, emit } = mount()
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(runSuite())
+    await waitFor(() => expect(runSuite()).toBeDisabled())
+    expect(transport.evalReports).toHaveBeenCalledTimes(1)
+
+    emit({ kind: 'job.finished', jobId: 'job-1', workspaceId: 'ws1', outcomes: [] })
+    await waitFor(() => expect(transport.evalReports).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(runSuite()).not.toBeDisabled())
   })
 
-  it('shows the reason a cancel was refused', async () => {
-    const onCancelJob = vi.fn(async () => {
-      throw new Error('no such job')
-    })
-    mount({}, undefined, { jobs: [{ jobId: 'job-4', label: 'Eval of the whole golden set' }], onCancelJob })
+  it('ignores another workspace finishing a job', async () => {
+    const { transport, emit } = mount()
     await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-
-    fireEvent.click(screen.getByRole('button', { name: /Cancel eval/i }))
-    expect(await screen.findByText('no such job')).toBeInTheDocument()
+    emit({ kind: 'job.finished', jobId: 'job-9', workspaceId: 'ws2', outcomes: [] })
+    expect(transport.evalReports).toHaveBeenCalledTimes(1)
   })
 
   /*
    * The store toasts a failed start and rethrows it; this is the half the
    * reader sees without leaving the screen.
    */
-  it('shows the reason an eval did not start beside the button', async () => {
-    const { transport } = fakeTransport()
-    const onStartEval = vi.fn(async () => {
-      throw new Error('the golden set holds no bundles')
-    })
-    render(
-      <PrimaryActionProvider>
-        <Eval transport={transport} workspaceId="ws1" onStartEval={onStartEval} />
-        <PrimaryActionSlot />
-      </PrimaryActionProvider>,
+  it('shows the reason a suite did not start', async () => {
+    mount(
+      {},
+      {
+        onStartEval: vi.fn(async () => {
+          throw new Error('the golden set holds no bundles')
+        }),
+      },
     )
-    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
-
-    fireEvent.click(await primary('Run eval on the whole set'))
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(runSuite())
     expect(await screen.findByText('the golden set holds no bundles')).toBeInTheDocument()
+    expect(runSuite()).not.toBeDisabled()
+  })
+})
+
+describe('Eval add golden', () => {
+  it('adds the key typed into the dialog and reloads the set', async () => {
+    const { transport } = mount()
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add golden' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add golden' })
+    fireEvent.change(within(dialog).getByLabelText('Ticket key'), { target: { value: ' OMNI-2512 ' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    await waitFor(() => expect(transport.addGolden).toHaveBeenCalledWith('ws1', { key: 'OMNI-2512' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(transport.golden).toHaveBeenCalledTimes(2)
+  })
+
+  it('refuses an empty key and shows the reason the add was refused', async () => {
+    mount({
+      addGolden: vi.fn(async () => {
+        throw new Error('golden set is inside a git work tree')
+      }),
+    })
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    fireEvent.click(screen.getByRole('button', { name: 'Add golden' }))
+    const dialog = screen.getByRole('dialog', { name: 'Add golden' })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    expect(within(dialog).getByText('Enter a ticket key.')).toBeInTheDocument()
+
+    fireEvent.change(within(dialog).getByLabelText('Ticket key'), { target: { value: 'OMNI-1' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Add' }))
+    expect(await within(dialog).findByText('golden set is inside a git work tree')).toBeInTheDocument()
+  })
+})
+
+describe('Eval last report', () => {
+  it('draws the newest report as a retro, with its meta and the retro columns', async () => {
+    mount()
+    const table = await screen.findByRole('table', {
+      name: 'Each key against the change a human merged',
+    })
+    expect(screen.getByText(`${when(RETRO.at)} · retro · rubric · claude sonnet`)).toBeInTheDocument()
+    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
+    const cells = within(row).getAllByRole('cell')
+    expect(cells.map((c) => c.textContent)).toEqual([
+      'OMNI-2510',
+      'Done',
+      'matched',
+      '1/3 33%',
+      'partial',
+      '26',
+      '$3.75',
+      '5.5',
+    ])
+    expect(screen.getByText(/File overlap counts the files/)).toBeInTheDocument()
+  })
+
+  it('names the files the note never found, the rubric, and why a key has no scores', async () => {
+    mount()
+    await screen.findByText('internal/export/pool.go')
+    expect(screen.getByText(/rubric partial — half the change/)).toBeInTheDocument()
+    expect(screen.getByText('triage: failed — provider exited 1')).toBeInTheDocument()
+    const table = screen.getByRole('table', { name: 'Each key against the change a human merged' })
+    const failed = within(table).getByRole('row', { name: /OMNI-2511/ })
+    expect(within(failed).getByText('Failed')).toBeInTheDocument()
+  })
+
+  it('draws a plain report with the assertion columns when it is the newest', async () => {
+    mount({ latestRetro: vi.fn(async () => null) })
+    const table = await screen.findByRole('table', { name: 'Score per key' })
+    expect(screen.getByText(`${when(REPORT.at)} · plain · claude sonnet`)).toBeInTheDocument()
+    const row = within(table).getByRole('row', { name: /OMNI-2510/ })
+    const cells = within(row).getAllByRole('cell')
+    expect(cells.map((c) => c.textContent)).toEqual([
+      'OMNI-2510',
+      'Done',
+      '3/3',
+      '4/5 80%',
+      '2/2 100%',
+      'yes',
+      '7',
+      '$0.42',
+      '3.5',
+    ])
+    expect(screen.getByText('provider exited 1')).toBeInTheDocument()
+    expect(screen.getByText(/wanted P1, got P3/)).toBeInTheDocument()
+    expect(screen.getByText(/Assertions are the checks/)).toBeInTheDocument()
+  })
+
+  it('says where reports come from when the workspace has none, and Open JSON waits', async () => {
+    mount({
+      evalReports: vi.fn(async () => [] as EvalReport[]),
+      latestRetro: vi.fn(async () => null),
+    })
+    await screen.findByText(/No report yet/)
+    expect(screen.getByText('.sirdar/eval')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open JSON' })).toBeDisabled()
+  })
+
+  it('Open JSON shows the report as it was written, with its path', async () => {
+    mount()
+    await screen.findByRole('table', { name: 'Each key against the change a human merged' })
+    fireEvent.click(screen.getByRole('button', { name: 'Open JSON' }))
+    const dialog = screen.getByRole('dialog', { name: 'Report JSON' })
+    expect(within(dialog).getByText('/work/.sirdar/eval/20260915T090000Z-retro.json')).toBeInTheDocument()
+    expect(within(dialog).getByText(/"baseCommit": "abc123"/)).toBeInTheDocument()
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 })

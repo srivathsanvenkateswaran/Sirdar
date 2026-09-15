@@ -2,74 +2,70 @@
  * The gallery's own chrome.
  *
  * Nothing in this file is a component rule: the specimens bring their own CSS
- * from `src/ui/`, and everything here is the page that holds them — the
- * switch bar, the labels, the frame the two themes are painted inside. It
- * reads the same tokens as everything else, so the page cannot drift from what
- * it is showing.
+ * from `src/ui/`, and everything here is the page that holds them — the bar
+ * with the two switches, the section grid, the labels, the frame the two
+ * themes are painted inside. The measures are the Library mock's
+ * (`docs/design/2026-09-15-screens/Library.html`: `.lbar`, `.gsec`, `.gname`,
+ * `.gnote`, `.sp`, `.splab`), and it reads the same tokens as everything else,
+ * so the page cannot drift from what it is showing.
  */
 
 .lib {
   display: flex;
   flex-direction: column;
-  min-height: 0;
+  min-block-size: 0;
   overflow-y: auto;
-  background: var(--sd-paper);
+  background: var(--sd-shell);
 }
 
+/*
+ * The bar: the page head on the surface, sticky, with the theme and direction
+ * switches at the inline end. 32/48/24 padding and a rule beneath, as the
+ * mock's `.lbar`. The mock sits the switches on the lede's baseline rather
+ * than centring them on the title, which is the one thing this file changes
+ * about the page head, and why it is written down.
+ */
 .lib__bar {
   position: sticky;
   inset-block-start: 0;
   z-index: 15;
-  display: grid;
-  gap: var(--sd-space-3);
-  padding-block: var(--sd-space-3);
-  padding-inline: var(--sd-space-5);
+  padding-block: var(--sd-space-6) var(--sd-space-5);
+  padding-inline: var(--sd-space-7);
   border-block-end: 1px solid var(--sd-rule);
   background: var(--sd-surface);
 }
 
-.lib__bar-row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--sd-space-4);
-  flex-wrap: wrap;
+.lib__bar .sd-page-head {
+  align-items: flex-end;
 }
 
-.lib__title {
-  margin: 0;
-  font-family: var(--sd-font-display);
-  font-size: var(--sd-text-display-m);
-  font-weight: 500;
-  line-height: 1.1;
-}
-
-.lib__lede {
-  margin: 0;
-  max-width: 60ch;
-  font-size: var(--sd-text-body);
-  color: var(--sd-ink-3);
-}
-
-.lib__controls {
-  display: flex;
-  gap: var(--sd-space-3);
-  flex-wrap: wrap;
+.lib__bar .sd-page-head__actions {
+  padding-block-end: var(--sd-space-1);
 }
 
 /*
  * The frame is what carries `data-theme` and `dir`. Both are element-scoped
  * in `styles/tokens.css`, so a light frame inside a dark window is a real
- * light theme rather than a set of overridden colours.
+ * light theme rather than a set of overridden colours. It is the shell
+ * ground, as the mock's `.gallery`: the specimens sit on the window, the bar
+ * on the sheet.
  */
 .lib__frame {
-  padding-block: var(--sd-space-5) var(--sd-space-9);
-  padding-inline: var(--sd-space-5);
-  background: var(--sd-paper);
+  padding-block-end: var(--sd-space-6);
+  background: var(--sd-shell);
   color: var(--sd-ink);
 }
 
+/*
+ * One component per section: a 260px column with its name and one sentence,
+ * the specimens beside it, a rule under it. The mock's `.gsec`.
+ */
 .lib-section {
-  padding-block: var(--sd-space-6);
+  display: grid;
+  grid-template-columns: 260px minmax(0, 1fr);
+  column-gap: var(--sd-space-6);
+  padding-block: 20px;
+  padding-inline: var(--sd-space-7);
   border-block-end: 1px solid var(--sd-rule);
 }
 
@@ -77,23 +73,28 @@
   border-block-end: 0;
 }
 
-.lib-section__head {
-  margin-block-end: var(--sd-space-4);
+.lib-section__head,
+.lib-section__body {
+  min-inline-size: 0;
 }
 
+/* The name is the UI face at the title size, as the mock's `.gname`: the
+   serif stays with the note pane and the settings heading. */
 .lib-section__name {
   margin: 0;
-  font-family: var(--sd-font-display);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
   font-size: var(--sd-text-title);
   font-weight: 500;
+  line-height: 1.25;
 }
 
 .lib-section__note {
   margin-block: var(--sd-space-1) 0;
-  max-width: var(--sd-measure-prose);
-  font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-body);
   color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  line-height: 1.5;
 }
 
 .lib-row {
@@ -112,39 +113,32 @@
   gap: var(--sd-space-5);
 }
 
+/* A labelled specimen: the mock's `.sp`, label over stage at an 8px gap. */
 .lib-state {
   display: grid;
-  gap: var(--sd-space-1);
-  min-width: 0;
-  max-width: 100%;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
 /* The label is the only thing on the page allowed to be smaller than the
-   component it labels. */
+   component it labels: the ledger face, in the third ink. */
 .lib-state__label {
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-micro);
   color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.5;
 }
 
 .lib-state__stage {
-  min-width: 0;
-  max-width: 100%;
+  min-inline-size: 0;
+  max-inline-size: 100%;
 }
 
+/* A card reads at a lane's width: the mock's `.lib-runcard`. */
 .lib-state__stage > .sd-card,
 .lib-state__stage > .sd-run-card {
-  width: 260px;
-}
-
-/* The diff view is a column that fills its pane; the gallery gives it one. */
-.lib-diff {
-  display: flex;
-  inline-size: min(100%, 720px);
-  block-size: 360px;
-  border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-md);
-  overflow: hidden;
+  inline-size: 300px;
 }
 
 .lib-band-stage {
@@ -168,7 +162,7 @@
   display: grid;
   gap: var(--sd-space-1);
   padding: var(--sd-space-3);
-  max-width: 720px;
+  max-inline-size: 720px;
   border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-md);
   background: var(--sd-surface);
@@ -178,23 +172,12 @@
  * A toast is fixed to the window corner in the app. Here it is pinned into
  * its own box instead, so the specimen can be read beside the others rather
  * than floating over the whole gallery. This is gallery chrome overriding a
- * component's placement, which is the one thing this file does to a component
- * and the reason it is written down.
+ * component's placement, the same kind of exception as the bar's alignment
+ * above.
  */
 .lib-toast-stage .sd-toasts {
   position: static;
-  max-width: 420px;
-}
-
-@media (max-width: 720px) {
-  .lib__bar,
-  .lib__frame {
-    padding-inline: var(--sd-space-3);
-  }
-
-  .lib-lanes {
-    flex-direction: column;
-  }
+  max-inline-size: 420px;
 }
 
 /*
@@ -208,4 +191,21 @@
 
 .lib-col--sidebar .lib-state__stage {
   inline-size: var(--sd-sidebar-w);
+}
+
+@media (max-width: 720px) {
+  .lib__bar,
+  .lib-section {
+    padding-inline: var(--sd-space-3);
+  }
+
+  /* The name column goes above the specimens once there is no room beside. */
+  .lib-section {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: var(--sd-space-4);
+  }
+
+  .lib-lanes {
+    flex-direction: column;
+  }
 }

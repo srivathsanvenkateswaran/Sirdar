@@ -1,0 +1,176 @@
+/**
+ * A unified patch, read into files, hunks and lines.
+ *
+ * `internal/fix.ReviewDiff` answers with the text `git diff` writes, and the
+ * service addresses a hunk by its file path and its 0-based position within
+ * that file. The parser keeps that numbering: `hunks[i]` of a file is the
+ * hunk `dropHunk({ path, hunk: i })` reverts, so the screen never has to count
+ * for itself.
+ *
+ * Nothing here is strict. A line the parser does not recognise inside a hunk
+ * (a `\ No newline at end of file` marker, a stray blank) is kept as a `meta`
+ * line rather than thrown away, because a reviewer would rather see an odd
+ * line than wonder whether one was hidden.
+ */
+
+export type DiffLineType = 'context' | 'add' | 'del' | 'meta'
+
+export interface DiffLine {
+  type: DiffLineType
+  /** The line without its leading marker. */
+  text: string
+  /** The line's number in the old file; absent on an added line. */
+  oldNo?: number
+  /** The line's number in the new file; absent on a deleted line. */
+  newNo?: number
+}
+
+export interface DiffHunk {
+  /** 0-based within its file: the index `dropHunk` takes. */
+  index: number
+  /** The whole `@@ … @@ section` line, as written. */
+  header: string
+  oldStart: number
+  oldLines: number
+  newStart: number
+  newLines: number
+  /** What followed the second `@@`: usually the enclosing function. */
+  section: string
+  lines: DiffLine[]
+}
+
+export interface PatchFile {
+  /** The path the file has now; the old one for a deletion. */
+  path: string
+  oldPath: string
+  status: 'added' | 'modified' | 'deleted' | 'renamed'
+  hunks: DiffHunk[]
+  additions: number
+  deletions: number
+}
+
+const HUNK = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@ ?(.*)$/
+
+/** `a/internal/x.go` → `internal/x.go`; `/dev/null` stays as it is. */
+function stripPrefix(path: string): string {
+  const trimmed = path.trim()
+  if (trimmed === '/dev/null') return trimmed
+  return trimmed.replace(/^[ab]\//, '')
+}
+
+/** The two paths on a `diff --git a/x b/y` line, quoted or not. */
+function gitPaths(line: string): { old: string; now: string } | undefined {
+  const rest = line.slice('diff --git '.length)
+  const quoted = /^"(.*?)" "(.*?)"$/.exec(rest)
+  if (quoted) return { old: stripPrefix(quoted[1]), now: stripPrefix(quoted[2]) }
+  // `a/x b/x`: the paths are separated by a space, and the only safe way to
+  // split a path that may itself contain spaces is to find the ` b/` that
+  // starts the second one.
+  const at = rest.indexOf(' b/')
+  if (at === -1) return undefined
+  return { old: stripPrefix(rest.slice(0, at)), now: stripPrefix(rest.slice(at + 1)) }
+}
+
+export function parsePatch(patch: string): PatchFile[] {
+  const files: PatchFile[] = []
+  let file: PatchFile | undefined
+  let hunk: DiffHunk | undefined
+  let oldNo = 0
+  let newNo = 0
+
+  const lines = patch.split('\n')
+  // A patch ends with a newline, and splitting on it leaves one empty string
+  // that is not a line of anything.
+  if (lines.length > 0 && lines[lines.length - 1] === '') lines.pop()
+
+  const startFile = (oldPath: string, now: string) => {
+    file = { path: now, oldPath, status: 'modified', hunks: [], additions: 0, deletions: 0 }
+    if (oldPath !== now && oldPath !== '/dev/null' && now !== '/dev/null') file.status = 'renamed'
+    files.push(file)
+    hunk = undefined
+  }
+
+  for (const line of lines) {
+    if (line.startsWith('diff --git ')) {
+      const paths = gitPaths(line)
+      startFile(paths?.old ?? '', paths?.now ?? '')
+      continue
+    }
+    if (line.startsWith('--- ')) {
+      const path = stripPrefix(line.slice(4))
+      if (!file || file.hunks.length > 0) startFile(path, path)
+      if (file) {
+        file.oldPath = path
+        if (path === '/dev/null') file.status = 'added'
+      }
+      hunk = undefined
+      continue
+    }
+    if (line.startsWith('+++ ')) {
+      const path = stripPrefix(line.slice(4))
+      if (!file) startFile(path, path)
+      if (file) {
+        if (path === '/dev/null') {
+          file.status = 'deleted'
+          file.path = file.oldPath
+        } else {
+          file.path = path
+          if (file.oldPath === '/dev/null') file.status = 'added'
+        }
+      }
+      hunk = undefined
+      continue
+    }
+    const head = HUNK.exec(line)
+    if (head) {
+      if (!file) startFile('', '')
+      const current = file as PatchFile
+      hunk = {
+        index: current.hunks.length,
+        header: line,
+        oldStart: Number(head[1]),
+        oldLines: head[2] === undefined ? 1 : Number(head[2]),
+        newStart: Number(head[3]),
+        newLines: head[4] === undefined ? 1 : Number(head[4]),
+        section: head[5] ?? '',
+        lines: [],
+      }
+      current.hunks.push(hunk)
+      oldNo = hunk.oldStart
+      newNo = hunk.newStart
+      continue
+    }
+    if (!hunk) {
+      // `index`, `new file mode`, `rename from`, `similarity index` and the
+      // rest of git's file header. The status is read off the paths, and the
+      // mode lines are the one thing worth confirming from here.
+      if (file && line.startsWith('rename from ')) file.status = 'renamed'
+      if (file && line.startsWith('new file mode')) file.status = 'added'
+      if (file && line.startsWith('deleted file mode')) file.status = 'deleted'
+      continue
+    }
+    const current = file as PatchFile
+    const marker = line[0]
+    if (marker === '+') {
+      hunk.lines.push({ type: 'add', text: line.slice(1), newNo })
+      newNo += 1
+      current.additions += 1
+    } else if (marker === '-') {
+      hunk.lines.push({ type: 'del', text: line.slice(1), oldNo })
+      oldNo += 1
+      current.deletions += 1
+    } else if (marker === ' ' || line === '') {
+      hunk.lines.push({ type: 'context', text: line.slice(1), oldNo, newNo })
+      oldNo += 1
+      newNo += 1
+    } else {
+      hunk.lines.push({ type: 'meta', text: line })
+    }
+  }
+  return files
+}
+
+/** The key a screen files a per-hunk decision under: the path and the index, joined by a newline, which no path git reports carries. */
+export function hunkKey(path: string, index: number): string {
+  return `${path}\n${index}`
+}

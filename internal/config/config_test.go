@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1136,27 +1137,108 @@ func TestValidateQwen(t *testing.T) {
 	}
 }
 
+// ackAgy is the smallest workspace that may name the disabled provider:
+// `provider: agy` with the terms acknowledgement set. Cases append their
+// own keys to the agy block it opens.
+const ackAgy = "workspace: demo\nprovider: agy\nagy:\n  acknowledgeTerms: true\n"
+
+// agyDisabled is the refusal every start path shares, verbatim.
+const agyDisabled = "provider agy is disabled: Google's Antigravity terms do not allow driving " +
+	"the CLI from another program; choose claude, codex, openai, acp, qwen or cursor"
+
+// TestAgyIsRefusedWithoutTheAcknowledgement covers the reason the provider
+// is off: Google's Antigravity terms do not allow another program to drive
+// the CLI, so a workspace that names it does not load at all.
+func TestAgyIsRefusedWithoutTheAcknowledgement(t *testing.T) {
+	for _, body := range []string{
+		"workspace: demo\nprovider: agy\n",
+		// A block that configures the provider without acknowledging is
+		// refused the same way: writing agy.model is not consent.
+		"workspace: demo\nprovider: agy\nagy:\n  model: gemini-3.6-flash-low\n",
+		"workspace: demo\nprovider: agy\nagy:\n  acknowledgeTerms: false\n",
+	} {
+		_, err := Load(writeCfg(t, body))
+		if err == nil {
+			t.Fatalf("Load(%q) succeeded, want the disabled refusal", body)
+		}
+		if err.Error() != agyDisabled {
+			t.Fatalf("Load(%q) error = %q, want %q", body, err, agyDisabled)
+		}
+		if !errors.Is(err, ErrAgyDisabled) {
+			t.Fatalf("Load(%q) error is not ErrAgyDisabled", body)
+		}
+	}
+}
+
+// TestAgyAcknowledgementLoads covers the escape hatch: an operator who has
+// read the note and accepted the risk gets the provider back, and nothing
+// else about the block changes.
+func TestAgyAcknowledgementLoads(t *testing.T) {
+	c, err := Load(writeCfg(t, ackAgy+"  model: gemini-3.6-flash-low\n"))
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if !c.AgyAcknowledged() || c.AgyDisabled() {
+		t.Fatalf("acknowledged=%v disabled=%v, want true/false", c.AgyAcknowledged(), c.AgyDisabled())
+	}
+	if c.Agy.Model != "gemini-3.6-flash-low" {
+		t.Fatalf("agy.model = %q", c.Agy.Model)
+	}
+
+	// Another provider with an agy block that has not acknowledged
+	// anything is untouched: the refusal is about what drives the run.
+	other, err := Load(writeCfg(t, "workspace: demo\nprovider: claude\nagy:\n  effort: low\n"))
+	if err != nil {
+		t.Fatalf("Load on claude: %v", err)
+	}
+	if other.AgyDisabled() {
+		t.Fatal("a claude workspace reports the agy provider as disabled")
+	}
+}
+
+// TestLoadDoctorKeepsADisabledWorkspace covers the one command that has to
+// survive the refusal: `sirdar doctor` reports the disablement as a row of
+// its own report, which it cannot do if the load hands back nothing.
+func TestLoadDoctorKeepsADisabledWorkspace(t *testing.T) {
+	c, err := LoadDoctor(writeCfg(t, "workspace: demo\nprovider: agy\n"))
+	if err != nil {
+		t.Fatalf("LoadDoctor: %v", err)
+	}
+	if !c.AgyDisabled() {
+		t.Fatal("LoadDoctor returned a config that does not report the provider disabled")
+	}
+
+	// Every other fault still fails the load, so doctor is not a way to
+	// run against a configuration nothing else accepts.
+	if _, err := LoadDoctor(writeCfg(t, "workspace: demo\nprovider: nonesuch\n")); err == nil {
+		t.Fatal("LoadDoctor accepted an unknown provider")
+	}
+}
+
 func TestValidateAgy(t *testing.T) {
 	cases := []struct {
 		name, body, want string
 	}{
 		{
-			// No block at all is the ordinary case: the CLI runs against
-			// the Google account the operator already signed it in to.
-			"no block", "workspace: demo\nprovider: agy\n", "",
+			// The provider is disabled, so every case that means to reach
+			// the rest of these checks carries the acknowledgement. The
+			// bare block is the ordinary case once it is set: the CLI runs
+			// against the Google account the operator already signed it
+			// in to.
+			"acknowledged, no other keys", ackAgy, "",
 		},
 		{
 			"a whole block",
-			"workspace: demo\nprovider: agy\nagy:\n  path: ~/.local/bin/agy\n  model: gemini-3.6-flash-low\n  effort: low\n",
+			ackAgy + "  path: ~/.local/bin/agy\n  model: gemini-3.6-flash-low\n  effort: low\n",
 			"",
 		},
-		{"effort medium", "workspace: demo\nprovider: agy\nagy:\n  effort: medium\n", ""},
-		{"effort high", "workspace: demo\nprovider: agy\nagy:\n  effort: high\n", ""},
+		{"effort medium", ackAgy + "  effort: medium\n", ""},
+		{"effort high", ackAgy + "  effort: high\n", ""},
 		{
 			// The CLI would reject this at argument-parse time, halfway
 			// through a triage sweep; catching it at load is cheaper.
 			"an effort the CLI does not take",
-			"workspace: demo\nprovider: agy\nagy:\n  effort: maximum\n",
+			ackAgy + "  effort: maximum\n",
 			"agy.effort",
 		},
 		{
@@ -1173,10 +1255,13 @@ func TestValidateAgy(t *testing.T) {
 			// — a billing mode that looks chosen and honoured and is
 			// neither.
 			"api billing has no meaning here",
-			"workspace: demo\nprovider: agy\nbilling: api\n",
+			"workspace: demo\nprovider: agy\nbilling: api\nagy:\n  acknowledgeTerms: true\n",
 			"billing: api has no meaning on provider agy",
 		},
-		{"subscription billing is the one that fits", "workspace: demo\nprovider: agy\nbilling: subscription\n", ""},
+		{
+			"subscription billing is the one that fits",
+			"workspace: demo\nprovider: agy\nbilling: subscription\nagy:\n  acknowledgeTerms: true\n", "",
+		},
 		{
 			// The same key on the provider it was built for is untouched.
 			"api billing on claude is unaffected",

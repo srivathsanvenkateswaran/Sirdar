@@ -334,4 +334,15 @@ describe('wails transport', () => {
     await t.mcpCall('ws1', 'fs', 'list')
     expect(bridge.MCPCall).toHaveBeenLastCalledWith('ws1', 'fs', 'list', {})
   })
+
+  // Opening the config file is a desktop-only ability: the browser build
+  // has no `openConfig` at all, which is what Settings keys its fallback on.
+  it('opens the config file through OpenConfig, and only on the desktop', async () => {
+    const bridge = stubBridge({ OpenConfig: async () => undefined })
+    await expect(createWailsTransport().openConfig?.('ws1')).resolves.toBeUndefined()
+    expect(bridge.OpenConfig).toHaveBeenCalledWith('ws1')
+
+    delete (window as unknown as { go?: unknown }).go
+    expect(createTransport().openConfig).toBeUndefined()
+  })
 })
