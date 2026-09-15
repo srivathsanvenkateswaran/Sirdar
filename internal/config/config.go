@@ -23,11 +23,11 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
-	Token   string       `yaml:"token,omitempty"` // credential ref
+	Token   string       `yaml:"token,omitempty"` // credential ref (Zoho Desk access token, Front API token)
 	Auth    *OAuthConfig `yaml:"auth,omitempty"`
 
 	// Jira (Email and APIToken are also Zendesk's basic-auth credentials).
@@ -831,6 +831,7 @@ var helpdeskOnlyAdapters = map[string]bool{
 	"helpscout": true,
 	"intercom":  true,
 	"hubspot":   true,
+	"front":     true,
 }
 
 func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
@@ -909,6 +910,10 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 	case "hubspot":
 		if s.AccessToken == "" {
 			return fmt.Errorf("config: %s.accessToken: is required for adapter hubspot", prefix)
+		}
+	case "front":
+		if s.Token == "" {
+			return fmt.Errorf("config: %s.token: is required for adapter front", prefix)
 		}
 	case "jira":
 		if s.BaseURL == "" {
