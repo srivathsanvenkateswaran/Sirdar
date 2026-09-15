@@ -23,7 +23,7 @@ These speak ACP themselves, usually behind a flag.
 | Gemini CLI | `gemini` | `["--experimental-acp"]` | The form the scaffold and `docs/config.md` use, for a locally installed CLI. The registry's own entry is `npx` with `["@google/gemini-cli@0.59.0", "--acp"]`, so the flag name differs between versions — unverified which your build takes; `sirdar doctor` settles it in one run |
 | Goose (Block) | `goose` | `["acp"]` | Distributed as a binary, no npx wrapper in the registry |
 | Qwen Code (Alibaba) | `npx` | `["@qwen-code/qwen-code@0.23.2", "--acp", "--experimental-skills"]` | |
-| Kimi CLI (Moonshot) | `kimi` | unverified | Binary; the registry lists no argv |
+| Kimi CLI (Moonshot) | `kimi` (usually an absolute path, see below) | `["acp"]` | **Verified** against `kimi` 0.43.1 — the one row on this page that has been run. Protocol version 1, `loadSession`, image prompts. Set the session mode to `plan`: in `default` mode a write inside the workspace is approved before Sirdar is asked. `docs/research/12-kimi-wire-formats.md` |
 | OpenCode | `opencode` | unverified | Binary; the registry lists no argv |
 | Crush | `crush` | unverified | Not found in the registry snapshot at all — may be unregistered or renamed |
 | Junie (JetBrains) | `junie` | unverified | Binary; `junie.jetbrains.com` |
@@ -46,6 +46,53 @@ those adapters are better: they carry a cost signal, a rate-limit signal and sch
 output, none of which ACP has a field for. Reach for the ACP path here only to test the ACP
 adapter itself, or to run a version of one of them that Sirdar's native adapter does not
 handle.
+
+## Kimi Code CLI, in detail
+
+The only agent on this page that has actually been driven. `kimi acp --help` says "Run
+kimi-code as an Agent Client Protocol (ACP) server over stdio", and it is a full
+implementation — `@agentclientprotocol/sdk` 1.3.0, protocol version 1, `loadSession`, image
+and embedded-context prompts, HTTP and SSE MCP transports, `session/set_mode` and
+`session/set_config_option`.
+
+```yaml
+provider: acp
+acp:
+  command: /Users/you/.kimi-code/bin/kimi
+  args: ["acp"]
+  env: {}
+budget:
+  maxMinutes: 20
+```
+
+The installer does **not** put `kimi` on `PATH`. It lands in `~/.kimi-code/bin/kimi`, so
+`acp.command` normally has to be the absolute path; "command not found" from `sirdar doctor` is
+the expected first result otherwise.
+
+Four things to know before running one against a repository you care about, all from
+`docs/research/12-kimi-wire-formats.md`:
+
+- **`default` mode is not read-only.** A policy the bundle calls `git-cwd-write-approve`
+  approves a `Write` or `Edit` whose targets all sit inside the workspace, whenever the
+  workspace is a git checkout — which a Sirdar workspace always is. The call never becomes a
+  `session/request_permission`, so Sirdar's policy never sees it. Use `plan`.
+- **`plan` mode is a genuine in-process veto**, not a prompt instruction: the plan feature
+  registers its own `onBeforeExecuteTool` listener and vetoes `Write` and `Edit` outside the
+  plan file, and a veto short-circuits the in-workspace approval above. `Bash` is deliberately
+  left to the normal chain, so it arrives as a permission request and `permissions.bash`
+  decides. Sirdar's ACP adapter does **not** send `session/set_mode` today, so this has to be
+  done by hand or added to the adapter.
+- **A subagent escapes both.** `Agent` and `AgentSwarm` are approved without asking, and a
+  subagent is created with its permission mode forced to `auto` and without the parent's
+  plan-mode state. Nothing it does asks, and nothing vetoes its writes. No flag removes the
+  tool.
+- **`FetchURL` and `WebSearch` are approved without asking**, so `permissions.fetch` is never
+  consulted on this agent.
+
+The free "Kimi Code" tier's quota is small enough that it can be spent before the first real
+run. It surfaces as a `-32000` JSON-RPC error on `session/prompt` whose message begins
+`Authentication required: 403 You've reached your monthly usage limit…` — indistinguishable
+from a broken login except by reading the text.
 
 ## Worked example
 
