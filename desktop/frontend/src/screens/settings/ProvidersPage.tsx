@@ -47,12 +47,18 @@ export const PROVIDER_FACTS: Record<Provider, ProviderFacts> = {
     fix: 'refused',
     guard: 'completed write ends the run',
   },
+  // Off: Google's Antigravity terms do not allow a program to drive the CLI.
+  // The adapter is still in the tree behind agy.acknowledgeTerms, and doctor
+  // says "disabled (Antigravity terms)" for a workspace that still names it.
   agy: {
     drivenBy: 'agy · plan mode',
     fix: 'refused',
-    guard: 'completed write ends the run',
+    guard: 'disabled (Antigravity terms)',
   },
 }
+
+/** What doctor prints for the disabled provider, and what its row says without doctor. */
+const AGY_DISABLED = 'disabled (Antigravity terms)'
 
 /** The doctor rows that belong to a provider, by the name each adapter prints. */
 function rowsFor(provider: Provider, configured: string, checks: Check[]): Check[] {
@@ -82,8 +88,14 @@ export interface SignIn {
  * checked", not "signed out".
  */
 export function signInOf(provider: Provider, configured: string, doctor: DoctorState): SignIn {
-  if (doctor.status !== 'done') return { level: 'none', word: 'not checked' }
-  const rows = rowsFor(provider, configured, doctor.checks)
+  const rows = doctor.status === 'done' ? rowsFor(provider, configured, doctor.checks) : []
+  // The disabled provider reads as disabled whether or not doctor ran: its
+  // one row says so, and without that row nothing else would either.
+  const off = rows.find((c) => c.name === 'agy')
+  if (off) return { level: 'fail', word: 'disabled', detail: off.detail }
+  if (provider === 'agy' && rows.length === 0) {
+    return { level: 'fail', word: 'disabled', detail: AGY_DISABLED }
+  }
   if (rows.length === 0) return { level: 'none', word: 'not checked' }
   const failed = rows.find((c) => levelOf(c) === 'fail')
   if (failed) return { level: 'fail', word: 'failed', detail: `${failed.name}: ${failed.detail}` }

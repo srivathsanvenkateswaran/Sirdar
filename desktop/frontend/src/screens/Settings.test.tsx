@@ -47,7 +47,13 @@ function transportWith(over: Partial<Transport> = {}, seed: Parameters<typeof cr
 /** What the sidebar's footer would draw: the screen's published primary action. */
 function PrimaryProbe(): JSX.Element {
   const action = usePrimaryAction()
-  return <output data-testid="primary">{action ? `${action.label}${action.disabled ? ' (disabled)' : ''}` : 'New session'}</output>
+  return (
+    <output data-testid="primary">
+      {action
+        ? `${action.label}${action.disabled ? ' (disabled)' : ''} on the ${action.placement ?? 'footer'}`
+        : 'New session'}
+    </output>
+  )
 }
 
 function open(
@@ -264,7 +270,26 @@ describe('Providers', () => {
     expect(within(table).getByText('Claude Code CLI · stream-json')).toBeInTheDocument()
     expect(within(table).getAllByText('refused')).toHaveLength(2)
     expect(within(table).getAllByText('every call mediated')).toHaveLength(4)
-    expect(within(table).getAllByText('not checked')).toHaveLength(7)
+    expect(within(table).getAllByText('not checked')).toHaveLength(6)
+    // agy is off under Google's Antigravity terms, with or without doctor.
+    expect(within(table).getByText('disabled')).toHaveAttribute('title', 'disabled (Antigravity terms)')
+    expect(within(table).getByText('disabled (Antigravity terms)')).toBeInTheDocument()
+  })
+
+  it('reads the agy row doctor emits for a workspace that still names it', async () => {
+    const doctor = vi.fn().mockResolvedValue([
+      { name: 'agy', ok: false, level: 'fail', detail: 'disabled (Antigravity terms)' },
+    ] satisfies Check[])
+    open(
+      { page: 'providers', workspaces: [{ ...WORKSPACE, provider: 'agy' }] },
+      transportWith({ doctor }, { configSummary: configSummary({ general: { ...configSummary().general, provider: 'agy' } }) }),
+    )
+    fireEvent.click(await screen.findByRole('button', { name: 'Check agy' }))
+    const table = screen.getByRole('table', { name: 'Providers' })
+    const cell = await within(table).findByText('disabled')
+    expect(cell).toHaveAttribute('data-level', 'fail')
+    expect(cell).toHaveAttribute('title', 'disabled (Antigravity terms)')
+    expect(within(table).getAllByText('not checked')).toHaveLength(6)
   })
 
   it('Check re-runs doctor and fills the sign-in column from its rows', async () => {
@@ -274,8 +299,8 @@ describe('Providers', () => {
     expect(doctor).toHaveBeenCalledWith('ws1')
     const table = screen.getByRole('table', { name: 'Providers' })
     expect(await within(table).findByText('signed in')).toHaveAttribute('title', 'logged in as sri')
-    // Doctor only looked at the workspace's own provider.
-    expect(within(table).getAllByText('not checked')).toHaveLength(6)
+    // Doctor only looked at the workspace's own provider; agy stays disabled.
+    expect(within(table).getAllByText('not checked')).toHaveLength(5)
   })
 
   it('reads a failing login as failed, with the row that failed', async () => {
@@ -453,9 +478,9 @@ describe('Try a tool', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('server went away')
   })
 
-  it('publishes Call as the primary action while the page is up, so New session steps down', async () => {
+  it('publishes Call as the primary action, drawn on the screen, so New session steps down', async () => {
     open({ page: 'tools' })
-    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Call'))
+    await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Call on the screen'))
     go('About')
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('New session'))
   })

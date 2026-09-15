@@ -226,7 +226,9 @@ export default function Settings(props: {
   const tester = useToolTester(transport, currentWorkspaceId, inventory)
 
   // Call is the one filled button while Try a tool is up, so the sidebar's
-  // New session steps down for it. Every other page has Save, disabled.
+  // New session steps down for it; the button itself is drawn on the page,
+  // which is what `placement: 'screen'` tells the footer. Every other page
+  // has Save, disabled.
   const tools = open && page === 'tools'
   useProvidePrimaryAction(
     tools
@@ -236,6 +238,7 @@ export default function Settings(props: {
           disabled: !tester.canCall,
           busy: tester.calling,
           title: tester.problem || undefined,
+          placement: 'screen',
         }
       : null,
   )
