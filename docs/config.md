@@ -80,11 +80,6 @@ rather than being silently ignored.
 | `notify.generic[].headers` | map | unset | Headers to send; an `env:`/`keychain:` value is resolved, anything else is sent literally — except a name that looks like a credential (`Authorization`, or one ending in `-Token`, `-Key` or `-Secret`), which must be a reference |
 | `notify.generic[].secret` | string | unset | Credential reference to the shared secret signing the body as `X-Sirdar-Signature` |
 | `attachments.maxBytes` | int | `10485760` (10 MiB) | Attachments larger than this are dropped from the bundle and named in a warning |
-| `attachments.transcribe` | object, optional | unset | Turn audio attachments into text with a command you name; absent means no audio is transcribed. See Audio transcription below |
-| `attachments.transcribe.command` | string | none (required with the block) | The command template, split into argv and never run through a shell: `{in}` is the audio file, `{out}` an output path without an extension, `{outdir}` a directory to write into |
-| `attachments.transcribe.maxSeconds` | int | `300` | Audio longer than this is skipped with a warning; `0` turns the check off. The length is read with `ffprobe`, so without `ffprobe` on `PATH` there is no check |
-| `attachments.transcribe.maxFiles` | int | `30` | Attachments one ticket may transcribe; the rest are named as unread. `0` means no cap |
-| `attachments.transcribe.formats` | list of string | `ogg`, `opus`, `mp3`, `m4a`, `wav`, `mp4` | Extensions treated as audio |
 | `fix.prIncludesComplaint` | bool | `false` | Put the customer's own words from the triage note in the pull request body's Symptom section; off by default, because a pull request is often public |
 | `fix.inPlace` | bool | `false` | Run the fix session in the operator's own working tree (`git checkout -B`) instead of a linked worktree under `.sirdar/worktrees/<run-id>`; see Fix worktrees below |
 | `playbooks` | string | `.sirdar/playbooks` | Directory of playbook markdown files loaded into the prompt, in filename order |
@@ -1077,74 +1072,8 @@ whatever point the provider offers to be asked.
 An attachment the helpdesk downloaded is kept only if the session could open it. Images,
 PDFs, `text/*`, JSON, CSV, XML and ZIP are kept; audio, video and anything else is deleted
 from the bundle, as is any file over `attachments.maxBytes`. Each dropped file is named, with
-its size, in the run's warnings, in the prompt, and in the triage note's "Attachments not
-reviewed" line, so the agent reports it as evidence it could not read instead of hunting for
-a transcoder.
-
-Audio is the one type with a second chance: see Audio transcription below.
-
-## Audio transcription
-
-A helpdesk serving a WhatsApp number gets voice notes. One ticket in this workspace's first
-live runs carried 28 of them, all `audio/ogg`, all Arabic, none of which the session could
-open — the triage came out low-confidence because the complaint itself was in the audio.
-
-With an `attachments.transcribe` block, each audio attachment is run through a command you
-name during bundle assembly, and the text lands beside the file as
-`<attachment>.transcript.txt`:
-
-```yaml
-attachments:
-  transcribe:
-    command: whisper-cli -m ~/models/ggml-large-v3.bin -l auto -otxt -of {out} {in}
-    maxSeconds: 300
-    maxFiles: 30
-    formats: [ogg, opus, mp3, m4a, wav, mp4]
-```
-
-The block is absent by default, and absent means no audio is transcribed.
-
-**Where the audio goes is your command's business, not Sirdar's.** Sirdar ships no model,
-downloads nothing, and calls no transcription service. The example above is
-[whisper.cpp](https://github.com/ggml-org/whisper.cpp), which runs the model on this machine
-and sends nothing anywhere. A command that posts to a hosted API — OpenAI's, a cloud vendor's
-— sends the customer's recorded voice to that API, under whatever terms you agreed with them.
-Sirdar runs the command you configured and makes no other judgement about it.
-
-The `whisper` CLI shape works too, since `{outdir}` is read as well as `{out}`:
-
-```yaml
-    command: whisper {in} --language auto --output_format txt --output_dir {outdir}
-```
-
-**How the command is run.** The template is split into argv once, at config load — quote a
-path with spaces, as a shell would — and executed directly. There is no shell, so a pipe, a
-redirect or a `&&` is refused at load rather than passed to the tool as a literal argument;
-put the pipeline in a script and name the script here. Each placeholder is substituted inside
-its own token, so `-of {out}` and `--output_dir={outdir}` both work and a path with spaces
-stays one argument. The command gets stdin closed, and an environment of `PATH`, `HOME` and
-`LANG` alone — none of the credentials the run resolved for the helpdesk or the model
-endpoint. Each file has two minutes, and the whole bundle has ten.
-
-**What ends up in the bundle.** A transcribed attachment stays where it was, with the
-transcript written next to it under the same name plus `.transcript.txt`. The first line of
-the transcript names the tool that produced it and the language, when the tool reported one
-or the command pinned one with `-l`. `ticket.json` marks the attachment transcribed and
-records the transcript's path, the rendered conversation points at it, and the prompt tells
-the session the transcripts exist, that they are machine-produced, and that quoting one means
-saying so. The audio is kept rather than deleted: a note quoting a voice note is only
-checkable if someone can still listen to it.
-
-**Failures are per-file warnings, never run failures.** A command that exits non-zero, a file
-over `maxSeconds`, the `maxFiles` cap or the ten-minute budget — each leaves that attachment
-exactly where an unreadable attachment has always been: dropped from the bundle, named in the
-run's warnings and in the prompt, and listed in the note as an attachment nobody reviewed. A
-transcribed file is never in that list.
-
-`sirdar doctor` has a `transcribe` row: whether a command is configured, whether its first
-token is on `PATH`, and the limits in force. It also says when `ffprobe` is missing, because
-`maxSeconds` is read with `ffprobe` and without it no length check can be made — the
-two-minute per-file timeout is then the only bound on a long recording.
+its size, in the run's warnings and in the prompt, so the agent reports it as evidence it
+could not read instead of hunting for a transcoder.
 
 ## Languages
 

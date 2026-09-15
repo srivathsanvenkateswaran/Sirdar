@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/url"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -18,7 +17,6 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/zohodesk"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
 )
 
 // doctorTimeout caps each source check, so one unreachable adapter or API
@@ -34,7 +32,7 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks := []Check{{Name: "config", OK: true, Detail: filepath.Join(cfg.Root, ".sirdar", "config.yaml")}}
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg)...)
-	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg), transcribeCheck(cfg))
+	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
 	return levelled(checks)
 }
@@ -438,60 +436,6 @@ func fetchCheck(cfg *config.Config) Check {
 	}
 	check.Detail = "permissions.fetch allows " + strings.Join(cfg.Permissions.Fetch, ", ")
 	return check
-}
-
-// transcribeCheck reports whether audio attachments will be turned into
-// text, and whether the command that would do it can actually be found.
-// A missing binary never fails a run — every transcription failure is a
-// per-file warning — so it is a warning here too, but it is the difference
-// between a ticket's voice notes being read and being listed as unread.
-func transcribeCheck(cfg *config.Config) Check {
-	check := Check{Name: "transcribe", OK: true}
-	t := cfg.Attachments.Transcribe
-	if t == nil || strings.TrimSpace(t.Command) == "" {
-		check.Detail = "attachments.transcribe is unset: audio attachments are named in a warning and left unread"
-		return check
-	}
-
-	argv, err := transcribe.SplitCommand(t.Command)
-	if err != nil {
-		return Check{Name: check.Name, Detail: err.Error()}
-	}
-	limits := fmt.Sprintf("up to %s, %s each; formats: %s",
-		countPhrase(t.MaxFiles, "file"), secondsPhrase(t.MaxSeconds), strings.Join(t.Formats, ", "))
-
-	path, err := exec.LookPath(argv[0])
-	if err != nil {
-		return warn(check.Name, argv[0]+" is not on PATH, so no audio will be transcribed; "+limits)
-	}
-	check.Detail = argv[0] + " → " + path + "; " + limits
-	if t.MaxSeconds > 0 {
-		if _, err := exec.LookPath("ffprobe"); err != nil {
-			check.Level = string(provider.LevelWarn)
-			check.Detail += "; ffprobe is not on PATH, so maxSeconds cannot be checked and every audio file is transcribed under the 2-minute per-file timeout"
-		}
-	}
-	return check
-}
-
-// countPhrase renders a cap that 0 turns off, e.g. "30 files" or
-// "any number of files".
-func countPhrase(n int, noun string) string {
-	if n <= 0 {
-		return "any number of " + noun + "s"
-	}
-	if n == 1 {
-		return "1 " + noun
-	}
-	return fmt.Sprintf("%d %ss", n, noun)
-}
-
-// secondsPhrase renders the length cap that 0 turns off.
-func secondsPhrase(n int) string {
-	if n <= 0 {
-		return "any length"
-	}
-	return fmt.Sprintf("%ds", n)
 }
 
 // oauthCheck performs one refresh and reports the access token it got and

@@ -135,20 +135,6 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   by signature, are exempt. And the fix route itself now answers 403 on a listener bound with
   `--allow-remote`: a remote caller may read notes and start a triage, but not write code and open
   a pull request under the operator's GitHub login (`docs/config.md`).
-- Added optional audio transcription to bundle assembly, under `attachments.transcribe`. A
-  helpdesk on a WhatsApp number gets voice notes — one ticket in the first live runs carried 28
-  Arabic `audio/ogg` files, none of which the session could open, and the triage came out
-  low-confidence because the complaint itself was in the audio. With a command configured, each
-  audio attachment is transcribed during bundle assembly and the text lands beside it as
-  `<attachment>.transcript.txt`, marked in the manifest, pointed at from the rendered
-  conversation, and announced to the session as machine-produced evidence. The command template
-  is split into argv at config load and executed directly, never through a shell; it runs with
-  stdin closed, an environment of `PATH`, `HOME` and `LANG` alone, two minutes per file and ten
-  per bundle. Every failure — a broken command, audio over `maxSeconds`, the `maxFiles` cap — is
-  a per-file warning that leaves the attachment where an unreadable attachment has always been:
-  named as unread in the warnings, the prompt and the note. The block is absent by default;
-  Sirdar ships no model and calls no service, so audio leaves the machine only if the command the
-  operator chose sends it somewhere. `sirdar doctor` has a `transcribe` row (`docs/config.md`).
 - Added `budget.stallMinutes`, a stall watch on the provider's stream. A session that says
   nothing at all — no tool call, no assistant text, no usage line — for six minutes (the default;
   `0` turns the check off) is cancelled, marked `failed` with `stalled: no activity for 6m`, and
