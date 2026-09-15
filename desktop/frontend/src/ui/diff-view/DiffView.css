@@ -1,0 +1,152 @@
+/*
+ * Diff view. The mono ledger at 13.5px on a 1.7 line, one number column, and
+ * a tint of the done hue behind an added line and of the failed hue behind a
+ * deleted one — each with its own mark, so the tint is never the only copy.
+ *
+ * The view is left-to-right whatever the pane around it: code is written that
+ * way, and a mirrored diff would put the line numbers on the wrong side of
+ * the text they number.
+ */
+
+.sd-diff {
+  min-inline-size: 0;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.7;
+  color: var(--sd-ink);
+}
+
+/* ---------- file ---------- */
+
+.sd-diff__filehead {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  padding-block: 14px 6px;
+  padding-inline: 20px;
+  color: var(--sd-ink-2);
+}
+
+.sd-diff__path {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sd-diff__counts {
+  display: inline-flex;
+  gap: var(--sd-space-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.sd-diff__add {
+  color: var(--sd-st-done);
+}
+
+.sd-diff__del {
+  color: var(--sd-st-failed);
+}
+
+.sd-diff__status {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-ledger);
+}
+
+/* ---------- hunk ---------- */
+
+.sd-diff__hunkhead {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sd-space-3);
+  padding-block: 6px;
+  padding-inline: 20px;
+  border-block: 1px solid var(--sd-rule);
+  background: var(--sd-sunk);
+  color: var(--sd-ink-3);
+}
+
+.sd-diff__header {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.5;
+}
+
+.sd-diff__acts {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: 6px;
+}
+
+/* A kept hunk's button keeps the ink; the check beside the word is the state. */
+.sd-diff__acts .sd-button[aria-pressed='true'] {
+  color: var(--sd-ink);
+}
+
+/* ---------- lines ---------- */
+
+.sd-diff__lines {
+  display: block;
+}
+
+.sd-diff__line {
+  display: grid;
+  grid-template-columns: 3.6rem minmax(0, 1fr);
+  padding-inline-end: 20px;
+  white-space: pre;
+}
+
+.sd-diff__no {
+  padding-inline: 20px 12px;
+  color: var(--sd-ink-3);
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+}
+
+.sd-diff__code {
+  min-inline-size: 0;
+  overflow-x: auto;
+  tab-size: 4;
+}
+
+.sd-diff__mark {
+  display: inline-block;
+  inline-size: 1.2ch;
+  user-select: none;
+}
+
+.sd-diff__line[data-type='add'] {
+  background: color-mix(in srgb, var(--sd-st-done) 10%, transparent);
+}
+
+.sd-diff__line[data-type='add'] .sd-diff__code {
+  color: var(--sd-st-done);
+}
+
+.sd-diff__line[data-type='del'] {
+  background: color-mix(in srgb, var(--sd-st-failed) 10%, transparent);
+}
+
+.sd-diff__line[data-type='del'] .sd-diff__code {
+  color: var(--sd-st-failed);
+}
+
+.sd-diff__line[data-type='meta'] .sd-diff__code {
+  color: var(--sd-ink-3);
+}
+
+/* ---------- the stubs ---------- */
+
+.sd-diff__stub {
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: 20px;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+}
