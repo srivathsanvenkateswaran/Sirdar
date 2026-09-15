@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Sirdar walkthrough · Change review</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:13px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+a{color:#3B3AA6}a:hover{color:#2B2A80}
+.app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
+.sidebar{display:flex;flex-direction:column;flex:0 0 208px;padding:8px;background:transparent}
+.brand{display:flex;align-items:center;min-height:32px;padding:0 8px;font-family:var(--sd-font-mono);font-size:13px;font-weight:600;letter-spacing:.06em}
+.nav{display:flex;flex-direction:column;padding-top:8px}
+.navrow{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;margin:2px 0;padding:4px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:13px;font-weight:500;line-height:1.4}
+.navrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.navrow svg{width:16px;height:16px;flex:0 0 auto}
+.navcount{margin-left:auto;padding:0 8px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:10.5px;line-height:16px}
+.recent{display:flex;flex-direction:column;margin-top:12px;padding-top:8px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 8px 4px;color:var(--sd-ink-3);font-size:10.5px;letter-spacing:.06em}
+.recentrow{display:flex;align-items:center;gap:8px;min-height:26px;margin:1px 0;padding:3px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:12px}
+.recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:11.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.dot[data-live="true"]{background:var(--sd-accent)}
+.dot[data-blocked="true"]{background:var(--sd-st-blocked)}
+.foot{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:8px;border-top:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border-radius:8px;font-weight:500}
+.switcher svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:2px}
+.quota{display:flex;align-items:center;gap:8px;padding:2px 8px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:58px}
+.quota .bar{display:block;flex:1;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.quota .pct{min-width:3ch;text-align:right}
+.quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:28px;padding:4px 12px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.primary[data-disabled="true"]{opacity:.45}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:4px 12px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink-2)}
+.btn svg{width:14px;height:14px}
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:8px 8px 8px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-sheet);overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:15px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.stat{padding:0 10px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:1.5;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
+.badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
+.badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
+.badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
+.badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
+.fact{display:inline-flex;align-items:center;min-height:20px;padding:0 8px;border-radius:4px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:10.5px;font-weight:500;line-height:20px;white-space:nowrap}
+.mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.h-serif{margin:0;font-family:var(--sd-font-display);font-size:24px;font-weight:400;line-height:1.2}
+.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:7px 10px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-3);font-size:12px}
+.tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
+.tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.icon{width:16px;height:16px;flex:0 0 auto}
+/* shared controls: one segmented control, one toggle, one select look, one outline chip */
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:24px;padding:2px 12px;border-radius:999px;color:var(--sd-ink-2);font-size:12px;line-height:20px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:32px;height:18px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:2px;left:2px;width:14px;height:14px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:16px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:13px;white-space:nowrap}
+.sel svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:1px 8px;border:1px solid var(--sd-rule-strong);border-radius:4px;font-size:11.5px;line-height:1.6;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
+.rv{display:grid;grid-template-columns:240px minmax(0,1fr) 320px;flex:1;min-height:0}
+.rail{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
+.railhead{padding:10px 16px 6px;font-size:11.5px;color:var(--sd-ink-3)}
+.railhead .add{color:var(--sd-st-done)}.railhead .del{color:var(--sd-st-failed)}
+.file{display:flex;align-items:center;gap:8px;padding:6px 16px;font-family:var(--sd-font-mono);font-size:11.5px}
+.file[data-on="true"]{background:var(--sd-card-row)}
+.file .path{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .add{color:var(--sd-st-done)}.file .del{color:var(--sd-st-failed)}
+.file .rev{color:var(--sd-ink-3);font-family:var(--sd-font-ui)}
+.railsec{margin-top:8px;padding:10px 16px 4px;border-top:1px solid var(--sd-rule);font-size:11.5px;font-weight:500;color:var(--sd-ink-2)}
+.checks{display:flex;flex-direction:column;gap:4px;padding:2px 16px 12px;font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-2)}
+.checks .ok{color:var(--sd-st-done)}
+.diffcol{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule)}
+.dtool{display:flex;align-items:center;gap:12px;min-height:36px;padding:4px 16px;border-bottom:1px solid var(--sd-rule)}
+.dtool .path{font-size:11.5px;color:var(--sd-ink-2)}
+.diff{flex:1;min-height:0;overflow:hidden;font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.55}
+.hunk{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 16px;background:var(--sd-sunk);color:var(--sd-ink-3);border-top:1px solid var(--sd-rule);border-bottom:1px solid var(--sd-rule)}
+.hunk .acts{display:flex;gap:4px}
+.hunk .btn{min-height:22px;padding:0 8px;font-size:11px;font-family:var(--sd-font-ui)}
+.hunk .btn[data-on="true"]{color:var(--sd-ink)}
+.hunk .btn svg{width:12px;height:12px}
+.fileh{display:flex;align-items:center;gap:8px;padding:10px 16px 4px;color:var(--sd-ink-2)}
+.fileh .add{color:var(--sd-st-done)}
+.dl{display:grid;grid-template-columns:3.2rem 1fr;padding:0 16px 0 0;white-space:pre}
+.dl .n{padding-left:16px;color:var(--sd-ink-3);text-align:right;padding-right:10px}
+.dl[data-t="add"]{background:rgba(23,113,58,.10)}.dl[data-t="del"]{background:rgba(176,36,24,.10)}
+.dl[data-t="add"] .c{color:var(--sd-st-done)}.dl[data-t="del"] .c{color:var(--sd-st-failed)}
+.dl.more .c{color:var(--sd-ink-3)}
+.pane{display:flex;flex-direction:column;gap:10px;min-width:0;min-height:0;padding:12px 16px;font-size:12.5px;line-height:1.5}
+.pane h3{margin:0;font-size:13px;font-weight:500}
+.pane p{margin:0;max-width:60ch}
+.pane code{font-family:var(--sd-font-mono);font-size:.92em;background:rgba(23,24,28,.06);padding:0 3px;border-radius:2px}
+.pane .notdone b{font-weight:500}
+.note{margin-top:6px;padding-top:12px;border-top:1px solid var(--sd-rule)}
+.note .lab{font-size:11.5px;font-weight:500;color:var(--sd-ink-2)}
+.note .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px}
+.note .path{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:11.5px;color:var(--sd-ink-2)}
+.foot2{display:flex;align-items:center;gap:8px;min-height:44px;padding:6px 16px;border-top:1px solid var(--sd-rule)}
+.foot2 .stats{margin-left:0}
+.foot2 .btn.ghost{margin-left:auto}
+  </style>
+<style>
+.demo-bar{display:flex;align-items:center;gap:16px;width:1440px;box-sizing:border-box;padding:10px 16px;background:#17181C;color:#FAF7EC;font:13px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-bar .step{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;color:#A6A9B2;white-space:nowrap}
+.demo-bar .name{font-weight:600;white-space:nowrap}
+.demo-bar .what{flex:1;min-width:0;color:#D5D2C6}
+.demo-bar a{color:#FAF7EC;text-decoration:none;padding:4px 10px;border:1px solid #3D424B;border-radius:8px;white-space:nowrap}
+.demo-bar a:hover{border-color:#FAF7EC}
+.demo-bar label{display:flex;align-items:center;gap:6px;color:#A6A9B2;white-space:nowrap;cursor:pointer}
+.demo-from{width:1440px;box-sizing:border-box;padding:6px 16px;background:#2B2D33;color:#D5D2C6;font:12px/1.4 Inter,-apple-system,system-ui,sans-serif}
+.demo-from b{color:#FAF7EC;font-weight:500}
+[data-demo-link]{cursor:pointer}
+body.demo-show [data-demo-link]{outline:2px dashed #3B3AA6;outline-offset:2px}
+</style>
+</head>
+<body>
+<div class="demo-bar"><span class="step">3 of 10</span><span class="name">Change review</span><span class="what">The full-width review before a fix becomes a branch: keep or drop each hunk, read the checks and what the agent said, then create the branch.</span><label><input type="checkbox" id="demo-show"> Show links</label><a href="index.html">Map</a><a href="Session.html">Back</a><a href="Board.html">Next</a></div><div class="demo-from"><b>Reached from:</b> From the Changes tab or Create branch on a session.</div>
+<div class="app">
+<div class="sidebar">
+  <div class="brand">SIRDAR</div>
+  <nav class="nav">
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-cur="board"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+  </nav>
+  <div class="recent">
+    <div class="recent-label">Recent sessions</div>
+    <div class="recentrow" data-current="true"><span class="dot" data-blocked="true"></span><span class="key">SBX-1</span><span class="kind">fix</span></div>
+    <div class="recentrow"><span class="dot" data-live="true"></span><span class="key">SBX-4</span><span class="kind">triage</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-3</span><span class="kind">rca</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
+  </div>
+  <div class="foot">
+    <div class="switcher"><span>acme-support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="quotas">
+      <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
+      <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
+      <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
+    </div>
+    <div class="btn" data-sb="new">New session</div>
+  </div>
+</div>
+<div class="sheet">
+  <div class="topbar">
+    <span class="key">SBX-1</span><span class="kind">fix</span><span class="badge" data-s="completed">completed</span>
+    <span class="title">Product 00219 stock shows 1 more than the movement report</span>
+    <div class="stats"><span class="stat">claude · <b>sonnet</b></span><span class="stat"><b>05:40</b></span><span class="stat"><b>31</b> turns</span><span class="stat"><b>$0.58</b></span></div>
+    <span class="btn ghost">Back to session</span>
+  </div>
+  <div class="rv">
+    <div class="rail">
+      <div class="railhead">2 files · <span class="mono"><span class="add">+25</span> <span class="del">−6</span></span></div>
+      <div class="file" data-on="true"><span class="path">app/ledger.go</span><span class="add">+4</span><span class="del">−6</span><span class="rev">reviewed</span></div>
+      <div class="file"><span class="path">app/ledger_test.go</span><span class="add">+21</span><span class="del">−0</span><span class="rev">new</span></div>
+      <div class="railsec">Checks</div>
+      <div class="checks"><span><span class="ok">ok</span>  go build ./...</span><span><span class="ok">ok</span>  go vet ./...</span><span><span class="ok">ok</span>  go test · 12 passed · 1.2s</span></div>
+    </div>
+    <div class="diffcol">
+      <div class="dtool"><span class="seg"><span data-on="true">Unified</span><span>Split</span></span><span class="mono path">app/ledger.go</span></div>
+      <div class="diff">
+        <div class="hunk"><span>@@ -88,12 +88,10 @@ func (l *Ledger) ApplyMovement(m Movement)</span><span class="acts"><span class="btn pale" data-on="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12 5 5 9-10"></path></svg>Kept</span><span class="btn ghost">Drop</span></span></div>
+        <div class="dl"><span class="n">88</span><span class="c">    case Return:</span></div>
+        <div class="dl"><span class="n">89</span><span class="c">        l.onHand[m.SKU] += m.Qty</span></div>
+        <div class="dl" data-t="del"><span class="n">90</span><span class="c">-       // partial returns also adjust reserved</span></div>
+        <div class="dl" data-t="del"><span class="n">91</span><span class="c">-       l.adjust(m.SKU, m.Qty)</span></div>
+        <div class="dl" data-t="del"><span class="n">92</span><span class="c">-       if m.Partial {</span></div>
+        <div class="dl" data-t="del"><span class="n">93</span><span class="c">-           l.reserved[m.SKU] -= m.Qty</span></div>
+        <div class="dl" data-t="del"><span class="n">94</span><span class="c">-       }</span></div>
+        <div class="dl" data-t="add"><span class="n">90</span><span class="c">+       // a partial return releases the reservation;</span></div>
+        <div class="dl" data-t="add"><span class="n">91</span><span class="c">+       // a full one is counted by the receipt</span></div>
+        <div class="dl" data-t="add"><span class="n">92</span><span class="c">+       if m.Partial {</span></div>
+        <div class="dl" data-t="add"><span class="n">93</span><span class="c">+           l.reserved[m.SKU] -= m.Qty</span></div>
+        <div class="dl"><span class="n">94</span><span class="c">        }</span></div>
+        <div class="dl"><span class="n">95</span><span class="c">        l.log(m)</span></div>
+        <div class="dl"><span class="n">96</span><span class="c">    case Sale:</span></div>
+        <div class="fileh"><span>app/ledger_test.go</span><span class="add">+21</span></div>
+        <div class="hunk"><span>@@ -1,6 +1,27 @@</span><span class="acts"><span class="btn pale">Keep</span><span class="btn ghost">Drop</span></span></div>
+        <div class="dl"><span class="n">1</span><span class="c">  package app</span></div>
+        <div class="dl"><span class="n">2</span><span class="c"> </span></div>
+        <div class="dl"><span class="n">3</span><span class="c">  import "testing"</span></div>
+        <div class="dl"><span class="n">4</span><span class="c"> </span></div>
+        <div class="dl" data-t="add"><span class="n">5</span><span class="c">+ func TestApplyMovement_PartialReturn(t *testing.T) {</span></div>
+        <div class="dl" data-t="add"><span class="n">6</span><span class="c">+     cases := []struct {</span></div>
+        <div class="dl" data-t="add"><span class="n">7</span><span class="c">+         name     string</span></div>
+        <div class="dl" data-t="add"><span class="n">8</span><span class="c">+         partial  bool</span></div>
+        <div class="dl" data-t="add"><span class="n">9</span><span class="c">+         wantHand int</span></div>
+        <div class="dl" data-t="add"><span class="n">10</span><span class="c">+         wantRes  int</span></div>
+        <div class="dl" data-t="add"><span class="n">11</span><span class="c">+     }{</span></div>
+        <div class="dl" data-t="add"><span class="n">12</span><span class="c">+         {"full return counts once", false, 6, 2},</span></div>
+        <div class="dl" data-t="add"><span class="n">13</span><span class="c">+         {"partial return releases the reservation", true, 6, 1},</span></div>
+        <div class="dl" data-t="add"><span class="n">14</span><span class="c">+     }</span></div>
+        <div class="dl" data-t="add"><span class="n">15</span><span class="c">+     for _, tc := range cases {</span></div>
+        <div class="dl" data-t="add"><span class="n">16</span><span class="c">+         t.Run(tc.name, func(t *testing.T) {</span></div>
+        <div class="dl" data-t="add"><span class="n">17</span><span class="c">+             l := newLedger(t, 5, 2)</span></div>
+        <div class="dl" data-t="add"><span class="n">18</span><span class="c">+             l.ApplyMovement(ret("00219", 1, tc.partial))</span></div>
+        <div class="dl more"><span class="n"></span><span class="c">  9 more lines</span></div>
+      </div>
+    </div>
+    <div class="pane">
+      <h3>What the agent said</h3>
+      <p><code>ApplyMovement</code> applied a Return twice: once as a receipt, then again through the adjustment branch that was added for partial returns and never guarded. The second branch is now guarded on <code>m.Partial</code>, so a full return counts once and a partial return only releases its reservation.</p>
+      <p>The new table test covers both paths for product 00219: a full return of 1 and a partial return of 1 both leave on-hand at 6, which is what the movement report shows.</p>
+      <p class="notdone"><b>Not done:</b> no migration for balances already affected, per your answer.</p>
+      <div class="note">
+        <div class="row"><span class="lab">Resolution note</span><span class="btn pale">Open</span></div>
+        <div class="mono path">notes/SBX-1 RES double-counted-return.md</div>
+      </div>
+    </div>
+  </div>
+  <div class="foot2">
+    <div class="stats"><span class="stat">worktree <b>.sirdar/worktrees/run-7f3a</b></span><span class="stat">base <b>9c1e4b2</b></span></div>
+    <span class="btn ghost">Discard worktree</span>
+    <span class="primary">Create branch <span class="mono">sirdar/SBX-1</span></span>
+  </div>
+</div>
+</div>
+<script>
+(function(){
+  var map={"Back to session": "Session.html", "Create branch sirdar/SBX-1": "Board.html", "Discard worktree": "Session.html", "Kept": "Review.html", "Keep": "Review.html", "Drop": "Review.html"}, side={"Sessions": "Session.html", "Board": "Board.html", "Register": "Register.html", "Eval": "Eval.html", "Library": "Library.html", "Settings": "Settings.html", "New session": "SessionEmpty.html"};
+  function txt(el){return (el.textContent||'').replace(/\s+/g,' ').trim();}
+  function link(el,href){ if(el.closest('[data-demo-link]')) return; el.setAttribute('data-demo-link',href); el.addEventListener('click',function(e){e.preventDefault();e.stopPropagation();location.href=href;}); }
+  document.querySelectorAll('.navrow, .recentrow, [data-sb="new"]').forEach(function(el){
+    var t=txt(el).replace(/\s*\d+$/,''); if(el.classList.contains('recentrow')) {link(el,'Session.html');return;}
+    var k=Object.keys(side).find(function(k){return t.indexOf(k)===0;}); if(k) link(el,side[k]);
+  });
+  var pool=document.querySelectorAll('.primary, .btn, .tab, .file, .r, .fileh, [class*="nav-row"]');
+  pool.forEach(function(el){ var t=txt(el).replace(/\s*[⌘↵]+\s*$/,'').replace(/\s*\d+$/,''); var keys=Object.keys(map).sort(function(a,b){return b.length-a.length;}); var k=keys.find(function(k){return t===k||t.indexOf(k+' ')===0;}); if(k) link(el,map[k]); });
+  // cards and table rows open the session they name
+  document.querySelectorAll('.card, .sd-card, tbody tr, .row, .irow, .srow').forEach(function(el){ if(/SBX-\d/.test(txt(el)) && !el.closest('.sidebar') && el.querySelectorAll('.card').length===0) link(el,'Session.html'); });
+  var box=document.getElementById('demo-show'); if(box){ box.addEventListener('change',function(){document.body.classList.toggle('demo-show',box.checked);}); }
+})();
+</script>
+</body>
+</html>

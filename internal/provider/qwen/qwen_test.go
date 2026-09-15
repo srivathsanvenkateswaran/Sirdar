@@ -851,6 +851,37 @@ func TestExclusionsCoverEveryCoreTool(t *testing.T) {
 	if excluded[shellTool] {
 		t.Error("the shell is conditional and must not be in the always-excluded list")
 	}
+
+	// The same invariant for a fix session, whose kept set is the triage
+	// one plus the three editing tools.
+	fixExcluded := map[string]bool{}
+	for _, name := range fixExcludedTools {
+		fixExcluded[name] = true
+	}
+	for _, name := range qwenCoreTools {
+		switch {
+		case fixKeptTools[name] && fixExcluded[name]:
+			t.Errorf("%q is both kept and excluded in fix mode", name)
+		case !fixKeptTools[name] && !fixExcluded[name]:
+			t.Errorf("%q is neither kept nor excluded in fix mode", name)
+		}
+	}
+	for name := range fixKeptTools {
+		if name == shellTool {
+			continue
+		}
+		if policyName(name) == name {
+			t.Errorf("%q is kept in fix mode but reaches the policy unmapped, so it would be refused", name)
+		}
+	}
+	for _, name := range fixWriteTools {
+		if !keptTools[name] && !excluded[name] {
+			t.Errorf("%q must still be excluded on a triage session", name)
+		}
+		if keptTools[name] {
+			t.Errorf("%q must not be in the triage kept set", name)
+		}
+	}
 }
 
 // TestUntrustedWorkspaceUnlessMCPIsWanted pins the folder-trust posture.
@@ -874,7 +905,7 @@ func TestUntrustedWorkspaceUnlessMCPIsWanted(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	path, err := writeSettings(dir, "http://127.0.0.1:1/decide/tok", false)
+	path, err := writeSettings(dir, "http://127.0.0.1:1/decide/tok", false, deniedTools)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1729,7 +1760,7 @@ func TestSettingsFileIsRemoved(t *testing.T) {
 
 func TestSettingsContent(t *testing.T) {
 	dir := t.TempDir()
-	path, err := writeSettings(dir, "http://127.0.0.1:1234/decide/tok", false)
+	path, err := writeSettings(dir, "http://127.0.0.1:1234/decide/tok", false, deniedTools)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -2199,4 +2230,198 @@ func TestJSONObject(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestFixModeRegistersTheEditingTools is the command-line half of fix-mode
+// writes. The three editing tools have to come off --exclude-tools, or the
+// model never sees them; and they have to go onto --allowed-tools, or the
+// headless denyUnlessAllowed refuses EDIT and WRITE_FILE before a hook is
+// ever consulted. The first live fix run had neither, which is why its
+// agent reported the edit it could not make and the run still said
+// "completed".
+func TestFixModeRegistersTheEditingTools(t *testing.T) {
+	spec := provider.SessionSpec{
+		OutputSchema: []byte(`{}`),
+		Mode:         provider.ModeFix,
+		Policy:       provider.FixPolicy("/w", []string{"go build*"}, nil, nil),
+	}
+	got := args(spec, Endpoint{}, nil)
+
+	for _, tool := range fixWriteTools {
+		if excludes(got, tool) {
+			t.Errorf("%q must stay registered in fix mode: %v", tool, got)
+		}
+		if !allows(got, tool) {
+			t.Errorf("%q must be allow-listed in fix mode or the headless deny refuses it: %v", tool, got)
+		}
+	}
+	// The shell is still the workspace's fixBash list, judged call by
+	// call by the hook.
+	if !allows(got, shellTool) {
+		t.Errorf("the shell must be allow-listed for the hook to judge: %v", got)
+	}
+	// Everything a fix does not need is excluded exactly as in triage.
+	for _, tool := range []string{
+		"notebook_edit", "monitor", "agent", "task", "skill",
+		"create_sub_session", "tool_search", "save_memory", "workflow",
+		"cron_create", "enter_worktree", "send_message",
+	} {
+		if !excludes(got, tool) {
+			t.Errorf("%q must be excluded in fix mode too: %v", tool, got)
+		}
+		if allows(got, tool) {
+			t.Errorf("%q must not be allow-listed in fix mode: %v", tool, got)
+		}
+	}
+
+	// And a triage session is unchanged: the editing tools are off the
+	// command line whatever any settings layer says.
+	triage := args(provider.SessionSpec{
+		OutputSchema: []byte(`{}`),
+		Policy:       &provider.PermissionPolicy{BashAllow: []string{"git log*"}},
+	}, Endpoint{}, nil)
+	for _, tool := range fixWriteTools {
+		if !excludes(triage, tool) {
+			t.Errorf("%q must be excluded on a triage session: %v", tool, triage)
+		}
+		if allows(triage, tool) {
+			t.Errorf("%q must never be allow-listed on a triage session: %v", tool, triage)
+		}
+	}
+}
+
+// TestFixModeSettingsStopDenyingTheEditingTools covers the other half. A
+// settings-layer deny beats every allow, so write_file and edit staying on
+// permissions.deny would keep them unregistered however the command line
+// allowed them. notebook_edit stays denied in both modes.
+func TestFixModeSettingsStopDenyingTheEditingTools(t *testing.T) {
+	dir := t.TempDir()
+	path, err := writeSettings(dir, "http://127.0.0.1:1/decide/tok", false, deniedFor(provider.ModeFix))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var s struct {
+		Permissions struct {
+			Deny []string `json:"deny"`
+		} `json:"permissions"`
+	}
+	if err := json.Unmarshal(b, &s); err != nil {
+		t.Fatal(err)
+	}
+	for _, tool := range []string{"write_file", "edit"} {
+		if contains(s.Permissions.Deny, tool) {
+			t.Errorf("%q must not be denied in a fix session's settings: %s", tool, b)
+		}
+	}
+	if !contains(s.Permissions.Deny, "notebook_edit") {
+		t.Errorf("notebook_edit must stay denied: %s", b)
+	}
+	if got := deniedFor(provider.ModeTriage); !contains(got, "write_file") || !contains(got, "edit") {
+		t.Errorf("a triage session must still deny the editing tools: %v", got)
+	}
+}
+
+// TestFixModeWritesGoThroughThePolicy is what registering the tools is
+// for: every call reaches the hook, and FixPolicy.decideWrite is what
+// decides it. A write inside the worktree root is allowed; one into
+// .git/hooks/ is refused, because a hook written there is code the next
+// commit would run; a call that names no path at all is refused rather
+// than approved unseen.
+func TestFixModeWritesGoThroughThePolicy(t *testing.T) {
+	root := t.TempDir()
+	inside := filepath.Join(root, "ledger.go")
+	hook := filepath.Join(root, ".git", "hooks", "x")
+	outside := filepath.Join(t.TempDir(), "elsewhere.go")
+
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"f1"}`,
+		`{"$hookTool":"edit","$hookInput":`+mustJSON(map[string]any{"file_path": inside, "old_string": "a", "new_string": "b"})+`}`,
+		`{"$hookTool":"write_file","$hookInput":`+mustJSON(map[string]any{"file_path": hook, "content": "#!/bin/sh"})+`}`,
+		`{"$hookTool":"write_file","$hookInput":`+mustJSON(map[string]any{"file_path": outside, "content": "x"})+`}`,
+		`{"$hookTool":"write_file","$hookInput":{"content":"no path at all"}}`,
+		`{"$hookTool":"notebook_edit","$hookInput":`+mustJSON(map[string]any{"notebook_path": inside})+`}`,
+		`{"type":"result","subtype":"success","session_id":"f1","is_error":false,"num_turns":1,"structured_result":{"ok":true},"usage":{"input_tokens":1,"output_tokens":1}}`,
+	)
+
+	spec := fakeSpec(t, script)
+	spec.Cwd = root
+	spec.Mode = provider.ModeFix
+	spec.Policy = provider.FixPolicy(root, []string{"go build*"}, nil, nil)
+
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := drain(t, s)
+
+	perms := kinds(events, provider.EvPermission)
+	if len(perms) != 5 {
+		t.Fatalf("permission events %+v", perms)
+	}
+	for i, want := range []struct {
+		tool     string
+		decision string
+	}{
+		{"edit", "allow"},
+		{"write_file", "deny"},
+		{"write_file", "deny"},
+		{"write_file", "deny"},
+		{"notebook_edit", "deny"},
+	} {
+		if perms[i].Tool != want.tool || perms[i].Decision != want.decision {
+			t.Fatalf("permission %d: %s %s, want %s %s (%s)",
+				i, perms[i].Tool, perms[i].Decision, want.tool, want.decision, perms[i].Text)
+		}
+	}
+	if !strings.Contains(perms[1].Text, ".git") {
+		t.Errorf("the .git denial must say where it would have written: %q", perms[1].Text)
+	}
+	if !strings.Contains(perms[2].Text, "outside the workspace") {
+		t.Errorf("a write outside the root must say so: %q", perms[2].Text)
+	}
+	if !strings.Contains(perms[3].Text, "named no file path") {
+		t.Errorf("a write with no path must say so: %q", perms[3].Text)
+	}
+}
+
+// TestTriageModeWriteIsRefusedByThePolicyToo is the belt to the command
+// line's braces: even if a later Qwen registered write_file on a read-only
+// session anyway, the hook refuses it.
+func TestTriageModeWriteIsRefusedByThePolicyToo(t *testing.T) {
+	root := t.TempDir()
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"t1"}`,
+		`{"$hookTool":"write_file","$hookInput":`+mustJSON(map[string]any{"file_path": filepath.Join(root, "x.go"), "content": "x"})+`}`,
+		`{"type":"result","subtype":"success","session_id":"t1","is_error":false,"num_turns":1,"structured_result":{"ok":true},"usage":{"input_tokens":1,"output_tokens":1}}`,
+	)
+	spec := fakeSpec(t, script)
+	spec.Cwd = root
+	spec.Policy = &provider.PermissionPolicy{Root: root, BashAllow: []string{"git log*"}}
+
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	events, _ := drain(t, s)
+	perms := kinds(events, provider.EvPermission)
+	if len(perms) != 1 || perms[0].Decision != "deny" {
+		t.Fatalf("permission events %+v", perms)
+	}
+	if !strings.Contains(perms[0].Text, "read-only") {
+		t.Errorf("a triage write must be refused as read-only: %q", perms[0].Text)
+	}
+}
+
+// allows reports whether argv allow-lists tool.
+func allows(argv []string, tool string) bool {
+	for i, a := range argv {
+		if a == "--allowed-tools" && i+1 < len(argv) && argv[i+1] == tool {
+			return true
+		}
+	}
+	return false
 }

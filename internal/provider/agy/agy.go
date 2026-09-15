@@ -123,6 +123,35 @@ var execTools = map[string]bool{
 	"call_mcp_tool":              true,
 }
 
+// readTools are the tools that put a file's contents in front of the
+// agent. A triage note is a claim about a codebase, and one of these
+// completing is the only evidence on this wire that the agent looked at
+// the codebase before making it. See observeRead.
+//
+// `list_dir` and `find_by_name` are deliberately **not** here, and that is
+// the distinction round 1 turned on: that run's `find_by_name` completed
+// while its `view_file` was refused, so a check that counted any tool
+// would have passed a session which had seen a list of filenames and not
+// one line of code.
+var readTools = map[string]bool{
+	"view_file":         true,
+	"read_file":         true,
+	"grep_search":       true,
+	"read_resource":     true,
+	"read_url_content":  true,
+	"read_browser_page": true,
+}
+
+// searchTools are the tools that name files without opening them. They do
+// not count as evidence, but a refusal of one is still a refused read and
+// belongs in the count the failure reason carries — a session that was
+// refused a `list_dir` and a `view_file` was refused two reads.
+var searchTools = map[string]bool{
+	"list_dir":     true,
+	"find_by_name": true,
+	"glob":         true,
+}
+
 // toolArgs is every argument name an `agy` tool names its subject with:
 // the file a write targets, the command line an exec runs, the server and
 // tool an MCP call reaches. The keys are Cascade's PascalCase, not the
@@ -210,23 +239,48 @@ func (p *Provider) model(spec provider.SessionSpec) string {
 
 // args builds the command line.
 //
+// --disable-slash-commands is **not** on it, and its absence is the
+// deliberate part. Round 1 passed it — the prompt carries ticket text
+// somebody else wrote, and slash-command expansion would let a line of
+// that text name a command — and every run came back with
+// "warning: --mode plan has no effect while slash command expansion is
+// disabled." on stderr. Plan mode is implemented as an expansion in print
+// mode, so the two flags cannot both take: disabling expansion disabled
+// the one read-only lever this provider has, and the sessions ran in the
+// CLI's default mode, which the research capture watched perform a write.
+// Nothing in `agy --help` combines them, so the injection surface is
+// accepted and narrowed instead:
+//
+//   - With --input-format stream-json the CLI refuses to answer its own
+//     slash commands at all — "/%s is answered by the CLI itself and is
+//     unavailable with --input-format stream-json" — so the commands that
+//     change the session (/model, /logout, /plugin) are not reachable from
+//     the prompt. What remains expandable is a workspace or user skill.
+//   - Every write and every command is denied for the session by the
+//     project file (project.go), so a skill that expanded into one is
+//     refused rather than run.
+//   - A write or command that completes anyway ends the run (observeWrite).
+//
 // --print= is load-bearing and the empty value is not a typo: -p, --print
 // and --prompt all take the prompt as the flag's own value, so the bare
 // `agy -p --output-format stream-json` form is rejected with "-p took
 // \"--output-format\" as its prompt". With --input-format stream-json the
 // prompt arrives on stdin instead, so the flag is given an empty value to
 // select print mode without swallowing the next argument.
-func (p *Provider) args(spec provider.SessionSpec) []string {
+func (p *Provider) args(spec provider.SessionSpec, project string) []string {
 	out := []string{
 		"--output-format", "stream-json",
 		"--input-format", "stream-json",
-		// The prompt carries ticket text written by whoever opened the
-		// ticket. Slash-command and skill expansion in print mode would
-		// let a line of that text name a command, so it is off.
-		"--disable-slash-commands",
 		// The read-only guarantee, such as the CLI allows one to be
 		// made. See planMode.
 		"--mode", planMode,
+	}
+	// The session's own project file carries the permission rules: a
+	// read allowed, every write and every command denied. See project.go.
+	// Empty when the file could not be written, in which case the session
+	// runs on the operator's own settings and says so.
+	if project != "" {
+		out = append(out, "--project", project)
 	}
 	// The runner always supplies a schema; an empty one is a caller bug,
 	// so it is passed through rather than silently dropped.
@@ -391,13 +445,43 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	// does the caller's ctx. The CLI starts a language-server sidecar of
 	// its own, so the whole process group is signalled rather than just
 	// the immediate child.
+	env, notices := childEnv(spec)
+
+	// The session's permission rules go in a project file of Sirdar's
+	// own, written before the process starts and deleted when it ends.
+	// This is what lets a triage read a file at all: without it the CLI
+	// auto-denies read_file in a headless run, and round 1 filed a
+	// high-confidence note off the ticket text alone. See project.go.
+	//
+	// A crash between writing the file and reaping the process leaves one
+	// behind in the operator's directory, so every start clears the ones
+	// old enough to be nobody's.
+	if n := sweepStaleProjects(time.Now(), staleProjectAge); n > 0 {
+		notices = append(notices, systemNotice(fmt.Sprintf(
+			"removed %d stale Sirdar project file(s) from ~/.gemini/config/projects left by an earlier run", n)))
+	}
+	projectID, projectPath, perr := writeProject(spec.Cwd)
+	if perr != nil {
+		// Not fatal. An operator whose own settings.json already allows
+		// read_file still gets a working run, and one whose settings do
+		// not gets a run that reads nothing — which the blind check ends
+		// with a reason naming exactly that, rather than a note written
+		// out of the ticket text. Saying it here is what connects the two.
+		notices = append(notices, systemNotice("could not write this session's agy project file ("+perr.Error()+
+			"), so the session runs on the operator's own ~/.gemini/antigravity-cli/settings.json: "+
+			"reads will be auto-denied unless that file allows read_file"))
+		projectID, projectPath = "", ""
+	} else {
+		notices = append(notices, systemNotice("granted this session read_file through its own project file "+
+			projectPath+"; write_file, command and execute_url are denied, and the file is removed when the run ends"))
+	}
+
 	runCtx, cancelRun := context.WithCancel(ctx)
-	cmd := exec.CommandContext(runCtx, binary, p.args(spec)...)
+	cmd := exec.CommandContext(runCtx, binary, p.args(spec, projectID)...)
 	procgroup.Setup(cmd)
 	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
-	env, notices := childEnv(spec)
 	cmd.Env = env
 
 	// mcp.workspaceOnly asked for a restriction this CLI cannot express.
@@ -413,11 +497,13 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		cancelRun()
+		removeProject(projectPath)
 		return nil, fmt.Errorf("agy stdin: %w", err)
 	}
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		cancelRun()
+		removeProject(projectPath)
 		return nil, fmt.Errorf("agy stdout: %w", err)
 	}
 	tail := &tailWriter{max: stderrTailLines}
@@ -430,6 +516,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		stdin:     stdin,
 		stderr:    tail,
 		stateDir:  stateDir(),
+		project:   projectPath,
 		events:    make(chan provider.Event, eventBuffer),
 		readDone:  make(chan struct{}),
 		done:      make(chan struct{}),
@@ -437,6 +524,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	}
 	if err := cmd.Start(); err != nil {
 		cancelRun()
+		removeProject(projectPath)
 		return nil, fmt.Errorf("start %s: %w", binary, err)
 	}
 	// Sent before the read goroutine starts, so there is no chance of a
@@ -450,6 +538,10 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		go func() {
 			<-s.readDone
 			_ = cmd.Wait()
+			// After the child is reaped, not before: the CLI reads its
+			// project at startup and a file pulled out from under it
+			// would be a second failure on top of this one.
+			removeProject(s.project)
 		}()
 		return nil, fmt.Errorf("agy prompt: %w", err)
 	}
@@ -528,7 +620,8 @@ func (p *Provider) DoctorWithConfig(ctx context.Context, binary string, cfg prov
 			"run `agy models` and set agy.model to one that is")
 	}
 
-	checks := []provider.Check{version, login, model, settingsCheck(cfg), mcpCheck(cfg), fixCheck()}
+	reads := readAccessCheck()
+	checks := []provider.Check{version, login, model, reads, settingsCheck(cfg, reads.OK), mcpCheck(cfg), fixCheck()}
 	return checks
 }
 
@@ -558,25 +651,81 @@ type agySettings struct {
 // It is always a warning, never a failure: a permissive rule is the
 // operator's own decision about their own machine, and doctor's job here
 // is to make it visible rather than to veto it.
-func settingsCheck(cfg provider.DoctorConfig) provider.Check {
+// readAccessCheck is the row that says whether a triage on this provider
+// will be able to read anything.
+//
+// It is a **failure**, not a warning, when the answer is no. Every other
+// gap this adapter reports — no MCP scoping, no fix mode, an operator's
+// own allow rules — is a permanent property of the CLI that an operator
+// can read and decide about. This one is different: a session that cannot
+// read is not a degraded triage, it is an agent answering a ticket from
+// its description, and round 1 produced exactly that and called it high
+// confidence. A run in that state should not start.
+//
+// What the check tests is the one thing Sirdar controls: whether it can
+// write its own project file under ~/.gemini/config/projects, which is
+// where the read_file grant goes (project.go). The grant itself is
+// verified on a live run rather than here; doctor cannot spend a model
+// turn.
+func readAccessCheck() provider.Check {
+	const name = "agy read access"
+	dir, err := projectsDir()
+	if err != nil {
+		return provider.Check{Name: name, Detail: "the home directory could not be found, so Sirdar cannot " +
+			"write the project file that grants this session read_file. A headless agy run auto-denies a read " +
+			"it has no rule for, so a triage would answer out of the ticket text alone. " +
+			"Add `read_file(*)` under permissions.allow in ~/.gemini/antigravity-cli/settings.json"}
+	}
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return provider.Check{Name: name, Detail: dir + " could not be created (" + err.Error() +
+			"), so Sirdar cannot grant this session read_file and a triage would read nothing. " +
+			"Add `read_file(*)` under permissions.allow in ~/.gemini/antigravity-cli/settings.json"}
+	}
+	probe, err := os.CreateTemp(dir, projectIDPrefix+"doctor-*.json")
+	if err != nil {
+		return provider.Check{Name: name, Detail: dir + " is not writable (" + err.Error() +
+			"), so Sirdar cannot grant this session read_file and a triage would read nothing. " +
+			"Add `read_file(*)` under permissions.allow in ~/.gemini/antigravity-cli/settings.json"}
+	}
+	probeName := probe.Name()
+	_ = probe.Close()
+	_ = os.Remove(probeName)
+
+	return provider.Check{Name: name, OK: true, Detail: "Sirdar writes one project file per session under " +
+		dir + " granting read_file and denying write_file, command and execute_url, passes it as --project, " +
+		"and deletes it when the run ends. Project rules outrank " + filepath.Join("~", stateDirParent, stateDirChild, "settings.json")}
+}
+
+func settingsCheck(cfg provider.DoctorConfig, readsGranted bool) provider.Check {
 	const name = "agy settings"
 	path, err := settingsPath()
 	if err != nil {
 		return provider.Warn(name, "the home directory could not be found, so "+
 			"the CLI's settings.json cannot be read; Sirdar cannot tell what this session will be allowed to do")
 	}
+	// A settings file that cannot be read or parsed is treated the same
+	// way as one with no read rule: with Sirdar's project file
+	// unavailable, nothing has been shown to grant a read, and a triage
+	// that reads nothing is the failure readAccessCheck describes.
+	unreadable := func(detail string) provider.Check {
+		if readsGranted {
+			return provider.Warn(name, detail)
+		}
+		return provider.Check{Name: name, Detail: detail + ". Sirdar cannot write its own project file either, " +
+			"so nothing is known to grant this session a read and a triage would read nothing"}
+	}
 	b, err := os.ReadFile(path)
 	switch {
 	case errors.Is(err, os.ErrNotExist):
-		return provider.Warn(name, path+" does not exist: the CLI will run on its defaults, "+
+		return unreadable(path + " does not exist: the CLI will run on its defaults, " +
 			"and this workspace is not in trustedWorkspaces")
 	case err != nil:
-		return provider.Warn(name, path+" could not be read: "+err.Error()+
+		return unreadable(path + " could not be read: " + err.Error() +
 			"; Sirdar cannot tell what this session will be allowed to do")
 	}
 	var s agySettings
 	if err := json.Unmarshal(b, &s); err != nil {
-		return provider.Warn(name, path+" is not valid JSON ("+err.Error()+
+		return unreadable(path + " is not valid JSON (" + err.Error() +
 			"); the CLI reads this file for every session and Sirdar cannot tell what it will allow")
 	}
 
@@ -601,7 +750,29 @@ func settingsCheck(cfg provider.DoctorConfig) provider.Check {
 		detail += ". An allow rule is what turns agy's refusal into a completed write, " +
 			"which a triage run can only report afterwards and then fail on"
 	}
+	// With Sirdar's own project file unavailable, this file is the only
+	// thing that can grant a read, and a run without one answers out of
+	// the ticket text. That is a failure rather than a warning, for the
+	// reason readAccessCheck gives.
+	if !readsGranted && !allowsRead(s.Permissions.Allow) {
+		return provider.Check{Name: name, Detail: detail + ". Sirdar cannot write its own project file, and " +
+			"this one allows no read either, so a triage would read nothing: add \"read_file(*)\" to permissions.allow"}
+	}
 	return provider.Warn(name, detail)
+}
+
+// allowsRead reports whether any of the operator's own allow rules grants
+// a read. The rule syntax is <permission>(<target>), and read_file is the
+// permission every read tool on this CLI goes through — `view_file`,
+// `grep_search`, `list_dir` and `find_by_name` alike, which is what the
+// headless refusal names when it asks for one.
+func allowsRead(allow []string) bool {
+	for _, rule := range allow {
+		if strings.HasPrefix(strings.TrimSpace(rule), "read_file(") {
+			return true
+		}
+	}
+	return false
 }
 
 func settingsPath() (string, error) {
@@ -750,6 +921,12 @@ type session struct {
 	stderr    *tailWriter
 	stateDir  string
 
+	// project is the session's own project file under
+	// ~/.gemini/config/projects, deleted when the session ends. Empty
+	// when it could not be written, in which case the session ran on the
+	// operator's own settings.
+	project string
+
 	events   chan provider.Event
 	readDone chan struct{}
 	done     chan struct{}
@@ -759,6 +936,12 @@ type session struct {
 	// step_index. It is touched only by the read goroutine, so it needs no
 	// lock of its own.
 	pending map[int]toolArgsMemo
+
+	// reads and readsDenied are what the session saw of the codebase, and
+	// share pending's confinement to the read goroutine. See observeRead.
+	reads       int
+	readsDenied int
+	blindSent   bool
 
 	writeMu   sync.Mutex
 	stdinShut bool
@@ -847,6 +1030,11 @@ func (s *session) Wait() (provider.Result, error) {
 		}
 		s.mu.Unlock()
 		s.cancelRun()
+		// The child is reaped by now, so the permission file it was
+		// started under has done its job. It lives in the operator's own
+		// directory and is removed on every exit path: here, in Cancel,
+		// and from the failed-Start paths above.
+		removeProject(s.project)
 		close(s.done)
 	})
 	<-s.done
@@ -864,6 +1052,11 @@ func (s *session) Cancel() {
 	s.stdinShut = true
 	s.writeMu.Unlock()
 	s.cancelRun()
+	// Cancel is the path a breach and a budget take, and neither is
+	// guaranteed to be followed by a Wait that gets as far as reaping the
+	// child. The project file is removed here too; Wait's own removal is
+	// then a no-op.
+	removeProject(s.project)
 }
 
 // read consumes stdout until EOF, emitting one or more events per line.
@@ -884,6 +1077,12 @@ func (s *session) read(stdout io.Reader) {
 			s.rememberTool(&ev)
 			s.measure(&ev)
 			s.absorb(ev)
+			s.observeRead(ev)
+			// Ahead of the answer it judges, because the run layer files
+			// the note the moment the final event reaches it.
+			if blind := s.blindBefore(ev); blind != nil {
+				s.events <- *blind
+			}
 			s.events <- ev
 			if breach := s.observeWrite(ev); breach != nil {
 				s.events <- *breach
@@ -948,6 +1147,63 @@ func (s *session) rememberTool(ev *provider.Event) {
 func emptyArgs(input json.RawMessage) bool {
 	s := strings.TrimSpace(string(input))
 	return s == "" || s == "null" || s == "{}"
+}
+
+// observeRead counts what the session managed to read and what it was
+// refused. Both counters are touched only by the read goroutine, like
+// pending, so neither needs a lock.
+//
+// A read counts when its step ends without an error message: a DONE line
+// for one of the readTools. An ERROR line — a refusal, a missing file, a
+// binary file the CLI declined to decode — is not a read, whatever the
+// reason, because none of them put a line of the codebase in the prompt.
+func (s *session) observeRead(ev provider.Event) {
+	switch ev.Kind {
+	case provider.EvToolFinished:
+		if readTools[ev.Tool] && ev.Text == "" {
+			s.reads++
+		}
+	case provider.EvPermission:
+		if ev.Decision == "deny" && (readTools[ev.Tool] || searchTools[ev.Tool]) {
+			s.readsDenied++
+		}
+	}
+}
+
+// blindBefore is the check that stops a triage note being written out of
+// the ticket text alone.
+//
+// Round 1 of this provider completed a run in 36 seconds and filed a
+// high-confidence note. Every `view_file` in it had been auto-denied,
+// because a headless `agy` cannot prompt for a permission and nothing had
+// granted one: the agent answered from the ticket description, and the
+// note that reached the register was indistinguishable from one built on
+// the code. The project file (project.go) is what fixes the cause; this is
+// what makes the failure visible when it does not.
+//
+// It fires on the final event, which is where the run layer would file,
+// and only once — a schema retry produces a second final, and the verdict
+// on the session does not change between them. The reason is a fact about
+// the session rather than a judgement about the answer: how many reads
+// were refused, or that none was attempted.
+func (s *session) blindBefore(ev provider.Event) *provider.Event {
+	if ev.Kind != provider.EvFinal || s.blindSent || s.reads > 0 {
+		return nil
+	}
+	s.blindSent = true
+
+	reason := "the agent could read nothing (no read tool was called)"
+	if s.readsDenied > 0 {
+		reason = fmt.Sprintf("the agent could read nothing (%d reads denied)", s.readsDenied)
+	}
+	out := newEvent(provider.EvBlind, ev.Raw)
+	out.Text = reason + "\n" +
+		"this session completed no read of a file, so its answer was written out of " +
+		"the ticket text alone and is not a triage. agy decides permissions from files rather than from " +
+		"a channel Sirdar can answer, so a refused read is reported after the fact: check the permission " +
+		"events in this run, and `sirdar doctor` for whether this session got the project file that grants " +
+		"read_file"
+	return &out
 }
 
 // observeWrite is this adapter's substitute for a permission policy.

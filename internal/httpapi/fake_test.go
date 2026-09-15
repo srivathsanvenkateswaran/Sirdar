@@ -2,18 +2,32 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io/fs"
 	"sync"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/mcpclient"
 )
 
 // The ids the fake service knows. Anything else is a 404, which is how the
 // unknown-id cases below are driven.
 const (
-	knownWS  = "ws1"
-	knownRun = "20260910T120000Z-ab12"
-	knownJob = "job-1"
+	knownWS        = "ws1"
+	knownRun       = "20260910T120000Z-ab12"
+	knownJob       = "job-1"
+	knownMCPServer = "fake"
 )
+
+// mcpCall records what the call route asked the service.
+type mcpCall struct{ Server, Tool, Args string }
+
+// dropCall is what the drop route passed the service.
+type dropCall struct {
+	Path string
+	Hunk int
+	ETag string
+}
 
 // fake is a Service that answers from canned data and records what it was
 // asked, so the handlers can be tested without internal/app.
@@ -35,12 +49,18 @@ type fake struct {
 	golden  []GoldenEntry
 	reports []EvalReport
 	summary ConfigSummary
+	diff    RunDiff
+
+	inventory MCPInventory
+	toolList  MCPToolList
 
 	// Failures to inject.
 	queueUnsupported bool
 	queueErr         error
 	noteMissing      bool
 	addErr           error
+	diffErr          error
+	dropErr          error
 
 	// What the handlers passed in.
 	gotRoot      string
@@ -63,6 +83,9 @@ type fake struct {
 	gotSteer     string
 	steerErr     error // when set, Steer refuses with it
 	gotCancelled JobID
+	gotConnect   bool
+	gotCall      mcpCall
+	gotDrop      dropCall
 
 	// Webhook plumbing: the reason TriageIfIdle gives for starting
 	// nothing, the error it fails with, and what the hook route asked it
@@ -106,6 +129,30 @@ func newFake() *fake {
 		checks:   []Check{{Name: "claude cli", OK: true, Detail: "1.2.3"}},
 		golden:   []GoldenEntry{{Key: "OMNI-2510", Dir: "/golden/OMNI-2510", BundleDir: "/golden/OMNI-2510/bundle", Assertions: 3, HasExpectedNote: true}},
 		quotas:   []Quota{{Provider: "claude", ObservedAt: "2026-09-10T12:00:00Z", FiveHour: &QuotaWindow{Utilization: 0.31, ResetsAt: "2026-09-10T15:00:00Z"}}},
+		inventory: MCPInventory{
+			Servers: []MCPServer{{
+				Entry: mcpclient.Entry{
+					Name: knownMCPServer, Scope: "workspace", Transport: "stdio",
+					Command: "/usr/local/bin/oxo-mcp", EnvKeys: []string{"OXO_TOKEN"},
+					Source: "/repos/oxo-apis/.mcp.json",
+				},
+				Connected: true, Tools: 2, TookMs: 41,
+			}},
+			Warnings:      []string{},
+			WorkspaceOnly: true,
+			Permissions:   []string{},
+		},
+		toolList: MCPToolList{
+			Server: knownMCPServer,
+			Tools: []MCPTool{
+				{Name: "list_rows", FullName: "mcp__fake__list_rows", Verdict: "allowed",
+					Rule: "read-word", Reason: `read word "list", with no write word beside it`},
+				{Name: "delete_rows", FullName: "mcp__fake__delete_rows", Verdict: "denied",
+					Rule: "write-word", Reason: `write word "delete" in the name`},
+			},
+			TookMs:      41,
+			Permissions: []string{},
+		},
 	}
 }
 
@@ -234,6 +281,29 @@ func (f *fake) Prompt(wsID, runID string) (string, error) {
 	return f.prompt, nil
 }
 
+func (f *fake) RunDiff(wsID, runID string) (RunDiff, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return RunDiff{}, err
+	}
+	if f.diffErr != nil {
+		return RunDiff{}, f.diffErr
+	}
+	return f.diff, nil
+}
+
+func (f *fake) DropHunk(_ context.Context, wsID, runID, path string, hunk int, etag string) (RunDiff, error) {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return RunDiff{}, err
+	}
+	f.mu.Lock()
+	f.gotDrop = dropCall{Path: path, Hunk: hunk, ETag: etag}
+	f.mu.Unlock()
+	if f.dropErr != nil {
+		return RunDiff{}, f.dropErr
+	}
+	return f.diff, nil
+}
+
 func (f *fake) StartTriage(_ context.Context, wsID string, keys []string, o TriageOptions) (JobID, error) {
 	if err := f.checkWS(wsID); err != nil {
 		return "", err
@@ -331,6 +401,62 @@ func (f *fake) ConfigSummary(wsID string) (ConfigSummary, error) {
 		return ConfigSummary{}, err
 	}
 	return f.summary, nil
+}
+
+func (f *fake) MCPServers(_ context.Context, wsID string, connect bool) (MCPInventory, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return MCPInventory{}, err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.gotConnect = connect
+	inv := f.inventory
+	if !connect {
+		// The list route never starts anything, so the connected half of
+		// each row is not there to read.
+		for i := range inv.Servers {
+			inv.Servers[i].Connected = false
+			inv.Servers[i].Tools = 0
+			inv.Servers[i].TookMs = 0
+		}
+	}
+	return inv, nil
+}
+
+func (f *fake) MCPTools(_ context.Context, wsID, server string) (MCPToolList, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return MCPToolList{}, err
+	}
+	if server != knownMCPServer {
+		return MCPToolList{}, fmt.Errorf("%w: %s", ErrNoSuchMCPServer, server)
+	}
+	return f.toolList, nil
+}
+
+func (f *fake) MCPCall(_ context.Context, wsID, server, tool string, args json.RawMessage) (MCPCallResult, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return MCPCallResult{}, err
+	}
+	if server != knownMCPServer {
+		return MCPCallResult{}, fmt.Errorf("%w: %s", ErrNoSuchMCPServer, server)
+	}
+	f.mu.Lock()
+	f.gotCall = mcpCall{Server: server, Tool: tool, Args: string(args)}
+	f.mu.Unlock()
+
+	for _, t := range f.toolList.Tools {
+		if t.Name != tool {
+			continue
+		}
+		res := MCPCallResult{Server: server, Tool: tool, Verdict: t.Verdict, Reason: t.Reason, TookMs: 7}
+		if t.Verdict != "allowed" {
+			res.TookMs = 0
+			return res, fmt.Errorf("%w: %s: %s", ErrMCPDenied, t.FullName, t.Reason)
+		}
+		res.Result = "rows of orders"
+		return res, nil
+	}
+	return MCPCallResult{}, fmt.Errorf("%w: %s", ErrNoSuchMCPServer, server)
 }
 
 func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobID, error) {

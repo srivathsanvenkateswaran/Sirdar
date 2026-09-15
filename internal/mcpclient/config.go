@@ -43,6 +43,10 @@ type mcpEntry struct {
 	Command string            `json:"command"`
 	Args    []string          `json:"args"`
 	Env     map[string]string `json:"env"`
+	// Headers are the http transport's own credentials: an Authorization
+	// bearer, a vendor api-key. Only Inventory and Connect read them; a
+	// run started by internal/provider/openai uses stdio servers alone.
+	Headers map[string]string `json:"headers"`
 }
 
 // LoadWorkspaceServers reads <root>/.mcp.json against this process's own

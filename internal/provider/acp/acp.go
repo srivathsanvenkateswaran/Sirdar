@@ -44,11 +44,17 @@
 // mcp.workspaceOnly cannot be enforced across this boundary the way
 // --strict-mcp-config enforces it for Claude Code. Permission requests are
 // the agent's to send, so Sirdar's policy governs what it is asked about
-// and nothing else; a write that completes having asked nobody is reported
-// as an error after the fact (see the tool_call_update handler) because
-// that is the only move left. Note too that the workspace's .mcp.json env
-// values are sent to the agent in session/new, so any secret in them
-// crosses the wire into that agent's process.
+// and nothing else.
+//
+// Two things narrow that. Where the agent exposes ACP session modes, the
+// read-only one is selected before the first prompt (see selectMode), so an
+// agent that would otherwise have approved a write without asking refuses
+// it in its own process instead. And a write, a command or a sub-agent
+// spawn that completes in a read-only session having asked nobody raises an
+// EvBreach (see observeUnmediated), which ends the run and files nothing —
+// the only move left once the thing has already happened. Note too that the
+// workspace's .mcp.json env values are sent to the agent in session/new, so
+// any secret in them crosses the wire into that agent's process.
 package acp
 
 import (
@@ -98,10 +104,16 @@ const (
 // `{"--experimental-acp"}`, `{"acp"}`, or
 // `{"@zed-industries/claude-code-acp"}`. Env is added to the child's
 // environment; it is not the whole of it.
+//
+// Mode overrides the session mode this adapter would otherwise pick for
+// itself (see selectMode). It is one agent's own mode id — kimi's `plan`,
+// another agent's `read-only` — for a workspace whose agent names its
+// read-only mode something this adapter does not recognise.
 type Config struct {
 	Command string
 	Args    []string
 	Env     map[string]string
+	Mode    string
 }
 
 // Provider starts ACP sessions against the configured agent.
@@ -140,6 +152,14 @@ type agentCapabilities struct {
 		HTTP bool `json:"http"`
 		SSE  bool `json:"sse"`
 	} `json:"mcpCapabilities"`
+
+	// SessionCapabilities is the optional block an agent uses to say which
+	// session methods it serves. Only setMode is read: its presence is the
+	// second way an agent can advertise modes, for one that serves
+	// session/set_mode but lists no modes until a session exists.
+	SessionCapabilities struct {
+		SetMode json.RawMessage `json:"setMode"`
+	} `json:"sessionCapabilities"`
 }
 
 type initializeResult struct {
@@ -154,6 +174,49 @@ type initializeResult struct {
 		ID   string `json:"id"`
 		Name string `json:"name"`
 	} `json:"authMethods"`
+
+	// Modes is where a few agents put the mode list ACP defines on
+	// session/new. It is read here as a fallback, not as the primary
+	// source.
+	Modes *sessionModes `json:"modes"`
+}
+
+// sessionModes is ACP's session-modes block: the ids the session will
+// accept on session/set_mode, and which one it is in now. It rides on
+// session/new (and session/load) where an agent exposes modes at all.
+type sessionModes struct {
+	CurrentModeID  string `json:"currentModeId"`
+	AvailableModes []struct {
+		ID          string `json:"id"`
+		Name        string `json:"name"`
+		Description string `json:"description"`
+	} `json:"availableModes"`
+}
+
+// has reports whether id is one of the modes the session advertised.
+func (m *sessionModes) has(id string) bool {
+	if m == nil {
+		return false
+	}
+	for _, mode := range m.AvailableModes {
+		if mode.ID == id {
+			return true
+		}
+	}
+	return false
+}
+
+// ids lists the advertised mode ids, for an error that has to say what was
+// on offer instead.
+func (m *sessionModes) ids() []string {
+	if m == nil {
+		return nil
+	}
+	out := make([]string, 0, len(m.AvailableModes))
+	for _, mode := range m.AvailableModes {
+		out = append(out, mode.ID)
+	}
+	return out
 }
 
 // Start launches the agent, initializes it, opens (or loads) a session and
@@ -195,6 +258,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		cmd:        cmd,
 		spec:       spec,
 		servers:    servers,
+		modeWanted: strings.TrimSpace(p.cfg.Mode),
 		events:     make(chan provider.Event),
 		sendCh:     make(chan string, 1),
 		turnCh:     make(chan string),
@@ -304,6 +368,8 @@ func (s *session) handshake(ctx context.Context) error {
 	}
 	s.mu.Lock()
 	s.caps = init.AgentCapabilities
+	s.setModeServed = len(init.AgentCapabilities.SessionCapabilities.SetMode) > 0 &&
+		!isJSONNull(init.AgentCapabilities.SessionCapabilities.SetMode)
 	s.mu.Unlock()
 	s.emit(provider.Event{Kind: provider.EvSystem, Text: "acp agent " + agentLabel(init), Raw: raw})
 
@@ -318,13 +384,18 @@ func (s *session) handshake(ctx context.Context) error {
 		s.mu.Lock()
 		s.sessionID = s.spec.Resume
 		s.mu.Unlock()
-		if _, err := s.conn.call("session/load", map[string]any{
+		loaded, err := s.conn.call("session/load", map[string]any{
 			"sessionId":  s.spec.Resume,
 			"cwd":        s.spec.Cwd,
 			"mcpServers": mcpServerParams(s.servers),
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("acp: session/load: %w", err)
 		}
+		// A resumed session carries the mode it was left in, which is the
+		// previous run's, not this one's: it is selected again here for
+		// the same reason it was selected the first time.
+		s.selectMode(modesOf(loaded, init), loaded)
 		return nil
 	}
 
@@ -347,8 +418,135 @@ func (s *session) handshake(ctx context.Context) error {
 	s.mu.Lock()
 	s.sessionID = created.SessionID
 	s.mu.Unlock()
+	s.selectMode(modesOf(raw, init), raw)
 	return nil
 }
+
+// modesOf reads the session-modes block out of a session/new or
+// session/load result, falling back to the one a few agents put on the
+// initialize result instead.
+func modesOf(result json.RawMessage, init initializeResult) *sessionModes {
+	var opened struct {
+		Modes *sessionModes `json:"modes"`
+	}
+	if err := json.Unmarshal(result, &opened); err == nil && opened.Modes != nil &&
+		(len(opened.Modes.AvailableModes) > 0 || opened.Modes.CurrentModeID != "") {
+		return opened.Modes
+	}
+	return init.Modes
+}
+
+// readOnlyModeIDs are the ids agents give a mode that refuses writes, in
+// the order they are preferred. kimi and Gemini CLI call it `plan`; the
+// Copilot and Cursor spikes each had their own spelling, which is why more
+// than one is matched and why acp.mode exists for an agent that matches
+// none of them.
+var readOnlyModeIDs = []string{"plan", "read-only", "readonly", "read_only", "ask"}
+
+// editModeIDs are the ids for the mode a `sirdar fix` session needs: one
+// that may actually write, with Sirdar's permission policy still deciding
+// each call.
+var editModeIDs = []string{"default", "edit"}
+
+// selectMode puts the session into the mode the run needs, before the
+// first session/prompt goes out.
+//
+// This is defence in depth, not the guarantee. The guarantee is that every
+// session/request_permission is answered by the run's PermissionPolicy;
+// what a mode adds is the agent's own in-process refusal of writes it
+// would otherwise have approved without asking — kimi's plan mode vetoes
+// Write and Edit before its permission chain is consulted at all, and its
+// `default` mode approves an in-workspace write before a request is even
+// built. An agent that offers a read-only mode and is not put in one is
+// the case the tool_call_update breach check exists to catch after the
+// fact; selecting the mode is how it is caught before.
+//
+// The chosen id is sent even when the agent says it is already current: it
+// costs one round trip and it means the mode the run ran under was set by
+// this client rather than inferred from the agent's own report.
+func (s *session) selectMode(modes *sessionModes, raw json.RawMessage) {
+	s.mu.Lock()
+	sessionID, served := s.sessionID, s.setModeServed
+	s.mu.Unlock()
+
+	offered := len(modes.ids()) > 0
+	if !offered && !served {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: "acp: this agent offers no session modes, so there is no read-only mode to select; " +
+				"the run's posture rests on Sirdar's permission policy and on the breach check for a " +
+				"tool call that completes without asking",
+			Raw: raw,
+		})
+		return
+	}
+
+	fix := s.isFix()
+	want := readOnlyModeIDs
+	posture := "read-only"
+	if fix {
+		want = editModeIDs
+		posture = "fix"
+	}
+
+	chosen := ""
+	switch {
+	case s.modeWanted != "":
+		chosen = s.modeWanted
+		if offered && !modes.has(chosen) {
+			s.emit(provider.Event{
+				Kind: provider.EvError,
+				Text: fmt.Sprintf("acp: acp.mode is %q, which this agent does not offer (it offers %s); "+
+					"no mode was selected and the session runs in %q",
+					chosen, strings.Join(modes.ids(), ", "), modes.CurrentModeID),
+				Raw: raw,
+			})
+			return
+		}
+	case offered:
+		for _, id := range want {
+			if modes.has(id) {
+				chosen = id
+				break
+			}
+		}
+	}
+
+	if chosen == "" {
+		s.emit(provider.Event{
+			Kind: provider.EvSystem,
+			Text: fmt.Sprintf("acp: none of this agent's modes (%s) is a %s mode Sirdar recognises; "+
+				"the session runs in %q — set acp.mode if one of them is the right one",
+				strings.Join(modes.ids(), ", "), posture, modes.CurrentModeID),
+			Raw: raw,
+		})
+		return
+	}
+
+	if _, err := s.conn.call("session/set_mode", map[string]any{
+		"sessionId": sessionID,
+		"modeId":    chosen,
+	}); err != nil {
+		s.emit(provider.Event{
+			Kind: provider.EvError,
+			Text: fmt.Sprintf("acp: session/set_mode %q was refused: %v; the session runs in whatever "+
+				"mode it opened in", chosen, err),
+			Raw: raw,
+		})
+		return
+	}
+
+	s.emit(provider.Event{
+		Kind: provider.EvSystem,
+		Text: fmt.Sprintf("acp mode %s selected for this %s session", chosen, posture),
+		Raw:  rawOf(map[string]any{"modeId": chosen, "mode": posture, "available": modes.ids()}),
+	})
+}
+
+// isFix reports whether this session may write. The spec's Mode is the
+// field that says so; the policy is asked too, since a caller that builds
+// a fix policy without setting Mode still means a fix.
+func (s *session) isFix() bool { return s.spec.Mode.IsFix() || s.spec.Policy.IsFix() }
 
 // clientCapabilities is what Sirdar tells an agent it can be asked for.
 // Reading a text file is allowed — it is cheaper for the agent to ask than
@@ -426,14 +624,19 @@ type session struct {
 	sendCh chan string
 	turnCh chan string
 
-	mu        sync.Mutex
-	caps      agentCapabilities
-	sessionID string
-	chunks    strings.Builder
-	finalJSON json.RawMessage
-	finalText string
-	turns     int
-	usage     struct {
+	// modeWanted is acp.mode from the workspace config: the mode id to
+	// select instead of the one selectMode would pick. Empty means pick.
+	modeWanted string
+
+	mu            sync.Mutex
+	caps          agentCapabilities
+	setModeServed bool
+	sessionID     string
+	chunks        strings.Builder
+	finalJSON     json.RawMessage
+	finalText     string
+	turns         int
+	usage         struct {
 		in, out int64
 		cost    float64
 	}
@@ -1215,7 +1418,13 @@ type sessionUpdate struct {
 type trackedCall struct {
 	name  string
 	kind  string
+	title string
 	asked bool
+	// paths is every destination the call has named so far. A
+	// tool_call_update carries only what changed, so a write's path
+	// usually arrives once, on the tool_call, and the completion that has
+	// to be judged on it carries nothing.
+	paths []string
 }
 
 type costBlock struct {
@@ -1277,7 +1486,7 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 
 	case "tool_call":
 		name := displayName(u.Kind, u.Title)
-		s.track(u.ToolCallID, name, u.Kind)
+		s.track(u.ToolCallID, name, u.Kind, u.Title, updatePaths(u))
 		s.emit(provider.Event{
 			Kind:  provider.EvToolStarted,
 			Tool:  name,
@@ -1289,29 +1498,17 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		if u.Status != "completed" && u.Status != "failed" {
 			return
 		}
-		call := s.track(u.ToolCallID, displayName(u.Kind, u.Title), u.Kind)
+		call := s.track(u.ToolCallID, displayName(u.Kind, u.Title), u.Kind, u.Title, updatePaths(u))
 		s.emit(provider.Event{
 			Kind:  provider.EvToolFinished,
 			Tool:  call.name,
 			Input: toolInput(u),
 			Raw:   raw,
 		})
-		if u.Status == "completed" && authoritativeKinds[call.kind] && !call.asked {
-			// ACP leaves it to the agent to decide what is worth asking
-			// about, so a completed write — or a completed fetch, whose
-			// destination permissions.fetch exists to judge — that never
-			// produced a session/request_permission is the harness finding
-			// out after the fact. It cannot be undone; it can be made
-			// impossible to miss.
-			s.emit(provider.Event{
-				Kind: provider.EvError,
-				Text: fmt.Sprintf("acp: the agent completed a %q tool call (%s) without asking permission; "+
-					"this agent does not route that kind through session/request_permission, "+
-					"so Sirdar's permission policy could not be applied to it", call.kind, call.name),
-				Tool:  call.name,
-				Input: toolInput(u),
-				Raw:   raw,
-			})
+		if u.Status == "completed" {
+			if ev := s.observeUnmediated(call, u, raw); ev != nil {
+				s.emit(*ev)
+			}
 		}
 
 	case "plan":
@@ -1416,9 +1613,9 @@ func (s *session) preOpenTraffic(method string, raw json.RawMessage) {
 // state. A tool_call_update carries only the fields that changed, so the
 // kind and the title usually arrive once, on the tool_call, and everything
 // after that has to be looked up by id.
-func (s *session) track(id, name, kind string) trackedCall {
+func (s *session) track(id, name, kind, title string, paths []string) trackedCall {
 	if id == "" {
-		return trackedCall{name: name, kind: kind}
+		return trackedCall{name: name, kind: kind, title: title, paths: paths}
 	}
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -1430,13 +1627,35 @@ func (s *session) track(id, name, kind string) trackedCall {
 	if kind != "" {
 		call.kind = kind
 	}
+	if title != "" {
+		call.title = title
+	}
 	if name != "" && (call.name == "" || call.name == "tool") {
 		call.name = name
 	}
 	if call.name == "" {
 		call.name = name
 	}
+	call.paths = mergePaths(call.paths, paths)
 	return *call
+}
+
+// mergePaths adds the paths a later update named to the ones already
+// known, without repeating one.
+func mergePaths(have, add []string) []string {
+	for _, p := range add {
+		seen := false
+		for _, h := range have {
+			if h == p {
+				seen = true
+				break
+			}
+		}
+		if !seen {
+			have = append(have, p)
+		}
+	}
+	return have
 }
 
 // markAsked records that a tool call went through
@@ -1635,6 +1854,279 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 // is decided on the destinations it named rather than on its raw
 // arguments, which ACP does not standardise (see decideFixWrite).
 var writeKinds = map[string]bool{"edit": true, "delete": true, "move": true}
+
+// ------------------------------------------------- tool calls nobody approved
+
+// observeUnmediated decides what a completed tool call that never produced
+// a session/request_permission means for the run, and returns the event
+// that says so — or nil when there is nothing to report.
+//
+// ACP leaves it to the agent to decide what is worth asking about, so this
+// is the harness finding out after the fact. Nothing can be undone at that
+// point. What can be decided is whether the run carries on.
+//
+// A read-only run — triage or rca — that sees a write, a shell command or
+// a sub-agent spawn it was never asked about has had its guarantee fail,
+// not bent: that is an EvBreach, which the run layer answers by cancelling
+// the session and filing nothing, exactly as provider agy does when the
+// Antigravity CLI reports a completed write in a plan-mode session. The
+// difference between the two providers is only where the failure comes
+// from — agy cannot be asked, an ACP agent could have asked and did not.
+//
+// A fix run is allowed to write and to run commands, so the same call is a
+// warning there — but only inside the session root. A write that lands
+// outside it, or one that names no destination at all, is a breach in a
+// fix run too: the whole point of running a fix in a linked worktree is
+// that nothing outside it is touched, and a write nobody looked at cannot
+// be shown to have stayed inside.
+//
+// fetch stays a warning in both. It is neither a write nor a command: what
+// it costs is that permissions.fetch never judged the destination, which
+// is worth an operator's attention and is not the read-only guarantee
+// failing.
+func (s *session) observeUnmediated(call trackedCall, u sessionUpdate, raw json.RawMessage) *provider.Event {
+	if call.asked {
+		return nil
+	}
+	subagent := indicatesSubagent(call.kind, call.title) || indicatesSubagent(call.kind, call.name)
+	write := writeKinds[call.kind]
+	if !subagent && !write && !authoritativeKinds[call.kind] {
+		return nil
+	}
+
+	fix := s.isFix()
+	switch {
+	case subagent:
+		// Never a warning. A sub-agent is a second agent loop with its own
+		// permission state, and every agent whose bundle has been read
+		// starts it in the permissive mode: nothing it goes on to do
+		// produces a permission request, and nothing Sirdar configured
+		// reaches it. A fix run is no more able to vouch for that than a
+		// triage run.
+	case call.kind == "fetch":
+		return s.unmediatedWarning(call, u, raw)
+	case fix && !write:
+		return s.unmediatedWarning(call, u, raw)
+	case fix && write && s.writesWithinRoot(call):
+		return s.unmediatedWarning(call, u, raw)
+	case !fix:
+		// Every unasked write and command in a read-only run is a breach.
+	}
+
+	subject := unmediatedSubject(call, u)
+	headline := "read-only breach: " + call.name
+	if subject != "" {
+		headline += " " + oneLine(subject)
+	}
+	detail := fmt.Sprintf("the agent completed a %q tool call (%s) without ever sending "+
+		"session/request_permission, so Sirdar's permission policy never saw it. ", call.kind, call.name)
+	switch {
+	case subagent:
+		headline = "read-only breach: sub-agent spawn " + oneLine(firstNonEmpty(call.title, call.name))
+		detail = "the agent spawned a sub-agent without asking. A sub-agent runs its own loop with " +
+			"its own permission state — every agent whose behaviour has been captured starts one in " +
+			"a mode that approves everything — so nothing it does will reach this client as a " +
+			"permission request and nothing Sirdar configured applies to it. "
+	case fix:
+		detail += "A fix session may write, but only inside its own worktree, and this call " +
+			"cannot be shown to have stayed there. "
+	}
+	detail += "Check the agent's own permission configuration — Sirdar can neither see nor override it."
+
+	return &provider.Event{
+		Kind:  provider.EvBreach,
+		Text:  headline + "\n" + detail,
+		Tool:  call.name,
+		Input: toolInput(u),
+		Raw:   raw,
+	}
+}
+
+// unmediatedWarning is the report for a completed call that asked nobody
+// but did not break the run's guarantee: a fetch, or a fix session's own
+// in-worktree write.
+func (s *session) unmediatedWarning(call trackedCall, u sessionUpdate, raw json.RawMessage) *provider.Event {
+	named := call.name
+	if subject := unmediatedSubject(call, u); subject != "" {
+		named += " " + oneLine(subject)
+	}
+	return &provider.Event{
+		Kind: provider.EvError,
+		Text: fmt.Sprintf("acp: the agent completed a %q tool call (%s) without asking permission; "+
+			"this agent does not route that kind through session/request_permission, "+
+			"so Sirdar's permission policy could not be applied to it", call.kind, named),
+		Tool:  call.name,
+		Input: toolInput(u),
+		Raw:   raw,
+	}
+}
+
+// writesWithinRoot reports whether every destination a write named sits
+// inside the session root. A write that named none answers false: where it
+// went is unknown, and unknown is not inside.
+func (s *session) writesWithinRoot(call trackedCall) bool {
+	if len(call.paths) == 0 {
+		return false
+	}
+	root := s.spec.Cwd
+	if strings.TrimSpace(root) == "" {
+		return false
+	}
+	for _, path := range call.paths {
+		abs := path
+		if !filepath.IsAbs(abs) {
+			abs = filepath.Join(root, abs)
+		}
+		if !withinRoot(root, abs) {
+			return false
+		}
+	}
+	return true
+}
+
+// unmediatedSubject is the path or command a breach headline names, so an
+// operator reading the run's terminal reason sees what was done and not
+// only that something was.
+func unmediatedSubject(call trackedCall, u sessionUpdate) string {
+	if len(call.paths) > 0 {
+		return strings.Join(call.paths, ", ")
+	}
+	var args struct {
+		Command  json.RawMessage `json:"command"`
+		Commands []string        `json:"commands"`
+	}
+	if len(u.RawInput) > 0 && !isJSONNull(u.RawInput) {
+		_ = json.Unmarshal(u.RawInput, &args)
+	}
+	if len(args.Command) > 0 && !isJSONNull(args.Command) {
+		if command, err := provider.UnwrapCommand(args.Command); err == nil {
+			return command
+		}
+	}
+	if len(args.Commands) > 0 {
+		return strings.Join(args.Commands, "; ")
+	}
+	return firstNonEmpty(call.title, "")
+}
+
+// subagentIdents are the tool names agents give the call that starts a
+// second agent loop: Claude Code's Task, kimi's Agent and AgentSwarm, and
+// the spawn_* family other agents use.
+var subagentIdents = map[string]bool{
+	"agent": true, "agentswarm": true, "agent_swarm": true,
+	"task": true, "subagent": true, "subagenttask": true,
+}
+
+// indicatesSubagent reports whether a tool call starts a sub-agent.
+//
+// ACP's kind enum has no value for this — a sub-agent spawn arrives as
+// `other`, or as `execute`, or with no kind at all — so the agent's own
+// title is the only signal, and a title is agent-authored prose. Matching
+// it on a substring would fail a run over "update the task list", so only
+// the leading identifier is compared: "Task", "Agent(subagent_type=…)",
+// "AgentSwarm", "spawn_worker", and the mcp__server__task spelling, but
+// not a sentence that happens to contain one of those words.
+func indicatesSubagent(kind, title string) bool {
+	for _, field := range []string{kind, title} {
+		id := leadingIdent(field)
+		if id == "" {
+			continue
+		}
+		if subagentIdents[id] || strings.HasPrefix(id, "spawn") {
+			return true
+		}
+	}
+	return false
+}
+
+// leadingIdent lowercases a tool name and returns its first identifier:
+// everything up to the first character that is not a letter, digit or
+// underscore. An mcp__ name is reduced to its last segment first, since
+// that is the tool's own name within its server.
+func leadingIdent(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	if i := strings.LastIndex(name, "__"); i >= 0 {
+		name = name[i+2:]
+	}
+	for i, r := range name {
+		if r == '_' || (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			continue
+		}
+		return name[:i]
+	}
+	return name
+}
+
+// updatePaths lifts the destinations a session/update named, from
+// locations first and the file-naming arguments agents use otherwise —
+// the same places requestPaths reads them from on a permission request.
+func updatePaths(u sessionUpdate) []string {
+	var out []string
+	if len(u.Locations) > 0 && !isJSONNull(u.Locations) {
+		var locations []struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(u.Locations, &locations); err == nil {
+			for _, loc := range locations {
+				if strings.TrimSpace(loc.Path) != "" {
+					out = append(out, loc.Path)
+				}
+			}
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+
+	var args struct {
+		FileName     string `json:"fileName"`
+		FilePath     string `json:"file_path"`
+		FilePathCC   string `json:"filePath"`
+		Path         string `json:"path"`
+		NotebookPath string `json:"notebook_path"`
+		OldPath      string `json:"oldPath"`
+		NewPath      string `json:"newPath"`
+	}
+	if len(u.RawInput) > 0 && !isJSONNull(u.RawInput) {
+		_ = json.Unmarshal(u.RawInput, &args)
+	}
+	for _, p := range []string{
+		args.FileName, args.FilePath, args.FilePathCC, args.Path,
+		args.NotebookPath, args.OldPath, args.NewPath,
+	} {
+		if strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+// subjectMax is how much of a path or command a one-line report carries.
+const subjectMax = 120
+
+// oneLine collapses a subject onto one line and caps it, so a breach
+// headline stays the single line the run records as its reason. A subject
+// too long to fit loses its middle rather than its tail: a temporary
+// worktree path is mostly prefix, and the file name at the end is the part
+// an operator is reading for.
+func oneLine(text string) string {
+	text = strings.TrimSpace(strings.ReplaceAll(strings.ReplaceAll(text, "\r", " "), "\n", " "))
+	if len(text) <= subjectMax {
+		return text
+	}
+	head := subjectMax / 3
+	tail := subjectMax - head - 3
+	return text[:head] + "..." + text[len(text)-tail:]
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, v := range values {
+		if strings.TrimSpace(v) != "" {
+			return v
+		}
+	}
+	return ""
+}
 
 // decide judges one permission request.
 //

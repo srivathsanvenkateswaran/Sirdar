@@ -104,6 +104,9 @@ triage note resolved.
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
+| `sirdar mcp list` | `--connect` start each server, initialize, and count its tools | Lists the MCP servers a run in this workspace would be offered — name, scope, transport, command or URL, and the *names* of the env vars and headers each carries, never their values |
+| `sirdar mcp tools SERVER` | none | Lists every tool on one server with the verdict a run would get for it (`allowed`/`denied`) and the rule that settled it, from the same function the policy calls |
+| `sirdar mcp call SERVER TOOL` | `--args '<json>'` | Runs one tool by hand. A tool the workspace's permissions would refuse is refused here too, with the same reason and exit 2, and its server is never started |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
 | `sirdar steer RUN_ID "instruction"` | none | Gives a finished run a follow-up instruction; the same run continues, its note is re-rendered if the answer changes. See `docs/steer.md` |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |

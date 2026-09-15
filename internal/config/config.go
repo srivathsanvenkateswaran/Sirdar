@@ -164,10 +164,17 @@ func AccountsURLFor(baseURL string) string {
 // Values in Env are literal, not credential references: they reach a child
 // process's environment, which is exactly what a credential ref exists to
 // avoid. Put a key in your shell and let the agent read it from there.
+//
+// Mode is the ACP session mode id to select for this workspace, overriding
+// the one the adapter picks for itself: `plan`, `read-only`, `readonly`,
+// `read_only` or `ask` for a triage or rca run, `default` or `edit` for a
+// fix. Set it only for an agent whose read-only mode is spelled something
+// else; an id the agent does not offer is reported and no mode is set.
 type ACPConfig struct {
 	Command string            `yaml:"command"`
 	Args    []string          `yaml:"args,omitempty"`
 	Env     map[string]string `yaml:"env,omitempty"`
+	Mode    string            `yaml:"mode,omitempty"`
 }
 
 // OpenAIConfig configures `provider: openai`, where Sirdar runs the agent

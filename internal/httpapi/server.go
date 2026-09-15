@@ -83,6 +83,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/events", s.runEvents)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/note", s.note)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/diff", s.runDiff)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/diff/drop", s.dropHunk)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/rca", s.startRCA)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
@@ -91,6 +93,9 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/eval/retro/latest", s.latestRetro)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/golden", s.golden)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/mcp", s.mcpServers)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/mcp/{server}/tools", s.mcpTools)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/mcp/{server}/call", s.mcpCall)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/resume", s.resume)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/steer", s.steer)
@@ -420,7 +425,15 @@ func (s *server) static(w http.ResponseWriter, r *http.Request) {
 	if name == "" || name == "." {
 		name = "index.html"
 	}
-	if s.exists(name) {
+	// The page itself is never cached: an upgraded `sirdar serve` must not
+	// be shadowed by an index.html a browser kept, which would leave the
+	// operator on a build whose API has moved under it. The hashed assets
+	// beside it are content-addressed and may be cached as they are.
+	has := s.exists(name)
+	if !has || strings.HasSuffix(name, ".html") {
+		w.Header().Set("Cache-Control", "no-store")
+	}
+	if has {
 		http.ServeFileFS(w, r, s.ui, name)
 		return
 	}

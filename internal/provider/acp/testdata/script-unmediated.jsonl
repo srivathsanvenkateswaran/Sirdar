@@ -1,0 +1,22 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"opencode","version":"0.9.0"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-u"}}
+{"$expect":"session/prompt","as":"p1"}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-in","title":"Write ledger.go","kind":"edit","status":"pending","locations":[{"path":"{{cwd}}/ledger.go"}]}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-in","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-out","title":"Write outside","kind":"edit","status":"pending","locations":[{"path":"{{cwd}}/escape/secret.txt"}]}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-out","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-exec","title":"Run a command","kind":"execute","status":"pending","rawInput":{"command":"sh -lc \"touch /tmp/sirdar-acp-probe\""}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-exec","status":"completed","rawInput":{"command":"sh -lc \"touch /tmp/sirdar-acp-probe\""}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-fetch","title":"Fetch a page","kind":"fetch","status":"pending","rawInput":{"url":"https://example.com"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-fetch","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-spawn","title":"Agent(subagent_type=explore)","kind":"other","status":"pending"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-spawn","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-todo","title":"Update the task list","kind":"think","status":"pending"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-todo","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call","toolCallId":"tc-asked","title":"Write ledger.go","kind":"edit","status":"pending","locations":[{"path":"{{cwd}}/ledger.go"}]}}}
+{"$request":"session/request_permission","id":40,"params":{"sessionId":"sess-u","toolCall":{"toolCallId":"tc-asked","title":"Write ledger.go","kind":"edit","locations":[{"path":"{{cwd}}/ledger.go"}]},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"tool_call_update","toolCallId":"tc-asked","status":"completed"}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-u","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Unmediated\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

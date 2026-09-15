@@ -21,6 +21,8 @@ var bridgeMethods = []string{
 	"Events",
 	"Note",
 	"Prompt",
+	"RunDiff",
+	"DropHunk",
 	"StartTriage",
 	"StartRCA",
 	"StartFix",
@@ -57,6 +59,12 @@ var notBridged = map[string]string{
 	"HookReceived": "only the hook route reports a delivery",
 	// Diagnostics with no screen behind them.
 	"Jobs": "the frontend tracks the job ids it was given by each start",
+	// MCP inspection has two surfaces, `sirdar mcp` and the serve routes
+	// under /api/workspaces/{id}/mcp. The desktop app has no screen for
+	// it; bind these when it grows one.
+	"MCPServers": "no desktop screen inspects MCP servers yet",
+	"MCPTools":   "no desktop screen inspects MCP servers yet",
+	"MCPCall":    "no desktop screen inspects MCP servers yet",
 }
 
 // TestServiceSurfaceIsAccountedFor is the reverse direction: every exported
