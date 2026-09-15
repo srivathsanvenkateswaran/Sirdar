@@ -34,7 +34,7 @@ function css(component: string): string {
 }
 
 describe('the component library', () => {
-  it('holds the thirty-one components the library README lists', () => {
+  it('holds the thirty-two components the library README lists', () => {
     expect(COMPONENTS).toEqual([
       'ambient',
       'badge',
@@ -43,6 +43,7 @@ describe('the component library', () => {
       'card',
       'data-table',
       'dialog',
+      'diff-view',
       'event-row',
       'group-label',
       'heatmap',

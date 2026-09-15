@@ -5,6 +5,9 @@ import Button from '../ui/button'
 import Card from '../ui/card'
 import DataTable, { type DataColumn } from '../ui/data-table'
 import Dialog from '../ui/dialog'
+import DiffView, { hunkKey } from '../ui/diff-view'
+import { parsePatch } from '../lib/diff'
+import { diff as sampleDiff } from '../store/fakeTransport'
 import EventRow, { EVENT_GLYPHS, type EventVariant } from '../ui/event-row'
 import GroupLabel from '../ui/group-label'
 import Heatmap from '../ui/heatmap'
@@ -64,6 +67,15 @@ const EVERY_STATUS: SdStatus[] = [
 ]
 
 const LANES: LaneId[] = ['queue', 'gathering', 'blocked', 'triaged', 'done', 'failed']
+
+/** The fake transport's two-file change, read once: the gallery re-renders on every switch. */
+const SAMPLE_DIFF = sampleDiff()
+const SAMPLE_FILES = parsePatch(SAMPLE_DIFF.patch)
+const KEPT_ONE = new Set([hunkKey('internal/export/statement.go', 0)])
+const REFUSED_ONE = {
+  [hunkKey('internal/export/statement.go', 1)]:
+    'conflict: the diff has changed since it was read; read it again',
+}
 
 /** The providers a session can name, in the order the Providers page lists them. */
 const PROVIDERS_SHOWN = [
@@ -201,6 +213,7 @@ export default function Library(): JSX.Element {
     { id: 'page-head', label: 'Page head' },
     { id: 'kind-chip', label: 'Kind chip' },
     { id: 'state-glyph', label: 'State glyph' },
+    { id: 'diff-view', label: 'Diff view' },
   ]
 
   return (
@@ -209,7 +222,7 @@ export default function Library(): JSX.Element {
         <div className="lib__bar-row">
           <h1 className="lib__title">Asset library</h1>
           <p className="lib__lede">
-            Thirty-one components, every state, both themes, both directions. The switches
+            Thirty-two components, every state, both themes, both directions. The switches
             paint the specimens, not this page.
           </p>
         </div>
@@ -1159,6 +1172,44 @@ export default function Library(): JSX.Element {
             ))}
             <State label="Arabic">
               <StateGlyph state="blocked" word="بانتظار ردّك" clock="04:12" />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="diff-view"
+          name="Diff view"
+          note="Keep is the reader's mark; Drop is the one control that changes the commit."
+        >
+          <div className="lib-col">
+            <State label="Two files, one hunk kept, one drop refused">
+              <div className="lib-diff">
+                <DiffView
+                  files={SAMPLE_FILES}
+                  meta={SAMPLE_DIFF.files}
+                  kept={KEPT_ONE}
+                  refusals={REFUSED_ONE}
+                  onKeep={() => {}}
+                  onDrop={() => {}}
+                />
+              </div>
+            </State>
+            <State label="Read-only: the branch was pushed">
+              <div className="lib-diff">
+                <DiffView
+                  files={SAMPLE_FILES.slice(1)}
+                  meta={SAMPLE_DIFF.files}
+                  editable={false}
+                  readOnlyReason="The branch has been pushed; the change can be read but not edited."
+                  onKeep={() => {}}
+                  onDrop={() => {}}
+                />
+              </div>
+            </State>
+            <State label="No change">
+              <div className="lib-diff">
+                <DiffView files={[]} />
+              </div>
             </State>
           </div>
         </Section>

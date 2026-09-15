@@ -137,6 +137,16 @@
   width: 260px;
 }
 
+/* The diff view is a column that fills its pane; the gallery gives it one. */
+.lib-diff {
+  display: flex;
+  inline-size: min(100%, 720px);
+  block-size: 360px;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  overflow: hidden;
+}
+
 .lib-band-stage {
   display: flex;
   justify-content: center;
