@@ -85,6 +85,7 @@ export default function NewTriageDialog(props: {
               <option value="openai">openai</option>
               <option value="acp">acp</option>
               <option value="qwen">qwen</option>
+              <option value="cursor">cursor</option>
               <option value="agy">agy</option>
             </select>
           </div>

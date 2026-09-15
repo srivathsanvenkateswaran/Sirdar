@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import FixForm from './FixForm'
+import { PROVIDERS } from '../../api/types'
 
 function mount(over: { pending?: boolean; error?: string; defaultProvider?: string } = {}) {
   const onStart = vi.fn()
@@ -55,7 +56,9 @@ describe('FixForm', () => {
     expect(
       screen.getByRole('option', { name: 'Workspace default (claude)' }),
     ).toBeInTheDocument()
-    for (const name of ['claude', 'codex', 'openai', 'acp', 'qwen']) {
+    // Read off PROVIDERS rather than a copy of it, so a provider added to
+    // the one list the picker renders from cannot go untested here.
+    for (const name of PROVIDERS) {
       expect(screen.getByRole('option', { name })).toBeInTheDocument()
     }
   })

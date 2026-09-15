@@ -32,7 +32,11 @@ const maxMalformed = 10
 // Claude passes the schema as a CLI flag its own process enforces, Codex as
 // a protocol param its agent enforces, and the openai loop as a tool-call
 // parameter schema. ACP has none of those: the schema reaches the agent
-// only as prompt text (acp.promptText).
+// only as prompt text (acp.promptText). Cursor has none of them either —
+// there is no --json-schema flag and no structured_output field, so the
+// schema is appended to the prompt and the answer is read back out of the
+// result line's prose (cursor.extractJSON, which refuses an object whose
+// whole top level is $schema and title).
 //
 // Qwen is here on the strength of the first live run rather than the flag.
 // --json-schema is a real flag and Qwen Code does act on it, but only after
@@ -43,8 +47,9 @@ const maxMalformed = 10
 // retry is talking to a model that is answering in free text and has to be
 // told so in the same words ACP's is.
 var noWireSchemaEnforcement = map[string]bool{
-	"acp":  true,
-	"qwen": true,
+	"acp":    true,
+	"cursor": true,
+	"qwen":   true,
 }
 
 // maxEmptyTurns is how many turns may end with no answer before the run is
@@ -662,6 +667,16 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 	switch ev.Kind {
 	case provider.EvToolStarted:
 		fmt.Fprintf(w, "[%s] tool %s%s\n", key, ev.Tool, toolDetail(ev.Input))
+	case provider.EvToolFinished:
+		// How a tool call ended, where the provider said something worth
+		// repeating. On cursor that is the only place a refusal shows up
+		// — there is no permission event to print, so without this line
+		// an operator watching a run cannot tell a tool that was refused
+		// from one that ran. The summary is cut to one short line
+		// because other adapters put the tool's whole output in Text.
+		if summary := toolSummary(ev.Text); summary != "" {
+			fmt.Fprintf(w, "[%s] tool %s %s\n", key, ev.Tool, summary)
+		}
 	case provider.EvPermission:
 		verb := "allow"
 		if ev.Decision == "deny" {
@@ -685,6 +700,20 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 			fmt.Fprintf(w, "[%s] %s\n", key, ev.Text)
 		}
 	}
+}
+
+// toolSummary is a finished tool call's outcome, in a form a progress line
+// can carry: one line, cut short, and nothing at all for the ordinary
+// success every read tool reports.
+func toolSummary(text string) string {
+	s := firstLine(text)
+	if s == "" || s == "ok" {
+		return ""
+	}
+	if len(s) > toolDetailMax {
+		s = s[:toolDetailMax] + "…"
+	}
+	return s
 }
 
 const toolDetailMax = 60
