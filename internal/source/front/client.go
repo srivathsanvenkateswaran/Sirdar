@@ -27,6 +27,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
@@ -86,6 +87,14 @@ var maxAttachmentBytes int64 = 64 << 20
 // 100-page fixture.
 var maxFeedPages = 100
 
+// maxEntriesCacheEntries bounds the merged-entries cache: past this many
+// distinct conversations seen by one Client the cache is dropped and
+// rebuilt rather than left to grow without limit. A run's working set of
+// conversations in flight at once is small in practice; a cache that grew
+// past this is more likely a pathologically long-lived client than a
+// workload worth holding onto.
+const maxEntriesCacheEntries = 1000
+
 // Config holds one Front workspace's settings. Secrets arrive already
 // resolved by the wiring layer, so every field is a plain string.
 type Config struct {
@@ -108,6 +117,16 @@ type Client struct {
 	// the conversation id it was called with. Entries are appended by each
 	// call in a bundle and removed when read.
 	warnings httpx.Warnings
+
+	// mu guards entriesCache. One Client serves every conversation in a
+	// run, so two conversations can be inside a call at once.
+	mu sync.Mutex
+	// entriesCache holds the merged thread already walked for a
+	// conversation id, for as long as this Client lives: Threads and
+	// Attachments both build on entries(), and a Get+Threads+Attachments
+	// sequence about the same conversation would otherwise walk both
+	// Front feeds twice for no reason.
+	entriesCache map[string]entriesResult
 }
 
 var (

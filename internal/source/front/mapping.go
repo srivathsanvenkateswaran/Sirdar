@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/url"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
@@ -193,13 +194,20 @@ func unixTime(secs float64) time.Time {
 	return time.Unix(whole, int64(frac*float64(time.Second))).UTC()
 }
 
+// tagLike matches an actual HTML tag — "<" or "</" followed by a letter, or
+// "<!" for a doctype/comment, then anything up to the closing ">". A bare
+// "<" is not enough: a plain-text body can carry one on its own (an emoticon
+// like "<3", a literal "<div>" typed as text with no closing ">" nearby),
+// and running that through the HTML converter would be lossy for no reason.
+var tagLike = regexp.MustCompile(`<[a-zA-Z/!][^>]*>`)
+
 // bodyText renders a body Front returned. Front's message bodies are HTML,
-// so they go through htmltext; a body with no markup in it at all is kept
-// verbatim instead, because the converter collapses whitespace the way a
-// browser does and that would run the lines of a genuinely plain body
+// so a body that actually contains a tag goes through htmltext; anything
+// else is kept verbatim, because the converter collapses whitespace the way
+// a browser does and that would run the lines of a genuinely plain body
 // together.
 func bodyText(body string) string {
-	if !strings.Contains(body, "<") {
+	if !tagLike.MatchString(body) {
 		return strings.TrimSpace(body)
 	}
 	text, _ := htmltext.ToMarkdown(body)
@@ -398,12 +406,14 @@ func (c *Client) listComments(ctx context.Context, id string) ([]frComment, []st
 
 // walk drives one paginated feed: it calls fetch with each page URL and
 // follows whatever next link fetch returns, refusing an untrusted host,
-// stopping on a link that points back at the page just read, and capping
-// the sweep at maxFeedPages with a warning naming the feed.
+// stopping on a link that repeats a page already read — directly, or
+// through a longer A→B→A cycle — and capping the sweep at maxFeedPages
+// with a warning naming the feed.
 func (c *Client) walk(ctx context.Context, feed, first string, fetch func(raw string) (string, error)) ([]string, error) {
 	var warnings []string
 	pages := 0
-	for next := first; next != ""; {
+	seen := map[string]bool{}
+	for next := strings.TrimSpace(first); next != ""; {
 		u, err := url.Parse(next)
 		if err != nil {
 			warnings = append(warnings, fmt.Sprintf("front: %s page link is not a valid url", feed))
@@ -417,20 +427,32 @@ func (c *Client) walk(ctx context.Context, feed, first string, fetch func(raw st
 			warnings = append(warnings, fmt.Sprintf("front: %s pages capped at %d", feed, maxFeedPages))
 			break
 		}
+		seen[next] = true
 		link, err := fetch(next)
 		if err != nil {
 			return nil, err
 		}
 		pages++
-		if link == next {
-			// A feed whose next link points at the page just read would
-			// loop for ever; stop rather than trust it.
+		link = strings.TrimSpace(link)
+		if link != "" && seen[link] {
+			// A feed whose next link points back at a page already read
+			// would loop for ever; stop rather than trust it. Comparing
+			// against every page seen so far, not just the one just read,
+			// is what catches a longer A→B→A cycle and not only a link
+			// that points straight at itself.
 			warnings = append(warnings, fmt.Sprintf("front: %s pagination stopped on a self-referential next link", feed))
 			break
 		}
-		next = strings.TrimSpace(link)
+		next = link
 	}
 	return warnings, nil
+}
+
+// entriesResult is the merged thread for one conversation, cached across
+// the calls made for it.
+type entriesResult struct {
+	items    []entry
+	warnings []string
 }
 
 // entries merges the two feeds into one ordered thread: messages with
@@ -438,7 +460,22 @@ func (c *Client) walk(ctx context.Context, feed, first string, fetch func(raw st
 // first. A stable sort keeps same-timestamp entries in the order the API
 // returned them, and messages are appended before comments so a note
 // written in the same second as the reply it is about still reads after it.
+//
+// Threads and Attachments each need this merged thread, so the result is
+// memoised in c.entriesCache for the Client's lifetime: a Get+Threads+
+// Attachments sequence about the same conversation walks both Front feeds
+// once rather than twice. Only a successful result is cached — a failed
+// fetch is retried on the next call rather than pinned as a permanent
+// failure — and the cached slice is never mutated after it is built, so
+// sharing it between callers is safe.
 func (c *Client) entries(ctx context.Context, id string) ([]entry, []string, error) {
+	c.mu.Lock()
+	cached, ok := c.entriesCache[id]
+	c.mu.Unlock()
+	if ok {
+		return cached.items, cached.warnings, nil
+	}
+
 	msgs, msgWarnings, err := c.listMessages(ctx, id)
 	if err != nil {
 		return nil, nil, err
@@ -490,6 +527,14 @@ func (c *Client) entries(ctx context.Context, id string) ([]entry, []string, err
 		})
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].at.Before(out[j].at) })
+
+	c.mu.Lock()
+	if c.entriesCache == nil || len(c.entriesCache) >= maxEntriesCacheEntries {
+		c.entriesCache = map[string]entriesResult{}
+	}
+	c.entriesCache[id] = entriesResult{items: out, warnings: warnings}
+	c.mu.Unlock()
+
 	return out, warnings, nil
 }
 

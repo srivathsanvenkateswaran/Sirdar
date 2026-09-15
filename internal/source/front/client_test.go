@@ -436,6 +436,11 @@ func TestBodyText(t *testing.T) {
 		// converter would collapse them the way a browser does.
 		{"plain text keeps its lines", "line one\nline two", "line one\nline two"},
 		{"empty", "", ""},
+		// A bare "<" with no tag shape after it — an emoticon, not markup
+		// — must not route the body through the HTML converter, which
+		// would collapse its line breaks for nothing.
+		{"heart emoticon is not a tag", "I love you <3\nreally", "I love you <3\nreally"},
+		{"less-than comparison is not a tag", "5 < 10\nstill true", "5 < 10\nstill true"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := bodyText(tc.in); got != tc.want {
@@ -557,6 +562,35 @@ func TestThreads_SelfReferentialNextLinkStops(t *testing.T) {
 	warnings := c.WarningsFor("cnv_1")
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "self-referential") {
 		t.Fatalf("warnings = %v, want one naming the self-referential link", warnings)
+	}
+}
+
+// TestThreads_LongerCycleStops covers a feed whose next link cycles back to
+// an earlier page rather than the one just read (page 1 -> page 2 -> page
+// 1): comparing only against the page just fetched would never catch this
+// and would loop until the page cap, so the guard has to remember every
+// page already read.
+func TestThreads_LongerCycleStops(t *testing.T) {
+	first := fmt.Sprintf("%s/conversations/cnv_1/messages?limit=%d", defaultBaseURL, pageSize)
+	second := fmt.Sprintf("https://%s/conversations/cnv_1/messages?page_token=P2", apiHost)
+	srv := pageServer(t, func(page int) string {
+		if page == 1 {
+			return second
+		}
+		return first // cycles back to the very first page, not the one just read
+	})
+	c := newClient(t, map[string]string{apiHost: addrOf(srv)})
+
+	th, err := c.Threads(context.Background(), "cnv_1")
+	if err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	if len(th) != 2 {
+		t.Fatalf("len(thread) = %d, want 2 (page 1 and page 2, stopped before re-reading page 1)", len(th))
+	}
+	warnings := c.WarningsFor("cnv_1")
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "self-referential") {
+		t.Fatalf("warnings = %v, want one naming the repeated link", warnings)
 	}
 }
 
@@ -703,6 +737,70 @@ func TestAttachments_OversizeIsRefusedAndNotLeftOnDisk(t *testing.T) {
 	}
 }
 
+// TestAttachments_FilesPagingWarningsEvenWhenEveryDownloadFails covers the
+// branch where every attachment download fails: the download failures
+// themselves go out as the returned error and are not also filed as
+// warnings, but a paging warning the feed walk produced along the way (here,
+// an untrusted next link) is not part of that error and must still be
+// filed, not lost with it.
+func TestAttachments_FilesPagingWarningsEvenWhenEveryDownloadFails(t *testing.T) {
+	evil := newHitCounter(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/comments"):
+			_, _ = w.Write([]byte(`{"_pagination":{"next":null},"_results":[]}`))
+		case strings.HasSuffix(r.URL.Path, "/messages"):
+			if r.URL.Query().Get("page_token") == "steal" {
+				t.Fatalf("untrusted next link was followed")
+			}
+			body, _ := json.Marshal(map[string]any{
+				"_pagination": map[string]any{"next": "https://" + evilHost + "/conversations/cnv_1/messages?page_token=steal"},
+				"_results": []map[string]any{{
+					"id":         "msg_1",
+					"is_inbound": true,
+					"created_at": 1788000001,
+					"text":       "has an attachment",
+					"recipients": []map[string]any{{"handle": "ada@example.com", "role": "from"}},
+					"attachments": []map[string]any{{
+						"id":  "fil_x",
+						"url": fmt.Sprintf("https://%s/download/fil_x", apiHost),
+					}},
+				}},
+			})
+			_, _ = w.Write(body)
+		case strings.HasPrefix(r.URL.Path, "/download/"):
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte(`{"_error":{"status":500,"title":"boom"}}`))
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
+	defer srv.Close()
+	c := newClient(t, map[string]string{apiHost: addrOf(srv), evilHost: addrOf(evil.Server)})
+
+	dir := filepath.Join(t.TempDir(), "TCK-1")
+	atts, err := c.Attachments(context.Background(), "cnv_1", dir)
+	if err == nil {
+		t.Fatal("Attachments: want an error when every download fails")
+	}
+	if len(atts) != 0 {
+		t.Errorf("attachments = %+v, want none", atts)
+	}
+	if got := evil.count(); got != 0 {
+		t.Errorf("untrusted next link was fetched %d times, want 0", got)
+	}
+
+	var pagingWarning string
+	for _, w := range c.WarningsFor("cnv_1") {
+		if strings.Contains(w, evilHost) {
+			pagingWarning = w
+		}
+	}
+	if pagingWarning == "" {
+		t.Fatal("the paging warning naming the untrusted host was lost when every download failed")
+	}
+}
+
 func TestAttachments_None(t *testing.T) {
 	as := newAPIServer(t)
 	c := newClient(t, map[string]string{apiHost: addrOf(as.Server)})
@@ -713,6 +811,35 @@ func TestAttachments_None(t *testing.T) {
 	}
 	if len(atts) != 0 {
 		t.Errorf("attachments = %+v, want none", atts)
+	}
+}
+
+// TestGetThreadsAttachments_SharesTheMergedFeedWalk covers the cache
+// entries() keeps: Threads and Attachments both build on the same merged
+// thread, so a Get+Threads+Attachments sequence about one conversation
+// should walk each of Front's two feeds once, not once per call.
+func TestGetThreadsAttachments_SharesTheMergedFeedWalk(t *testing.T) {
+	as := newAPIServer(t)
+	c := newClient(t, map[string]string{apiHost: addrOf(as.Server)})
+
+	if _, err := c.Get(context.Background(), "cnv_1"); err != nil {
+		t.Fatalf("Get: %v", err)
+	}
+	if _, err := c.Threads(context.Background(), "cnv_1"); err != nil {
+		t.Fatalf("Threads: %v", err)
+	}
+	dir := filepath.Join(t.TempDir(), "TCK-1")
+	if _, err := c.Attachments(context.Background(), "cnv_1", dir); err != nil {
+		t.Fatalf("Attachments: %v", err)
+	}
+
+	// cnv_1's messages fixture spans two pages; comments is one page. Both
+	// are walked once across all three calls, not once per call.
+	if got := as.count("/conversations/cnv_1/messages"); got != 2 {
+		t.Errorf("message page fetches = %d, want 2 (walked once, not once per call)", got)
+	}
+	if got := as.count("/conversations/cnv_1/comments"); got != 1 {
+		t.Errorf("comment page fetches = %d, want 1 (walked once, not once per call)", got)
 	}
 }
 
@@ -755,6 +882,10 @@ func TestTrust(t *testing.T) {
 		{"https://api2.frontapp.com@attacker.example/x", false, false},
 		{"https://api.frontapp.com.evil.example/x", false, false},
 		{"https://files.evil.example/x", false, false},
+		// A host that merely contains "api.frontapp.com" as a label
+		// suffix rather than sitting behind an actual dot boundary — the
+		// per-company rule is dot-prefixed so this must not match it.
+		{"https://evil-api.frontapp.com/x", false, false},
 	} {
 		u, perr := url.Parse(tc.raw)
 		if perr != nil {

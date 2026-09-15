@@ -151,6 +151,12 @@ func (c *Client) Attachments(ctx context.Context, id, dir string) ([]ticket.Atta
 	}
 
 	if len(out) == 0 && len(warnings) > 0 {
+		// The download failures are about to go out as the returned error,
+		// so they are not also filed as warnings — the caller already has
+		// every one of them there. The paging warnings are not part of
+		// that error, though, and would otherwise vanish along with it, so
+		// they are filed here before returning.
+		c.addWarnings(id, pagingWarnings)
 		errs := make([]error, len(warnings))
 		for i, w := range warnings {
 			errs[i] = errors.New(w)
