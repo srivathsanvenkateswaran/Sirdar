@@ -79,6 +79,19 @@ type State struct {
 	StderrTail []string
 	Warnings   []string
 
+	// ModelRequested is what the workspace asked for when that is not what
+	// answered. Model holds the id the provider reported on its init line,
+	// because a screen or a register row saying which model wrote a note
+	// has to name the model that wrote it; a run configured with no model
+	// at all, or with an alias like `sonnet` that the CLI resolves to a
+	// dated id, would otherwise have nothing to show. The configured value
+	// is kept here so the record still says what was asked for, and it is
+	// what a later session on the same run asks for again.
+	//
+	// It is empty — and omitted — on a run whose configured model is the
+	// one that answered, and on every run from before this field existed.
+	ModelRequested string `json:",omitempty"`
+
 	// Eval marks a run started by `sirdar eval`. An eval replays a stored
 	// bundle to score the agent, so its note is a measurement and not a
 	// record of a ticket: it stays in the run directory, is never filed
@@ -141,6 +154,18 @@ type State struct {
 		Local    bool   `json:",omitempty"`
 		DiffPath string `json:",omitempty"`
 	} `json:",omitempty"`
+}
+
+// RequestedModel is the model a session of this run should ask for: the
+// workspace's configured value, which moves to ModelRequested once a
+// provider's reported id takes Model's place. Before that swap Model is
+// still the configured value, so a run whose provider reported nothing
+// reads the same either way.
+func (s State) RequestedModel() string {
+	if s.ModelRequested != "" {
+		return s.ModelRequested
+	}
+	return s.Model
 }
 
 // NewRunID returns a sortable, unique run id of the form
