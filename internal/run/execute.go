@@ -462,6 +462,12 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MCPAllow:   cfg.Permissions.MCP,
 			FetchAllow: cfg.Permissions.Fetch,
 			Root:       root,
+			// Where a read may look: the tree the session stands in,
+			// plus this run's own directory and the bundle of ticket
+			// text and attachments staged inside it. A fix session's
+			// root is its worktree, which contains neither.
+			ReadRoots: []string{p.run.Dir, p.run.BundleDir()},
+			ReadAlso:  cfg.Permissions.ReadAlso,
 		},
 		Mode: provider.ModeTriage,
 		// mcp.workspaceOnly travels as these two fields for every
@@ -494,10 +500,12 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 		// not cover. It is read once, here, and reserved for this session.
 		spec.Policy = provider.FixPolicy(root, cfg.Permissions.FixBash, cfg.Permissions.MCP,
 			extraReserved(root))
-		// Where a fix may fetch from is the same list a triage may: the
-		// destination question does not change because the session is
-		// allowed to edit files.
+		// Where a fix may fetch from, and where it may read, are the same
+		// lists a triage gets: neither question changes because the
+		// session is allowed to edit files.
 		spec.Policy.FetchAllow = cfg.Permissions.Fetch
+		spec.Policy.ReadRoots = []string{p.run.Dir, p.run.BundleDir()}
+		spec.Policy.ReadAlso = cfg.Permissions.ReadAlso
 	}
 
 	// Claude Code reads image files from the bundle directory itself.

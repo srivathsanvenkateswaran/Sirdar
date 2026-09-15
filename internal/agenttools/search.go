@@ -101,7 +101,7 @@ func (o Options) grep(ctx context.Context, args json.RawMessage) (string, error)
 	if strings.TrimSpace(searchPath) == "" {
 		searchPath = "."
 	}
-	target, err := o.resolve(searchPath)
+	target, err := o.resolveRead(searchPath)
 	if err != nil {
 		return "", err
 	}

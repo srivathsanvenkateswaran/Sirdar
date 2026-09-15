@@ -79,6 +79,16 @@ type Options struct {
 	// It comes from the session's permission policy, so the tool and the
 	// policy in front of it reserve the same paths.
 	ExtraReserved []string
+
+	// ReadRoots and ReadAlso are the read scope the reading tools are
+	// confined to on top of Root: this run's own directory and the bundle
+	// inside it, and the permissions.readAlso globs. They come from the
+	// session's permission policy, so the tool and the policy in front of
+	// it judge a read the same way — without them a path the policy
+	// allowed would be refused a second time here, which is a rule
+	// nobody can act on.
+	ReadRoots []string
+	ReadAlso  []string
 }
 
 // DefaultMaxOutputBytes is the per-call output cap when Options leaves
@@ -170,6 +180,24 @@ func (o Options) resolve(p string) (string, error) {
 	real, err := provider.ResolveWithin(o.Root, p)
 	if err != nil {
 		return "", errPathEscape
+	}
+	return real, nil
+}
+
+// resolveRead is resolve for the tools that only look at a file: confined
+// to the workspace, and to the run directory and the readAlso globs the
+// session's policy named besides it. It goes through provider.ReadScope,
+// which is what the permission policy in front of this loop applies to the
+// same call, so the two gates answer alike rather than the inner one
+// refusing what the outer one just approved.
+func (o Options) resolveRead(p string) (string, error) {
+	scope := provider.ReadScope{
+		Roots: append([]string{o.Root}, o.ReadRoots...),
+		Also:  o.ReadAlso,
+	}
+	real, err := scope.Resolve(p)
+	if err != nil {
+		return "", fmt.Errorf("%w: %s", provider.ErrReadEscape, p)
 	}
 	return real, nil
 }

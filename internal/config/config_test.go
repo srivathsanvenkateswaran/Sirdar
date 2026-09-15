@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1412,6 +1413,57 @@ permissions:
 			continue
 		}
 		if !strings.Contains(err.Error(), "permissions.fetch[0]") || !strings.Contains(err.Error(), want) {
+			t.Errorf("error for %q = %v, want one naming the key and %q", body, err, want)
+		}
+	}
+}
+
+// TestPermissionsReadAlso covers the list that widens a session's read
+// scope: it reaches the config, the default is empty, and an entry that
+// cannot mean what the operator meant fails the load.
+func TestPermissionsReadAlso(t *testing.T) {
+	root := writeCfg(t, minimal+`
+permissions:
+  readAlso:
+    - "~/.claude/skills/*"
+    - "/opt/reference"
+`)
+	cfg, err := Load(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cfg.Permissions.ReadAlso) != 2 {
+		t.Fatalf("permissions.readAlso %v", cfg.Permissions.ReadAlso)
+	}
+	policy := &provider.PermissionPolicy{Root: cfg.Root, ReadAlso: cfg.Permissions.ReadAlso}
+	if d := policy.Decide("Read", json.RawMessage(`{"file_path":"/opt/reference/runbook.md"}`)); !d.Allow {
+		t.Errorf("a readAlso path was denied: %s", d.Message)
+	}
+	if d := policy.Decide("Read", json.RawMessage(`{"file_path":"/etc/passwd"}`)); d.Allow {
+		t.Error("a path nobody named was allowed")
+	}
+
+	bare, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bare.Permissions.ReadAlso) != 0 {
+		t.Errorf("permissions.readAlso defaults to %v, want empty", bare.Permissions.ReadAlso)
+	}
+
+	bad := map[string]string{
+		"  readAlso:\n    - \"*\"\n":            "every file",
+		"  readAlso:\n    - \"docs/**\"\n":      "absolute path",
+		"  readAlso:\n    - \"   \"\n":          "empty",
+		"  readAlso:\n    - \"../elsewhere\"\n": "absolute path",
+	}
+	for body, want := range bad {
+		_, err := Load(writeCfg(t, minimal+"permissions:\n"+body))
+		if err == nil {
+			t.Errorf("permissions.readAlso entry in %q loaded", body)
+			continue
+		}
+		if !strings.Contains(err.Error(), "permissions.readAlso[0]") || !strings.Contains(err.Error(), want) {
 			t.Errorf("error for %q = %v, want one naming the key and %q", body, err, want)
 		}
 	}
