@@ -221,22 +221,26 @@ describe('the sidebar footer', () => {
     expect(trigger).toHaveFocus()
   })
 
-  it('draws the screen that published one, and New session when no screen did', () => {
+  it('demotes New session while a screen publishes its own primary, and fills it otherwise', () => {
     setShowLibrary(false)
 
     function Publisher(): null {
-      useProvidePrimaryAction({ label: 'Run eval', onRun: () => {} })
+      useProvidePrimaryAction({ label: 'Run suite', onRun: () => {} })
       return null
     }
 
+    // The screen draws its own filled button in its page head; the footer
+    // does not draw a second copy of it.
     const { unmount } = mount({}, <Publisher />)
-    expect(screen.getByRole('button', { name: /Run eval/ })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Run suite/ })).toBeNull()
+    const demoted = screen.getByRole('button', { name: 'New session' })
+    expect(demoted).toHaveAttribute('data-variant', 'secondary')
     unmount()
 
     const { onNavigate } = mount()
-    expect(screen.queryByRole('button', { name: /Run eval/ })).toBeNull()
-    fireEvent.click(screen.getByRole('button', { name: 'New session' }))
+    const filled = screen.getByRole('button', { name: 'New session' })
+    expect(filled).toHaveAttribute('data-variant', 'primary')
+    fireEvent.click(filled)
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 
