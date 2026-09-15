@@ -33,7 +33,7 @@ export interface BoardColumn {
 }
 
 const COLUMNS: { id: ColumnId; name: string; empty: string }[] = [
-  { id: 'queue', name: 'Queue', empty: 'The tracker has nothing assigned and untouched.' },
+  { id: 'queue', name: 'Queue', empty: 'Nothing in the tracker is assigned to you and untouched.' },
   { id: 'gathering', name: 'Gathering', empty: 'No run is gathering evidence right now.' },
   { id: 'blocked', name: 'Blocked', empty: 'No run is waiting on an answer.' },
   { id: 'triaged', name: 'Triaged', empty: 'No triage note is waiting to be read.' },
@@ -67,14 +67,24 @@ function stamp(run: RunSummary): number {
 }
 
 /**
- * Splits the workspace's tickets and runs into the six lanes.
+ * Splits the workspace's queue and runs into the six lanes.
  *
- * A key moves right as work happens to it: a ticket nobody has run sits in
- * Queue; a run in flight is Gathering; a triage note with no root cause behind
- * it is Triaged; a completed RCA sends the key to Done. Runs are ordered by
- * their last change so the lane's top card is the one that just moved.
+ * A key moves right as work happens to it: a queued ticket nobody has run sits
+ * in Queue; a run in flight is Gathering; a triage note with no root cause
+ * behind it is Triaged; a completed RCA sends the key to Done. Runs are ordered
+ * by their last change so the lane's top card is the one that just moved.
+ *
+ * `queued` is the Queue lane's whole source — the tracker's answer to "what is
+ * assigned to me", so the lane is a list of work rather than a list of every
+ * ticket in the project. `tickets` is only looked in, for the title and the
+ * priority a run's own record may not carry; it defaults to the queue for a
+ * caller that has nothing else.
  */
-export function buildColumns(tickets: Ticket[], runs: RunSummary[]): BoardColumn[] {
+export function buildColumns(
+  queued: Ticket[],
+  runs: RunSummary[],
+  tickets: Ticket[] = queued,
+): BoardColumn[] {
   const ticketByKey = new Map(tickets.map((t) => [t.key, t]))
   const keysWithRuns = new Set(runs.map((r) => r.key))
   const rcaDone = new Set(
@@ -90,7 +100,7 @@ export function buildColumns(tickets: Ticket[], runs: RunSummary[]): BoardColumn
     failed: [],
   }
 
-  for (const ticket of tickets) {
+  for (const ticket of queued) {
     if (keysWithRuns.has(ticket.key)) continue
     lanes.queue.push({ kind: 'ticket', key: ticket.key, title: ticket.title, ticket })
   }
@@ -259,6 +269,11 @@ export interface BoardProps {
    * where a triage of it would run.
    */
   provider?: string
+  /**
+   * The workspace's tickets as the store holds them, looked in for the title
+   * and priority a run's own record may not carry. The Queue lane is not built
+   * from these: the screen asks the tracker for the reader's own keys itself.
+   */
   tickets: Ticket[]
   runs: RunSummary[]
   queueUnsupported: boolean
@@ -273,9 +288,11 @@ export interface BoardProps {
  * The board, at `#/`: every run as a card in the lane its state puts it in,
  * and under the lanes the deliveries the webhooks brought today.
  *
- * The lanes read the store's runs and tickets; the one thing the screen asks
- * the transport for itself is which keys are the reader's, when the Mine
- * quick filter is chosen, because the queue is the only thing that knows.
+ * The lanes read the store's runs; the one thing the screen asks the transport
+ * for itself is the Queue lane, which is the tracker's answer to "what is
+ * assigned to me" rather than every ticket in the project. Everything past
+ * Queue is a run, and a run already says whose ticket it is, so the Mine quick
+ * filter costs nothing.
  */
 export default function Board(props: BoardProps): JSX.Element {
   const {
@@ -297,7 +314,34 @@ export default function Board(props: BoardProps): JSX.Element {
   const [kind, setKind] = useState<KindFilter>('all')
   const filtersId = useId()
 
-  const columns = useMemo(() => buildColumns(tickets, runs), [tickets, runs])
+  // The Queue lane: the keys the tracker lists for the reader's own account,
+  // asked for once per workspace. Null until it answers, which is what tells
+  // "still loading" from "nothing is assigned to you".
+  const [queued, setQueued] = useState<Ticket[] | null>(null)
+  const [queueError, setQueueError] = useState('')
+  useEffect(() => {
+    if (queueUnsupported) {
+      setQueued([])
+      setQueueError('')
+      return
+    }
+    let cancelled = false
+    setQueued(null)
+    setQueueError('')
+    transport
+      .queue(workspaceId, { assignee: 'me' })
+      .then((rows) => {
+        if (!cancelled) setQueued(rows)
+      })
+      .catch((err) => {
+        if (!cancelled) setQueueError(reasonOf(err))
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [queueUnsupported, transport, workspaceId])
+
+  const columns = useMemo(() => buildColumns(queued ?? [], runs, tickets), [queued, runs, tickets])
   const live = useMemo(() => runs.filter((r) => LIVE.has(r.status)).length, [runs])
   const latest = useMemo(() => runs.reduce((max, r) => Math.max(max, stamp(r)), 0), [runs])
   const titles = useMemo(() => new Map(tickets.map((t) => [t.key, t.title])), [tickets])
@@ -313,38 +357,25 @@ export default function Board(props: BoardProps): JSX.Element {
     return () => clearTimeout(id)
   }, [latest, now])
 
-  // Mine: the keys the tracker lists for the reader's own account. Asked for
-  // when the filter is chosen, not before, and asked again for a new
-  // workspace. Until it answers, or if it cannot, every card stays visible
-  // rather than the board going blank.
-  const [mine, setMine] = useState<Set<string> | null>(null)
-  const [mineError, setMineError] = useState('')
-  useEffect(() => {
-    if (owner !== 'mine' || queueUnsupported) return
-    let cancelled = false
-    setMine(null)
-    setMineError('')
-    transport
-      .queue(workspaceId, { assignee: 'me' })
-      .then((mineTickets) => {
-        if (!cancelled) setMine(new Set(mineTickets.map((t) => t.key)))
-      })
-      .catch((err) => {
-        if (!cancelled) setMineError(reasonOf(err))
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [owner, queueUnsupported, transport, workspaceId])
+  // Mine costs no call: a run carries whether its ticket is the reader's, and
+  // every ticket in the Queue lane was asked for by that name. A service that
+  // predates the field says nothing about ownership for any run, and then the
+  // filter narrows nothing rather than emptying the board.
+  const mineKeys = useMemo(() => new Set((queued ?? []).map((t) => t.key)), [queued])
+  const ownershipKnown = useMemo(() => runs.some((r) => r.mine !== undefined), [runs])
+  const isMine = (card: BoardCard): boolean =>
+    card.kind === 'run' ? !ownershipKnown || card.run.mine === true : mineKeys.has(card.key)
 
   const keep = (card: BoardCard): boolean =>
-    matches(card, filter) &&
-    ofKind(card, kind) &&
-    (owner !== 'mine' || queueUnsupported || !mine || mine.has(card.key))
+    matches(card, filter) && ofKind(card, kind) && (owner !== 'mine' || isMine(card))
 
   const ago = updatedAgo(latest, now)
   const deliveries = inbound ?? []
   const filtering = filter !== '' || kind !== 'all' || owner === 'mine'
+  const shownRuns = columns.reduce(
+    (total, column) => total + column.cards.filter((c) => c.kind === 'run' && keep(c)).length,
+    0,
+  )
 
   return (
     <section className="board" aria-label="Board">
@@ -394,7 +425,17 @@ export default function Board(props: BoardProps): JSX.Element {
             'Loading runs…'
           ) : (
             <>
-              <b>{runs.length}</b> {runs.length === 1 ? 'run' : 'runs'} · <b>{live}</b> live
+              {filtering ? (
+                <>
+                  <b>{shownRuns}</b> of <b>{runs.length}</b>{' '}
+                  {runs.length === 1 ? 'run' : 'runs'}
+                </>
+              ) : (
+                <>
+                  <b>{runs.length}</b> {runs.length === 1 ? 'run' : 'runs'}
+                </>
+              )}{' '}
+              · <b>{live}</b> live
               {ago && ` · updated ${ago}`}
             </>
           )}
@@ -408,7 +449,6 @@ export default function Board(props: BoardProps): JSX.Element {
             options={OWNER_OPTIONS}
             value={owner}
             onChange={(id) => setOwner(id as Owner)}
-            disabled={queueUnsupported}
           />
           <SegmentedControl
             label="Kind"
@@ -416,12 +456,11 @@ export default function Board(props: BoardProps): JSX.Element {
             value={kind}
             onChange={(id) => setKind(id as KindFilter)}
           />
-          {queueUnsupported ? (
+          {!ownershipKnown && runs.length > 0 ? (
             <p className="board-filters__note">
-              This workspace has no tracker to say which keys are yours, so every run is shown.
+              This workspace's account names nobody, so no run can be called yours and every run is
+              shown.
             </p>
-          ) : mineError ? (
-            <p className="board-filters__note">Could not load your tickets. {mineError}</p>
           ) : null}
         </div>
       )}
@@ -429,14 +468,19 @@ export default function Board(props: BoardProps): JSX.Element {
       <div className="board-lanes">
         {columns.map((column) => {
           const cards = column.cards.filter(keep)
+          const queue = column.id === 'queue'
           const emptyText =
-            column.id === 'queue' && queueUnsupported
+            queue && queueUnsupported
               ? 'This workspace has no tracker; start triage by key.'
-              : filtering
-                ? filter
-                  ? `Nothing here matches “${filter}”.`
-                  : 'Nothing here matches the filters.'
-                : column.empty
+              : queue && queueError
+                ? `Could not load your queue. ${queueError}`
+                : queue && queued === null
+                  ? 'Reading the tickets assigned to you…'
+                  : filtering
+                    ? filter
+                      ? `Nothing here matches “${filter}”.`
+                      : 'Nothing here matches the filters.'
+                    : column.empty
 
           return (
             <KanbanColumn
@@ -444,6 +488,7 @@ export default function Board(props: BoardProps): JSX.Element {
               lane={column.id}
               title={column.name}
               count={cards.length}
+              note={queue && !queueUnsupported ? 'assigned to you' : undefined}
               empty={emptyText}
             >
               {cards.length === 0
@@ -460,6 +505,7 @@ export default function Board(props: BoardProps): JSX.Element {
                           status="queued"
                           title={card.title || undefined}
                           provider={provider}
+                          assignee={card.ticket.assignee || undefined}
                           href={card.ticket.url || undefined}
                         />
                         <Button

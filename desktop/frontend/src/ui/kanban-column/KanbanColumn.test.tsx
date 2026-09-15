@@ -46,6 +46,26 @@ describe('KanbanColumn', () => {
     expect(screen.getByText('0')).toBeInTheDocument()
   })
 
+  it('says after the count what narrows the lane, inside the heading', () => {
+    const { container } = render(
+      <KanbanColumn lane="queue" title="Queue" count={6} note="assigned to you" empty="Nothing." />,
+    )
+    const head = container.querySelector('.sd-lane__head') as HTMLElement
+    expect([...head.children].map((el) => el.textContent)).toEqual([
+      'Queue',
+      '6',
+      '· assigned to you',
+    ])
+    expect(head.querySelector('.sd-lane__note')).not.toBeNull()
+  })
+
+  it('draws no note for a lane that is narrowed by nothing', () => {
+    const { container } = render(
+      <KanbanColumn lane="done" title="Done" count={2} empty="Nothing resolved yet." />,
+    )
+    expect(container.querySelector('.sd-lane__note')).toBeNull()
+  })
+
   it('reads right to left with an Arabic heading', () => {
     const { container } = render(
       <div dir="rtl">

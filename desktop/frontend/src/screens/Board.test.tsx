@@ -22,10 +22,11 @@ const TICKETS = [
   ticket({ key: 'OMNI-3', title: 'Invoice total drops the VAT line', assignee: 'someone-else' }),
 ]
 
+/** Two of these five belong to somebody else, which is what Mine narrows to. */
 const RUNS = [
   run({ runId: 'r1', key: 'OMNI-1', status: 'running', provider: 'claude', updatedAt: '2026-09-10T09:05:00Z' }),
-  run({ runId: 'r2', key: 'OMNI-2', kind: 'triage', status: 'completed', provider: 'codex' }),
-  run({ runId: 'r3', key: 'OMNI-3', kind: 'fix', status: 'blocked', provider: 'claude' }),
+  run({ runId: 'r2', key: 'OMNI-2', kind: 'triage', status: 'completed', provider: 'codex', assignee: 'rana@acme.com', mine: false }),
+  run({ runId: 'r3', key: 'OMNI-3', kind: 'fix', status: 'blocked', provider: 'claude', assignee: 'someone-else', mine: false }),
   run({ runId: 'r4', key: 'OMNI-4', kind: 'rca', status: 'completed', provider: 'copilot' }),
   run({ runId: 'r5', key: 'OMNI-5', status: 'failed', provider: 'qwen' }),
 ]
@@ -52,7 +53,15 @@ function lane(container: HTMLElement, id: string): HTMLElement {
   return el as HTMLElement
 }
 
-function mount(over: Partial<BoardProps> = {}, transport: FakeTransport = createFakeTransport()) {
+/**
+ * The Queue lane is the tracker's answer to `assignee: me`, so a test that
+ * wants cards in it seeds the transport, not the `tickets` prop. The default
+ * seed is the three tickets above, of which the fake calls two the reader's.
+ */
+function mount(
+  over: Partial<BoardProps> = {},
+  transport: FakeTransport = createFakeTransport({ tickets: TICKETS }),
+) {
   const onOpenRun = vi.fn()
   const onTriage = vi.fn()
   const view = render(
@@ -74,14 +83,15 @@ function mount(over: Partial<BoardProps> = {}, transport: FakeTransport = create
 }
 
 describe('Board', () => {
-  it('lays the six lanes out with their counts and sorts each card into its lane', () => {
+  it('lays the six lanes out with their counts and sorts each card into its lane', async () => {
     const { container } = mount()
 
+    await screen.findByRole('region', { name: 'Queue (1)' })
     for (const name of ['Queue (1)', 'Gathering (1)', 'Blocked (1)', 'Triaged (1)', 'Done (1)', 'Failed (1)']) {
       expect(screen.getByRole('region', { name })).toBeInTheDocument()
     }
     // A key with a run leaves the queue: OMNI-1 and OMNI-3 are runs, OMNI-9 waits.
-    expect(within(lane(container, 'queue')).getByRole('button', { name: /OMNI-9/ })).toBeInTheDocument()
+    expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
     expect(within(lane(container, 'queue')).queryByText('OMNI-1')).toBeNull()
     expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
@@ -93,10 +103,13 @@ describe('Board', () => {
     expect(within(lane(container, 'triaged')).getByText('completed')).toBeInTheDocument()
   })
 
-  it('draws the queued ticket as a link to the tracker, with Triage a button of its own', () => {
+  it('draws the queued ticket as a link to the tracker, with Triage a button of its own', async () => {
     const { container, onTriage } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
     const queue = within(lane(container, 'queue'))
-    const card = queue.getByRole('link', { name: 'OMNI-9: Statement export times out, queued' })
+    const card = queue.getByRole('link', {
+      name: 'OMNI-9: Statement export times out, queued, assigned to sri',
+    })
     expect(card).toHaveAttribute('href', 'https://acme.atlassian.net/browse/OMNI-9')
     expect(within(card).getByText('queued')).toBeInTheDocument()
     expect(within(card).getByText('triage')).toBeInTheDocument()
@@ -108,8 +121,14 @@ describe('Board', () => {
     expect(onTriage).toHaveBeenCalledWith(['OMNI-9'])
   })
 
-  it('draws a queued ticket with no tracker page as a plain card, still with its Triage button', () => {
-    const { container, onTriage } = mount({ tickets: [ticket({ key: 'OMNI-8', title: 'No URL', url: '' })] })
+  it('draws a queued ticket with no tracker page as a plain card, still with its Triage button', async () => {
+    const { container, onTriage } = mount(
+      {},
+      createFakeTransport({
+        tickets: [ticket({ key: 'OMNI-8', title: 'No URL', url: '', assignee: 'sri' })],
+      }),
+    )
+    await screen.findByRole('region', { name: 'Queue (1)' })
     const queue = within(lane(container, 'queue'))
     expect(queue.queryByRole('link')).toBeNull()
     expect(queue.getAllByRole('button')).toHaveLength(1)
@@ -174,19 +193,25 @@ describe('Board', () => {
   })
 
   it('says in prose what each empty lane means, and what to do without a tracker', () => {
-    const { container } = mount({ runs: [], tickets: [], queueUnsupported: true })
+    const { container } = mount(
+      { runs: [], tickets: [], queueUnsupported: true },
+      createFakeTransport(),
+    )
     expect(status(container)).toBe('0 runs · 0 live')
+    // No tracker, no "assigned to you": the lane is narrowed by nothing.
+    expect(lane(container, 'queue').querySelector('.sd-lane__note')).toBeNull()
     expect(within(lane(container, 'queue')).getByText('This workspace has no tracker; start triage by key.')).toBeInTheDocument()
     expect(within(lane(container, 'gathering')).getByText('No run is gathering evidence right now.')).toBeInTheDocument()
     expect(within(lane(container, 'failed')).getByText('Nothing has failed.')).toBeInTheDocument()
   })
 
-  it('filters by key, title or provider from the well', () => {
+  it('filters by key, title or provider from the well', async () => {
     const { container } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
     const well = screen.getByRole('searchbox', { name: 'Filter cards' })
 
     fireEvent.change(well, { target: { value: 'statement' } })
-    expect(within(lane(container, 'queue')).getByRole('button', { name: /OMNI-9/ })).toBeInTheDocument()
+    expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
     expect(within(lane(container, 'gathering')).queryByRole('button', { name: /OMNI-1/ })).toBeNull()
     expect(within(lane(container, 'gathering')).getByText('Nothing here matches “statement”.')).toBeInTheDocument()
 
@@ -203,8 +228,9 @@ describe('Board', () => {
     expect(well).toHaveValue('')
   })
 
-  it('opens the quick filters from either control and narrows the lanes by kind', () => {
+  it('opens the quick filters from either control and narrows the lanes by kind', async () => {
     const { container } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
     const filters = screen.getByRole('button', { name: 'Filters' })
     expect(filters).toHaveAttribute('aria-expanded', 'false')
     expect(screen.queryByRole('radiogroup', { name: 'Kind' })).toBeNull()
@@ -214,52 +240,124 @@ describe('Board', () => {
     fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Kind' })).getByRole('radio', { name: 'Fix' }))
 
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
-    expect(within(lane(container, 'queue')).queryByRole('button', { name: /OMNI-9/ })).toBeNull()
+    expect(within(lane(container, 'queue')).queryByRole('link', { name: /OMNI-9/ })).toBeNull()
     expect(within(lane(container, 'queue')).getByText('Nothing here matches the filters.')).toBeInTheDocument()
 
     // A queued ticket is what a triage would be, so it counts as one.
     fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Kind' })).getByRole('radio', { name: 'Triage' }))
-    expect(within(lane(container, 'queue')).getByRole('button', { name: /OMNI-9/ })).toBeInTheDocument()
+    expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
     expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
 
     fireEvent.click(filters)
     expect(screen.queryByRole('radiogroup', { name: 'Kind' })).toBeNull()
   })
 
-  it('asks the tracker which keys are the reader’s own for Mine, and keeps only those', async () => {
-    const transport = createFakeTransport()
+  it('builds the Queue lane from the reader’s own untouched keys, and says so in the head', async () => {
     const asked: unknown[] = []
-    transport.queue = async (_ws, f) => {
+    const transport = createFakeTransport({ tickets: TICKETS })
+    const answer = transport.queue
+    transport.queue = async (ws, f) => {
       asked.push(f)
-      return TICKETS.filter((t) => t.assignee === 'sri')
+      return answer(ws, f)
     }
     const { container } = mount({}, transport)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+    await screen.findByRole('region', { name: 'Queue (1)' })
+    expect(asked).toEqual([{ assignee: 'me' }])
 
-    await waitFor(() => expect(asked).toEqual([{ assignee: 'me' }]))
-    await waitFor(() =>
-      expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull(),
+    const queue = within(lane(container, 'queue'))
+    // OMNI-9 is the reader's and untouched; OMNI-1 is theirs but has a run,
+    // and OMNI-3 is somebody else's, so the tracker never offered it.
+    expect(queue.getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
+    expect(queue.queryByText('OMNI-1')).toBeNull()
+    expect(queue.queryByText('OMNI-3')).toBeNull()
+    expect(lane(container, 'queue').querySelector('.sd-lane__note')).toHaveTextContent(
+      '· assigned to you',
     )
-    expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
-    expect(within(lane(container, 'queue')).getByRole('button', { name: /OMNI-9/ })).toBeInTheDocument()
-    // OMNI-2 is nobody's in the queue, so it is not the reader's.
-    expect(within(lane(container, 'triaged')).queryByRole('button', { name: /OMNI-2/ })).toBeNull()
   })
 
-  it('keeps every card and says why when the tracker cannot answer Mine', async () => {
-    const transport = createFakeTransport()
-    transport.queue = async () => {
-      throw new Error('tracker is down')
+  it('draws the assignee’s initials on a queued ticket', async () => {
+    const { container } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
+    const avatar = lane(container, 'queue').querySelector('.sd-avatar') as HTMLElement
+    expect(avatar).toHaveTextContent('S')
+    expect(avatar).toHaveAttribute('title', 'sri')
+  })
+
+  it('says the queue could not be read, in the lane it would have filled', async () => {
+    const transport = createFakeTransport({ tickets: TICKETS })
+    transport.failQueue(new Error('tracker is down'))
+    const { container } = mount({}, transport)
+
+    expect(await screen.findByText(/Could not load your queue\. tracker is down/)).toBeInTheDocument()
+    // A tracker that cannot answer empties no lane but its own.
+    expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
+  })
+
+  it('narrows to the reader’s own runs for Mine without asking the tracker again', async () => {
+    const { container, transport } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
+    expect(transport.calls.queue).toHaveLength(1)
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+
+    expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
+    expect(within(lane(container, 'done')).getByRole('button', { name: /OMNI-4/ })).toBeInTheDocument()
+    expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
+    // OMNI-2 and OMNI-3 belong to somebody else.
+    expect(within(lane(container, 'triaged')).queryByRole('button', { name: /OMNI-2/ })).toBeNull()
+    expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
+    expect(status(container)).toMatch(/^3 of 5 runs · 1 live/)
+    expect(transport.calls.queue).toHaveLength(1)
+
+    // All puts the other two back, and the count line stops counting.
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'All' }))
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(status(container)).toMatch(/^5 runs · 1 live/)
+    expect(transport.calls.queue).toHaveLength(1)
+  })
+
+  it('keeps every run visible under Mine while the queue is still answering', async () => {
+    let release = (): void => {}
+    const transport = createFakeTransport({ tickets: TICKETS })
+    const answer = transport.queue
+    transport.queue = async (ws, f) => {
+      await new Promise<void>((resolve) => {
+        release = resolve
+      })
+      return answer(ws, f)
     }
     const { container } = mount({}, transport)
 
     fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
     fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
 
-    expect(await screen.findByText(/Could not load your tickets\. tracker is down/)).toBeInTheDocument()
+    // The runs already say whose they are, so Mine answers at once and the
+    // slow queue only holds up the lane it fills.
+    expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
+    expect(within(lane(container, 'queue')).getByText('Reading the tickets assigned to you…')).toBeInTheDocument()
+
+    release()
+    await waitFor(() =>
+      expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument(),
+    )
+  })
+
+  it('narrows nothing under Mine when the service says nothing about ownership', async () => {
+    const older = RUNS.map(({ assignee: _assignee, mine: _mine, ...rest }) => rest)
+    const { container } = mount({ runs: older })
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(screen.getByText(/names nobody, so no run can be called yours/)).toBeInTheDocument()
   })
 
   it('lists the day’s deliveries with the outcome coloured and the reason in the meta line', () => {

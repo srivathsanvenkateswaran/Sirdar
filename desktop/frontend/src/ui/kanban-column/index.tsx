@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import './KanbanColumn.css'
+import './Note.css'
 
 /** The board's columns, in the order the state machine moves a ticket through. */
 export type LaneId = 'queue' | 'gathering' | 'blocked' | 'triaged' | 'done' | 'failed'
@@ -9,6 +10,13 @@ export interface KanbanColumnProps {
   title: string
   /** Shown beside the title in the lane's hue. Zero is shown, not hidden. */
   count: number
+  /**
+   * A few words after the count saying what narrows this lane — "assigned to
+   * you" on a queue that lists only the reader's tickets. It is in the head's
+   * own sentence rather than the empty prose because it is true of the lane
+   * whether or not the lane has anything in it.
+   */
+  note?: ReactNode
   /** Prose, not an icon: what an empty column means and what to do about it. */
   empty: ReactNode
   children?: ReactNode
@@ -29,6 +37,7 @@ export default function KanbanColumn({
   lane,
   title,
   count,
+  note,
   empty,
   children,
 }: KanbanColumnProps): JSX.Element {
@@ -39,6 +48,7 @@ export default function KanbanColumn({
       <h2 className="sd-lane__head">
         <span>{title}</span>
         <span className="sd-lane__count">{count}</span>
+        {note ? <span className="sd-lane__note">· {note}</span> : null}
       </h2>
       <div className="sd-lane__body">
         {isEmpty ? <p className="sd-lane__empty">{empty}</p> : children}
