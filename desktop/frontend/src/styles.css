@@ -150,3 +150,11 @@ kbd {
   font-size: var(--sd-text-body);
   color: var(--sd-ink-2);
 }
+
+/* The line under a field or a form that says what went wrong. Settings pages
+   and the fix panel both draw it, so it lives with the app's sheet. */
+.form-error {
+  margin-block-start: 6px;
+  color: var(--sd-st-failed);
+  font-size: var(--sd-text-meta);
+}

@@ -1,30 +1,14 @@
+import { STATE_WORDS, type SdStatus } from '../status-badge'
 import './StateGlyph.css'
 
 /**
- * The states a glyph exists for: the CLI's run states, plus `done`, which the
- * board uses for a key whose RCA is written.
+ * The states a glyph exists for: the same set the status badge names, so
+ * the two never disagree about what a state is called.
  */
-export type GlyphState =
-  | 'queued'
-  | 'preparing'
-  | 'running'
-  | 'blocked'
-  | 'completed'
-  | 'done'
-  | 'failed'
-  | 'over_budget'
+export type GlyphState = SdStatus
 
-/** The word each state is shown by, lowercase because it sits inside a sentence-sized card footer. */
-export const STATE_WORDS: Record<GlyphState, string> = {
-  queued: 'queued',
-  preparing: 'preparing',
-  running: 'running',
-  blocked: 'blocked',
-  completed: 'completed',
-  done: 'done',
-  failed: 'failed',
-  over_budget: 'over budget',
-}
+/** The word each state is shown by; the status badge's map, re-exported so a card footer and a pill read alike. */
+export { STATE_WORDS }
 
 /** Which of the five drawings a state gets. */
 function glyphOf(state: GlyphState): 'queued' | 'running' | 'blocked' | 'check' | 'failed' {
@@ -46,7 +30,7 @@ function glyphOf(state: GlyphState): 'queued' | 'running' | 'blocked' | 'check' 
 
 export interface StateGlyphProps {
   state: GlyphState
-  /** Overrides the word. Only for a state the CLI reports under another name. */
+  /** A translation of the word, and nothing else; another English word is a state missing from `STATE_WORDS`. */
   word?: string
   /**
    * Already formatted, e.g. `04:12`. Shown in the ledger face beside the word.

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { Transport } from '../../api/types'
+import { reasonOf } from '../../lib/format'
 
 interface Section {
   title: string
@@ -53,7 +54,7 @@ export default function PromptView({
         if (!cancelled) setPrompt(text)
       })
       .catch((e: unknown) => {
-        if (!cancelled) setError(e instanceof Error ? e.message : String(e))
+        if (!cancelled) setError(reasonOf(e))
       })
     return () => {
       cancelled = true

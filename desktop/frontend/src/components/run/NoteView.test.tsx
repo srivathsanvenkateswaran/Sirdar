@@ -56,6 +56,13 @@ function fakeTransport(text: string): Transport {
  * by a test id: the component carries the reader's direction on its own
  * article element, which is the thing every case here is about.
  */
+/** The transport refusing the note, with the reason it gives. */
+function failingTransport(err: Error): Transport {
+  const t = fakeTransport('')
+  t.note = () => Promise.reject(err)
+  return t
+}
+
 function pane(): HTMLElement {
   const el = document.querySelector('.sd-note')
   if (!el) throw new Error('the note pane is not rendered')
@@ -125,5 +132,19 @@ describe('NoteView', () => {
     const md = await screen.findByTestId('note-markdown')
     expect(md.textContent).toContain(ARABIC)
     expect(md.textContent).not.toContain('<div')
+  })
+
+  it('says a missing note is not written yet', async () => {
+    render(
+      <NoteView transport={failingTransport(new Error('not_found: no such note'))} workspaceId="ws1" runId="r1" kinds={['triage']} />,
+    )
+    expect(await screen.findByText('No note yet. It is written when the run completes.')).toBeInTheDocument()
+  })
+
+  it('shows the reason when the note cannot be read for any other cause', async () => {
+    render(
+      <NoteView transport={failingTransport(new Error('internal: notes dir is not readable'))} workspaceId="ws1" runId="r1" kinds={['triage']} />,
+    )
+    expect(await screen.findByText('internal: notes dir is not readable')).toBeInTheDocument()
   })
 })

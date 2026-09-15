@@ -342,17 +342,41 @@ describe('Session', () => {
       await waitFor(() => expect(banner).toHaveTextContent('2 tests in 1.2s, 2 files changed'))
     })
 
-    it('reports the note once it has landed, with its path', async () => {
+    it('reports the note once it has landed, by its name in the notes dir', async () => {
       const test = toolEvent('go test ./...')
       const f = fake({
         detail: { ...RUN, status: 'completed' },
         events: [test, resultEvent(test, GO_TEST_OK), { t: '2026-09-10T10:03:00Z', kind: 'final', payload: {} }],
       })
-      renderSession(f)
+      renderSession(f, { notesDir: '/work/notes' })
 
       const banner = await screen.findByRole('status')
       expect(banner).toHaveTextContent('Note filed')
-      expect(banner).toHaveTextContent('/work/notes/OMNI-2510-triage.md')
+      expect(banner).toHaveTextContent('OMNI-2510-triage.md')
+      expect(banner).not.toHaveTextContent('/work/notes/')
+    })
+
+    it('says a fix run committed, and on which branch', async () => {
+      const f = fake({
+        detail: FIX,
+        events: [{ t: '2026-09-10T10:03:00Z', kind: 'final', payload: { text: 'Committed the fix.' } }],
+      })
+      renderSession(f)
+      const banner = await screen.findByRole('status')
+      expect(banner).toHaveTextContent('Fix committed')
+      expect(banner).toHaveTextContent('sirdar/OMNI-2510')
+      expect(banner).not.toHaveTextContent('Note filed')
+    })
+
+    it('says a fix run finished when it recorded no commit', async () => {
+      const f = fake({
+        detail: { ...FIX, fix: { branch: 'sirdar/OMNI-2510', base: 'main' } },
+        events: [{ t: '2026-09-10T10:03:00Z', kind: 'final', payload: { text: 'Nothing to change.' } }],
+      })
+      renderSession(f)
+      const banner = await screen.findByRole('status')
+      expect(banner).toHaveTextContent('Run finished')
+      expect(banner).not.toHaveTextContent('Fix committed')
     })
 
     it('says when the tests failed', async () => {
@@ -489,6 +513,31 @@ describe('Session', () => {
   })
 
   describe('the other tabs', () => {
+    it('is one tab stop, moved by the arrows, and names its panel', async () => {
+      const f = fake({ detail: FIX })
+      renderSession(f)
+      const changes = await screen.findByRole('tab', { name: /Changes/ })
+      const note = screen.getByRole('tab', { name: 'Note' })
+      const panel = screen.getByRole('tabpanel')
+      expect(changes).toHaveAttribute('tabindex', '0')
+      expect(note).toHaveAttribute('tabindex', '-1')
+      expect(changes).toHaveAttribute('aria-controls', panel.id)
+      expect(panel).toHaveAttribute('aria-labelledby', changes.id)
+
+      changes.focus()
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+      expect(note).toHaveAttribute('aria-selected', 'true')
+      expect(note).toHaveAttribute('tabindex', '0')
+      expect(document.activeElement).toBe(note)
+      expect(panel).toHaveAttribute('aria-labelledby', note.id)
+
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'End' })
+      expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
+      fireEvent.keyDown(screen.getByRole('tablist'), { key: 'ArrowRight' })
+      expect(changes).toHaveAttribute('aria-selected', 'true')
+    })
+
+
     it('renders the note markdown with its frontmatter as a table', async () => {
       const note = ['---', 'key: OMNI-2510', 'service: payments-api', '---', '', '## Summary', '', 'The 500 comes from an unchecked nil in the ledger handler.', ''].join('\n')
       const f = fake({ note })
@@ -652,7 +701,7 @@ describe('Session', () => {
    * delta. They fold into one row per burst so the tool calls between them
    * stay findable, and open on demand.
    */
-  it('folds consecutive stream events into one row, and opens it', async () => {
+  it('keeps the raw stream events out of sight until Show everything, then folds them into one row that opens', async () => {
     const f = fake({
       events: [
         toolEvent('rg -n "nil tenant"'),
@@ -664,6 +713,12 @@ describe('Session', () => {
     })
     renderSession(f)
     await screen.findByText('rg -n "nil tenant"')
+    expect(screen.queryByRole('button', { name: /4 stream events/ })).toBeNull()
+    expect(screen.queryByText('delta one')).toBeNull()
+
+    const everything = screen.getByRole('switch', { name: 'Show everything' })
+    expect(everything).toHaveAttribute('aria-checked', 'false')
+    fireEvent.click(everything)
 
     const fold = screen.getByRole('button', { name: /4 stream events/ })
     expect(fold).toHaveAttribute('aria-expanded', 'false')
@@ -672,6 +727,33 @@ describe('Session', () => {
     fireEvent.click(fold)
     expect(screen.getByText('delta one')).toBeInTheDocument()
     expect(screen.getByText('delta four')).toBeInTheDocument()
+  })
+
+  it('keeps the per-turn usage ticks out of the transcript until Show everything', async () => {
+    const f = fake({
+      events: [
+        toolEvent('go vet ./...'),
+        { t: '2026-09-10T10:00:06Z', kind: 'usage', payload: { turns: 2, costUsd: 0.05 } },
+      ],
+    })
+    renderSession(f)
+    await screen.findByText('go vet ./...')
+    const stream = screen.getByTestId('event-stream')
+    expect(stream).toHaveAttribute('role', 'log')
+    expect(stream).toHaveAttribute('aria-live', 'polite')
+    expect(within(stream).queryByText(/\$0\.05/)).toBeNull()
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Show everything' }))
+    expect(within(stream).getByText(/\$0\.05/)).toBeInTheDocument()
+  })
+
+  it('tells a screen reader the state as it moves', async () => {
+    const f = fake()
+    renderSession(f)
+    await screen.findByRole('heading', { name: RUN.key })
+    expect(screen.getByText('Run running')).toHaveAttribute('aria-live', 'polite')
+    f.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, status: 'completed' } })
+    await waitFor(() => expect(screen.getByText('Run completed')).toBeInTheDocument())
   })
 
   /*

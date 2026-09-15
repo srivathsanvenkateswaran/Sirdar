@@ -503,7 +503,7 @@ describe('Eval last report', () => {
     const cells = within(row).getAllByRole('cell')
     expect(cells.map((c) => c.textContent)).toEqual([
       'OMNI-2510',
-      'Done',
+      'done',
       'matched',
       '1/3 33%',
       'partial',
@@ -521,7 +521,7 @@ describe('Eval last report', () => {
     expect(screen.getByText('triage: failed — provider exited 1')).toBeInTheDocument()
     const table = screen.getByRole('table', { name: 'Each key against the change a human merged' })
     const failed = within(table).getByRole('row', { name: /OMNI-2511/ })
-    expect(within(failed).getByText('Failed')).toBeInTheDocument()
+    expect(within(failed).getByText('failed')).toBeInTheDocument()
   })
 
   it('draws a plain report with the assertion columns when it is the newest', async () => {
@@ -532,7 +532,7 @@ describe('Eval last report', () => {
     const cells = within(row).getAllByRole('cell')
     expect(cells.map((c) => c.textContent)).toEqual([
       'OMNI-2510',
-      'Done',
+      'done',
       '3/3',
       '4/5 80%',
       '2/2 100%',

@@ -1,5 +1,5 @@
 /*
- * Status badge. Six hues, each with its word. The fill is a tint of the hue so
+ * Status badge. Seven hues, each with its word. The fill is a tint of the hue so
  * the badge reads at a glance; the text is the hue at full strength, which is
  * what clears 4.5:1.
  */
@@ -31,6 +31,7 @@
 .sd-badge[data-status='running'] { --sd-badge-hue: var(--sd-st-live); }
 .sd-badge[data-status='blocked'] { --sd-badge-hue: var(--sd-st-blocked); }
 .sd-badge[data-status='completed'] { --sd-badge-hue: var(--sd-st-triaged); }
+.sd-badge[data-status='done'] { --sd-badge-hue: var(--sd-st-done); }
 .sd-badge[data-status='failed'],
 .sd-badge[data-status='over_budget'] { --sd-badge-hue: var(--sd-st-failed); }
 

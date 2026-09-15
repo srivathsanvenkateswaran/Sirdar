@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
 import { run } from '../../store/fakeTransport'
-import { STATUS_WORDS } from '../../ui/status-badge'
+import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
 import Sidebar, { recentRuns } from './Sidebar'
 
@@ -165,8 +165,8 @@ describe('recent sessions', () => {
     const recent = screen.getByRole('navigation', { name: 'Recent sessions' })
     const rows = within(recent).getAllByRole('button')
     expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
-      `OMNI-1 triage, ${STATUS_WORDS.running.toLowerCase()}`,
-      `OMNI-2 fix, ${STATUS_WORDS.blocked.toLowerCase()}`,
+      `OMNI-1 triage, ${STATE_WORDS.running}`,
+      `OMNI-2 fix, ${STATE_WORDS.blocked}`,
       'OMNI-3 rca',
       'OMNI-4 triage',
     ])

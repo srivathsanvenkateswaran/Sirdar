@@ -1,6 +1,7 @@
 import KindChip from '../kind-chip'
 import ProviderMark from '../provider-mark'
-import StateGlyph, { STATE_WORDS, type GlyphState } from '../state-glyph'
+import StateGlyph, { type GlyphState } from '../state-glyph'
+import { STATE_WORDS } from '../status-badge'
 import './RunCard.css'
 
 export interface RunCardProps {

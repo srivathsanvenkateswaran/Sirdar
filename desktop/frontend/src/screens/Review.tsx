@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { RunDetail as RunDetailData, RunDiff, RunEvent, Ticket, Transport } from '../api/types'
-import { elapsed, type IndexedEvent } from '../lib/events'
-import { costOrUnknown } from '../lib/format'
-import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand } from '../lib/review'
+import type { RunDiff, Ticket, Transport } from '../api/types'
+import { elapsed } from '../lib/events'
+import { costOrUnknown, reasonOf } from '../lib/format'
+import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand, rekeyAfterDrop } from '../lib/review'
+import { LIVE, useRunFeed } from '../components/run/useRunFeed'
 import Button from '../ui/button'
 import DiffView, { hunkKey, parsePatch, type DiffMode, type HunkDecision } from '../ui/diff-view'
 import KindChip from '../ui/kind-chip'
@@ -10,9 +11,6 @@ import ProviderMark, { providerName } from '../ui/provider-mark'
 import SegmentedControl from '../ui/segmented-control'
 import StatusBadge, { type SdStatus } from '../ui/status-badge'
 import './review.css'
-
-const LIVE = new Set(['preparing', 'running'])
-const TERMINAL = new Set(['completed', 'failed', 'over_budget'])
 
 /** How long Copy reads "Copied" before it says its name again. */
 const COPIED_MS = 1500
@@ -26,32 +24,6 @@ const MODES = [
 function fileWord(status: RunDiff['files'][number]['status'], reviewed: boolean): string {
   if (reviewed) return 'reviewed'
   return status === 'added' ? 'new' : status
-}
-
-/**
- * A hunk's decision survives a drop only if it still names the same hunk:
- * the hunks after the dropped one move up by one, and the dropped one is
- * gone.
- */
-function rekeyAfterDrop(
-  decisions: Record<string, HunkDecision>,
-  path: string,
-  dropped: number,
-): Record<string, HunkDecision> {
-  const next: Record<string, HunkDecision> = {}
-  for (const [key, decision] of Object.entries(decisions)) {
-    const at = key.lastIndexOf('\n')
-    const keyPath = key.slice(0, at)
-    const index = Number(key.slice(at + 1))
-    if (keyPath !== path) {
-      next[key] = decision
-    } else if (index < dropped) {
-      next[key] = decision
-    } else if (index > dropped) {
-      next[hunkKey(path, index - 1)] = decision
-    }
-  }
-  return next
 }
 
 /** The note a fix is filed against: the resolution note when there is one, the last note otherwise. */
@@ -91,9 +63,7 @@ export default function Review({
   /** Opens the session's note. */
   onOpenNote: () => void
 }): JSX.Element {
-  const [detail, setDetail] = useState<RunDetailData | null>(null)
-  const [loadError, setLoadError] = useState('')
-  const [events, setEvents] = useState<IndexedEvent[]>([])
+  const { detail, events, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const [diff, setDiff] = useState<RunDiff | null>(null)
   const [diffError, setDiffError] = useState('')
   const [diffLoading, setDiffLoading] = useState(true)
@@ -105,8 +75,6 @@ export default function Review({
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
   const [now, setNow] = useState(() => Date.now())
-  const seen = useRef<Set<number>>(new Set())
-  const wasStatus = useRef('')
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const status = detail?.status ?? ''
@@ -121,12 +89,15 @@ export default function Review({
         if (cancelled) return
         setDiff(d)
         setDiffError('')
+        // The hunks are numbered afresh in what came back, so a decision
+        // made against the old numbering would name the wrong hunk.
+        setDecisions({})
         setActivePath((path) => (path && d.files.some((f) => f.path === path) ? path : d.files[0]?.path ?? ''))
       })
       .catch((err: unknown) => {
         if (cancelled) return
         setDiff(null)
-        setDiffError(err instanceof Error ? err.message : String(err))
+        setDiffError(reasonOf(err))
       })
       .finally(() => {
         if (!cancelled) setDiffLoading(false)
@@ -136,89 +107,19 @@ export default function Review({
     }
   }, [transport, workspaceId, runId])
 
-  // Subscribe before backfilling so nothing written between the two is lost;
-  // the index dedupe absorbs whatever the two deliveries have in common.
   useEffect(() => {
-    let cancelled = false
-    seen.current = new Set()
-    wasStatus.current = ''
-    setDetail(null)
-    setLoadError('')
-    setEvents([])
-    setDecisions({})
     setDropError('')
     setDiffError('')
-
-    const append = (index: number, event: RunEvent) => {
-      if (seen.current.has(index)) return
-      seen.current.add(index)
-      setEvents((prev) => [...prev, { index, event }].sort((a, b) => a.index - b.index))
-    }
-
-    const unsubscribe = transport.subscribe((e) => {
-      if (cancelled) return
-      if (e.kind === 'run.event') {
-        if (e.runId !== runId) return
-        if (e.workspaceId && e.workspaceId !== workspaceId) return
-        append(e.index, e.event)
-        return
-      }
-      if (e.kind === 'run.updated' && e.run?.runId === runId) {
-        setDetail((prev) => (prev ? { ...prev, ...e.run } : prev))
-      }
-    })
-
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
-      })
-
-    transport
-      .events(workspaceId, runId, 0)
-      .then(({ events: backfill, next }) => {
-        if (cancelled) return
-        const first = Math.max(1, next - backfill.length + 1)
-        backfill.forEach((event, i) => append(first + i, event))
-      })
-      .catch(() => {
-        // The run request already reports an unreadable run; an empty log
-        // only means no checks to list.
-      })
-
-    const stopDiff = loadDiff()
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-      stopDiff()
-    }
-  }, [transport, workspaceId, runId, loadDiff])
+    return loadDiff()
+  }, [loadDiff])
 
   // A run opened while it was still working: the moment it ends, the change
-  // and the fix facts exist, so ask for both again.
+  // and the fix facts exist, so ask for the change again (the feed re-reads
+  // the run).
   useEffect(() => {
-    const before = wasStatus.current
-    wasStatus.current = status
-    if (!LIVE.has(before) || !TERMINAL.has(status)) return
-    let cancelled = false
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch(() => {
-        // The header already carries the finished status from the event.
-      })
-    const stopDiff = loadDiff()
-    return () => {
-      cancelled = true
-      stopDiff()
-    }
-  }, [status, transport, workspaceId, runId, loadDiff])
+    if (finished === 0) return
+    return loadDiff()
+  }, [finished, loadDiff])
 
   useEffect(() => {
     if (!live) return
@@ -273,7 +174,7 @@ export default function Review({
           current && next.files.some((f) => f.path === current) ? current : next.files[0]?.path ?? '',
         )
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
+        const message = reasonOf(err)
         setDropError(message)
         // A stale etag means the change moved under this screen; read it
         // again so the next drop names the hunk that is really there.

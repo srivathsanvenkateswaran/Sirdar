@@ -176,9 +176,9 @@ describe('Register', () => {
     // then the two register-only rows on the 10th and 9th; the failed run's
     // reason is a row of its own.
     expect(keys).toEqual(['OMNI-4', 'OMNI-1', 'OMNI-3', 'the provider refused the prompt', 'OMNI-2', 'OMNI-2'])
-    expect(within(t).getByText('Running')).toBeInTheDocument()
-    expect(within(t).getByText('Failed')).toBeInTheDocument()
-    expect(within(t).getAllByText('Completed')).toHaveLength(3)
+    expect(within(t).getByText('running')).toBeInTheDocument()
+    expect(within(t).getByText('failed')).toBeInTheDocument()
+    expect(within(t).getAllByText('completed')).toHaveLength(3)
   })
 
   it('puts a failed run’s reason under its row, and nothing under a clean one', async () => {
@@ -310,7 +310,7 @@ describe('Register', () => {
   it('moves a row when its run changes state, without a second read', async () => {
     const { transport } = mount()
     const t = await table()
-    expect(within(t).getByText('Running')).toBeInTheDocument()
+    expect(within(t).getByText('running')).toBeInTheDocument()
     const reads = transport.calls.runs.length
 
     act(() => {
@@ -329,7 +329,7 @@ describe('Register', () => {
       })
     })
 
-    await waitFor(() => expect(within(t).queryByText('Running')).toBeNull())
+    await waitFor(() => expect(within(t).queryByText('running')).toBeNull())
     expect(within(t).getByText('over budget after 3 turns')).toBeInTheDocument()
     expect(transport.calls.runs).toHaveLength(reads)
   })
@@ -354,7 +354,7 @@ describe('Register', () => {
         run: run({ runId: 'run-4', key: 'OMNI-4', status: 'failed' }),
       })
     })
-    expect(within(t).getByText('Running')).toBeInTheDocument()
+    expect(within(t).getByText('running')).toBeInTheDocument()
   })
 
   it('opens the run when its key is pressed', async () => {

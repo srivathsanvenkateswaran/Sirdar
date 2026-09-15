@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import type { Transport } from '../../api/types'
 import { promptAttachments } from '../../lib/events'
 import { sections } from './PromptView'
+import { reasonOf } from '../../lib/format'
 
 /**
  * What the agent was handed: the bundle directory, the attachments, and the
@@ -39,7 +40,7 @@ export default function BundleView({
       .catch((e: unknown) => {
         if (cancelled) return
         setPrompt('')
-        setError(e instanceof Error ? e.message : String(e))
+        setError(reasonOf(e))
       })
     return () => {
       cancelled = true

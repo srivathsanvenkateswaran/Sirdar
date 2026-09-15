@@ -2,14 +2,23 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import ReactMarkdown from 'react-markdown'
 import type { NoteKind, Transport } from '../../api/types'
 import { splitFrontmatter } from '../../lib/events'
+import { reasonOf } from '../../lib/format'
 import { noteDir, stripRTLBlocks, subscribePreferRTL } from '../../lib/rtl'
 import NotePane from '../../ui/note-pane'
-
-
 
 interface Note {
   kind: NoteKind
   text: string
+}
+
+/**
+ * A note the run has not written is answered with a not-found, and for an
+ * RCA run asking for both of its notes, one of the two missing is the
+ * ordinary case. Anything else the service says is a reason the reader
+ * should see, not a note that does not exist yet.
+ */
+function isMissing(err: unknown): boolean {
+  return /^not_found:|^404\b|\bnot found\b|no such/i.test(reasonOf(err))
 }
 
 /**
@@ -48,7 +57,6 @@ export default function NoteView({
   const wanted = kinds.join(',')
   const dir = useSyncExternalStore(subscribePreferRTL, noteDir, () => 'auto' as const)
 
-
   useEffect(() => {
     let cancelled = false
     setNotes(null)
@@ -57,16 +65,18 @@ export default function NoteView({
       wanted.split(',').map(async (kind) => {
         try {
           const text = await transport.note(workspaceId, runId, kind as NoteKind)
-          return { kind: kind as NoteKind, text }
-        } catch {
-          return { kind: kind as NoteKind, text: '' }
+          return { kind: kind as NoteKind, text, failed: '' }
+        } catch (err: unknown) {
+          return { kind: kind as NoteKind, text: '', failed: isMissing(err) ? '' : reasonOf(err) }
         }
       }),
     ).then((all) => {
       if (cancelled) return
-      const found = all.filter((n) => n.text.trim() !== '')
+      const found = all.filter((n) => n.text.trim() !== '').map(({ kind, text }) => ({ kind, text }))
       setNotes(found)
-      if (found.length === 0) setError('No note yet. It is written when the run completes.')
+      if (found.length > 0) return
+      const failed = all.find((n) => n.failed !== '')
+      setError(failed ? failed.failed : 'No note yet. It is written when the run completes.')
     })
     return () => {
       cancelled = true

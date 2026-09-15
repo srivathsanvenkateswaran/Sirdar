@@ -5,7 +5,7 @@ import type { Screen } from '../../store/appStore'
 import Button from '../../ui/button'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
 import SidebarNavItem from '../../ui/sidebar-nav-item'
-import { STATUS_WORDS } from '../../ui/status-badge'
+import { stateWord } from '../../ui/status-badge'
 import QuotaMeter from '../QuotaMeter'
 import {
   BoardIcon,
@@ -110,7 +110,7 @@ function RecentSessions({
       {recent.map((run) => {
         const live = run.status === 'preparing' || run.status === 'running'
         const blocked = run.status === 'blocked'
-        const word = live || blocked ? `, ${STATUS_WORDS[run.status].toLowerCase()}` : ''
+        const word = live || blocked ? `, ${stateWord(run.status)}` : ''
         return (
           <button
             key={run.runId}

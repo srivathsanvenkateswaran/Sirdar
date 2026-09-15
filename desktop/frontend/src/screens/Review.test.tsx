@@ -90,7 +90,7 @@ describe('the Change review screen', () => {
     renderReview(fake())
     expect(await screen.findByRole('heading', { name: 'OMNI-1' })).toBeInTheDocument()
     expect(screen.getByText('fix')).toBeInTheDocument()
-    expect(screen.getByText('Completed')).toBeInTheDocument()
+    expect(screen.getByText('completed')).toBeInTheDocument()
     expect(screen.getByText('Statement export times out')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Claude' })).toBeInTheDocument()
     expect(screen.getByText('31')).toBeInTheDocument()
@@ -245,7 +245,7 @@ describe('the Change review screen', () => {
   it('follows the run live: the status moves and the checks arrive', async () => {
     const t = fake({ detail: { status: 'running', fix: undefined }, events: [] })
     renderReview(t)
-    expect(await screen.findByText('Running')).toBeInTheDocument()
+    expect(await screen.findByText('running')).toBeInTheDocument()
     expect(screen.getByRole('navigation', { name: 'Files' })).toHaveTextContent('None yet.')
     expect(screen.getByText(/still working/)).toBeInTheDocument()
 
@@ -266,7 +266,7 @@ describe('the Change review screen', () => {
     act(() => {
       t.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, status: 'completed' } })
     })
-    expect(await screen.findByText('Completed')).toBeInTheDocument()
+    expect(await screen.findByText('completed')).toBeInTheDocument()
     // The run ended: the change is asked for again.
     await waitFor(() => expect(t.calls.runDiff.length).toBeGreaterThan(before))
   })

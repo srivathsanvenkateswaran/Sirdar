@@ -184,12 +184,13 @@ describe('the asset library', () => {
 
     it('shows every run state as its own badge', () => {
       for (const word of [
-        'Queued',
-        'Preparing',
-        'Running',
-        'Needs input',
-        'Completed',
-        'Over budget',
+        'queued',
+        'preparing',
+        'running',
+        'blocked',
+        'completed',
+        'done',
+        'over budget',
       ])
         expect(within(frame()).getAllByText(word).length).toBeGreaterThan(0)
     })

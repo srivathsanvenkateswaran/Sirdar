@@ -106,7 +106,7 @@ function asStatus(state: string): SdStatus {
 /** The state word. A completed replay is done; the rest are the library's. */
 function StateCell({ state }: { state: string }): JSX.Element {
   const status = asStatus(state)
-  return <StatusBadge status={status}>{status === 'completed' ? 'Done' : undefined}</StatusBadge>
+  return <StatusBadge status={status === 'completed' ? 'done' : status} />
 }
 
 /**

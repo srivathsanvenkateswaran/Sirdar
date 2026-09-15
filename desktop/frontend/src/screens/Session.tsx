@@ -1,29 +1,31 @@
 import {
   useCallback,
   useEffect,
+  useId,
   useMemo,
-  useRef,
   useState,
   useSyncExternalStore,
   type JSX,
+  type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import type { FixStart, NoteKind, RunDetail, RunDiff, Transport } from '../api/types'
-import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
-import { costOrUnknown } from '../lib/format'
-import { checksFromEvents, describeTests, latestStep } from '../lib/review'
+import type { FixStart, NoteKind, RunDiff, Transport } from '../api/types'
+import { askedQuestion, elapsed } from '../lib/events'
+import { costOrUnknown, reasonOf } from '../lib/format'
+import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import BundleView from '../components/run/BundleView'
-import ChangesPane, { reasonOf } from '../components/run/ChangesPane'
+import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../components/run/Composer'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
 import ToolsPane, { toolCount } from '../components/run/ToolsPane'
+import { LIVE, TERMINAL, useRunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
 import ProviderMark from '../ui/provider-mark'
-import StatusBadge, { type SdStatus } from '../ui/status-badge'
+import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
 /**
@@ -41,34 +43,11 @@ function useRunJob(runId: string): string | undefined {
 
 type Tab = 'changes' | 'note' | 'bundle' | 'tools'
 
-const LIVE = new Set(['preparing', 'running'])
-
-/**
- * The states a run does not come back from. `blocked` is not one of them: it
- * is waiting for an answer and resumes into `running`, so Cancel stays on
- * offer there and the artefacts are not asked for again.
- */
-const TERMINAL = new Set(['completed', 'failed', 'over_budget'])
-
-/** The state's word on this screen, in the mocks' vocabulary. */
-export function stateWord(status: string): string {
-  switch (status) {
-    case 'preparing':
-    case 'queued':
-      return 'queued'
-    case 'running':
-      return 'running'
-    case 'blocked':
-      return 'blocked · waiting on you'
-    case 'completed':
-      return 'completed'
-    case 'failed':
-      return 'failed'
-    case 'over_budget':
-      return 'over budget'
-    default:
-      return status
-  }
+/** The reading direction the tabs are laid out in, from the nearest `dir`. */
+function directionOf(node: HTMLElement | null): 'ltr' | 'rtl' {
+  const dir = node?.closest('[dir]')?.getAttribute('dir')
+  if (dir === 'rtl' || dir === 'ltr') return dir
+  return typeof document !== 'undefined' && document.dir === 'rtl' ? 'rtl' : 'ltr'
 }
 
 /** Keys typed into a field belong to that field, not to the window. */
@@ -94,16 +73,20 @@ export default function Session(props: {
   runId: string
   /** The ticket's title, when the tracker's queue lists it. */
   title?: string
+  /** The workspace's notes directory, so a filed note is named as the vault names it. */
+  notesDir?: string
   onBack: () => void
   /** Opens the change review for this run. */
   onOpenReview: () => void
   /** Reruns the fix with the deviation accepted; the shell owns the job. */
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, runId, title, onBack, onOpenReview, onStartFix } = props
-  const [detail, setDetail] = useState<RunDetail | null>(null)
-  const [loadError, setLoadError] = useState('')
-  const [events, setEvents] = useState<IndexedEvent[]>([])
+  const { transport, workspaceId, runId, title, notesDir, onBack, onOpenReview, onStartFix } = props
+  const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(
+    transport,
+    workspaceId,
+    runId,
+  )
   const [tab, setTab] = useState<Tab | null>(null)
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
@@ -113,112 +96,20 @@ export default function Session(props: {
   const [sent, setSent] = useState(0)
   const [changed, setChanged] = useState<number | null>(null)
   const [now, setNow] = useState(() => Date.now())
-  /** Bumped when the run finishes, to re-ask for artefacts written at the end. */
-  const [artefacts, setArtefacts] = useState(0)
-  const seen = useRef<Set<number>>(new Set())
-  /** The status of the previous render, for spotting the run finishing. */
-  const wasStatus = useRef('')
   const jobId = useRunJob(runId)
+  const tabsId = useId()
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
   const terminal = TERMINAL.has(status)
 
-  // Subscribe before backfilling so nothing written between the two is lost;
-  // the index dedupe absorbs whatever the two deliveries have in common.
+  // What this screen holds about a run is about that run alone.
   useEffect(() => {
-    let cancelled = false
-    seen.current = new Set()
-    wasStatus.current = ''
-    setDetail(null)
-    setEvents([])
-    setLoadError('')
     setActionError('')
     setSteerRefusal('')
     setTab(null)
     setChanged(null)
-
-    const append = (index: number, event: IndexedEvent['event']) => {
-      if (seen.current.has(index)) return
-      seen.current.add(index)
-      setEvents((prev) => [...prev, { index, event }].sort((a, b) => a.index - b.index))
-    }
-
-    const unsubscribe = transport.subscribe((e) => {
-      if (cancelled) return
-      if (e.kind === 'run.event') {
-        if (e.runId !== runId) return
-        if (e.workspaceId && e.workspaceId !== workspaceId) return
-        append(e.index, e.event)
-        return
-      }
-      if (e.kind === 'run.updated' && e.run?.runId === runId) {
-        setDetail((prev) => (prev ? { ...prev, ...e.run } : prev))
-      }
-    })
-
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setLoadError(err instanceof Error ? err.message : String(err))
-      })
-
-    transport
-      .events(workspaceId, runId, 0)
-      .then(({ events: backfill, next }) => {
-        if (cancelled) return
-        // The watcher and Service.Events both number events from 1, and
-        // `next` is the index of the last line in this page. Numbering the
-        // backfill from zero would leave the last line sharing no index with
-        // the live event that repeats it, and the stream would show it twice.
-        const first = Math.max(1, next - backfill.length + 1)
-        backfill.forEach((event, i) => append(first + i, event))
-      })
-      .catch(() => {
-        // The detail request already reports an unreadable run; an empty event
-        // log is normal for one that has not written a line yet.
-      })
-
-    return () => {
-      cancelled = true
-      unsubscribe()
-    }
-  }, [transport, workspaceId, runId])
-
-  /*
-   * A run opened while it was still working keeps whatever it had at the time.
-   * The note, the fix result and the rest of state.json are written as the run
-   * finishes, so a screen that only asked on mount went on saying "No note yet"
-   * for a run that had one, and the reader had to leave and come back.
-   *
-   * `run.updated` patches the status into `detail` as the store sees it move,
-   * so the moment it turns terminal is visible here: ask for the run again,
-   * and bump the counter the artefact panes read so they ask too.
-   */
-  useEffect(() => {
-    const before = wasStatus.current
-    wasStatus.current = status
-    if (!LIVE.has(before) || !TERMINAL.has(status)) return
-
-    let cancelled = false
-    setArtefacts((n) => n + 1)
-    transport
-      .run(workspaceId, runId)
-      .then((d) => {
-        if (!cancelled) setDetail(d)
-      })
-      .catch(() => {
-        // The header already carries the finished status from the event; a
-        // re-read that fails leaves the screen as it was rather than blanking
-        // a run the reader is looking at.
-      })
-    return () => {
-      cancelled = true
-    }
-  }, [status, transport, workspaceId, runId])
+  }, [runId])
 
   // A refusal is about the run as it was; once the run moves it no longer holds.
   useEffect(() => {
@@ -289,7 +180,7 @@ export default function Session(props: {
         noteAnswer(text)
         setSent((n) => n + 1)
       } catch (err: unknown) {
-        setActionError(reasonOf(err))
+        setActionError(withoutCode(err))
       } finally {
         setPending('')
       }
@@ -320,12 +211,11 @@ export default function Session(props: {
           ]
         })
       } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err)
         // The run's own state refuses it — 409 — or the provider cannot
         // continue at all. Either way the button says so and stays down
         // until the run moves.
-        if (/^conflict:|refused/i.test(message)) setSteerRefusal(reasonOf(err))
-        else setActionError(reasonOf(err))
+        if (/^conflict:|refused/i.test(reasonOf(err))) setSteerRefusal(withoutCode(err))
+        else setActionError(withoutCode(err))
       } finally {
         setPending('')
       }
@@ -340,7 +230,7 @@ export default function Session(props: {
     try {
       await onStartFix(detail.key, { acceptDeviation: true })
     } catch (err: unknown) {
-      setActionError(reasonOf(err))
+      setActionError(withoutCode(err))
     } finally {
       setPending('')
     }
@@ -354,7 +244,7 @@ export default function Session(props: {
       await transport.cancel(jobId)
       clearRunJob(runId)
     } catch (err: unknown) {
-      setActionError(reasonOf(err))
+      setActionError(withoutCode(err))
     } finally {
       setPending('')
     }
@@ -414,6 +304,42 @@ export default function Session(props: {
     { id: 'tools', label: 'Tools', count: tools },
   ]
 
+  const shownIndex = Math.max(
+    tabs.findIndex((t) => t.id === shownTab),
+    0,
+  )
+
+  /**
+   * The tab list is one stop; the arrows move between tabs and select as
+   * they go, the way a tab list is expected to. The arrows are read in the
+   * reader's own direction, so in an Arabic pane the right arrow moves to
+   * the tab on the right.
+   */
+  const onTabKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const rtl = directionOf(e.currentTarget) === 'rtl'
+    let to: number
+    switch (e.key) {
+      case 'ArrowRight':
+        to = rtl ? shownIndex - 1 : shownIndex + 1
+        break
+      case 'ArrowLeft':
+        to = rtl ? shownIndex + 1 : shownIndex - 1
+        break
+      case 'Home':
+        to = 0
+        break
+      case 'End':
+        to = tabs.length - 1
+        break
+      default:
+        return
+    }
+    e.preventDefault()
+    const next = tabs[((to % tabs.length) + tabs.length) % tabs.length]
+    setTab(next.id)
+    e.currentTarget.querySelectorAll<HTMLButtonElement>('.session-tab')[tabs.indexOf(next)]?.focus()
+  }
+
   let banner: JSX.Element | null = null
   if (step?.kind === 'tests') {
     banner = step.ok ? (
@@ -426,11 +352,23 @@ export default function Session(props: {
       </Banner>
     )
   } else if (step?.kind === 'note') {
-    banner = (
-      <Banner tone="ok" title="Note filed">
-        {notePath ? <span className="banner-path">{notePath}</span> : 'the note is under Note'}
-      </Banner>
-    )
+    // The run's final event. A fix run ends in a commit, not a note; say
+    // which, and on which branch. A triage or RCA run ends in a filed note.
+    if (isFix) {
+      banner = detail.fix?.commit ? (
+        <Banner tone="ok" title="Fix committed">
+          <span className="banner-path">{detail.fix.branch || detail.fix.commit.slice(0, 12)}</span>
+        </Banner>
+      ) : (
+        <Banner tone="ok" title="Run finished" />
+      )
+    } else {
+      banner = (
+        <Banner tone="ok" title="Note filed">
+          {notePath ? <span className="banner-path">{noteName(notePath, notesDir)}</span> : null}
+        </Banner>
+      )
+    }
   }
 
   return (
@@ -438,7 +376,11 @@ export default function Session(props: {
       <header className="session-topbar">
         <h1 className="session-key">{detail.key}</h1>
         <KindChip kind={detail.kind} />
-        <StatusBadge status={detail.status as SdStatus}>{stateWord(detail.status)}</StatusBadge>
+        <StatusBadge
+          status={detail.status as SdStatus}
+          // On this screen the reader is the one being waited on.
+          detail={detail.status === 'blocked' ? 'waiting on you' : undefined}
+        />
         <span className="session-title" title={title} dir="auto">
           {title ?? ''}
         </span>
@@ -475,6 +417,11 @@ export default function Session(props: {
         )}
       </header>
 
+      {/* The state, for a screen reader, as it moves; the badge is what a sighted reader watches. */}
+      <span className="visually-hidden" aria-live="polite">
+        {`Run ${stateWord(detail.status)}`}
+      </span>
+
       {actionError && pending !== 'accept' && mode.kind !== 'answer' && mode.kind !== 'steer' ? (
         <p className="session-failed-line" role="alert">
           {actionError}
@@ -500,14 +447,17 @@ export default function Session(props: {
           />
         </div>
         <div className="session-right">
-          <div className="session-tabs" role="tablist" aria-label="Run artefacts">
-            {tabs.map((t) => (
+          <div className="session-tabs" role="tablist" aria-label="Run artefacts" onKeyDown={onTabKey}>
+            {tabs.map((t, i) => (
               <button
                 key={t.id}
                 type="button"
                 role="tab"
+                id={`${tabsId}-tab-${t.id}`}
                 className="session-tab"
                 aria-selected={shownTab === t.id}
+                aria-controls={`${tabsId}-panel`}
+                tabIndex={i === shownIndex ? 0 : -1}
                 onClick={() => setTab(t.id)}
               >
                 {t.label}
@@ -515,40 +465,47 @@ export default function Session(props: {
               </button>
             ))}
           </div>
-          {shownTab === 'changes' && isFix ? (
-            <ChangesPane
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              checks={checks}
-              fix={detail.fix}
-              reload={artefacts}
-              onLoaded={onDiffLoaded}
-              onOpenReview={onOpenReview}
-              onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
-              acceptPending={pending === 'accept'}
-              acceptError={pending === 'accept' ? '' : actionError}
-            />
-          ) : null}
-          {shownTab === 'note' ? (
-            <NoteView
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              kinds={noteKinds}
-              reload={artefacts}
-            />
-          ) : null}
-          {shownTab === 'bundle' ? (
-            <BundleView
-              transport={transport}
-              workspaceId={workspaceId}
-              runId={runId}
-              bundleDir={detail.bundleDir}
-              promptPath={detail.promptPath}
-            />
-          ) : null}
-          {shownTab === 'tools' ? <ToolsPane events={events} startedAt={detail.startedAt} /> : null}
+          <div
+            className="session-panel"
+            role="tabpanel"
+            id={`${tabsId}-panel`}
+            aria-labelledby={`${tabsId}-tab-${shownTab}`}
+          >
+            {shownTab === 'changes' && isFix ? (
+              <ChangesPane
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                checks={checks}
+                fix={detail.fix}
+                reload={finished}
+                onLoaded={onDiffLoaded}
+                onOpenReview={onOpenReview}
+                onAcceptDeviation={onStartFix ? () => void acceptDeviation() : undefined}
+                acceptPending={pending === 'accept'}
+                acceptError={pending === 'accept' ? '' : actionError}
+              />
+            ) : null}
+            {shownTab === 'note' ? (
+              <NoteView
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                kinds={noteKinds}
+                reload={finished}
+              />
+            ) : null}
+            {shownTab === 'bundle' ? (
+              <BundleView
+                transport={transport}
+                workspaceId={workspaceId}
+                runId={runId}
+                bundleDir={detail.bundleDir}
+                promptPath={detail.promptPath}
+              />
+            ) : null}
+            {shownTab === 'tools' ? <ToolsPane events={events} startedAt={detail.startedAt} /> : null}
+          </div>
         </div>
       </div>
     </div>

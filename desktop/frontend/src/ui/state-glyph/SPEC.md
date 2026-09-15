@@ -10,7 +10,8 @@ be too heavy.
 Built. `desktop/frontend/src/ui/state-glyph/`, used in the app. New in the
 2026-09-15 screens round. The status badge (`src/ui/status-badge/`) stays for
 the places that want a pill — the register and the session topbar's badge —
-and the two share their hues.
+and the two share their hues and their words: `STATE_WORDS` and `GlyphState`
+are the badge's `STATE_WORDS` and `SdStatus`, re-exported here.
 
 ## Anatomy
 
@@ -54,6 +55,8 @@ and the two share their hues.
   eight states, and colour alone is never status in this product.
 - **Do** use `done` for a key whose RCA is written; it is the board's word,
   not the CLI's, and the CLI's `completed` keeps the triaged hue.
+- **Don't** pass `word` for anything but a translation. An English word that
+  differs from the badge's is a state missing from `STATE_WORDS`.
 - **Don't** animate the running glyph. The live-run pulse on the board is the
   app's one loop, and a second one beside it is noise.
 
@@ -65,6 +68,10 @@ is the tightest) and **6.29:1** or more in dark, as the tokens test records.
 No motion.
 
 ## Changelog
+
+### 2026-09-15 (fix round)
+Reads its words and its state type from the status badge instead of keeping
+a second map, so the two components cannot drift.
 
 ### 2026-09-15
 Added, from `.tcard .st` and its glyphs in

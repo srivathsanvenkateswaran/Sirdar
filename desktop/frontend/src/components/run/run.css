@@ -172,6 +172,14 @@
 
 /* ------------------------------------------------------------------- tabs */
 
+/* The pane under the tabs: the same column the panes used to sit in directly. */
+.session-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
 .session-tabs {
   display: flex;
   flex: 0 0 auto;
@@ -236,6 +244,22 @@
   font-size: var(--sd-text-ledger);
   overflow-wrap: anywhere;
   unicode-bidi: isolate;
+}
+
+/* The one control over the transcript: everything, or what the agent did. */
+.stream-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--sd-space-2);
+  margin-block-end: var(--sd-space-2);
+  margin-inline: var(--sd-space-5);
+}
+
+.stream-head__label {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-3);
 }
 
 .stream-scroll {
@@ -480,7 +504,10 @@ section:first-child > .turn-rule {
 }
 
 .ev-fold-caret {
-  font-size: 10px;
+  display: inline-block;
+  inline-size: 1em;
+  font-size: var(--sd-text-micro);
+  text-align: center;
 }
 
 /* ---------------------------------------------------------------- composer */
@@ -496,6 +523,16 @@ section:first-child > .turn-rule {
 
 .composer:focus-within {
   border-color: var(--sd-accent);
+}
+
+/*
+ * The ring is on the box, not the textarea inside it: the textarea has no
+ * border of its own, so a ring on it would sit inside the box's corners.
+ * It is the same ring every other control wears.
+ */
+.composer:has(.composer-text:focus-visible) {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
 }
 
 .composer-text {
@@ -515,7 +552,7 @@ section:first-child > .turn-rule {
 }
 
 .composer-text:focus-visible {
-  /* The composer's own border carries the ring for the whole box. */
+  /* The box carries the ring; see `.composer:has(.composer-text:focus-visible)`. */
   outline: none;
 }
 
@@ -994,10 +1031,4 @@ section:first-child > .turn-rule {
   font-family: var(--sd-font-mono);
   resize: vertical;
   min-block-size: 62px;
-}
-
-.form-error {
-  margin-block-start: 6px;
-  color: var(--sd-st-failed);
-  font-size: var(--sd-text-meta);
 }

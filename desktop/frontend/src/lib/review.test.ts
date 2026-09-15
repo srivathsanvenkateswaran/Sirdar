@@ -3,6 +3,8 @@ import type { RunEvent } from '../api/types'
 import {
   changeTotals,
   checksFromEvents,
+  noteName,
+  rekeyAfterDrop,
   describeTests,
   fixReport,
   judgeOutput,
@@ -247,5 +249,32 @@ describe('latestStep', () => {
       ok: false,
       detail: 'FAIL app 0.1s',
     })
+  })
+})
+
+describe('rekeyAfterDrop', () => {
+  it('keeps other files, keeps hunks above the drop, moves the ones below up, and forgets the dropped one', () => {
+    const before = {
+      'a.go\n0': 'kept',
+      'a.go\n1': 'kept',
+      'a.go\n2': 'kept',
+      'b.go\n1': 'kept',
+    }
+    expect(rekeyAfterDrop(before, 'a.go', 1)).toEqual({
+      'a.go\n0': 'kept',
+      'a.go\n1': 'kept',
+      'b.go\n1': 'kept',
+    })
+  })
+})
+
+describe('noteName', () => {
+  it('names the note by its path under the notes dir, or by its file name', () => {
+    expect(noteName('/work/notes/OMNI-1 export.md', '/work/notes')).toBe('OMNI-1 export.md')
+    expect(noteName('/work/notes/triage/OMNI-1 export.md', '/work/notes/')).toBe('triage/OMNI-1 export.md')
+    expect(noteName('/elsewhere/OMNI-1 export.md', '/work/notes')).toBe('OMNI-1 export.md')
+    expect(noteName('/work/notes-old/OMNI-1.md', '/work/notes')).toBe('OMNI-1.md')
+    expect(noteName('/work/notes/OMNI-1 export.md')).toBe('OMNI-1 export.md')
+    expect(noteName('')).toBe('')
   })
 })
