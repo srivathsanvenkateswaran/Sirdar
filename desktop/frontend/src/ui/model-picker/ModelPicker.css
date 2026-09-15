@@ -1,0 +1,201 @@
+/*
+ * Model picker. The chip is the mocks' `.chip` — 32 tall, a hairline at
+ * pill radius, the label in the second ink and the pair in the ledger face
+ * — made a button. The popover under it borrows the dialog's surface: the
+ * strong rule, the medium radius and the one soft shadow, since it is the
+ * same kind of thing, a question asked over the page.
+ */
+
+.sd-model-picker {
+  position: relative;
+  display: inline-flex;
+}
+
+/* ---------- the chip ---------- */
+
+.sd-model-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-block-size: 32px;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-pill);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.5;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.sd-model-chip:hover:not(:disabled),
+.sd-model-chip[aria-expanded='true'] {
+  border-color: var(--sd-rule-strong);
+  color: var(--sd-ink);
+}
+
+/* A fact, not a control: the words stay legible, only the affordance goes. */
+.sd-model-chip:disabled {
+  cursor: default;
+}
+
+.sd-model-chip:disabled:not([data-readonly='true']) {
+  opacity: 0.45;
+}
+
+.sd-model-chip__value {
+  font-family: var(--sd-font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+  unicode-bidi: isolate;
+}
+
+.sd-model-chip > .sd-mark {
+  margin-inline-start: calc(-1 * var(--sd-space-1));
+}
+
+/* ---------- the popover ---------- */
+
+.sd-model-picker__popover {
+  position: absolute;
+  inset-block-start: calc(100% + var(--sd-space-1));
+  inset-inline-start: 0;
+  z-index: 25;
+  display: grid;
+  gap: var(--sd-space-3);
+  inline-size: min(560px, calc(100vw - 2 * var(--sd-space-4)));
+  padding: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  text-align: start;
+  white-space: normal;
+}
+
+.sd-model-picker__columns {
+  display: grid;
+  grid-template-columns: 200px minmax(0, 1fr);
+  gap: var(--sd-space-3);
+}
+
+.sd-model-picker__col {
+  display: grid;
+  align-content: start;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+}
+
+.sd-model-picker__heading {
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  line-height: 1.5;
+  text-transform: uppercase;
+}
+
+.sd-model-picker__list {
+  display: grid;
+  gap: 2px;
+  border-radius: var(--sd-radius-sm);
+}
+
+.sd-model-picker__option {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-block-size: 36px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-2);
+  border-radius: var(--sd-radius-sm);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.sd-model-picker__option:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+/* Selected is a fill and a check together, never the fill alone. */
+.sd-model-picker__option[aria-selected='true'] {
+  background: var(--sd-card-row);
+  color: var(--sd-ink);
+  font-weight: 500;
+}
+
+.sd-model-picker__name {
+  display: grid;
+  flex: 1;
+  min-inline-size: 0;
+}
+
+.sd-model-picker__note {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  font-weight: 400;
+}
+
+.sd-model-picker__tag {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  font-weight: 400;
+  white-space: nowrap;
+}
+
+.sd-model-picker__check {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* ---------- the free-text row ---------- */
+
+.sd-model-picker__other {
+  display: grid;
+  gap: var(--sd-space-1);
+}
+
+.sd-model-picker__input {
+  min-block-size: 36px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+}
+
+.sd-model-picker__input::placeholder {
+  color: var(--sd-ink-3);
+}
+
+.sd-model-picker__hint {
+  margin: 0;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+  line-height: 1.4;
+}
+
+.sd-model-picker__foot {
+  display: flex;
+  justify-content: flex-end;
+}
+
+@media (max-width: 720px) {
+  .sd-model-picker__columns {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

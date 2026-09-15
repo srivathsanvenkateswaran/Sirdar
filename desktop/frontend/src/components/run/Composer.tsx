@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
 import Button from '../../ui/button'
-import ProviderMark from '../../ui/provider-mark'
+import ModelPicker from '../../ui/model-picker'
 
 /** What the composer's one button does right now. */
 export type ComposerMode =
@@ -121,14 +121,14 @@ export default function Composer({
         </p>
       ) : null}
       <div className="composer-bar">
-        <span className="chip">
-          Model
-          <ProviderMark provider={provider} size="sm" />
-          <span className="chip-mono">
-            {provider}
-            {model ? ` · ${model}` : ''}
-          </span>
-        </span>
+        {/* A steer or an answer continues the run this session has, on the
+            model it has, so the chip states the pair and cannot change it. */}
+        <ModelPicker
+          provider={provider}
+          model={model}
+          unknownAs="model unknown"
+          readOnly="A steer resumes the same session, so the provider and model cannot change here"
+        />
         {mode.kind === 'disabled' ? <span className="composer-reason">{mode.reason}</span> : null}
         <Button
           type="submit"

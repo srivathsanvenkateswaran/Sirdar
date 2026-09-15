@@ -388,7 +388,10 @@ export default function Session(props: {
           <span className="session-stat session-provider">
             <ProviderMark provider={detail.provider} size="sm" />
             <span className="session-provider-name">{detail.provider}</span>
-            {detail.model ? <span className="session-provider-model">{detail.model}</span> : null}
+            {/* Never blank: a run that has not reported its model yet says so. */}
+            <span className="session-provider-model" dir="ltr">
+              {detail.model || 'model unknown'}
+            </span>
           </span>
           <span className="session-stat">
             <b>{elapsed(detail, now)}</b>
