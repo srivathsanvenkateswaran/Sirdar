@@ -88,6 +88,11 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 		if cfg.Qwen != nil {
 			binary = cfg.Qwen.Path
 		}
+	case "cursor":
+		binary = ""
+		if cfg.Cursor != nil {
+			binary = cfg.Cursor.Path
+		}
 	}
 	if binary != "" {
 		binary = cfg.ExpandPath(binary)

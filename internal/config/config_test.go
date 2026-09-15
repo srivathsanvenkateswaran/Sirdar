@@ -318,7 +318,7 @@ func TestValidateOpenAI(t *testing.T) {
 		{
 			"an unknown provider",
 			"workspace: demo\nprovider: gemini\n",
-			"claude, codex, openai, acp or qwen",
+			"claude, codex, openai, acp, qwen or cursor",
 		},
 		{
 			"acp with no block",
@@ -1018,6 +1018,48 @@ permissions:
 	}
 	if len(cfg.Permissions.MCP) != 1 {
 		t.Errorf("permissions.mcp %v", cfg.Permissions.MCP)
+	}
+}
+
+// TestValidateCursor covers the cursor block. Every field is optional and
+// there is no credential to check, so the only rule is the execution mode:
+// a typo there would otherwise be swallowed by the adapter's fallback to
+// ask, and a workspace that meant plan would never find out.
+func TestValidateCursor(t *testing.T) {
+	cases := []struct {
+		name, body, want string
+	}{
+		{"no block", "workspace: demo\nprovider: cursor\n", ""},
+		{"ask", "workspace: demo\nprovider: cursor\ncursor:\n  mode: ask\n", ""},
+		{"plan", "workspace: demo\nprovider: cursor\ncursor:\n  mode: plan\n", ""},
+		{"mixed case", "workspace: demo\nprovider: cursor\ncursor:\n  mode: Plan\n", ""},
+		{"path and model alone", "workspace: demo\nprovider: cursor\ncursor:\n  path: ~/bin/cursor-agent\n  model: auto\n", ""},
+		{
+			"a write mode", "workspace: demo\nprovider: cursor\ncursor:\n  mode: agent\n",
+			"cursor.mode",
+		},
+		{
+			// A cursor block left behind while the workspace runs on
+			// claude is still checked, the same way an unused qwen block
+			// is.
+			"unused block on another provider",
+			"workspace: demo\nprovider: claude\ncursor:\n  mode: yolo\n",
+			"cursor.mode",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, c.body))
+			switch {
+			case c.want == "" && err != nil:
+				t.Fatalf("Load: %v", err)
+			case c.want == "":
+			case err == nil:
+				t.Fatalf("want an error mentioning %q, got none", c.want)
+			case !strings.Contains(err.Error(), c.want):
+				t.Fatalf("error = %v, want it to mention %q", err, c.want)
+			}
+		})
 	}
 }
 

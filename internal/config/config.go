@@ -220,6 +220,29 @@ type QwenConfig struct {
 	APIKey  string `yaml:"apiKey,omitempty"`
 }
 
+// CursorConfig configures `provider: cursor`, where the Cursor Agent CLI
+// (`cursor-agent`) drives the session. Every field is optional: with none
+// of them set the session runs `cursor-agent` off PATH against whatever
+// login the operator's own binary already holds, the way `provider: claude`
+// runs against their Claude Code login.
+//
+// There is no endpoint block and no apiKey. Cursor's endpoint override
+// (`CURSOR_API_ENDPOINT`) is stripped from the agent's environment rather
+// than made configurable, for the reason `ANTHROPIC_BASE_URL` is stripped
+// under subscription billing: with no credential of its own the CLI would
+// send the operator's Cursor login to whatever host it names, and there is
+// no Cursor-compatible endpoint for it to legitimately point at.
+//
+// Mode is the read-only execution mode a triage or rca session runs in:
+// `ask` (the default) is Q&A, `plan` analyses and proposes. Both are
+// enforced by Cursor's backend rather than by Sirdar — docs/config.md says
+// what that does and does not guarantee.
+type CursorConfig struct {
+	Path  string `yaml:"path,omitempty"`
+	Model string `yaml:"model,omitempty"`
+	Mode  string `yaml:"mode,omitempty"`
+}
+
 // DefaultMaxContextTokens is the context window assumed for an
 // openai-compatible endpoint that does not name one. The loop starts
 // dropping old tool results as the prompt approaches it.
@@ -481,6 +504,7 @@ type Config struct {
 	OpenAI *OpenAIConfig `yaml:"openai,omitempty"`
 	Qwen   *QwenConfig   `yaml:"qwen,omitempty"`
 	ACP    *ACPConfig    `yaml:"acp,omitempty"`
+	Cursor *CursorConfig `yaml:"cursor,omitempty"`
 
 	// Webhooks configures the inbound trigger endpoints `sirdar serve`
 	// exposes. They are off unless enabled, and exposing them off the
@@ -632,9 +656,9 @@ func FindRoot(dir string) (string, error) {
 // first violation found. Each error names the offending key.
 func (c *Config) Validate() error {
 	switch c.Provider {
-	case "claude", "codex", "openai", "acp", "qwen":
+	case "claude", "codex", "openai", "acp", "qwen", "cursor":
 	default:
-		return fmt.Errorf("config: provider: must be claude, codex, openai, acp or qwen, got %q", c.Provider)
+		return fmt.Errorf("config: provider: must be claude, codex, openai, acp, qwen or cursor, got %q", c.Provider)
 	}
 	if err := validateOpenAI(c); err != nil {
 		return err
@@ -643,6 +667,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := validateACP(c); err != nil {
+		return err
+	}
+	if err := validateCursor(c); err != nil {
 		return err
 	}
 	switch c.Billing {
@@ -945,6 +972,24 @@ func validateQwen(c *Config) error {
 	}
 	if q.Model == "" {
 		return fmt.Errorf("config: qwen.model: is required when qwen.baseUrl is set")
+	}
+	return nil
+}
+
+// validateCursor checks the cursor block. Every field is optional — a
+// workspace that names none runs the CLI against the operator's own login
+// — so the only rule is that the execution mode is one the CLI accepts.
+// A typo there would otherwise be swallowed: the adapter falls back to
+// "ask", and a workspace that meant "plan" would never find out.
+func validateCursor(c *Config) error {
+	cu := c.Cursor
+	if cu == nil {
+		return nil
+	}
+	switch strings.TrimSpace(strings.ToLower(cu.Mode)) {
+	case "", "ask", "plan":
+	default:
+		return fmt.Errorf("config: cursor.mode: must be ask or plan, got %q", cu.Mode)
 	}
 	return nil
 }

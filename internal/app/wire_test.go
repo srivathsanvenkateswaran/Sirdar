@@ -961,8 +961,51 @@ func TestACPProviderIsBuiltFromTheBlock(t *testing.T) {
 // provider a workspace may name.
 func TestProviderForRejectsAnUnknownName(t *testing.T) {
 	_, err := ProviderFor(&config.Config{Provider: "gemini"}, envResolver(nil))
-	if err == nil || !strings.Contains(err.Error(), "claude, codex, openai, acp or qwen") {
+	if err == nil || !strings.Contains(err.Error(), ProviderList) {
 		t.Fatalf("err = %v", err)
+	}
+}
+
+// TestCursorProviderIsBuiltFromTheBlock covers the wiring for the one
+// provider that has no credential to resolve: the CLI authenticates with
+// the login it already holds, so all the block carries is where the binary
+// is, which model to ask for and which read-only mode to run in.
+func TestCursorProviderIsBuiltFromTheBlock(t *testing.T) {
+	p, err := ProviderFor(&config.Config{Provider: "cursor"}, envResolver(nil))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	if p.Name() != "cursor" {
+		t.Fatalf("Name() = %q", p.Name())
+	}
+	// A one-off --model override beats the workspace's own, the way it
+	// does for every other provider.
+	cfg := &config.Config{
+		Provider: "cursor",
+		Model:    "composer-2.5",
+		Cursor:   &config.CursorConfig{Model: "auto", Mode: "plan"},
+	}
+	p, err = ProviderFor(cfg, envResolver(nil))
+	if err != nil {
+		t.Fatalf("ProviderFor: %v", err)
+	}
+	checks := p.Doctor(context.Background(), "/no/such/binary")
+	var model, fix string
+	for _, c := range checks {
+		switch c.Name {
+		case "cursor model":
+			model = c.Detail
+		case "cursor fix":
+			fix = c.Detail
+		}
+	}
+	if !strings.Contains(model, "composer-2.5") {
+		t.Fatalf("model row %q does not carry the --model override", model)
+	}
+	// Every cursor report says `sirdar fix` is refused, because the CLI
+	// approves its own tool calls and does not sandbox the edit tool.
+	if fix == "" {
+		t.Fatal("no cursor fix row")
 	}
 }
 
