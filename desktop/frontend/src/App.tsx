@@ -7,7 +7,8 @@ import Eval from './screens/Eval'
 import Register from './screens/Register'
 import RunDetail from './screens/RunDetail'
 import Settings from './screens/Settings'
-import type { EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
+import { parseRoute, routeHash, sameScreen } from './lib/routes'
+import type { AppState, AppStore, EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
 
 /**
@@ -16,6 +17,55 @@ import { useAppState, useStore } from './store/useAppStore'
  * it, and an unhandled rejection would only reach the console.
  */
 function reported(): void {}
+
+/**
+ * Keeps the address bar and the store's screen in step, both ways.
+ *
+ * Reading: whatever the hash names is opened — on load, on Back, and on a
+ * pasted link. Nothing is applied until `init()` has answered, because a run
+ * link names a workspace and there are none to match it against before then.
+ *
+ * Writing: every move the window makes — the header's buttons, a board card,
+ * the store's own navigation — leaves an address that can be linked to. A hash
+ * that names nothing opens nothing and is then overwritten by the screen the
+ * window is really on, so the address never describes a screen that is not up.
+ */
+function useHashRoute(store: AppStore, state: AppState): void {
+  const { screen, currentWorkspaceId, workspaces, loading } = state
+
+  useEffect(() => {
+    function apply(): void {
+      const route = parseRoute(window.location.hash)
+      if (!route) return
+      const now = store.getState()
+      if (now.loading) return
+      const wants = route.workspaceId
+      if (
+        sameScreen(now.screen, route.screen) &&
+        (!wants || wants === now.currentWorkspaceId || !workspaces.some((w) => w.id === wants))
+      ) {
+        return
+      }
+      store.openRoute(route.screen, wants)
+    }
+    apply()
+    window.addEventListener('hashchange', apply)
+    return () => window.removeEventListener('hashchange', apply)
+  }, [store, loading, workspaces])
+
+  useEffect(() => {
+    if (loading) return
+    const want = routeHash(screen, currentWorkspaceId)
+    if (window.location.hash === want) return
+    // A window that opened with no hash at all gets one without a history
+    // entry, so Back still leads out of the app rather than to the board.
+    if (window.location.hash === '') {
+      window.history.replaceState(null, '', want)
+      return
+    }
+    window.location.hash = want
+  }, [screen, currentWorkspaceId, loading])
+}
 
 /** Keys typed into a field belong to that field, not to the window. */
 function isTyping(target: EventTarget | null): boolean {
@@ -34,6 +84,8 @@ export default function App(): JSX.Element {
   useEffect(() => {
     void store.init()
   }, [store])
+
+  useHashRoute(store, state)
 
   const workspaceId = state.currentWorkspaceId
   const currentWorkspace = state.workspaces.find((w) => w.id === workspaceId)
