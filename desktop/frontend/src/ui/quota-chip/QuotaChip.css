@@ -23,8 +23,19 @@
   unicode-bidi: isolate;
 }
 
+/* The words and the percentage never shrink. What gives way, in order: the
+   countdown (shrink 4, then cut), then the bar down to 24px. */
 .sd-quota > * {
   flex: 0 0 auto;
+}
+
+.sd-quota > .sd-quota__bar {
+  flex: 0 1 56px;
+  min-inline-size: 24px;
+}
+
+.sd-quota > .sd-quota__reset {
+  flex: 0 4 auto;
 }
 
 .sd-quota__provider {

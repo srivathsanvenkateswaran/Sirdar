@@ -380,6 +380,21 @@
   border-block-start: 1px solid var(--sd-rule);
 }
 
+/* The worktree path is long; in the footer it wraps inside the sheet rather
+   than running past it, and the base beside it wraps with it. */
+.review-foot > .review-stats {
+  flex-wrap: wrap;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+  row-gap: var(--sd-space-1);
+}
+
+.review-foot .review-stat {
+  min-inline-size: 0;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .review-push {
   display: flex;
   flex-wrap: wrap;

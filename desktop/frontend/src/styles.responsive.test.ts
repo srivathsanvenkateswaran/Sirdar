@@ -115,7 +115,11 @@ describe('the sidebar', () => {
     const chip = sheet('ui/quota-chip/QuotaChip.css')
     expect(rule(chip, '.sd-quota')).toContain('white-space: nowrap')
     expect(rule(chip, '.sd-quota')).toContain('overflow: hidden')
-    expect(rule(chip, '.sd-quota__reset')).toContain('text-overflow: ellipsis')
+    expect(chip).toMatch(/\n\.sd-quota__reset \{[^}]*text-overflow: ellipsis/)
+    // The bar and the countdown are what give way; the words and the
+    // percentage never do.
+    expect(rule(chip, '.sd-quota > .sd-quota__bar')).toContain('min-inline-size: 24px')
+    expect(rule(chip, '.sd-quota > .sd-quota__reset')).toContain('flex: 0 4 auto')
     expect(rule(css, '.quota-meter__provider')).toContain('flex-direction: column')
   })
 })
@@ -125,9 +129,9 @@ describe('the board', () => {
   const lane = sheet('ui/kanban-column/KanbanColumn.css')
   const card = sheet('ui/run-card/RunCard.css')
 
-  it('lets six lanes share the row down to 200 each', () => {
+  it('lets six lanes share the row down to 160 each, which is what fits at 1440', () => {
     expect(rule(lane, '.sd-lane')).toContain('flex: 1 1 0')
-    expect(rule(lane, '.sd-lane')).toContain('min-inline-size: 200px')
+    expect(rule(lane, '.sd-lane')).toContain('min-inline-size: 160px')
     expect(rule(board, '.board-lanes')).toContain('overflow-x: auto')
   })
 

@@ -3,9 +3,13 @@
  * lane's hue — which is the board's whole legend — and a tracked uppercase
  * head with the count beside it.
  *
- * The lanes share their row: `flex: 1 1 0` with a 200px floor, so six of
- * them fit a 1440 sheet at 248-ish each and the row only scrolls sideways
- * once six times 200 no longer fit.
+ * The lanes share their row: `flex: 1 1 0` with a 160px floor, so six of
+ * them fit the sheet from 1440 up and the row only scrolls sideways below
+ * that. The floor is 160 and not the 200 the brief first asked for because
+ * of the arithmetic: at 1440 the sheet is 1084 wide once the 248 sidebar
+ * and the 48 page inset are taken, and six lanes with five 16px gaps have
+ * 1004 between them — 167 each. A 200 floor would have scrolled until the
+ * window was 1640 wide, which is the overflow this rule exists to remove.
  */
 
 .sd-lane {
@@ -13,7 +17,7 @@
   flex: 1 1 0;
   flex-direction: column;
   box-sizing: border-box;
-  min-inline-size: 200px;
+  min-inline-size: 160px;
   min-height: 0;
   padding: var(--sd-space-2);
   border-radius: var(--sd-radius-sm);
@@ -64,6 +68,11 @@
   gap: var(--sd-space-2);
   min-height: 0;
   overflow-y: auto;
+  /* The body is a size container named `lane`, so the run card can step
+     its own type down when the lane it is in is narrow — which depends on
+     the window and the sidebar together, not on the window alone. */
+  container-type: inline-size;
+  container-name: lane;
 }
 
 .sd-lane__empty {

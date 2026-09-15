@@ -17,6 +17,10 @@
   display: flex;
   flex-direction: column;
   flex: 0 0 var(--sd-sidebar-w);
+  /* The basis is the width. Without this a flex item's floor is its
+     min-content, and one long mono quota line was widening the whole
+     sidebar past 300 — which is where the sheet's lanes went. */
+  min-inline-size: 0;
   min-block-size: 0;
   padding-block: 20px var(--sd-space-4);
   padding-inline: var(--sd-space-4);

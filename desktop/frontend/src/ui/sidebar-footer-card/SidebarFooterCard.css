@@ -46,6 +46,12 @@
   min-inline-size: 0;
 }
 
+/* In the card the chips sit in a column on the card's own inset, so the
+   pill's side padding is dead space a 220 sidebar cannot spare. */
+.sd-sidebar-foot__quotas .sd-quota {
+  padding-inline: 0;
+}
+
 /* The action is the full content width of the card, as the app-shell language
    states: one filled commit button per screen, and this is where the Board's
    lives. */
