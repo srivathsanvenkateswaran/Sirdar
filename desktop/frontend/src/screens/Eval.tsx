@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type {
   EvalReport,
   EvalResult,
@@ -11,6 +11,7 @@ import type {
 } from '../api/types'
 import ProviderFields from '../components/run/ProviderFields'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import { reasonOf } from '../lib/format'
 import Badge from '../ui/badge'
 import Button from '../ui/button'
 import DataTable, { type DataColumn } from '../ui/data-table'
@@ -280,6 +281,9 @@ function CheckIcon(): JSX.Element {
 
 type Open = 'golden' | 'json' | 'provider' | null
 
+/** How long the Copy button says Copied before it says Copy again. */
+const COPIED_MS = 1500
+
 /**
  * The golden set and what the last suite scored against it.
  *
@@ -296,11 +300,17 @@ export default function Eval(props: {
   /** The store's quota readings; the estimate's 5h clause reads them. */
   quota?: Quota[]
   /**
-   * Whole-set eval jobs this window started. Such a job names no key, so no
-   * run claims it and this screen is the only place its Cancel can live.
+   * Eval jobs this window started, as the store records them: the ones
+   * this screen may cancel, and the ones whose `job.finished` is the
+   * suite's own.
    */
   jobs?: { jobId: string; label: string }[]
-  onStartEval: (keys?: string[], opts?: EvalStart) => Promise<void> | void
+  /**
+   * Starts a suite. A store that answers with the job id lets the screen
+   * pair the finish with the start it made and offer Cancel on its own,
+   * without waiting for `jobs` to carry it.
+   */
+  onStartEval: (keys?: string[], opts?: EvalStart) => Promise<string | void> | string | void
   onCancelJob?: (jobId: string) => Promise<void> | void
 }): JSX.Element {
   const { transport, workspaceId, defaultProvider, defaultModel, quota, jobs, onStartEval, onCancelJob } =
@@ -315,8 +325,13 @@ export default function Eval(props: {
   const [model, setModel] = useState('')
   const [pending, setPending] = useState(false)
   const [started, setStarted] = useState(false)
+  /** The job id the last start answered with, until it finishes. */
+  const [ownJob, setOwnJob] = useState('')
   const [error, setError] = useState('')
   const [open, setOpen] = useState<Open>(null)
+  const [copied, setCopied] = useState(false)
+  const [copyError, setCopyError] = useState('')
+  const copyTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
 
   // The add-golden dialog's own state.
   const [goldenKey, setGoldenKey] = useState('')
@@ -343,7 +358,7 @@ export default function Eval(props: {
     } catch (err) {
       setGolden([])
       setReports([])
-      setError(err instanceof Error ? err.message : String(err))
+      setError(reasonOf(err))
     }
   }, [transport, workspaceId])
 
@@ -351,14 +366,33 @@ export default function Eval(props: {
     void load()
   }, [load])
 
+  /*
+   * The suites this window started: the store's record, plus the id the
+   * last start answered with. Cancel is offered for each, and a
+   * `job.finished` is the suite's own only when it names one of them.
+   */
+  const suites = useMemo(() => {
+    const listed = jobs ?? []
+    if (!ownJob || listed.some((job) => job.jobId === ownJob)) return listed
+    return [...listed, { jobId: ownJob, label: 'Eval suite' }]
+  }, [jobs, ownJob])
+  const suiteIds = useRef(new Set<string>())
+  suiteIds.current = new Set(suites.map((job) => job.jobId))
+
   // A suite writes its report when the job ends, so the table is reloaded
-  // then rather than leaving the reader to press anything.
+  // then rather than leaving the reader to press anything. Another job in
+  // the workspace ending — a triage, say — is not the suite finishing, so
+  // it is ignored while the suite's own id is known. A store that records
+  // no id for the suite leaves the screen nothing to compare with, and any
+  // finish in the workspace then ends the wait.
   useEffect(() => {
     return transport.subscribe((e) => {
-      if (e.kind === 'job.finished' && e.workspaceId === workspaceId) {
-        setStarted(false)
-        void load()
-      }
+      if (e.kind !== 'job.finished' || e.workspaceId !== workspaceId) return
+      const known = suiteIds.current
+      if (known.size > 0 && !known.has(e.jobId)) return
+      setStarted(false)
+      setOwnJob((id) => (id === e.jobId ? '' : id))
+      void load()
     })
   }, [transport, workspaceId, load])
 
@@ -382,7 +416,7 @@ export default function Eval(props: {
     })
   }
 
-  const running = (jobs?.length ?? 0) > 0 || started
+  const running = suites.length > 0 || started
   const effectiveProvider = provider || defaultProvider || ''
   const effectiveModel = model.trim() || (provider ? '' : defaultModel || '')
 
@@ -413,10 +447,11 @@ export default function Eval(props: {
         opts.rubric = rubric
         opts.withRca = withRca
       }
-      await onStartEval([...selected], opts)
+      const jobId = await onStartEval([...selected], opts)
+      if (typeof jobId === 'string' && jobId) setOwnJob(jobId)
       setStarted(true)
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(reasonOf(err))
     } finally {
       setPending(false)
     }
@@ -427,10 +462,32 @@ export default function Eval(props: {
     setError('')
     try {
       await onCancelJob(jobId)
+      // The job's own `job.finished` ends the wait; forgetting the id here
+      // as well keeps Cancel from lingering if it never arrives.
+      setOwnJob((id) => (id === jobId ? '' : id))
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err))
+      setError(reasonOf(err))
     }
   }
+
+  async function copy(): Promise<void> {
+    if (!json) return
+    setCopyError('')
+    try {
+      await navigator.clipboard?.writeText(json)
+      setCopied(true)
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+      copyTimer.current = setTimeout(() => setCopied(false), COPIED_MS)
+    } catch {
+      setCopyError('Could not reach the clipboard. Select the text and copy it.')
+    }
+  }
+
+  useEffect(() => {
+    return () => {
+      if (copyTimer.current) clearTimeout(copyTimer.current)
+    }
+  }, [])
 
   async function addGolden(event: FormEvent): Promise<void> {
     event.preventDefault()
@@ -447,7 +504,7 @@ export default function Eval(props: {
       setOpen(null)
       await load()
     } catch (err) {
-      setGoldenError(err instanceof Error ? err.message : String(err))
+      setGoldenError(reasonOf(err))
     } finally {
       setGoldenPending(false)
     }
@@ -500,8 +557,8 @@ export default function Eval(props: {
           actions={
             <div className="eval-actions">
               <div className="eval-actions__row">
-                {jobs && onCancelJob
-                  ? jobs.map((job) => (
+                {onCancelJob
+                  ? suites.map((job) => (
                       <Button
                         key={job.jobId}
                         variant="ghost"
@@ -733,10 +790,13 @@ export default function Eval(props: {
       <Dialog
         open={open === 'json'}
         title="Report JSON"
-        onClose={() => setOpen(null)}
+        onClose={() => {
+          setOpen(null)
+          setCopyError('')
+        }}
         actions={
           <>
-            <Button onClick={() => void navigator.clipboard?.writeText(json)}>Copy</Button>
+            <Button onClick={() => void copy()}>{copied ? 'Copied' : 'Copy'}</Button>
             <Button variant="pale" onClick={() => setOpen(null)}>
               Close
             </Button>
@@ -744,6 +804,11 @@ export default function Eval(props: {
         }
       >
         {latest ? <p className="eval-dialog__path">{latest.report.path}</p> : null}
+        {copyError ? (
+          <p className="eval-error" role="alert">
+            {copyError}
+          </p>
+        ) : null}
         <pre className="eval-dialog__json" tabIndex={0}>
           {json}
         </pre>

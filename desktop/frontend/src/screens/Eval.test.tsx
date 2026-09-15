@@ -151,7 +151,7 @@ function mount(
     quota?: Quota[]
     jobs?: { jobId: string; label: string }[]
     onCancelJob?: (id: string) => Promise<void>
-    onStartEval?: (keys?: string[], opts?: unknown) => Promise<void>
+    onStartEval?: (keys?: string[], opts?: unknown) => Promise<string | void>
   } = {},
 ) {
   const onStartEval = extra.onStartEval ?? vi.fn(async () => {})
@@ -379,7 +379,7 @@ describe('Eval run suite', () => {
     await waitFor(() => expect(onCancelJob).toHaveBeenCalledWith('job-4'))
   })
 
-  it('stays disabled after a start until the job finishes, then reloads the report', async () => {
+  it('stays disabled after a start until a job finishes, when the store recorded no id to compare', async () => {
     const { transport, emit } = mount()
     fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
     fireEvent.click(runSuite())
@@ -389,6 +389,48 @@ describe('Eval run suite', () => {
     emit({ kind: 'job.finished', jobId: 'job-1', workspaceId: 'ws1', outcomes: [] })
     await waitFor(() => expect(transport.evalReports).toHaveBeenCalledTimes(2))
     await waitFor(() => expect(runSuite()).not.toBeDisabled())
+  })
+
+  it('waits for the suite’s own job to finish, not another job in the workspace', async () => {
+    const { transport, emit } = mount({}, { onStartEval: vi.fn(async () => 'job-7') })
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    fireEvent.click(runSuite())
+    await waitFor(() => expect(runSuite()).toBeDisabled())
+
+    // A triage ending is not the suite ending.
+    emit({ kind: 'job.finished', jobId: 'job-1', workspaceId: 'ws1', outcomes: [] })
+    expect(runSuite()).toBeDisabled()
+    expect(transport.evalReports).toHaveBeenCalledTimes(1)
+
+    emit({ kind: 'job.finished', jobId: 'job-7', workspaceId: 'ws1', outcomes: [] })
+    await waitFor(() => expect(transport.evalReports).toHaveBeenCalledTimes(2))
+    await waitFor(() => expect(runSuite()).not.toBeDisabled())
+  })
+
+  it('offers Cancel for the job the start answered with, before the store lists it', async () => {
+    const onCancelJob = vi.fn(async () => {})
+    mount({}, { onStartEval: vi.fn(async () => 'job-7'), onCancelJob })
+    fireEvent.click(await screen.findByRole('checkbox', { name: 'OMNI-2510' }))
+    expect(screen.queryByRole('button', { name: 'Cancel suite' })).toBeNull()
+    fireEvent.click(runSuite())
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel suite' }))
+    await waitFor(() => expect(onCancelJob).toHaveBeenCalledWith('job-7'))
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Cancel suite' })).toBeNull())
+  })
+
+  it('lists a job once when the store and the start both name it', async () => {
+    const onCancelJob = vi.fn(async () => {})
+    mount(
+      {},
+      {
+        jobs: [{ jobId: 'job-7', label: 'Eval of the whole golden set' }],
+        onStartEval: vi.fn(async () => 'job-7'),
+        onCancelJob,
+      },
+    )
+    await screen.findByRole('checkbox', { name: 'OMNI-2510' })
+    expect(screen.getAllByRole('button', { name: 'Cancel suite' })).toHaveLength(1)
   })
 
   it('ignores another workspace finishing a job', async () => {
@@ -523,5 +565,28 @@ describe('Eval last report', () => {
     expect(within(dialog).getByText(/"baseCommit": "abc123"/)).toBeInTheDocument()
     fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }))
     expect(screen.queryByRole('dialog')).toBeNull()
+  })
+
+  it('Copy puts the JSON on the clipboard and says so, and says why when it cannot', async () => {
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    try {
+      mount()
+      await screen.findByRole('table', { name: 'Each key against the change a human merged' })
+      fireEvent.click(screen.getByRole('button', { name: 'Open JSON' }))
+      const dialog = screen.getByRole('dialog', { name: 'Report JSON' })
+
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Copy' }))
+      await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Copied' })).toBeInTheDocument())
+      expect(writeText).toHaveBeenCalledWith(expect.stringContaining('"baseCommit": "abc123"'))
+
+      writeText.mockRejectedValueOnce(new Error('denied'))
+      fireEvent.click(within(dialog).getByRole('button', { name: /Cop/ }))
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Could not reach the clipboard. Select the text and copy it.',
+      )
+    } finally {
+      Object.defineProperty(navigator, 'clipboard', { value: undefined, configurable: true })
+    }
   })
 })
