@@ -151,7 +151,7 @@ Retries were discarded when the queue backend returned a transient error.
   "required": ["rca", "resolution"],
   "definitions": {
     "evidenceEntry": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
           "additionalProperties": false,
@@ -202,7 +202,7 @@ Retries were discarded when the queue backend returned a transient error.
         "title": { "type": "string" },
         "summary": { "type": "string" },
         "customerSummary": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,
@@ -407,7 +407,7 @@ Retries were discarded when the queue backend returned a transient error.
         "whatWasWrong": { "type": "string" },
         "whatWeChanged": { "type": "string" },
         "codeChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,
@@ -436,7 +436,7 @@ Retries were discarded when the queue backend returned a transient error.
           ]
         },
         "dataChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,

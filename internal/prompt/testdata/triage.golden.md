@@ -156,7 +156,7 @@ Files:
       "description": "Null when the complaint was already written in the note's language."
     },
     "customerReplyDraft": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
           "additionalProperties": false,

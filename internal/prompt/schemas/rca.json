@@ -6,7 +6,7 @@
   "required": ["rca", "resolution"],
   "definitions": {
     "evidenceEntry": {
-      "oneOf": [
+      "anyOf": [
         {
           "type": "object",
           "additionalProperties": false,
@@ -57,7 +57,7 @@
         "title": { "type": "string" },
         "summary": { "type": "string" },
         "customerSummary": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,
@@ -262,7 +262,7 @@
         "whatWasWrong": { "type": "string" },
         "whatWeChanged": { "type": "string" },
         "codeChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,
@@ -291,7 +291,7 @@
           ]
         },
         "dataChange": {
-          "oneOf": [
+          "anyOf": [
             {
               "type": "object",
               "additionalProperties": false,

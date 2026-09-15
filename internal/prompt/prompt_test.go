@@ -463,7 +463,7 @@ func allowsNull(t *testing.T, raw json.RawMessage) bool {
 	t.Helper()
 	var typed struct {
 		Type  json.RawMessage   `json:"type"`
-		OneOf []json.RawMessage `json:"oneOf"`
+		OneOf []json.RawMessage `json:"anyOf"`
 	}
 	if err := json.Unmarshal(raw, &typed); err != nil {
 		t.Fatalf("unmarshal property schema: %v", err)
@@ -569,7 +569,7 @@ func walkStrictSchema(t *testing.T, file, path string, node any) {
 	if items, ok := obj["items"]; ok {
 		walkStrictSchema(t, file, path+"[]", items)
 	}
-	for _, key := range []string{"oneOf", "anyOf", "allOf"} {
+	for _, key := range []string{"anyOf", "anyOf", "allOf"} {
 		if list, ok := obj[key].([]any); ok {
 			for i, sub := range list {
 				walkStrictSchema(t, file, fmt.Sprintf("%s.%s[%d]", path, key, i), sub)
@@ -579,6 +579,16 @@ func walkStrictSchema(t *testing.T, file, path string, node any) {
 	if defs, ok := obj["definitions"].(map[string]any); ok {
 		for name, def := range defs {
 			walkStrictSchema(t, file, path+".definitions."+name, def)
+		}
+	}
+}
+
+// TestSchemasUseNoOneOf pins the second strict-mode rule OpenAI enforces:
+// oneOf is rejected outright; a nullable object is expressed with anyOf.
+func TestSchemasUseNoOneOf(t *testing.T) {
+	for name, raw := range map[string][]byte{"triage": TriageSchema, "rca": RCASchema, "fix": FixSchema} {
+		if strings.Contains(string(raw), `"oneOf"`) {
+			t.Errorf("%s schema uses oneOf, which strict structured output rejects; use anyOf", name)
 		}
 	}
 }
