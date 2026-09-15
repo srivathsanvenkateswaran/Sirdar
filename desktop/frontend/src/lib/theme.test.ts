@@ -8,10 +8,11 @@ afterEach(() => {
 })
 
 describe('the theme preference', () => {
-  it('starts on the system theme, with nothing stamped on the root', () => {
+  it('starts light, stamped on the root, with nothing stored', () => {
     applyTheme()
-    expect(theme()).toBe('system')
-    expect(document.documentElement.dataset.theme).toBeUndefined()
+    expect(theme()).toBe('light')
+    expect(document.documentElement.dataset.theme).toBe('light')
+    expect(localStorage.getItem('sirdar.theme')).toBeNull()
   })
 
   it('stamps a chosen theme on the root and remembers it', () => {
@@ -24,17 +25,20 @@ describe('the theme preference', () => {
     expect(document.documentElement.dataset.theme).toBe('dark')
   })
 
-  it('going back to system clears the stamp and the stored choice', () => {
-    setTheme('light')
+  it('choosing System clears the stamp, and is remembered over the light default', () => {
     setTheme('system')
     expect(document.documentElement.dataset.theme).toBeUndefined()
-    expect(localStorage.getItem('sirdar.theme')).toBeNull()
+    expect(localStorage.getItem('sirdar.theme')).toBe('system')
+
+    resetTheme()
+    expect(theme()).toBe('system')
+    expect(document.documentElement.dataset.theme).toBeUndefined()
   })
 
   it('ignores a stored value that is not a theme', () => {
     localStorage.setItem('sirdar.theme', 'sepia')
     resetTheme()
-    expect(theme()).toBe('system')
+    expect(theme()).toBe('light')
   })
 
   it('tells a subscriber once per change and not for a no-op', () => {

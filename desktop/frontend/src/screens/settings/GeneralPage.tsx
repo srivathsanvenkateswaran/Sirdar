@@ -8,9 +8,10 @@ import { levelOf, MARKS, OpenConfig, type DoctorState, type Loaded } from './sha
 /** How long a Remove button stays armed before it goes back to asking. */
 const CONFIRM_MS = 5000
 
+/** Light first: it is the default, and the row reads left to right from it. */
 const THEME_OPTIONS: { id: Theme; label: string }[] = [
-  { id: 'system', label: 'System' },
   { id: 'light', label: 'Light' },
+  { id: 'system', label: 'System' },
   { id: 'dark', label: 'Dark' },
 ]
 
@@ -158,7 +159,7 @@ export default function GeneralPage({
                 ? 'Dark'
                 : 'Light'
           }
-          help="Remembered in this browser. It changes nothing in the workspace."
+          help="Light unless you choose otherwise; System follows the desktop. Remembered in this browser, and it changes nothing in the workspace."
           control={
             <SegmentedControl
               label="Theme"

@@ -11,6 +11,7 @@ import {
   configSummary,
   createFakeTransport,
   mcpInventory,
+  mcpTools,
   workspace as sampleWorkspace,
   type FakeTransport,
 } from '../store/fakeTransport'
@@ -276,6 +277,14 @@ describe('Providers', () => {
     expect(within(table).getByText('disabled (Antigravity terms)')).toBeInTheDocument()
   })
 
+  it('prints only the parts the config names when the model is empty', async () => {
+    const summary = configSummary()
+    summary.general.model = ''
+    open({ page: 'providers' }, transportWith({}, { configSummary: summary }))
+    expect(await screen.findByText('claude · subscription')).toBeInTheDocument()
+    expect(screen.queryByText(/· ·/)).toBeNull()
+  })
+
   it('reads the agy row doctor emits for a workspace that still names it', async () => {
     const doctor = vi.fn().mockResolvedValue([
       { name: 'agy', ok: false, level: 'fail', detail: 'disabled (Antigravity terms)' },
@@ -439,6 +448,17 @@ describe('Try a tool', () => {
     // Kept for the session.
     expect(screen.getByText('filesystem · read_file')).toBeInTheDocument()
     expect(screen.getByText('57ms')).toBeInTheDocument()
+  })
+
+  it('opens on the first tool a run could call, not the first in the list', async () => {
+    const tools = mcpTools('filesystem')
+    tools.tools.reverse() // write_file, denied, now heads the list
+    open({ page: 'tools' }, transportWith({}, { mcpTools: { filesystem: tools } }))
+    const toolSelect = (await screen.findByLabelText('Tool')) as HTMLSelectElement
+    await waitFor(() => expect(toolSelect.options.length).toBe(3))
+    expect(toolSelect.options[0].value).toBe('write_file')
+    expect(toolSelect.value).toBe('list_directory')
+    expect(screen.getByText('allowed')).toBeInTheDocument()
   })
 
   it('shows a denied verdict as the answer, without an error', async () => {

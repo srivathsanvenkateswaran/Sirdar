@@ -33,6 +33,15 @@ export interface ToolTester {
 }
 
 /**
+ * The tool a fresh listing selects: the first one a run could call. A server
+ * whose first tool is a write would otherwise open on a denied verdict, and
+ * the point of the page is to see something come back.
+ */
+export function firstAllowed(list: MCPToolList): string {
+  return (list.tools.find((t) => t.verdict === 'allowed') ?? list.tools[0])?.name ?? ''
+}
+
+/**
  * The tool tester's state, lifted out of the page so the modal can publish
  * Call as the screen's one primary action while the page is up, and so
  * Recent calls survive the modal closing: Settings stays mounted, the page
@@ -70,7 +79,7 @@ export function useToolTester(
     const cached = listed.current[server]
     if (cached) {
       setTools({ status: 'done', data: cached })
-      setTool((t) => (cached.tools.some((x) => x.name === t) ? t : (cached.tools[0]?.name ?? '')))
+      setTool((t) => (cached.tools.some((x) => x.name === t) ? t : firstAllowed(cached)))
       return
     }
     let cancelled = false
@@ -81,7 +90,7 @@ export function useToolTester(
         if (cancelled) return
         listed.current[server] = data
         setTools({ status: 'done', data })
-        setTool(data.tools[0]?.name ?? '')
+        setTool(firstAllowed(data))
       })
       .catch((err: unknown) => {
         if (!cancelled) setTools({ status: 'error', message: message(err) })
