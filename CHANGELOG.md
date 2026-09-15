@@ -24,10 +24,11 @@ OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhip
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, and
-Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk, and
-Freshdesk. Anything else — an internal tracker, a different helpdesk — is a separate
-executable speaking a small line-delimited JSON protocol over stdin/stdout, so its
-credentials and vendor-specific code never touch Sirdar's core.
+Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
+Freshdesk, Help Scout, Intercom, and HubSpot Service Hub. Anything else — an internal
+tracker, a different helpdesk — is a separate executable speaking a small
+line-delimited JSON protocol over stdin/stdout, so its credentials and vendor-specific
+code never touch Sirdar's core.
 
 A Wails v2 desktop app under `desktop/` sharing the same React frontend that
 `sirdar serve` serves over HTTP; the desktop build talks to the core in-process
@@ -75,7 +76,7 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
 - Added `sirdar fix`, a human-gated mode that lets the agent edit a workspace and open a pull
   request for an approved triage note, confined by a per-provider write policy and a snapshot
   guard that refuses any change to `.git` or the workspace's own `.sirdar` directory
-  (`docs/eval.md`).
+  (`docs/fix.md`).
 - Added `provider: qwen`, a native Qwen Code adapter: every non-read tool is excluded, and an
   authenticated loopback PreToolUse hook fails closed, so the workspace stays read-only even
   though the run is untrusted.

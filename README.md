@@ -189,6 +189,7 @@ a hook only becomes code the machine runs at the next commit or push.
 ## Fix flow
 
 `sirdar fix KEY` is the only part of Sirdar that writes anything, and it is gated on a person.
+See `docs/fix.md` for the full flow, the per-provider confinement, and `permissions.fixBash`.
 
 **The gate is the triage note.** The command refuses to start unless the note's frontmatter
 `status` is `triaged` or `fix-approved`. There is no separate approval record: running the
