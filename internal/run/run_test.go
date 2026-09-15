@@ -1779,6 +1779,50 @@ func TestCredentialEnvNamesCoversZendeskAndFreshdesk(t *testing.T) {
 	}
 }
 
+// TestCredentialEnvNamesCoversServiceNowPassword is the round-1 regression:
+// credentialEnvNames listed every SourceConfig credential field except
+// Password, so a ServiceNow helpdesk configured with basic auth
+// (password: env:SERVICENOW_PASSWORD) left that variable readable inside
+// the agent's environment. Username is a literal login name, not a
+// credential ref, and must survive.
+func TestCredentialEnvNamesCoversServiceNowPassword(t *testing.T) {
+	cfg := &config.Config{Billing: "subscription"}
+	cfg.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:  "servicenow",
+		Instance: "acme",
+		Username: "agent",
+		Password: "env:SERVICENOW_PASSWORD",
+	}
+
+	names := credentialEnvNames(cfg)
+	if !names["SERVICENOW_PASSWORD"] {
+		t.Error("SERVICENOW_PASSWORD is not treated as a credential")
+	}
+
+	d := Deps{Config: cfg, Env: []string{
+		"PATH=/usr/bin", "SERVICENOW_PASSWORD=hunter2", "HOME=/home/me",
+	}}
+	got := strings.Join(d.childEnv(), " ")
+	if strings.Contains(got, "SERVICENOW_PASSWORD=") {
+		t.Errorf("SERVICENOW_PASSWORD survived into the agent environment: %s", got)
+	}
+	if !strings.Contains(got, "PATH=/usr/bin") || !strings.Contains(got, "HOME=/home/me") {
+		t.Errorf("childEnv dropped a variable that is not a credential: %s", got)
+	}
+
+	// The OAuth alternative for ServiceNow basic auth: the oauthToken ref
+	// was already covered before this fix, guard it stays that way.
+	cfg2 := &config.Config{Billing: "subscription"}
+	cfg2.Sources.Helpdesk = &config.SourceConfig{
+		Adapter:    "servicenow",
+		Instance:   "acme",
+		OAuthToken: "env:SERVICENOW_OAUTH",
+	}
+	if names2 := credentialEnvNames(cfg2); !names2["SERVICENOW_OAUTH"] {
+		t.Error("SERVICENOW_OAUTH is not treated as a credential")
+	}
+}
+
 // TestFinalEndsTheSessionDeterministically is the D1 regression: the first
 // real run produced a schema-valid note at 9 minutes and then sat for
 // another 15 until the wall-clock budget killed it, because nothing closed

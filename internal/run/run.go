@@ -192,7 +192,7 @@ func credentialEnvNames(cfg *config.Config) map[string]bool {
 			continue
 		}
 		refs = append(refs, s.Token, s.APIToken, s.PAT, s.APIKey, s.OAuthToken,
-			s.ClientID, s.ClientSecret, s.AccessToken)
+			s.ClientID, s.ClientSecret, s.AccessToken, s.Password)
 		if s.Auth != nil {
 			refs = append(refs, s.Auth.ClientID, s.Auth.ClientSecret, s.Auth.RefreshToken)
 		}

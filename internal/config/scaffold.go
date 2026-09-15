@@ -135,6 +135,19 @@ sources:
     # baseUrl: ""                             # optional override, e.g. a proxy
     # email: you@acme.com                     # basic auth username; the login email
     # apiKey: keychain:gorgias-api-key        # basic auth password
+    #
+    # adapter: servicenow
+    # instance: acme                          # acme.service-now.com
+    # table: incident                         # or sc_task, sn_customerservice_case
+    # username: sirdar.integration            # literal login name, not a secret
+    # password: keychain:servicenow-password  # basic auth, instead of oauthToken
+    # oauthToken: keychain:servicenow-oauth-token  # instead of username + password
+    # dateFormat: mdy                         # or dmy; only if the instance serves dashed dates
+    #
+    # ServiceNow is the one built-in that serves either role: the same
+    # incident is the customer's ticket and the work item, so the same
+    # block works under sources.tracker when ServiceNow is where the work
+    # is tracked too.
 notes:
   dir: .sirdar/notes
   templates: ""              # optional: directory with triage/rca/resolution .md.tmpl overrides

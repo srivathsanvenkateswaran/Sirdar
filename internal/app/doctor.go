@@ -241,7 +241,10 @@ func checkSource(ctx context.Context, cfg *config.Config, name string, sc *confi
 		}
 		return append(checks, deskProbe(ctx, name, sc, ts))
 
-	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias":
+	case "zendesk", "freshdesk", "helpscout", "intercom", "hubspot", "front", "gorgias", "servicenow":
+		// ServiceNow is here under either role: the same client answers
+		// both, and its Ping is the one authenticated round trip worth
+		// making whichever role it was configured for.
 		return []Check{builtinHelpdeskProbe(ctx, name, sc)}
 
 	case "jira", "linear", "azdo", "rally":
@@ -276,13 +279,14 @@ func builtinProbe(ctx context.Context, name string, sc *config.SourceConfig) Che
 }
 
 // builtinHelpdeskProbe builds a built-in helpdesk adapter (zendesk,
-// freshdesk, helpscout, intercom, hubspot, front, gorgias) with the
-// credentials the config names and calls its Ping: one authenticated round
-// trip proving the base URL/domain, the credential and the network all
-// work. The detail names who the connection authenticates as — an email
-// for Zendesk and Gorgias basic auth, "oauth" for a bearer token, the
+// freshdesk, helpscout, intercom, hubspot, front, gorgias, servicenow) with
+// the credentials the config names and calls its Ping: one authenticated
+// round trip proving the base URL/domain, the credential and the network
+// all work. The detail names who the connection authenticates as — an
+// email for Zendesk and Gorgias basic auth, "oauth" for a bearer token, the
 // account domain for Freshdesk, the kind of grant for the four fixed-host
-// vendors — never the secret itself.
+// vendors, the username or OAuth token on its instance for ServiceNow —
+// never the secret itself.
 func builtinHelpdeskProbe(ctx context.Context, name string, sc *config.SourceConfig) Check {
 	hd, err := newBuiltinHelpdesk(sc, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
@@ -330,6 +334,15 @@ func helpdeskAuthWho(sc *config.SourceConfig) string {
 		// The login email is the Basic username. It identifies the
 		// account; the API key is the password and is never printed.
 		return sc.Email
+	case "servicenow":
+		// The instance is worth naming: one workspace can point at a dev
+		// instance and a production one on different days. The password
+		// and the OAuth token are named only by kind.
+		who := "the OAuth token"
+		if sc.Username != "" {
+			who = sc.Username
+		}
+		return who + " on " + builtinEndpoint(sc)
 	default:
 		return "configured"
 	}

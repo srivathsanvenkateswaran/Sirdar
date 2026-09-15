@@ -23,7 +23,7 @@ type Provider string
 // under sources.*, which is exactly what KnownFields(true) is there to
 // catch, and a typo in a source's settings would then be silently ignored.
 type SourceConfig struct {
-	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "gorgias" | "jira" | "linear" | "azdo" | "rally"
+	Adapter string       `yaml:"adapter"` // "exec" | "zohodesk" | "zendesk" | "freshdesk" | "helpscout" | "intercom" | "hubspot" | "front" | "gorgias" | "servicenow" | "jira" | "linear" | "azdo" | "rally"
 	Command string       `yaml:"command,omitempty"`
 	OrgID   string       `yaml:"orgId,omitempty"`
 	BaseURL string       `yaml:"baseUrl,omitempty"`
@@ -77,6 +77,22 @@ type SourceConfig struct {
 	// (private-app access token). Both are a single bearer credential
 	// against a single fixed API host, so neither needs a base URL.
 	AccessToken string `yaml:"accessToken,omitempty"` // credential ref
+
+	// ServiceNow. One instance is one tenant on one host, and the same
+	// incident is both the customer's ticket and the work item, so this
+	// adapter is configurable under either role. Username is a literal —
+	// it is the half of basic auth that is not a secret, and naming it is
+	// what lets doctor say who the connection authenticates as — while
+	// Password and OAuthToken are credential references.
+	Instance string `yaml:"instance,omitempty"` // "acme" or "acme.service-now.com"
+	Table    string `yaml:"table,omitempty"`    // default "incident"
+	Username string `yaml:"username,omitempty"` // literal login name, not a credential ref
+	Password string `yaml:"password,omitempty"` // credential ref
+	// DateFormat resolves a dashed display-value timestamp's month/day
+	// ambiguity: "mdy" or "dmy". Empty (the default) parses only the
+	// unambiguous layouts, so a dashed date simply will not parse until
+	// this names one.
+	DateFormat string `yaml:"dateFormat,omitempty"`
 
 	// HelpdeskRef is the tracker-only fallback that reads a helpdesk
 	// reference out of the ticket description when the tracker's own data
@@ -832,6 +848,9 @@ var trackerOnlyAdapters = map[string]bool{"jira": true, "linear": true, "azdo": 
 // conversations and have no issue list to sweep, so naming one under
 // sources.tracker leaves a workspace that loads and then fails on its first
 // run — worth catching at load time instead.
+// servicenow is deliberately in neither list: one ServiceNow incident is
+// both the customer's ticket and the work item, so the adapter serves
+// whichever role the workspace names it under.
 var helpdeskOnlyAdapters = map[string]bool{
 	"zendesk":   true,
 	"freshdesk": true,
@@ -937,6 +956,25 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		if s.APIKey == "" {
 			return fmt.Errorf("config: %s.apiKey: is required for adapter gorgias", prefix)
 		}
+	case "servicenow":
+		if s.Instance == "" && s.BaseURL == "" {
+			return fmt.Errorf("config: %s.instance: is required for adapter servicenow", prefix)
+		}
+		basic := s.Username != "" || s.Password != ""
+		bearer := s.OAuthToken != ""
+		switch {
+		case basic && bearer:
+			return fmt.Errorf("config: %s: set username and password, or oauthToken, not both", prefix)
+		case basic && (s.Username == "" || s.Password == ""):
+			return fmt.Errorf("config: %s: both username and password are required for basic auth", prefix)
+		case !basic && !bearer:
+			return fmt.Errorf("config: %s: one of username + password or oauthToken is required for adapter servicenow", prefix)
+		}
+		switch strings.ToLower(strings.TrimSpace(s.DateFormat)) {
+		case "", "mdy", "dmy":
+		default:
+			return fmt.Errorf("config: %s.dateFormat: must be mdy or dmy, got %q", prefix, s.DateFormat)
+		}
 	case "jira":
 		if s.BaseURL == "" {
 			return fmt.Errorf("config: %s.baseUrl: is required for adapter jira", prefix)
@@ -985,6 +1023,7 @@ func validateSource(prefix string, s *SourceConfig, isTracker bool) error {
 		{"clientId", s.ClientID},
 		{"clientSecret", s.ClientSecret},
 		{"accessToken", s.AccessToken},
+		{"password", s.Password},
 	} {
 		if f.ref == "" {
 			continue

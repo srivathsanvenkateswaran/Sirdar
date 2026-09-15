@@ -23,10 +23,10 @@ already being paid for; `provider: openai` runs Sirdar's own agent loop against 
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
 a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
 
-Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, and
-Rally; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
-Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, and Gorgias. Anything else — an internal
-tracker, a different helpdesk — is a separate executable speaking a small
+Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
+and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
+Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, and ServiceNow. Anything
+else — an internal tracker, a different helpdesk — is a separate executable speaking a small
 line-delimited JSON protocol over stdin/stdout, so its credentials and vendor-specific
 code never touch Sirdar's core.
 
@@ -79,6 +79,12 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `account` or `baseUrl`, HTTP Basic with the login `email` and an `apiKey` credential
   reference, the cursor-paginated `/api/messages` feed as the thread, and attachment
   downloads that send the key only to the configured account host.
+- Added a built-in ServiceNow adapter, the first that serves either role: one incident is both
+  the customer's ticket and the work item, so the same block works under `sources.tracker` or
+  `sources.helpdesk`. It reads the Table API for the record, `sys_journal_field` for the
+  conversation (work notes internal, comments customer-visible) and the Attachment API for the
+  files, authenticating with a basic username/password pair or an OAuth bearer token
+  (`docs/adapters.md`, `docs/research/adapters/servicenow.md`).
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).
