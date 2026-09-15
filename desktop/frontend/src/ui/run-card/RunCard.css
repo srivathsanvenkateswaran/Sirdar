@@ -1,0 +1,96 @@
+/*
+ * Run card. The base card with a run in it: a key in the ledger face, a title
+ * clamped to two lines, a quoted reason behind a rail, and a footer of badge,
+ * clock and cost.
+ */
+
+.sd-run-card {
+  display: grid;
+  gap: var(--sd-space-1);
+  width: 100%;
+  margin: 0;
+  padding: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  text-align: start;
+  cursor: pointer;
+  transition: border-color var(--sd-dur-1) ease;
+}
+
+.sd-run-card:hover {
+  border-color: var(--sd-accent);
+}
+
+/* The one moving thing on the board wears the one accent. */
+.sd-run-card[data-live='true'] {
+  border-inline-start: 2px solid var(--sd-accent);
+}
+
+.sd-run-card__top {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}
+
+.sd-run-card__key {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+}
+
+.sd-run-card__kind {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+}
+
+.sd-run-card__title {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  font-size: var(--sd-text-body);
+  line-height: 1.35;
+  color: var(--sd-ink-2);
+}
+
+/* The quote rail is a logical border: on an Arabic reason it moves to the
+   right, where that reason's own leading edge is. */
+.sd-run-card__reason {
+  padding-inline-start: var(--sd-space-2);
+  border-inline-start: 2px solid var(--sd-rule-strong);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+  color: var(--sd-ink-2);
+}
+
+.sd-run-card__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}
+
+.sd-run-card__elapsed,
+.sd-run-card__cost {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  /* A clock and a cost are numbers in a bilingual pane: they stay left to
+     right whichever way the prose around them runs. */
+  unicode-bidi: isolate;
+  color: var(--sd-ink-2);
+}
+
+.sd-run-card__elapsed[data-live='true'] {
+  color: var(--sd-accent);
+}
+
+.sd-run-card__cost {
+  color: var(--sd-ink-3);
+}

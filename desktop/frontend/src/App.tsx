@@ -1,12 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import Header from './components/shell/Header'
 import NewTriageDialog from './components/shell/NewTriageDialog'
 import Toasts from './components/shell/Toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
+import Library from './screens/Library'
 import Register from './screens/Register'
 import RunDetail from './screens/RunDetail'
 import Settings from './screens/Settings'
+import { showLibrary, subscribeShowLibrary } from './lib/library'
 import { parseRoute, routeHash, sameScreen } from './lib/routes'
 import type { AppState, AppStore, EvalOptions, FixOptions, RCAOptions, Screen } from './store/appStore'
 import { useAppState, useStore } from './store/useAppStore'
@@ -78,6 +80,7 @@ function isTyping(target: EventTarget | null): boolean {
 export default function App(): JSX.Element {
   const store = useStore()
   const state = useAppState()
+  const libraryOn = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const [triageOpen, setTriageOpen] = useState(false)
   const filterRef = useRef<HTMLInputElement | null>(null)
 
@@ -86,6 +89,10 @@ export default function App(): JSX.Element {
   }, [store])
 
   useHashRoute(store, state)
+
+  useEffect(() => {
+    if (state.screen.name === 'library' && !libraryOn) store.navigate({ name: 'board' })
+  }, [state.screen, libraryOn, store])
 
   const workspaceId = state.currentWorkspaceId
   const currentWorkspace = state.workspaces.find((w) => w.id === workspaceId)
@@ -172,6 +179,13 @@ export default function App(): JSX.Element {
         />
       )
       break
+    case 'library':
+      // The switch can be turned off while the gallery is open, and a link to
+      // it can be pasted into a window that has it off. Either way the window
+      // shows the board and the address catches up, rather than showing a
+      // screen the reader has said they do not want.
+      screen = libraryOn ? <Library /> : null
+      break
     case 'settings':
       screen = (
         <Settings
@@ -210,7 +224,7 @@ export default function App(): JSX.Element {
         onNewTriage={openTriage}
       />
       <main className="main">
-        {state.workspaces.length === 0 && !state.loading ? (
+        {state.workspaces.length === 0 && !state.loading && state.screen.name !== 'library' ? (
           <p className="app-empty">
             No workspace yet. Open Settings and add the path to a repository that has a{' '}
             <code>.sirdar</code> config.

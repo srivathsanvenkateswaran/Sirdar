@@ -1,117 +1,30 @@
 /*
- * Sirdar desktop — design tokens and shell.
+ * Sirdar desktop — the app shell.
+ *
+ * Every value this file paints with comes from `styles/tokens.css`, which is
+ * the single source of truth for the app, the landing site and the docs site
+ * alike. Nothing below declares a colour, a radius or a duration of its own;
+ * the import has to lead the file because that is where CSS allows it.
  *
  * The board is a workbench, not a landing page: hairline rules instead of
- * shadows, a 3px radius, and no gradient anywhere. Two typographic registers do
- * the work — prose is set in the system sans, while every identifier and every
- * number (keys, elapsed clocks, costs, counts) is monospace with tabular
- * figures, so a lane of cards reads like a ledger column.
+ * shadows and no gradient anywhere. Two typographic registers do the work —
+ * prose is set in the UI sans, while every identifier and every number (keys,
+ * elapsed clocks, costs, counts) is monospace with tabular figures, so a lane
+ * of cards reads like a ledger column.
  *
- * Colour carries meaning and nothing else. One accent, --accent, means "Sirdar
- * itself": it is the interactive colour and it is the colour of a run that is
- * live. The four status hues are used only for the state they name, in the lane
- * rail and in the badge on every card in that lane, so the rail doubles as the
- * legend.
+ * Colour carries meaning and nothing else. One accent means "Sirdar itself":
+ * it is the interactive colour and the colour of a run that is live. The six
+ * status hues are used only for the state they name, in the lane rail and in
+ * the badge on every card in that lane, so the rail doubles as the legend.
+ *
+ * What is still here that is not shell: the board, card, badge, dialog and
+ * toast rules below. `src/ui/` now holds the library components that replace
+ * them, and the branch that restyles the screens deletes each rule here as it
+ * points a screen at the component. Deleting them on this branch would strip
+ * the running app of its paint for the sake of a tidier file.
  */
 
-:root {
-  --paper: #fbfbfa;
-  --surface: #ffffff;
-  --lane: #f2f2f0;
-  --ink: #191a1c;
-  --ink-2: #5b5f66;
-  --ink-3: #686d75;
-  --rule: #e2e2df;
-  --rule-strong: #cbcbc6;
-  --accent: #4340c8;
-  --accent-ink: #ffffff;
-  --accent-soft: rgba(67, 64, 200, 0.1);
-
-  --st-queue: #6b7280;
-  --st-live: var(--accent);
-  --st-blocked: #b45309;
-  --st-triaged: #0f766e;
-  --st-done: #15803d;
-  --st-failed: #b91c1c;
-
-  /*
-   * Arabic faces come first in each stack and are only ever fallbacks: they
-   * carry no Latin glyphs the browser will reach for, so Latin text still
-   * renders in the system face behind them. Nothing is downloaded — these are
-   * the faces macOS, Windows and the common Linux font packages already ship,
-   * and a machine with none of them falls through to its own Arabic default.
-   */
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
-    "Noto Naskh Arabic", "Geeza Pro", "Segoe UI Arabic", "Noto Sans Arabic", sans-serif;
-  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono",
-    "Noto Sans Arabic", monospace;
-
-
-
-  /*
-   * `components/panels.css` and `components/run/run.css` were written against
-   * a shorter set of names — --bg, --fg, --muted, --border, --line — and carry
-   * a light-theme literal as each one's fallback. Nothing defined those names,
-   * so every rule in those two files used its fallback: in the dark theme that
-   * painted Register rows, Eval values and the Settings headings in #16181d on
-   * a #131418 paper (a ratio of 1.04:1). They are aliases, and a custom
-   * property substitutes where it is used, so one definition here follows the
-   * palette into whichever theme is active.
-   */
-  --bg: var(--surface);
-  --fg: var(--ink);
-  --muted: var(--ink-3);
-  --border: var(--rule);
-  --line: var(--rule);
-
-  --radius: 3px;
-  --gutter: 12px;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #131418;
-    --surface: #1b1d23;
-    --lane: #0e0f12;
-    --ink: #e6e8ec;
-    --ink-2: #9aa0aa;
-    --ink-3: #868c96;
-    --rule: #2a2d34;
-    --rule-strong: #3d424b;
-    --accent: #9b98ff;
-    --accent-ink: #14141f;
-    --accent-soft: rgba(155, 152, 255, 0.14);
-
-    --st-queue: #8b919b;
-    --st-blocked: #e0a14a;
-    --st-triaged: #5ac8bb;
-    --st-done: #6ec98a;
-    --st-failed: #f08c8c;
-    color-scheme: dark;
-  }
-}
-
-:root[data-theme="dark"] {
-  --paper: #131418;
-  --surface: #1b1d23;
-  --lane: #0e0f12;
-  --ink: #e6e8ec;
-  --ink-2: #9aa0aa;
-  --ink-3: #868c96;
-  --rule: #2a2d34;
-  --rule-strong: #3d424b;
-  --accent: #9b98ff;
-  --accent-ink: #14141f;
-  --accent-soft: rgba(155, 152, 255, 0.14);
-
-  --st-queue: #8b919b;
-  --st-blocked: #e0a14a;
-  --st-triaged: #5ac8bb;
-  --st-done: #6ec98a;
-  --st-failed: #f08c8c;
-  color-scheme: dark;
-}
+@import './styles/tokens.css';
 
 * {
   box-sizing: border-box;
@@ -125,15 +38,15 @@ body,
 
 body {
   margin: 0;
-  background: var(--paper);
-  color: var(--ink);
-  font: 13px/1.5 var(--sans);
+  background: var(--sd-paper);
+  color: var(--sd-ink);
+  font: var(--sd-text-body) / 1.5 var(--sd-font-ui);
   -webkit-font-smoothing: antialiased;
 }
 
 code,
 kbd {
-  font-family: var(--mono);
+  font-family: var(--sd-font-mono);
 }
 
 .visually-hidden {
@@ -147,9 +60,12 @@ kbd {
   white-space: nowrap;
 }
 
+/* The focus ring is the same ring everywhere, in both themes, and no rule in
+   the app or the library removes it. The accent clears 4.5:1 against paper,
+   surface and sunk in both themes, so it is visible wherever it lands. */
 :focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
 }
 
 /* ---------- shell ---------- */

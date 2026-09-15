@@ -1,0 +1,113 @@
+/*
+ * Button. The primary variant is the only one with the hard offset shadow and
+ * the only one permitted to mutate anything.
+ */
+
+.sd-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--sd-space-2);
+  /* 32px is the app's minimum hit target; the padding gets there without a
+     fixed height, so a two-line label in Arabic still fits. */
+  min-height: 32px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    color var(--sd-dur-1) ease,
+    background-color var(--sd-dur-1) ease,
+    border-color var(--sd-dur-1) ease,
+    box-shadow var(--sd-dur-1) ease,
+    transform var(--sd-dur-1) var(--sd-ease);
+}
+
+.sd-button:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--sd-accent);
+  color: var(--sd-accent);
+}
+
+.sd-button:disabled,
+.sd-button[aria-disabled='true'] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---------- primary ---------- */
+
+.sd-button[data-variant='primary'] {
+  border-color: var(--sd-shadow-hard-color);
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+  box-shadow: var(--sd-shadow-hard);
+}
+
+.sd-button[data-variant='primary']:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: var(--sd-shadow-hard-color);
+  color: var(--sd-accent);
+}
+
+/* Pressed: a pixel into the page, with the shadow shrinking to match, so the
+   button looks pushed down rather than dimmed. */
+.sd-button[data-variant='primary']:active:not(:disabled, [aria-disabled='true']) {
+  transform: translate(1px, 1px);
+  box-shadow: var(--sd-shadow-hard-pressed);
+}
+
+[dir='rtl'] .sd-button[data-variant='primary']:active:not(:disabled, [aria-disabled='true']) {
+  transform: translate(-1px, 1px);
+}
+
+.sd-button[data-variant='primary']:disabled,
+.sd-button[data-variant='primary'][aria-disabled='true'] {
+  box-shadow: none;
+}
+
+/* ---------- ghost ---------- */
+
+.sd-button[data-variant='ghost'] {
+  border-color: transparent;
+  background: transparent;
+  color: var(--sd-ink-2);
+}
+
+.sd-button[data-variant='ghost']:hover:not(:disabled, [aria-disabled='true']) {
+  border-color: transparent;
+  background: var(--sd-accent-soft);
+  color: var(--sd-accent);
+}
+
+/* ---------- parts ---------- */
+
+.sd-button__label {
+  min-width: 0;
+}
+
+.sd-button__kbd {
+  padding-inline: var(--sd-space-1);
+  border: 1px solid currentColor;
+  border-radius: var(--sd-radius-xs);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  line-height: 1.5;
+  opacity: 0.6;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-button {
+    transition-duration: 1ms;
+  }
+
+  .sd-button[data-variant='primary']:active:not(:disabled, [aria-disabled='true']) {
+    transform: none;
+  }
+}

@@ -11,7 +11,7 @@ import type { Screen } from '../store/appStore'
  * binary's embedded FS, neither of which rewrites unknown paths to index.html.
  *
  *   #/                        the board
- *   #/register  #/eval  #/settings
+ *   #/register  #/eval  #/settings  #/library
  *   #/runs/<workspaceId>/<runId>
  *
  * A run link names its workspace because a run id means nothing without one:
@@ -55,6 +55,10 @@ export function parseRoute(hash: string): Route | null {
     case 'register':
     case 'eval':
     case 'settings':
+    case 'library':
+      // A library link parses whether or not the switch is on. The window
+      // decides what to do with it: a route is an address, and refusing to
+      // read one here would mean the address bar and the screen disagree.
       return parts.length === 1 ? { screen: { name: parts[0] } } : null
     case 'runs': {
       if (parts.length !== 3) return null

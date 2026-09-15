@@ -1,0 +1,74 @@
+/*
+ * Toast. A surface card with a 2px edge in the tone's hue, and the only other
+ * thing in the app besides a dialog that carries the soft ambient shadow.
+ */
+
+.sd-toasts {
+  position: fixed;
+  inset-inline-end: var(--sd-space-3);
+  inset-block-end: var(--sd-space-3);
+  z-index: 20;
+  display: grid;
+  gap: var(--sd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  max-width: min(380px, calc(100vw - 2 * var(--sd-space-5)));
+}
+
+.sd-toast {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sd-space-2);
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-inline-start: 2px solid var(--sd-accent);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  line-height: 1.45;
+  animation: sd-toast-in 140ms var(--sd-ease);
+}
+
+.sd-toast[data-tone='error'] {
+  border-inline-start-color: var(--sd-st-failed);
+}
+
+.sd-toast__text {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.sd-toast__dismiss {
+  flex: none;
+  min-width: 24px;
+  min-height: 24px;
+  border: 0;
+  border-radius: var(--sd-radius-xs);
+  background: transparent;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-body-l);
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sd-toast__dismiss:hover {
+  color: var(--sd-ink);
+}
+
+@keyframes sd-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-toast {
+    animation: none;
+  }
+}

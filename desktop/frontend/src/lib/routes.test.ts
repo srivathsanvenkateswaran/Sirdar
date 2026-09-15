@@ -11,6 +11,7 @@ describe('parseRoute', () => {
     ['#/register', 'register'],
     ['#/eval', 'eval'],
     ['#/settings', 'settings'],
+    ['#/library', 'library'],
   ])('%s opens the %s screen', (hash, name) => {
     expect(parseRoute(hash)).toEqual({ screen: { name } })
   })
@@ -37,6 +38,7 @@ describe('parseRoute', () => {
     '#/runs/ws1',
     '#/runs/ws1/r1/extra',
     '#/settings/danger',
+    '#/library/button',
     '#/runs//r1',
   ])('answers null for %s', (hash) => {
     expect(parseRoute(hash)).toBeNull()
@@ -53,6 +55,7 @@ describe('routeHash', () => {
     [{ name: 'register' } as Screen, '#/register'],
     [{ name: 'eval' } as Screen, '#/eval'],
     [{ name: 'settings' } as Screen, '#/settings'],
+    [{ name: 'library' } as Screen, '#/library'],
   ])('writes %o as %s', (screen, hash) => {
     expect(routeHash(screen, 'ws1')).toBe(hash)
   })

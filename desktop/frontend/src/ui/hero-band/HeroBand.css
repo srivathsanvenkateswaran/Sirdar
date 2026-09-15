@@ -1,0 +1,100 @@
+/*
+ * Hero band. Full bleed, leading corners rounded, one headline, one deck, one
+ * action. No shadow: a band separates by colour and corner, never by depth.
+ */
+
+.sd-hero {
+  /* The band carries its own ink and its own ground, so everything inside it
+     inherits a pair that is known to clear 4.5:1 without any rule saying so. */
+  --sd-band-ground: var(--sd-band-deep);
+  display: block;
+  width: 100%;
+  padding-block: var(--sd-space-8);
+  padding-inline: var(--sd-space-5);
+  border-start-start-radius: var(--sd-radius-band);
+  border-start-end-radius: var(--sd-radius-band);
+  background: var(--sd-band-ground);
+  color: var(--sd-band-fg);
+}
+
+.sd-hero[data-tone='ink'] {
+  --sd-band-ground: var(--sd-band-ink);
+}
+
+.sd-hero__inner {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-7);
+  margin-inline: auto;
+  max-width: var(--sd-measure-wide);
+}
+
+.sd-hero__aside {
+  flex: none;
+}
+
+.sd-hero__content {
+  min-width: 0;
+}
+
+.sd-hero__headline {
+  margin: 0;
+  max-width: 18ch;
+  font-family: var(--sd-font-display);
+  font-size: var(--sd-text-display-l);
+  font-weight: 400;
+  line-height: 1.04;
+  letter-spacing: -0.01em;
+}
+
+.sd-hero__clause-tail {
+  font-style: italic;
+}
+
+/*
+ * Arabic has no italic. A faux slant on Naskh is a defect, not an emphasis, so
+ * the second clause takes weight instead and the figure survives translation.
+ */
+[dir='rtl'] .sd-hero__clause-tail {
+  font-style: normal;
+  font-weight: 600;
+}
+
+.sd-hero__deck {
+  margin-block: var(--sd-space-4) 0;
+  max-width: 46ch;
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body-l);
+  line-height: 1.55;
+  /* The deck is the band's own ink at a lower weight rather than a second
+     colour: only band ink is allowed on a band. */
+  opacity: 0.86;
+}
+
+.sd-hero__action {
+  margin-block-start: var(--sd-space-5);
+}
+
+/* The landing page's hit targets are 44px, not the app's 32. */
+.sd-hero__action .sd-button {
+  min-height: 44px;
+  padding-inline: var(--sd-space-5);
+  font-size: var(--sd-text-body-l);
+}
+
+@media (max-width: 720px) {
+  .sd-hero {
+    padding-block: var(--sd-space-7);
+  }
+
+  .sd-hero__inner {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--sd-space-5);
+  }
+
+  .sd-hero__headline {
+    font-size: var(--sd-text-display-m);
+    max-width: none;
+  }
+}

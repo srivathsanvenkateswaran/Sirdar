@@ -1,0 +1,134 @@
+/*
+ * Note pane. Prose at a reading measure, in the app's one serif moment.
+ */
+
+.sd-note {
+  max-width: var(--sd-measure-prose);
+  padding-block: var(--sd-space-4);
+  padding-inline: var(--sd-space-4);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body-l);
+  line-height: 1.6;
+  color: var(--sd-ink);
+}
+
+.sd-note__head {
+  margin-block-end: var(--sd-space-4);
+  padding-block-end: var(--sd-space-3);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.sd-note__title {
+  margin: 0;
+  font-family: var(--sd-font-display);
+  font-size: var(--sd-text-display-m);
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+/*
+ * Arabic has no italic and no serif counterpart in this stack, so an Arabic
+ * heading marks itself with weight instead of slant. Nothing in the app is
+ * ever set in italic for the same reason.
+ */
+.sd-note[dir='rtl'] .sd-note__title {
+  font-weight: 600;
+}
+
+.sd-note__source {
+  margin-block: var(--sd-space-1) 0;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  unicode-bidi: isolate;
+  color: var(--sd-ink-3);
+}
+
+.sd-note__body > :first-child {
+  margin-block-start: 0;
+}
+
+.sd-note__body h2,
+.sd-note__body h3 {
+  margin-block: var(--sd-space-5) var(--sd-space-2);
+  font-family: var(--sd-font-display);
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.sd-note__body h2 {
+  font-size: var(--sd-text-title);
+}
+
+.sd-note__body h3 {
+  font-size: var(--sd-text-body-l);
+}
+
+.sd-note__body p,
+.sd-note__body li {
+  overflow-wrap: anywhere;
+}
+
+.sd-note__body blockquote {
+  margin-inline: 0;
+  padding-inline-start: var(--sd-space-3);
+  border-inline-start: 2px solid var(--sd-rule-strong);
+  color: var(--sd-ink-2);
+}
+
+.sd-note__body code {
+  padding-inline: var(--sd-space-1);
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-sunk);
+  font-family: var(--sd-font-mono);
+  font-size: 0.92em;
+  unicode-bidi: isolate;
+}
+
+.sd-note__body pre {
+  padding: var(--sd-space-3);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  overflow-x: auto;
+}
+
+.sd-note__body pre code {
+  padding: 0;
+  background: none;
+}
+
+/*
+ * The marker sweep. A link is underlaid with a band of the highlight colour
+ * that wipes across it from the leading edge on hover, the way a marker pen
+ * crosses a printed page. It is the library's one link treatment, and it
+ * grows from `inset-inline-start` so it wipes the way the text reads.
+ *
+ * Until the Link component lands this rule is the definition; the note pane is
+ * where nearly every link in the app lives.
+ */
+.sd-note__body a {
+  color: var(--sd-accent);
+  text-decoration-color: color-mix(in srgb, var(--sd-accent) 45%, transparent);
+  text-underline-offset: 2px;
+  background-image: linear-gradient(var(--sd-highlight), var(--sd-highlight));
+  background-repeat: no-repeat;
+  background-position-y: 88%;
+  background-size: 0 0.42em;
+  transition: background-size var(--sd-dur-1) var(--sd-ease);
+}
+
+.sd-note__body a:hover,
+.sd-note__body a:focus-visible {
+  background-size: 100% 0.42em;
+}
+
+/* The pen travels the way the text reads. */
+.sd-note[dir='rtl'] .sd-note__body a {
+  background-position-x: right;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-note__body a {
+    transition-duration: 1ms;
+  }
+}

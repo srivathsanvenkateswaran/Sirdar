@@ -1,0 +1,344 @@
+/*
+ * Sirdar design tokens — the only place a value is declared.
+ *
+ * Three surfaces read this file and none of them redeclares anything: the
+ * desktop app imports it at the top of `styles.css`, the landing site takes a
+ * byte-identical copy, and the docs site assigns Material's `--md-*` variables
+ * from these names. If the three ever disagree, this file is right and the
+ * other two are stale. See `docs/design/01-tokens.md`, which is the contract
+ * this file implements, and `docs/design/00-design-language.md` for why each
+ * value is what it is.
+ *
+ * Every ratio quoted in a comment below was computed, not estimated, and is
+ * asserted in `src/styles.contrast.test.ts`. A token that cannot state its
+ * ratio does not ship.
+ *
+ * Nothing here is downloaded. The three families the design language names —
+ * Newsreader, Inter, JetBrains Mono — lead each stack so that the day the
+ * woff2 files are self-hosted they are picked up without a token change; until
+ * then every stack falls through to a face the operating system already has,
+ * which is what keeps the desktop app working offline and the landing page
+ * free of a third-party request.
+ */
+
+:root {
+  /* ---------- ground and surface ---------- */
+  --sd-paper: #FAF7EC;
+  --sd-surface: #FFFDF7;
+  --sd-sunk: #F1EDDF;
+  --sd-band-deep: #1F2B52;
+  --sd-band-ink: #17181C;
+
+  /*
+   * The ink a band carries. `01-tokens.md` states the band's ratio as "paper
+   * on it: 12.83:1 light, 10.48:1 dark" without naming the token that paints
+   * it; in the dark theme the paper value is a near-black and 10.48:1 is the
+   * warm ink instead. Two components already have to agree on this (hero band
+   * and the docs home band), which by section 4's test makes it a token rather
+   * than a component-local constant.
+   */
+  --sd-band-fg: var(--sd-paper);
+
+  /* ---------- ink ramp ---------- */
+  /* on paper: 16.54 / 7.76 / 4.98. --sd-ink-3 on --sd-sunk is 4.56, the
+     tightest pair the file ships and the reason --sd-sunk is no darker. */
+  --sd-ink: #17181C;
+  --sd-ink-2: #4A4E58;
+  --sd-ink-3: #676B74;
+  --sd-rule: #E3DFD1;
+  --sd-rule-strong: #C9C4B2;
+
+  /* ---------- accent and highlight ---------- */
+  --sd-accent: #3B3AA6; /* 8.36 on paper, 8.82 on surface, 7.65 on sunk */
+  --sd-accent-ink: #FFFDF7; /* 8.82 on the accent fill */
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  --sd-highlight: #E4E0FF;
+  --sd-highlight-ink: #17181C; /* 13.86 on the highlight fill */
+
+  /* ---------- status ---------- */
+  /*
+   * Meaning is fixed by the run state machine in the CLI. Light values are
+   * deepened from the app's originals so they clear 4.5:1 on warm paper.
+   * --sd-st-blocked is the tightest at 4.84 on paper and 4.43 on sunk, which
+   * is why no component in the library paints status text on --sd-sunk.
+   */
+  --sd-st-queue: #63676F;
+  --sd-st-live: var(--sd-accent);
+  --sd-st-blocked: #A15C07;
+  --sd-st-triaged: #0E6F66;
+  --sd-st-done: #17713A;
+  --sd-st-failed: #B02418;
+
+  /* ---------- type ---------- */
+  --sd-font-display: Newsreader, Georgia, "Noto Naskh Arabic", serif;
+  --sd-font-ui: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "IBM Plex Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", "Segoe UI Arabic",
+    system-ui, sans-serif;
+  --sd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", "Noto Sans Arabic", monospace;
+
+  /* The app column of the type ladder in 00-design-language.md section 4. */
+  --sd-text-display-m: 1.5rem;
+  --sd-text-title: 1.125rem;
+  --sd-text-body-l: 0.9375rem;
+  --sd-text-body: 0.8125rem;
+  --sd-text-meta: 0.71875rem;
+  --sd-text-micro: 0.65625rem;
+
+  /* The landing column of the same ladder. */
+  --sd-text-display-xl: 4.5rem;
+  --sd-text-display-l: 3.5rem;
+
+  /* ---------- space ---------- */
+  --sd-space-1: 4px;
+  --sd-space-2: 8px;
+  --sd-space-3: 12px;
+  --sd-space-4: 16px;
+  --sd-space-5: 24px;
+  --sd-space-6: 32px;
+  --sd-space-7: 48px;
+  --sd-space-8: 64px;
+  --sd-space-9: 96px;
+  --sd-space-10: 128px;
+
+  /* ---------- radius ---------- */
+  --sd-radius-xs: 4px;
+  --sd-radius-sm: 8px;
+  --sd-radius-md: 12px;
+  --sd-radius-lg: 20px;
+  --sd-radius-band: 40px;
+  --sd-radius-pill: 999px;
+
+  /* ---------- elevation ---------- */
+  /*
+   * Two shadows, and most things get neither. The hard offset is the printed
+   * look and marks the one control on a surface that can change something; it
+   * flips its horizontal offset under [dir="rtl"] at the foot of this file so
+   * the light keeps coming from the leading edge.
+   */
+  --sd-shadow-hard-color: var(--sd-ink);
+  --sd-shadow-hard: 2px 2px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-hard-pressed: 1px 1px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-soft: 0 4px 20px rgba(23, 24, 28, 0.1);
+
+  /* ---------- motion ---------- */
+  --sd-dur-1: 120ms;
+  --sd-dur-2: 200ms;
+  --sd-dur-3: 300ms;
+  --sd-dur-4: 350ms;
+  --sd-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* The two ambient motions. Both are decorative and both have a static pose
+     under prefers-reduced-motion; see src/ui/motion. */
+  --sd-dur-ring: 48s;
+  --sd-dur-marquee: 34s;
+
+  /* ---------- layout ---------- */
+  --sd-measure-wide: 1200px;
+  --sd-measure-prose: 68ch;
+  --sd-gutter: 12px;
+
+  color-scheme: light;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sd-radius-band: 64px;
+  }
+}
+
+/*
+ * Dark. The two spellings — the system preference and the explicit choice —
+ * must stay in step; each is written out rather than sharing a class, because
+ * a selector list containing an unsupported `:not()` would drop both.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sd-paper: #14151A;
+    --sd-surface: #1C1E25;
+    --sd-sunk: #0F1014;
+    --sd-band-deep: #232F58;
+    --sd-band-ink: #0C0D10;
+    --sd-band-fg: var(--sd-ink); /* 10.48 on band-deep, 15.69 on band-ink */
+
+    --sd-ink: #E9E7DF;
+    --sd-ink-2: #A6A9B2;
+    --sd-ink-3: #8C919B;
+    --sd-rule: #2A2D34;
+    --sd-rule-strong: #3D424B;
+
+    --sd-accent: #A6A2FF;
+    --sd-accent-ink: #14151A;
+    --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+    --sd-highlight: #2E2A55;
+    --sd-highlight-ink: #DDD8FF;
+
+    --sd-st-queue: #9298A3;
+    --sd-st-blocked: #E0A14A;
+    --sd-st-triaged: #58C7BA;
+    --sd-st-done: #6EC98A;
+    --sd-st-failed: #F08C8C;
+
+    /* Ink on a dark ground would be invisible, so the hard shadow is drawn in
+       the strong rule instead. */
+    --sd-shadow-hard-color: var(--sd-rule-strong);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --sd-paper: #14151A;
+  --sd-surface: #1C1E25;
+  --sd-sunk: #0F1014;
+  --sd-band-deep: #232F58;
+  --sd-band-ink: #0C0D10;
+  --sd-band-fg: var(--sd-ink);
+
+  --sd-ink: #E9E7DF;
+  --sd-ink-2: #A6A9B2;
+  --sd-ink-3: #8C919B;
+  --sd-rule: #2A2D34;
+  --sd-rule-strong: #3D424B;
+
+  --sd-accent: #A6A2FF;
+  --sd-accent-ink: #14151A;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+  --sd-highlight: #2E2A55;
+  --sd-highlight-ink: #DDD8FF;
+
+  --sd-st-queue: #9298A3;
+  --sd-st-blocked: #E0A14A;
+  --sd-st-triaged: #58C7BA;
+  --sd-st-done: #6EC98A;
+  --sd-st-failed: #F08C8C;
+
+  --sd-shadow-hard-color: var(--sd-rule-strong);
+
+  color-scheme: dark;
+}
+
+/*
+ * The gallery paints a light frame inside a dark window and the other way
+ * round, so both themes also have to be reachable on a subtree rather than
+ * only on :root. These repeat the two blocks above at element scope; they
+ * carry no colour of their own, only the same values one level down.
+ */
+[data-theme="light"] {
+  --sd-paper: #FAF7EC;
+  --sd-surface: #FFFDF7;
+  --sd-sunk: #F1EDDF;
+  --sd-band-deep: #1F2B52;
+  --sd-band-ink: #17181C;
+  --sd-band-fg: var(--sd-paper);
+  --sd-ink: #17181C;
+  --sd-ink-2: #4A4E58;
+  --sd-ink-3: #676B74;
+  --sd-rule: #E3DFD1;
+  --sd-rule-strong: #C9C4B2;
+  --sd-accent: #3B3AA6;
+  --sd-accent-ink: #FFFDF7;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  --sd-highlight: #E4E0FF;
+  --sd-highlight-ink: #17181C;
+  --sd-st-queue: #63676F;
+  --sd-st-blocked: #A15C07;
+  --sd-st-triaged: #0E6F66;
+  --sd-st-done: #17713A;
+  --sd-st-failed: #B02418;
+  --sd-shadow-hard-color: var(--sd-ink);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --sd-paper: #14151A;
+  --sd-surface: #1C1E25;
+  --sd-sunk: #0F1014;
+  --sd-band-deep: #232F58;
+  --sd-band-ink: #0C0D10;
+  --sd-band-fg: var(--sd-ink);
+  --sd-ink: #E9E7DF;
+  --sd-ink-2: #A6A9B2;
+  --sd-ink-3: #8C919B;
+  --sd-rule: #2A2D34;
+  --sd-rule-strong: #3D424B;
+  --sd-accent: #A6A2FF;
+  --sd-accent-ink: #14151A;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+  --sd-highlight: #2E2A55;
+  --sd-highlight-ink: #DDD8FF;
+  --sd-st-queue: #9298A3;
+  --sd-st-blocked: #E0A14A;
+  --sd-st-triaged: #58C7BA;
+  --sd-st-done: #6EC98A;
+  --sd-st-failed: #F08C8C;
+  --sd-shadow-hard-color: var(--sd-rule-strong);
+  color-scheme: dark;
+}
+
+/*
+ * The one documented exception to logical properties. A hard offset shadow is
+ * a light source, not a layout box: mirrored, the light would come from the
+ * trailing edge and the button would look as though it had been lit from the
+ * wrong side of the page.
+ */
+[dir="rtl"] {
+  --sd-shadow-hard: -2px 2px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-hard-pressed: -1px 1px 0 0 var(--sd-shadow-hard-color);
+}
+
+/*
+ * ---------- legacy aliases ----------
+ *
+ * The app's pre-token variable names, kept for one release.
+ *
+ * `styles.css`, `components/panels.css` and `components/run/run.css` between
+ * them read these names about three hundred times. Renaming them in place
+ * would mean rewriting every one of those rules on the same commit as the
+ * palette change, which is how a restyle turns into a bisect. Instead the new
+ * names land first, the old ones become one-line references, and the second
+ * pass deletes this block once `grep -rn 'var(--paper' desktop/frontend/src`
+ * comes back empty — which is the restyle branch's job, not this one's.
+ *
+ * Each alias is a reference rather than a literal, so it follows the palette
+ * into whichever theme is active. That is the whole point: the bug this
+ * replaces was a set of light-theme literals written as fallbacks, which
+ * painted #16181d text on a #131418 paper in the dark theme.
+ *
+ * `--radius` is the one alias that cannot be faithful. It was a single 3px
+ * value serving a badge, a card and a dialog alike; 01-tokens.md splits it
+ * into three. It points at --sd-radius-xs here so nothing loses its corner,
+ * and every selector that reads it gets a per-component decision when the
+ * restyle branch reaches it.
+ */
+:root {
+  --paper: var(--sd-paper);
+  --surface: var(--sd-surface);
+  --lane: var(--sd-sunk);
+  --ink: var(--sd-ink);
+  --ink-2: var(--sd-ink-2);
+  --ink-3: var(--sd-ink-3);
+  --rule: var(--sd-rule);
+  --rule-strong: var(--sd-rule-strong);
+  --accent: var(--sd-accent);
+  --accent-ink: var(--sd-accent-ink);
+  --accent-soft: var(--sd-accent-soft);
+
+  --st-queue: var(--sd-st-queue);
+  --st-live: var(--sd-st-live);
+  --st-blocked: var(--sd-st-blocked);
+  --st-triaged: var(--sd-st-triaged);
+  --st-done: var(--sd-st-done);
+  --st-failed: var(--sd-st-failed);
+
+  --sans: var(--sd-font-ui);
+  --mono: var(--sd-font-mono);
+
+  --bg: var(--sd-surface);
+  --fg: var(--sd-ink);
+  --muted: var(--sd-ink-3);
+  --border: var(--sd-rule);
+  --line: var(--sd-rule);
+
+  --radius: var(--sd-radius-xs);
+  --gutter: var(--sd-gutter);
+}

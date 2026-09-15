@@ -1,0 +1,88 @@
+/*
+ * Pill nav. A surface-coloured pill row that sits on top of whatever band it
+ * is over, which is how a colour-banded page still reads as one document.
+ */
+
+.sd-pill-nav {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.sd-pill-nav__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-1);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sd-pill-nav__slot {
+  display: flex;
+  min-width: 0;
+}
+
+.sd-pill-nav__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-height: 32px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 0;
+  border-radius: var(--sd-radius-pill);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+  line-height: 1.4;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  transition:
+    color var(--sd-dur-1) ease,
+    background-color var(--sd-dur-1) ease;
+}
+
+.sd-pill-nav__item:hover {
+  color: var(--sd-ink);
+}
+
+/* The current page is a fill, not a border: a border under one item shifts
+   every other item by a pixel when the bar wraps. */
+.sd-pill-nav__item[aria-current='page'] {
+  background: var(--sd-accent-soft);
+  color: var(--sd-accent);
+  font-weight: 500;
+}
+
+.sd-pill-nav__count {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-ink-3);
+}
+
+.sd-pill-nav__item[aria-current='page'] .sd-pill-nav__count {
+  color: inherit;
+}
+
+/* ---------- floating bar ---------- */
+
+.sd-pill-nav[data-floating='true'] {
+  position: sticky;
+  inset-block-start: var(--sd-space-4);
+  z-index: 10;
+  align-self: center;
+  padding: var(--sd-space-1);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-pill-nav__item {
+    transition-duration: 1ms;
+  }
+}
