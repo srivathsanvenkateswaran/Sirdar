@@ -23,15 +23,33 @@ import (
 // maxMalformed is how many malformed provider lines in a row end the run.
 const maxMalformed = 10
 
-// noWireSchemaEnforcement names the providers with no mechanism to enforce
-// SessionSpec.OutputSchema on the wire: the schema reaches the model only
-// as prompt text, so nothing stops it from echoing the schema's own header
-// back, or answering with the schema itself. Claude and Qwen pass it as a
-// CLI flag their own process enforces, Codex as a protocol param its agent
-// enforces, and the openai loop as a tool-call parameter schema; ACP has
-// none of those, so it alone gets the sharpened retry and prompt wording.
+// noWireSchemaEnforcement names the providers that cannot hold the model
+// to SessionSpec.OutputSchema, so a failed note is likely to have failed by
+// quoting the schema's own header back, or by answering with the schema
+// itself, rather than by getting a field wrong. Those get the sharpened
+// retry wording.
+//
+// Claude passes the schema as a CLI flag its own process enforces, Codex as
+// a protocol param its agent enforces, and the openai loop as a tool-call
+// parameter schema. ACP has none of those: the schema reaches the agent
+// only as prompt text (acp.promptText). Cursor has none of them either —
+// there is no --json-schema flag and no structured_output field, so the
+// schema is appended to the prompt and the answer is read back out of the
+// result line's prose (cursor.extractJSON, which refuses an object whose
+// whole top level is $schema and title).
+//
+// Qwen is here on the strength of the first live run rather than the flag.
+// --json-schema is a real flag and Qwen Code does act on it, but only after
+// the fact: it registers a synthetic structured_output tool and fails the
+// run when the model answers in prose instead of calling it, which is
+// exactly what qwen-plus-character did on both the first turn and the
+// resumed retry. The schema constrains nothing the model writes, so the
+// retry is talking to a model that is answering in free text and has to be
+// told so in the same words ACP's is.
 var noWireSchemaEnforcement = map[string]bool{
-	"acp": true,
+	"acp":    true,
+	"cursor": true,
+	"qwen":   true,
 }
 
 // maxEmptyTurns is how many turns may end with no answer before the run is
@@ -65,6 +83,13 @@ type execution struct {
 	emptyTurns  int // turns that ended with no answer at all
 	schemaError string
 	malformed   int
+
+	// finalNarration is the last thing a terminal provider line said in
+	// prose rather than in JSON: a CLI's account of why it failed the run,
+	// or an agent's closing sentence. It is not an answer — answerDoc
+	// keeps it out of the validator — so it is held here and becomes the
+	// reason a run that never produced a document ended.
+	finalNarration string
 
 	// retrySession is set when the schema retry could not be sent on the
 	// running session and a fresh one was started to carry it; consume
@@ -663,6 +688,16 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 	switch ev.Kind {
 	case provider.EvToolStarted:
 		fmt.Fprintf(w, "[%s] tool %s%s\n", key, ev.Tool, toolDetail(ev.Input))
+	case provider.EvToolFinished:
+		// How a tool call ended, where the provider said something worth
+		// repeating. On cursor that is the only place a refusal shows up
+		// — there is no permission event to print, so without this line
+		// an operator watching a run cannot tell a tool that was refused
+		// from one that ran. The summary is cut to one short line
+		// because other adapters put the tool's whole output in Text.
+		if summary := toolSummary(ev.Text); summary != "" {
+			fmt.Fprintf(w, "[%s] tool %s %s\n", key, ev.Tool, summary)
+		}
 	case provider.EvPermission:
 		verb := "allow"
 		if ev.Decision == "deny" {
@@ -686,6 +721,20 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 			fmt.Fprintf(w, "[%s] %s\n", key, ev.Text)
 		}
 	}
+}
+
+// toolSummary is a finished tool call's outcome, in a form a progress line
+// can carry: one line, cut short, and nothing at all for the ordinary
+// success every read tool reports.
+func toolSummary(text string) string {
+	s := firstLine(text)
+	if s == "" || s == "ok" {
+		return ""
+	}
+	if len(s) > toolDetailMax {
+		s = s[:toolDetailMax] + "…"
+	}
+	return s
 }
 
 const toolDetailMax = 60
@@ -859,9 +908,12 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
-	doc := []byte(ev.Final)
-	if len(doc) == 0 {
-		doc = []byte(strings.TrimSpace(ev.Text))
+	doc, narration := answerDoc(ev)
+	if narration != "" {
+		// Kept for the failure reason below. It is the provider's own
+		// account of how the session ended, and it is the only account
+		// there is once the document turns out not to exist.
+		ex.finalNarration = narration
 	}
 
 	// An empty document is a turn that ended with nothing in it — all tool
@@ -890,6 +942,20 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		} else if schemaItself {
 			err = fmt.Errorf("the agent's answer is the JSON Schema itself (a root \"properties\" object), not a document shaped by it")
 		}
+		if err != nil {
+			// The other thing a model writing free-text JSON gets wrong
+			// about a string field: null for "I have nothing to put
+			// here", which is what the schema's own optional fields
+			// spell that way. Same information as "", so it is read as
+			// "" and the fields are named in a warning.
+			if coerced, nulled, ok := coerceNullStrings(schema, doc); ok {
+				if cerr := note.Validate(noteKind(p.kind), coerced); cerr == nil {
+					doc, err = coerced, nil
+					p.state.Warnings = append(p.state.Warnings,
+						"the agent wrote null where the schema wants a string, read as empty: "+strings.Join(nulled, ", "))
+				}
+			}
+		}
 	}
 	if err == nil {
 		ex.final = append([]byte(nil), doc...)
@@ -915,9 +981,15 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	switch {
 	case empty && ex.emptyTurns >= maxEmptyTurns:
 		// Nothing was ever validated, so calling this a schema failure
-		// would name the wrong problem.
+		// would name the wrong problem. The provider's own last words go
+		// in the reason when it had any: "the agent ended the turn
+		// without an answer" is true of a CLI that failed the run for
+		// answering in prose, and says nothing an operator can act on.
 		ex.schemaError = firstProblem(err)
 		ex.failure = errEmptyAnswer.Error()
+		if ex.finalNarration != "" {
+			ex.failure += ": " + firstLine(ex.finalNarration)
+		}
 		sess.Cancel()
 		return
 	case !empty && ex.retried:

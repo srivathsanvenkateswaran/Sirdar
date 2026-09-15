@@ -37,6 +37,27 @@ The exclusion block is the read-only guarantee and is not optional; see
 The shell is the one tool that switches sides: allow-listed when the workspace named
 `permissions.bash` patterns and excluded when it did not.
 
+### What changes for `sirdar fix`
+
+A fix session is the one run that may write, and three tools move for it — `write_file`,
+`edit` and `replace` (the legacy alias `ToolNamesMigration` resolves onto `edit`). All three
+come off `--exclude-tools`, go onto `--allowed-tools`, and come off the settings file's
+`permissions.deny`. All three are needed: an excluded tool is never registered; an
+un-allowed one is refused by `denyUnlessAllowed` before any hook is consulted; and a
+settings-layer deny beats every allow. Getting two of the three right registers nothing,
+which is what the first live fix run did — its agent reported the edit it had been refused
+and the run still said "completed".
+
+Nothing else moves. `notebook_edit`, `monitor`, and the agent/skill/task family stay
+excluded in fix mode exactly as in triage, and the shell is still the workspace's
+`permissions.fixBash` list judged command by command by the hook.
+
+The writes are mediated, not trusted: each call reaches the PreToolUse hook and
+`FixPolicy.decideWrite` resolves its `file_path` against the worktree root, refusing
+anything outside it and anything under `.git/`, `.sirdar/` or the repository's
+`core.hooksPath`. Measured: the hook payload for both `write_file` and `edit` carries
+`file_path` (see the PreToolUse body below), which is what makes that check possible at all.
+
 The prompt goes in **on stdin** and stdin is then closed. `-p/--prompt` is deprecated in
 0.23.3 in favour of a positional argument, and both put the whole triage prompt on the
 command line; stdin has no length limit and is the documented third form
@@ -460,6 +481,38 @@ thing from Sirdar's retry against the *note* schema after the run.
 Restrictions that matter: `--json-schema` is rejected with `-i/--prompt-interactive`, with
 `--input-format stream-json`, with `--acp`, and with no prompt at all. It is a per-run flag,
 so it has to be re-passed on every `--resume`.
+
+### When the model ignores the tool (observed live, 2026-09-15)
+
+The stub backend above always called `structured_output`, which hid the case a real model
+produces. On the first live run — `sirdar triage SBX-1` against a Qwen OAuth login, model
+`qwen-plus-character` — the model wrote the entire note as a **text block** and never called
+the tool. What the CLI does then is give up, not re-prompt:
+
+```json
+{"type":"assistant","message":{"content":[{"type":"text","text":"{\n  \"ticket\": { ... }"}],
+ "usage":{"input_tokens":43483,"output_tokens":1924,"total_tokens":45407}}}
+{"type":"result","subtype":"error_during_execution","is_error":true,"num_turns":2,
+ "usage":{"input_tokens":43483,"output_tokens":1924,"total_tokens":45407},
+ "permission_denials":[],
+ "error":{"message":"Model produced plain text instead of calling the structured_output tool as required by --json-schema after 2 turn(s). Output preview (200+ chars): \"{\\n  \\\"ticket\\\": ...\"."}}
+```
+
+The result line carries **no `structured_result` and no `result` string at all** — only that
+sentence — and the process exits 1. So `--json-schema` is enforcement after the fact, not a
+constraint on what the model writes: it can turn a good answer into a failed run, and the
+answer survives only in the last `assistant` text block. `permission_denials` is empty and the
+hook is never asked about `structured_output`, which is how a run that ignored the tool is told
+apart from one whose call was refused.
+
+Resuming to retry does not help by itself. The `--resume` session receives the retry message
+(it appears as a `real_user` turn in
+`~/.qwen/projects/<sanitized-cwd>/chats/<sessionId>.jsonl`) and answers it — with a fresh,
+also-correct JSON document, again as plain text, again exiting 1. Two turns, no note.
+
+The adapter therefore reads the answer out of the text block when the result line carries no
+structured one (`qwen.recoverFinal`, `qwen.jsonObject`), and `internal/run` counts qwen among
+the providers whose schema retry has to spell out "the JSON object only".
 
 ## Resume
 

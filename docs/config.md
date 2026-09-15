@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `agy` (Google's Antigravity CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `cursor` (the Cursor Agent CLI), `agy` (Google's Antigravity CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -117,6 +117,9 @@ rather than being silently ignored.
 | `acp.command` | string | none (required for `provider: acp`) | The ACP agent's program: `gemini`, `goose`, `opencode`, `npx` |
 | `acp.args` | list of string, optional | unset | The rest of the agent's command line, e.g. `["--experimental-acp"]` |
 | `acp.env` | map, optional | unset | Literal environment entries added to the agent's environment; these are values, not credential references |
+| `cursor.path` | string, optional | `""` (look up `cursor-agent` on `PATH`) | Path to the Cursor Agent binary |
+| `cursor.model` | string, optional | `auto` | Model id the CLI is asked for. A Cursor Free plan may only use `auto`; `--model` and `model` override it |
+| `cursor.mode` | string, optional | `ask` | The read-only execution mode a triage or rca session runs in: `ask` or `plan` |
 
 `{key}` and `{slug}` in a filename pattern are replaced with the ticket key and a slugified
 title. A pattern may also contain `/` segments to file notes into a subdirectory of `notes.dir`
@@ -1179,6 +1182,18 @@ whatever point the provider offers to be asked.
   has not itself been watched fire on an actual turn. One dogfood fix turn that has the agent
   write through a hook — a live run, deliberately spending Codex quota — would confirm it.
 
+- **cursor** — the policy is **never consulted**. `cursor-agent -p` approves its own tool
+  calls: there is no permission channel, no approval request, and no hook Sirdar can install
+  without writing into the workspace it is promising not to touch. `permissions.bash` and
+  `permissions.mcp` therefore govern nothing on this provider. What stands in their place is
+  the execution mode (`--mode ask` or `plan`) and the excluded tool list, both enforced by
+  Cursor's backend, plus `--sandbox enabled` for shell commands. `permissions.fetch` is
+  honoured only in its empty state, by excluding `web_fetch_tool_call` and `fetch_tool_call`
+  from the session; with hosts named the tools come back and no per-call check follows them.
+  What Sirdar does enforce is the consequence: a completed edit or shell call is a read-only
+  breach that fails the run and files nothing. `sirdar fix` is refused outright, before the
+  command touches git. See `provider: cursor` below.
+
 ## Attachment filtering
 
 An attachment the helpdesk downloaded is kept only if the session could open it. Images,
@@ -1331,7 +1346,7 @@ real run rather than after.
 ## Providers
 
 `provider: claude` (default), `provider: codex`, `provider: openai`, `provider: acp`,
-`provider: qwen`, or `provider: agy` selects what drives runs; `--provider` on `triage` and
+`provider: qwen`, `provider: cursor`, or `provider: agy` selects what drives runs; `--provider` on `triage` and
 `rca` overrides it per invocation.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
@@ -1341,6 +1356,8 @@ real run rather than after.
 - `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in
   the `qwen:` block rather than under `providers:` because the rest of that block — the
   endpoint — belongs with it.
+- `cursor.path`: path to the `cursor-agent` binary. Empty (the default) looks it up on `PATH`.
+  It sits in the `cursor:` block for the same reason `qwen.path` sits in `qwen:`.
 - `agy.path`: path to the `agy` binary, in the `agy:` block for the same reason.
 - `billing: subscription` (default) removes `ANTHROPIC_API_KEY` from the agent's child
   environment so the run authenticates with the CLI's own login and draws on your subscription.
@@ -1991,3 +2008,186 @@ and a later run reopens it with `session/load`. An agent without that capability
 itself — its name and version, the protocol version, and whether it supports `loadSession` and
 image prompts — then shuts it down again. That is the cheapest way to find out whether an agent
 you have not run before works here at all.
+
+#### Kimi Code CLI over ACP
+
+Moonshot's Kimi CLI speaks ACP natively — `kimi acp` — and it is the one agent in
+`docs/research/providers/acp-agents.md` that has been driven against a real binary rather than
+transcribed from a registry. Version 0.43.1 answers protocol version 1 and advertises
+`loadSession`, image prompts, embedded context, and HTTP and SSE MCP transports.
+
+```yaml
+provider: acp
+acp:
+  command: /Users/you/.kimi-code/bin/kimi
+  args: ["acp"]
+  env: {}
+budget:
+  maxMinutes: 20
+```
+
+The installer does not put `kimi` on `PATH` — it lives at `~/.kimi-code/bin/kimi` — so
+`acp.command` normally has to be the absolute path.
+
+Kimi's read-only posture is a session **mode**, chosen with `session/set_mode`, and the choice
+matters more here than for most agents:
+
+- **`plan`** vetoes `Write` and `Edit` in the agent's own process, before the permission chain
+  is consulted, and leaves `Bash` to arrive as a permission request that `permissions.bash`
+  answers. That is the mode a triage run wants.
+- **`default`** is not read-only in a git checkout. Kimi approves a `Write` or `Edit` whose
+  targets all lie inside the workspace whenever the workspace is inside a git work tree, and
+  that approval happens before a `session/request_permission` is built — so Sirdar is never
+  asked about the writes it exists to refuse.
+- **`auto`** and **`yolo`** approve more still, and neither belongs in a Sirdar run.
+
+Sirdar's ACP adapter does not send `session/set_mode` today, so a kimi session starts in
+`default`. Until it does, **treat `provider: acp` with kimi as a scratch-checkout provider**,
+not one to point at a repository you care about. Two further gaps are Kimi's own and no client
+setting reaches them: a subagent spawned through its `Agent` or `AgentSwarm` tool runs with
+permissions forced to auto and without the parent's plan-mode state, so nothing it does is
+asked about; and `FetchURL` and `WebSearch` are approved without asking, so `permissions.fetch`
+is never consulted. `docs/research/12-kimi-wire-formats.md` has the evidence for all of it.
+
+Headless `kimi -p` is not an alternative: it forces the session's permission mode to auto on
+every path, and refuses `--plan`, `--auto` and `--yolo` outright when combined with `-p`. That
+is why this is an ACP provider and not a native adapter.
+
+Cost is absent, as on every ACP agent — Kimi's `usage_update` carries context tokens and omits
+`cost` deliberately — so `budget.maxMinutes` is the bound. A spent quota on the free tier
+arrives as a JSON-RPC `-32000` whose message begins `Authentication required: 403 You've
+reached your monthly usage limit…`, which reads like a login failure and is not one.
+
+### `provider: cursor`
+
+The [Cursor Agent CLI](https://cursor.com/cli) (`cursor-agent`, also installed as `agent`) runs
+against the login that binary already holds — a macOS keychain entry, or an `auth.json` under
+your home directory on Linux and Windows. The whole block is optional:
+
+```yaml
+provider: cursor
+cursor:
+  path: cursor-agent   # optional: where the CLI lives
+  model: auto          # a Cursor Free plan may only use auto
+  mode: ask            # ask | plan, both read-only
+```
+
+**Read this before choosing it.** Cursor is the one provider whose read-only guarantee Sirdar
+does not enforce itself, and `sirdar fix` is refused on it outright. Both follow from one
+property of the CLI, which its own `--help` states: `-p` "has access to all tools, including
+write and shell". A print-mode session is its own approver. There is no permission channel like
+Claude Code's `control_request`, no approval request like Codex's, and no hook Sirdar can
+install without writing into your repository — so `permissions.bash`, `permissions.mcp` and
+`provider.PermissionPolicy` are **never consulted** on this provider. A default-mode print
+session was watched writing a file and running `touch x` with no prompt and no TTY to answer
+one (`docs/research/11-cursor-wire-formats.md`).
+
+What holds instead, on every triage and rca session:
+
+- **`--mode ask` (or `plan`).** Cursor's backend puts the session in a read-only execution mode.
+  A live ask-mode turn asked to create a file and run a shell command refused both and attempted
+  no tool call at all. It is the model declining under a server-side mode, not a tool being
+  withheld locally.
+- **`--exclude-tools`** for `edit_tool_call`, `delete_tool_call`, `shell_tool_call`,
+  `write_shell_stdin_tool_call`, `apply_agent_diff_tool_call` and `switch_mode_tool_call` — the
+  last because the model has a tool for changing its own execution mode. The flag becomes the
+  `x-cursor-agent-exclude-tools` request header, so this too is Cursor's backend enforcing it.
+- **`--sandbox enabled`.** Every shell call then carries a `TYPE_WORKSPACE_READWRITE` policy
+  with `networkAccess: false` and the workspace as the only writable path. It confines a shell
+  command; it does nothing for the edit tool, which is why that tool is excluded rather than
+  sandboxed.
+- **`--disable-project-configs`,** so a checkout's own `.cursor/cli.json`, sandbox policies and
+  rules cannot widen what its triage run may do.
+- **`--trust`,** because a directory you have never opened Cursor in interactively otherwise
+  fails before any API call, exit 1, with nothing on stdout. Cursor persists trust per
+  directory, in your own `~/.cursor` state, so passing the flag records the workspace path
+  there as trusted — the one change a triage run makes to anything outside the run directory.
+
+Take that together and the honest summary is: a cursor triage run is read-only because Cursor
+says so, not because Sirdar can stop it. If your workspace needs the guarantee enforced on your
+own machine, use `provider: claude`, `provider: codex`, `provider: qwen` or `provider: openai`.
+
+**A completed write ends the run.** Sirdar cannot refuse a Cursor tool call — print mode is its
+own approver and the first Sirdar hears of an edit is the line saying it finished — so what it
+does instead is watch for one. A `tool_call` / `completed` line for any of the six excluded
+tools, with anything other than a `rejected` result, means both the exclusion and the execution
+mode failed. The run is failed on the spot with the reason `read-only breach: Edit <path>`: the
+session is cancelled, its process group killed, and **no triage note is written and no register
+row recorded**, even if the answer was already in flight. A triage note asserts that the run
+read and wrote nothing, and this is the run that cannot assert it. A *rejected* tool call is the
+ordinary outcome and is not a breach — it is logged as `rejected: <reason>` and the session
+carries on. `provider: agy` fails a run the same way and for the same reason.
+
+**`sirdar fix` is refused,** before `sirdar fix` touches git at all — the provider answers
+`SupportsFix() == false`, which is asked ahead of fetching the default branch, cutting a branch
+or adding a worktree, so a refused run leaves the workspace exactly as it was. `Start` refuses
+the same spec as well, so every other route into a fix session hits it too, and `sirdar doctor`
+carries a `cursor fix` warning row saying why: the sandbox confines a shell command to the workspace but not the edit
+tool, which takes an absolute path from the model, and nothing local judges it — so a fix
+session's writes could not be confined to Sirdar's fix worktree.
+
+**`permissions.fetch`** is honoured the only way it can be: with the list empty (the default),
+`web_fetch_tool_call` and `fetch_tool_call` join the exclusion list, exactly as `WebFetch` joins
+Claude's `--disallowedTools`. With hosts configured they come back — and then nothing checks
+which host is fetched, because there is no per-call decision to make it in. `WebSearch` stays
+allowed, as on every provider.
+
+**`mcp.workspaceOnly` cannot be honoured.** Cursor always merges `~/.cursor/mcp.json` with the
+workspace's `.cursor/mcp.json` and has no flag that narrows the set. Sirdar honours the setting
+only in its emptiest case: a workspace with no `.mcp.json` gets the MCP tools excluded
+altogether. Otherwise the session sees your user-level servers too, and `doctor`'s `cursor mcp`
+row says so rather than implying a restriction that is not there. `--approve-mcps` is never
+passed.
+
+**Budgets.** The result line carries `inputTokens`, `outputTokens`, `cacheReadTokens` and
+`cacheWriteTokens` and nothing else: **no cost and no turn count**. So `budget.maxUsd` cannot
+fire — a run that sets one gets an `EvSystem` notice saying so at session start — and there is
+no `--max-turns` for `budget.maxTurns` to map onto, leaving only Sirdar's own count of the
+turns it saw. `budget.maxMinutes` is the bound that actually works here, the same as for
+`provider: acp`. Set it as if it were the only one.
+
+**Structured output.** There is no `--json-schema` flag and no `structured_output` field. The
+schema is appended to the prompt and the answer is read out of the result line's text,
+leniently: fenced blocks are searched first and the **last** one wins, then the last balanced
+top-level object in the text as a whole. Last, because a model answering a prompt-carried schema
+often restates the schema or works an example before giving the answer. An object whose only
+top-level keys are `$schema` and `title` is the schema's own header quoted back, and is refused
+rather than filed. An answer carrying no usable JSON object is what triggers the runner's schema
+retry — which on this provider is worded to say "no `$schema`, no `title`, no surrounding text
+or code fence", as it is for `provider: acp` — and because the CLI reads nothing from stdin,
+that retry goes into a fresh process with `--resume <chatId>` rather than a second message on
+the same session.
+
+**Environment.** `CURSOR_API_KEY`, `CURSOR_AUTH_TOKEN`, `CURSOR_API_ENDPOINT`, `CURSOR_API_URL`,
+`CURSOR_DATA_DIR` and `CURSOR_STATSIG_OVERRIDES` are stripped from the agent's environment, one
+`EvSystem` event per variable removed, and there is no configuration that puts any of them back.
+`CURSOR_API_ENDPOINT` is the one that matters: it is Cursor's documented endpoint override, and
+leaving it set would send your Cursor login to whatever host it names — the same failure
+`ANTHROPIC_BASE_URL` is stripped for under `billing: subscription`. Nothing else is touched:
+`HOME` in particular is left alone, because on macOS the login lives in the login keychain and
+moving `HOME` would take it with it.
+
+`HTTPS_PROXY`, `HTTP_PROXY`, `ALL_PROXY` and `NODE_EXTRA_CA_CERTS` (and their lowercase
+spellings) are **passed through**, as they are for every other adapter: behind a corporate proxy
+they are the only way the CLI reaches `api2.cursor.sh` at all. They are reported rather than
+removed — one `EvSystem` notice naming them at session start, and a `cursor proxy` warning row
+in `sirdar doctor` when any is set — because what they mean is that whatever terminates the TLS
+can read the ticket in the prompt and the answer that comes back. Neither the notice nor the row
+carries the value, since a proxy URL routinely carries credentials.
+
+**Models.** `cursor-agent --list-models` lists 200-odd ids, and a **Free plan may only use
+`auto`** — a named model is refused with an `ActionRequiredError` before the first token, and the
+session dies at exit 1 with no result line. `sirdar doctor`'s `cursor model` row reads your
+account tier from `cursor-agent about` and fails when the configured model and the plan cannot
+work together, which is cheaper than finding out mid-run.
+
+`sirdar doctor` reports five rows for this provider — `cursor-agent --version`,
+`cursor-agent status` (logged in or not, and on failure the error alone: the account email would
+otherwise end up pasted into a ticket), `cursor model`, the `cursor fix` refusal, and
+`cursor mcp` — plus a sixth, `cursor proxy`, when a proxy variable is set.
+
+`docs/research/11-cursor-wire-formats.md` has the captured wire shapes, the exit codes, the tool
+name list, and one finding this adapter does not yet use: Cursor supports `preToolUse` hooks,
+they do fire in print mode, and their `deny` is honoured — which is a real per-call mediation
+channel, blocked today only by the fact that its config file would have to be written into the
+workspace Sirdar is promising not to touch.

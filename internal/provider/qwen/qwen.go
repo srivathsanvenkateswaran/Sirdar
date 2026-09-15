@@ -179,14 +179,58 @@ var keptTools = map[string]bool{
 // Sirdar's can turn a deny into an allow. Taking away the tools that
 // register one closes that path; the folder-trust posture (see
 // writeTrustedFolders) closes it a second time.
-var excludedTools = buildExcludedTools()
+var excludedTools = buildExcludedTools(keptTools)
 
-// buildExcludedTools is qwenCoreTools minus keptTools, in the order the
-// core list is written, so --exclude-tools is stable across runs.
-func buildExcludedTools() []string {
+// fixWriteTools are the editing tools a fix session keeps registered, and
+// the only ones: write_file, edit, and replace, which 0.23.3's
+// ToolNamesMigration resolves onto edit. Each reaches the policy as Write
+// or Edit (policyNames), and each carries its target in file_path, which
+// is what FixPolicy.decideWrite needs in order to confine the write to the
+// worktree root and refuse .git/, .sirdar/ and the repository's hooks
+// directory.
+//
+// notebook_edit is not here: nothing in the flow edits a notebook, and
+// provider.fixAllowed refuses it anyway. Neither is anything that spawns a
+// sub-agent or runs a command without going through the shell tool. Those
+// stay excluded in fix mode exactly as they are in triage, because a fix
+// session is a triage session that may edit its own worktree, not an
+// unsupervised one.
+var fixWriteTools = []string{"write_file", "edit", "replace"}
+
+// fixKeptTools is keptTools plus the editing tools: the set a fix session
+// runs with.
+var fixKeptTools = buildFixKeptTools()
+
+func buildFixKeptTools() map[string]bool {
+	out := make(map[string]bool, len(keptTools)+len(fixWriteTools))
+	for name := range keptTools {
+		out[name] = true
+	}
+	for _, name := range fixWriteTools {
+		out[name] = true
+	}
+	return out
+}
+
+// fixExcludedTools is the same settings-proof exclusion for a fix session:
+// everything but the read set, the shell, and the three editing tools the
+// hook mediates.
+var fixExcludedTools = buildExcludedTools(fixKeptTools)
+
+// excludedFor is the --exclude-tools list for a session in this mode.
+func excludedFor(mode provider.Mode) []string {
+	if mode.IsFix() {
+		return fixExcludedTools
+	}
+	return excludedTools
+}
+
+// buildExcludedTools is qwenCoreTools minus kept, in the order the core
+// list is written, so --exclude-tools is stable across runs.
+func buildExcludedTools(kept map[string]bool) []string {
 	out := make([]string, 0, len(qwenCoreTools))
 	for _, name := range qwenCoreTools {
-		if !keptTools[name] {
+		if !kept[name] {
 			out = append(out, name)
 		}
 	}
@@ -198,6 +242,21 @@ func buildExcludedTools() []string {
 // half, the way the Claude adapter passes --disallowedTools alongside its
 // permission policy.
 var deniedTools = []string{"write_file", "edit", "notebook_edit"}
+
+// fixDeniedTools is that list for a fix session. write_file and edit come
+// off it: a settings-layer deny beats every allow, so leaving them on
+// would keep the editing tools unregistered however the command line
+// allowed them — which is half of why the first live fix run reported
+// "completed" having changed nothing. notebook_edit stays.
+var fixDeniedTools = []string{"notebook_edit"}
+
+// deniedFor is the settings-file deny list for a session in this mode.
+func deniedFor(mode provider.Mode) []string {
+	if mode.IsFix() {
+		return fixDeniedTools
+	}
+	return deniedTools
+}
 
 // Endpoint is the model endpoint a workspace configured under `qwen:`. It
 // is optional: with no fields set the session runs against whatever login
@@ -325,12 +384,26 @@ func args(spec provider.SessionSpec, ep Endpoint, mcpNames []string) []string {
 	for _, name := range mcpNames {
 		out = append(out, "--allowed-mcp-server-names", name)
 	}
-	// The read-only guarantee. Every write-capable tool is excluded on
-	// every session, whatever the operator's or the repository's own
-	// settings say, because --exclude-tools is merged into the deny list
-	// without consulting them and deny beats allow (see excludedTools).
-	for _, name := range excludedTools {
+	// The read-only guarantee. Every write-capable tool is excluded on a
+	// triage or rca session, whatever the operator's or the repository's
+	// own settings say, because --exclude-tools is merged into the deny
+	// list without consulting them and deny beats allow (see
+	// excludedTools).
+	for _, name := range excludedFor(spec.Mode) {
 		out = append(out, "--exclude-tools", name)
+	}
+	// A fix session is the one exception, and the editing tools it keeps
+	// are mediated rather than trusted: each call reaches the PreToolUse
+	// hook, which puts it through FixPolicy.decideWrite and so confines it
+	// to the worktree root. They have to be allow-listed as well as left
+	// un-excluded, because the headless denyUnlessAllowed refuses EDIT and
+	// WRITE_FILE under --approval-mode default unless isExplicitlyAllowed
+	// says otherwise, and --allowed-tools is the one thing that says so
+	// without consulting a settings layer Sirdar does not own.
+	if spec.Mode.IsFix() {
+		for _, name := range fixWriteTools {
+			out = append(out, "--allowed-tools", name)
+		}
 	}
 	// The shell is excluded the same way unless the workspace named
 	// permissions.bash patterns. When it did, the hook is the gate: it
@@ -492,7 +565,7 @@ func compactJSON(raw []byte) string {
 // outright when the user layer sets disableAllHooks, belt and braces
 // against this override not taking effect the way the system-layer
 // precedence promises.
-func writeSettings(dir, hookURL string, folderTrust bool) (string, error) {
+func writeSettings(dir, hookURL string, folderTrust bool, denied []string) (string, error) {
 	type hook struct {
 		Type    string `json:"type"`
 		URL     string `json:"url"`
@@ -511,7 +584,7 @@ func writeSettings(dir, hookURL string, folderTrust bool) (string, error) {
 				}},
 			}},
 		},
-		"permissions":     map[string]any{"deny": deniedTools},
+		"permissions":     map[string]any{"deny": denied},
 		"disableAllHooks": false,
 		"security": map[string]any{
 			"folderTrust":         map[string]any{"enabled": folderTrust},
@@ -741,7 +814,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	if needsMCPTrust {
 		startupWarnings = trustedResidueWarnings(workspace)
 	}
-	settingsPath, err := writeSettings(dir, base+hookPathPrefix+token, folderTrust)
+	settingsPath, err := writeSettings(dir, base+hookPathPrefix+token, folderTrust, deniedFor(spec.Mode))
 	if err != nil {
 		_ = listener.Close()
 		_ = os.RemoveAll(dir)
@@ -1076,6 +1149,11 @@ type session struct {
 	waitErr error
 	meter   usageMeter
 
+	// lastDoc is the most recent JSON object the model wrote as plain
+	// text. It is where the answer ends up when the model never calls
+	// structured_output, which is the whole of recoverFinal's business.
+	lastDoc json.RawMessage
+
 	// decided holds the ids of the tool calls the hook answered, and
 	// started the ids of the tool calls the stream announced but has not
 	// reported a result for yet. A result for a call that ran without a
@@ -1343,8 +1421,12 @@ func (s *session) read(stdout io.Reader) {
 		line := append([]byte(nil), raw...)
 		for _, ev := range decode(line) {
 			s.measure(&ev)
+			recovered := s.recoverFinal(&ev)
 			s.absorb(ev)
 			s.emit(ev)
+			if recovered != "" {
+				s.emit(warningEvent(recovered))
+			}
 		}
 		for _, ev := range s.reconcile(line) {
 			s.emit(ev)
@@ -1650,6 +1732,43 @@ func (s *session) measure(ev *provider.Event) {
 	ev.Turns = s.meter.turns
 	ev.InputTok = s.meter.inTok
 	ev.OutputTok = s.meter.outTok
+}
+
+// recoverFinal fills in a final event's structured answer from the
+// model's own text when the CLI produced none, and returns the warning
+// that recovery deserves (empty when nothing was recovered).
+//
+// Qwen Code 0.23.3 registers --json-schema as a synthetic
+// structured_output tool and enforces it by failing the run when the model
+// answers in prose instead: exit 1, a result line with
+// subtype "error_during_execution", is_error true, an empty result string,
+// and under error.message an English sentence beginning "Model produced
+// plain text instead of calling the structured_output tool". Feeding that
+// sentence to the note validator is what produced
+// `parse document: invalid character 'M' looking for beginning of value`
+// on the first live qwen run, and what made the schema retry quote a
+// meaningless error back at a model that had answered correctly.
+//
+// The answer itself is in the assistant's last text block, so it is taken
+// from there. Whether it is a note is still note.Validate's verdict, not
+// this function's: all that is claimed here is that a complete JSON object
+// was written, and that it is a better candidate than the CLI's prose
+// account of its own failure.
+func (s *session) recoverFinal(ev *provider.Event) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if ev.Kind == provider.EvAssistantText {
+		if doc := jsonObject(ev.Text); len(doc) > 0 {
+			s.lastDoc = doc
+		}
+		return ""
+	}
+	if ev.Kind != provider.EvFinal || len(ev.Final) > 0 || len(s.lastDoc) == 0 {
+		return ""
+	}
+	ev.Final = s.lastDoc
+	return "the model never called structured_output; the answer was read from its text instead"
 }
 
 // absorb records the parts of an event that belong to the terminal Result.
