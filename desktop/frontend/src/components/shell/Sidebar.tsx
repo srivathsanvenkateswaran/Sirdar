@@ -1,6 +1,7 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { Quota, RunSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
+import { BELOW_COMPACT, useMediaQuery } from '../../lib/useMediaQuery'
 import type { Screen } from '../../store/appStore'
 import Button from '../../ui/button'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
@@ -34,28 +35,11 @@ const ROWS: { name: NavName; label: string; icon: JSX.Element }[] = [
 /** How many runs the Recent sessions list shows. */
 export const RECENT_LIMIT = 4
 
-/** Below this window width the sidebar keeps its icons and drops its labels. */
-const RAIL_AT = '(max-width: 900px)'
-
 /**
- * Whether the sidebar is down to its icon rail.
- *
- * `matchMedia` is guarded rather than assumed: the Wails webview has it, jsdom
- * does not always, and a shell that throws on mount in a test environment is a
- * shell nobody can test.
+ * Below this window width the sidebar keeps its icons and drops its labels:
+ * the narrow band of `styles/tokens.css`, where the sheet needs every pixel.
  */
-function useRail(): boolean {
-  const [rail, setRail] = useState(false)
-  useEffect(() => {
-    const media = globalThis.matchMedia?.(RAIL_AT)
-    if (!media) return
-    setRail(media.matches)
-    const listen = (e: MediaQueryListEvent) => setRail(e.matches)
-    media.addEventListener?.('change', listen)
-    return () => media.removeEventListener?.('change', listen)
-  }, [])
-  return rail
-}
+export const RAIL_AT = BELOW_COMPACT
 
 function stamp(run: RunSummary): number {
   const updated = Date.parse(run.updatedAt ?? '')
@@ -182,7 +166,7 @@ export default function Sidebar(props: {
   } = props
   const library = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const primary = usePrimaryAction()
-  const rail = useRail()
+  const rail = useMediaQuery(RAIL_AT)
 
   const current = rowOf(screen)
   const rows = library ? ROWS : ROWS.filter((row) => row.name !== 'library')

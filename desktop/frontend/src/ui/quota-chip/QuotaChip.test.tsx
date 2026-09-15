@@ -41,10 +41,26 @@ describe('QuotaChip', () => {
   it('keeps its numbers left to right inside an Arabic header', () => {
     render(
       <div dir="rtl">
-        <QuotaChip provider="claude" window="5h" percent={12} resetsIn="resets in 2h 14m" />
+        <QuotaChip provider="claude" window="5h" percent={12} resetsIn="2h 14m" />
       </div>,
     )
     expect(screen.getByText('12%')).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('resets in 2h 14m')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('2h 14m')).toHaveAttribute('dir', 'ltr')
+  })
+
+  it('says the reset in full in its title and the bar, and the countdown alone on the line', () => {
+    const { container } = render(
+      <QuotaChip provider="claude" window="7d" percent={88} resetsIn="1h 58m" />,
+    )
+    expect(container.querySelector('.sd-quota')).toHaveAttribute('title', 'resets in 1h 58m')
+    expect(
+      screen.getByRole('img', { name: 'claude 7d: 88% used, resets in 1h 58m' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('1h 58m')).toHaveClass('sd-quota__reset')
+  })
+
+  it('carries no title when there is no reset to say', () => {
+    const { container } = render(<QuotaChip provider="codex" window="used" percent={55} />)
+    expect(container.querySelector('.sd-quota')).not.toHaveAttribute('title')
   })
 })

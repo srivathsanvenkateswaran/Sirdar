@@ -16,9 +16,11 @@ export function formatSeenAgo(observedAt: string, now: number = Date.now()): str
 }
 
 /**
- * "resets in Xh Ym" from an ISO timestamp. A countdown to the minute, not
- * the shared relative clock: the chip's spec quotes the minutes, and a
- * quota that resets in 2h 14m is a fact a reader plans an hour around.
+ * "Xh Ym" until the reset, from an ISO timestamp. A countdown to the minute,
+ * not the shared relative clock: the chip's spec quotes the minutes, and a
+ * quota that resets in 2h 14m is a fact a reader plans an hour around. The
+ * chip adds the words "resets in" where there is room for them — its title
+ * and the bar's name — so the line in the sidebar stays one line.
  */
 export function formatResetIn(resetsAt: string, now: number = Date.now()): string {
   const diffMs = new Date(resetsAt).getTime() - now
@@ -26,7 +28,7 @@ export function formatResetIn(resetsAt: string, now: number = Date.now()): strin
   const totalMinutes = Math.max(0, Math.round(diffMs / 60000))
   const hours = Math.floor(totalMinutes / 60)
   const minutes = totalMinutes % 60
-  return `resets in ${hours}h ${minutes}m`
+  return `${hours}h ${minutes}m`
 }
 
 /**

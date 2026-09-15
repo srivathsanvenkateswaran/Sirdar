@@ -210,6 +210,13 @@
   --sd-control-h: 40px;
   --sd-sidebar-w: 248px;
   --sd-nav-row-h: 44px;
+  /*
+   * The page inset every full-sheet screen draws: 40 above and 48 at the
+   * sides at the wide width (the block-end stays --sd-space-6). The
+   * breakpoints below step it down.
+   */
+  --sd-page-pad-block: 40px;
+  --sd-page-pad-inline: 48px;
 
   color-scheme: light;
 }
@@ -217,6 +224,43 @@
 @media (min-width: 768px) {
   :root {
     --sd-radius-band: 64px;
+  }
+}
+
+/*
+ * ---------- breakpoints ----------
+ *
+ * The app is designed for a 1440–1470 wide, ~900 tall window and degrades
+ * from there. Four bands, and every stylesheet writes its rules at these
+ * widths and no others:
+ *
+ *   wide      ≥ 1440        sidebar 248, page inset 40/48; six lanes share
+ *                           the row, the register band sits side by side,
+ *                           the review is three columns
+ *   standard  1200 – 1439   sidebar 248, page inset 32/32; review rail 240
+ *                           and pane 320
+ *   compact   1024 – 1199   sidebar 220, page inset 24/24; the session
+ *                           panes stack below 1100, the review pane drops
+ *                           under the diff, eval is one column, the wide
+ *                           tables lose their least-read columns
+ *   narrow    < 1024        the sidebar is a 56px icon rail and layouts
+ *                           stack; the older < 720 rules still apply
+ *
+ * Only the tokens change here. src/styles.responsive.test.ts reads each
+ * sheet and checks its rules sit at the same widths.
+ */
+@media (max-width: 1439px) {
+  :root {
+    --sd-page-pad-block: 32px;
+    --sd-page-pad-inline: 32px;
+  }
+}
+
+@media (max-width: 1199px) {
+  :root {
+    --sd-sidebar-w: 220px;
+    --sd-page-pad-block: 24px;
+    --sd-page-pad-inline: 24px;
   }
 }
 

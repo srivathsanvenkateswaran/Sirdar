@@ -34,10 +34,16 @@
   display: flex;
   flex-direction: column;
   gap: 6px;
+  min-inline-size: 0;
   /* A workspace with several budgeted providers must not push the primary
      action off the bottom of the sidebar. */
   max-block-size: 32vh;
   overflow-y: auto;
+}
+
+/* Each provider's chips are one line each, and give way before the card. */
+.sd-sidebar-foot__quotas > * {
+  min-inline-size: 0;
 }
 
 /* The action is the full content width of the card, as the app-shell language

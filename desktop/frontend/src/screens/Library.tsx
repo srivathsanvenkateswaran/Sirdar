@@ -678,10 +678,10 @@ export default function Library(): JSX.Element {
         >
           <div className="lib-row lib-row--tight">
             <State label="Fine">
-              <QuotaChip provider="claude" window="5h" percent={42} resetsIn="resets in 2h 14m" />
+              <QuotaChip provider="claude" window="5h" percent={42} resetsIn="2h 14m" />
             </State>
             <State label="Getting close">
-              <QuotaChip provider="claude" window="7d" percent={88} resetsIn="resets in 3d 4h" />
+              <QuotaChip provider="claude" window="7d" percent={88} resetsIn="3d 4h" />
             </State>
             <State label="Over budget">
               <QuotaChip provider="codex" window="used" percent={100} />
