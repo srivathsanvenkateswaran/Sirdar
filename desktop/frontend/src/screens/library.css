@@ -189,13 +189,13 @@
 
 /*
  * The app-shell six. A sidebar row and the footer card only read at the width
- * they ship at, so their specimens are laid out in a 208px column rather than
- * stretched across the page.
+ * they ship at, so their specimens are laid out in a sidebar-wide column
+ * rather than stretched across the page.
  */
 .lib-col--sidebar {
   align-items: start;
 }
 
 .lib-col--sidebar .lib-state__stage {
-  inline-size: 208px;
+  inline-size: var(--sd-sidebar-w);
 }

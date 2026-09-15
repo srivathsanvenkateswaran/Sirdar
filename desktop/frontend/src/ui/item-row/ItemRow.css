@@ -1,0 +1,103 @@
+/*
+ * Item row. A card-row box with a tone rail at its leading edge, an icon in a
+ * sunk box, a title over a line of facts, and one control at the end.
+ */
+
+.sd-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-4);
+  padding-block: var(--sd-space-4);
+  padding-inline: var(--sd-space-5) 20px;
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-card-row);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+}
+
+/* The rail: 3px, inset 12 from the leading edge and 16 from the top and
+   bottom. Logical, so it moves to the right of an Arabic list. */
+.sd-item::before {
+  content: '';
+  position: absolute;
+  inset-inline-start: var(--sd-space-3);
+  inset-block: var(--sd-space-4);
+  inline-size: 3px;
+  border-radius: 2px;
+  background: var(--sd-rule-strong);
+}
+
+.sd-item[data-tone='live']::before { background: var(--sd-st-live); }
+.sd-item[data-tone='blocked']::before { background: var(--sd-st-blocked); }
+.sd-item[data-tone='done']::before { background: var(--sd-st-done); }
+.sd-item[data-tone='failed']::before { background: var(--sd-st-failed); }
+
+.sd-item__icon {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border-radius: 10px;
+  background: var(--sd-sunk);
+  color: var(--sd-ink-2);
+}
+
+.sd-item__icon > svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+.sd-item__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 2px;
+  min-inline-size: 0;
+}
+
+.sd-item__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--sd-text-body-l);
+  font-weight: 500;
+  line-height: 1.3;
+}
+
+.sd-item__title[data-wrap='true'] {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  white-space: normal;
+}
+
+.sd-item__meta {
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  line-height: 1.4;
+}
+
+.sd-item__action {
+  flex: 0 0 auto;
+}
+
+/* The row as a control: the button takes the whole leading part and the
+   action stays a separate stop, so a row is never two buttons in one. */
+.sd-item__open {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--sd-space-4);
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}

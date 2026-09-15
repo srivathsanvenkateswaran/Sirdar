@@ -1,0 +1,95 @@
+/*
+ * Search bar. One input with a magnifier before it and a hint after it, in
+ * two sizes: the 64-tall bar a session starts from, and the 40-tall sunk well
+ * the board filters with.
+ */
+
+.sd-search {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-4);
+  min-block-size: 64px;
+  padding-inline: var(--sd-space-5);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-sheet);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body-l);
+}
+
+.sd-search:focus-within {
+  border-color: var(--sd-rule-strong);
+}
+
+/* Read out, never drawn: the placeholder is a hint and not a name. */
+.sd-search__label {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.sd-search__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+  color: var(--sd-ink-3);
+}
+
+.sd-search__icon > svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
+.sd-search__input {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  outline: none;
+}
+
+.sd-search__input::placeholder {
+  color: var(--sd-ink-3);
+  opacity: 1;
+}
+
+/* The field's own ring would sit inside the box; the box carries it. */
+.sd-search:has(.sd-search__input:focus-visible) {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
+}
+
+.sd-search__aside {
+  flex: 0 0 auto;
+  margin-inline-start: auto;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  white-space: nowrap;
+}
+
+/* ---------- the well ---------- */
+
+.sd-search[data-variant='well'] {
+  gap: var(--sd-space-2);
+  inline-size: 240px;
+  max-inline-size: 100%;
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border-color: transparent;
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-sunk);
+  font-size: var(--sd-text-body);
+}
+
+.sd-search[data-variant='well'] .sd-search__icon > svg {
+  inline-size: 18px;
+  block-size: 18px;
+}

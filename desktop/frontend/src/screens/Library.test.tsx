@@ -8,7 +8,7 @@ function frame(): HTMLElement {
 }
 
 describe('the asset library', () => {
-  it('shows every one of the twenty-one components', () => {
+  it('shows every one of the thirty-one components', () => {
     const { container } = render(<Library />)
     // Section headings only: the note pane specimen has headings of its own,
     // and so does the dialog.
@@ -37,6 +37,16 @@ describe('the asset library', () => {
       'Setting row',
       'Heatmap',
       'Badge',
+      'Provider mark',
+      'Banner',
+      'Group label',
+      'Item row',
+      'Search bar',
+      'Stat card',
+      'Toggle',
+      'Page head',
+      'Kind chip',
+      'State glyph',
     ])
   })
 
@@ -65,12 +75,19 @@ describe('the asset library', () => {
     const within_ = within(frame())
     expect(within_.getByRole('button', { name: 'ابدأ الفرز' })).toBeInTheDocument()
     expect(within_.getByRole('radio', { name: 'المسندة إليّ' })).toBeInTheDocument()
-    expect(within_.getByText('بانتظار ردّك')).toBeInTheDocument()
+    // The status badge and the state glyph both carry the blocked word.
+    expect(within_.getAllByText('بانتظار ردّك').length).toBeGreaterThan(0)
     expect(within_.getAllByText(/العميل لا يستطيع تصدير كشف الحساب/).length).toBeGreaterThan(0)
     expect(within_.getByText('تعذّر بدء التشغيل: لا توجد مساحة عمل.')).toBeInTheDocument()
     // The marquee renders its track twice for a seamless loop, so the item
     // legitimately appears more than once.
     expect(within_.getAllByText('مكتب زوهو').length).toBeGreaterThan(0)
+  })
+
+  it('shows every provider mark by the vendor it stands for', () => {
+    render(<Library />)
+    for (const name of ['Claude', 'Codex', 'GitHub Copilot', 'Antigravity', 'Qwen', 'Cursor'])
+      expect(within(frame()).getAllByRole('img', { name }).length).toBeGreaterThan(0)
   })
 
   it('shows every run state as its own badge', () => {

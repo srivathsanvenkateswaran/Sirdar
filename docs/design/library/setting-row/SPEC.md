@@ -92,6 +92,14 @@ light and **12.51:1** dark, value `--sd-ink-2` at **7.37 / 6.60**, help
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: rows go from 64 to 72 tall with 12px block
+padding; the card's padding from 12 block-only to 24 all round (12 at the
+foot); the card heading from a tracked 11.5px label to `--sd-text-title`
+(22px) at 500 in `--sd-ink`; the label to `--sd-text-body` (16px), the value
+and help to `--sd-text-meta`. The pale button and the input are
+`--sd-control-h` (40) tall, and the button's label is `--sd-ink` at 500.
+
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 7. The 86-tall
 reference row becomes 64 at Sirdar's 13px base; the divider is

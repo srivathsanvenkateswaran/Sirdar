@@ -78,6 +78,13 @@ nothing moves.
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: 48-tall rows with 16px cell padding and
+`--sd-rule-faint` hairlines between them, a 12px-padded header in
+`--sd-ink-3` at `--sd-text-meta`, body cells at `--sd-text-body` (16px) and
+numeric cells in the ledger face at `--sd-text-ledger`. Cells no longer wrap;
+the detail row still does.
+
 ### 2026-09-15 (restyle)
 Gained an optional `detail` render prop, drawn as a full-width row under the
 row it belongs to. Added when the Eval screen was pointed at this component:

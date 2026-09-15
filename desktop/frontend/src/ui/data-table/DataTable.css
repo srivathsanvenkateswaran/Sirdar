@@ -22,41 +22,53 @@
 }
 
 .sd-table__caption {
-  padding-block: var(--sd-space-2);
-  padding-inline: var(--sd-space-3);
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
   border-block-end: 1px solid var(--sd-rule);
   color: var(--sd-ink-2);
   font-weight: 500;
   text-align: start;
 }
 
+/* 48-tall rows, hairlines in the faint rule, 16px cell padding. */
 .sd-table th,
 .sd-table td {
-  padding-block: var(--sd-space-1);
-  padding-inline: var(--sd-space-3);
-  border-block-end: 1px solid var(--sd-rule);
+  block-size: 48px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-4);
+  border-block-end: 1px solid var(--sd-rule-faint);
   text-align: start;
   vertical-align: middle;
+  white-space: nowrap;
 }
 
 .sd-table thead th {
   position: sticky;
   inset-block-start: 0;
   z-index: 1;
+  block-size: auto;
+  padding-block: var(--sd-space-3);
+  border-block-end: 1px solid var(--sd-rule);
   background: var(--sd-surface);
-  color: var(--sd-ink-2);
+  color: var(--sd-ink-3);
   font-size: var(--sd-text-meta);
   font-weight: 500;
+  line-height: 1.5;
 }
 
 .sd-table tbody tr:last-child td {
   border-block-end: 0;
 }
 
-.sd-table [data-numeric='true'] {
+.sd-table td[data-numeric='true'] {
   font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
   text-align: end;
   unicode-bidi: isolate;
+}
+
+.sd-table th[data-numeric='true'] {
+  text-align: end;
 }
 
 .sd-table__sort {
@@ -102,8 +114,10 @@
  * columns above it keep their alignment down the whole table.
  */
 .sd-table__detail > td {
-  padding-block: var(--sd-space-1) var(--sd-space-2);
+  block-size: auto;
+  padding-block: 0 var(--sd-space-3);
   color: var(--sd-ink-2);
   font-size: var(--sd-text-meta);
   line-height: 1.45;
+  white-space: normal;
 }

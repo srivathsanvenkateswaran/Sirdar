@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All twenty-one are built. Each row links the spec in this folder, which is a
+All thirty-one are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -201,10 +201,35 @@ component it is showing.
 | 20 | Heatmap | app | built | `src/ui/heatmap/` | [heatmap/SPEC.md](heatmap/SPEC.md) |
 | 21 | Badge | app, landing | built | `src/ui/badge/` | [badge/SPEC.md](badge/SPEC.md) |
 
+### The screens-round ten
+
+Added on 2026-09-15 with the reviewed mocks in `../2026-09-15-screens/`, which
+re-based the app on the reference's 16px register. Each is a piece the mocks
+draw on more than one screen; the components above were re-scaled at the same
+time (40px controls, 72px setting rows, 48px table rows, 14px heat cells, the
+16px sheet) and each one's changelog says what moved.
+
+| # | Component | Surfaces | Status | Code | Spec |
+|---|---|---|---|---|---|
+| 22 | Provider mark | app | built | `src/ui/provider-mark/` | [provider-mark/SPEC.md](provider-mark/SPEC.md) |
+| 23 | Banner | app | built | `src/ui/banner/` | [banner/SPEC.md](banner/SPEC.md) |
+| 24 | Group label | app | built | `src/ui/group-label/` | [group-label/SPEC.md](group-label/SPEC.md) |
+| 25 | Item row | app | built | `src/ui/item-row/` | [item-row/SPEC.md](item-row/SPEC.md) |
+| 26 | Search bar | app | built | `src/ui/search-bar/` | [search-bar/SPEC.md](search-bar/SPEC.md) |
+| 27 | Stat card | app | built | `src/ui/stat-card/` | [stat-card/SPEC.md](stat-card/SPEC.md) |
+| 28 | Toggle | app | built | `src/ui/toggle/` | [toggle/SPEC.md](toggle/SPEC.md) |
+| 29 | Page head | app | built | `src/ui/page-head/` | [page-head/SPEC.md](page-head/SPEC.md) |
+| 30 | Kind chip | app | built | `src/ui/kind-chip/` | [kind-chip/SPEC.md](kind-chip/SPEC.md) |
+| 31 | State glyph | app | built | `src/ui/state-glyph/` | [state-glyph/SPEC.md](state-glyph/SPEC.md) |
+
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
-two keyframes and the RTL reversal that ring text and the marquee share; it is
-described inside the ambient spec and is skipped by the sync script, the same
-way this folder's `_`-prefixed partials are skipped by the catalogue scanner.
+two ambient keyframes and the RTL reversal that ring text and the marquee
+share, and since 2026-09-15 the app's two entrances as well — the sheet's
+content rising 8px over 320ms on navigation, and the settings modal scaling
+from 0.98 over 300ms behind a 200ms scrim, both frozen under reduced motion.
+It is described inside the ambient spec and is skipped by the sync script, the
+same way this folder's `_`-prefixed partials are skipped by the catalogue
+scanner.
 
 Every screen is on the library now. Board draws its lanes with Kanban column
 and its cards with Run card and Card; Run detail's ledger is Event row, its

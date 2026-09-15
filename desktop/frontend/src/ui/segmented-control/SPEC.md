@@ -17,7 +17,9 @@ equivalent today.
 - `span.sd-segmented__thumb` — the moving part. Absolute, `inset-block: 3px`,
   width `(100% - 6px) / count`, positioned by `inset-inline-start` from
   `--sd-segmented-index`.
-- `button.sd-segmented__option[role="radio"]` — one option. `min-height: 32px`.
+- `button.sd-segmented__option[role="radio"]` — one option. `min-height: 32px`
+  inside the 3px track, so the whole control is `--sd-control-h` (40) tall;
+  `padding-inline: 16px`, `--sd-text-meta` on a 22px line.
 
 ## States
 
@@ -69,6 +71,11 @@ rest are **7.76:1** on `--sd-sunk` or better. Reduced motion: the thumb jumps
 rather than slides, and nothing waits for the transition.
 
 ## Changelog
+
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: the option's padding goes from 4/12 to 5/16
+and its type from 13px to `--sd-text-meta` (14px) on a 22px line, so the
+track measures the 40px control height.
 
 ### 2026-09-15
 Added. New component; no predecessor in the app.

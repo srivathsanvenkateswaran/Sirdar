@@ -81,6 +81,11 @@ Reduced motion: nothing here moves in any state.
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: 14px cells at a 6px gap (were 12 and 4),
+26 weeks by default (were 12), the legend in the ledger face at
+`--sd-text-ledger` with a 16px gap.
+
 ### 2026-09-15
 Added. Initial spec from `docs/design/03-desktop-app.md` section 10. The
 reference's 16px cell at 8px gap becomes 12px at 4px for Sirdar's 13px base,

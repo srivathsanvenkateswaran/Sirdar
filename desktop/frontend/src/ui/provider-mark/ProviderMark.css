@@ -1,0 +1,70 @@
+/*
+ * Provider mark. A vendor's mark in white on a tile of its brand colour, or on
+ * the ink for a vendor whose mark is black. The brand colour arrives as
+ * `--sd-mark-tile` from the marks module; this file names none.
+ */
+
+.sd-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-ink);
+  color: var(--sd-primary-ink);
+  /* Not a word: the tile mirrors with nothing. */
+  direction: ltr;
+}
+
+/* A branded tile keeps its white mark in both themes; the brand colour is the
+   same in the dark, and the ink tiles above are what invert. */
+.sd-mark[data-branded='true'] {
+  background: var(--sd-mark-tile);
+  color: var(--sd-surface);
+}
+
+.sd-mark > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-mark[data-size='sm'] {
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 6px;
+}
+
+.sd-mark[data-size='sm'] > svg {
+  inline-size: 13px;
+  block-size: 13px;
+}
+
+.sd-mark[data-size='lg'] {
+  inline-size: 40px;
+  block-size: 40px;
+  border-radius: 10px;
+}
+
+.sd-mark[data-size='lg'] > svg {
+  inline-size: 22px;
+  block-size: 22px;
+}
+
+/* The fallback: two letters of the provider's name, in the ledger face. */
+.sd-mark__initials {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.sd-mark[data-size='sm'] .sd-mark__initials {
+  font-size: 10px;
+}
+
+.sd-mark[data-size='lg'] .sd-mark__initials {
+  font-size: var(--sd-text-meta);
+}

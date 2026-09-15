@@ -8,7 +8,7 @@ export interface HeatmapDay {
 
 export interface HeatmapProps {
   days: HeatmapDay[]
-  /** How many weeks of columns to draw. The grid scrolls past the container. */
+  /** How many weeks of columns to draw; 26 by default. The grid scrolls past the container. */
   weeks?: number
   /** The last day in the grid. Defaults to the latest day it was given. */
   endDate?: string
@@ -109,7 +109,7 @@ function grid(days: HeatmapDay[], weeks: number, end?: string): { date: string; 
  */
 export default function Heatmap({
   days,
-  weeks = 12,
+  weeks = 26,
   endDate,
   label = 'Runs per day',
   onSelect,
@@ -122,7 +122,7 @@ export default function Heatmap({
       <div className="sd-heatmap__scroll" tabIndex={0} role="group" aria-label={label}>
         <div
           className="sd-heatmap__grid"
-          style={{ gridTemplateColumns: `repeat(${columns}, 12px)` }}
+          style={{ gridTemplateColumns: `repeat(${columns}, 14px)` }}
         >
           {cells.map((cell) => {
             const name = cellName(cell.date, cell.count)

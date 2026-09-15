@@ -78,6 +78,13 @@ key and a truncated title. Contrast: title `--sd-ink` on `--sd-surface` is
 
 ## Changelog
 
+### 2026-09-15 (v2 register)
+Re-scaled to the reviewed mocks: the fill goes from `--sd-surface` with a
+`--sd-rule-strong` border to `--sd-card-row` with no border at rest (the
+interactive card keeps a transparent border so its hover accent has
+somewhere to go); padding from 8 to 24; the title from 13px/600 to
+`--sd-text-title` (22px) at 500; the meta to `--sd-text-ledger`.
+
 ### 2026-09-15
 Added. Initial spec from `styles.css` `.card`. Radius moves 3px to
 `--sd-radius-md` (12px); the border moves from `--rule` to `--sd-rule-strong`
