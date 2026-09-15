@@ -15,6 +15,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
 )
 
 // prepared is a run that has its directory, bundle and prompt on disk and
@@ -30,10 +31,19 @@ type prepared struct {
 	noNotify bool
 
 	// root is the tree the session runs in and is confined to, when it is
-	// not the workspace root: a fix run's linked worktree. Everything
-	// else — the run directory, the configuration, the playbooks — still
-	// comes from the workspace root.
+	// not the workspace root: a fix run's linked worktree, or the
+	// historical checkout an `--at` run made. Everything else — the run
+	// directory, the configuration, the playbooks — still comes from the
+	// workspace root.
 	root string
+
+	// ownWorktree is set when this run made root itself and is therefore
+	// the one to take it away again. A fix run's worktree is
+	// internal/fix's to manage, so it is left alone here.
+	ownWorktree bool
+
+	// keepWorktree leaves an own worktree on disk after the run.
+	keepWorktree bool
 
 	// service and notePath are what the first register row recorded: the
 	// service the note filed under and the path a human opens. The
@@ -92,7 +102,11 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return nil, err
 	}
 
-	rn, err := store.Create(cfg.Root, key, now)
+	// The run id is minted here rather than inside store.Create because an
+	// --at run names its worktree after it, and that directory has to
+	// exist before the session that stands in it.
+	runID := store.NewRunID(now)
+	rn, err := store.CreateID(cfg.Root, key, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +117,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	}
 	// A dry run notifies nobody: it writes a bundle and a prompt, and
 	// "completed" on the channel would claim a triage that never ran.
-	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun}
+	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun, keepWorktree: o.KeepWorktree}
 	p.state = store.State{
 		RunID:     filepath.Base(rn.Dir),
 		Key:       key,
@@ -114,6 +128,14 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		StartedAt: now,
 		UpdatedAt: now,
 		Eval:      o.Eval,
+	}
+	// The historical checkout, before anything else the run does: a
+	// commit that does not exist, or a repository that refuses the
+	// worktree, should stop the run before a ticket is fetched.
+	if o.At != "" {
+		if err := r.checkoutAt(ctx, p, o.At); err != nil {
+			return p, err
+		}
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
@@ -178,6 +200,58 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return p, err
 	}
 	return p, nil
+}
+
+// checkoutAt puts this run in a linked worktree of the workspace checked
+// out at commit, detached, and points the session's root at it. It is the
+// same machinery `sirdar fix` stands its session in, with one difference:
+// there is no branch. A retrospective run reads the repository as it stood
+// and writes nothing to it, so there is nothing a branch name would mean.
+//
+// The commit is resolved before the directory is made, so `--at` on a
+// commit this repository does not have fails with that as the reason rather
+// than as a git error out of `worktree add`.
+func (r *Runner) checkoutAt(ctx context.Context, p *prepared, commit string) error {
+	root := r.Config.Root
+	g := worktree.Git{Dir: root}
+	if err := g.Run(ctx, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return fmt.Errorf("run: --at %s: the workspace is not a git repository", commit)
+	}
+	sha, err := worktree.ResolveCommit(ctx, g, commit)
+	if err != nil {
+		return fmt.Errorf("run: --at %s: %w", commit, err)
+	}
+	path := worktree.Path(root, p.state.RunID)
+	if err := worktree.AddDetached(ctx, g, path, sha); err != nil {
+		return fmt.Errorf("run: --at %s: %w", commit, err)
+	}
+	p.root, p.ownWorktree = path, true
+	p.state.At = sha
+	p.state.Warnings = append(p.state.Warnings,
+		fmt.Sprintf("the session ran against %s in %s, not against the working tree", sha, worktree.RelToRoot(root, path)))
+	fmt.Fprintf(r.stderr(), "[%s] at %s in %s\n", p.state.Key, sha, worktree.RelToRoot(root, path))
+	return nil
+}
+
+// releaseWorktree takes away the worktree an --at run made, once that run
+// has ended. A blocked run keeps it: it can be resumed, and a resumed
+// session has to stand where the first one stood. So does a run the
+// operator asked to keep with --keep-worktree.
+func (r *Runner) releaseWorktree(ctx context.Context, p *prepared, status store.Status) {
+	if p == nil || !p.ownWorktree || p.root == "" {
+		return
+	}
+	if p.keepWorktree || status == store.StatusBlocked {
+		return
+	}
+	// The removal is run from the main tree, never from inside the
+	// directory being removed, and a context that has already been
+	// cancelled — an interrupt — would refuse the git command outright.
+	if ctx.Err() != nil {
+		ctx = context.WithoutCancel(ctx)
+	}
+	worktree.Remove(ctx, worktree.Git{Dir: r.Config.Root}, p.root, r.stderr(), p.state.Key)
+	p.root, p.ownWorktree = "", false
 }
 
 // stageBundle puts the ticket bundle in the run directory: normally by

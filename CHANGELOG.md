@@ -174,3 +174,23 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   transcript to `transcript.json` (mode `0600`) in the run directory after every turn, and
   `sirdar resume` and the runner's schema retry both continue from it instead of starting the
   triage over.
+- Added `--at COMMIT` to `sirdar triage` and `sirdar rca`: the session runs against the
+  repository as it stood at that commit, in a linked worktree of the run's own under
+  `.sirdar/worktrees/<run-id>` at a detached HEAD, so a ticket can be triaged against the code
+  that was actually running when it was filed. The tree you are standing in is untouched — its
+  HEAD, its index and its uncommitted work are all where you left them — and the workspace's
+  `.sirdar/` is still read from the main tree, so the configuration, playbooks and templates are
+  the ones you configured rather than the ones the repository happened to carry a year ago. The
+  run state records `At:` and the note's frontmatter carries `at:`, because nothing else in a
+  note would tell a reader that its code references are not about today's tip. The worktree is
+  removed when the run ends, unless `--keep-worktree` or the run blocked and can be resumed.
+  Triage stays exactly as read-only inside the worktree as it is at HEAD.
+- Added `--local` and `--at COMMIT` to `sirdar fix`. `--local` stops the flow at the commit:
+  nothing is pushed, no pull request is opened, the worktree is kept, the commit's unified diff
+  is written to `fix.diff` in the run directory, and the run state records `Fix.Local`,
+  `Fix.Commit` and `Fix.DiffPath`. The triage note is left on its own status, since `fix-pushed`
+  would be a claim about work that never left the machine. `--accept-deviation` with `--local`
+  accepts the diff and still pushes nothing. `--at` cuts the fix branch from a named commit
+  instead of `origin/<base>` and skips the fetch, so a fix can be generated against the code the
+  ticket was filed against. Together they are what a retrospective evaluation runs — many fixes
+  against historical commits, none of which may reach a remote.
