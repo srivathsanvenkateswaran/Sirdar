@@ -45,6 +45,11 @@ type Options struct {
 	Stderr io.Writer
 	// Now is the clock the quota history scan reads; zero means time.Now.
 	Now func() time.Time
+	// GoldenDir is the golden set the eval routes read and write; empty
+	// means eval.DefaultDir. It is set once, by whichever shell built the
+	// service, and never by a request: a caller who could name the
+	// directory could read any bundle on the machine through it.
+	GoldenDir string
 }
 
 // DefaultBuffer is how many events a subscriber may fall behind by before
@@ -557,9 +562,10 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 	if err := checkID(ErrNoSuchRun, "key", key); err != nil {
 		return "", err
 	}
-	return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
+	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		r := &runner.Runner{Deps: deps}
 		out, err := r.RCA(jctx, key, runner.RCAOptions{
+			Options:    runner.Options{Model: o.Model},
 			PRURL:      o.PRURL,
 			Resolution: o.Resolution,
 		})
@@ -621,6 +627,13 @@ func (s *Service) startJob(
 	work func(context.Context, runner.Deps) []JobOutcome,
 	onBuildError func(error) []JobOutcome,
 ) (JobID, error) {
+	// Every start funnels through here, so this is where a provider name
+	// nobody drives is refused — over HTTP and over the Wails bridge alike,
+	// since the bridge binds this Service and never passes through
+	// internal/httpapi.
+	if err := CheckProvider(providerName); err != nil {
+		return "", err
+	}
 	ws, cfg, err := s.load(wsID)
 	if err != nil {
 		return "", err
@@ -743,5 +756,14 @@ func (s *Service) log(err error) {
 	if err == nil {
 		return
 	}
-	s.publish(Event{Kind: KindLog, Text: err.Error()})
+	s.logText(err.Error())
+}
+
+// logText publishes one line for the UI's activity pane. Nothing a job
+// puts here may carry a secret: it is fanned out to every subscriber.
+func (s *Service) logText(text string) {
+	if text == "" {
+		return
+	}
+	s.publish(Event{Kind: KindLog, Text: text})
 }

@@ -23,11 +23,71 @@ var bridgeMethods = []string{
 	"Prompt",
 	"StartTriage",
 	"StartRCA",
+	"StartFix",
+	"StartEval",
+	"EvalReports",
+	"Golden",
+	"AddGolden",
+	"ConfigSummary",
 	"Resume",
 	"Cancel",
 	"Register",
 	"Doctor",
 	"Quota",
+}
+
+// notBridged is every other exported method of *app.Service, with the
+// reason it is not something the frontend calls. Between the two lists the
+// Service's surface is accounted for exactly, so a method added there
+// reaches this file rather than being quietly unavailable in the desktop
+// app — which is how the Wails shell came to be missing a route the browser
+// one served.
+var notBridged = map[string]string{
+	// Lifecycle: main.go calls these around wails.Run.
+	"Start": "the shell starts the watcher",
+	"Stop":  "the shell stops the jobs on shutdown",
+	// The event fan-out reaches the frontend as Wails runtime events,
+	// emitted by forward() in main.go, not as a bound call.
+	"Subscribe": "events are forwarded onto the Wails runtime",
+	// The webhook path. `sirdar serve` owns the hook endpoints; the
+	// desktop app has no listener, so nothing calls these.
+	"TriageIfIdle": "only an inbound webhook delivery starts a run this way",
+	"HookReceived": "only the hook route reports a delivery",
+	// Diagnostics with no screen behind them.
+	"Jobs": "the frontend tracks the job ids it was given by each start",
+}
+
+// TestServiceSurfaceIsAccountedFor is the reverse direction: every exported
+// method on *app.Service is either bound to the frontend or listed as
+// deliberately unbound.
+func TestServiceSurfaceIsAccountedFor(t *testing.T) {
+	bound := map[string]bool{}
+	for _, name := range bridgeMethods {
+		bound[name] = true
+	}
+
+	service := reflect.TypeOf(&app.Service{})
+	for i := 0; i < service.NumMethod(); i++ {
+		name := service.Method(i).Name
+		if bound[name] {
+			if _, ok := notBridged[name]; ok {
+				t.Errorf("%s is in both bridgeMethods and notBridged", name)
+			}
+			continue
+		}
+		if _, ok := notBridged[name]; !ok {
+			t.Errorf("app.Service.%s is neither bound to the frontend nor listed in notBridged;"+
+				" add it to the Bridge, or say there why the desktop app does not need it", name)
+		}
+	}
+
+	// A stale entry is as bad as a missing one: it would go on excusing a
+	// method that no longer exists.
+	for name := range notBridged {
+		if _, ok := service.MethodByName(name); !ok {
+			t.Errorf("notBridged names %s, which app.Service no longer has", name)
+		}
+	}
 }
 
 func TestBridgeCoversServiceSurface(t *testing.T) {

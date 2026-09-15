@@ -157,6 +157,24 @@ And nothing downstream mistakes the replay for the key's newest triage. `sirdar 
 runs when they look — so replaying `OMNI-1234` today cannot put tomorrow's fix to work on a
 bundle captured six months ago.
 
+## From the desktop app
+
+The desktop build and `sirdar serve` show the same golden set and the same report on their Eval
+screen: tick the keys to replay or leave them all unticked to replay the set, override the
+provider and model for that one run if you are comparing two, and read the score table back
+from the report the run wrote under `.sirdar/eval/`. A completed triage run has an **Add to
+golden set** button, which does what `sirdar golden add --from RUN_ID` does.
+
+Which directory that is comes from the command line and nowhere else:
+
+```
+sirdar serve --golden DIR
+```
+
+A request cannot name it. The bundles are real customers' conversations, and a UI that let a
+caller point the eval routes at an arbitrary directory would be a way to read any bundle on the
+machine.
+
 ## What an eval and a fix are each trusted with
 
 A replay is read-only in the same sense every triage run is: the session gets the read tools,

@@ -646,8 +646,77 @@
   background: color-mix(in srgb, var(--run-warn) 7%, transparent);
 }
 
-.form--rca {
+.form--rca,
+.form--fix {
   background: var(--run-tint);
+}
+
+/*
+ * The fix result and the review it may be waiting on. It is not a form the
+ * reader opened — it is what the run left behind — so it keeps the warning
+ * ground the blocked resume box uses rather than the quiet RCA tint.
+ */
+.form--fix-review {
+  background: color-mix(in srgb, var(--run-warn) 7%, transparent);
+}
+
+.form-note {
+  max-width: 78ch;
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #6b7280);
+}
+
+.form-check {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.form-check input {
+  flex: 0 0 auto;
+}
+
+/* The two override fields are narrower than a URL field and sit on one row. */
+.form-row--providers .form-field {
+  min-width: 170px;
+  max-width: 260px;
+}
+
+.fix-facts {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.fix-facts dt {
+  color: var(--muted, #6b7280);
+}
+
+.fix-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.fix-deviation {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--run-line);
+}
+
+/* What the agent said it did instead: quoted, so it reads as the agent's. */
+.fix-deviation__text {
+  max-width: 78ch;
+  margin: 0 0 8px;
+  padding-left: 10px;
+  border-left: 2px solid var(--run-warn);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 
 .form-question {
@@ -709,5 +778,22 @@
 }
 
 .run-failed {
+  color: var(--run-error);
+}
+
+/* What the last action on this run said, under the header that started it. */
+.run-said,
+.run-failed-line {
+  margin: 0;
+  padding: 7px 16px;
+  border-bottom: 1px solid var(--run-line);
+  font-size: 12px;
+}
+
+.run-said {
+  color: var(--muted, #6b7280);
+}
+
+.run-failed-line {
   color: var(--run-error);
 }

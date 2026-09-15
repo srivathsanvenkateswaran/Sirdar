@@ -45,6 +45,16 @@ type server struct {
 	// the operator, so the reason a delivery failed is written here and
 	// only a generic message goes back over the wire.
 	logf func(format string, v ...any)
+
+	// loopbackOnly is whether the listener this handler was built for can
+	// be reached only from this machine. See LoopbackOnly: the fix route is
+	// refused when it cannot.
+	loopbackOnly bool
+
+	// listenAddr is the host:port `sirdar serve` bound to, if the caller
+	// said. See ListenAddr: it is what the guard pins the Host header to
+	// on a listener that is not loopback-only.
+	listenAddr string
 }
 
 func newServer(svc Service, ui fs.FS, opts ...Option) *server {
@@ -56,6 +66,10 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 		keepalive: 15 * time.Second,
 		logf:      log.Printf,
 	}
+	// loopbackOnly stays false unless a caller passes LoopbackOnly: a
+	// handler built by a shell that never thought about its listener
+	// refuses the one route that writes code, rather than offering it to
+	// whoever turns out to be able to reach the port.
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -71,6 +85,12 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/triage", s.startTriage)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/rca", s.startRCA)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/fix", s.startFix)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/eval", s.startEval)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/eval", s.evalReports)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/golden", s.golden)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/golden", s.addGolden)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/config/summary", s.configSummary)
 	s.mux.HandleFunc("POST /api/workspaces/{id}/runs/{runId}/resume", s.resume)
 	s.mux.HandleFunc("POST /api/jobs/{jobId}/cancel", s.cancel)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/register", s.register)
@@ -93,7 +113,15 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	return s
 }
 
-func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) { s.mux.ServeHTTP(w, r) }
+// ServeHTTP runs the cross-site guard before the router, so every mutating
+// route is covered by construction rather than by each handler remembering
+// to ask. See guard.go.
+func (s *server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if !s.guard(w, r) {
+		return
+	}
+	s.mux.ServeHTTP(w, r)
+}
 
 // --- workspaces ---
 
@@ -193,13 +221,17 @@ func (s *server) runEvents(w http.ResponseWriter, r *http.Request) {
 	}{nonNil(events), next})
 }
 
-// noteKinds are the note kinds the spec allows on the note route.
-var noteKinds = map[string]bool{"triage": true, "rca": true, "resolution": true}
+// noteKinds are the note kinds the note route allows. The empty kind is one
+// of them: it means whichever primary note this run's own kind produced,
+// which is the only way to reach a fix run's note.md — asking a fix run for
+// its "triage" note is a mismatch the service refuses.
+var noteKinds = map[string]bool{"": true, "triage": true, "rca": true, "resolution": true}
 
 func (s *server) note(w http.ResponseWriter, r *http.Request) {
 	kind := r.URL.Query().Get("kind")
 	if !noteKinds[kind] {
-		writeError(w, http.StatusBadRequest, "bad_request", "kind must be one of triage, rca, resolution")
+		writeError(w, http.StatusBadRequest, "bad_request",
+			"kind must be one of triage, rca, resolution, or absent for the run's own note")
 		return
 	}
 	md, err := s.svc.Note(r.PathValue("id"), r.PathValue("runId"), kind)
@@ -241,6 +273,9 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "keys must list at least one ticket key")
 		return
 	}
+	if !validProvider(w, body.Provider) {
+		return
+	}
 	id, err := s.svc.StartTriage(r.Context(), r.PathValue("id"), body.Keys, TriageOptions{
 		Provider: body.Provider, Model: body.Model, DryRun: body.DryRun,
 	})
@@ -256,6 +291,8 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		Key        string `json:"key"`
 		PRURL      string `json:"prUrl"`
 		Resolution string `json:"resolution"`
+		Provider   string `json:"provider"`
+		Model      string `json:"model"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -264,8 +301,12 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "key is required")
 		return
 	}
+	if !validProvider(w, body.Provider) {
+		return
+	}
 	id, err := s.svc.StartRCA(r.Context(), r.PathValue("id"), body.Key, RCAOptions{
 		PRURL: body.PRURL, Resolution: body.Resolution,
+		Provider: body.Provider, Model: body.Model,
 	})
 	if err != nil {
 		s.fail(w, err)

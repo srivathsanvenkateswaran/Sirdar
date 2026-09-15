@@ -7,7 +7,13 @@ import {
   useSyncExternalStore,
   type JSX,
 } from 'react'
-import type { NoteKind, RunDetail as RunDetailData, Transport } from '../api/types'
+import type {
+  FixStart,
+  NoteKind,
+  RCAStart,
+  RunDetail as RunDetailData,
+  Transport,
+} from '../api/types'
 import { askedQuestion, elapsed, type IndexedEvent } from '../lib/events'
 import { costOrUnknown } from '../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
@@ -18,6 +24,8 @@ import BundleView from '../components/run/BundleView'
 import StateView from '../components/run/StateView'
 import ResumeBox from '../components/run/ResumeBox'
 import RCAForm from '../components/run/RCAForm'
+import FixForm from '../components/run/FixForm'
+import FixPanel from '../components/run/FixPanel'
 import '../components/run/run.css'
 
 /**
@@ -51,17 +59,23 @@ export default function RunDetail(props: {
   transport: Transport
   workspaceId: string
   runId: string
+  /** The workspace's configured provider, named on the override selects. */
+  defaultProvider?: string
   onBack: () => void
-  onStartRCA: (key: string, opts?: { prUrl?: string; resolution?: string }) => Promise<void> | void
+  onStartRCA: (key: string, opts?: RCAStart) => Promise<void> | void
+  onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, runId, onBack, onStartRCA } = props
+  const { transport, workspaceId, runId, defaultProvider, onBack, onStartRCA, onStartFix } = props
   const [detail, setDetail] = useState<RunDetailData | null>(null)
   const [loadError, setLoadError] = useState('')
   const [events, setEvents] = useState<IndexedEvent[]>([])
   const [tab, setTab] = useState<Tab>('note')
   const [rcaOpen, setRcaOpen] = useState(false)
+  const [fixOpen, setFixOpen] = useState(false)
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
+  /** What the last "Add to golden set" did, shown until the run changes. */
+  const [golden, setGolden] = useState('')
   const [copied, setCopied] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const seen = useRef<Set<number>>(new Set())
@@ -79,7 +93,9 @@ export default function RunDetail(props: {
     setEvents([])
     setLoadError('')
     setActionError('')
+    setGolden('')
     setRcaOpen(false)
+    setFixOpen(false)
 
     const append = (index: number, event: IndexedEvent['event']) => {
       if (seen.current.has(index)) return
@@ -154,16 +170,26 @@ export default function RunDetail(props: {
         setRcaOpen(false)
         return
       }
+      if (fixOpen) {
+        setFixOpen(false)
+        return
+      }
       onBack()
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [onBack, rcaOpen])
+  }, [onBack, rcaOpen, fixOpen])
 
-  const noteKinds = useMemo<NoteKind[]>(
-    () => (detail?.kind === 'rca' ? ['rca', 'resolution'] : ['triage']),
-    [detail?.kind],
-  )
+  /*
+   * Which notes the Note tab asks for. A fix run has no triage note of its
+   * own — asking for one is a mismatch the service refuses with a 404 — so it
+   * asks for the empty kind, which is whatever note.md the run itself wrote.
+   */
+  const noteKinds = useMemo<NoteKind[]>(() => {
+    if (detail?.kind === 'rca') return ['rca', 'resolution']
+    if (detail?.kind === 'fix') return ['']
+    return ['triage']
+  }, [detail?.kind])
 
   const notePath = detail?.notes?.[0] ?? ''
 
@@ -184,7 +210,7 @@ export default function RunDetail(props: {
   )
 
   const startRCA = useCallback(
-    async (o: { prUrl: string; resolution: string }) => {
+    async (o: { prUrl: string; resolution: string; provider: string; model: string }) => {
       if (!detail) return
       setPending('rca')
       setActionError('')
@@ -195,6 +221,8 @@ export default function RunDetail(props: {
         await onStartRCA(detail.key, {
           prUrl: o.prUrl || undefined,
           resolution: o.resolution || undefined,
+          provider: o.provider || undefined,
+          model: o.model || undefined,
         })
         setRcaOpen(false)
       } catch (err: unknown) {
@@ -205,6 +233,43 @@ export default function RunDetail(props: {
     },
     [detail, onStartRCA],
   )
+
+  const startFix = useCallback(
+    async (o: FixStart, what: 'fix' | 'accept') => {
+      if (!detail || !onStartFix) return
+      setPending(what)
+      setActionError('')
+      try {
+        await onStartFix(detail.key, o)
+        setFixOpen(false)
+      } catch (err: unknown) {
+        setActionError(err instanceof Error ? err.message : String(err))
+      } finally {
+        setPending('')
+      }
+    },
+    [detail, onStartFix],
+  )
+
+  /*
+   * Copy this run's bundle into the golden set, which is what
+   * `sirdar golden add` does. The bundle is a real customer's conversation,
+   * so nothing of it is shown here and nothing about where it went is
+   * reported beyond the directory the service chose.
+   */
+  const addToGolden = useCallback(async () => {
+    setPending('golden')
+    setActionError('')
+    setGolden('')
+    try {
+      const entry = await transport.addGolden(workspaceId, { runId })
+      setGolden(`Added to the golden set as ${entry.key}.`)
+    } catch (err: unknown) {
+      setActionError(err instanceof Error ? err.message : String(err))
+    } finally {
+      setPending('')
+    }
+  }, [transport, workspaceId, runId])
 
   const cancel = useCallback(async () => {
     if (!jobId) return
@@ -247,6 +312,9 @@ export default function RunDetail(props: {
 
   const question = askedQuestion(detail.reason)
   const canStartRCA = detail.kind === 'triage' && detail.status === 'completed'
+  // A fix runs from a completed triage note, which is the same gate the CLI
+  // applies; the core refuses one whose note says otherwise.
+  const canStartFix = Boolean(onStartFix) && canStartRCA
 
   return (
     <div className="run">
@@ -295,6 +363,27 @@ export default function RunDetail(props: {
               Start RCA
             </button>
           ) : null}
+          {canStartFix ? (
+            <button
+              type="button"
+              className="run-btn"
+              onClick={() => setFixOpen((v) => !v)}
+              aria-expanded={fixOpen}
+            >
+              Start fix
+            </button>
+          ) : null}
+          {canStartRCA ? (
+            <button
+              type="button"
+              className="run-btn"
+              onClick={() => void addToGolden()}
+              disabled={pending !== ''}
+              title="Copy this run's bundle into the golden set the eval replays"
+            >
+              {pending === 'golden' ? 'Adding…' : 'Add to golden set'}
+            </button>
+          ) : null}
           <button
             type="button"
             className="run-btn"
@@ -306,6 +395,11 @@ export default function RunDetail(props: {
           </button>
         </div>
       </header>
+
+      {golden ? <p className="run-said">{golden}</p> : null}
+      {actionError && !rcaOpen && !fixOpen && detail.status !== 'blocked' && !detail.fix ? (
+        <p className="run-failed-line">{actionError}</p>
+      ) : null}
 
       {detail.status === 'blocked' ? (
         <ResumeBox
@@ -322,8 +416,40 @@ export default function RunDetail(props: {
           runKey={detail.key}
           pending={pending === 'rca'}
           error={actionError}
+          defaultProvider={defaultProvider}
           onStart={startRCA}
           onCancel={() => setRcaOpen(false)}
+        />
+      ) : null}
+
+      {fixOpen ? (
+        <FixForm
+          runKey={detail.key}
+          pending={pending === 'fix'}
+          error={actionError}
+          defaultProvider={defaultProvider}
+          onStart={(o) =>
+            void startFix(
+              {
+                dryRun: o.dryRun || undefined,
+                noPr: o.noPr || undefined,
+                base: o.base || undefined,
+                provider: o.provider || undefined,
+                model: o.model || undefined,
+              },
+              'fix',
+            )
+          }
+          onCancel={() => setFixOpen(false)}
+        />
+      ) : null}
+
+      {detail.fix ? (
+        <FixPanel
+          fix={detail.fix}
+          pending={pending === 'accept'}
+          error={actionError}
+          onAccept={() => void startFix({ acceptDeviation: true }, 'accept')}
         />
       ) : null}
 

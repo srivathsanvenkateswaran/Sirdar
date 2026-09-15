@@ -1,6 +1,9 @@
 import type {
   AppEvent,
   Check,
+  ConfigSummary,
+  EvalReport,
+  GoldenEntry,
   Quota,
   RegisterRow,
   RunDetail,
@@ -125,6 +128,22 @@ export function createHTTPTransport(): Transport {
         key,
         ...(o ?? {}),
       }),
+    startFix: (ws, key, o) =>
+      postJSON<{ jobId: string }>(`/workspaces/${encodeURIComponent(ws)}/fix`, {
+        key,
+        ...(o ?? {}),
+      }),
+    startEval: (ws, keys, o) =>
+      postJSON<{ jobId: string }>(`/workspaces/${encodeURIComponent(ws)}/eval`, {
+        ...(keys && keys.length > 0 ? { keys } : {}),
+        ...(o ?? {}),
+      }),
+    evalReports: (ws) => getJSON<EvalReport[]>(`/workspaces/${encodeURIComponent(ws)}/eval`),
+    golden: (ws) => getJSON<GoldenEntry[]>(`/workspaces/${encodeURIComponent(ws)}/golden`),
+    addGolden: (ws, o) =>
+      postJSON<GoldenEntry>(`/workspaces/${encodeURIComponent(ws)}/golden`, o),
+    configSummary: (ws) =>
+      getJSON<ConfigSummary>(`/workspaces/${encodeURIComponent(ws)}/config/summary`),
     resume: (ws, runId, answer) =>
       postJSON<{ jobId: string }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/resume`,
@@ -185,7 +204,32 @@ interface BridgeBindings {
     keys: string[],
     o: { provider: string; model: string; dryRun: boolean },
   ): Promise<string>
-  StartRCA(ws: string, key: string, o: { prUrl: string; resolution: string }): Promise<string>
+  StartRCA(
+    ws: string,
+    key: string,
+    o: { prUrl: string; resolution: string; provider: string; model: string },
+  ): Promise<string>
+  StartFix(
+    ws: string,
+    key: string,
+    o: {
+      dryRun: boolean
+      noPr: boolean
+      base: string
+      acceptDeviation: boolean
+      provider: string
+      model: string
+    },
+  ): Promise<string>
+  StartEval(
+    ws: string,
+    keys: string[],
+    o: { provider: string; model: string; concurrency: number },
+  ): Promise<string>
+  EvalReports(ws: string): Promise<EvalReport[] | null>
+  Golden(ws: string): Promise<GoldenEntry[] | null>
+  AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
+  ConfigSummary(ws: string): Promise<ConfigSummary>
   Resume(ws: string, runId: string, answer: string): Promise<string>
   Cancel(jobId: string): Promise<void>
   Version(): Promise<string>
@@ -242,8 +286,31 @@ export function createWailsTransport(): Transport {
       jobId: await bridge().StartRCA(ws, key, {
         prUrl: o?.prUrl ?? '',
         resolution: o?.resolution ?? '',
+        provider: o?.provider ?? '',
+        model: o?.model ?? '',
       }),
     }),
+    startFix: async (ws, key, o) => ({
+      jobId: await bridge().StartFix(ws, key, {
+        dryRun: o?.dryRun ?? false,
+        noPr: o?.noPr ?? false,
+        base: o?.base ?? '',
+        acceptDeviation: o?.acceptDeviation ?? false,
+        provider: o?.provider ?? '',
+        model: o?.model ?? '',
+      }),
+    }),
+    startEval: async (ws, keys, o) => ({
+      jobId: await bridge().StartEval(ws, keys ?? [], {
+        provider: o?.provider ?? '',
+        model: o?.model ?? '',
+        concurrency: o?.concurrency ?? 0,
+      }),
+    }),
+    evalReports: async (ws) => list(await bridge().EvalReports(ws)),
+    golden: async (ws) => list(await bridge().Golden(ws)),
+    addGolden: (ws, o) => bridge().AddGolden(ws, o.key ?? '', o.runId ?? ''),
+    configSummary: (ws) => bridge().ConfigSummary(ws),
     resume: async (ws, runId, answer) => ({
       jobId: await bridge().Resume(ws, runId, answer ?? ''),
     }),

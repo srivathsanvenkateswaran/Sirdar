@@ -32,10 +32,14 @@ const serveShutdownTimeout = 5 * time.Second
 // app embeds, served from this binary over loopback.
 func cmdServe(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("serve", stderr,
-		"usage: sirdar serve [--addr 127.0.0.1:7777] [--open] [--workspace PATH] [--allow-remote]")
+		"usage: sirdar serve [--addr 127.0.0.1:7777] [--open] [--workspace PATH] [--golden DIR] [--allow-remote]")
 	addr := fs.String("addr", "127.0.0.1:7777", "address to listen on")
 	openBrowser := fs.Bool("open", false, "open the UI in the default browser")
 	workspace := fs.String("workspace", "", "workspace to register (default: the one the working directory is in)")
+	// The golden set is named once, here, and never by a request: it holds
+	// real customers' bundles, and a caller who could name the directory
+	// could read any bundle on the machine through the eval routes.
+	golden := fs.String("golden", "", "golden set the eval routes replay (default ~/.sirdar/golden)")
 	allowRemote := fs.Bool("allow-remote", false, "permit a non-loopback address (there is no authentication)")
 	if _, ok := parseFlags(fs, args, 0, 0, stderr); !ok {
 		return exitUsage
@@ -43,13 +47,17 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 
 	// The API starts runs and reads notes with the operator's own agent
 	// login, so an address anyone can reach is a decision, not a default.
-	if !isLoopback(*addr) {
+	loopback := isLoopback(*addr)
+	if !loopback {
 		if !*allowRemote {
 			fmt.Fprintf(stderr, "sirdar serve: %s is not a loopback address; pass --allow-remote to bind it anyway\n", *addr)
 			return exitUsage
 		}
 		fmt.Fprintf(stderr, "sirdar serve: warning: %s is reachable from other machines and there is no authentication;"+
-			" anyone who can reach it can start runs and read your notes\n", *addr)
+			" anyone who can reach it can start runs and read your notes."+
+			" The fix route is refused on this listener: a remote caller must not be able to write code"+
+			" and open pull requests under your GitHub login. Run fixes with `sirdar fix`,"+
+			" or from a server bound to loopback\n", *addr)
 	}
 
 	root, ok := serveRoot(*workspace, stderr)
@@ -69,19 +77,22 @@ func cmdServe(args []string, stdout, stderr io.Writer) int {
 		return 1
 	}
 
-	hooks, ok := serveHooks(root, wsID, *allowRemote, stderr)
+	opts, ok := serveHooks(root, wsID, *allowRemote, stderr)
 	if !ok {
 		return 1
 	}
+	// The bind decision, handed to the handler rather than re-derived there:
+	// it is what the fix route is gated on.
+	opts = append(opts, httpapi.LoopbackOnly(loopback), httpapi.ListenAddr(*addr))
 
 	ctx, stop := interruptible()
 	defer stop()
 
-	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr)})
+	svc := app.New(reg, app.BuildDeps, app.Options{Stderr: app.Synced(stderr), GoldenDir: *golden})
 	svc.Start(ctx)
 	defer svc.Stop()
 
-	return serveHTTP(ctx, httpapi.New(svc, ui.FS(), hooks...), *addr, *openBrowser, stdout, stderr)
+	return serveHTTP(ctx, httpapi.New(svc, ui.FS(), opts...), *addr, *openBrowser, stdout, stderr)
 }
 
 // serveHooks builds the workspace's webhook receiver, if it configured

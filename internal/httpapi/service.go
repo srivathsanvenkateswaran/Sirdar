@@ -25,6 +25,12 @@ type Service interface {
 	TriageIfIdle(ctx context.Context, wsID, key string, o TriageOptions) (JobID, string, error)
 	HookReceived(source, key, outcome string)
 	StartRCA(ctx context.Context, wsID, key string, o RCAOptions) (JobID, error)
+	StartFix(ctx context.Context, wsID, key string, o FixOptions) (JobID, error)
+	StartEval(ctx context.Context, wsID string, keys []string, o EvalOptions) (JobID, error)
+	EvalReports(wsID string) ([]EvalReport, error)
+	Golden(wsID string) ([]GoldenEntry, error)
+	AddGolden(wsID, key, runID string) (GoldenEntry, error)
+	ConfigSummary(wsID string) (ConfigSummary, error)
 	Resume(ctx context.Context, wsID, runID, answer string) (JobID, error)
 	Cancel(jobID JobID) error
 	Register(wsID string) ([]RegisterRow, error)

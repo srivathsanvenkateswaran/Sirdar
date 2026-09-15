@@ -1,5 +1,6 @@
 import type {
   AppEvent,
+  HookOutcome,
   Quota,
   RunSummary,
   Ticket,
@@ -14,12 +15,46 @@ export type Screen =
   | { name: 'board' }
   | { name: 'run'; runId: string }
   | { name: 'register' }
+  | { name: 'eval' }
   | { name: 'settings' }
 
 export interface Toast {
   id: number
   tone: 'info' | 'error'
   text: string
+}
+
+/**
+ * One inbound webhook delivery, as the Board's Inbound panel lists it. The
+ * tracker fires on every field change, so most deliveries are skipped or
+ * filtered; seeing them is how a hook that never arrives is told apart from
+ * one that arrives and is dropped.
+ */
+export interface InboundDelivery {
+  id: number
+  source: string
+  key: string
+  outcome: HookOutcome
+  at: string
+}
+
+/** How many deliveries the Inbound panel keeps. */
+export const INBOUND_LIMIT = 50
+
+/**
+ * A job this window started that names no ticket key.
+ *
+ * Every other job is paired with a run as its first `run.updated` arrives, and
+ * Run detail cancels it from there. A whole-set eval names no key at all, so no
+ * run can ever claim it and nothing in the window would otherwise hold its id:
+ * once started it could only be stopped by quitting the app. These are kept on
+ * the state so the screen that started one can offer Cancel.
+ */
+export interface KeylessJob {
+  jobId: string
+  workspaceId: string
+  /** What the job is, for the button beside it. */
+  label: string
 }
 
 export interface AppState {
@@ -33,6 +68,10 @@ export interface AppState {
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
   toasts: Toast[]
+  /** Inbound webhook deliveries, newest first. */
+  inbound: InboundDelivery[]
+  /** Jobs this window started that no run will ever claim; see KeylessJob. */
+  keylessJobs: KeylessJob[]
   /** True until `init()` has finished its first pass, so the board can say so. */
   loading: boolean
 }
@@ -46,6 +85,23 @@ export interface TriageOptions {
 export interface RCAOptions {
   prUrl?: string
   resolution?: string
+  provider?: string
+  model?: string
+}
+
+export interface FixOptions {
+  dryRun?: boolean
+  noPr?: boolean
+  base?: string
+  acceptDeviation?: boolean
+  provider?: string
+  model?: string
+}
+
+export interface EvalOptions {
+  provider?: string
+  model?: string
+  concurrency?: number
 }
 
 /**
@@ -80,6 +136,10 @@ export interface AppStore {
   navigate(screen: Screen): void
   startTriage(keys: string[], opts?: TriageOptions): Promise<void>
   startRCA(key: string, opts?: RCAOptions): Promise<void>
+  startFix(key: string, opts?: FixOptions): Promise<void>
+  startEval(keys?: string[], opts?: EvalOptions): Promise<void>
+  /** Stops a job this window started, by id. */
+  cancelJob(jobId: string): Promise<void>
   refresh(): Promise<void>
   toast(text: string, tone?: Toast['tone']): void
   dismissToast(id: number): void
@@ -116,6 +176,23 @@ export function isQueueUnsupported(err: unknown): boolean {
   return /\b501\b|unsupported|not implemented/i.test(message)
 }
 
+/** What a delivery's toast says: who sent it, about what, and what came of it. */
+export function inboundText(entry: { source: string; key: string; outcome: HookOutcome }): string {
+  const what = entry.key ? `${entry.source} · ${entry.key}` : entry.source
+  switch (entry.outcome) {
+    case 'started':
+      return `Webhook from ${what} started a triage.`
+    case 'skipped':
+      return `Webhook from ${what} was skipped; that key is busy or in its cooldown.`
+    case 'filtered':
+      return `Webhook from ${what} did not match this workspace's filter.`
+    case 'ignored':
+      return `Webhook from ${entry.source} named no ticket.`
+    default:
+      return `Webhook from ${what} was rejected.`
+  }
+}
+
 function errorText(err: unknown): string {
   if (err instanceof Error && err.message) return err.message
   const text = String(err ?? '')
@@ -140,6 +217,12 @@ export function upsertQuota(quota: Quota[], entry: Quota): Quota[] {
   return next
 }
 
+/**
+ * A failed start is reported twice on purpose: the toast tells the window, and
+ * the rejection tells the form that asked. Swallowing it here left every form's
+ * `error` prop permanently empty — a fix refused for a note nobody approved
+ * would toast once and leave the dialog looking as though it had worked.
+ */
 export function createAppStore(transport: Transport): AppStore {
   let state: AppState = {
     transport,
@@ -151,6 +234,8 @@ export function createAppStore(transport: Transport): AppStore {
     queueUnsupported: {},
     quota: [],
     toasts: [],
+    inbound: [],
+    keylessJobs: [],
     loading: true,
   }
 
@@ -158,6 +243,7 @@ export function createAppStore(transport: Transport): AppStore {
   const pending: PendingJob[] = []
   let unsubscribe: (() => void) | null = null
   let toastSeq = 0
+  let inboundSeq = 0
   let disposed = false
   let started = false
 
@@ -226,9 +312,23 @@ export function createAppStore(transport: Transport): AppStore {
     await Promise.all([loadRuns(workspaceId), loadQueue(workspaceId)])
   }
 
-  /** Remembers a job until every key it was given has a run. */
-  function track(jobId: string, workspaceId: string, keys: string[], startedAt: number): void {
+  /**
+   * Remembers a job until every key it was given has a run. A job that names
+   * no key is remembered on the state instead: no run will claim it, so the
+   * screen that started it is the only place Cancel can live.
+   */
+  function track(
+    jobId: string,
+    workspaceId: string,
+    keys: string[],
+    startedAt: number,
+    label = '',
+  ): void {
     if (!jobId) return
+    if (keys.length === 0) {
+      set({ keylessJobs: [...state.keylessJobs, { jobId, workspaceId, label }] })
+      return
+    }
     pending.push({ jobId, workspaceId, keys: new Set(keys), startedAt })
   }
 
@@ -252,6 +352,9 @@ export function createAppStore(transport: Transport): AppStore {
   function release(jobId: string): void {
     const at = pending.findIndex((job) => job.jobId === jobId)
     if (at >= 0) pending.splice(at, 1)
+    if (state.keylessJobs.some((job) => job.jobId === jobId)) {
+      set({ keylessJobs: state.keylessJobs.filter((job) => job.jobId !== jobId) })
+    }
     clearJob(jobId)
   }
 
@@ -287,6 +390,19 @@ export function createAppStore(transport: Transport): AppStore {
               : `Finished ${done.length} ${done.length === 1 ? 'run' : 'runs'}.`
         toast(summary, failed > 0 ? 'error' : 'info')
         void loadRuns(event.workspaceId)
+        return
+      }
+      case 'hook.received': {
+        inboundSeq += 1
+        const entry: InboundDelivery = {
+          id: inboundSeq,
+          source: event.source,
+          key: event.key ?? '',
+          outcome: event.outcome,
+          at: new Date().toISOString(),
+        }
+        set({ inbound: [entry, ...state.inbound].slice(0, INBOUND_LIMIT) })
+        toast(inboundText(entry), event.outcome === 'rejected' ? 'error' : 'info')
         return
       }
       // `run.event` is a per-line firehose; Run detail subscribes for itself.
@@ -363,6 +479,57 @@ export function createAppStore(transport: Transport): AppStore {
         void loadRuns(workspaceId)
       } catch (err) {
         if (!disposed) toast(`Triage did not start. ${errorText(err)}`, 'error')
+        throw err
+      }
+    },
+
+    async startFix(key, opts) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return
+      }
+      if (!key) {
+        toast('Enter a ticket key.', 'error')
+        return
+      }
+      const askedAt = Date.now()
+      try {
+        const started = await transport.startFix(workspaceId, key, opts)
+        if (disposed) return
+        track(started?.jobId ?? '', workspaceId, [key], askedAt)
+        toast(
+          opts?.acceptDeviation
+            ? `Publishing the reviewed commit for ${key}.`
+            : `Fix started for ${key}.`,
+        )
+        void loadRuns(workspaceId)
+      } catch (err) {
+        if (!disposed) toast(`Fix did not start. ${errorText(err)}`, 'error')
+        throw err
+      }
+    },
+
+    async startEval(keys, opts) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId) {
+        toast('Add a workspace before starting a run.', 'error')
+        return
+      }
+      const askedAt = Date.now()
+      try {
+        const started = await transport.startEval(workspaceId, keys, opts)
+        if (disposed) return
+        track(started?.jobId ?? '', workspaceId, keys ?? [], askedAt, 'Eval of the whole golden set')
+        toast(
+          keys && keys.length > 0
+            ? `Eval started for ${keys.length === 1 ? keys[0] : `${keys.length} keys`}.`
+            : 'Eval started for the whole golden set.',
+        )
+        void loadRuns(workspaceId)
+      } catch (err) {
+        if (!disposed) toast(`Eval did not start. ${errorText(err)}`, 'error')
+        throw err
       }
     },
 
@@ -385,6 +552,21 @@ export function createAppStore(transport: Transport): AppStore {
         void loadRuns(workspaceId)
       } catch (err) {
         if (!disposed) toast(`Root cause analysis did not start. ${errorText(err)}`, 'error')
+        throw err
+      }
+    },
+
+    async cancelJob(jobId) {
+      if (!jobId) return
+      try {
+        await transport.cancel(jobId)
+        if (disposed) return
+        // The job's own `job.finished` will arrive and release it; dropping
+        // it here as well keeps the button from lingering if it does not.
+        release(jobId)
+      } catch (err) {
+        if (!disposed) toast(`Could not cancel the job. ${errorText(err)}`, 'error')
+        throw err
       }
     },
 

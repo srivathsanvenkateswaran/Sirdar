@@ -96,6 +96,24 @@ func (b *Bridge) Doctor(ws string) ([]app.Check, error) {
 // Quota returns the newest rate-limit reading per provider.
 func (b *Bridge) Quota() []app.Quota { return b.svc.Quota() }
 
+// Golden lists the keys in the golden set the eval runs replay.
+func (b *Bridge) Golden(ws string) ([]app.GoldenEntry, error) { return b.svc.Golden(ws) }
+
+// AddGolden copies a completed run's bundle into the golden set. An empty
+// key is taken from the run the id names.
+func (b *Bridge) AddGolden(ws, key, runId string) (app.GoldenEntry, error) {
+	return b.svc.AddGolden(ws, key, runId)
+}
+
+// EvalReports returns the workspace's recorded eval reports, newest first.
+func (b *Bridge) EvalReports(ws string) ([]app.EvalReport, error) { return b.svc.EvalReports(ws) }
+
+// ConfigSummary reports the workspace's notify and webhooks configuration
+// with every credential reference cut back to its scheme.
+func (b *Bridge) ConfigSummary(ws string) (app.ConfigSummary, error) {
+	return b.svc.ConfigSummary(ws)
+}
+
 // --- jobs -------------------------------------------------------------
 
 // StartTriage triages the keys in the background and returns the job id.
@@ -110,6 +128,21 @@ func (b *Bridge) StartTriage(ws string, keys []string, o app.TriageOptions) (str
 // StartRCA produces the RCA note and resolution draft for one key.
 func (b *Bridge) StartRCA(ws, key string, o app.RCAOptions) (string, error) {
 	id, err := b.svc.StartRCA(context.Background(), ws, key, o)
+	return string(id), err
+}
+
+// StartFix runs the confined fix flow for one key: the branch, the agent
+// session, the commit, and — unless the agent reported deviating from the
+// note — the push and the pull request.
+func (b *Bridge) StartFix(ws, key string, o app.FixOptions) (string, error) {
+	id, err := b.svc.StartFix(context.Background(), ws, key, o)
+	return string(id), err
+}
+
+// StartEval replays the golden set and scores it. An empty keys list means
+// every key in the set.
+func (b *Bridge) StartEval(ws string, keys []string, o app.EvalOptions) (string, error) {
+	id, err := b.svc.StartEval(context.Background(), ws, keys, o)
 	return string(id), err
 }
 

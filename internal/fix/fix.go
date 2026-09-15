@@ -172,8 +172,17 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	// orphan that commit and spend a second session re-deriving it, so
 	// when the branch still carries exactly the commit the blocked run
 	// recorded, this pushes that commit and opens the pull request for it.
+	//
+	// When a blocked run left a commit and the branch no longer carries it,
+	// the rerun is refused rather than quietly starting a fresh session: the
+	// commit the person read is not what would be pushed, and a full agent
+	// run is not what "accept what I reviewed" asks for.
 	if o.AcceptDeviation && !o.DryRun {
-		if prior, rep, ok := reviewedCommit(ctx, g, cfg.Root, key); ok {
+		prior, rep, ok, err := reviewedCommit(ctx, g, cfg.Root, key)
+		if err != nil {
+			return res, err
+		}
+		if ok {
 			return pushReviewed(ctx, g, cfg, key, tn, prior, rep, o, stderr)
 		}
 	}
@@ -299,6 +308,13 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 		// The worktree stays. The commit in it is what the operator is
 		// being asked to read, and --accept-deviation publishes from it.
 		res.Blocked = dev
+		// The deviation goes into the run state as well as into the
+		// command's output: a desktop shell reads the run directory, and
+		// the review that unblocks this commit happens there too.
+		recordFixState(cfg.Root, out.State.RunID, stderr, key, func(s *store.State) {
+			s.Fix.Deviation = dev
+		})
+		res.State.Fix.Deviation = dev
 		return res, nil
 	}
 
@@ -353,44 +369,79 @@ func publish(ctx context.Context, g git, cfg *config.Config, key string, tn tria
 	}
 
 	res.NotesUpdated = updateNotes(tn, res.PRURL, res.Commit, stderr, key)
+
+	// What the push produced is recorded on the run that made the commit —
+	// which on an --accept-deviation rerun is the earlier run, not a new
+	// one — so the screen showing that run says the work has left the
+	// machine.
+	//
+	// The push itself is recorded, not only the pull request URL. With
+	// --no-pr, or when `gh` failed and the operator was told to open the
+	// request by hand, the branch is on the remote and there is no URL; a
+	// reader that had only the URL would take that for work still waiting
+	// on them.
+	if res.RunID != "" {
+		recordFixState(cfg.Root, res.RunID, stderr, key, func(s *store.State) {
+			s.Fix.Pushed = res.Pushed
+			s.Fix.PRURL = res.PRURL
+		})
+		res.State.Fix.Pushed, res.State.Fix.PRURL = res.Pushed, res.PRURL
+	}
 	return nil
 }
 
 // reviewedCommit finds the commit a previous fix run left on its branch for
 // a human to read: the newest fix run for the key, when it recorded a
-// commit and its branch still points at exactly that commit. A branch that
-// has moved on, been deleted, or was never recorded means there is nothing
-// to reuse, and the caller runs the ordinary flow.
+// commit and its branch still points at exactly that commit.
+//
+// A key with no such run — nothing recorded a commit, or the newest fix run
+// failed before it made one — returns ok false and no error, and the caller
+// runs the ordinary flow: `--accept-deviation` on a first fix is a valid
+// thing to ask for and means "do not stop if the agent deviates".
+//
+// A run that did record a commit whose branch has since moved or gone is an
+// error, not a fall-through. The commit a person read is not the branch's
+// head any more, so neither pushing it nor starting a fresh session is what
+// they asked for; they are told which it was and left to choose.
 //
 // Only the newest fix run is considered. An older commit that somebody left
 // on a branch months ago is not what "--accept-deviation" refers to.
-func reviewedCommit(ctx context.Context, g git, root, key string) (store.State, Report, bool) {
+func reviewedCommit(ctx context.Context, g git, root, key string) (store.State, Report, bool, error) {
 	var rep Report
 	states, err := store.List(root, key)
 	if err != nil {
-		return store.State{}, rep, false
+		return store.State{}, rep, false, nil
 	}
 	for _, s := range states {
 		if s.Kind != store.KindFix || s.Eval {
 			continue
 		}
 		if s.Status != store.StatusCompleted || s.Fix.Commit == "" || s.Fix.Branch == "" {
-			return store.State{}, rep, false
+			return store.State{}, rep, false, nil
 		}
 		head, err := g.out(ctx, "rev-parse", "--verify", "--quiet", "refs/heads/"+s.Fix.Branch)
-		if err != nil || head != s.Fix.Commit {
-			return store.State{}, rep, false
+		if err != nil {
+			return store.State{}, rep, false, fmt.Errorf(
+				"fix: --accept-deviation would push %s, the commit run %s left for review, but branch %s no longer exists:"+
+					" branch moved; rerun without --accept-deviation to start a fresh fix, or restore the branch at that commit",
+				short(s.Fix.Commit), s.RunID, s.Fix.Branch)
+		}
+		if head != s.Fix.Commit {
+			return store.State{}, rep, false, fmt.Errorf(
+				"fix: --accept-deviation would push %s, the commit run %s left for review, but branch %s is now at %s:"+
+					" branch moved; rerun without --accept-deviation to start a fresh fix, or reset %s to the reviewed commit",
+				short(s.Fix.Commit), s.RunID, s.Fix.Branch, short(head), s.Fix.Branch)
 		}
 		doc, err := runner.FixReport(root, key, s.RunID)
 		if err != nil {
-			return store.State{}, rep, false
+			return store.State{}, rep, false, nil
 		}
 		if err := json.Unmarshal(doc, &rep); err != nil || strings.TrimSpace(rep.Summary) == "" {
-			return store.State{}, rep, false
+			return store.State{}, rep, false, nil
 		}
-		return s, rep, true
+		return s, rep, true, nil
 	}
-	return store.State{}, rep, false
+	return store.State{}, rep, false, nil
 }
 
 // pushReviewed completes a fix from the commit a previous run made, with no
@@ -444,12 +495,22 @@ func pushReviewed(ctx context.Context, g git, cfg *config.Config, key string, tn
 // made, and failing the command here would only make it look as though it
 // were not.
 func recordCommit(root, runID, branch, base, commit string, stderr io.Writer, key string) {
+	recordFixState(root, runID, stderr, key, func(s *store.State) {
+		s.Fix.Branch, s.Fix.Base, s.Fix.Commit = branch, base, commit
+	})
+}
+
+// recordFixState applies mutate to a fix run's own state.json. A failure is
+// reported and otherwise ignored: whatever the state was to record has
+// already happened, and failing the command here would only make it look as
+// though it had not.
+func recordFixState(root, runID string, stderr io.Writer, key string, mutate func(*store.State)) {
 	rn, state, err := store.Open(root, runID)
 	if err != nil {
 		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
 		return
 	}
-	state.Fix.Branch, state.Fix.Base, state.Fix.Commit = branch, base, commit
+	mutate(&state)
 	if err := rn.WriteState(state); err != nil {
 		fmt.Fprintf(stderr, "[%s] the commit was not recorded in the run state: %v\n", key, err)
 	}

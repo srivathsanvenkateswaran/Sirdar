@@ -396,3 +396,139 @@
   margin: 0;
   cursor: pointer;
 }
+
+/* ---- Settings: the read-only notify and webhooks summary ---- */
+
+/*
+ * Nothing in this block is editable and nothing in it is a secret. A
+ * workspace names credentials as references, and only the scheme of a
+ * reference reaches the window, so the rows say where a secret comes from
+ * and never what it is.
+ */
+.config-sub {
+  margin: 14px 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.config-line {
+  margin: 0 0 8px;
+  max-width: 76ch;
+  line-height: 1.5;
+}
+
+.config-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.config-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+}
+
+.config-row:last-child {
+  border-bottom: 0;
+}
+
+.config-row__type {
+  min-width: 90px;
+  font-weight: 600;
+}
+
+.config-row__meta {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
+
+/* ---- Eval and the golden set ---- */
+
+.golden-list {
+  margin: 0 0 12px;
+  padding: 0;
+  list-style: none;
+}
+
+.golden-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+}
+
+.golden-row:last-child {
+  border-bottom: 0;
+}
+
+.golden-row__pick {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 160px;
+  cursor: pointer;
+}
+
+.golden-row__meta {
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+}
+
+.eval-meta {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: var(--muted, #6b7280);
+  overflow-wrap: anywhere;
+}
+
+.eval-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.eval-table th,
+.eval-table td {
+  padding: 5px 8px;
+  text-align: left;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+}
+
+.eval-table thead th {
+  font-weight: 600;
+  color: var(--muted, #6b7280);
+  white-space: nowrap;
+}
+
+/* The state hue is the row's only colour, so a failure is found by scanning. */
+.eval-row[data-state="failed"] td:nth-child(2),
+.eval-row[data-state="over_budget"] td:nth-child(2) {
+  color: var(--panel-danger);
+}
+
+.eval-row[data-state="completed"] td:nth-child(2) {
+  color: var(--panel-ok);
+}
+
+.eval-row--why td {
+  padding-top: 0;
+  border-bottom: 1px solid var(--border, #e4e6eb);
+}
+
+.eval-why {
+  margin: 0 0 3px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--muted, #6b7280);
+  overflow-wrap: anywhere;
+}

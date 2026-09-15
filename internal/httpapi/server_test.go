@@ -14,6 +14,11 @@ import (
 
 // do issues one request against a handler built on f and returns the
 // recorded response. A nil body sends no body at all.
+//
+// The handler is built as a loopback one, which is what `sirdar serve`
+// builds on its default address; guard_test.go covers the other bind. Host
+// is set to match: the guard now checks it (see validHost in guard.go),
+// and httptest.NewRequest's default of "example.com" is not loopback.
 func do(t *testing.T, f *fake, method, target string, body string) *httptest.ResponseRecorder {
 	t.Helper()
 	var r *http.Request
@@ -23,8 +28,9 @@ func do(t *testing.T, f *fake, method, target string, body string) *httptest.Res
 		r = httptest.NewRequest(method, target, strings.NewReader(body))
 		r.Header.Set("Content-Type", "application/json")
 	}
+	r.Host = "127.0.0.1:7777"
 	w := httptest.NewRecorder()
-	New(f, emptyFS{}).ServeHTTP(w, r)
+	New(f, emptyFS{}, LoopbackOnly(true)).ServeHTTP(w, r)
 	return w
 }
 
@@ -267,8 +273,27 @@ func TestNote(t *testing.T) {
 }
 
 func TestNoteBadKind(t *testing.T) {
-	for _, kind := range []string{"", "summary"} {
+	for _, kind := range []string{"summary", "fix", "triage%20"} {
 		assertError(t, do(t, newFake(), "GET", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/note?kind="+kind, ""), 400, "bad_request")
+	}
+}
+
+// An absent kind is the run's own note.md, which is the only way to read a
+// fix run's note: a fix run has no "triage" note, and asking it for one is
+// a mismatch the service refuses.
+func TestNoteWithNoKindIsTheRunsOwn(t *testing.T) {
+	for _, target := range []string{
+		"/api/workspaces/" + knownWS + "/runs/" + knownRun + "/note",
+		"/api/workspaces/" + knownWS + "/runs/" + knownRun + "/note?kind=",
+	} {
+		f := newFake()
+		w := do(t, f, "GET", target, "")
+		if w.Code != 200 {
+			t.Fatalf("%s: status %d, want 200; body %s", target, w.Code, w.Body.String())
+		}
+		if f.gotNoteKind != "" {
+			t.Fatalf("%s: the service was asked for kind %q, want the run's own", target, f.gotNoteKind)
+		}
 	}
 }
 

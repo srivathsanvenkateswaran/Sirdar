@@ -53,6 +53,79 @@ describe('http transport', () => {
     expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs')
   })
 
+  /*
+   * The empty note kind is the run's own note.md, which is how a fix run's
+   * note is reached. It has to travel as *no* query parameter: `?kind=` and an
+   * absent `kind` both mean the same thing to the server, and the query
+   * builder drops empty values, so this is the shape that actually goes out.
+   */
+  it('asks for the run\'s own note with no kind parameter', async () => {
+    const spy = vi.fn(
+      async (_input: RequestInfo | URL, _init?: RequestInit) =>
+        new Response('# note', { headers: { 'Content-Type': 'text/markdown' } }),
+    )
+    vi.stubGlobal('fetch', spy)
+
+    await createTransport().note('ws1', 'r1', '')
+    expect(spy.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r1/note')
+
+    await createTransport().note('ws1', 'r1', 'triage')
+    expect(spy.mock.calls[1]![0]).toBe('/api/workspaces/ws1/runs/r1/note?kind=triage')
+  })
+
+  it('posts a fix to the workspace fix route, flags and all', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-1' })
+
+    await createTransport().startFix('ws 1', 'OMNI-1', { base: 'main', acceptDeviation: true })
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws%201/fix')
+    const init = fetchMock.mock.calls[0]![1] as RequestInit
+    expect(init.method).toBe('POST')
+    expect(JSON.parse(String(init.body))).toEqual({
+      key: 'OMNI-1',
+      base: 'main',
+      acceptDeviation: true,
+    })
+  })
+
+  // An eval of the whole golden set sends no keys at all, which is what the
+  // route reads as "every key in the set".
+  it('leaves keys out of an eval over the whole set', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-2' })
+
+    await createTransport().startEval('ws1', [], { provider: 'qwen' })
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/eval')
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      provider: 'qwen',
+    })
+  })
+
+  it('sends the keys it was given', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-3' })
+
+    await createTransport().startEval('ws1', ['OMNI-1'])
+
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      keys: ['OMNI-1'],
+    })
+  })
+
+  it('reads the golden set, the reports and the config summary from their own routes', async () => {
+    const fetchMock = mockFetch([])
+    const t = createTransport()
+
+    await t.golden('ws1')
+    await t.evalReports('ws1')
+    await t.configSummary('ws1')
+
+    expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
+      '/api/workspaces/ws1/golden',
+      '/api/workspaces/ws1/eval',
+      '/api/workspaces/ws1/config/summary',
+    ])
+  })
+
   it('surfaces the API error envelope as an Error', async () => {
     mockFetch({ error: { code: 'unsupported', message: 'no tracker configured' } }, { status: 501 })
 

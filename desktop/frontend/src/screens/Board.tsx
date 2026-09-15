@@ -2,6 +2,8 @@ import { useMemo, useState } from 'react'
 import type { RunSummary, Ticket } from '../api/types'
 import RunCard from '../components/cards/RunCard'
 import TicketCard from '../components/cards/TicketCard'
+import InboundPanel from '../components/shell/InboundPanel'
+import type { InboundDelivery } from '../store/appStore'
 
 /** One card in a lane: either an untouched ticket or a run. */
 export type BoardCard =
@@ -105,11 +107,13 @@ export default function Board(props: {
   runs: RunSummary[]
   queueUnsupported: boolean
   loading: boolean
+  inbound?: InboundDelivery[]
   filterRef?: React.RefObject<HTMLInputElement | null>
   onOpenRun: (runId: string) => void
   onTriage: (keys: string[]) => void
 }): JSX.Element {
-  const { tickets, runs, queueUnsupported, loading, filterRef, onOpenRun, onTriage } = props
+  const { tickets, runs, queueUnsupported, loading, inbound, filterRef, onOpenRun, onTriage } =
+    props
   const [filter, setFilter] = useState('')
 
   const columns = useMemo(() => buildColumns(tickets, runs), [tickets, runs])
@@ -188,6 +192,8 @@ export default function Board(props: {
           )
         })}
       </div>
+
+      <InboundPanel deliveries={inbound ?? []} />
     </section>
   )
 }

@@ -69,6 +69,29 @@ type RunDetail struct {
 	Warnings   []string `json:"warnings"`
 	Handle     string   `json:"handle"`
 	Budget     Budget   `json:"budget"`
+	// Fix is set only for a fix run that recorded something: the branch
+	// the work sits on, the commit, the pull request once it exists, and
+	// the deviation a person has to accept before the commit is pushed.
+	Fix *FixInfo `json:"fix,omitempty"`
+}
+
+// FixInfo is where a fix run's work went, read off the run's state.json.
+// Nothing in it is a secret: a branch name, a commit sha, a pull request
+// URL, and what the agent said it did instead of the note.
+type FixInfo struct {
+	Branch string `json:"branch,omitempty"`
+	Base   string `json:"base,omitempty"`
+	Commit string `json:"commit,omitempty"`
+	PRURL  string `json:"prUrl,omitempty"`
+	// Pushed says the branch reached the remote. It is what tells work that
+	// has left the machine from work still waiting on a person: a `--no-pr`
+	// run and one whose `gh` call failed are both pushed with no PRURL.
+	Pushed bool `json:"pushed,omitempty"`
+	// Deviation is non-empty when the agent reported doing something other
+	// than the triage note's Proposed Fix. The commit is on the branch and
+	// has not been pushed; a rerun with acceptDeviation pushes the commit
+	// that was reviewed rather than starting a second session.
+	Deviation string `json:"deviation,omitempty"`
 }
 
 // EventPayload mirrors the payload internal/run writes to events.jsonl.
@@ -168,10 +191,37 @@ type TriageOptions struct {
 	DryRun   bool   `json:"dryRun"`
 }
 
-// RCAOptions are the two inputs only an RCA run takes.
+// RCAOptions are the inputs an RCA run takes: the two only it has, and the
+// same one-off provider and model override every other start accepts.
 type RCAOptions struct {
 	PRURL      string `json:"prUrl"`
 	Resolution string `json:"resolution"`
+	Provider   string `json:"provider"`
+	Model      string `json:"model"`
+}
+
+// FixOptions are the flags of one fix job, matching `sirdar fix`.
+//
+// AcceptDeviation is the human gate: a fix whose agent reported deviating
+// from the note's Proposed Fix commits locally and stops, and a rerun with
+// this set pushes the commit that was reviewed rather than starting a
+// second session over it.
+type FixOptions struct {
+	DryRun          bool   `json:"dryRun"`
+	NoPR            bool   `json:"noPr"`
+	Base            string `json:"base"`
+	AcceptDeviation bool   `json:"acceptDeviation"`
+	Provider        string `json:"provider"`
+	Model           string `json:"model"`
+}
+
+// EvalOptions are the per-invocation overrides an eval job takes. The
+// golden set itself is the service's, not the caller's: a UI that could
+// name a directory could read any bundle on the machine through it.
+type EvalOptions struct {
+	Provider    string `json:"provider"`
+	Model       string `json:"model"`
+	Concurrency int    `json:"concurrency"`
 }
 
 // JobOutcome is one key's result in a finished job.
@@ -252,7 +302,7 @@ func DetailOf(root string, s store.State) RunDetail {
 	if warnings == nil {
 		warnings = []string{}
 	}
-	return RunDetail{
+	d := RunDetail{
 		RunSummary: SummaryOf(s),
 		PromptPath: filepath.Join(dir, "prompt.md"),
 		BundleDir:  filepath.Join(dir, "bundle"),
@@ -264,6 +314,17 @@ func DetailOf(root string, s store.State) RunDetail {
 			MaxUSD:     s.Budget.MaxUSD,
 		},
 	}
+	if f := (FixInfo{
+		Branch:    s.Fix.Branch,
+		Base:      s.Fix.Base,
+		Commit:    s.Fix.Commit,
+		PRURL:     s.Fix.PRURL,
+		Pushed:    s.Fix.Pushed,
+		Deviation: s.Fix.Deviation,
+	}); f != (FixInfo{}) {
+		d.Fix = &f
+	}
+	return d
 }
 
 // RegisterRowOf converts a stored register row into its wire shape.

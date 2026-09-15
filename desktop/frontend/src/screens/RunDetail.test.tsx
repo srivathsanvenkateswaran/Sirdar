@@ -60,6 +60,13 @@ function fakeTransport(over: Partial<Transport> & { detail?: RunDetailData } = {
     prompt: vi.fn(async () => ''),
     startTriage: vi.fn(),
     startRCA: vi.fn(async () => ({ jobId: 'job-1' })),
+    addGolden: vi.fn(async () => ({
+      key: 'OMNI-2510',
+      dir: '/golden/OMNI-2510',
+      bundleDir: '/golden/OMNI-2510/bundle',
+      assertions: 0,
+      hasExpectedNote: false,
+    })),
     resume: vi.fn(async () => ({ jobId: 'job-2' })),
     cancel: vi.fn(),
     register: vi.fn(),
@@ -81,20 +88,41 @@ function fakeTransport(over: Partial<Transport> & { detail?: RunDetailData } = {
   }
 }
 
-function renderRun(fake: Fake, onBack = vi.fn(), onStartRCA = vi.fn()) {
+function renderRun(
+  fake: Fake,
+  onBack = vi.fn(),
+  onStartRCA = vi.fn(),
+  onStartFix = vi.fn(),
+  defaultProvider?: string,
+) {
   return {
     onBack,
     onStartRCA,
+    onStartFix,
     ...render(
       <RunDetail
         transport={fake.transport}
         workspaceId="ws1"
         runId={RUN.runId}
+        defaultProvider={defaultProvider}
         onBack={onBack}
         onStartRCA={onStartRCA}
+        onStartFix={onStartFix}
       />,
     ),
   }
+}
+
+/** A completed triage run whose fix committed but stopped for review. */
+const BLOCKED_FIX: RunDetailData = {
+  ...RUN,
+  status: 'completed',
+  fix: {
+    branch: 'sirdar/OMNI-2510',
+    base: 'main',
+    commit: '9f2c1ab77e4d5c6b',
+    deviation: 'Changed the generator template rather than the generated column.',
+  },
 }
 
 describe('RunDetail', () => {
@@ -250,6 +278,30 @@ describe('RunDetail', () => {
     expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'triage')
   })
 
+  /*
+   * Which note each kind of run is asked for. A fix run has no triage note —
+   * the service refuses the mismatch with a 404 — so the tab asks for the
+   * empty kind, which is whatever note.md the run itself wrote. It used to
+   * ask for 'triage' and show every fix run an empty tab.
+   */
+  it('asks a fix run for its own note, not for a triage note', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, kind: 'fix', status: 'completed' } })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, ''))
+    expect(fake.transport.note).not.toHaveBeenCalledWith('ws1', RUN.runId, 'triage')
+  })
+
+  it('asks an RCA run for both its notes', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, kind: 'rca', status: 'completed' } })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    await waitFor(() => expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'rca'))
+    expect(fake.transport.note).toHaveBeenCalledWith('ws1', RUN.runId, 'resolution')
+  })
+
   it('disables Cancel until the shell knows the job, and unsubscribes on unmount', async () => {
     const fake = fakeTransport()
     const { unmount } = renderRun(fake)
@@ -299,6 +351,127 @@ describe('RunDetail', () => {
       }),
     )
     expect(fake.transport.startRCA).not.toHaveBeenCalled()
+  })
+
+  it('offers a fix only on a completed triage run, and hands it to the shell', async () => {
+    const running = fakeTransport()
+    const { unmount } = renderRun(running)
+    await screen.findByText('running')
+    expect(screen.queryByRole('button', { name: 'Start fix' })).toBeNull()
+    unmount()
+
+    const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
+    const { onStartFix } = renderRun(fake, vi.fn(), vi.fn(), vi.fn(), 'claude')
+    await screen.findByText('completed')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start fix' }))
+    const form = await screen.findByRole('form', { name: 'Start fix' })
+    expect(
+      within(form).getByRole('option', { name: 'Workspace default (claude)' }),
+    ).toBeInTheDocument()
+    fireEvent.change(within(form).getByLabelText('Base branch'), { target: { value: 'main' } })
+    fireEvent.click(within(form).getByRole('button', { name: 'Start fix' }))
+
+    await waitFor(() =>
+      expect(onStartFix).toHaveBeenCalledWith('OMNI-2510', {
+        dryRun: undefined,
+        noPr: undefined,
+        base: 'main',
+        provider: undefined,
+        model: undefined,
+      }),
+    )
+  })
+
+  it('escape closes the fix form before it leaves the screen', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
+    const { onBack } = renderRun(fake)
+    await screen.findByText('completed')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start fix' }))
+    await screen.findByRole('form', { name: 'Start fix' })
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    await waitFor(() => expect(screen.queryByRole('form', { name: 'Start fix' })).toBeNull())
+    expect(onBack).not.toHaveBeenCalled()
+
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(onBack).toHaveBeenCalledTimes(1)
+  })
+
+  /*
+   * The deviation gate, end to end on this screen: the commit is described,
+   * what the agent did instead is quoted, and accepting reruns the fix with
+   * acceptDeviation rather than starting another session.
+   */
+  it('shows a blocked fix and publishes the reviewed commit on accept', async () => {
+    const fake = fakeTransport({ detail: BLOCKED_FIX })
+    const { onStartFix } = renderRun(fake)
+    await screen.findByText('completed')
+
+    const panel = await screen.findByRole('region', { name: 'Fix result' })
+    expect(within(panel).getByText('sirdar/OMNI-2510 (from origin/main)')).toBeInTheDocument()
+    expect(within(panel).getByText(/Changed the generator template/)).toBeInTheDocument()
+
+    fireEvent.click(within(panel).getByRole('button', { name: 'Accept and publish' }))
+    await waitFor(() =>
+      expect(onStartFix).toHaveBeenCalledWith('OMNI-2510', { acceptDeviation: true }),
+    )
+  })
+
+  it('a pushed fix shows its pull request and asks for no review', async () => {
+    const fake = fakeTransport({
+      detail: {
+        ...BLOCKED_FIX,
+        fix: { ...BLOCKED_FIX.fix, prUrl: 'https://github.com/acme/api/pull/42' },
+      },
+    })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    const panel = await screen.findByRole('region', { name: 'Fix result' })
+    expect(
+      within(panel).getByRole('link', { name: 'https://github.com/acme/api/pull/42' }),
+    ).toBeInTheDocument()
+    expect(within(panel).queryByRole('button', { name: 'Accept and publish' })).toBeNull()
+  })
+
+  it('copies a completed run into the golden set and says what it was added as', async () => {
+    const fake = fakeTransport({ detail: { ...RUN, status: 'completed' } })
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to golden set' }))
+    await waitFor(() =>
+      expect(fake.transport.addGolden).toHaveBeenCalledWith('ws1', { runId: RUN.runId }),
+    )
+    expect(await screen.findByText('Added to the golden set as OMNI-2510.')).toBeInTheDocument()
+  })
+
+  it('a golden set that refuses the bundle says why', async () => {
+    const fake = fakeTransport({
+      detail: { ...RUN, status: 'completed' },
+      addGolden: vi.fn(async () => Promise.reject(new Error('the golden set is inside a git work tree'))),
+    } as Partial<Transport>)
+    renderRun(fake)
+    await screen.findByText('completed')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add to golden set' }))
+    expect(
+      await screen.findByText('the golden set is inside a git work tree'),
+    ).toBeInTheDocument()
+  })
+
+  it('a running run offers no golden copy: only a finished bundle is worth replaying', async () => {
+    renderRun(fakeTransport())
+    await screen.findByText('running')
+    expect(screen.queryByRole('button', { name: 'Add to golden set' })).toBeNull()
+  })
+
+  it('a run with no fix state shows no fix panel at all', async () => {
+    renderRun(fakeTransport({ detail: { ...RUN, status: 'completed' } }))
+    await screen.findByText('completed')
+    expect(screen.queryByRole('region', { name: 'Fix result' })).toBeNull()
   })
 
   // A screen that closes while "Copied" is still showing must not leave the
