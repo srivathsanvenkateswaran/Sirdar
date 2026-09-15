@@ -131,6 +131,9 @@ func decode(raw []byte) []provider.Event {
 		ev.Text = "init"
 		if l.Init != nil {
 			ev.Text = "init: model " + l.Init.Model + ", permission mode " + l.Init.PermissionMode
+			// The same name as a field, so the run layer records the
+			// model rather than parsing the sentence.
+			ev.Model = l.Init.Model
 		}
 		return []provider.Event{ev}
 	case "step_update":

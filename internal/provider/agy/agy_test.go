@@ -1330,3 +1330,31 @@ func firstLineOf(s string) string {
 	}
 	return s
 }
+
+// TestInitLineReportsModel: the init line already names the model in its
+// notice text; it carries the same name as a field so the run layer records
+// the model that answered without reading the sentence.
+func TestInitLineReportsModel(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	var reported []string
+	for _, ev := range d.all {
+		if ev.Model == "" {
+			continue
+		}
+		if ev.Kind != provider.EvSystem {
+			t.Errorf("%s event carried a model: %q", ev.Kind, ev.Model)
+		}
+		reported = append(reported, ev.Model)
+	}
+	// script-basic.jsonl's init line says "model":"gemini-3.6-flash-low".
+	if len(reported) != 1 || reported[0] != "gemini-3.6-flash-low" {
+		t.Fatalf("models reported %q, want exactly one %q", reported, "gemini-3.6-flash-low")
+	}
+}
