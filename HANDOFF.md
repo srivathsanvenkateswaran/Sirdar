@@ -357,7 +357,7 @@ free Kimi Code tier's monthly quota was spent before the first prompt, so the ha
 session-modes machinery and `session/set_mode` were exercised for real and everything downstream
 of a model reply was not. `provider: qwen` has run live too, against a real OAuth login, and the
 two bugs those runs found — fix mode registering no write tool, an error sentence fed to the note
-validator — are fixed but have not been watched succeed. Its fail-closed loopback permission hook
+validator — are fixed but have not been watched succeed: the free Qwen tier's quota was exhausted on 2026-09-15 (`Free quota exhausted` on every turn), so the fix-mode run only confirmed from the CLI's own `system/init` that the write tools are registered. Its fail-closed loopback permission hook
 still has no live exercise: the tools it would have judged were excluded, so `permission_denials`
 came back empty.
 
