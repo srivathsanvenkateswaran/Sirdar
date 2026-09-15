@@ -1,0 +1,243 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Sirdar screens · Library</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:13px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+a{color:#3B3AA6}a:hover{color:#2B2A80}
+.app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
+.sidebar{display:flex;flex-direction:column;flex:0 0 208px;padding:8px;background:transparent}
+.brand{display:flex;align-items:center;min-height:32px;padding:0 8px;font-family:var(--sd-font-mono);font-size:13px;font-weight:600;letter-spacing:.06em}
+.nav{display:flex;flex-direction:column;padding-top:8px}
+.navrow{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;margin:2px 0;padding:4px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:13px;font-weight:500;line-height:1.4}
+.navrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.navrow svg{width:16px;height:16px;flex:0 0 auto}
+.navcount{margin-left:auto;padding:0 8px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:10.5px;line-height:16px}
+.recent{display:flex;flex-direction:column;margin-top:12px;padding-top:8px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 8px 4px;color:var(--sd-ink-3);font-size:10.5px;letter-spacing:.06em}
+.recentrow{display:flex;align-items:center;gap:8px;min-height:26px;margin:1px 0;padding:3px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:12px}
+.recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:11.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.dot[data-live="true"]{background:var(--sd-accent)}
+.dot[data-blocked="true"]{background:var(--sd-st-blocked)}
+.foot{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:8px;border-top:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border-radius:8px;font-weight:500}
+.switcher svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:2px}
+.quota{display:flex;align-items:center;gap:8px;padding:2px 8px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:58px}
+.quota .bar{display:block;flex:1;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.quota .pct{min-width:3ch;text-align:right}
+.quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:28px;padding:4px 12px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.primary[data-disabled="true"]{opacity:.45}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:4px 12px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink-2)}
+.btn svg{width:14px;height:14px}
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:8px 8px 8px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-sheet);overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:15px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.stat{padding:0 10px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:1.5;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
+.badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
+.badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
+.badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
+.badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
+.fact{display:inline-flex;align-items:center;min-height:20px;padding:0 8px;border-radius:4px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:10.5px;font-weight:500;line-height:20px;white-space:nowrap}
+.mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.h-serif{margin:0;font-family:var(--sd-font-display);font-size:24px;font-weight:400;line-height:1.2}
+.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:7px 10px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-3);font-size:12px}
+.tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
+.tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.icon{width:16px;height:16px;flex:0 0 auto}
+.lbar{display:flex;align-items:flex-end;gap:24px;padding:12px 24px;border-bottom:1px solid var(--sd-rule);background:var(--sd-surface)}
+.ltxt{display:flex;flex-direction:column;gap:4px}
+.lede{color:var(--sd-ink-3);font-size:13px}
+.ctrls{display:flex;gap:8px;margin-left:auto;padding-bottom:2px}
+.seg{display:inline-flex;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);overflow:hidden}
+.seg span{min-height:26px;padding:3px 12px;color:var(--sd-ink-3);font-size:12px;font-weight:500;line-height:1.4}
+.seg span+span{border-left:1px solid var(--sd-rule-strong)}
+.seg span[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.gallery{display:flex;flex:1;flex-direction:column;min-height:0;background:var(--sd-shell);overflow:hidden}
+.gsec{display:grid;grid-template-columns:200px minmax(0,1fr);column-gap:24px;padding:10px 24px;border-bottom:1px solid var(--sd-rule)}
+.gsec:last-child{border-bottom:0}
+.gname{margin:0;font-family:var(--sd-font-display);font-size:18px;font-weight:400;line-height:1.25}
+.gnote{margin-top:4px;color:var(--sd-ink-2);font-size:12px;line-height:1.45}
+.sps{display:flex;flex-wrap:wrap;gap:20px;align-items:flex-start}
+.sp{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.lab{font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.btn.filled{border-color:var(--sd-primary);background:var(--sd-primary);color:var(--sd-primary-ink)}
+.btn[data-disabled="true"]{opacity:.45}
+.card{border-radius:12px;background:var(--sd-card-row)}
+.runcard{display:flex;flex-direction:column;gap:6px;width:260px;padding:10px 12px;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);box-sizing:border-box}
+.runcard[data-live="true"]{border-left:2px solid var(--sd-accent)}
+.runcard .r1{display:flex;align-items:center;gap:8px}
+.runcard .key{font-family:var(--sd-font-mono);font-size:12.5px;font-weight:600}
+.runcard .kind{font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.runcard .badge{margin-left:auto}
+.runcard .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2);font-size:12.5px}
+.runcard .stats{margin-left:0;font-size:10.5px}
+.runcard .stat{padding:0 8px}
+.evs{display:flex;flex-direction:column;gap:2px;width:560px;padding:4px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);font-size:12px}
+.ev{display:grid;grid-template-columns:3.3rem 2.2rem minmax(0,1fr);column-gap:8px;margin:0 12px}
+.ev .at{padding-top:3px;font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.ev .mark{padding:3px 0 3px 8px;border-left:2px solid var(--sd-rule);font-family:var(--sd-font-mono);font-size:11.5px;line-height:1.5;color:var(--sd-ink-3)}
+.ev .main{min-width:0;padding:2px 8px 2px 0;line-height:1.45}
+.ev[data-v="allow"] .mark{border-color:var(--sd-st-triaged);color:var(--sd-st-triaged)}
+.ev[data-v="deny"] .mark{border-color:var(--sd-st-blocked);color:var(--sd-st-blocked)}
+.ev[data-v="callout"] .mark{border-color:var(--sd-st-blocked);color:var(--sd-st-blocked)}
+.ev[data-v="final"] .mark{border-color:var(--sd-accent);color:var(--sd-accent)}
+.line1{display:flex;align-items:baseline;gap:8px;min-width:0}
+.tool{flex:none;font-family:var(--sd-font-mono);font-weight:600}
+.sum{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-family:var(--sd-font-mono);color:var(--sd-ink-3)}
+.ev[data-v="deny"] .tool,.ev[data-v="deny"] .why{color:var(--sd-st-blocked)}
+.why{font-family:var(--sd-font-mono)}
+.said{max-width:72ch;font-size:12.5px}
+.callout{max-width:72ch;margin:2px 0;padding:6px 10px;border:1px solid rgba(161,92,7,.4);border-radius:8px;background:rgba(161,92,7,.08)}
+.callout .head{font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-st-blocked)}
+.callout .q{margin-top:2px;font-size:12.5px}
+.setcard{width:420px}
+.srow{display:flex;align-items:center;gap:12px;height:64px;padding:0 16px;box-sizing:border-box}
+.srow+.srow{border-top:1px solid var(--sd-rule-faint)}
+.stxt{display:flex;flex:1;flex-direction:column;gap:2px;min-width:0}
+.sl{font-weight:500;line-height:1.4}
+.sv{color:var(--sd-ink-3);font-size:11.5px;line-height:1.35}
+.qc{display:inline-flex;align-items:center;gap:8px;min-height:24px;padding:0 10px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-surface);font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
+.qc .p{font-weight:600;color:var(--sd-ink)}
+.qc .bar{display:block;width:72px;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.qc .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.qc .pct{min-width:3ch;text-align:right;font-variant-numeric:tabular-nums}
+.qc[data-level="warn"] .fill{background:var(--sd-st-blocked)}.qc[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+.qc[data-level="over"] .fill{background:var(--sd-st-failed)}.qc[data-level="over"] .pct{color:var(--sd-st-failed);font-weight:600}
+  </style>
+</head>
+<body>
+<div class="app">
+<div class="sidebar">
+  <div class="brand">SIRDAR</div>
+  <nav class="nav">
+    <div class="navrow" data-cur="sessions"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-cur="board"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+  </nav>
+  <div class="recent">
+    <div class="recent-label">Recent sessions</div>
+    <div class="recentrow" data-rcur="sbx1"><span class="dot" data-blocked="true"></span><span class="key">SBX-1</span><span class="kind">fix</span></div>
+    <div class="recentrow"><span class="dot" data-live="true"></span><span class="key">SBX-4</span><span class="kind">triage</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-3</span><span class="kind">rca</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
+  </div>
+  <div class="foot">
+    <div class="switcher"><span>acme-support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="quotas">
+      <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
+      <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
+      <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
+    </div>
+    <div class="primary" data-sb="new">New session</div>
+  </div>
+</div>
+<div class="sheet">
+  <div class="lbar">
+    <div class="ltxt"><h1 class="h-serif">Library</h1><div class="lede">Every component the app ships, at the size it ships at.</div></div>
+    <div class="ctrls">
+      <span class="seg"><span data-on="true">Light</span><span>Dark</span></span>
+      <span class="seg"><span data-on="true">LTR</span><span>RTL</span></span>
+    </div>
+  </div>
+  <div class="gallery">
+    <div class="gsec">
+      <div><h2 class="gname">Button</h2><div class="gnote">One filled button per screen, and it is that screen's commit action.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">default</span><span class="btn">Create branch</span></div>
+        <div class="sp"><span class="lab">primary</span><span class="btn filled">Run suite</span></div>
+        <div class="sp"><span class="lab">ghost</span><span class="btn ghost">Cancel</span></div>
+        <div class="sp"><span class="lab">pale</span><span class="btn pale">Change</span></div>
+        <div class="sp"><span class="lab">disabled</span><span class="btn" data-disabled="true">Create branch</span></div>
+      </div>
+    </div>
+    <div class="gsec">
+      <div><h2 class="gname">Status badge</h2><div class="gnote">Every hue is paired with its word; the accent means a live run.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">queued</span><span class="badge" data-s="queued">queued</span></div>
+        <div class="sp"><span class="lab">running</span><span class="badge" data-s="running">running</span></div>
+        <div class="sp"><span class="lab">blocked</span><span class="badge" data-s="blocked">blocked</span></div>
+        <div class="sp"><span class="lab">completed</span><span class="badge" data-s="completed">completed</span></div>
+        <div class="sp"><span class="lab">done</span><span class="badge" data-s="done">done</span></div>
+        <div class="sp"><span class="lab">failed</span><span class="badge" data-s="failed">failed</span></div>
+      </div>
+    </div>
+    <div class="gsec">
+      <div><h2 class="gname">Run card</h2><div class="gnote">A live run carries the accent on its edge; nothing else does.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">at rest</span>
+          <div class="runcard">
+            <div class="r1"><span class="key">SBX-3</span><span class="kind">rca</span><span class="badge" data-s="completed">completed</span></div>
+            <div class="t">Stock count export skips products with zero on hand</div>
+            <div class="stats"><span class="stat">codex</span><span class="stat"><b>02:10</b></span><span class="stat"><b>$0.19</b></span></div>
+          </div>
+        </div>
+        <div class="sp"><span class="lab">live</span>
+          <div class="runcard" data-live="true">
+            <div class="r1"><span class="key">SBX-4</span><span class="kind">triage</span><span class="badge" data-s="running">running</span></div>
+            <div class="t">Invoice total drops the VAT line when a discount is applied</div>
+            <div class="stats"><span class="stat">claude · <b>sonnet</b></span><span class="stat"><b>01:48</b></span><span class="stat"><b>$0.12</b></span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="gsec">
+      <div><h2 class="gname">Event row</h2><div class="gnote">Clock, verdict mark, then the tool and its one-line summary.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">allow, deny, callout, final</span>
+          <div class="evs">
+            <div class="ev" data-v="allow"><span class="at">00:05</span><span class="mark">ok</span><div class="main"><div class="line1"><span class="tool">Read</span><span class="sum">app/ledger.go · 212 lines</span></div></div></div>
+            <div class="ev" data-v="deny"><span class="at">01:03</span><span class="mark">no</span><div class="main"><div class="line1"><span class="tool">Bash</span><span class="sum">git commit -m "fix: guard partial return"</span></div><div class="why">read-only outside the worktree: commits are yours to make</div></div></div>
+            <div class="ev" data-v="callout"><span class="at">01:14</span><span class="mark">?</span><div class="main"><div class="callout"><div class="head">The agent is asking</div><div class="q">Should the resolution note propose a one-off recount for the affected SKUs?</div></div></div></div>
+            <div class="ev" data-v="final"><span class="at">01:20</span><span class="mark">end</span><div class="main"><div class="said">Fix is ready in the worktree: 2 files changed, 12 tests passed.</div></div></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="gsec">
+      <div><h2 class="gname">Setting row</h2><div class="gnote">64px rows on a card fill, one pale control each, no border.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">card</span>
+          <div class="card setcard">
+            <div class="srow"><div class="stxt"><div class="sl">Default provider</div><div class="sv mono">claude · sonnet</div></div><span class="btn pale">Change</span></div>
+            <div class="srow"><div class="stxt"><div class="sl">Worktree root</div><div class="sv mono">.sirdar/worktrees</div></div><span class="btn pale">Choose</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="gsec">
+      <div><h2 class="gname">Quota chip</h2><div class="gnote">Grey until 80%, then the blocked hue; past the window it says so.</div></div>
+      <div class="sps">
+        <div class="sp"><span class="lab">normal</span><span class="qc"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></span></div>
+        <div class="sp"><span class="lab">warn</span><span class="qc" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></span></div>
+        <div class="sp"><span class="lab">over</span><span class="qc" data-level="over"><span class="p">codex</span><span class="bar"><span class="fill" style="width:100%"></span></span><span class="pct">over</span></span></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+</body>
+</html>

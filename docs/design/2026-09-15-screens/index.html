@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Sirdar screens · contact sheet</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+body{margin:0;padding:32px;background:#F2EEE0;color:#17181C;font:14px/1.5 Inter,-apple-system,system-ui,sans-serif}
+h1{margin:0 0 8px;font-family:Newsreader,Georgia,serif;font-size:32px;font-weight:400}
+.note{max-width:68ch;color:#4A4E58}.note p{margin:0 0 8px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(480px,1fr));gap:32px;margin-top:24px}
+.tile{display:block;color:inherit;text-decoration:none}
+.frame{position:relative;width:100%;aspect-ratio:1440/900;border:1px solid #E3DFD1;border-radius:12px;overflow:hidden;background:#FFFDF7}
+.frame iframe{position:absolute;inset:0;width:1440px;height:900px;border:0;transform-origin:0 0;transform:scale(calc(100% / 1440 * 1));pointer-events:none}
+.cap{display:flex;justify-content:space-between;gap:12px;padding:8px 4px 0;font-weight:500}
+.cap .file{font-family:"JetBrains Mono",ui-monospace,Menlo,monospace;font-size:11px;font-weight:400;color:#676B74}
+</style>
+<script>
+function fit(){document.querySelectorAll('.frame').forEach(f=>{const s=f.clientWidth/1440;f.querySelector('iframe').style.transform='scale('+s+')'})}
+addEventListener('load',fit);addEventListener('resize',fit);
+</script></head><body>
+<h1>Sirdar screens</h1>
+<div class="note"><p>Sirdar screens for review. Every value comes from the shipped tokens (paper ground, one serif per screen, mono for evidence, one filled button per screen). Ticket SBX-1 is the sandbox ticket; every name, key and server is fabricated.</p><p>Row 1: the session surface (live, blocked on a question; empty), the queue. Row 2: change review before a branch, the register, eval. Row 3: settings (MCP servers, providers, the tool tester), the component library.</p><p>Mark anything: wording, density, what is missing, what should go.</p><p>Click a tile to open the screen at full size (1440×900).</p></div>
+<div class="grid">
+<a class="tile" href="Session.html"><div class="frame"><iframe src="Session.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Session</span><span class="file">Session.html</span></div></a>
+<a class="tile" href="SessionEmpty.html"><div class="frame"><iframe src="SessionEmpty.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>New session</span><span class="file">SessionEmpty.html</span></div></a>
+<a class="tile" href="Board.html"><div class="frame"><iframe src="Board.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Board</span><span class="file">Board.html</span></div></a>
+<a class="tile" href="Review.html"><div class="frame"><iframe src="Review.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Change review</span><span class="file">Review.html</span></div></a>
+<a class="tile" href="Register.html"><div class="frame"><iframe src="Register.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Register</span><span class="file">Register.html</span></div></a>
+<a class="tile" href="Eval.html"><div class="frame"><iframe src="Eval.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Eval</span><span class="file">Eval.html</span></div></a>
+<a class="tile" href="Settings.html"><div class="frame"><iframe src="Settings.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: MCP servers</span><span class="file">Settings.html</span></div></a>
+<a class="tile" href="Providers.html"><div class="frame"><iframe src="Providers.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: Providers</span><span class="file">Providers.html</span></div></a>
+<a class="tile" href="Library.html"><div class="frame"><iframe src="Library.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Library</span><span class="file">Library.html</span></div></a>
+<a class="tile" href="ToolTester.html"><div class="frame"><iframe src="ToolTester.html" scrolling="no" tabindex="-1" loading="lazy"></iframe></div><div class="cap"><span>Settings: Try a tool</span><span class="file">ToolTester.html</span></div></a>
+</div></body></html>

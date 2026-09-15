@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1440">
+<title>Sirdar screens · Board</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:13px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+a{color:#3B3AA6}a:hover{color:#2B2A80}
+.app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
+.sidebar{display:flex;flex-direction:column;flex:0 0 208px;padding:8px;background:transparent}
+.brand{display:flex;align-items:center;min-height:32px;padding:0 8px;font-family:var(--sd-font-mono);font-size:13px;font-weight:600;letter-spacing:.06em}
+.nav{display:flex;flex-direction:column;padding-top:8px}
+.navrow{display:flex;align-items:center;gap:8px;width:100%;min-height:28px;margin:2px 0;padding:4px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:13px;font-weight:500;line-height:1.4}
+.navrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.navrow svg{width:16px;height:16px;flex:0 0 auto}
+.navcount{margin-left:auto;padding:0 8px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:10.5px;line-height:16px}
+.recent{display:flex;flex-direction:column;margin-top:12px;padding-top:8px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 8px 4px;color:var(--sd-ink-3);font-size:10.5px;letter-spacing:.06em}
+.recentrow{display:flex;align-items:center;gap:8px;min-height:26px;margin:1px 0;padding:3px 8px;border-radius:8px;color:var(--sd-ink-2);font-size:12px}
+.recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:11.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.dot{width:6px;height:6px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.dot[data-live="true"]{background:var(--sd-accent)}
+.dot[data-blocked="true"]{background:var(--sd-st-blocked)}
+.foot{display:flex;flex-direction:column;gap:8px;margin-top:auto;padding:8px;border-top:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:28px;padding:4px 8px;border-radius:8px;font-weight:500}
+.switcher svg{width:14px;height:14px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:2px}
+.quota{display:flex;align-items:center;gap:8px;padding:2px 8px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:58px}
+.quota .bar{display:block;flex:1;height:4px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.quota .pct{min-width:3ch;text-align:right}
+.quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:28px;padding:4px 12px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.primary[data-disabled="true"]{opacity:.45}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-height:28px;padding:4px 12px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink-2)}
+.btn svg{width:14px;height:14px}
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:8px 8px 8px 0;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-sheet);overflow:hidden}
+.topbar{display:flex;align-items:center;gap:12px;min-height:44px;padding:6px 16px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:15px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:11.5px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3)}
+.stat{padding:0 10px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+.badge{display:inline-flex;align-items:center;padding:1px 8px;border-radius:999px;font-size:11.5px;line-height:1.5;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
+.badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
+.badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
+.badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
+.badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
+.fact{display:inline-flex;align-items:center;min-height:20px;padding:0 8px;border-radius:4px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:10.5px;font-weight:500;line-height:20px;white-space:nowrap}
+.mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.h-serif{margin:0;font-family:var(--sd-font-display);font-size:24px;font-weight:400;line-height:1.2}
+.tabs{display:flex;gap:2px;padding:0 12px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:7px 10px;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-3);font-size:12px}
+.tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
+.tab .n{margin-left:6px;font-family:var(--sd-font-mono);font-size:10.5px;color:var(--sd-ink-3)}
+.icon{width:16px;height:16px;flex:0 0 auto}
+.filter{display:flex;align-items:center;gap:8px;width:240px;min-height:28px;padding:0 10px;border:1px solid var(--sd-rule);border-radius:8px;background:var(--sd-sunk);color:var(--sd-ink-3);font-size:12.5px;white-space:nowrap;overflow:hidden}
+.filter svg{width:16px;height:16px;flex:0 0 auto}
+.seg{display:inline-flex;align-items:center;min-height:28px;border:1px solid var(--sd-rule-strong);border-radius:8px;overflow:hidden;font-size:12.5px;color:var(--sd-ink-2);background:var(--sd-surface)}
+.seg span{padding:0 12px;line-height:26px;border-left:1px solid var(--sd-rule-strong)}
+.seg span:first-child{border-left:0}
+.seg span[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink);font-weight:500}
+.status{margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
+.status b{font-weight:500;color:var(--sd-ink-2)}
+.lanes{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;flex:1;min-height:0;padding:12px 12px 0}
+.lane{display:flex;flex-direction:column;min-width:0;min-height:0;border-top:2px solid var(--sd-st-queue);border-radius:12px;background:var(--sd-sunk);overflow:hidden}
+.lane[data-h="live"]{border-top-color:var(--sd-accent)}
+.lane[data-h="blocked"]{border-top-color:var(--sd-st-blocked)}
+.lane[data-h="triaged"]{border-top-color:var(--sd-st-triaged)}
+.lane[data-h="done"]{border-top-color:var(--sd-st-done)}
+.lane[data-h="failed"]{border-top-color:var(--sd-st-failed)}
+.lane .head{display:flex;align-items:baseline;gap:8px;padding:8px 10px 6px;font-size:12.5px;font-weight:500}
+.lane .head .n{margin-left:auto;font-family:var(--sd-font-mono);font-size:11px;font-weight:400;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
+.lane .cards{display:flex;flex-direction:column;gap:6px;padding:0 6px 6px;min-height:0;overflow:hidden}
+.card{display:flex;flex-direction:column;gap:5px;padding:8px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface)}
+.card[data-live="true"]{border-left:2px solid var(--sd-accent)}
+.card .top{display:flex;align-items:baseline;gap:6px;font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.card .key{font-size:11.5px;font-weight:600}
+.card .kind{font-size:10.5px;color:var(--sd-ink-3)}
+.card .title{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;color:var(--sd-ink-2);font-size:12px;line-height:1.4}
+.card .reason{padding:1px 0 1px 8px;border-left:2px solid var(--sd-rule-strong);color:var(--sd-ink-3);font-size:11.5px;line-height:1.4}
+.card[data-live="true"] .reason{border-left-color:var(--sd-accent-soft)}
+.card .cf{display:flex;align-items:center;gap:6px;margin-top:1px;font-family:var(--sd-font-mono);font-size:11px;font-variant-numeric:tabular-nums}
+.card .cf .badge{font-size:11px;padding:0 7px}
+.card .clock{color:var(--sd-ink-2)}
+.card[data-live="true"] .clock{color:var(--sd-accent)}
+.card .cost{margin-left:auto;color:var(--sd-ink-3)}
+.inbound{display:flex;flex-direction:column;max-height:150px;margin:10px 12px 12px;border:1px solid var(--sd-rule);border-radius:12px;background:var(--sd-surface);overflow:hidden}
+.inbound .head{display:flex;align-items:baseline;gap:8px;padding:7px 12px;font-size:12.5px;font-weight:500}
+.inbound .head .n{font-family:var(--sd-font-mono);font-size:11px;font-weight:400;color:var(--sd-ink-3)}
+.irow{display:grid;grid-template-columns:5.2rem 4.6rem 5rem minmax(0,1fr) auto;align-items:center;column-gap:16px;min-height:30px;padding:0 12px;border-top:1px solid var(--sd-rule-faint);font-size:12px}
+.irow .src{font-weight:600}
+.irow .key,.irow .at{font-family:var(--sd-font-mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+.irow .at{color:var(--sd-ink-3)}
+.irow .out{font-family:var(--sd-font-mono);font-size:10.5px;font-weight:500}
+.irow .out[data-o="started"]{color:var(--sd-accent)}
+.irow .out[data-o="skipped"]{color:var(--sd-st-blocked)}
+.irow .out[data-o="rejected"]{color:var(--sd-st-failed)}
+.irow .why{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+  </style>
+</head>
+<body>
+<div class="app">
+<div class="sidebar">
+  <div class="brand">SIRDAR</div>
+  <nav class="nav">
+    <div class="navrow" data-cur="sessions"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+  </nav>
+  <div class="recent">
+    <div class="recent-label">Recent sessions</div>
+    <div class="recentrow" data-rcur="sbx1"><span class="dot" data-blocked="true"></span><span class="key">SBX-1</span><span class="kind">fix</span></div>
+    <div class="recentrow"><span class="dot" data-live="true"></span><span class="key">SBX-4</span><span class="kind">triage</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-3</span><span class="kind">rca</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
+  </div>
+  <div class="foot">
+    <div class="switcher"><span>acme-support</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="quotas">
+      <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
+      <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
+      <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
+    </div>
+    <div class="primary" data-sb="new">New session</div>
+  </div>
+</div>
+<div class="sheet">
+  <div class="topbar">
+    <span class="filter"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><path d="m20 20-3.5-3.5"></path></svg>Filter by key, title or provider</span>
+    <span class="seg"><span data-on="true">Mine</span><span>All</span></span>
+    <span class="status"><b>6</b> runs · <b>1</b> live · updated 12s ago</span>
+  </div>
+  <div class="lanes">
+    <div class="lane" data-h="queue">
+      <div class="head">Queue<span class="n">2</span></div>
+      <div class="cards">
+        <div class="card"><div class="top"><span class="key">SBX-8</span><span class="kind">triage</span></div><div class="title">Stocktake import rejects rows with a trailing comma</div><div class="cf"><span class="badge">queued</span><span class="clock">00:00</span><span class="cost">$0.00</span></div></div>
+        <div class="card"><div class="top"><span class="key">SBX-9</span><span class="kind">triage</span></div><div class="title">Reorder point ignores units already on order</div><div class="reason">behind SBX-4 · one live run at a time</div><div class="cf"><span class="badge">queued</span><span class="clock">00:00</span><span class="cost">$0.00</span></div></div>
+      </div>
+    </div>
+    <div class="lane" data-h="live">
+      <div class="head">Gathering<span class="n">1</span></div>
+      <div class="cards">
+        <div class="card" data-live="true"><div class="top"><span class="key">SBX-4</span><span class="kind">triage</span></div><div class="title">Sale on account is missing from the customer statement</div><div class="reason">reading 3 helpdesk messages · zendesk</div><div class="cf"><span class="badge" data-s="running">running</span><span class="clock">01:47</span><span class="cost">$0.06</span></div></div>
+      </div>
+    </div>
+    <div class="lane" data-h="blocked">
+      <div class="head">Blocked<span class="n">1</span></div>
+      <div class="cards">
+        <div class="card"><div class="top"><span class="key">SBX-1</span><span class="kind">fix</span></div><div class="title">Product 00219 stock shows 1 more than the movement report</div><div class="reason">asks: propose a one-off recount for affected SKUs, or leave balances alone?</div><div class="cf"><span class="badge" data-s="blocked">blocked</span><span class="clock">04:12</span><span class="cost">$0.41</span></div></div>
+      </div>
+    </div>
+    <div class="lane" data-h="triaged">
+      <div class="head">Triaged<span class="n">2</span></div>
+      <div class="cards">
+        <div class="card"><div class="top"><span class="key">SBX-3</span><span class="kind">rca</span></div><div class="title">Purchase order received twice after a supplier resend</div><div class="reason">no idempotency key on the receive endpoint</div><div class="cf"><span class="badge" data-s="completed">triaged</span><span class="clock">06:30</span><span class="cost">$0.52</span></div></div>
+        <div class="card"><div class="top"><span class="key">SBX-2</span><span class="kind">triage</span></div><div class="title">Barcode scan adds the wrong variant for product 00187</div><div class="cf"><span class="badge" data-s="completed">triaged</span><span class="clock">02:58</span><span class="cost">$0.19</span></div></div>
+      </div>
+    </div>
+    <div class="lane" data-h="done">
+      <div class="head">Done<span class="n">1</span></div>
+      <div class="cards">
+        <div class="card"><div class="top"><span class="key">SBX-5</span><span class="kind">fix</span></div><div class="title">Invoice 2026-0412 total differs from its line items after a discount</div><div class="reason">branch sirdar/SBX-5 · 12 tests passed</div><div class="cf"><span class="badge" data-s="done">done</span><span class="clock">09:04</span><span class="cost">$0.88</span></div></div>
+      </div>
+    </div>
+    <div class="lane" data-h="failed">
+      <div class="head">Failed<span class="n">1</span></div>
+      <div class="cards">
+        <div class="card"><div class="top"><span class="key">SBX-6</span><span class="kind">triage</span></div><div class="title">Low-stock alert fires for a product with 40 on hand</div><div class="reason">jira timed out after 30s fetching the issue</div><div class="cf"><span class="badge" data-s="failed">failed</span><span class="clock">00:41</span><span class="cost">$0.03</span></div></div>
+      </div>
+    </div>
+  </div>
+  <div class="inbound">
+    <div class="head">Inbound<span class="n">3</span></div>
+    <div class="irow"><span class="src">zendesk</span><span class="key">SBX-4</span><span class="out" data-o="started">started</span><span class="why">started SBX-4</span><span class="at">12:41</span></div>
+    <div class="irow"><span class="src">jira</span><span class="key">SBX-7</span><span class="out" data-o="skipped">skipped</span><span class="why">assignee is not you</span><span class="at">12:36</span></div>
+    <div class="irow"><span class="src">jira</span><span class="key">SBX-6</span><span class="out" data-o="rejected">rejected</span><span class="why">cooldown 10m</span><span class="at">12:29</span></div>
+  </div>
+</div>
+</div>
+</body>
+</html>
