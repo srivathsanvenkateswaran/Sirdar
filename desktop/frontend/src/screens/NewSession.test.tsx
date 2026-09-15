@@ -1,12 +1,13 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { RunSummary } from '../api/types'
+import type { RunSummary, Workspace } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import { resetRunJobs, setRunJob } from '../lib/jobs'
 import { createFakeTransport, run, ticket, workspace, type FakeTransport } from '../store/fakeTransport'
 import NewSession, {
   extractKey,
   hasTriageNote,
+  lastUsedModel,
   newestFirst,
   ticketSource,
   type SessionMode,
@@ -39,6 +40,7 @@ function mount(
   over: {
     transport?: FakeTransport
     runs?: RunSummary[]
+    workspace?: Workspace
     onStart?: (mode: SessionMode, key: string, o: StartOverrides) => Promise<string>
   } = {},
 ) {
@@ -46,12 +48,13 @@ function mount(
   const onStart = over.onStart ?? vi.fn(async () => 'job-1')
   const onOpenRun = vi.fn()
   const runs = over.runs ?? []
+  const ws = over.workspace ?? workspace()
   const view = render(
     <PrimaryActionProvider>
       <NewSession
         transport={transport}
         workspaceId="ws1"
-        workspace={workspace()}
+        workspace={ws}
         runs={runs}
         onStart={onStart}
         onOpenRun={onOpenRun}
@@ -65,7 +68,7 @@ function mount(
         <NewSession
           transport={transport}
           workspaceId="ws1"
-          workspace={workspace()}
+          workspace={ws}
           runs={next}
           onStart={onStart}
           onOpenRun={onOpenRun}
@@ -78,6 +81,23 @@ function mount(
 }
 
 const bar = () => screen.getByRole('searchbox', { name: 'Ticket key or URL' })
+const modelChip = () => screen.getByRole('button', { name: /^Model/ })
+
+describe('lastUsedModel', () => {
+  it('is what the newest run on the provider reported, or nothing', () => {
+    const runs = [
+      run({ runId: 'a', provider: 'claude', model: 'claude-opus-5', updatedAt: '2026-09-10T09:00:00Z' }),
+      run({ runId: 'b', provider: 'claude', model: 'claude-sonnet-5', updatedAt: '2026-09-11T09:00:00Z' }),
+      run({ runId: 'c', provider: 'claude', model: '', updatedAt: '2026-09-12T09:00:00Z' }),
+      run({ runId: 'd', provider: 'codex', model: 'gpt-5.6-luna', updatedAt: '2026-09-13T09:00:00Z' }),
+    ]
+    // A newer run that has not reported its model does not blank the answer.
+    expect(lastUsedModel(runs, 'claude')).toBe('claude-sonnet-5')
+    expect(lastUsedModel(runs, 'codex')).toBe('gpt-5.6-luna')
+    expect(lastUsedModel(runs, 'qwen')).toBe('')
+    expect(lastUsedModel(runs, '')).toBe('')
+  })
+})
 const startButton = () => screen.getByRole('button', { name: /^Start/ })
 
 describe('extractKey', () => {
@@ -242,15 +262,23 @@ describe('NewSession', () => {
     expect(screen.getByLabelText(/Dry run/)).toBeDisabled()
   })
 
-  it('starts a fix with the one-off provider, model and dry run from More options', async () => {
+  it('starts a fix with the provider and model from the chip and dry run from More options', async () => {
     const { onStart } = mount({ runs: [TRIAGED] })
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
     fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
-    fireEvent.change(screen.getByLabelText('Provider'), { target: { value: 'codex' } })
-    fireEvent.change(screen.getByLabelText('Model'), { target: { value: ' o3 ' } })
-    fireEvent.click(screen.getByLabelText(/Dry run/))
+    fireEvent.click(modelChip())
+    const popover = screen.getByRole('dialog', { name: 'Provider and model' })
+    fireEvent.click(within(popover).getByRole('option', { name: /codex/ }))
+    fireEvent.change(within(popover).getByRole('textbox', { name: 'Other model' }), {
+      target: { value: ' o3 ' },
+    })
+    fireEvent.click(within(popover).getByRole('button', { name: 'Done' }))
     // The chip follows the override, so the reader sees what will run.
     expect(screen.getByText('codex · o3')).toBeInTheDocument()
+    // Provider and model are no longer under More options; dry run still is.
+    fireEvent.click(screen.getByLabelText(/Dry run/))
+    expect(screen.queryByLabelText('Provider')).toBeNull()
+    expect(screen.queryByLabelText('Model')).toBeNull()
 
     fireEvent.click(startButton())
     await waitFor(() =>
@@ -260,6 +288,67 @@ describe('NewSession', () => {
         dryRun: true,
       }),
     )
+  })
+
+  it('carries a model chosen on the workspace own provider without a provider override', async () => {
+    const { onStart } = mount()
+    fireEvent.change(bar(), { target: { value: 'OMNI-9' } })
+    fireEvent.click(modelChip())
+    const popover = screen.getByRole('dialog', { name: 'Provider and model' })
+    expect(within(popover).getByText('workspace default')).toBeInTheDocument()
+    fireEvent.click(within(popover).getByRole('option', { name: 'Sonnet 5' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('claude · Sonnet 5')).toBeInTheDocument()
+
+    fireEvent.click(startButton())
+    await waitFor(() =>
+      expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-9', {
+        provider: undefined,
+        model: 'claude-sonnet-5',
+        dryRun: undefined,
+      }),
+    )
+  })
+
+  describe('the Model chip', () => {
+    const noModel = () => workspace({ model: '' })
+
+    it('names the workspace model when the config has one', () => {
+      mount()
+      expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+    })
+
+    it('says CLI default when the config names no model and no run has reported one', () => {
+      mount({ workspace: noModel() })
+      expect(screen.getByText('claude · CLI default')).toBeInTheDocument()
+    })
+
+    it('appends what the newest run on that provider reported', () => {
+      mount({
+        workspace: noModel(),
+        runs: [
+          run({ runId: 'a', provider: 'claude', model: 'claude-opus-5', updatedAt: '2026-09-10T09:00:00Z' }),
+          run({ runId: 'b', provider: 'claude', model: 'claude-sonnet-5', updatedAt: '2026-09-11T09:00:00Z' }),
+          run({ runId: 'c', provider: 'codex', model: 'gpt-5.6-luna', updatedAt: '2026-09-12T09:00:00Z' }),
+        ],
+      })
+      expect(
+        screen.getByText('claude · CLI default · last used claude-sonnet-5'),
+      ).toBeInTheDocument()
+      // Switching provider follows that provider's newest run instead.
+      fireEvent.click(modelChip())
+      const popover = screen.getByRole('dialog', { name: 'Provider and model' })
+      fireEvent.click(within(popover).getByRole('option', { name: /codex/ }))
+      expect(screen.getByText('codex · CLI default · last used gpt-5.6-luna')).toBeInTheDocument()
+    })
+
+    it('drops the last-used clause once a model is chosen', () => {
+      mount({ workspace: noModel(), runs: [run({ provider: 'claude', model: 'claude-sonnet-5' })] })
+      fireEvent.click(modelChip())
+      const popover = screen.getByRole('dialog', { name: 'Provider and model' })
+      fireEvent.click(within(popover).getByRole('option', { name: 'Opus 5' }))
+      expect(screen.getByText('claude · Opus 5')).toBeInTheDocument()
+    })
   })
 
   it('turns RCA and Fix off, with the reason, while the key has no triage note', () => {

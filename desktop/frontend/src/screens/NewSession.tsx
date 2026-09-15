@@ -8,7 +8,6 @@ import {
   type SVGProps,
 } from 'react'
 import type { RunSummary, Ticket, Transport, Workspace } from '../api/types'
-import ProviderFields from '../components/run/ProviderFields'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { parseTime, reasonOf, relativeTime } from '../lib/format'
 import { getRunJob, subscribeRunJobs } from '../lib/jobs'
@@ -16,7 +15,7 @@ import { isQueueUnsupported } from '../store/appStore'
 import Button from '../ui/button'
 import GroupLabel from '../ui/group-label'
 import ItemRow, { type ItemTone } from '../ui/item-row'
-import ProviderMark from '../ui/provider-mark'
+import ModelPicker from '../ui/model-picker'
 import SearchBar from '../ui/search-bar'
 import SegmentedControl from '../ui/segmented-control'
 import './new-session.css'
@@ -87,6 +86,18 @@ export function newestRun(runs: RunSummary[]): RunSummary | undefined {
   return runs
     .slice()
     .sort((a, b) => stamp(b.updatedAt || b.startedAt) - stamp(a.updatedAt || a.startedAt))[0]
+}
+
+/**
+ * The model the newest run on `provider` reported, or '' when no run on that
+ * provider has said. This is what "CLI default" turned out to be last time:
+ * with `model: ""` in the config nobody knows whether the CLI ran Fable,
+ * Opus or Sonnet until a run says so, and `RunSummary.model` carries what
+ * the run reported.
+ */
+export function lastUsedModel(runs: RunSummary[], provider: string): string {
+  if (!provider) return ''
+  return newestRun(runs.filter((r) => r.provider === provider && r.model))?.model ?? ''
 }
 
 const HELPDESKS = ['zendesk', 'zoho', 'freshdesk', 'helpscout', 'intercom', 'hubspot', 'frontapp', 'gorgias']
@@ -191,9 +202,12 @@ function HelpdeskIcon(): JSX.Element {
  *
  * "Landed today" is the tracker's queue for the reader — `queue()` with
  * `assignee: me`, newest first, five at most — each row with a Triage button
- * that starts a triage the same way. The chips say which playbook and which
- * model the session will get; neither is a control, and the one-off
- * overrides the old dialog had live under More options.
+ * that starts a triage the same way. The Playbook chip says which playbook
+ * the session will get and is not a control; the Model chip says which
+ * provider and model, and opens the picker that changes them. With no model
+ * in the config the chip says "CLI default" and, when a run on that provider
+ * has reported what that turned out to be, "last used <model>" after it.
+ * Dry run, the one override left, lives under More options.
  */
 export default function NewSession(props: {
   transport: Transport
@@ -362,8 +376,11 @@ export default function NewSession(props: {
     }
   }
 
+  // What "CLI default" was last time, for the chip: the newest run on the
+  // provider the session will use, whether that is the override or the
+  // workspace's own.
   const chipProvider = provider || workspace?.provider || ''
-  const chipModel = provider ? model.trim() : model.trim() || workspace?.model || ''
+  const lastUsed = useMemo(() => lastUsedModel(runs, chipProvider), [runs, chipProvider])
 
   return (
     <section className="new-session" aria-label="New session" onKeyDown={onKeyDown}>
@@ -402,14 +419,18 @@ export default function NewSession(props: {
             <span className="new-session__chip">
               Playbook <span className="mono">auto</span>
             </span>
-            {chipProvider && (
-              <span className="new-session__chip">
-                Model <ProviderMark provider={chipProvider} size="sm" />
-                <span className="mono" dir="ltr">
-                  {chipModel ? `${chipProvider} · ${chipModel}` : chipProvider}
-                </span>
-              </span>
-            )}
+            <ModelPicker
+              provider={provider}
+              model={model}
+              defaultProvider={workspace?.provider}
+              defaultModel={workspace?.model}
+              lastUsed={lastUsed}
+              disabled={busy}
+              onChange={(choice) => {
+                setProvider(choice.provider)
+                setModel(choice.model)
+              }}
+            />
             {/* The screen's one filled button: the sidebar's New session
                 steps down while this is up. */}
             <Button
@@ -432,15 +453,6 @@ export default function NewSession(props: {
           <details className="new-session__more">
             <summary>More options</summary>
             <div className="new-session__more-body">
-              <ProviderFields
-                idPrefix="new"
-                provider={provider}
-                model={model}
-                defaultProvider={workspace?.provider}
-                disabled={busy}
-                onProvider={setProvider}
-                onModel={setModel}
-              />
               <label className="checkbox">
                 <input
                   type="checkbox"
