@@ -146,12 +146,31 @@ In build order. The first five are shared by all three surfaces and unblock the 
 | 14 | **Hero band** | landing, docs home | new | Full-bleed, `--sd-radius-band` on the leading corners, paper ink on `--sd-band-deep` or `--sd-band-ink`. Holds a display headline with an italic second clause, one deck line, one button. |
 | 15 | **Marquee / ring text** | landing | new | Both ambient motions in one folder because they share the reduced-motion contract and the RTL direction flip. Ring text: a sentence on a circular path, 48s linear. Marquee: one track, 34s linear, 64px edge mask. Neither carries information. |
 
-After these fifteen: Code block, Kbd, Link with marker sweep, Text badge row, Media frame,
-Step band, Inbound row, Workspace switcher, Settings panel, Fix panel.
+## The app-shell six
+
+Added from `../03-desktop-app.md`, which reads the desktop app language off a capture of
+Wispr Flow's macOS settings screen. Five are new and Badge extends the markup `.badge`
+already has. They come after the fifteen because each one is the Card, the Dialog or the
+Button with a job, and none of them can be specified before those are settled.
+
+| # | Component | Surfaces | Status today | Notes for the spec |
+|---|---|---|---|---|
+| 16 | **Sidebar nav item** | app | new | Icon 16 plus label 13/500 in a 28-tall pill at 32 pitch, inset 8. Rest `--sd-ink-2`, hover `--sd-nav-hover`, current `--sd-nav-active` with `--sd-ink`. No accent, no border, and never `--sd-ink-3`, which clears only 4.12:1 on the active fill. |
+| 17 | **Sidebar footer card** | app | new | The block pinned under a `--sd-rule` hairline at the foot of the sidebar: workspace switcher row, one quota chip per budgeted provider, then the screen's primary button at full content width. `--sd-card-row` fill, `--sd-radius-md`, no shadow. |
+| 18 | **Modal sheet with secondary nav** | app | new; extends Dialog (12) | The large Dialog variant: `min(900px,92vw)` by `min(640px,88vh)`, centred, `--sd-scrim` behind it, a 200-wide `--sd-card-row` nav column on the leading edge carrying the modal's leading corners, and a `--sd-sheet` content panel at 32 padding with the app's one serif heading. Settings is the only screen that gets one. |
+| 19 | **Setting row** | app | new | One setting per row, 64 tall, inside a `--sd-card-row` card: label 13/500 over its current value in `--sd-ink-2` on the leading side, exactly one control on the trailing side, rows split by a `--sd-rule-faint` divider inset 16 and none after the last. Two controls means two rows. |
+| 20 | **Heatmap** | app | new | Runs per day above the Register table: 12px cells, 4px gaps, weekday rows by week columns, 12 weeks in a scroll container, five `--sd-heat-*` steps. Every cell is a button with an accessible name like `14 September, 6 runs`, and the legend prints bucket boundaries as numbers, not only More and Less. |
+| 21 | **Badge** | app, landing | partial: shares markup with `.badge` | The account or workspace chip: 20 tall, `--sd-radius-xs`, padding-inline 8, 11/500 sentence case, `--sd-badge-bg` with `--sd-badge-ink` at 13.86:1 light and 9.72:1 dark. It carries a fact about the account, never a run state; anything that could be either is the Status badge (5). |
+
+After these twenty-one: Code block, Kbd, Link with marker sweep, Text badge row, Media
+frame, Step band, Inbound row, Fix panel. Workspace switcher and Settings panel leave that
+list: the switcher is a row inside 17 and the settings panel is 18 and 19 together.
 
 ## The index
 
-Fifteen components are built. Each row links the spec in this folder, which is a
+Fifteen components are built and six are `planned`, which means the inventory above
+describes them in a line and no SPEC.md exists yet. Numbering is one sequence across both.
+Each built row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -177,6 +196,12 @@ component it is showing.
 | 13 | Quota chip | app, landing | built | `src/ui/quota-chip/` | [quota-chip/SPEC.md](quota-chip/SPEC.md) |
 | 14 | Hero band | landing, docs home | built | `src/ui/hero-band/` | [hero-band/SPEC.md](hero-band/SPEC.md) |
 | 15 | Ring text and marquee | landing | built | `src/ui/ambient/` | [ambient/SPEC.md](ambient/SPEC.md) |
+| 16 | Sidebar nav item | app | planned | none yet | not written |
+| 17 | Sidebar footer card | app | planned | none yet | not written |
+| 18 | Modal sheet with secondary nav | app | planned | none yet | not written |
+| 19 | Setting row | app | planned | none yet | not written |
+| 20 | Heatmap | app | planned | none yet | not written |
+| 21 | Badge | app, landing | planned | none yet | not written |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two keyframes and the RTL reversal that ring text and the marquee share; it is

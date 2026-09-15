@@ -40,6 +40,61 @@ clear 4.5:1.
 | `--sd-band-deep` | `#1F2B52` | `#232F58` | The full-bleed section band. Derived from the app's existing accent `#4340c8` pulled down in lightness and desaturated, so the band and the accent are the same hue family. Paper on it: **12.83:1** light, **10.48:1** dark. |
 | `--sd-band-ink` | `#17181C` | `#0C0D10` | The second band. Same value as `--sd-ink` in light, so an ink band is literally the text colour enlarged. |
 
+### App shell
+
+Added after reading a capture of Wispr Flow's macOS app on 2026-09-15. The app is a window
+ground with one content sheet on it rather than a page with colour bands, and the two planes
+need their own names. Measurements and reconstructions are in `03-desktop-app.md` section 3.
+Nothing above is renamed: `--sd-paper` keeps the landing page and the docs site, and stops
+being the desktop app's background.
+
+| Token | Light | Dark | Rationale |
+|---|---|---|---|
+| `--sd-shell` | `#F2EEE0` | `#0C0D11` | The window ground: behind the sheet, under the sidebar, under the title bar strip. `--sd-paper` pulled down about 3%. The sheet reads against it at **1.14:1** light and **1.12:1** dark; the reference's own pair is 1.08:1, which is enough. `--sd-ink-3` on it is **4.60:1** light, **6.14:1** dark, which is what fixes the value: `#EFEBDD` would have been 4.48 and would not ship. |
+| `--sd-sheet` | `#FFFDF7` | `#191A20` | The content sheet: the board, the run split, the register table, the modal's content panel. In light it is the same value as `--sd-surface` and that is deliberate, because the sheet *is* the app's surface; in dark they diverge, since the sheet must lift off the shell while a card on the sheet lifts again. `--sd-ink` on it: **17.44:1** light, **14.02:1** dark. |
+| `--sd-card-row` | `#F5F1E4` | `#22242B` | The settings card, the sidebar footer card, the modal's secondary nav column. A step off the sheet in the direction that reads as raised: **1.11:1** light, **1.12:1** dark. It inverts between themes (darker than the sheet in light, lighter in dark) and that is why it cannot be `--sd-sunk`, which stays recessed in both. `--sd-ink` **15.70** / **12.51**, `--sd-ink-2` **7.37** / **6.60**, `--sd-ink-3` **4.73** / **4.90**. |
+| `--sd-rule-faint` | `#EAE6D6` | `#24262C` | The hairline *inside* a card row, where `--sd-rule` is too strong against `--sd-card-row`. **1.11:1** light, **1.12:1** dark, matching the reference's 1.08 divider. Not a text colour. Three components read it (Setting row, Sidebar footer card, Modal secondary nav), which is what makes it a token rather than a constant. |
+| `--sd-scrim` | `rgba(23,24,28,.32)` | `rgba(7,8,10,.56)` | Behind a dialog or the settings modal. The reference solves to `#1A1A1A` at 31%. The board has to stay legible through it, which is the reason a modal is used at all. |
+
+### Navigation and the primary action
+
+| Token | Light | Dark | Rationale |
+|---|---|---|---|
+| `--sd-nav-hover` | `#EDE8D8` | `#1B1D24` | Sidebar row hover, secondary-nav row hover. A step toward the active fill, **1.06:1** off the shell light and **1.15:1** dark. `--sd-ink-2` on it: **6.79** / **7.16**. |
+| `--sd-nav-active` | `#E7E2D1` | `#24262E` | The current page's soft pill. **1.12:1** off the shell light, **1.29:1** dark, no border and no accent. `--sd-ink` on it: **13.68** / **12.19**. `--sd-ink-2`: **6.42** both. `--sd-ink-3` clears only 4.12 here and is not allowed on a nav pill. Deliberately neutral: in Sirdar the accent means a live run, and a nav row wearing it competes with the one card on the board that earned it. Also the fill for the pale per-row button on a setting card. |
+| `--sd-primary` | `#17181C` | `#E9E7DF` | The one filled commit button per screen. It is `--sd-ink`, inverted per theme, so a black button in light does not become an invisible black button on a `#0C0D11` shell in dark. |
+| `--sd-primary-ink` | `#FFFDF7` | `#0C0D11` | Its label: **17.44:1** light, **15.69:1** dark. |
+| `--sd-primary-hover` | `#2B2D33` | `#D5D2C6` | Label on it: **13.53:1** light, **12.82:1** dark. |
+
+### Badge
+
+| Token | Light | Dark | Rationale |
+|---|---|---|---|
+| `--sd-badge-bg` | `var(--sd-highlight)` | `var(--sd-highlight)` | The account or workspace chip, the reference's lavender plan badge on Sirdar's own hue. It points at the existing highlight rather than introducing a ninth near-identical tint; the name exists because a badge and a primary button are different roles that happen to share a fill today. |
+| `--sd-badge-ink` | `var(--sd-highlight-ink)` | `var(--sd-highlight-ink)` | **13.86:1** light, **9.72:1** dark. |
+
+A badge carries a fact about the account or the workspace. Run state stays on
+`--sd-st-*` with its word, and anything that could be either is a status badge.
+
+### Heatmap
+
+Five steps of the accent for the runs-per-day grid on the Register.
+
+| Token | Light | Dark | Means |
+|---|---|---|---|
+| `--sd-heat-0` | `#EEEADB` | `#232630` | no runs |
+| `--sd-heat-1` | `#CFCBEE` | `#34315F` | 1 |
+| `--sd-heat-2` | `#A7A2DE` | `#4C4894` | 2 to 4 |
+| `--sd-heat-3` | `#6E69C4` | `#736ECF` | 5 to 9 |
+| `--sd-heat-4` | `var(--sd-accent)` | `var(--sd-accent)` | 10 or more |
+
+Step 0 against `--sd-sheet` is **1.18:1** light and **1.15:1** dark. Consecutive steps
+separate by **1.30 / 1.51 / 1.98 / 1.91** light and **1.26 / 1.52 / 1.83 / 1.90** dark. A
+sequential ramp's neighbouring pairs are not held to 3:1; the floor applies to the text,
+and the count is carried by the cell's accessible name, its tooltip, and a legend that
+prints bucket boundaries as numbers. The top step is the accent itself, so the busiest day
+and a live run are the same colour, which is true: both mean the machine is working.
+
 ### Ink ramp
 
 | Token | Light | Dark | On paper | Rationale |
@@ -115,8 +170,9 @@ and the aliases are deleted in a second pass once `grep -r 'var(--paper'` return
 
 | Today | Becomes | Note |
 |---|---|---|
-| `--paper` | `--sd-paper` | value changes `#fbfbfa` to `#FAF7EC` |
+| `--paper` | `--sd-shell` | the app's `body` background becomes the window ground, `#fbfbfa` to `#F2EEE0`. `--sd-paper` still exists and still means the landing page and docs ground; the app just stops using it. See `03-desktop-app.md` section 4 |
 | `--surface` | `--sd-surface` | `#ffffff` to `#FFFDF7` |
+| `--surface`, where it paints the screen itself | `--sd-sheet` | the board, the run split, the register and eval tables sit on the sheet; cards on top of it keep `--sd-surface` |
 | `--lane` | `--sd-sunk` | renamed: the same value serves lane wells, inputs and code blocks, and "lane" is board-specific |
 | `--ink` | `--sd-ink` | `#191a1c` to `#17181C` |
 | `--ink-2` | `--sd-ink-2` | `#5b5f66` to `#4A4E58` |
@@ -182,6 +238,19 @@ restating hexes:
 
 `desktop/frontend/src/styles.contrast.test.ts` already parses the app's `:root` blocks and
 asserts contrast. Point it at `styles/tokens.css` instead and add the pairs this file
-states a ratio for, including the two tight ones (`--sd-ink-3` on `--sd-sunk` at 4.56,
-`--sd-st-blocked` on `--sd-paper` at 4.84). A token that cannot state its ratio does not
-ship.
+states a ratio for, including the tight ones: `--sd-ink-3` on `--sd-sunk` at 4.56,
+`--sd-st-blocked` on `--sd-paper` at 4.84, `--sd-ink-3` on `--sd-shell` at 4.60, and
+`--sd-ink-3` on `--sd-card-row` at 4.73. A token that cannot state its ratio does not ship.
+
+Two assertions in the test are about a step rather than a ratio, and both are upper bounds
+as well as lower ones, because a plane that separates too hard stops reading as the same
+window:
+
+- `--sd-sheet` against `--sd-shell`, and `--sd-card-row` against `--sd-sheet`, each between
+  1.08:1 and 1.25:1 in both themes.
+- `--sd-ink-3` on `--sd-nav-active` is recorded at 4.12 and marked as a pair the app does
+  not use, so the number stays visible to anyone who reaches for it.
+
+The five `--sd-heat-*` steps are asserted monotonic in relative luminance in both themes,
+in the same direction, and every consecutive pair at 1.2:1 or more. They are not asserted
+against 4.5:1; `03-desktop-app.md` section 10 says why and what carries the number instead.
