@@ -203,7 +203,13 @@ function Shell(): JSX.Element {
       )
       break
     case 'register':
-      screen = <Register transport={state.transport} workspaceId={workspaceId} />
+      screen = (
+        <Register
+          transport={state.transport}
+          workspaceId={workspaceId}
+          onOpenRun={(runId) => navigate({ name: 'run', runId })}
+        />
+      )
       break
     case 'eval':
       screen = (
