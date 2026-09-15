@@ -318,6 +318,61 @@ func TestAppendRegisterReadRegisterRoundTrip(t *testing.T) {
 	}
 }
 
+// TestRegisterStaysBackwardCompatible: register.jsonl is append-only and
+// long-lived, so the two columns added for the markdown export must not
+// change a line that carries neither, and a line written before they
+// existed must still read back.
+func TestRegisterStaysBackwardCompatible(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, ".sirdar")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	old := `{"Key":"OMNI-0","Kind":"triage","RunID":"r0","Date":"2026-09-01",` +
+		`"Provider":"claude","Model":"m","Service":"checkout","Classification":"bug",` +
+		`"Confidence":"high","Severity":"sev2","Turns":3,"CostUSD":0.12,` +
+		`"TriageVerdict":"","NotePath":"note0.md"}` + "\n"
+	if err := os.WriteFile(filepath.Join(dir, "register.jsonl"), []byte(old), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	withCols := RegisterRow{Key: "OMNI-1", Kind: "triage", NotePath: "note1.md",
+		Title: "Export fails for large orders", Company: "NEQSA SWEET"}
+	if err := AppendRegister(root, withCols); err != nil {
+		t.Fatal(err)
+	}
+	noCols := RegisterRow{Key: "OMNI-2", Kind: "fix", Date: "2026-09-11"}
+	if err := AppendRegister(root, noCols); err != nil {
+		t.Fatal(err)
+	}
+
+	rows, err := ReadRegister(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(rows) != 3 {
+		t.Fatalf("want 3 rows, got %d", len(rows))
+	}
+	if rows[0].Key != "OMNI-0" || rows[0].Title != "" || rows[0].Company != "" {
+		t.Errorf("a pre-existing line should read back with empty columns: %+v", rows[0])
+	}
+	if !reflect.DeepEqual(rows[1], withCols) {
+		t.Errorf("row with columns:\ngot  %+v\nwant %+v", rows[1], withCols)
+	}
+	if !reflect.DeepEqual(rows[2], noCols) {
+		t.Errorf("row without columns:\ngot  %+v\nwant %+v", rows[2], noCols)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, "register.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
+	if strings.Contains(lines[2], "Title") || strings.Contains(lines[2], "Company") {
+		t.Errorf("a row that recorded neither column should write neither key: %s", lines[2])
+	}
+}
+
 func TestLatestNotePicksNewestCompletedRun(t *testing.T) {
 	root := t.TempDir()
 	t0 := time.Date(2026, 9, 10, 9, 0, 0, 0, time.UTC)

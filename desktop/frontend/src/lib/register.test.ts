@@ -25,6 +25,8 @@ function row(overrides: Partial<RegisterRow>): RegisterRow {
     costUsd: 0.5,
     triageVerdict: '',
     notePath: '',
+    title: '',
+    company: '',
     ...overrides,
   }
 }
@@ -53,6 +55,17 @@ describe('groupRegisterRows', () => {
     const rows = [row({ key: 'OMNI-1', service: '' }), row({ key: 'OMNI-1', service: 'oxo-api' })]
     const [group] = groupRegisterRows(rows)
     expect(group.service).toBe('oxo-api')
+  })
+
+  it('keeps the newest non-empty title and company for a key', () => {
+    const rows = [
+      row({ key: 'OMNI-1', kind: 'triage', title: 'Export job times out', company: 'NEQSA SWEET' }),
+      row({ key: 'OMNI-1', kind: 'rca', title: '', company: '' }),
+      row({ key: 'OMNI-1', kind: 'resolution', title: 'Export job times out on large orders', company: '' }),
+    ]
+    const [group] = groupRegisterRows(rows)
+    expect(group.title).toBe('Export job times out on large orders')
+    expect(group.company).toBe('NEQSA SWEET')
   })
 })
 
@@ -124,8 +137,28 @@ describe('toMarkdownTable', () => {
     const lines = table.split('\n')
 
     expect(lines[0]).toBe(
-      '| # | Issue | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |',
+      '| # | Issue | Title | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |',
     )
-    expect(lines[2]).toBe('| 1 |  |  |  | OMNI-1 | 2026-09-01 |  |  | confirmed |')
+    expect(lines[2]).toBe('| 1 |  |  |  |  | OMNI-1 | 2026-09-01 |  |  | confirmed |')
+  })
+
+  it('fills Title and Company from the group, the two cells a human used to type in', () => {
+    const groups = groupRegisterRows([
+      row({
+        key: 'OMNI-1',
+        kind: 'triage',
+        date: '2026-09-01',
+        triageVerdict: 'confirmed',
+        title: 'Export job times out on large orders',
+        company: 'NEQSA SWEET',
+      }),
+    ])
+
+    const table = toMarkdownTable(groups)
+    const lines = table.split('\n')
+
+    expect(lines[2]).toBe(
+      '| 1 |  | Export job times out on large orders | NEQSA SWEET |  | OMNI-1 | 2026-09-01 |  |  | confirmed |',
+    )
   })
 })

@@ -34,12 +34,35 @@ func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks = append(checks, sourceChecks(ctx, cfg)...)
 	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg))
 	checks = append(checks, notesCheck(cfg), templatesCheck(cfg))
+	return levelled(checks)
+}
+
+// levelled fills in the level of every check that set none, so a caller —
+// the CLI's marks, the desktop list, an HTTP client — never has to derive
+// it a second time. A check that only set OK is "ok" or "fail"; the
+// warning state is never inferred.
+func levelled(checks []Check) []Check {
+	for i := range checks {
+		if checks[i].Level != "" {
+			continue
+		}
+		checks[i].Level = string(provider.LevelFail)
+		if checks[i].OK {
+			checks[i].Level = string(provider.LevelOK)
+		}
+	}
 	return checks
+}
+
+// warn builds an advisory check: worth reading, never a reason to exit
+// non-zero.
+func warn(name, detail string) Check {
+	return Check{Name: name, OK: true, Level: string(provider.LevelWarn), Detail: detail}
 }
 
 // checkOf converts a provider diagnostic into the wire shape.
 func checkOf(c provider.Check) Check {
-	return Check{Name: c.Name, OK: c.OK, Detail: c.Detail}
+	return Check{Name: c.Name, OK: c.OK, Level: string(c.Severity()), Detail: c.Detail}
 }
 
 func providerChecks(ctx context.Context, cfg *config.Config) []Check {
@@ -123,7 +146,11 @@ func claudeEnvironmentCheck(cfg *config.Config) Check {
 	if cfg.Billing == "api" {
 		check.OK = true
 		if base := os.Getenv("ANTHROPIC_BASE_URL"); base != "" {
-			check.Detail = "custom base URL: " + hostOnly(base) + "; budget.maxUsd cannot be trusted"
+			// Nothing here stops a run: under api billing the variable is
+			// the supported way to reach an Anthropic-compatible
+			// endpoint. What it costs is the spend ceiling, which is
+			// worth a warning and not an exit code.
+			return warn(check.Name, "custom base URL: "+hostOnly(base)+"; budget.maxUsd cannot be trusted")
 		}
 		return check
 	}
@@ -348,10 +375,16 @@ func mcpCheck(cfg *config.Config) Check {
 	path := filepath.Join(cfg.Root, ".mcp.json")
 	switch {
 	case !cfg.WorkspaceOnlyMCP():
+		// Neither of the two outer states is a failure and neither is
+		// plainly fine: the session either sees every server the operator
+		// has, or none at all. Both are warnings, which is the row this
+		// tri-state was added for.
+		check.Level = string(provider.LevelWarn)
 		check.Detail = "mcp.workspaceOnly is off: every user-level MCP server is visible to the agent"
 	case cfg.MCPConfigPath() != "":
 		check.Detail = path + " — the session sees these servers only"
 	default:
+		check.Level = string(provider.LevelWarn)
 		check.Detail = "no workspace .mcp.json: the agent will have no MCP tools; add the servers the playbooks need to " + path
 	}
 	if len(cfg.Permissions.MCP) > 0 {

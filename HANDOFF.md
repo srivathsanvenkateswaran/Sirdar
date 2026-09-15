@@ -166,10 +166,20 @@ onto `.git`.
 No writes to any helpdesk or tracker (`sirdar fix` writes to git and GitHub and
 to nothing else). No auth on `sirdar serve` (loopback only unless `--allow-remote`); the `/hooks/`
 webhook routes rely on the operator's own TLS termination plus each source's shared-secret
-signature. Register markdown
-export lacks title/company columns (`RegisterRow` has none). `provider: openai` has no resume
-handle (a blocked run must be re-run). Two concurrent runs of the same key can mis-pair the UI's
-Cancel button within a 2 s window.
+signature. Two concurrent runs of the same key can mis-pair the UI's Cancel button within a 2 s
+window.
+
+Four dogfood-deferred items from `docs/research/07-dogfood-findings.md` are now fixed (`quality`
+branch): `doctor` has a third level, `[!!]` for a warning, so the MCP-visibility and no-`.mcp.json`
+rows no longer print `[OK]` with a "warning:" detail and only a real failure exits non-zero
+(`provider.Check.Level`, `cmd/sirdar/cmd_doctor.go`, desktop Settings). `MCPLooksLikeWrite` now
+tokenises the whole tool name and denies a generically named passthrough
+(`*_api_request`, `graphql`, `sql_execute`) instead of letting a read word beside a write word
+win — `run_query` and `run_select` are denied by the default heuristic now and need
+`permissions.mcp`. `sirdar register --markdown` fills Title and Company from the note's own
+title and its `company`/`customer` frontmatter. `provider: openai` writes its message transcript
+to `transcript.json` (0600) in the run directory after every turn, which is now its resume
+handle for `sirdar resume` and the schema retry.
 
 ## Standing constraints
 

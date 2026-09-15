@@ -7,6 +7,10 @@ import type { RegisterRow } from '../api/types'
 export interface RegisterGroup {
   key: string
   service: string
+  /** The note's own title and the company its frontmatter named — the newest row of this
+   *  key that recorded either wins, mirroring `groupRegister` in cmd/sirdar/cmd_register.go. */
+  title: string
+  company: string
   rows: RegisterRow[]
   triage?: RegisterRow
   rca?: RegisterRow
@@ -19,11 +23,13 @@ export function groupRegisterRows(rows: RegisterRow[]): RegisterGroup[] {
   for (const row of rows) {
     let group = byKey.get(row.key)
     if (!group) {
-      group = { key: row.key, service: row.service, rows: [] }
+      group = { key: row.key, service: row.service, title: '', company: '', rows: [] }
       byKey.set(row.key, group)
     }
     group.rows.push(row)
     if (!group.service && row.service) group.service = row.service
+    if (row.title) group.title = row.title
+    if (row.company) group.company = row.company
     if (row.kind === 'triage') group.triage = row
     else if (row.kind === 'rca') group.rca = row
     else if (row.kind === 'resolution') group.resolution = row
@@ -81,20 +87,23 @@ export function sumUsage(groups: RegisterGroup[]): { costUsd: number; turns: num
 }
 
 const MARKDOWN_HEADER =
-  '| # | Issue | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |'
-const MARKDOWN_DIVIDER = '|---|---|---|---|---|---|---|---|---|'
+  '| # | Issue | Title | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |'
+const MARKDOWN_DIVIDER = '|---|---|---|---|---|---|---|---|---|---|'
 
 /**
- * `| # | Issue | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |`
- * Issue/Company/Helpdesk are blank — the register carries no ticket title,
- * company, or helpdesk reference, only the tracker key.
+ * `| # | Issue | Title | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |`
+ * Title and Company come from the register rows — the note's own title, and the company its
+ * frontmatter named — mirroring `sirdar register --markdown`. Issue and Helpdesk stay blank:
+ * the register carries no ticket title of its own and no helpdesk reference, only the
+ * tracker key, which lands in the Tracker cell.
  */
 export function toMarkdownTable(groups: RegisterGroup[]): string {
   const rows = groups.map((group, i) => {
     const cells = [
       String(i + 1),
       '',
-      '',
+      group.title,
+      group.company,
       '',
       group.key,
       group.triage?.date ?? '',

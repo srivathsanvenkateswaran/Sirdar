@@ -18,6 +18,7 @@ func init() { commands["register"] = cmdRegister }
 // from the (up to three) lines its runs appended.
 type registerEntry struct {
 	key                           string
+	title, company                string
 	triageDate, confidence, class string
 	rcaDate, verdict, severity    string
 	resolutionType                string
@@ -65,6 +66,16 @@ func groupRegister(rows []store.RegisterRow) []registerEntry {
 			entries = append(entries, registerEntry{key: row.Key})
 		}
 		e := &entries[i]
+		// The title and the company belong to the ticket, not to one
+		// note, so the newest line that recorded either wins and a line
+		// that recorded neither (a fix, or a run from before these
+		// columns existed) leaves what is already there.
+		if row.Title != "" {
+			e.title = row.Title
+		}
+		if row.Company != "" {
+			e.company = row.Company
+		}
 		switch note.Kind(row.Kind) {
 		case note.Triage:
 			e.triageDate, e.confidence, e.class, e.triagePath = row.Date, row.Confidence, row.Classification, row.NotePath
@@ -123,15 +134,18 @@ func fileExists(path string) bool {
 }
 
 // printRegisterMarkdown prints the vault's `_Issue Register` table shape for
-// pasting. The register records the notes and the run, not the customer or
-// the ticket URLs, so Company, Helpdesk and Tracker are left as empty cells
-// for the human who pastes the rows to fill in.
+// pasting. Title and Company come from the register itself now — the note's
+// own title, and the company its frontmatter named — so the two cells a
+// human used to fill in by hand arrive filled. Helpdesk and Tracker are
+// still empty: the register records the notes and the run, not the ticket
+// URLs.
 func printRegisterMarkdown(stdout io.Writer, entries []registerEntry) {
-	fmt.Fprintln(stdout, "| # | Issue | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |")
-	fmt.Fprintln(stdout, "|---|---|---|---|---|---|---|---|---|")
+	fmt.Fprintln(stdout, "| # | Issue | Title | Company | Helpdesk | Tracker | Triage | RCA | Resolution | Status |")
+	fmt.Fprintln(stdout, "|---|---|---|---|---|---|---|---|---|---|")
 	for i, e := range entries {
-		fmt.Fprintf(stdout, "| %d | %s |  |  |  | %s | %s | %s | %s |\n",
-			i+1, cell(e.key), wikiLink(e.triagePath), wikiLink(e.rcaPath), wikiLink(e.resPath), e.status())
+		fmt.Fprintf(stdout, "| %d | %s | %s | %s |  |  | %s | %s | %s | %s |\n",
+			i+1, cell(e.key), cell(e.title), cell(e.company),
+			wikiLink(e.triagePath), wikiLink(e.rcaPath), wikiLink(e.resPath), e.status())
 	}
 }
 
