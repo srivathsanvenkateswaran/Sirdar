@@ -14,7 +14,11 @@ export interface RunCardProps {
   priority?: string
   /** Already formatted: this component does no arithmetic on a clock. */
   elapsed?: string
+  /** The clock's tooltip: the exact stamp, or what it is counting. */
+  elapsedTitle?: string
   cost?: string
+  /** The cost's tooltip: turns and token flow, so the card stays to one number. */
+  costTitle?: string
   onOpen: () => void
 }
 
@@ -41,7 +45,9 @@ export default function RunCard({
   reason,
   priority,
   elapsed,
+  elapsedTitle,
   cost,
+  costTitle,
   onOpen,
 }: RunCardProps): JSX.Element {
   const live = status === 'preparing' || status === 'running'
@@ -82,12 +88,17 @@ export default function RunCard({
       <span className="sd-run-card__foot">
         <StatusBadge status={status} />
         {elapsed && (
-          <span className="sd-run-card__elapsed" data-live={live ? 'true' : undefined} dir="ltr">
+          <span
+            className="sd-run-card__elapsed"
+            data-live={live ? 'true' : undefined}
+            title={elapsedTitle}
+            dir="ltr"
+          >
             {elapsed}
           </span>
         )}
         {cost && (
-          <span className="sd-run-card__cost" dir="ltr">
+          <span className="sd-run-card__cost" title={costTitle} dir="ltr">
             {cost}
           </span>
         )}

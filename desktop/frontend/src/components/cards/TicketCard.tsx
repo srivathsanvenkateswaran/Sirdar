@@ -1,17 +1,17 @@
 import type { Ticket } from '../../api/types'
 import { relativeTime } from '../../lib/format'
-import { PriorityBadge } from './StatusBadge'
+import Button from '../../ui/button'
+import Card from '../../ui/card'
+import { PriorityBadge } from '../../ui/status-badge'
 
 /**
  * A tracker ticket that Sirdar has never run. Nothing to open yet, so the only
  * affordance is the one action that changes that.
  *
- * The title comes from the tracker in whatever language it was filed in, so it
- * carries `dir="auto"`: an Arabic title then reads right to left inside a card
- * that is otherwise laid out left to right, with its punctuation at the end
- * the reader expects.
+ * It is the library's base Card rather than the run card: a ticket has no
+ * state, no clock and no cost, and giving it the run card's shape would
+ * promise a run behind it.
  */
-
 export default function TicketCard(props: {
   ticket: Ticket
   onTriage: (key: string) => void
@@ -19,31 +19,27 @@ export default function TicketCard(props: {
 }): JSX.Element {
   const { ticket, onTriage, busy } = props
   return (
-    <article className="card card--ticket">
-      <span className="card-top">
-        <span className="key">{ticket.key}</span>
-        <PriorityBadge priority={ticket.priority} />
-      </span>
-      {ticket.title && (
-        <span className="card-title" dir="auto">
-          {ticket.title}
+    <Card
+      title={
+        <span className="ticket-key" dir="ltr">
+          {ticket.key}
         </span>
-      )}
-
-      <span className="card-foot">
-        <button
-          type="button"
-          className="button button--quiet"
-          disabled={busy}
-          onClick={() => onTriage(ticket.key)}
-        >
-          Triage
-        </button>
-        {ticket.status && <span className="card-kind">{ticket.status}</span>}
-        <time className="elapsed" dateTime={ticket.updatedAt} title={ticket.updatedAt}>
-          {relativeTime(ticket.updatedAt)}
-        </time>
-      </span>
-    </article>
+      }
+      meta={<PriorityBadge priority={ticket.priority} />}
+      dir="auto"
+      footer={
+        <>
+          <Button variant="ghost" disabled={busy} onClick={() => onTriage(ticket.key)}>
+            Triage
+          </Button>
+          {ticket.status && <span className="ticket-status">{ticket.status}</span>}
+          <time className="ticket-at" dateTime={ticket.updatedAt} title={ticket.updatedAt}>
+            {relativeTime(ticket.updatedAt)}
+          </time>
+        </>
+      }
+    >
+      {ticket.title || null}
+    </Card>
   )
 }

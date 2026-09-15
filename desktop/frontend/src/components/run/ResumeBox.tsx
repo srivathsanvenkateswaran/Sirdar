@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import Button from '../../ui/button'
 
 /**
  * The run stopped and is waiting on a person. When it stopped to ask something,
@@ -48,9 +49,15 @@ export default function ResumeBox({
             onChange={(e) => setAnswer(e.target.value)}
           />
         </div>
-        <button type="submit" className="run-btn run-btn--primary" disabled={pending}>
+        {/*
+          Run detail's one filled button. It stays beside the answer field
+          rather than going to the sidebar footer, because the answer is what
+          it commits and a commit button a window away from its own input is a
+          button nobody presses on purpose.
+        */}
+        <Button type="submit" variant="primary" disabled={pending}>
           {pending ? 'Resuming…' : 'Resume run'}
-        </button>
+        </Button>
       </div>
       {error ? <div className="form-error">{error}</div> : null}
     </form>
