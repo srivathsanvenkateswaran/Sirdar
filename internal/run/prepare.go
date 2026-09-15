@@ -268,6 +268,8 @@ func (r *Runner) stageBundle(ctx context.Context, key string, p *prepared, o Opt
 			Helpdesk: r.Helpdesk,
 			Stderr:   r.stderr(),
 			AsOf:     o.AsOf,
+			Env:      r.Env,
+			Now:      r.now,
 		}
 		bundle, warnings, err := f.Fetch(ctx, key, p.run.BundleDir())
 		p.state.Warnings = append(p.state.Warnings, warnings...)

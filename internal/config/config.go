@@ -13,6 +13,7 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
 )
 
 // Provider selects which agent CLI drives triage and RCA runs.
@@ -266,6 +267,42 @@ var DefaultFixBash = []string{
 // it, so it is named in a warning instead.
 const DefaultAttachmentMaxBytes = 10 << 20
 
+// Default transcription limits. A voice note is under a minute; five
+// minutes covers a customer narrating a whole workflow and stops short of
+// an hour-long call recording nobody meant to send. Thirty files is the
+// WhatsApp-thread case — the ticket that prompted this carried 28 — with a
+// ceiling, so one pathological ticket cannot spend the whole batch budget.
+const (
+	DefaultTranscribeMaxSeconds = 300
+	DefaultTranscribeMaxFiles   = 30
+)
+
+// DefaultTranscribeFormats are the attachment extensions treated as audio.
+// mp4 is in the list because a phone's "voice note" is routinely an mp4
+// container; whether the command can read its audio track is the command's
+// business, and a failure is a per-file warning.
+var DefaultTranscribeFormats = []string{"ogg", "opus", "mp3", "m4a", "wav", "mp4"}
+
+// TranscribeConfig turns audio attachments into text during bundle
+// assembly, by running a command the operator names. Absent — the default
+// — no audio is transcribed and a voice note stays what it was before:
+// evidence the session cannot open, named in a warning.
+//
+// Command is a template split into argv once, at config load, and never
+// handed to a shell: {in} is the audio file, {out} an output path without
+// an extension, {outdir} a directory to write into. A pipeline belongs in
+// a script the command names, not in this string.
+//
+// Sirdar ships no model and downloads nothing. Whether the customer's
+// voice note stays on this machine is decided entirely by the command
+// configured here.
+type TranscribeConfig struct {
+	Command    string   `yaml:"command"`
+	MaxSeconds int      `yaml:"maxSeconds,omitempty"`
+	MaxFiles   int      `yaml:"maxFiles,omitempty"`
+	Formats    []string `yaml:"formats,omitempty"`
+}
+
 // NotifyConfig posts a short digest of every finished run to a chat
 // channel or a webhook receiver. Every destination is optional and any
 // number may be configured at once; a workspace with no notify block posts
@@ -414,9 +451,11 @@ type Config struct {
 	MCP struct {
 		WorkspaceOnly *bool `yaml:"workspaceOnly"`
 	} `yaml:"mcp"`
-	// Attachments caps what a helpdesk download may put in the bundle.
+	// Attachments caps what a helpdesk download may put in the bundle,
+	// and optionally turns the audio in it into text the session can read.
 	Attachments struct {
-		MaxBytes int64 `yaml:"maxBytes"`
+		MaxBytes   int64             `yaml:"maxBytes"`
+		Transcribe *TranscribeConfig `yaml:"transcribe,omitempty"`
 	} `yaml:"attachments"`
 	// Fix configures the one flow that writes. PRIncludesComplaint puts
 	// the customer's own words in the pull request body; it is off by
@@ -544,6 +583,20 @@ func applyDefaults(c *Config) {
 	if c.Attachments.MaxBytes == 0 {
 		c.Attachments.MaxBytes = DefaultAttachmentMaxBytes
 	}
+	if t := c.Attachments.Transcribe; t != nil {
+		if t.MaxSeconds == 0 {
+			t.MaxSeconds = DefaultTranscribeMaxSeconds
+		}
+		if t.MaxFiles == 0 {
+			t.MaxFiles = DefaultTranscribeMaxFiles
+		}
+		if len(t.Formats) == 0 {
+			t.Formats = append([]string(nil), DefaultTranscribeFormats...)
+		}
+		for i, f := range t.Formats {
+			t.Formats[i] = strings.ToLower(strings.TrimPrefix(strings.TrimSpace(f), "."))
+		}
+	}
 	if len(c.Permissions.FixBash) == 0 {
 		c.Permissions.FixBash = append([]string(nil), DefaultFixBash...)
 	}
@@ -622,6 +675,9 @@ func (c *Config) Validate() error {
 	if c.Attachments.MaxBytes < 0 {
 		return fmt.Errorf("config: attachments.maxBytes: must be >= 0, got %d", c.Attachments.MaxBytes)
 	}
+	if err := validateTranscribe(c.Attachments.Transcribe); err != nil {
+		return err
+	}
 	if err := validateSource("sources.tracker", c.Sources.Tracker, true); err != nil {
 		return err
 	}
@@ -632,6 +688,35 @@ func (c *Config) Validate() error {
 		return err
 	}
 	return validateNotify(c.Notify)
+}
+
+// validateTranscribe checks the optional transcription block: there is a
+// command, it splits into an argv, and that argv names the audio file. The
+// split happens here so a typo — an unclosed quote, a pipe nobody can run
+// — is a config error at load rather than 28 identical warnings on the
+// first ticket that carries voice notes.
+func validateTranscribe(t *TranscribeConfig) error {
+	if t == nil {
+		return nil
+	}
+	if strings.TrimSpace(t.Command) == "" {
+		return fmt.Errorf("config: attachments.transcribe.command: required when the transcribe block is present")
+	}
+	if _, err := transcribe.New(transcribe.Options{Command: t.Command}); err != nil {
+		return fmt.Errorf("config: attachments.transcribe.command: %s", strings.TrimPrefix(err.Error(), "transcribe: "))
+	}
+	if t.MaxSeconds < 0 {
+		return fmt.Errorf("config: attachments.transcribe.maxSeconds: must be >= 0 (0 turns the length check off), got %d", t.MaxSeconds)
+	}
+	if t.MaxFiles < 0 {
+		return fmt.Errorf("config: attachments.transcribe.maxFiles: must be >= 0 (0 means no cap), got %d", t.MaxFiles)
+	}
+	for _, f := range t.Formats {
+		if strings.TrimSpace(f) == "" {
+			return fmt.Errorf("config: attachments.transcribe.formats: an empty extension is not a format")
+		}
+	}
+	return nil
 }
 
 // validateNotify checks the notify block: the states named are states a run
@@ -1184,6 +1269,21 @@ func (c *Config) AttachmentMaxBytes() int64 {
 		return DefaultAttachmentMaxBytes
 	}
 	return c.Attachments.MaxBytes
+}
+
+// TranscribeOptions is the transcription configuration in the shape the
+// transcriber takes, and whether the workspace configured one at all.
+func (c *Config) TranscribeOptions() (transcribe.Options, bool) {
+	t := c.Attachments.Transcribe
+	if t == nil || strings.TrimSpace(t.Command) == "" {
+		return transcribe.Options{}, false
+	}
+	return transcribe.Options{
+		Command:    t.Command,
+		MaxSeconds: t.MaxSeconds,
+		MaxFiles:   t.MaxFiles,
+		Formats:    t.Formats,
+	}, true
 }
 
 // MCPConfigPath is the workspace's .mcp.json when it exists and MCP
