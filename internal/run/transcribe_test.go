@@ -307,3 +307,31 @@ func TestTheNoteNamesTheAttachmentsNobodyRead(t *testing.T) {
 		t.Errorf("a transcribed voice note is listed as unreviewed:\n%s", note)
 	}
 }
+
+// TestTranscriptIsCappedAtAttachmentsMaxBytes is the round-1 fix: the
+// transcript file writeTranscript puts in the bundle counts toward the
+// same attachments.maxBytes cap as every other kept attachment, rather
+// than landing at whatever size transcribe.Result.Text happened to be.
+func TestTranscriptIsCappedAtAttachmentsMaxBytes(t *testing.T) {
+	long := strings.Repeat("x", 2000)
+	bin := fakeTranscriberScript(t, long)
+	cfg := newWorkspaceWith(t, configYAML+
+		"attachments:\n  maxBytes: 300\n  transcribe:\n    command: "+bin+" -otxt -of {out} {in}\n")
+	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64)))
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	dir := runDir(t, cfg, out)
+
+	transcript := filepath.Join(dir, "bundle", "attachments", "PTT-2026a.ogg.transcript.txt")
+	body := readFile(t, transcript)
+	if len(body) > 320 {
+		t.Fatalf("the transcript on disk is %d bytes, want it capped near the 300-byte attachments.maxBytes: %q", len(body), body)
+	}
+	if strings.Contains(body, long) {
+		t.Fatalf("the full transcript reached disk despite attachments.maxBytes: %q", body)
+	}
+}

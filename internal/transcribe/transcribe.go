@@ -25,6 +25,9 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 )
 
 const (
@@ -44,6 +47,15 @@ const (
 	// transcript is text; anything past this is a command writing
 	// something else at us.
 	maxCapture = 4 << 20
+
+	// killGrace is how long a timed-out command's process group has to
+	// die before exec gives up waiting on the pipes it holds — the same
+	// backstop agenttools/exec.go uses for its own child processes.
+	killGrace = 2 * time.Second
+
+	// probeCapture bounds ffprobe's own output: it is asked for one
+	// number, so anything past a few hundred bytes is not a duration.
+	probeCapture = 4 << 10
 )
 
 // Options configures a Transcriber. Command is required; the rest carry
@@ -174,7 +186,7 @@ func (t *Transcriber) Run(ctx context.Context, path string) (Result, error) {
 	defer os.RemoveAll(work)
 
 	stem := strings.TrimSuffix(filepath.Base(path), filepath.Ext(path))
-	if stem == "" {
+	if !validStem(stem) {
 		stem = "audio"
 	}
 	out := filepath.Join(work, stem)
@@ -185,7 +197,7 @@ func (t *Transcriber) Run(ctx context.Context, path string) (Result, error) {
 	}
 	argv := substitute(t.argv, map[string]string{"{in}": abs, "{out}": out, "{outdir}": work})
 
-	stdout, combined, err := t.exec(ctx, argv, work)
+	stdout, stderr, combined, err := t.exec(ctx, argv, work)
 	if err != nil {
 		return Result{}, fmt.Errorf("%s: %w%s", t.tool, err, tail(combined))
 	}
@@ -197,8 +209,21 @@ func (t *Transcriber) Run(ctx context.Context, path string) (Result, error) {
 	return Result{
 		Text:     strings.TrimRight(text, "\n"),
 		Tool:     t.tool,
-		Language: t.language(combined),
+		Language: t.language(stderr),
 	}, nil
+}
+
+// validStem reports whether stem is safe to join under the transcription
+// workspace and hand to the command as {out}: no path separator — either
+// OS's, since a filename can carry a separator this build's OS does not
+// use as one — and not a "." or ".." that would resolve to the workspace
+// itself or its parent. An attachment's filename is customer-controlled,
+// and {out} becomes a path the command is told to write to.
+func validStem(stem string) bool {
+	if stem == "" || stem == "." || stem == ".." {
+		return false
+	}
+	return !strings.ContainsAny(stem, `/\`)
 }
 
 // charge books this file against the batch's two caps, starting the clock
@@ -227,41 +252,48 @@ func (t *Transcriber) now() time.Time {
 
 // exec runs one command with everything a triage run wants held down:
 // no shell, stdin closed, a cut-down environment, a per-file timeout that
-// never outlives the batch budget, and a cap on how much output is kept.
-func (t *Transcriber) exec(ctx context.Context, argv []string, dir string) (stdout, combined string, err error) {
+// never outlives the batch budget, a cap on how much output is kept, and
+// its own process group so the timeout can kill whatever it spawned. A
+// wrapper script that traps or ignores SIGTERM and never exits would
+// otherwise leave cmd.Run blocked past the timeout with the child still
+// running — see agenttools/exec.go, which this mirrors.
+func (t *Transcriber) exec(ctx context.Context, argv []string, dir string) (stdout, stderr, combined string, err error) {
 	limit := t.perFile
 	if left := t.deadline.Sub(t.now()); !t.deadline.IsZero() && left < limit {
 		limit = left
 	}
 	if limit <= 0 {
-		return "", "", fmt.Errorf("%w: the %s budget for this bundle is spent", ErrOverCap, TotalTimeout)
+		return "", "", "", fmt.Errorf("%w: the %s budget for this bundle is spent", ErrOverCap, TotalTimeout)
 	}
 	cctx, cancel := context.WithTimeout(ctx, limit)
 	defer cancel()
 
 	bin, err := exec.LookPath(argv[0])
 	if err != nil {
-		return "", "", fmt.Errorf("%s is not on PATH", argv[0])
+		return "", "", "", fmt.Errorf("%s is not on PATH", argv[0])
 	}
 
-	var outBuf, bothBuf capped
-	outBuf.limit, bothBuf.limit = maxCapture, maxCapture
+	var outBuf, errBuf, bothBuf capped
+	outBuf.limit, errBuf.limit, bothBuf.limit = maxCapture, maxCapture, maxCapture
 
 	cmd := exec.CommandContext(cctx, bin, argv[1:]...)
 	cmd.Dir = dir
 	cmd.Stdin = nil // an empty pipe: the command is never asked a question
 	cmd.Env = t.env
 	cmd.Stdout = io.MultiWriter(&outBuf, &bothBuf)
-	cmd.Stderr = &bothBuf
+	cmd.Stderr = io.MultiWriter(&errBuf, &bothBuf)
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
+	cmd.WaitDelay = killGrace
 
 	runErr := cmd.Run()
 	if cctx.Err() != nil && errors.Is(cctx.Err(), context.DeadlineExceeded) {
-		return "", bothBuf.String(), fmt.Errorf("timed out after %s", limit.Round(time.Second))
+		return "", "", bothBuf.String(), fmt.Errorf("timed out after %s", limit.Round(time.Second))
 	}
 	if runErr != nil {
-		return "", bothBuf.String(), runErr
+		return "", "", bothBuf.String(), runErr
 	}
-	return outBuf.String(), bothBuf.String(), nil
+	return outBuf.String(), errBuf.String(), bothBuf.String(), nil
 }
 
 // duration asks ffprobe how long the audio is. Without ffprobe there is no
@@ -278,16 +310,26 @@ func (t *Transcriber) duration(ctx context.Context, path string) (float64, bool)
 	cctx, cancel := context.WithTimeout(ctx, probeTimeout)
 	defer cancel()
 
+	// -i names the input explicitly rather than trailing it as a bare
+	// argument: a filename beginning with "-" would otherwise be read as
+	// another flag.
 	cmd := exec.CommandContext(cctx, bin,
 		"-v", "error", "-show_entries", "format=duration",
-		"-of", "default=noprint_wrappers=1:nokey=1", path)
+		"-of", "default=noprint_wrappers=1:nokey=1", "-i", path)
 	cmd.Stdin = nil
 	cmd.Env = t.env
-	out, err := cmd.Output()
-	if err != nil {
+	var out capped
+	out.limit = probeCapture
+	cmd.Stdout = &out
+	cmd.Stderr = nil
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
+	cmd.WaitDelay = killGrace
+
+	if err := cmd.Run(); err != nil {
 		return 0, false
 	}
-	secs, err := strconv.ParseFloat(strings.TrimSpace(string(out)), 64)
+	secs, err := strconv.ParseFloat(strings.TrimSpace(out.String()), 64)
 	if err != nil || secs <= 0 {
 		return 0, false
 	}
@@ -295,12 +337,12 @@ func (t *Transcriber) duration(ctx context.Context, path string) (float64, bool)
 }
 
 // language is what to credit the transcript to: the code the command
-// pinned, else whatever the tool said it detected.
-func (t *Transcriber) language(output string) string {
+// pinned, else whatever the tool said it detected on stderr.
+func (t *Transcriber) language(stderr string) string {
 	if t.pinned != "" {
 		return t.pinned
 	}
-	return detectedLanguage(output)
+	return detectedLanguage(stderr)
 }
 
 // Header is the first line of a transcript file: what produced it, from
@@ -460,8 +502,8 @@ func pinnedLanguage(argv []string) string {
 // into the working directory (whisper.cpp's "<out>.txt", whisper's
 // "<stem>.txt"), else whatever it printed on stdout.
 func collect(work, stem, stdout string) string {
-	if data, err := os.ReadFile(filepath.Join(work, stem+".txt")); err == nil && strings.TrimSpace(string(data)) != "" {
-		return string(data)
+	if text, ok := readTranscriptFile(filepath.Join(work, stem+".txt")); ok {
+		return text
 	}
 	// Anything else the command left behind, preferring a .txt: the
 	// naming rules differ per tool and per output format flag, and the
@@ -478,12 +520,46 @@ func collect(work, stem, stdout string) string {
 			}
 		}
 		if best != "" {
-			if data, err := os.ReadFile(filepath.Join(work, best)); err == nil && strings.TrimSpace(string(data)) != "" {
-				return string(data)
+			if text, ok := readTranscriptFile(filepath.Join(work, best)); ok {
+				return text
 			}
 		}
 	}
 	return stdout
+}
+
+// readTranscriptFile reads a transcript the command wrote to disk, capped
+// at maxCapture bytes so a tool that wrote something other than text — or
+// simply a great deal of it — cannot be read whole into memory before
+// this package notices. ok is false when the file does not exist or holds
+// nothing but whitespace.
+func readTranscriptFile(path string) (text string, ok bool) {
+	info, err := os.Stat(path)
+	if err != nil || info.Size() == 0 {
+		return "", false
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+
+	data, err := io.ReadAll(io.LimitReader(f, maxCapture+1))
+	if err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(string(data)) == "" {
+		return "", false
+	}
+	if len(data) <= maxCapture {
+		return string(data), true
+	}
+	cut := maxCapture
+	for cut > 0 && !utf8.RuneStart(data[cut]) {
+		cut--
+	}
+	return strings.TrimRight(string(data[:cut]), "\n") +
+		"\n\n[transcript truncated at 4 MiB; the file the command wrote is longer]\n", true
 }
 
 var (
@@ -493,16 +569,44 @@ var (
 	pyLanguage = regexp.MustCompile(`(?i)detected language:\s*([A-Za-z][A-Za-z -]*)`)
 )
 
-// detectedLanguage reads the language a tool announced in its own output.
-func detectedLanguage(output string) string {
-	if m := cppLanguage.FindStringSubmatch(output); len(m) == 2 {
-		return strings.TrimSpace(m[1])
+// detectedLanguage reads the language a tool announced on stderr. stdout
+// is never scanned here: for a command with no {out} placeholder, stdout
+// is the transcript itself — customer speech — and a match inside it
+// would let the customer's own words set Result.Language, which lands in
+// the transcript header and the prompt's transcripts note unquoted.
+func detectedLanguage(stderr string) string {
+	if m := cppLanguage.FindStringSubmatch(stderr); len(m) == 2 {
+		return languageLabel(m[1])
 	}
-	if m := pyLanguage.FindStringSubmatch(output); len(m) == 2 {
-		return strings.TrimSpace(m[1])
+	if m := pyLanguage.FindStringSubmatch(stderr); len(m) == 2 {
+		return languageLabel(m[1])
 	}
 	return ""
 }
+
+// languageLabel is a detected language cut down to what is safe to drop,
+// unquoted, into a transcript header and a prompt note: its first
+// whitespace-separated token, at most 32 bytes of it, and only letters
+// and hyphens. Anything else reports as undetected rather than carrying
+// whatever a tool — or a customer's own speech a tool echoed — put on
+// that line.
+func languageLabel(s string) string {
+	s = strings.TrimSpace(s)
+	if fields := strings.Fields(s); len(fields) > 0 {
+		s = fields[0]
+	} else {
+		s = ""
+	}
+	if len(s) > 32 {
+		s = s[:32]
+	}
+	if s == "" || !languageLabelPattern.MatchString(s) {
+		return ""
+	}
+	return s
+}
+
+var languageLabelPattern = regexp.MustCompile(`^[A-Za-z-]+$`)
 
 // tail is the part of a failed command's output a warning can carry: one
 // line, short enough to sit in a run's warning list.
@@ -526,10 +630,12 @@ func tail(output string) string {
 
 // keptEnv is everything the child is told about the machine it runs on: a
 // PATH to find its model runner, a HOME because plenty of tools cache
-// under it, and a LANG so its own output is encoded the way it expects.
-// Not the operator's credentials, and not the API keys a triage run
-// resolved.
-var keptEnv = []string{"PATH", "HOME", "LANG"}
+// under it, a LANG so its own output is encoded the way it expects, and a
+// TMPDIR so a tool that writes scratch files there — rather than into the
+// working directory this package already controls — lands somewhere
+// writable instead of guessing. Not the operator's credentials, and not
+// the API keys a triage run resolved.
+var keptEnv = []string{"PATH", "HOME", "LANG", "TMPDIR"}
 
 // childEnv filters base down to keptEnv, falling back to the process
 // environment when the caller named none.

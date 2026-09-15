@@ -522,10 +522,18 @@ func (r *Runner) transcriber(p *prepared, b *ticket.Bundle) *transcribe.Transcri
 
 // writeTranscript files one transcript beside its audio in the bundle and
 // records it on the attachment, so the manifest, the prompt and the
-// rendered conversation all point at the same file.
+// rendered conversation all point at the same file. The transcript is
+// capped at the workspace's attachments.maxBytes, the same limit every
+// other kept attachment answers to: transcribe.Transcriber already bounds
+// what it holds in memory to 4 MiB, but a workspace that configured a
+// smaller attachments.maxBytes should not get a bundle file bigger than
+// what everything else in it is held to.
 func (r *Runner) writeTranscript(p *prepared, a *ticket.Attachment, res transcribe.Result) error {
 	rel := a.Path + ".transcript.txt"
 	body := transcribe.Header(a.Name, res) + "\n\n" + res.Text + "\n"
+	if max := r.Config.AttachmentMaxBytes(); max > 0 && int64(len(body)) > max {
+		body = truncate(body, int(max)) + "\n"
+	}
 	if err := os.WriteFile(filepath.Join(p.run.BundleDir(), rel), []byte(body), 0o644); err != nil {
 		return err
 	}
