@@ -20,7 +20,9 @@ replay from `sirdar eval` can never be mistaken for a real triage.
 ## What the run does
 
 1. **Preflight.** `git fetch origin`, and the default branch is read from `origin/HEAD` (falling
-   back to `main` or `master` if that symbolic ref is not set). Under `fix.inPlace` the working
+   back to `main` or `master` if that symbolic ref is not set). `--at COMMIT` skips the fetch: the
+   start point is already in this repository, and a retrospective fix has no business updating
+   your remote-tracking refs on its way past. Under `fix.inPlace` the working
    tree must also be clean, because that mode stages and commits everything in the tree you are
    standing in; a tree whose only uncommitted entries sit under `.sirdar/` gets a specific message
    pointing at `.git/info/exclude`, since that is what `sirdar init` writes and an older workspace
@@ -29,9 +31,10 @@ replay from `sirdar eval` can never be mistaken for a real triage.
    <root>/.sirdar/worktrees/<run-id> origin/<default>`, so the branch is checked out in a
    directory of this run's own and your HEAD does not move. Under `fix.inPlace` it is
    `git checkout -B fix-<key>-<title-slug> origin/<default>` in your own tree instead. `--base
-   BRANCH` overrides both the branch cut from and the branch targeted. The fix branch is refused
-   if it would equal the base branch; the default branch is never committed to and never
-   force-pushed, and neither is anything else. See Worktree mode below.
+   BRANCH` overrides both the branch cut from and the branch targeted, and `--at COMMIT` replaces
+   the start point with that commit. The fix branch is refused if it would equal the base branch;
+   the default branch is never committed to and never force-pushed, and neither is anything else.
+   See Worktree mode and Retrospective runs below.
 3. **Snapshot.** Before the session starts, `sirdar fix` sha256s every file under the workspace's
    `.sirdar/` (excluding its own `runs/`, `register.jsonl`, `eval/` and `worktrees/`) and under
    the directory git runs this repository's hooks from. See Confinement below.
@@ -48,7 +51,8 @@ replay from `sirdar eval` can never be mistaken for a real triage.
    is `fix: <summary>`; the body carries the note's root cause and the files changed. The commit
    carries no AI attribution trailer of any kind — the engineer who approved the note is the
    author of the change.
-7. **Push and pull request**, from the same worktree. `git push --no-verify -u origin <branch>`.
+7. **Push and pull request**, from the same worktree. `--local` stops before this step and the
+   two that follow: see Retrospective runs below. `git push --no-verify -u origin <branch>`.
    Then, if `gh` is on `PATH` and authenticated, `gh pr create` with title `[KEY] fix: <summary>`
    and a body carrying the symptom, the root cause, the fix, the checks run, and the tracker and
    helpdesk links from the note. Without `gh` — or if `gh pr create` fails — the branch is still
@@ -77,6 +81,55 @@ prompt to `.sirdar/runs/<KEY>/<run-id>/prompt.md` so you can read exactly what w
 worktree it made is taken away again, since nothing ran in it; the branch stays, because reading
 the prompt is usually the step before running the fix for real.
 
+## Retrospective runs: `--local` and `--at`
+
+Two flags turn the fix flow into something that can be pointed at a ticket that was closed a year
+ago, and that will not touch anybody's remote while it is.
+
+### `--local`
+
+```
+sirdar fix OMNI-1 --local
+```
+
+The flow runs as far as the commit and stops there. Nothing is pushed, `gh` is never called, and:
+
+- The commit's unified diff is written to `.sirdar/runs/<KEY>/<run-id>/fix.diff` — a plain patch
+  with no commit header, so `git apply` takes it as it stands.
+- The worktree is **kept**, because the commit and the diff in it are the whole output. Its path
+  and the diff's are both printed.
+- The run state records `Fix.Local: true`, `Fix.Commit`, `Fix.DiffPath` and `Fix.Worktree`, so a
+  screen reading the run directory can tell a local fix from one still waiting on a push.
+- The triage note is left on whatever status it had. `status: fix-pushed` would be a claim about
+  work that never left the machine.
+
+`--accept-deviation --local` means the same thing a plain `--accept-deviation` does — the commit
+you read is the one that counts — minus the push. It does not start a second session, and it does
+not publish: it names the reviewed commit, its diff and its worktree, and clears the deviation
+from the run state.
+
+The dirty-tree preflight is no part of this: it applies to `fix.inPlace` alone, and a local run
+commits only what the session put in its own worktree.
+
+### `--at COMMIT`
+
+```
+sirdar fix OMNI-1 --local --at 4f2c1ab
+```
+
+cuts the fix branch from that commit rather than from `origin/<base>`. Anything `git rev-parse`
+accepts will do — a sha, a tag, `HEAD~40` — and what is recorded is the resolved sha, in the run
+state's `At` and in the result. A commit this repository does not have is refused in the
+preflight, before a worktree is made or an agent process exists.
+
+The base branch still names what a pull request would target, and is still read from
+`origin/HEAD` when `--base` does not say. A local run with `--at` in a repository whose origin has
+no discernible default — a bare retrospective clone, or no remote at all — is allowed anyway,
+because it was never going to open one.
+
+`sirdar triage --at` and `sirdar rca --at` do the same thing one step earlier: they run the
+read-only session itself against a historical checkout. See `docs/config.md`, "Worktrees".
+
 ## Worktree mode
 
 By default the session runs in a linked git worktree at `<root>/.sirdar/worktrees/<run-id>`, not
@@ -98,6 +151,9 @@ The directory is named after the run id, so `sirdar runs` and what is on disk sa
 `sirdar init` adds `.sirdar/worktrees/` to `.git/info/exclude`; that file lives in the
 repository's common git directory, so the one exclusion covers every linked worktree as well as
 the main tree.
+
+A `--local` run keeps its worktree too, for the same reason a blocked one does: the commit in it
+is the output.
 
 **A worktree is removed when the run succeeds and kept when it does not.** A run blocked on a
 deviation keeps its worktree, and the blocked output prints the path: the commit sitting in it is
@@ -237,8 +293,11 @@ permissions:
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
+    - "npx tsc --noEmit*"
     - "go build*"
     - "go test*"
+    - "go vet*"
+    - "gofmt -l*"
     - "make *"
 ```
 
@@ -268,12 +327,14 @@ too, not only `Edit`/`Write`/`MultiEdit`: `go test -coverprofile=.git/hooks/pre-
 a `go test*` pattern and is refused anyway, because the path it names is a hook the next commit
 runs.
 
-What the allow-list does not confine: `make *`, `go test*`, `npm test*`, and `dotnet test*` run
-the workspace's own build system, which runs whatever the repository tells it to — a Makefile
-target, a `go:generate` directive, an npm `pretest` script. Sirdar does not read any of that, and
-no allow-list can. This is the accepted residual of fix mode: a fix has to build and test what it
-changed, and the trust extended is the trust you already give your own shell when you check out a
-branch and run `make test`. The pull request is the review gate for what the session actually
+What the allow-list does not confine: `make *`, `go test*`, `npm test*`, `npx tsc --noEmit*`, and
+`dotnet test*` run the workspace's own build system, which runs whatever the repository tells it
+to — a Makefile target, a `go:generate` directive, an npm `pretest` script. `go vet*` and
+`gofmt -l*` are read-only static checks and carry none of that reach. Sirdar does not read any of
+that, and no allow-list can. This is the accepted residual of fix mode: a fix has to build and
+test what it changed, and the trust extended is the trust you already give your own shell when
+you check out a branch and run `make test`. The pull request is the review gate for what the
+session actually
 did. A workspace that needs more than that should run `sirdar fix` in a container.
 
 ## `fix.prIncludesComplaint`

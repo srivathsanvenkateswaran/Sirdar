@@ -17,6 +17,7 @@ sirdar eval OMNI-1 OMNI-2        just these
   --model NAME
   --concurrency N
 sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]
+sirdar golden add KEY --retro --pr URL [--pr URL...] [--as-of RFC3339] [--golden DIR] [--force]
 sirdar golden list [--golden DIR]
 sirdar golden migrate [KEY...] [--golden DIR]
 ```
@@ -34,6 +35,11 @@ command drops into CI as it stands.
     expected.md          optional: the note a human wrote for this ticket
   OMNI-1240/
     bundle/
+  OMNI-3217/
+    bundle/              a retrospective entry adds three files
+    expected.json
+    retro.json           the cutoff, the base commit and the merged pull request
+    pr.diff
 ```
 
 It lives outside the repository by default, and should stay there: the bundles hold real
@@ -177,6 +183,107 @@ And nothing downstream mistakes the replay for the key's newest triage. `sirdar 
 `sirdar fix` both start from the newest completed triage note for a key, and they skip eval
 runs when they look — so replaying `OMNI-1234` today cannot put tomorrow's fix to work on a
 bundle captured six months ago.
+
+## Retrospective evaluation
+
+An ordinary golden entry is built from a run you already made, so it measures a new prompt
+against an old session. A retrospective entry is built from a ticket that was closed months ago
+and fixed by a pull request that is already merged, so it measures against what a person
+actually did. There is no run to copy from and no note to skeleton off: the entry is assembled
+from the ticket itself.
+
+```
+sirdar golden add OMNI-3217 --retro --pr https://github.com/acme/omni/pull/482
+```
+
+That writes:
+
+```
+~/.sirdar/golden/OMNI-3217/
+  bundle/              the ticket as it stood at the cutoff, with manifest.json
+  expected.json        {} — assertions are yours to add
+  retro.json           the ground truth
+  pr.diff              the merged pull request's diff
+```
+
+`retro.json` carries `key`, `asOf`, `baseCommit` (the pull request's `baseRefOid`, and for
+several pull requests the earliest one's), `prUrls`, `prDiff` (always `"pr.diff"`), `prFiles`
+(every path the pull requests touched, deduplicated and sorted) and `redacted`, which repeats
+the bundle manifest's three counts.
+
+The ticket is read through the same configured tracker and helpdesk adapters a triage run uses,
+with the same read-only calls — no MCP server is involved, and no provider session is started
+at all, so a workspace whose agent CLI is not installed on this machine can still build an
+entry. The pull request is read through `gh pr view` and `gh pr diff`, executed directly rather
+than through a shell. A missing or logged-out `gh` fails the command with the thing to fix,
+before anything is written.
+
+### The cutoff
+
+The bundle is assembled as of one instant, which is the point: a closed ticket's conversation
+ends with somebody posting the fix, and replaying it whole would score an agent on reading the
+answer. `--as-of RFC3339` sets the instant outright. Otherwise it is the **earliest** of two
+pieces of evidence about when the work started:
+
+- the ticket's first transition into an `in_progress` status, when the tracker adapter
+  implements `source.Transitioner` and reports one;
+- the earliest `--pr`'s `created_at`, read from `gh pr view --json createdAt,baseRefOid,mergeCommit,files`.
+
+Most adapters expose no status history, and a helpdesk-only workspace has no tracker at all, so
+the fallback is the pull request's `created_at` alone. That is later than the real pickup, and
+the error is in the direction of leaving a little early triage in the bundle — evidence the
+engineer did have — rather than removing what they had. It never leaves the fix in, because a
+pull request's own references are redacted whatever the cutoff. Where the cutoff came from is
+printed with the entry; if you disagree with it, pass `--as-of`.
+
+### What the cutoff removes
+
+- **Thread messages written after it.** A message an adapter could not date is kept: a missing
+  timestamp is a gap in the source, and treating it as "later" would empty the bundle for
+  whichever helpdesk reports one.
+- **Attachments only a dropped message pointed at.** An attachment carries no timestamp of its
+  own, so the message that referenced it is the only evidence of when it arrived; one that no
+  message references at all is kept, because nothing dates it. The file is deleted from
+  `bundle/attachments/`, not merely unlisted — leaving a screenshot of the green build in the
+  directory hands the session exactly what the cutoff took out of the thread.
+- **Every pull-request reference**, in the tracker's title, description and fields, in the
+  helpdesk's subject and fields, and in the messages that survived. A GitHub `/pull/N` or
+  `/pulls/N` URL, a GitLab `/merge_requests/N` URL, and a prose mention (`PR #482`, `pull
+  request 482`, `MR!17`) each become `[redacted: pull request]`. A tracker field whose name says
+  it holds nothing but pull requests — `prs`, `pr_url`, `pullRequests` and the rest of the
+  spellings — is replaced whole rather than scanned, because a tracker that renders its links as
+  a branch name or a bare `#482` would otherwise slip one past the patterns.
+
+The marker is deliberately visible. The point is to take away what the fix was, not to pretend
+nothing was taken away: a silent deletion leaves a sentence that reads as if the customer never
+mentioned anything, which is a different ticket from the one the engineer picked up.
+
+What was removed is counted in `bundle/manifest.json` beside `ticket.json`:
+
+```json
+{
+  "asOf": "2026-03-02T10:30:00Z",
+  "commentsDropped": 4,
+  "attachmentsDropped": 1,
+  "prLinks": 3
+}
+```
+
+The counts do **not** go into the bundle's `warnings`, which is what the prompt quotes to the
+agent. "Four later comments were dropped" tells a session being measured on this ticket that
+there is a conversation it is not being shown, and how much of one. The manifest is for you and
+for the scoring; the operator sees the same line on stderr when the entry is built.
+
+### What is still visible
+
+Redaction is not anonymisation. The bundle still says that something was redacted, and a
+determined session could infer that a fix exists — which it could anyway, from a ticket that is
+closed. What it cannot read is which pull request, which files, or which commit, and those are
+what a retrospective score is measured on.
+
+The same cutoff is available to a run directly, as `run.Options.AsOf`. It applies to a fetched
+bundle only: a replayed golden bundle is taken as it stands, because one built with a cutoff
+already carries it, and cutting it twice would say it had two.
 
 ## From the desktop app
 

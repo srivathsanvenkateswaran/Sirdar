@@ -3,10 +3,8 @@ package run
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/fs"
-	"mime"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -15,10 +13,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
-	"github.com/srivathsanvenkateswaran/sirdar/internal/transcribe"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/worktree"
 )
 
 // prepared is a run that has its directory, bundle and prompt on disk and
@@ -34,10 +31,19 @@ type prepared struct {
 	noNotify bool
 
 	// root is the tree the session runs in and is confined to, when it is
-	// not the workspace root: a fix run's linked worktree. Everything
-	// else — the run directory, the configuration, the playbooks — still
-	// comes from the workspace root.
+	// not the workspace root: a fix run's linked worktree, or the
+	// historical checkout an `--at` run made. Everything else — the run
+	// directory, the configuration, the playbooks — still comes from the
+	// workspace root.
 	root string
+
+	// ownWorktree is set when this run made root itself and is therefore
+	// the one to take it away again. A fix run's worktree is
+	// internal/fix's to manage, so it is left alone here.
+	ownWorktree bool
+
+	// keepWorktree leaves an own worktree on disk after the run.
+	keepWorktree bool
 
 	// service and notePath are what the first register row recorded: the
 	// service the note filed under and the path a human opens. The
@@ -96,7 +102,11 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		return nil, err
 	}
 
-	rn, err := store.Create(cfg.Root, key, now)
+	// The run id is minted here rather than inside store.Create because an
+	// --at run names its worktree after it, and that directory has to
+	// exist before the session that stands in it.
+	runID := store.NewRunID(now)
+	rn, err := store.CreateID(cfg.Root, key, runID)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +117,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	}
 	// A dry run notifies nobody: it writes a bundle and a prompt, and
 	// "completed" on the channel would claim a triage that never ran.
-	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun}
+	p := &prepared{run: rn, kind: kind, noNotify: o.NoNotify || o.DryRun, keepWorktree: o.KeepWorktree}
 	p.state = store.State{
 		RunID:     filepath.Base(rn.Dir),
 		Key:       key,
@@ -118,6 +128,14 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		StartedAt: now,
 		UpdatedAt: now,
 		Eval:      o.Eval,
+	}
+	// The historical checkout, before anything else the run does: a
+	// commit that does not exist, or a repository that refuses the
+	// worktree, should stop the run before a ticket is fetched.
+	if o.At != "" {
+		if err := r.checkoutAt(ctx, p, o.At); err != nil {
+			return p, err
+		}
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes
@@ -184,6 +202,58 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	return p, nil
 }
 
+// checkoutAt puts this run in a linked worktree of the workspace checked
+// out at commit, detached, and points the session's root at it. It is the
+// same machinery `sirdar fix` stands its session in, with one difference:
+// there is no branch. A retrospective run reads the repository as it stood
+// and writes nothing to it, so there is nothing a branch name would mean.
+//
+// The commit is resolved before the directory is made, so `--at` on a
+// commit this repository does not have fails with that as the reason rather
+// than as a git error out of `worktree add`.
+func (r *Runner) checkoutAt(ctx context.Context, p *prepared, commit string) error {
+	root := r.Config.Root
+	g := worktree.Git{Dir: root}
+	if err := g.Run(ctx, "rev-parse", "--is-inside-work-tree"); err != nil {
+		return fmt.Errorf("run: --at %s: the workspace is not a git repository", commit)
+	}
+	sha, err := worktree.ResolveCommit(ctx, g, commit)
+	if err != nil {
+		return fmt.Errorf("run: --at %s: %w", commit, err)
+	}
+	path := worktree.Path(root, p.state.RunID)
+	if err := worktree.AddDetached(ctx, g, path, sha); err != nil {
+		return fmt.Errorf("run: --at %s: %w", commit, err)
+	}
+	p.root, p.ownWorktree = path, true
+	p.state.At = sha
+	p.state.Warnings = append(p.state.Warnings,
+		fmt.Sprintf("the session ran against %s in %s, not against the working tree", sha, worktree.RelToRoot(root, path)))
+	fmt.Fprintf(r.stderr(), "[%s] at %s in %s\n", p.state.Key, sha, worktree.RelToRoot(root, path))
+	return nil
+}
+
+// releaseWorktree takes away the worktree an --at run made, once that run
+// has ended. A blocked run keeps it: it can be resumed, and a resumed
+// session has to stand where the first one stood. So does a run the
+// operator asked to keep with --keep-worktree.
+func (r *Runner) releaseWorktree(ctx context.Context, p *prepared, status store.Status) {
+	if p == nil || !p.ownWorktree || p.root == "" {
+		return
+	}
+	if p.keepWorktree || status == store.StatusBlocked {
+		return
+	}
+	// The removal is run from the main tree, never from inside the
+	// directory being removed, and a context that has already been
+	// cancelled — an interrupt — would refuse the git command outright.
+	if ctx.Err() != nil {
+		ctx = context.WithoutCancel(ctx)
+	}
+	worktree.Remove(ctx, worktree.Git{Dir: r.Config.Root}, p.root, r.stderr(), p.state.Key)
+	p.root, p.ownWorktree = "", false
+}
+
 // stageBundle puts the ticket bundle in the run directory: normally by
 // fetching it from the configured sources, and, when the caller named a
 // BundleDir, by copying that directory in instead. A replayed bundle is
@@ -192,7 +262,17 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 // exactly the evidence the original session saw.
 func (r *Runner) stageBundle(ctx context.Context, key string, p *prepared, o Options) (ticket.Bundle, error) {
 	if o.BundleDir == "" {
-		bundle, err := r.fetchBundle(ctx, key, p)
+		f := &Fetcher{
+			Config:   r.Config,
+			Tracker:  r.Tracker,
+			Helpdesk: r.Helpdesk,
+			Stderr:   r.stderr(),
+			AsOf:     o.AsOf,
+			Env:      r.Env,
+			Now:      r.now,
+		}
+		bundle, warnings, err := f.Fetch(ctx, key, p.run.BundleDir())
+		p.state.Warnings = append(p.state.Warnings, warnings...)
 		if err != nil {
 			return bundle, err
 		}
@@ -239,124 +319,6 @@ func copyTree(src, dst string) error {
 	})
 }
 
-// fetchBundle reads the tracker record, then the helpdesk record, thread
-// and attachments that go with it. An attachment failure is a warning the
-// prompt carries, not a run failure.
-func (r *Runner) fetchBundle(ctx context.Context, key string, p *prepared) (ticket.Bundle, error) {
-	var b ticket.Bundle
-
-	if r.Tracker != nil {
-		tt, err := r.Tracker.Get(ctx, key)
-		if err != nil {
-			return b, fmt.Errorf("tracker %s: %w", key, err)
-		}
-		b.Tracker = &tt
-		if b.Tracker.HelpdeskRef == "" {
-			r.applyHelpdeskRefFallback(p, &b, b.Tracker)
-		}
-		// A tracker adapter degrades the same way a helpdesk one does — a
-		// comment page it could not read, a field this workspace does not
-		// expose, an attachment it skipped — and reports none of it in the
-		// error. Draining its warnings here is the only thing that puts
-		// them in front of the agent.
-		if w, ok := r.Tracker.(source.Warner); ok {
-			for _, msg := range w.WarningsFor(key) {
-				p.warn(&b, msg)
-			}
-		}
-	}
-
-	helpdeskID := key
-	if b.Tracker != nil && b.Tracker.HelpdeskRef != "" {
-		helpdeskID = b.Tracker.HelpdeskRef
-	}
-
-	if r.Helpdesk != nil {
-		ht, err := r.Helpdesk.Get(ctx, helpdeskID)
-		if err != nil {
-			return b, fmt.Errorf("helpdesk %s: %w", helpdeskID, err)
-		}
-		b.Helpdesk = &ht
-
-		thread, err := r.Helpdesk.Threads(ctx, helpdeskID)
-		if err != nil {
-			return b, fmt.Errorf("helpdesk threads %s: %w", helpdeskID, err)
-		}
-		b.Thread = thread
-
-		atts, err := r.Helpdesk.Attachments(ctx, helpdeskID, filepath.Join(p.run.BundleDir(), "attachments"))
-		if err != nil {
-			p.warn(&b, fmt.Sprintf("attachments for helpdesk ticket %s could not be downloaded: %v", helpdeskID, err))
-		} else {
-			b.Attachments = r.keepReadableAttachments(ctx, p, &b, atts)
-		}
-		// A helpdesk that downloaded some attachments and not others
-		// returns no error at all, so ask it what it skipped: the agent
-		// has to know an attachment is missing before it reasons from
-		// the ones that arrived.
-		if w, ok := r.Helpdesk.(source.Warner); ok {
-			for _, msg := range w.WarningsFor(helpdeskID) {
-				p.warn(&b, msg)
-			}
-		}
-	}
-
-	if b.Tracker == nil && b.Helpdesk == nil {
-		return b, fmt.Errorf("no ticket source configured; set sources.tracker or sources.helpdesk")
-	}
-	return b, nil
-}
-
-// applyHelpdeskRefFallback fills in a tracker ticket's HelpdeskRef from its
-// description, using the regex rule the workspace configured under
-// sources.tracker.helpdeskRef. It is only reached when the adapter reported
-// no reference of its own, so a tracker with native linkage — a Jira
-// Service Management request, a Linear customer request, an Azure DevOps
-// hyperlink — is never overridden by a guess made from prose.
-//
-// Both patterns were compiled once at config load, so a compile failure
-// here cannot happen for a config that loaded; it is treated as no match
-// rather than as a run failure. A pattern that matched while idPattern did
-// not is worth a warning: the description does name a helpdesk ticket and
-// the rule could not turn it into an id, which is a rule to fix rather than
-// a ticket without a link.
-func (r *Runner) applyHelpdeskRefFallback(p *prepared, b *ticket.Bundle, tt *ticket.TrackerTicket) {
-	if r.Config == nil || r.Config.Sources.Tracker == nil {
-		return
-	}
-	h := r.Config.Sources.Tracker.HelpdeskRef
-	if h == nil || h.Pattern == "" {
-		return
-	}
-	re, err := regexp.Compile(h.Pattern)
-	if err != nil {
-		return
-	}
-	m := re.FindStringSubmatch(tt.Description)
-	if len(m) < 2 || m[1] == "" {
-		return
-	}
-	ref := m[1]
-
-	if h.IDPattern != "" {
-		idRe, err := regexp.Compile(h.IDPattern)
-		if err != nil {
-			return
-		}
-		im := idRe.FindStringSubmatch(ref)
-		if len(im) < 2 || im[1] == "" {
-			// The captured value came out of a ticket description, so its
-			// length is whoever wrote that description's choice, not a
-			// bounded field. A warning line goes into the prompt and the
-			// run state; a paragraph of prose does not belong in either.
-			p.warn(b, fmt.Sprintf("helpdeskRef.pattern matched %q in the description but idPattern did not; no helpdesk ticket was read", truncate(ref, 120)))
-			return
-		}
-		ref = im[1]
-	}
-	tt.HelpdeskRef = ref
-}
-
 // truncate caps s at max bytes without splitting a multi-byte rune,
 // marking a shortened value with an ellipsis so a reader can tell the
 // difference between a short value and a trimmed one.
@@ -371,190 +333,10 @@ func truncate(s string, max int) string {
 	return s + "…"
 }
 
-// readableMIME reports whether an agent session can actually open a file
-// of this type. Everything else — audio, video, and anything the helpdesk
-// labelled with a type nobody can read — is evidence the session cannot
-// reach, and is better named in a warning than left in the bundle for it
-// to hunt for a transcoder over.
-//
-// Audio is the one type with a second chance: a workspace that configured
-// attachments.transcribe has the file turned into text before this
-// judgement is final (see keepReadableAttachments).
-func readableMIME(mime string) bool {
-	switch {
-	case mime == "":
-		return false
-	case strings.HasPrefix(mime, "image/"), strings.HasPrefix(mime, "text/"):
-		return true
-	}
-	switch mime {
-	case "application/pdf", "application/json", "application/csv", "application/xml",
-		"application/zip", "application/x-zip-compressed":
-		return true
-	}
-	return false
-}
-
-// attachmentMIME is the type an attachment should be judged by: what its
-// filename extension says, falling back to what the helpdesk's download
-// response claimed. The extension leads because the claim is unreliable —
-// Zoho served this workspace's 16 MB .mp4 as text/html — and because a
-// wrong claim in that direction is the one that matters: it would put a
-// file the session cannot open back into the bundle.
-func attachmentMIME(a ticket.Attachment) string {
-	if byExt := baseMIME(mime.TypeByExtension(strings.ToLower(filepath.Ext(a.Name)))); byExt != "" {
-		return byExt
-	}
-	return baseMIME(a.MIME)
-}
-
-// baseMIME strips any ";charset=..." parameters from a media type.
-func baseMIME(t string) string {
-	if i := strings.IndexByte(t, ';'); i >= 0 {
-		t = t[:i]
-	}
-	return strings.TrimSpace(t)
-}
-
-// keepReadableAttachments enforces the size cap and the type allow-list on
-// what the helpdesk downloaded, and, for audio, gives the workspace's
-// transcription command a chance to turn a file the session cannot open
-// into one it can. A file that fails is deleted from the bundle — leaving
-// it there means the session can still read 17 MB of mp4 into its context
-// — and named, with its size and a reason, in a warning the prompt and the
-// run state both carry, and in the bundle's SkippedAttachments list the
-// note's "Attachments not reviewed" section renders from.
-//
-// A transcribed voice note stays in the bundle beside its transcript. It
-// is still unreadable, but it is now the source of a quotation in the
-// note, and an engineer who wants to check that quotation has to be able
-// to listen to it.
-func (r *Runner) keepReadableAttachments(ctx context.Context, p *prepared, b *ticket.Bundle, atts []ticket.Attachment) []ticket.Attachment {
-	max := r.Config.AttachmentMaxBytes()
-	tx := r.transcriber(p, b)
-	cappedReported := false
-
-	kept := make([]ticket.Attachment, 0, len(atts))
-	for _, a := range atts {
-		path := a.Path
-		if path != "" && !filepath.IsAbs(path) {
-			path = filepath.Join(p.run.BundleDir(), path)
-		}
-		size := int64(-1)
-		if info, err := os.Stat(path); err == nil {
-			size = info.Size()
-		}
-
-		mimeType := attachmentMIME(a)
-		var reason string
-		switch {
-		case size > max:
-			reason = fmt.Sprintf("over the %s limit", humanBytes(max))
-			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) is %s and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size), reason))
-		case readableMIME(mimeType):
-			kept = append(kept, a)
-			continue
-		case tx != nil && a.Path != "" && tx.Handles(a.Name, mimeType):
-			res, err := tx.Run(ctx, path)
-			if err == nil {
-				if err := r.writeTranscript(p, &a, res); err != nil {
-					reason = "transcribed, but the transcript could not be written"
-					p.warn(b, fmt.Sprintf("attachment %q was transcribed but the transcript could not be written: %v; its contents are unread", a.Name, err))
-					break
-				}
-				kept = append(kept, a)
-				continue
-			}
-			if errors.Is(err, transcribe.ErrOverCap) {
-				// One line for the cap, however many files follow it:
-				// the per-file warnings below already name each one.
-				if !cappedReported {
-					p.warn(b, fmt.Sprintf("transcription stopped: %v; the audio after this point is unread", err))
-					cappedReported = true
-				}
-				reason = "not transcribed before the transcription budget ran out"
-				p.warn(b, fmt.Sprintf("attachment %q (%s, %s) was not transcribed and was not kept; its contents are unread",
-					a.Name, mimeType, humanBytes(size)))
-				break
-			}
-			reason = fmt.Sprintf("could not be transcribed: %v", err)
-			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) could not be transcribed and was not kept; its contents are unread: %v",
-				a.Name, mimeType, humanBytes(size), err))
-		default:
-			reason = "cannot be opened in this session"
-			p.warn(b, fmt.Sprintf("attachment %q (%s, %s) %s and was not kept; its contents are unread",
-				a.Name, mimeType, humanBytes(size), reason))
-		}
-		b.SkippedAttachments = append(b.SkippedAttachments, ticket.SkippedAttachment{
-			Name: a.Name, Type: mimeType, Size: humanBytes(size), Reason: reason,
-		})
-		if path != "" {
-			if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
-				fmt.Fprintf(r.stderr(), "[%s] remove attachment %s: %v\n", p.state.Key, path, err)
-			}
-		}
-	}
-	if len(kept) == 0 {
-		return nil
-	}
-	return kept
-}
-
-// transcriber builds this run's audio transcriber, or nil when the
-// workspace configured none. A command that cannot be turned into an argv
-// is a warning and no transcription: config validation already refuses
-// one, so this is the hand-built Runner a test or an embedder assembles.
-func (r *Runner) transcriber(p *prepared, b *ticket.Bundle) *transcribe.Transcriber {
-	opts, ok := r.Config.TranscribeOptions()
-	if !ok {
-		return nil
-	}
-	opts.Env = r.Env
-	opts.Now = r.now
-	tx, err := transcribe.New(opts)
-	if err != nil {
-		p.warn(b, fmt.Sprintf("attachments.transcribe.command is unusable, so no audio was transcribed: %v", err))
-		return nil
-	}
-	return tx
-}
-
-// writeTranscript files one transcript beside its audio in the bundle and
-// records it on the attachment, so the manifest, the prompt and the
-// rendered conversation all point at the same file. The transcript is
-// capped at the workspace's attachments.maxBytes, the same limit every
-// other kept attachment answers to: transcribe.Transcriber already bounds
-// what it holds in memory to 4 MiB, but a workspace that configured a
-// smaller attachments.maxBytes should not get a bundle file bigger than
-// what everything else in it is held to.
-func (r *Runner) writeTranscript(p *prepared, a *ticket.Attachment, res transcribe.Result) error {
-	rel := a.Path + ".transcript.txt"
-	body := transcribe.Header(a.Name, res) + "\n\n" + res.Text + "\n"
-	if max := r.Config.AttachmentMaxBytes(); max > 0 && int64(len(body)) > max {
-		body = truncate(body, int(max)) + "\n"
-	}
-	if err := os.WriteFile(filepath.Join(p.run.BundleDir(), rel), []byte(body), 0o644); err != nil {
-		return err
-	}
-	a.Transcript = rel
-	a.TranscriptLanguage = res.Language
-	return nil
-}
-
-// humanBytes renders a byte count the way a warning should read.
-func humanBytes(n int64) string {
-	switch {
-	case n < 0:
-		return "size unknown"
-	case n < 1024:
-		return fmt.Sprintf("%d B", n)
-	case n < 1<<20:
-		return fmt.Sprintf("%.1f KiB", float64(n)/1024)
-	default:
-		return fmt.Sprintf("%.1f MiB", float64(n)/(1<<20))
-	}
-}
+// readableMIME, attachmentMIME, baseMIME, keepReadableAttachments and
+// humanBytes live in fetch.go: the bundle-fetch extraction gave the
+// Fetcher its own copies of this logic, so prepare.go does not keep a
+// second set.
 
 // warn records a warning in both places it has to appear: the prompt the
 // agent reads, and the run state a human reads afterwards.

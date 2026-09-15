@@ -7,6 +7,8 @@ package source
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
@@ -71,4 +73,41 @@ type Warner interface {
 	// WarningsFor returns the problems recorded by the call made for
 	// ticket id, or nothing when there were none.
 	WarningsFor(id string) []string
+}
+
+// Transition is one status change on a tracker record: when it happened and
+// what the record moved between. From is empty for a record's first
+// transition when the adapter does not report the state it left.
+type Transition struct {
+	At   time.Time `json:"at"`
+	From string    `json:"from"`
+	To   string    `json:"to"`
+}
+
+// Transitioner is implemented by trackers that can report a record's status
+// history. It is optional: an adapter that cannot read a changelog simply
+// does not implement it, and the caller falls back to whatever other
+// evidence it has.
+//
+// The one caller today is the retrospective golden builder, which wants the
+// moment an engineer picked the ticket up — the first move into an
+// in-progress status — as the cutoff for a bundle that must not contain the
+// fix. Transitions are returned oldest first.
+type Transitioner interface {
+	Transitions(ctx context.Context, key string) ([]Transition, error)
+}
+
+// InProgress reports whether a status name means work had started, folding
+// case and dropping the separators trackers disagree about: "In Progress",
+// "in_progress" and "inprogress" are one status.
+func InProgress(status string) bool {
+	var b strings.Builder
+	for _, r := range strings.ToLower(status) {
+		switch r {
+		case '_', '-', ' ', '.':
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String() == "inprogress"
 }

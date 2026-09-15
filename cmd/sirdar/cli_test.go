@@ -496,3 +496,28 @@ func onlyMatch(t *testing.T, dir, pattern string) string {
 	}
 	return matches[0]
 }
+
+// The retrospective flags only mean anything together: --pr and --as-of are
+// read by --retro, and --retro without a pull request has no ground truth to
+// score against. Each is refused before the workspace is even loaded, so the
+// operator is told what they meant rather than what failed later.
+func TestGoldenAddRetroFlagCombinations(t *testing.T) {
+	chdir(t, t.TempDir())
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"golden", "add", "OMNI-1", "--pr", "https://github.com/a/b/pull/1"}, want: "only read with --retro"},
+		{args: []string{"golden", "add", "OMNI-1", "--as-of", "2026-03-02T10:00:00Z"}, want: "only read with --retro"},
+		{args: []string{"golden", "add", "OMNI-1", "--retro"}, want: "at least one --pr"},
+		{args: []string{"golden", "add", "OMNI-1", "--retro", "--pr", "https://github.com/a/b/pull/1", "--as-of", "yesterday"}, want: "RFC3339"},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(tc.args, &out, &errb); code != 2 {
+			t.Errorf("%v: want exit 2, got %d (stderr %q)", tc.args, code, errb.String())
+		}
+		if !strings.Contains(errb.String(), tc.want) {
+			t.Errorf("%v: stderr = %q, want it to mention %q", tc.args, errb.String(), tc.want)
+		}
+	}
+}

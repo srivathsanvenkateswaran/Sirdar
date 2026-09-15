@@ -67,7 +67,7 @@ rather than being silently ignored.
 | `budget.stallMinutes` | int | `6` | Minutes of complete silence from the provider before the run is cancelled and marked `failed` with `stalled: no activity for Nm`; `0` turns the check off. See Budgets below |
 | `concurrency` | int | `1` | Parallel runs across the keys passed to `sirdar triage`; overridable with `--concurrency` |
 | `permissions.bash` | list of string | `[]` | Glob patterns a shell command must match to be allowed — the agent's `Bash` tool on Claude, its own `bash` in the openai loop, and Codex's command approvals; see Bash permission globs below |
-| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `go build*`, `go test*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
+| `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `npx tsc --noEmit*`, `go build*`, `go test*`, `go vet*`, `gofmt -l*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
 | `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
@@ -625,8 +625,11 @@ permissions:
     - "dotnet build*"
     - "dotnet test*"
     - "npm test*"
+    - "npx tsc --noEmit*"
     - "go build*"
     - "go test*"
+    - "go vet*"
+    - "gofmt -l*"
     - "make *"
 ```
 
@@ -697,11 +700,12 @@ through.
 
 ### What the allow-list does not confine
 
-`make *`, `go test*`, `npm test*` and `dotnet test*` run the workspace's own build system, and
-a build system runs whatever the repository tells it to: a Makefile target, a `go:generate`
-directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of that, and no
-allow-list can — approving `make test` is approving the Makefile on the branch the session is
-standing on.
+`make *`, `go test*`, `npm test*`, `npx tsc --noEmit*` and `dotnet test*` run the workspace's own
+build system, and a build system runs whatever the repository tells it to: a Makefile target, a
+`go:generate` directive, an npm `pretest` script, an MSBuild task. Sirdar does not read any of
+that, and no allow-list can — approving `make test` is approving the Makefile on the branch the
+session is standing on. `go vet*` and `gofmt -l*` are the exception in this list: both are
+read-only static checks over the source tree and run no repository-defined code.
 
 That is deliberate, and it is the accepted residual of fix mode. A fix has to build and test
 what it changed or its report is worthless, and the trust it asks for is the trust you already
@@ -727,7 +731,48 @@ people. Leave it off anywhere the pull request is public, or read by anyone who 
 with that customer's conversation. The triage note is always linked either way, through the
 tracker and helpdesk URLs in the body.
 
-## Fix worktrees
+## Worktrees
+
+Two flows stand a session somewhere other than the tree you are in, and both put the directory at
+`<root>/.sirdar/worktrees/<run-id>`: `sirdar fix`, so the agent's edits land somewhere nothing
+else is reading, and `sirdar triage --at` / `sirdar rca --at`, so a session reads the repository
+as it stood at a named commit.
+
+`sirdar init` excludes `.sirdar/worktrees/` in `.git/info/exclude`. That file lives in the
+repository's common git directory, so the one exclusion covers every linked worktree as well as
+the main tree.
+
+### `--at COMMIT` on triage and rca
+
+```
+sirdar triage OMNI-1 --at 4f2c1ab
+sirdar rca OMNI-1 --at 4f2c1ab --keep-worktree
+```
+
+checks that commit out at a detached HEAD — no branch is made or moved, because a read-only
+session has nothing a branch name would mean — and runs the session there. Anything
+`git rev-parse` accepts will do; the resolved sha is what gets recorded. A commit this repository
+does not have is refused during preparation, before the ticket is fetched.
+
+What follows the worktree is where the session stands and what its writes are confined to. What
+does not is the workspace's own `.sirdar/`: the configuration, the playbooks and the note
+templates are read from the main tree whichever commit the session stands at, because they are
+what you configured rather than what the repository happened to carry a year ago. The run
+directory is in the main tree too.
+
+The tree you are standing in is not touched — not its HEAD, not its index, not a file the older
+commit disagrees about. And nothing about the confinement changes: a triage at a commit is as
+read-only as a triage at HEAD, with the same disallowed tools and the same permission policy,
+pointed at the worktree.
+
+The run state records `At: <sha>`, and the note's frontmatter carries `at: <sha>` — nothing else
+in a note would tell a reader that its code references are about code that has since moved.
+
+The worktree is removed when the run ends. `--keep-worktree` leaves it, for reading what the
+session was reading; so does a run that ended `blocked`, since a `sirdar resume` has to stand
+where the first session stood.
+
+### Fix worktrees
 
 `sirdar fix` runs its session in a linked git worktree at `<root>/.sirdar/worktrees/<run-id>`,
 made with `git worktree add` and taken away with `git worktree remove` once the branch is
@@ -743,8 +788,8 @@ request are made from the worktree, since that is where the branch is checked ou
 
 A worktree is removed when the run succeeds and kept when it does not: a run blocked on a
 deviation leaves it in place, and `sirdar fix KEY --accept-deviation` publishes the recorded
-commit out of it. `sirdar init` excludes `.sirdar/worktrees/` in `.git/info/exclude`, which lives
-in the repository's common git directory and so covers every linked worktree too.
+commit out of it. A `sirdar fix --local` run keeps it as well — that run stops at the commit, and
+the commit and the `fix.diff` beside it are its whole output (`docs/fix.md`).
 
 ```yaml
 fix:
