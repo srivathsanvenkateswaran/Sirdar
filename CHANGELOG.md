@@ -61,6 +61,31 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- `provider: acp` reads session modes the way the agents actually publish them. A mode id may be
+  a URL — every one of GitHub Copilot's is a link into the protocol's own documentation, ending
+  `#plan`, `#agent` or `#autopilot` — so ids are now matched on their last fragment or path
+  segment as well as whole, and the agent's own id is what goes back on the wire. An agent that
+  advertises no modes at all may still expose one as a session config option, which is where
+  OpenCode keeps its `build`/`plan` choice: Sirdar sets it with `session/set_config_option`,
+  `plan` for a triage or rca run and `build` for a fix (`docs/config.md`, "Session modes").
+- An ACP agent's `available_commands_update` is now kept as one line — the count and the first
+  three names — instead of verbatim. OpenCode re-sends the host's whole slash-command catalogue,
+  descriptions and all, on every update, and one run's event log grew past 1300 system events of
+  largely the same 15 KiB of text.
+- A prompt turn that ends with no answer at all is a warning while the run can still recover, and
+  becomes the run's error only if no answer ever arrives. Copilot ends two such turns before a
+  good third often enough that runs which filed a perfectly good note were carrying error lines
+  for the turns it took to get there.
+- `permissions.bash` and `permissions.fixBash` now ignore git's cosmetic global options when
+  matching: `git --no-pager diff -- x` matches `git diff*`, as do `--no-optional-locks` and a
+  `-c color.ui=…` / `-c core.pager=cat` that runs no program. `-C`, `--git-dir`, `--work-tree`
+  and any other `-c` setting still stay in the command and fail the match, because each of them
+  changes what git does rather than how it prints (`docs/config.md`).
+- Re-triage looks for a key's existing note only where the configured filename pattern files it,
+  rather than walking the notes directory. An archived copy under `notes/previous/` was being
+  read for its status and taken as reason to file nothing, leaving the run's note in the run
+  directory with one warning in the state file. When filing really is refused because a person
+  has moved the note on, the run now says so on its last line, naming the note and its status.
 - Tagging a release now builds and drafts it end to end: CLI archives for all three platforms,
   deb/rpm packages, checksums, a Homebrew tap formula, and desktop app zips, all attached to one
   GitHub release that stays a draft until a human clicks Publish (`docs/release.md`).

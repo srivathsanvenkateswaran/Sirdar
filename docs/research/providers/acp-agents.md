@@ -102,8 +102,8 @@ Three agents were driven end to end against the sandbox workspace
 
 | Agent | Launch | Triage | RCA | Fix | What it showed |
 |---|---|---|---|---|---|
-| GitHub Copilot CLI | `copilot --acp` | pass | pass | pass | The only agent that finished all three kinds. Earlier fix attempts failed on the report shape — an answer carrying extra root properties, and a turn that ended with nothing in it — before one came back clean |
-| OpenCode | `opencode acp` | pass | **fail** | pass | The rca answered a good root-cause analysis with the `rca` object's own fields written at the root, so the document was missing both required top-level keys, and the schema retry repeated the same shape. That failure is what the sharpened retry now names explicitly (`docs/config.md`, "No schema-constrained output") |
+| GitHub Copilot CLI | `copilot --acp` | pass | pass | pass | The only agent that finished all three kinds. Earlier fix attempts failed on the report shape — an answer carrying extra root properties, and a turn that ended with nothing in it — before one came back clean. Its mode ids are URLs (`…/session-modes#plan`), which no mode was selected against until the re-test |
+| OpenCode | `opencode acp` | pass | **fail** | pass | The rca answered a good root-cause analysis with the `rca` object's own fields written at the root, so the document was missing both required top-level keys, and the schema retry repeated the same shape. That failure is what the sharpened retry now names explicitly (`docs/config.md`, "No schema-constrained output"). It advertises no `availableModes` at all — its session mode is a `configOptions` entry — and it re-sends the host's whole 31-command catalogue on every `available_commands_update` |
 | Kimi CLI | `~/.kimi-code/bin/kimi acp` | — | — | — | **No model turn.** The account's monthly quota was already spent, and `session/prompt` came back as a `-32000` error before a token was billed. The handshake, the session-modes machinery and `session/set_mode` were all exercised for real; everything downstream of a model reply was not |
 
 Two things came out of these runs and are now in the adapter:
@@ -116,6 +116,26 @@ Two things came out of these runs and are now in the adapter:
   log. In a triage or rca session it is now an `EvBreach`: the session is cancelled, no note is
   written and no row reaches the register. `docs/config.md` has the exact rules, including what
   stays a warning in a fix run.
+
+A second pass over the same three runs found four more, all now in the adapter
+(`docs/config.md`, "Session modes"):
+
+- **A mode id can be a URL.** Copilot's are
+  `https://agentclientprotocol.com/protocol/session-modes#plan` and `#agent`, `#autopilot`.
+  Matching whole ids alone found no read-only mode in a list that plainly had one, so ids are
+  now matched on their last fragment or path segment too; the agent's own id is what goes back
+  on the wire.
+- **A mode can be a config option instead of a mode.** OpenCode's `session/new` reply has no
+  `availableModes` and a `configOptions` entry `{id: "mode", currentValue: "build", options:
+  [build, plan]}`. Sirdar now sets it with `session/set_config_option` — `plan` for triage and
+  rca, `build` for fix — when an agent lists no modes.
+- **`available_commands_update` can be enormous.** OpenCode sends the host's whole
+  slash-command catalogue, descriptions and all, every time any of it changes: about 15 KiB a
+  copy, and one run's event log grew past 1300 system events of largely the same text. The
+  adapter now keeps one line — the count and the first three names — and none of the bodies.
+- **An empty turn is not yet a failure.** Copilot ended two turns with nothing to say before
+  answering properly on the third; the run passed and carried two error lines for it. That
+  warning is now only turned into an error if the run does end with no answer.
 
 ## Worked example
 
@@ -160,7 +180,9 @@ not found" and "not logged in" actually appear.
   does not show these (they ride on `session/new`, which doctor does not open), so the first run's
   event log is where to look: `acp mode <id> selected for this read-only session` means one was
   found, and a line naming what the agent offered means none of them matched — set `acp.mode`
-  to the right id.
+  to the right id. An agent that lists no modes may still have one under `configOptions`, which
+  Sirdar reads as well; a bare word is what `acp.mode` takes either way, even where the agent's
+  own id is a URL.
 - **What MCP servers it already has.** Sirdar adds the workspace's to whatever the agent is
   configured with globally; `mcp.workspaceOnly` cannot reach across ACP.
 - **Whether it honours the JSON-only instruction.** ACP has no schema field, so this is the
