@@ -64,7 +64,7 @@ func (o Options) readFile(ctx context.Context, args json.RawMessage) (string, er
 	if strings.TrimSpace(a.Path) == "" {
 		return "", errors.New("read_file: path is required")
 	}
-	abs, err := o.resolve(a.Path)
+	abs, err := o.resolveRead(a.Path)
 	if err != nil {
 		return "", err
 	}
@@ -158,7 +158,7 @@ func (o Options) listDir(ctx context.Context, args json.RawMessage) (string, err
 	if strings.TrimSpace(a.Path) == "" {
 		return "", errors.New("list_dir: path is required")
 	}
-	abs, err := o.resolve(a.Path)
+	abs, err := o.resolveRead(a.Path)
 	if err != nil {
 		return "", err
 	}

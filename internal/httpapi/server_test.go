@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 	"testing/fstest"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 )
 
 // do issues one request against a handler built on f and returns the
@@ -387,6 +389,38 @@ func TestResumeWithoutBody(t *testing.T) {
 
 func TestResumeUnknownRun(t *testing.T) {
 	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/runs/nope/resume", `{}`), 404, "not_found")
+}
+
+func TestSteer(t *testing.T) {
+	f := newFake()
+	var got steerResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"Now write the RCA from this"}`), 202, &got)
+	if got.JobID != knownJob || got.RunID != knownRun || f.gotSteer != "Now write the RCA from this" {
+		t.Fatalf("job %q run %q text %q", got.JobID, got.RunID, f.gotSteer)
+	}
+}
+
+// A steer is an instruction; without one there is nothing to send, and
+// the service is not asked.
+func TestSteerRequiresText(t *testing.T) {
+	f := newFake()
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"  "}`), 400, "bad_request")
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{}`), 400, "bad_request")
+	if f.gotSteer != "" {
+		t.Fatalf("the service was asked to steer %q", f.gotSteer)
+	}
+}
+
+func TestSteerUnknownRun(t *testing.T) {
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/runs/nope/steer", `{"text":"go"}`), 404, "not_found")
+}
+
+// A run that refuses the steer on its own state — still running, over a
+// budget — is a conflict, not a server error and not a missing id.
+func TestSteerRefusedIsAConflict(t *testing.T) {
+	f := newFake()
+	f.steerErr = fmt.Errorf("%w: run r1 is running", app.ErrSteerRefused)
+	assertError(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"go"}`), 409, "conflict")
 }
 
 func TestCancel(t *testing.T) {

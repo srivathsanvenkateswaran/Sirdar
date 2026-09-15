@@ -722,6 +722,16 @@ func TestTriageHappyPath(t *testing.T) {
 	if spec.Policy.Root != cfg.Root {
 		t.Fatalf("policy root %q want %q; without it a shell command is not held to the workspace", spec.Policy.Root, cfg.Root)
 	}
+	// The read scope: the workspace, plus this run's own directory and
+	// the bundle staged inside it. Without the run directory the session
+	// cannot read the attachments the prompt points it at.
+	if d := spec.Policy.Decide("Read", json.RawMessage(`{"file_path":"/etc/passwd"}`)); d.Allow {
+		t.Fatal("the session could read outside the workspace")
+	}
+	bundleRead := `{"file_path":"` + filepath.Join(dir, "bundle", "thread.md") + `"}`
+	if d := spec.Policy.Decide("Read", json.RawMessage(bundleRead)); !d.Allow {
+		t.Fatalf("the session could not read its own bundle: %s", d.Message)
+	}
 	if len(spec.Images) != 0 {
 		t.Fatalf("claude sessions take no images: %v", spec.Images)
 	}
@@ -1735,6 +1745,20 @@ func TestRCAWithSubdirectoryPatternsFilesBothNotesAndUpdatesTriage(t *testing.T)
 	triageNote := readFile(t, triagePath)
 	if !strings.Contains(triageNote, "status: resolved") {
 		t.Fatalf("triage note inside Triage/ was not updated:\n%s", triageNote)
+	}
+	// The body's links were written at triage time from the triage
+	// title's slug; the rca retitled the issue and filed under its own.
+	// Both halves of the note have to point at the notes that exist.
+	for _, want := range []string{
+		"RCA/OMNI-1 RCA export-times-out-on-large-orders",
+		"Resolutions/OMNI-1 RES stream-the-csv-export",
+	} {
+		if strings.Count(triageNote, want) < 2 {
+			t.Errorf("triage note does not carry %q in both its frontmatter and its body:\n%s", want, triageNote)
+		}
+	}
+	if strings.Contains(triageNote, "RCA export-fails-for-large-orders") {
+		t.Errorf("a link predicted at triage time survived in the body:\n%s", triageNote)
 	}
 
 	rows, err := store.ReadRegister(cfg.Root)

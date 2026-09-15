@@ -62,6 +62,18 @@ type prepared struct {
 	triageNotePath string
 	triageNoteCopy string
 	triageLink     string
+
+	// usageBase is what the run had spent before this execute: zero for a
+	// fresh run and for a resume, the run's recorded usage for a steer,
+	// whose session adds to it rather than replacing it.
+	usageBase store.Usage
+
+	// steer is the follow-up instruction this execute carries, when it is
+	// one; execute writes it into the transcript ahead of the session.
+	// previousFinal is the answer the run had already filed, so a steer
+	// whose answer does not change leaves the note as it is.
+	steer         *store.Steer
+	previousFinal []byte
 }
 
 // sessionRoot is the directory this run's session stands in: its own root

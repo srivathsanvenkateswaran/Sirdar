@@ -70,6 +70,7 @@ rather than being silently ignored.
 | `permissions.fixBash` | list of string | `git status*`, `git diff*`, `git log*`, `git show*`, `git grep*`, `git blame*`, `dotnet build*`, `dotnet test*`, `npm test*`, `npx tsc --noEmit*`, `go build*`, `go test*`, `go vet*`, `gofmt -l*`, `make *` | Glob patterns a `sirdar fix` session's `Bash` calls must match, in place of `permissions.bash`; same syntax, see `permissions.fixBash` below |
 | `permissions.mcp` | list of string | `[]` | Glob patterns matched against an MCP tool's full name, on every provider; see MCP access below |
 | `permissions.fetch` | list of string | `[]` | Hosts a session may fetch a URL from: `docs.example.com` exactly, `*.example.com` for its subdomains, `http://localhost:3000` for a service on this machine. Empty — the default — denies every fetch; see Web fetch below |
+| `permissions.readAlso` | list of string | `[]` | Paths outside the workspace a read-class tool may still open: an absolute path or one starting with `~`, with `*` spanning `/`. Empty — the default — confines every read to the workspace, the run directory and its bundle; see Read scope below |
 | `mcp.workspaceOnly` | bool | `true` | Start the session against `<workspace>/.mcp.json` alone — and against no MCP servers at all when there is no such file — so the operator's global MCP servers are not loaded. Applies to Claude (`--strict-mcp-config`) and Codex (a generated `CODEX_HOME`); see MCP access below |
 | `notify` | object, optional | unset | Post a digest of every finished run to Slack, Teams or a webhook; see Notifications below |
 | `notify.on` | list of string | all four terminal states | Which of `completed`, `failed`, `over_budget`, `blocked` are worth a message |
@@ -905,6 +906,55 @@ against a fix committing work you had not finished.
 
 `docs/fix.md` has the whole flow.
 
+## Read scope
+
+A read-only run says what a session may change. It did not use to say what a session may
+*read*: `Read`, `Glob`, `Grep` and `LS` were approved on the tool's name, and each of them
+takes an absolute path, so a triage session could open any file the operator's account could —
+a live run read a skill file out of `~/.claude/skills/`, which is neither the workspace nor
+anything the ticket pointed at.
+
+Where a read may look is now judged on every call, against three directories:
+
+- the **workspace root** — the tree the session stands in, which for a `sirdar fix` session is
+  its linked worktree;
+- the **run directory**, `.sirdar/runs/<key>/<run-id>`, which holds the prompt, the events and
+  the run's own records;
+- the run's **bundle**, `<run dir>/bundle`, where the ticket text and its downloaded
+  attachments are staged. The prompt points the session at these files by absolute path, and in
+  a fix run they sit outside the worktree entirely.
+
+A path outside all three is refused with `read outside the workspace: <path>`, named exactly as
+the tool named it. Relative paths resolve against the workspace root, symlinks resolve before
+the check — a link inside the workspace pointing out of it is refused like any other outside
+path — and a leading `~` is never expanded into an approval. A call that names no path at all
+is reading the session's working directory, which is the workspace, and goes through.
+
+`permissions.readAlso` widens it:
+
+```yaml
+permissions:
+  readAlso:
+    - "~/.claude/skills/*"
+    - "/opt/runbooks"
+```
+
+Each entry is an absolute path or one starting with `~`; `*` spans `/`, so the first entry
+covers a file at any depth under the skills tree. An entry with no wildcard names a directory
+and everything inside it. Both spellings of a home directory are matched, so an entry written
+with `~` still covers the same path sent absolutely. A relative entry, or a bare `*`, fails the
+config load: the first is already in scope and the second is the whole machine.
+
+**`Bash` is not judged by this list.** A shell command is confined by `permissions.bash` and its
+own root-escape rule (see above), which reads the command as text. Adding a directory to
+`readAlso` does not let `cat` reach it.
+
+Two providers are outside all of it. `provider: cursor` and `provider: agy` answer their own
+tool calls — there is no permission request for Sirdar to decide — so a read there goes wherever
+the CLI allows. `sirdar doctor` carries a warning row for each (`cursor reads`, `agy reads`),
+and every session on those providers records the same thing on its own event stream, so a run's
+log says what it could reach rather than implying the read-only posture covered it.
+
 ## Web fetch
 
 `permissions.fetch` is the list of hosts a run may retrieve a URL from. It applies to Claude
@@ -1095,10 +1145,66 @@ Once the list is non-empty it is the whole rule: a tool that matches no pattern 
 heuristic or not. That is the setting to use for a run you want to be read-only by
 construction rather than by naming convention.
 
+### Checking it
+
+Both settings can be read without starting a run, from the CLI or from `sirdar serve`. The
+verdicts come out of the same function the policy calls (`provider.DecideMCPTool`), so what you
+are shown here is what a session gets.
+
+```
+$ sirdar mcp list
+oxo-mysql-stg	workspace	stdio	/usr/local/bin/mysql-mcp --dsn $OXO_DSN
+	env: OXO_DSN
+grafana	workspace	http	https://grafana.example/mcp
+	headers: Authorization
+	note: http transport: Sirdar's own agent loop (provider: openai) starts stdio servers only, …
+permissions.mcp is empty, so each tool is judged by its name
+```
+
+Only names cross, never values: the command line is printed as configured rather than expanded,
+and `env` and `headers` are reduced to their key names. `--connect` starts each server, runs the
+initialize handshake, counts its tools and times it — or prints the error, with the entry's own
+credentials taken back out of whatever the server said. An HTTP 401 or 403 is reported as
+`401 from the token, check its scope`, never with the token.
+
+```
+$ sirdar mcp tools oxo-mysql-stg
+mcp__oxo-mysql-stg__read_query	allowed	read word "read", with no write word beside it
+mcp__oxo-mysql-stg__run_select	denied	write word "run" in the name
+mcp__oxo-mysql-stg__sql_execute	denied	write word "execute" in the name
+4 tool(s) in 612ms; permissions.mcp is empty, so each tool is judged by its name
+```
+
+`sirdar mcp call <server> <tool> [--args '<json>']` runs one by hand. A denied tool is refused
+with the same reason and exit status 2, and its server is never started — the verdict is taken
+before anything is spawned. An allowed one prints the tool's output, capped at 64 KiB with a
+`truncated at 65536 bytes` line when the cap bites.
+
+`sirdar serve` exposes the same three, loopback-only and behind the same cross-site guard as
+every other route:
+
+| Route | What it answers |
+|---|---|
+| `GET /api/workspaces/{id}/mcp` | the servers, with no connection attempted |
+| `GET /api/workspaces/{id}/mcp?connect=1` | the same, each started and its tools counted |
+| `GET /api/workspaces/{id}/mcp/{server}/tools` | every tool with `verdict`, `rule` and `reason` |
+| `POST /api/workspaces/{id}/mcp/{server}/call` | `{"tool":…,"args":{…}}` → `{verdict, reason, result\|error, tookMs, truncated}` |
+
+A denied tool is `403` on the call route, with the verdict and the reason in the body.
+
+Two things differ from a run, both deliberate. `${VAR}` in `.mcp.json` expands here from the
+environment `sirdar` itself runs with, where a run's child environment has had the workspace's
+configured credentials stripped out of it first — so a server whose command line names one may
+start here and not in a session. And with `mcp.workspaceOnly: false` the list includes the
+operator's own global servers, scoped `global`, read from `~/.claude.json`, `~/.mcp.json` and
+`~/.gemini/config/mcp_config.json`; Codex's TOML config is not among them, so a `provider: codex`
+workspace with the setting off will see fewer servers listed than its sessions get.
+
 ### How the permissions reach each provider
 
-`permissions.bash`, `permissions.mcp` and `permissions.fetch` are one policy, applied at
-whatever point the provider offers to be asked.
+`permissions.bash`, `permissions.mcp`, `permissions.fetch` and the read scope
+(`permissions.readAlso`) are one policy, applied at whatever point the provider offers to be
+asked.
 
 - **claude** — the CLI is started with `--permission-prompt-tool stdio`, so every tool call it
   is not already allowed to make arrives as a `can_use_tool` request and is answered from the
@@ -1116,13 +1222,23 @@ whatever point the provider offers to be asked.
   fails closed rather than open — an unrelated URL sitting in the prompt text blocks a fetch it
   was never the destination of — which is the trade Sirdar makes on the side of not missing a
   URL a prompt injection did mean to route through.
+
+  A read is answered on the same channel and by the same rule: `Read`, `Glob`, `Grep` and `LS`
+  arrive as `can_use_tool` requests and are judged against the read scope. The catch that
+  applies to fetches applies here too — a `Read(…)` allow rule in the operator's own
+  `~/.claude/settings.json` is applied by the CLI before Sirdar is asked, and unlike `WebFetch`
+  the tool cannot be put on `--disallowedTools`, since a session that cannot read cannot
+  triage. Keep such a rule out of your user settings.
 - **openai** — the loop runs the tools itself, so it applies the policy before each call. Its
   `web_fetch` checks `permissions.fetch` a second time inside the tool, and again on every
-  redirect hop.
+  redirect hop; `read_file`, `list_dir` and `grep` re-check the read scope inside the tool the
+  same way, so a path the policy allowed and one the tool allows are the same set.
 - **qwen** — `web_fetch` goes through the same fail-closed `PreToolUse` hook as every other
   tool, under the name `WebFetch`, so `permissions.fetch` decides it. `web_search` is left
-  registered and allowed (no destination to judge).
-- **agy** — none of the three lists reaches this provider at all, and that is not an oversight.
+  registered and allowed (no destination to judge). The read tools reach the same hook under
+  their own names — `read_file`, `read_many_files`, `search_file_content`, `glob`,
+  `list_directory` — and are judged as `Read`, `Grep`, `Glob` and `LS` against the read scope.
+- **agy** — none of these lists reaches this provider at all, and that is not an oversight.
   Google's Antigravity CLI offers no point at which a host can be asked: a headless run
   auto-denies whatever needs approval and decides everything else from files. What Sirdar does
   instead is set the rules before the session starts — `--mode plan`, plus a project file of its
@@ -1132,7 +1248,12 @@ whatever point the provider offers to be asked.
   shell command *completes* in a triage session, which ends the run `failed` and files nothing,
   because a guarantee that did not hold cannot be carried as a warning on a note that claims it
   did. A session that completed no read at all ends the run the same way. `sirdar fix` is
-  refused on this provider, before it cuts a branch. See `provider: agy` below.
+  refused on this provider, before it cuts a branch. The read grant is `read_file(*)`, the one
+  form of the rule whose meaning is not a guess, so *where* a read looks is unconfined here as a
+  consequence rather than as a separate decision: no call is offered to the policy, and
+  `permissions.readAlso` decides nothing. `sirdar doctor` carries an `agy reads` warning row
+  beside the `agy read access` one, and every session says the same on its event stream. See
+  `provider: agy` below.
 - **acp** — a permission request whose `kind` is `fetch` is judged as `WebFetch` against
   `permissions.fetch`, and the kind wins over the agent's own title, so an agent cannot route
   a fetch through the MCP rules by naming it `mcp__browser__get_page`. The URL is read out of
@@ -1143,6 +1264,14 @@ whatever point the provider offers to be asked.
   is reported as an `EvError` on the run. A completed *write*, *command* or *sub-agent spawn*
   that asked nobody is treated harder: it fails the run. See
   [What fails the run](#what-fails-the-run) under `provider: acp`.
+
+  Reads reach the policy two ways here, and both are judged against the read scope: a
+  permission request whose `kind` is `read` (the agent running its own read tool), and
+  `fs/read_text_file`, where the agent asks Sirdar to open the file for it. The second is the
+  one filesystem capability Sirdar advertises, and it is answered with a JSON-RPC error naming
+  the path when that path is out of scope — so an agent cannot reach a file by asking the
+  client for it instead of reading it itself. The same limit as everywhere else on this
+  provider applies: an agent that reads without asking is not reached at all.
 - **codex** — a triage session runs with `sandbox: read-only`, a fix session with
   `sandbox: workspace-write`, and both with `approvalPolicy: untrusted`, so Codex asks before
   running a shell command, calling an MCP tool or writing a file, and the policy answers.
@@ -1182,6 +1311,13 @@ whatever point the provider offers to be asked.
   One limit worth knowing: the policy only sees what Codex asks about. A tool Codex decides
   needs no approval runs without `permissions.mcp` being consulted.
 
+  **Reads arrive as commands.** Codex exposes no file-read tool over the wire — a session reads
+  by running `cat`, `rg` or `sed`, which comes through as a `commandExecution` approval. So
+  what confines a read here is `permissions.bash` and its root-escape rule, not
+  `permissions.readAlso`: a `cat *` pattern approves `cat ledger.go` and refuses
+  `cat /etc/passwd` and anything under `~`. Widening `readAlso` does not widen what a Codex
+  session can read.
+
   **`permissions.fetch` does not reach Codex.** Codex's web search and page fetching are its
   own built-in tools, run on its side and reported to the client as a finished `webSearch`
   item; there is no approval on the wire for them, so there is nothing for the policy to
@@ -1212,7 +1348,11 @@ whatever point the provider offers to be asked.
   from the session; with hosts named the tools come back and no per-call check follows them.
   What Sirdar does enforce is the consequence: a completed edit or shell call is a read-only
   breach that fails the run and files nothing. `sirdar fix` is refused outright, before the
-  command touches git. See `provider: cursor` below.
+  command touches git. Reads are unconfined here for the same reason `permissions.bash` is:
+  nothing asks, so `permissions.readAlso` decides nothing, and a session reads whatever the CLI
+  lets it open — the live re-test that prompted the read scope watched exactly that happen. A
+  `cursor reads` warning row says so in `sirdar doctor`, and every session says it on its own
+  event stream. See `provider: cursor` below.
 
 ## Attachment filtering
 
@@ -1794,6 +1934,9 @@ run.
      /Users/you/.gemini/config/projects granting read_file and denying write_file, command and
      execute_url, passes it as --project, and deletes it when the run ends. Project rules
      outrank ~/.gemini/antigravity-cli/settings.json
+[!!] agy reads — reads are not confined on this provider: the CLI answers its own tool calls,
+     so a Read, Glob or Grep outside the workspace is never offered to Sirdar's permission
+     policy and permissions.readAlso decides nothing …
 [!!] agy settings — /Users/you/.gemini/antigravity-cli/settings.json — permissions.allow: none;
      permissions.deny: none; this workspace is in trustedWorkspaces
 [!!] agy mcp scope — the CLI loads ~/.gemini/config/mcp_config.json for every session and takes
@@ -1801,9 +1944,11 @@ run.
 [!!] agy fix mode — `sirdar fix` is refused on provider agy: …
 ```
 
-`agy mcp scope` and `agy fix mode` are warnings, not failures: they never change an exit code,
-and they are there because the gaps are permanent properties of the CLI rather than something
-an operator can misconfigure.
+`agy reads`, `agy mcp scope` and `agy fix mode` are warnings, not failures: they never change an
+exit code, and they are there because the gaps are permanent properties of the CLI rather than
+something an operator can misconfigure. `agy reads` is the companion to the row above it — the
+project file grants `read_file(*)`, so the session can read, and nothing on this wire can be
+asked *where*.
 
 **`agy read access` is a failure when it fails**, and it is the one row that stops a run. It
 tests the only thing Sirdar controls here: whether it can write its project file into
@@ -2286,10 +2431,11 @@ session dies at exit 1 with no result line. `sirdar doctor`'s `cursor model` row
 account tier from `cursor-agent about` and fails when the configured model and the plan cannot
 work together, which is cheaper than finding out mid-run.
 
-`sirdar doctor` reports five rows for this provider — `cursor-agent --version`,
+`sirdar doctor` reports six rows for this provider — `cursor-agent --version`,
 `cursor-agent status` (logged in or not, and on failure the error alone: the account email would
-otherwise end up pasted into a ticket), `cursor model`, the `cursor fix` refusal, and
-`cursor mcp` — plus a sixth, `cursor proxy`, when a proxy variable is set.
+otherwise end up pasted into a ticket), `cursor model`, the `cursor reads` warning that the read
+scope is not enforced here, the `cursor fix` refusal, and `cursor mcp` — plus a seventh,
+`cursor proxy`, when a proxy variable is set.
 
 `docs/research/11-cursor-wire-formats.md` has the captured wire shapes, the exit codes, the tool
 name list, and one finding this adapter does not yet use: Cursor supports `preToolUse` hooks,

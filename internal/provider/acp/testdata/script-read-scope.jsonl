@@ -1,0 +1,10 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"qwen-code","version":"0.23.2"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-r"}}
+{"$expect":"session/prompt","as":"p1"}
+{"$request":"session/request_permission","id":30,"params":{"sessionId":"sess-r","toolCall":{"toolCallId":"tc-in","title":"Read inside.txt","kind":"read","rawInput":{"path":"inside.txt"}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":31,"params":{"sessionId":"sess-r","toolCall":{"toolCallId":"tc-out","title":"Read the operator's skills","kind":"read","rawInput":{"path":"/etc/passwd"}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Reject","kind":"reject_once"}]}}
+{"$request":"fs/read_text_file","id":32,"params":{"sessionId":"sess-r","path":"/etc/passwd"}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-r","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Scoped\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

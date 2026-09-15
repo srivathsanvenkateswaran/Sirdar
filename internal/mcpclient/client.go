@@ -383,9 +383,14 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 	if err := c.call(ctx, "tools/call", params, &res); err != nil {
 		return "", false, err
 	}
+	return flatten(res.Content), res.IsError, nil
+}
 
+// flatten turns a tools/call result's content items into one string, so
+// both transports hand a caller the same shape.
+func flatten(content []contentItem) string {
 	var parts []string
-	for _, item := range res.Content {
+	for _, item := range content {
 		switch item.Type {
 		case "text":
 			parts = append(parts, item.Text)
@@ -410,7 +415,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 			}
 		}
 	}
-	return strings.Join(parts, "\n"), res.IsError, nil
+	return strings.Join(parts, "\n")
 }
 
 // Close shuts the server down: stdin is closed (the stdio transport's

@@ -73,6 +73,18 @@ type RunDetail struct {
 	// the work sits on, the commit, the pull request once it exists, and
 	// the deviation a person has to accept before the commit is pushed.
 	Fix *FixInfo `json:"fix,omitempty"`
+
+	// Steers lists the follow-up instructions the run has taken, oldest
+	// first, and who answered each: "resume" for the session that wrote
+	// the note, "primed" for a fresh one handed it.
+	Steers []SteerInfo `json:"steers,omitempty"`
+}
+
+// SteerInfo is one follow-up instruction on a run, for the run detail.
+type SteerInfo struct {
+	At           string `json:"at"`
+	Text         string `json:"text"`
+	Continuation string `json:"continuation"`
 }
 
 // FixInfo is where a fix run's work went, read off the run's state.json.
@@ -103,6 +115,11 @@ type EventPayload struct {
 	Turns    int             `json:"turns,omitempty"`
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
+
+	// Continuation is carried by a `steer` event alone: "resume" or
+	// "primed", saying whether the session answering the instruction is
+	// the one that wrote the note.
+	Continuation string `json:"continuation,omitempty"`
 
 	// Action, Path and Hunk carry a "review" event: what a person did to
 	// the fix commit after the session ended. Hunk is a pointer because
@@ -393,6 +410,9 @@ func DetailOf(root string, s store.State) RunDetail {
 		Deviation: s.Fix.Deviation,
 	}); f != (FixInfo{}) {
 		d.Fix = &f
+	}
+	for _, st := range s.Steers {
+		d.Steers = append(d.Steers, SteerInfo{At: wireTime(st.At), Text: st.Text, Continuation: st.Continuation})
 	}
 	return d
 }

@@ -10,7 +10,7 @@ from conventional-commit prefixes in the git log, and is not a replacement for t
 Sirdar as it stands today, before the first tagged release:
 
 A command-line harness (`sirdar init`, `doctor`, `triage`, `rca`, `resume`, `runs`,
-`register`, `serve`) that reads an engineering-support ticket from a tracker and a
+`register`, `mcp`, `serve`) that reads an engineering-support ticket from a tracker and a
 helpdesk, hands it to a coding agent inside a read-only workspace, and writes a
 Triage Note recording the agent's root-cause hypothesis for a human to review. Once a
 human has made and merged the actual fix, `sirdar rca` writes the RCA and Resolution
@@ -61,6 +61,33 @@ Release packaging: darwin/linux/windows binaries on amd64/arm64 via goreleaser, 
 packages, a Homebrew tap, and desktop app zips for all three platforms — see
 `docs/release.md`.
 
+- A read is now judged on where it looks, not on the tool's name. `Read`, `Glob`, `Grep`, `LS`
+  and the same tools under each provider's own names were approved unseen, so a triage session
+  could open any file on the machine — a live run read a skill file out of the operator's home
+  directory. A read-class call whose target resolves outside the workspace root, the run's
+  directory or its bundle is refused with `read outside the workspace: <path>`, on Claude's
+  permission tool, the qwen hook, an ACP `session/request_permission` and its `fs/read_text_file`,
+  and in Sirdar's own agent loop. Symlinks resolve before the check. `permissions.readAlso` is a
+  new list of globs, empty by default, that widens the scope to a runbook directory or a skills
+  tree. `Bash` is unchanged — its own allow-list already refuses a path argument outside the
+  root — and on `provider: cursor` and `provider: agy`, which answer their own tool calls, there
+  is nothing to mediate: `sirdar doctor` warns and every session says so on its own event log.
+- The digest's ISSUE column reads the triage note's title, and falls back to the first sentence
+  of the complaint that is not a greeting. It used to take the complaint's first sentence, which
+  on an Arabic support thread is "Peace be upon you." for every row.
+- A triage note's body links now move with its frontmatter. The "Register:" line names the RCA
+  and Resolution notes by the slug predicted from the triage title; when the rca retitles the
+  issue and files under a different name, both halves of the note are rewritten, instead of the
+  frontmatter alone being right and the body links leading nowhere.
+- Added `sirdar steer RUN_ID "instruction"` and `POST /api/workspaces/{id}/runs/{runId}/steer`:
+  a follow-up instruction on a finished (or blocked) run continues the same run. The transcript
+  grows in place with a `steer` line saying who answered — the session that wrote the note
+  (`claude`, `codex`, `qwen`, `openai` resume it by handle) or a fresh session primed with the
+  run's prompt and answer (`acp`); `cursor` and `agy` refuse through the new
+  `provider.Steerable` contract. The note is rendered again and a register row appended only
+  when the answer changes; turns, minutes and cost accumulate on the run and the same caps apply
+  to the total. A `--local` or deviation-blocked fix run is steered in its own worktree with its
+  commit amended, never pushed (`docs/steer.md`).
 - `provider: acp` reads session modes the way the agents actually publish them. A mode id may be
   a URL — every one of GitHub Copilot's is a link into the protocol's own documentation, ending
   `#plan`, `#agent` or `#autopilot` — so ids are now matched on their last fragment or path
@@ -139,6 +166,25 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   conversation (work notes internal, comments customer-visible) and the Attachment API for the
   files, authenticating with a basic username/password pair or an OAuth bearer token
   (`docs/adapters.md`, `docs/research/adapters/servicenow.md`).
+- Added `sirdar mcp`, which answers what a run's MCP access would be without starting a run.
+  `sirdar mcp list` names the servers the workspace declares — and, with `mcp.workspaceOnly`
+  off, the operator's global ones too, scoped `global` — with their transport and command or
+  URL, and with `env` and `headers` reduced to key names so no credential value is ever
+  printed. `--connect` starts each, initializes, counts its tools and times it, or prints the
+  error; an HTTP 401 or 403 reads `401 from the token, check its scope` and never carries the
+  token. `sirdar mcp tools SERVER` lists every tool with the verdict a run would get and the
+  rule that settled it (a `permissions.mcp` pattern, a write word, a generic passthrough, a
+  read word, or a name the heuristic recognises nothing in), from the same
+  `provider.DecideMCPTool` the policy calls — one function, so the two cannot drift.
+  `sirdar mcp call SERVER TOOL [--args '<json>']` runs one by hand: a denied tool is refused
+  with that same reason and exit 2, its server never started, and an allowed one's output is
+  capped at 64 KiB with a `truncated` line. `sirdar serve` gains the same three at
+  `GET /api/workspaces/{id}/mcp` (`?connect=1`), `GET …/mcp/{server}/tools` and
+  `POST …/mcp/{server}/call`, loopback-only and behind the existing cross-site guard, with a
+  denied tool answered `403` carrying the reason (`docs/config.md`, "Checking it").
+- Added a streamable-HTTP MCP transport to `internal/mcpclient`, so an `"type": "http"` entry in
+  `.mcp.json` can be listed, inspected and called by `sirdar mcp`. Sirdar's own agent loop
+  (`provider: openai`) still starts stdio servers only, and the listing says so on the row.
 - Added `sirdar eval`, which replays a golden set of previously triaged tickets and scores a new
   run against the assertions and note you recorded for each one, and `sirdar golden add` to build
   that set from a completed run (`docs/eval.md`).

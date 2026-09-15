@@ -211,6 +211,47 @@ func TestBasicSession(t *testing.T) {
 	}
 }
 
+// TestReadOutsideTheWorkspaceIsDeniedOnTheControlChannel: a Read the CLI
+// asks about is answered from the read scope, not from the tool's name. It
+// is the same path a Bash denial takes — the reason has to reach the
+// control_response the model sees and the run's own permission event.
+func TestReadOutsideTheWorkspaceIsDeniedOnTheControlChannel(t *testing.T) {
+	spec := fakeSpec(t, "testdata/script-read-scope.jsonl")
+	spec.Policy = &provider.PermissionPolicy{Root: spec.Cwd}
+
+	s, err := New().Start(context.Background(), spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var denied, allowed *provider.Event
+	var events []provider.Event
+	for ev := range s.Events() {
+		events = append(events, ev)
+	}
+	for i, ev := range events {
+		if ev.Kind != provider.EvPermission {
+			continue
+		}
+		if ev.Decision == "deny" {
+			denied = &events[i]
+		} else {
+			allowed = &events[i]
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if denied == nil {
+		t.Fatal("the session read /etc/passwd without being asked about it")
+	}
+	if !strings.Contains(denied.Text, "read outside the workspace: /etc/passwd") {
+		t.Errorf("deny event Text %q does not name the path", denied.Text)
+	}
+	if allowed == nil || !strings.Contains(string(allowed.Input), "ledger.go") {
+		t.Errorf("the in-workspace read was not allowed: %+v", allowed)
+	}
+}
+
 // TestBashDenialHintReachesTheToolResult: a denied Bash call's message goes
 // out verbatim as the control_response Claude Code shows the model and as
 // the EvPermission event's Text, so the hint that names permissions.bash

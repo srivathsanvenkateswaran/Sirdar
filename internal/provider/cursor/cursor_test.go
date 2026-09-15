@@ -181,7 +181,7 @@ func TestSessionReadsTheStream(t *testing.T) {
 		kinds = append(kinds, ev.Kind)
 	}
 	want := map[provider.EventKind]int{
-		provider.EvSystem:        2, // init, the echoed prompt
+		provider.EvSystem:        3, // the unconfined-reads notice, init, the echoed prompt
 		provider.EvAssistantText: 2,
 		provider.EvToolStarted:   2,
 		provider.EvToolFinished:  2,
@@ -605,6 +605,31 @@ func TestDoctorReadsTheVersionTheLoginAndTheFixRefusal(t *testing.T) {
 	if fix.Severity() != provider.LevelWarn || !strings.Contains(fix.Detail, "refused") {
 		t.Errorf("fix row %+v", fix)
 	}
+	reads := byName["cursor reads"]
+	if reads.Severity() != provider.LevelWarn || !strings.Contains(reads.Detail, "not confined") {
+		t.Errorf("reads row %+v", reads)
+	}
+	if !strings.Contains(reads.Detail, "permissions.readAlso") {
+		t.Errorf("reads row %+v does not name the setting it overrules", reads)
+	}
+}
+
+// TestSessionSaysReadsAreNotConfined: the doctor row is what an operator
+// reads before a run, and this notice is what they read after one. A
+// provider Sirdar cannot ask about a read has to say so on the run's own
+// event log, where the rest of what the session could reach is recorded.
+func TestSessionSaysReadsAreNotConfined(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl", nil))
+	if err != nil {
+		t.Fatalf("start: %v", err)
+	}
+	events, _ := drain(t, s)
+	for _, ev := range events {
+		if ev.Kind == provider.EvSystem && strings.Contains(ev.Text, "reads are not confined") {
+			return
+		}
+	}
+	t.Error("the session never said that reads are unconfined on this provider")
 }
 
 func TestDoctorFailsANamedModelOnAFreePlan(t *testing.T) {
@@ -863,6 +888,17 @@ func TestFixIsRefusedBeforeGit(t *testing.T) {
 	err := provider.RefuseFix(p)
 	if !errors.Is(err, ErrFixUnsupported) {
 		t.Errorf("RefuseFix = %v, want ErrFixUnsupported", err)
+	}
+}
+
+// TestSteerIsRefused pins the other early refusal: `sirdar steer` asks
+// provider.PlanSteer before it touches the run's state, and a provider
+// that cannot judge a tool call before it runs cannot take an open-ended
+// follow-up instruction.
+func TestSteerIsRefused(t *testing.T) {
+	c, err := provider.PlanSteer(New())
+	if c != provider.ContinueNone || !errors.Is(err, ErrSteerUnsupported) {
+		t.Fatalf("PlanSteer = %q, %v; want ContinueNone and ErrSteerUnsupported", c, err)
 	}
 }
 

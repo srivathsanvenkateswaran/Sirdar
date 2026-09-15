@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
@@ -34,7 +35,11 @@ type Service interface {
 	Golden(wsID string) ([]GoldenEntry, error)
 	AddGolden(wsID, key, runID string) (GoldenEntry, error)
 	ConfigSummary(wsID string) (ConfigSummary, error)
+	MCPServers(ctx context.Context, wsID string, connect bool) (MCPInventory, error)
+	MCPTools(ctx context.Context, wsID, server string) (MCPToolList, error)
+	MCPCall(ctx context.Context, wsID, server, tool string, args json.RawMessage) (MCPCallResult, error)
 	Resume(ctx context.Context, wsID, runID, answer string) (JobID, error)
+	Steer(ctx context.Context, wsID, runID, text string) (JobID, error)
 	Cancel(jobID JobID) error
 	Register(wsID string) ([]RegisterRow, error)
 	Doctor(ctx context.Context, wsID string) ([]Check, error)
@@ -55,6 +60,12 @@ var (
 	// ErrNotFound stands for every id nobody knows. internal/app reports a
 	// separate sentinel per kind of id; they all become 404.
 	ErrNotFound = app.ErrNoSuchWorkspace
+	// ErrMCPDenied is a tool the workspace's own permissions refuse. It
+	// becomes 403, with the reason in the body the handler already has.
+	ErrMCPDenied = app.ErrMCPDenied
+	// ErrNoSuchMCPServer is a server name the workspace does not
+	// configure. It becomes 404.
+	ErrNoSuchMCPServer = app.ErrNoSuchMCPServer
 	// ErrNoDiff is a run with no change to review. It becomes 404 with the
 	// reason, which is what the screen shows instead of a diff.
 	ErrNoDiff = app.ErrNoDiff
@@ -71,13 +82,22 @@ func classify(err error) (int, string) {
 	switch {
 	case errors.Is(err, ErrUnsupported):
 		return 501, "unsupported"
+	case errors.Is(err, app.ErrSteerRefused):
+		// The run's own state refuses the steer — it is live, or over a
+		// budget. Nothing is wrong with the server or the id; the caller
+		// can wait, or cannot have this at all, and 409 says which
+		// through the message.
+		return 409, "conflict"
+	case errors.Is(err, app.ErrMCPDenied):
+		return 403, "forbidden"
 	case errors.Is(err, ErrRefused):
 		return 409, "conflict"
 	case errors.Is(err, ErrNoDiff):
 		return 404, "no_diff"
 	case errors.Is(err, app.ErrNoSuchWorkspace),
 		errors.Is(err, app.ErrNoSuchRun),
-		errors.Is(err, app.ErrNoSuchJob):
+		errors.Is(err, app.ErrNoSuchJob),
+		errors.Is(err, app.ErrNoSuchMCPServer):
 		return 404, "not_found"
 	default:
 		return 500, "internal"

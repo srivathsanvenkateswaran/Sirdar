@@ -104,7 +104,11 @@ triage note resolved.
 | `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
 | `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
 | `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
+| `sirdar mcp list` | `--connect` start each server, initialize, and count its tools | Lists the MCP servers a run in this workspace would be offered — name, scope, transport, command or URL, and the *names* of the env vars and headers each carries, never their values |
+| `sirdar mcp tools SERVER` | none | Lists every tool on one server with the verdict a run would get for it (`allowed`/`denied`) and the rule that settled it, from the same function the policy calls |
+| `sirdar mcp call SERVER TOOL` | `--args '<json>'` | Runs one tool by hand. A tool the workspace's permissions would refuse is refused here too, with the same reason and exit 2, and its server is never started |
 | `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
+| `sirdar steer RUN_ID "instruction"` | none | Gives a finished run a follow-up instruction; the same run continues, its note is re-rendered if the answer changes. See `docs/steer.md` |
 | `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
 | `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, fix date, RCA date, verdict, severity, resolution, and which notes exist. `--markdown` also fills the Title and Company cells from the notes' own titles and frontmatter |
 | `sirdar version` | none | Prints the binary version |
@@ -128,6 +132,14 @@ or hit a rate limit) is continued with `sirdar resume RUN_ID`. A session that go
 silent — no tool call, no text, no usage line — for `budget.stallMinutes` (6 by default, `0` to
 turn it off) is cancelled and marked `failed` with `stalled: no activity for 6m`, rather than
 being held to the end of the wall-clock budget. A blocked run is never counted as stalled.
+
+A run that has finished can be steered: `sirdar steer RUN_ID "Now write the RCA from this"`
+(or `POST /api/workspaces/{id}/runs/{runId}/steer` with `{"text": ...}`) sends a follow-up
+instruction to the same run. Claude, Codex, Qwen and the `openai` loop resume the session that
+wrote the note; an ACP agent gets a fresh session primed with the run's own prompt and answer,
+and the transcript says so; `cursor` and `agy` refuse, since neither lets Sirdar judge a tool
+call before it runs. Turns, minutes and cost keep counting against the run's own caps, and a fix
+run is steered in its own worktree with its commit amended. See `docs/steer.md`.
 
 Each run gets its own directory, `.sirdar/runs/<KEY>/<run-id>/`:
 
@@ -161,6 +173,17 @@ required outside a loopback entry, and userinfo, IP literals and private address
 whatever the list says. It exists because a triage reads attacker-supplied text all day: without
 it, an instruction hidden in a ticket comment could pick the destination and take the run's
 context with it.
+
+A read is judged the same way, on where it looks rather than on the tool's name. `Read`, `Glob`,
+`Grep` and `LS` — and the same tools under each provider's own names — may open the workspace,
+the run's directory, and the bundle of ticket text and attachments staged inside it; anything
+else is refused with `read outside the workspace: <path>`. Symlinks resolve before the check,
+and `permissions.readAlso` is a list of globs, empty by default, that widens it to a runbook
+directory or a skills tree you want a session to read. It applies wherever Sirdar answers a tool
+call — Claude's permission tool, the qwen hook, an ACP permission request and its
+`fs/read_text_file`, and Sirdar's own agent loop. On Codex a read is a shell command, so
+`permissions.bash` confines it; on `cursor` and `agy` nothing asks, so nothing is confined, and
+both `sirdar doctor` and the run's own event log say so.
 
 `sirdar fix` is the one session that may change files, and only after a human has read the note
 (see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
@@ -261,8 +284,8 @@ bounded by turns and wall-clock time instead.
 in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is the one provider
 whose read-only guarantee Sirdar does not impose: the CLI gives a parent process no way to
 mediate a tool call, so every session runs in the CLI's own `--mode plan`, `permissions.bash`,
-`permissions.mcp` and `permissions.fetch` are never consulted, `mcp.workspaceOnly` cannot be
-enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
+`permissions.mcp`, `permissions.fetch` and `permissions.readAlso` are never consulted,
+`mcp.workspaceOnly` cannot be enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
 watch, and fail loudly: a refusal the CLI makes appears as a denied permission, and a write or a
 command that *completes* in a triage session ends the run — the session is killed and the run is
 `failed`, with no note written and no register row added, because both would assert a read-only

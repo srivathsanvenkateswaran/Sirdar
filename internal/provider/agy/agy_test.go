@@ -674,6 +674,16 @@ func TestSupportsFixIsFalse(t *testing.T) {
 	}
 }
 
+// TestSteerIsRefused is what `sirdar steer` asks before it touches the
+// run: with no way to refuse a tool call before it runs, an open-ended
+// follow-up cannot be held to the read-only guarantee.
+func TestSteerIsRefused(t *testing.T) {
+	c, err := provider.PlanSteer(New())
+	if c != provider.ContinueNone || !errors.Is(err, ErrSteerUnsupported) {
+		t.Fatalf("PlanSteer = %q, %v; want ContinueNone and ErrSteerUnsupported", c, err)
+	}
+}
+
 // TestSendRunsAnotherTurn is the schema retry. Unlike Qwen Code, this CLI
 // takes --json-schema and --input-format stream-json together, so the retry
 // is one more stdin line rather than a fresh --resume.
@@ -754,6 +764,24 @@ func TestChildEnvStripsRedirectionVariables(t *testing.T) {
 		if !containsSubstring(d.systems, "removed "+name) {
 			t.Errorf("stripping %s was not reported: %v", name, d.systems)
 		}
+	}
+}
+
+// TestUnconfinedReadsAreReported: the read scope is enforced wherever
+// Sirdar answers a tool call, and nowhere on this provider. Every session
+// says so on its own event stream, so the run's record shows what it could
+// reach rather than implying the read-only posture covered it.
+func TestUnconfinedReadsAreReported(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := drain(t, s)
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if !containsSubstring(d.systems, "reads are not confined on provider agy") {
+		t.Fatalf("the session said nothing about unconfined reads: %v", d.systems)
 	}
 }
 
@@ -876,7 +904,7 @@ func TestDoctorRows(t *testing.T) {
 	for _, c := range checks {
 		byName[c.Name] = c
 	}
-	for _, name := range []string{"agy --version", "agy models", "agy model", "agy settings", "agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy --version", "agy models", "agy model", "agy settings", "agy mcp scope", "agy reads", "agy fix mode"} {
 		if _, ok := byName[name]; !ok {
 			t.Fatalf("missing doctor row %q: %+v", name, checks)
 		}
@@ -890,7 +918,7 @@ func TestDoctorRows(t *testing.T) {
 	if byName["agy model"].Severity() != provider.LevelOK {
 		t.Errorf("a configured model on the list should pass: %+v", byName["agy model"])
 	}
-	for _, name := range []string{"agy settings", "agy mcp scope", "agy fix mode"} {
+	for _, name := range []string{"agy settings", "agy mcp scope", "agy reads", "agy fix mode"} {
 		c := byName[name]
 		if c.Severity() != provider.LevelWarn {
 			t.Errorf("%s should warn, not fail or pass silently: %+v", name, c)

@@ -1137,6 +1137,41 @@ func TestLoginShellWrapperIsUnwrapped(t *testing.T) {
 	}
 }
 
+// TestCodexReadsAreConfinedByTheCommandAllowList says where the read scope
+// lands on this provider. Codex exposes no file-read tool over the wire: a
+// session reads by running a command, which arrives as a commandExecution
+// approval, so what confines a read here is permissions.bash and its
+// root-escape rule — a `cat *` pattern approves `cat ledger.go` and not
+// `cat /etc/passwd`, and not the operator's home directory either.
+func TestCodexReadsAreConfinedByTheCommandAllowList(t *testing.T) {
+	sess := startSession(t, "script-read-scope.jsonl", func(spec *provider.SessionSpec) {
+		spec.Policy = &provider.PermissionPolicy{
+			BashAllow: []string{"cat *"},
+			Root:      spec.Cwd,
+		}
+	})
+	drain(sess)
+	res, err := sess.Wait()
+	if err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+	for _, tc := range []struct {
+		name string
+		id   int
+		want string
+	}{
+		{"a file in the workspace", 401, `{"decision":"accept"}`},
+		{"an absolute path outside it", 402, `{"decision":"decline"}`},
+		{"the operator's home directory", 403, `{"decision":"decline"}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := replyTo(t, res, tc.id); got != tc.want {
+				t.Errorf("reply to %d = %s, want %s", tc.id, got, tc.want)
+			}
+		})
+	}
+}
+
 // TestUnwrapCommand covers the shapes decideCommand has to tell apart
 // without a session around them.
 func TestUnwrapCommand(t *testing.T) {

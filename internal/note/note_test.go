@@ -466,6 +466,99 @@ func TestUpdateTriageStatusReplacesExistingLinks(t *testing.T) {
 	}
 }
 
+// TestUpdateTriageStatusRewritesTheBodyLinks: the header line of a triage
+// note links to follow-ups that do not exist yet, named after the slug the
+// triage title made. When the rca files under a different slug, the body
+// has to move with the frontmatter — otherwise the note a reader clicks
+// through to is one nobody ever wrote.
+func TestUpdateTriageStatusRewritesTheBodyLinks(t *testing.T) {
+	const predicted = `---
+status: triaged
+tracker_key: OMNI-1
+---
+
+# Export is empty
+
+Register: [[_Issue Register]] · RCA: [[OMNI-1 RCA export-is-empty]] · Resolution: [[OMNI-1 RES export-is-empty]]
+
+## Customer Complaint (translated)
+
+OMNI-1 is the ticket the customer opened.
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "OMNI-1 export-is-empty.md")
+	if err := os.WriteFile(path, []byte(predicted), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := UpdateTriageStatus(path, "resolved",
+		map[string]string{
+			"rca":        `"[[OMNI-1 RCA export-drops-rows-over-500]]"`,
+			"resolution": `"[[OMNI-1 RES export-drops-rows-over-500]]"`,
+		},
+		Relink{Pattern: "{key} RCA {slug}.md", Key: "OMNI-1", Stem: "OMNI-1 RCA export-drops-rows-over-500"},
+		Relink{Pattern: "{key} RES {slug}.md", Key: "OMNI-1", Stem: "OMNI-1 RES export-drops-rows-over-500"},
+	)
+	if err != nil {
+		t.Fatalf("UpdateTriageStatus: %v", err)
+	}
+
+	got := readFileString(t, path)
+	for _, want := range []string{
+		"RCA: [[OMNI-1 RCA export-drops-rows-over-500]]",
+		"Resolution: [[OMNI-1 RES export-drops-rows-over-500]]",
+		"[[_Issue Register]]",
+		"OMNI-1 is the ticket the customer opened.",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("note does not contain %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "export-is-empty]]") {
+		t.Errorf("a predicted link survived:\n%s", got)
+	}
+	// The note's own title and filename are the triage run's and stay put.
+	if !strings.Contains(got, "# Export is empty") {
+		t.Errorf("the note's title was rewritten:\n%s", got)
+	}
+}
+
+// Two patterns that produce the same shape cannot be told apart, so
+// neither is applied: half the links would end up pointing at the other
+// note.
+func TestUpdateTriageStatusLeavesAmbiguousPatternsAlone(t *testing.T) {
+	const body = `---
+status: triaged
+---
+
+RCA: [[OMNI-1 export-is-empty]]
+`
+	dir := t.TempDir()
+	path := filepath.Join(dir, "OMNI-1 export-is-empty.md")
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := UpdateTriageStatus(path, "resolved", nil,
+		Relink{Pattern: "{key} {slug}.md", Key: "OMNI-1", Stem: "OMNI-1 rca-name"},
+		Relink{Pattern: "{key} {slug}.md", Key: "OMNI-1", Stem: "OMNI-1 res-name"},
+	)
+	if err != nil {
+		t.Fatalf("UpdateTriageStatus: %v", err)
+	}
+	if got := readFileString(t, path); !strings.Contains(got, "[[OMNI-1 export-is-empty]]") {
+		t.Errorf("an ambiguous rewrite was applied:\n%s", got)
+	}
+}
+
+func readFileString(t *testing.T, path string) string {
+	t.Helper()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
 func TestUpdateTriageStatusErrorsOnMissingFrontmatter(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "no-frontmatter.md")
