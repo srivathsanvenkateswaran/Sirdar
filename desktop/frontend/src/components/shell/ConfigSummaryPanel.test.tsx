@@ -1,9 +1,11 @@
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 import type { ConfigSummary } from '../../api/types'
+import { configSummary } from '../../store/fakeTransport'
 import ConfigSummaryPanel from './ConfigSummaryPanel'
 
 const CONFIGURED: ConfigSummary = {
+  ...configSummary(),
   notify: {
     enabled: true,
     on: ['completed', 'failed'],
@@ -31,6 +33,7 @@ const CONFIGURED: ConfigSummary = {
 }
 
 const NOTHING: ConfigSummary = {
+  ...configSummary(),
   notify: { enabled: false, on: [], includeTitle: false, destinations: [] },
   webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
 }

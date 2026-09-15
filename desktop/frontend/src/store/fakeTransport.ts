@@ -223,14 +223,63 @@ export function ticket(over: Partial<Ticket> = {}): Ticket {
   }
 }
 
-/** An in-memory Transport for tests; every method resolves. */
 /** A workspace that notifies nowhere and serves no inbound hooks. */
 export function emptyConfigSummary(): ConfigSummary {
   return {
+    ...configSummary(),
     notify: { enabled: false, on: [], includeTitle: false, destinations: [] },
     webhooks: { enabled: false, cooldown: '10m0s', match: {}, sources: [] },
   }
 }
+
+/** The config summary as the sample workspace's config.yaml reads: every page of Settings has a value. */
+export function configSummary(over: Partial<ConfigSummary> = {}): ConfigSummary {
+  return {
+    general: {
+      workspace: 'omni',
+      root: '/repos/omni',
+      configPath: '/repos/omni/.sirdar/config.yaml',
+      provider: 'claude',
+      model: 'sonnet',
+      billing: 'subscription',
+      notesLanguage: 'en',
+      customerLanguage: 'auto',
+      rtlMarkup: true,
+    },
+    budget: { maxTurns: 20, maxMinutes: 20, maxUsd: 2, stallMinutes: 6 },
+    permissions: {
+      bash: ['git status*', 'git diff*', 'git log*'],
+      fixBash: ['git status*', 'git diff*', 'npm test*'],
+      fetch: [],
+      readAlso: [],
+      mcp: ['mcp__filesystem__read_*', 'mcp__filesystem__list_*'],
+    },
+    notes: {
+      dir: '/repos/omni/notes',
+      filenames: {
+        triage: '{{key}}-triage.md',
+        rca: '{{key}}-rca.md',
+        resolution: '{{key}}-resolution.md',
+      },
+    },
+    mcp: { workspaceOnly: true },
+    notify: {
+      enabled: true,
+      on: ['completed', 'failed'],
+      includeTitle: false,
+      destinations: [{ type: 'slack', credential: 'env' }],
+    },
+    webhooks: {
+      enabled: true,
+      cooldown: '10m0s',
+      match: { assignee: 'me' },
+      sources: [{ name: 'jira', auth: 'secret', credential: 'keychain' }],
+    },
+    ...over,
+  }
+}
+
+/** An in-memory Transport for tests; every method resolves. */
 
 export function createFakeTransport(seed: {
   workspaces?: Workspace[]

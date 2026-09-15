@@ -126,6 +126,54 @@ func TestConfigSummaryWithNothingConfigured(t *testing.T) {
 	}
 }
 
+// The pages that read config.yaml without being able to write it get the
+// resolved values, with every default spelled out and every list a list.
+func TestConfigSummaryCarriesTheReadOnlyPages(t *testing.T) {
+	stall := 0
+	cfg := &config.Config{
+		Workspace: "omni",
+		Provider:  "claude",
+		Model:     "sonnet",
+		Billing:   "subscription",
+		Root:      "/repos/omni",
+	}
+	cfg.Notes.Dir = "notes"
+	cfg.Notes.Filenames.Triage = "{{key}}-triage.md"
+	cfg.Budget.MaxTurns = 20
+	cfg.Budget.MaxUSD = 2.5
+	cfg.Budget.StallMinutes = &stall
+	cfg.Permissions.Bash = []string{"git status*"}
+	cfg.Permissions.MCP = []string{"mcp__grafana__query_*"}
+
+	got := SummariseConfig(cfg)
+
+	if got.General.Workspace != "omni" || got.General.Provider != "claude" || got.General.Model != "sonnet" {
+		t.Fatalf("general %+v", got.General)
+	}
+	if got.General.ConfigPath != "/repos/omni/.sirdar/config.yaml" {
+		t.Fatalf("config path %q", got.General.ConfigPath)
+	}
+	if got.General.NotesLanguage != "en" || got.General.CustomerLanguage != "auto" || !got.General.RTLMarkup {
+		t.Fatalf("language defaults %+v", got.General)
+	}
+	if got.Budget.MaxTurns != 20 || got.Budget.MaxUSD != 2.5 || got.Budget.StallMinutes != 0 {
+		t.Fatalf("budget %+v", got.Budget)
+	}
+	if got.Notes.Dir != "/repos/omni/notes" || got.Notes.Templates != "" || got.Notes.Filenames.Triage != "{{key}}-triage.md" {
+		t.Fatalf("notes %+v", got.Notes)
+	}
+	if !got.MCP.WorkspaceOnly {
+		t.Fatalf("mcp %+v", got.MCP)
+	}
+	if strings.Join(got.Permissions.Bash, ",") != "git status*" || strings.Join(got.Permissions.MCP, ",") != "mcp__grafana__query_*" {
+		t.Fatalf("permissions %+v", got.Permissions)
+	}
+	// Unset lists are empty lists: the frontend maps over every one.
+	if got.Permissions.Fetch == nil || got.Permissions.ReadAlso == nil || got.Permissions.FixBash == nil {
+		t.Fatalf("a nil list reached the summary: %+v", got.Permissions)
+	}
+}
+
 // notify.on defaulting to every terminal state is a fact about the
 // workspace, so the summary says which states rather than leaving a blank.
 func TestConfigSummarySpellsOutTheDefaultStates(t *testing.T) {
