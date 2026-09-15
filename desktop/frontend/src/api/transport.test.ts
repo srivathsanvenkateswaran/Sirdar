@@ -117,13 +117,28 @@ describe('http transport', () => {
 
     await t.golden('ws1')
     await t.evalReports('ws1')
+    await t.latestRetro('ws1')
     await t.configSummary('ws1')
 
     expect(fetchMock.mock.calls.map((c) => c[0])).toEqual([
       '/api/workspaces/ws1/golden',
       '/api/workspaces/ws1/eval',
+      '/api/workspaces/ws1/eval/retro/latest',
       '/api/workspaces/ws1/config/summary',
     ])
+  })
+
+  it('sends the retro flags with an eval start', async () => {
+    const fetchMock = mockFetch({ jobId: 'job-5' })
+
+    await createTransport().startEval('ws1', ['OMNI-1'], { retro: true, withRca: true, rubric: true })
+
+    expect(JSON.parse(String((fetchMock.mock.calls[0]![1] as RequestInit).body))).toEqual({
+      keys: ['OMNI-1'],
+      retro: true,
+      withRca: true,
+      rubric: true,
+    })
   })
 
   it('surfaces the API error envelope as an Error', async () => {

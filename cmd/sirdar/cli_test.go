@@ -496,3 +496,64 @@ func onlyMatch(t *testing.T, dir, pattern string) string {
 	}
 	return matches[0]
 }
+
+// The retrospective flags only mean anything together: --pr and --as-of are
+// read by --retro, and --retro without a pull request has no ground truth to
+// score against. Each is refused before the workspace is even loaded, so the
+// operator is told what they meant rather than what failed later.
+func TestGoldenAddRetroFlagCombinations(t *testing.T) {
+	chdir(t, t.TempDir())
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{
+		{args: []string{"golden", "add", "OMNI-1", "--pr", "https://github.com/a/b/pull/1"}, want: "only read with --retro"},
+		{args: []string{"golden", "add", "OMNI-1", "--as-of", "2026-03-02T10:00:00Z"}, want: "only read with --retro"},
+		{args: []string{"golden", "add", "OMNI-1", "--retro"}, want: "at least one --pr"},
+		{args: []string{"golden", "add", "OMNI-1", "--retro", "--pr", "https://github.com/a/b/pull/1", "--as-of", "yesterday"}, want: "RFC3339"},
+	} {
+		var out, errb bytes.Buffer
+		if code := run(tc.args, &out, &errb); code != 2 {
+			t.Errorf("%v: want exit 2, got %d (stderr %q)", tc.args, code, errb.String())
+		}
+		if !strings.Contains(errb.String(), tc.want) {
+			t.Errorf("%v: stderr = %q, want it to mention %q", tc.args, errb.String(), tc.want)
+		}
+	}
+}
+
+// TestEvalRetroFlags covers the retro half of `sirdar eval` at the command
+// level, which is all of it that can be checked without a model: the two
+// flags that only mean something with --retro say so, the usage line names
+// all three, and a golden set with nothing to replay names the file it was
+// looking for rather than printing an empty table.
+func TestEvalRetroFlags(t *testing.T) {
+	root, _ := newWorkspace(t, "fakeclaude.sh")
+	chdir(t, root)
+
+	var out, errb bytes.Buffer
+	if code := run([]string{"eval", "--with-rca"}, &out, &errb); code != 2 {
+		t.Errorf("--with-rca without --retro: exit %d, want 2 (stderr %q)", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), "--retro") {
+		t.Errorf("the refusal does not say which flag they belong to: %q", errb.String())
+	}
+
+	out.Reset()
+	errb.Reset()
+	run([]string{"eval", "--nope"}, &out, &errb)
+	for _, want := range []string{"--retro", "--with-rca", "--rubric"} {
+		if !strings.Contains(errb.String(), want) {
+			t.Errorf("the usage line does not mention %s:\n%s", want, errb.String())
+		}
+	}
+
+	out.Reset()
+	errb.Reset()
+	if code := run([]string{"eval", "--retro", "--golden", t.TempDir()}, &out, &errb); code != 1 {
+		t.Errorf("a golden set with no retro entry: exit %d, want 1 (stderr %q)", code, errb.String())
+	}
+	if !strings.Contains(errb.String(), "retro.json") {
+		t.Errorf("the message does not name the file it was looking for: %q", errb.String())
+	}
+}

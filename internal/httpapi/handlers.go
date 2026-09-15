@@ -49,8 +49,10 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Key             string `json:"key"`
 		DryRun          bool   `json:"dryRun"`
+		Local           bool   `json:"local"`
 		NoPR            bool   `json:"noPr"`
 		Base            string `json:"base"`
+		At              string `json:"at"`
 		AcceptDeviation bool   `json:"acceptDeviation"`
 		Provider        string `json:"provider"`
 		Model           string `json:"model"`
@@ -67,8 +69,10 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.svc.StartFix(r.Context(), r.PathValue("id"), body.Key, FixOptions{
 		DryRun:          body.DryRun,
+		Local:           body.Local,
 		NoPR:            body.NoPR,
 		Base:            body.Base,
+		At:              body.At,
 		AcceptDeviation: body.AcceptDeviation,
 		Provider:        body.Provider,
 		Model:           body.Model,
@@ -91,6 +95,11 @@ func (s *server) startEval(w http.ResponseWriter, r *http.Request) {
 		Provider    string   `json:"provider"`
 		Model       string   `json:"model"`
 		Concurrency int      `json:"concurrency"`
+		// Retro replays each key at the commit its fix branched from
+		// and scores it against the pull request that fixed it.
+		Retro   bool `json:"retro"`
+		WithRCA bool `json:"withRca"`
+		Rubric  bool `json:"rubric"`
 	}
 	// An eval of the whole golden set carries no body at all.
 	if !decode(w, r, &body, true) {
@@ -105,6 +114,7 @@ func (s *server) startEval(w http.ResponseWriter, r *http.Request) {
 	}
 	id, err := s.svc.StartEval(r.Context(), r.PathValue("id"), body.Keys, EvalOptions{
 		Provider: body.Provider, Model: body.Model, Concurrency: body.Concurrency,
+		Retro: body.Retro, WithRCA: body.WithRCA, Rubric: body.Rubric,
 	})
 	if err != nil {
 		s.fail(w, err)
@@ -122,6 +132,19 @@ func (s *server) evalReports(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, nonNil(reports))
+}
+
+// latestRetro is GET /api/workspaces/{id}/eval/retro/latest: the newest
+// retro report, or null when the workspace has run none. A workspace with
+// no retro is not an error — most have none — so the body is a null rather
+// than a 404 the screen would have to tell apart from a bad id.
+func (s *server) latestRetro(w http.ResponseWriter, r *http.Request) {
+	report, err := s.svc.LatestRetro(r.PathValue("id"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, report)
 }
 
 // golden is GET /api/workspaces/{id}/golden: the keys in the golden set.

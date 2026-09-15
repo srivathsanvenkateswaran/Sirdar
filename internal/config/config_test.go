@@ -1102,7 +1102,8 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 		t.Fatalf("fixBash = %v, want the default list", cfg.Permissions.FixBash)
 	}
 	for _, want := range []string{"git status*", "git diff*", "git log*", "git show*", "git grep*", "git blame*",
-		"dotnet build*", "dotnet test*", "npm test*", "go build*", "go test*", "make *"} {
+		"dotnet build*", "dotnet test*", "npm test*", "npx tsc --noEmit*", "go build*", "go test*", "go vet*",
+		"gofmt -l*", "make *"} {
 		var found bool
 		for _, got := range cfg.Permissions.FixBash {
 			if got == want {
@@ -1130,7 +1131,8 @@ func TestFixBashDefaultsAndOverride(t *testing.T) {
 		}
 	}
 	for _, wanted := range []string{"git status --porcelain", "git diff HEAD", "git log --oneline -20",
-		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./..."} {
+		"git show HEAD", "git grep -n rows", "git blame export/csv.go", "go test ./...",
+		"go vet ./...", "gofmt -l .", "npx tsc --noEmit"} {
 		if ok, reason := provider.MatchCommand("", cfg.Permissions.FixBash, wanted); !ok {
 			t.Errorf("the default fixBash list refuses %q: %s", wanted, reason)
 		}
@@ -1339,5 +1341,80 @@ func TestValidateNegativeStallMinutes(t *testing.T) {
 func TestStallMinutesOnAHandBuiltConfig(t *testing.T) {
 	if got := (&Config{}).StallMinutes(); got != 6 {
 		t.Fatalf("StallMinutes() = %d on a zero Config", got)
+	}
+}
+
+// TestTranscribeIsAbsentByDefault: a workspace that says nothing about
+// audio transcribes nothing, and a voice note stays evidence nobody read.
+func TestTranscribeIsAbsentByDefault(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.Attachments.Transcribe != nil {
+		t.Fatalf("transcribe block %+v, want none", c.Attachments.Transcribe)
+	}
+	if _, ok := c.TranscribeOptions(); ok {
+		t.Fatal("TranscribeOptions should report no transcription")
+	}
+}
+
+func TestTranscribeDefaults(t *testing.T) {
+	body := minimal + `
+attachments:
+  transcribe:
+    command: whisper-cli -m /models/ggml-large-v3.bin -l auto -otxt -of {out} {in}
+`
+	c, err := Load(writeCfg(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	tc := c.Attachments.Transcribe
+	if tc.MaxSeconds != DefaultTranscribeMaxSeconds || tc.MaxFiles != DefaultTranscribeMaxFiles {
+		t.Fatalf("limits %+v", tc)
+	}
+	if strings.Join(tc.Formats, ",") != "ogg,opus,mp3,m4a,wav,mp4" {
+		t.Fatalf("formats %v", tc.Formats)
+	}
+	opts, ok := c.TranscribeOptions()
+	if !ok || opts.MaxFiles != 30 {
+		t.Fatalf("options %+v ok=%v", opts, ok)
+	}
+}
+
+func TestTranscribeFormatsAreNormalised(t *testing.T) {
+	body := minimal + `
+attachments:
+  transcribe:
+    command: whisper {in}
+    formats: [".OGG", "Opus"]
+`
+	c, err := Load(writeCfg(t, body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(c.Attachments.Transcribe.Formats, ","); got != "ogg,opus" {
+		t.Fatalf("formats %q", got)
+	}
+}
+
+// TestTranscribeCommandIsCheckedAtLoad: the command is split into argv
+// once, here, so a pipeline nobody can run or a template that never sees
+// the audio is a config error rather than one warning per voice note.
+func TestTranscribeCommandIsCheckedAtLoad(t *testing.T) {
+	for _, c := range []struct{ name, block, want string }{
+		{"no command", "attachments:\n  transcribe:\n    maxFiles: 4\n", "command"},
+		{"no {in}", "attachments:\n  transcribe:\n    command: whisper --help\n", "{in}"},
+		{"a pipeline", "attachments:\n  transcribe:\n    command: whisper {in} | tee out.txt\n", "shell operator"},
+		{"an open quote", "attachments:\n  transcribe:\n    command: \"whisper '{in}\"\n", "quote"},
+		{"negative maxSeconds", "attachments:\n  transcribe:\n    command: whisper {in}\n    maxSeconds: -1\n", "maxSeconds"},
+		{"negative maxFiles", "attachments:\n  transcribe:\n    command: whisper {in}\n    maxFiles: -2\n", "maxFiles"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := Load(writeCfg(t, minimal+"\n"+c.block))
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error %v, want one naming %q", err, c.want)
+			}
+		})
 	}
 }

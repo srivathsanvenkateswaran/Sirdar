@@ -69,6 +69,14 @@ type State struct {
 	// what `sirdar rca` or `sirdar fix` reads as "the newest triage note".
 	Eval bool `json:",omitempty"`
 
+	// At is the commit a retrospective run stood at. `sirdar triage --at`,
+	// `sirdar rca --at` and `sirdar fix --at` each check that commit out
+	// into a linked worktree and run the session there, so the agent reads
+	// the repository as it was when the ticket was filed rather than as it
+	// is today. It holds the resolved sha, not whatever shorthand was
+	// typed, and is empty for every ordinary run.
+	At string `json:",omitempty"`
+
 	// Fix records where a fix run's work went: the branch it was made on,
 	// the branch it targets, and the commit it produced. The commit is
 	// what a `--accept-deviation` rerun looks for — it pushes the commit a
@@ -99,6 +107,15 @@ type State struct {
 		Deviation string `json:",omitempty"`
 		Pushed    bool   `json:",omitempty"`
 		PRURL     string `json:",omitempty"`
+
+		// Local marks a `sirdar fix --local` run: the commit was made and
+		// nothing else. Nothing was pushed, no pull request exists, the
+		// worktree is still on disk, and DiffPath names the commit's
+		// unified diff in the run directory. A screen reading Pushed alone
+		// would show a local run as work still waiting on a person, which
+		// is wrong: it is work that was never going to leave the machine.
+		Local    bool   `json:",omitempty"`
+		DiffPath string `json:",omitempty"`
 	} `json:",omitempty"`
 }
 

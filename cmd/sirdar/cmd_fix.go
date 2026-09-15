@@ -12,11 +12,13 @@ func init() { commands["fix"] = cmdFix }
 
 func cmdFix(args []string, stdout, stderr io.Writer) int {
 	fs := newFlagSet("fix", stderr,
-		"usage: sirdar fix KEY [--dry-run] [--no-pr] [--base BRANCH] [--accept-deviation] [--provider claude|codex|openai] [--model NAME]")
+		"usage: sirdar fix KEY [--dry-run] [--local] [--no-pr] [--base BRANCH] [--at COMMIT] [--accept-deviation] [--provider claude|codex|openai] [--model NAME]")
 	dryRun := fs.Bool("dry-run", false, "create the branch and the prompt, start no agent and push nothing")
+	local := fs.Bool("local", false, "commit in the worktree and stop: push nothing, open no pull request, write the diff to fix.diff, keep the worktree")
 	noPR := fs.Bool("no-pr", false, "push the branch but do not open a pull request")
 	base := fs.String("base", "", "branch to cut from and target (default: origin's default branch)")
-	accept := fs.Bool("accept-deviation", false, "push even though the agent reported deviating from the note")
+	at := fs.String("at", "", "cut the fix branch from this commit instead of from origin/<base>")
+	accept := fs.Bool("accept-deviation", false, "accept a reported deviation: push the commit, or with --local leave it where it is")
 	providerName := fs.String("provider", "", "override the configured provider")
 	model := fs.String("model", "", "override the configured model")
 	positional, ok := parseFlags(fs, args, 1, 1, stderr)
@@ -42,7 +44,9 @@ func cmdFix(args []string, stdout, stderr io.Writer) int {
 	res, err := fix.Run(ctx, deps, key, fix.Options{
 		Model:           *model,
 		Base:            *base,
+		At:              *at,
 		DryRun:          *dryRun,
+		Local:           *local,
 		NoPR:            *noPR,
 		AcceptDeviation: *accept,
 	})
@@ -56,7 +60,11 @@ func cmdFix(args []string, stdout, stderr io.Writer) int {
 // printFix reports what the run did, and returns the exit status: non-zero
 // when the work is sitting on a local branch waiting for a human.
 func printFix(res fix.Result, stdout io.Writer) int {
-	fmt.Fprintf(stdout, "branch: %s (from origin/%s)\n", res.Branch, res.Base)
+	from := "origin/" + res.Base
+	if res.At != "" {
+		from = res.At
+	}
+	fmt.Fprintf(stdout, "branch: %s (from %s)\n", res.Branch, from)
 	if res.DryRun {
 		fmt.Fprintf(stdout, "dry run: the prompt is in .sirdar/runs/%s/%s/prompt.md; no agent was started\n", res.Key, res.RunID)
 		return 0
@@ -68,6 +76,25 @@ func printFix(res fix.Result, stdout io.Writer) int {
 	}
 	for _, t := range res.Report.TestsRun {
 		fmt.Fprintf(stdout, "  %s — %s\n", t.Command, t.Result)
+	}
+
+	// A local run's whole output is the commit, the diff and the directory
+	// it is all sitting in, so those are said before anything else — and a
+	// blocked local run is told the same thing, since nothing was going to
+	// be pushed either way.
+	if res.Local {
+		if res.DiffPath != "" {
+			fmt.Fprintf(stdout, "diff: %s\n", res.DiffPath)
+		}
+		if res.Worktree != "" {
+			fmt.Fprintf(stdout, "worktree: %s\n", res.Worktree)
+		}
+		if res.Blocked != "" {
+			fmt.Fprintf(stdout, "\nThe agent reported deviating from the note:\n\n  %s\n\nNothing was pushed; --local never pushes.\n", res.Blocked)
+			return 1
+		}
+		fmt.Fprintf(stdout, "local: nothing was pushed and no pull request was opened\n")
+		return 0
 	}
 
 	if res.Blocked != "" {

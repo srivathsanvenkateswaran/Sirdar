@@ -26,6 +26,7 @@ var bridgeMethods = []string{
 	"StartFix",
 	"StartEval",
 	"EvalReports",
+	"LatestRetro",
 	"Golden",
 	"AddGolden",
 	"ConfigSummary",
