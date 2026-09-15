@@ -147,6 +147,22 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		policy = &provider.PermissionPolicy{}
 	}
 
+	// A resumed session continues the transcript the earlier one left in
+	// the run directory: spec.Resume is the path to it, which is what
+	// Handle reported. Failing here is the honest answer — a fresh
+	// session that silently started the triage again would spend the
+	// budget meant for one more answer.
+	var resumed []Message
+	var resumedTurns int
+	if spec.Resume != "" {
+		t, err := readTranscript(spec.Resume)
+		if err != nil {
+			return nil, err
+		}
+		resumed = t.Messages
+		resumedTurns = t.Turns
+	}
+
 	runCtx, cancel := context.WithCancel(ctx)
 	s := &session{
 		cfg:      cfg,
@@ -165,6 +181,18 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		dead:     make(chan struct{}),
 		done:     make(chan struct{}),
 		messages: []Message{{Role: "system", Content: SystemFor(spec.Mode)}},
+	}
+	s.transcript = transcriptPath(spec.RunDir)
+	if len(resumed) > 0 {
+		// The resumed transcript already carries its system message; the
+		// spec's prompt is the new user turn on the end of it.
+		s.messages = resumed
+		// The transcript's turn count is the earlier session's, not this
+		// process's: seeding it here is what makes budget.maxTurns span
+		// the whole run rather than resetting on every resume. Without
+		// this, a session that spent its whole budget across two resumes
+		// could take up to 3x MaxTurns before the loop ever stopped it.
+		s.turns = resumedTurns
 	}
 	s.messages = append(s.messages, Message{Role: "user", Content: UserMessage(spec.Prompt, spec.Images)})
 
@@ -252,10 +280,16 @@ type session struct {
 
 	// messages is the transcript. Only the loop goroutine touches it.
 	messages []Message
-	nudged   bool
-	turns    int
-	inTok    int64
-	outTok   int64
+	// transcript is where messages is persisted, so a later session can
+	// resume this one. Empty when the caller kept no run directory.
+	transcript string
+	// saveErr is the first transcript write that failed, reported once as
+	// a warning rather than on every turn.
+	saveErr bool
+	nudged  bool
+	turns   int
+	inTok   int64
+	outTok  int64
 
 	events chan provider.Event
 	sendCh chan string
@@ -268,6 +302,7 @@ type session struct {
 	result       provider.Result
 	streamClosed bool
 	inputClosed  bool
+	saved        bool // a transcript is on disk and can be resumed from
 }
 
 func (s *session) add(t *tool) {
@@ -281,10 +316,50 @@ func (s *session) add(t *tool) {
 // awaitSend meaningful.
 func (s *session) Events() <-chan provider.Event { return s.events }
 
-// Handle returns "": this provider has no resume token. The runner falls
-// back to a fresh session, which is the honest answer — the transcript
-// lives in this process and nowhere else.
-func (s *session) Handle() string { return "" }
+// Handle returns the path of this session's persisted transcript, which is
+// what a later SessionSpec.Resume reloads. It is empty until a transcript
+// has actually been written — no run directory, or a write that failed —
+// and the runner then treats the session as unresumable, as it did before
+// this loop persisted anything.
+func (s *session) Handle() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if !s.saved {
+		return ""
+	}
+	return s.transcript
+}
+
+// persist writes the message transcript to the run directory. It is called
+// from the loop goroutine, which is the only one that touches messages.
+//
+// A transcript that cannot be written costs the session its resume handle
+// and nothing else: the run is mid-investigation and losing it over a full
+// disk would be the worse trade. The failure is reported once.
+func (s *session) persist() {
+	if s.transcript == "" {
+		return
+	}
+	err := writeTranscript(s.transcript, transcript{
+		Version:  transcriptVersion,
+		Provider: "openai",
+		Model:    s.cfg.Chat.Model,
+		Mode:     string(s.spec.Mode),
+		SavedAt:  time.Now().UTC(),
+		Turns:    s.turns,
+		Messages: s.messages,
+	})
+	if err == nil {
+		s.mu.Lock()
+		s.saved = true
+		s.mu.Unlock()
+		return
+	}
+	if !s.saveErr {
+		s.saveErr = true
+		s.warn("transcript: " + err.Error() + "; this session cannot be resumed")
+	}
+}
 
 // Send appends a follow-up user message and resumes the loop. The runner
 // uses it for the schema-retry turn, which arrives while it is still
@@ -428,8 +503,12 @@ func (s *session) discoverTools() bool {
 }
 
 // turnLoop runs chat turns until the session produces a note, fails, or
-// runs out of budget.
+// runs out of budget. Every turn is persisted, so whatever ends the loop —
+// a note, a budget, a rate limit, a cancelled context — leaves a
+// transcript a later session can pick up from.
 func (s *session) turnLoop() {
+	defer s.persist()
+
 	for {
 		if max := s.spec.Budget.MaxTurns; max > 0 && s.turns >= max {
 			// The runner reads "over budget" off a usage event whose
@@ -504,6 +583,7 @@ func (s *session) turnLoop() {
 		if !s.trim(resp.Usage.PromptTokens) {
 			return
 		}
+		s.persist()
 	}
 }
 

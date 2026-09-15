@@ -42,17 +42,13 @@ these are the remainders.
 
 ## Deferred in this repo
 
-- **`doctor` has no warning level.** `provider.Check` is `OK bool`
-  (`internal/provider/provider.go:123`), so the MCP row reports "every user-level MCP server
-  is visible to the agent" as an `[OK]` line whose detail starts with `warning:`
-  (`cmd/sirdar/cmd_doctor.go:217`). A third state — `[??]`, non-zero-exit-free — would read
-  better and would suit the "describe passed but the credential is untested" case too.
-- **The write-verb heuristic only reads the leading verb.** `MCPLooksLikeWrite`
-  (`internal/provider/policy.go:132`) denies `create_incident` and, after stripping a
-  repeated server prefix, `slack_send_message`. It allows a write tool whose name does not
-  lead with a verb — `grafana_api_request` is the example in this session's own tool list.
-  `permissions.mcp` is the answer for a workspace that cares; a per-server default-deny list
-  shipped with Sirdar would be better.
+Two entries below are fixed on the `quality` branch: `doctor` now has a warning level
+(`provider.Check.Level`, `[!!]`, non-zero-exit-free — the MCP-visibility row uses it instead of
+an `[OK]` line whose detail starts with `warning:`), and `MCPLooksLikeWrite` now tokenises the
+whole name and denies a generic passthrough like `grafana_api_request` instead of allowing it.
+See `docs/config.md`'s `sirdar doctor` levels and `permissions.mcp` sections for the current
+rules.
+
 - **The prompt still inlines the head of `thread.md`** (`internal/run/prepare.go:38`,
   `internal/prompt/prompt.go:221`). The heading no longer lies about it, but for a thread
   shorter than 40 lines the whole conversation is paid for twice: once inline and once when

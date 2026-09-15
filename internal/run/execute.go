@@ -250,6 +250,7 @@ func (r *Runner) sessionSpec(p *prepared, resume string) provider.SessionSpec {
 			MaxUSD:     cfg.Budget.MaxUSD,
 		},
 		Resume: resume,
+		RunDir: p.run.Dir,
 		Env:    r.childEnv(),
 		Binary: r.binary(),
 	}
@@ -732,6 +733,8 @@ func (r *Runner) completeTriage(p *prepared, doc []byte) (note.DigestRow, error)
 		Classification: f.Classification,
 		Confidence:     f.RootCause.Confidence,
 		NotePath:       notePath,
+		Title:          strings.TrimSpace(f.Title),
+		Company:        registerCompany(body, meta.Customer),
 	})
 
 	return note.DigestRow{
@@ -799,6 +802,7 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		}
 	}
 
+	company := registerCompany(rcaBody, meta.Customer)
 	r.appendRegister(p, store.RegisterRow{
 		Kind:           string(note.RCA),
 		Date:           meta.Date,
@@ -808,6 +812,8 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		Severity:       f.RCA.Severity,
 		TriageVerdict:  f.RCA.TriageReview.Verdict,
 		NotePath:       rcaPath,
+		Title:          strings.TrimSpace(f.RCA.Title),
+		Company:        company,
 	})
 	r.appendRegister(p, store.RegisterRow{
 		Kind:           string(note.Resolution),
@@ -815,6 +821,10 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		Service:        meta.Service,
 		Classification: f.Resolution.ResolutionType,
 		NotePath:       resPath,
+		// No Title: the resolution note is titled after the fix, and the
+		// register's title is the issue's — which is the triage note's,
+		// refined by the rca's.
+		Company: company,
 	})
 
 	return note.DigestRow{
@@ -822,6 +832,22 @@ func (r *Runner) completeRCA(p *prepared, doc []byte) (note.DigestRow, error) {
 		Confidence:     f.RCA.Confidence,
 		Classification: f.RCA.Classification,
 	}, nil
+}
+
+// registerCompany is the company the register records for a note: the
+// note's own `company` frontmatter key when a workspace template writes
+// one, then `customer`, which the built-in templates do write, and finally
+// whatever the run resolved the customer to be. It is read off the
+// rendered note rather than off the document, so a workspace whose
+// template names the company somewhere Sirdar does not model still gets it
+// into the export.
+func registerCompany(body, fallback string) string {
+	for _, key := range []string{"company", "customer"} {
+		if v := strings.TrimSpace(note.Frontmatter(body, key)); v != "" {
+			return v
+		}
+	}
+	return strings.TrimSpace(fallback)
 }
 
 // writeNote writes the rendered note into the run directory and, unless the

@@ -49,6 +49,8 @@ const rows: RegisterRow[] = [
     costUsd: 0.5,
     triageVerdict: 'confirmed',
     notePath: 'triage.md',
+    title: 'Export job times out on large orders',
+    company: 'NEQSA SWEET',
   },
   {
     key: 'OMNI-2',
@@ -65,6 +67,8 @@ const rows: RegisterRow[] = [
     costUsd: 0.25,
     triageVerdict: 'wrong',
     notePath: 'triage.md',
+    title: '',
+    company: '',
   },
 ]
 

@@ -14,7 +14,9 @@ func TestPolicy(t *testing.T) {
 		allow       bool
 	}{
 		{"Read", `{"file_path":"x"}`, true},
-		{"mcp__grafana__query", `{}`, true},
+		// A named read: the bare "query" this case used to name is now a
+		// generic passthrough and is denied (TestMCPWriteHeuristic).
+		{"mcp__grafana__query_prometheus", `{}`, true},
 		{"Write", `{"file_path":"x","content":"y"}`, false},
 		{"Bash", `{"command":"git log --oneline -5"}`, true},
 		{"Bash", `{"command":"  rg foo src/ "}`, true},
@@ -387,33 +389,143 @@ func TestRedirectionAndSubstitution(t *testing.T) {
 	}
 }
 
-// TestMCPWriteHeuristicReadsTheWholeName is R3: the leading-verb rule
-// denied every read-shaped query tool named run_* or exec_*, and missed
-// every write whose verb was not the first word.
-func TestMCPWriteHeuristicReadsTheWholeName(t *testing.T) {
-	allowed := []string{
-		"mcp__metabase__run_query",
-		"mcp__oxo-mysql-stg__run_select",
-		"mcp__grafana__query_loki_logs",
-		"mcp__grafana__get_sift_analysis",
-		"mcp__claude_ai_Janus__trigger_workflow",
-		"mcp__claude_ai_Janus__my_worklog_month",
+// TestMCPWriteHeuristic is the write-verb default, the rule that applies
+// while permissions.mcp is empty. The whole name is tokenised — on "_",
+// "-" and camelCase — and a write word anywhere in it denies the tool; a
+// generically named passthrough, whose arguments decide what it does, is
+// denied too; only a name with neither is read by its read word.
+//
+// The names are the ones the dogfood run actually had in its tool list
+// (docs/research/07-dogfood-findings.md) plus the OXO-style servers.
+func TestMCPWriteHeuristic(t *testing.T) {
+	cases := []struct {
+		tool  string
+		write bool
+		why   string
+	}{
+		// Reads: what a triage session lives on.
+		{"mcp__oxo-mysql-stg__read_query", false, "the read word is the whole operation"},
+		{"mcp__oxo-mysql-stg__list_tables", false, "listing is a read"},
+		{"mcp__oxo-mysql-stg__describe_table", false, "describing is a read"},
+		{"mcp__grafana__query_loki_logs", false, "a named query with no write word"},
+		{"mcp__grafana__get_sift_analysis", false, "get"},
+		{"mcp__grafana__list_incidents", false, "list"},
+		{"mcp__claude_ai_Janus__my_worklog_month", true, "worklog is one word, not log, but the tail default now denies a name with no read word at all"},
+		{"mcp__claude_ai_Zoho_Desk__getTicketConversations", false, "camelCase get"},
+		{"mcp__athena__find_backlinks", false, "find"},
+		{"mcp__grafana__find_slow_requests", false, "requests is not request"},
+
+		// Writes by a verb anywhere in the name.
+		{"mcp__grafana__create_incident", true, "leading verb"},
+		{"mcp__athena__wiki_save", true, "trailing verb"},
+		{"mcp__claude_ai_Slack__slack_send_message", true, "verb in the middle"},
+		{"mcp__claude_ai_Janus__log_worklog", true, "log"},
+		{"mcp__claude_ai_Janus__transition_ticket", true, "transition"},
+		{"mcp__claude_ai_Janus__trigger_workflow", true, "trigger"},
+		{"mcp__claude_ai_Athena_Prod__wiki_edit_article", true, "edit"},
+		{"mcp__plugin_vercel_vercel__deploy_to_vercel", true, "deploy, server name ignored"},
+		{"mcp__plugin_vercel_vercel__buy_domain", true, "buy, server name has underscores"},
+		{"mcp__plugin_vercel_vercel__unpause_project", true, "unpause"},
+		{"mcp__github__createPullRequest", true, "camelCase create"},
+		{"mcp__git__push-branch", true, "hyphen split"},
+		{"mcp__jira__assign-issue", true, "assign"},
+		{"mcp__k8s__restart_deployment", true, "restart"},
+		{"mcp__slack__reply_to_thread", true, "reply"},
+
+		// Generic passthroughs: the name says transport, the arguments
+		// say what it does.
+		{"mcp__grafana__grafana_api_request", true, "api_request takes a method and a path"},
+		{"mcp__x__graphql", true, "a graphql document can mutate"},
+		{"mcp__x__sql_execute", true, "execute"},
+		{"mcp__x__raw_query", true, "raw beats the read word beside it"},
+		{"mcp__x__query", true, "a query of nothing named is a passthrough"},
+
+		// A read word does not save a name that also carries a write
+		// word: this is the change from the earlier rule.
+		{"mcp__metabase__run_query", true, "run wins over query"},
+		{"mcp__oxo-mysql-stg__run_select", true, "run wins over select"},
+
+		// Round 1: the tail default flips. A name with no recognised read
+		// word is now a write, not an unseen approval. These are the
+		// reviewer's names, which used to fall through to allow for want
+		// of a verb the old lists recognised.
+		{"mcp__grafana__alerting_manage_rules", true, "manage is a write verb"},
+		{"mcp__claude_ai_Figma__use_figma", true, "use is a write verb"},
+		{"mcp__claude-in-chrome__form_input", true, "input is a write verb"},
+		{"mcp__claude-in-chrome__javascript_tool", true, "no write, passthrough or read word: denied by the tail default"},
+		{"mcp__grafana__generate_deeplink", true, "generate is a write verb"},
+		{"mcp__claude_ai_Tatak__next_departures", true, "no write, passthrough or read word: denied by the tail default"},
+
+		// Round 1: the rest of the new write verbs, each the only
+		// recognisable word in a name that used to fall through to allow.
+		{"mcp__x__enable_feature", true, "enable"},
+		{"mcp__x__disable_feature", true, "disable"},
+		{"mcp__x__start_job", true, "start"},
+		{"mcp__x__stop_job", true, "stop"},
+		{"mcp__x__grant_access", true, "grant"},
+		{"mcp__x__import_data", true, "import"},
+		{"mcp__x__restore_snapshot", true, "restore"},
+		{"mcp__x__rename_file", true, "rename"},
+		{"mcp__x__move_file", true, "move"},
+		{"mcp__x__drop_table", true, "drop"},
+		{"mcp__x__truncate_table", true, "truncate"},
+		{"mcp__x__submit_form", true, "submit"},
+		{"mcp__x__approve_request", true, "approve, though request alone would already be a passthrough"},
+		{"mcp__x__invite_member", true, "invite"},
+		{"mcp__x__share_document", true, "share"},
+		{"mcp__x__sync_repo", true, "sync"},
+		{"mcp__x__promote_release", true, "promote"},
+		{"mcp__x__scale_deployment", true, "scale"},
+		{"mcp__x__eval_expression", true, "eval"},
+
+		// Round 1: the new read words keep a name a read when it is the
+		// only word present alongside a noun the lists do not recognise.
+		{"mcp__grafana__check_datasources_health", false, "check and health are both read words"},
+		{"mcp__x__fetch_record", false, "fetch"},
+		{"mcp__x__view_dashboard", false, "view"},
+		{"mcp__x__lookup_user", false, "lookup"},
+		{"mcp__x__count_rows", false, "count"},
+		{"mcp__grafana__get_dashboard_summary", false, "summary, alongside get"},
+		{"mcp__x__list_labels", false, "labels, plural"},
+		{"mcp__grafana__list_prometheus_label_names", false, "label and names both read words"},
+		{"mcp__x__get_history", false, "history"},
+		{"mcp__x__analyze_trace", false, "analyze"},
+		{"mcp__x__analyse_trace", false, "analyse, the other spelling"},
+		{"mcp__x__suggest_fix", false, "suggest"},
+		{"mcp__x__explain_query_plan", false, "explain and query, both read; plan is neutral"},
+		{"mcp__x__diff_versions", false, "diff"},
+		{"mcp__x__blame_line", false, "blame"},
+		{"mcp__x__grep_logs", false, "grep"},
+		{"mcp__x__cat_file", false, "cat"},
+		{"mcp__x__tail_log", true, "tail is a read word but log is also a write verb, and a write word wins over a read word beside it"},
+		{"mcp__x__ls_dir", false, "ls"},
+		{"mcp__x__tree_view", false, "tree and view, both read"},
+		{"mcp__x__peek_queue", false, "peek"},
+		{"mcp__x__inspect_pod", false, "inspect"},
 	}
-	denied := []string{
-		"mcp__claude_ai_Janus__log_worklog",
-		"mcp__athena__wiki_save",
-		"mcp__grafana__create_incident",
-		"mcp__claude_ai_Athena_Prod__wiki_edit_article",
-	}
+
 	p := &PermissionPolicy{}
-	for _, tool := range allowed {
-		if d := p.Decide(tool, nil); !d.Allow {
-			t.Errorf("%s was denied: %s", tool, d.Message)
+	for _, c := range cases {
+		if got := MCPLooksLikeWrite(c.tool); got != c.write {
+			t.Errorf("MCPLooksLikeWrite(%q) = %v, want %v (%s)", c.tool, got, c.write, c.why)
+		}
+		// The same answer has to come out of the policy, which is what
+		// the providers actually call.
+		if d := p.Decide(c.tool, nil); d.Allow == c.write {
+			t.Errorf("Decide(%q) allow=%v, want %v (%s)", c.tool, d.Allow, !c.write, c.why)
 		}
 	}
-	for _, tool := range denied {
-		if d := p.Decide(tool, nil); d.Allow {
-			t.Errorf("%s was allowed", tool)
-		}
+}
+
+// permissions.mcp, once non-empty, is the whole rule: a name the heuristic
+// would deny is allowed when a pattern names it, and one it would allow is
+// denied when no pattern does.
+func TestMCPAllowListBeatsTheHeuristic(t *testing.T) {
+	p := &PermissionPolicy{MCPAllow: []string{"mcp__metabase__run_*"}}
+	if d := p.Decide("mcp__metabase__run_query", nil); !d.Allow {
+		t.Errorf("a named tool should be allowed: %s", d.Message)
+	}
+	if d := p.Decide("mcp__grafana__list_incidents", nil); d.Allow {
+		t.Error("a tool matching no pattern should be denied")
 	}
 }

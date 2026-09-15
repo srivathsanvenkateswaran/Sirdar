@@ -56,6 +56,15 @@ type SessionSpec struct {
 	// load. Empty means there is no such file.
 	MCPConfig string
 
+	// RunDir is this run's own directory (.sirdar/runs/<id>), where a
+	// provider may keep whatever it needs to resume the session later.
+	// Sirdar's own loop writes its message transcript there, which is the
+	// only resume handle it can have: unlike a CLI session there is no
+	// server-side thread to name. Empty means the caller keeps no run
+	// directory — an eval, a test — and a provider that would have
+	// written one does not, and reports no handle.
+	RunDir string
+
 	// MCPStrict says the session must see the servers in MCPConfig and no
 	// others. With MCPStrict set and MCPConfig empty the session gets no
 	// MCP servers at all, which is what mcp.workspaceOnly asks for in a
@@ -146,11 +155,51 @@ type Session interface {
 	Cancel()
 }
 
+// Level is how serious a Doctor diagnostic is.
+//
+// LevelWarn is the middle state the bool alone could not express: the
+// check found something the operator should know about — every user-level
+// MCP server visible to the agent, a Codex session that will see no MCP
+// servers at all, a custom Anthropic base URL that makes budget.maxUsd
+// meaningless — but nothing that stops a run. Only LevelFail exits
+// non-zero.
+type Level string
+
+const (
+	LevelOK   Level = "ok"
+	LevelWarn Level = "warn"
+	LevelFail Level = "fail"
+)
+
 // Check is one Doctor diagnostic result.
+//
+// OK stays the field every caller already reads, and it means "this is not
+// a failure": a warning has OK true. Level carries the third state; an
+// empty Level is read off OK, so a provider that has not been taught about
+// warnings still reports correctly.
 type Check struct {
 	Name   string
 	OK     bool
+	Level  Level
 	Detail string
+}
+
+// Severity is the check's level, derived from OK when the check set none.
+func (c Check) Severity() Level {
+	switch {
+	case c.Level != "":
+		return c.Level
+	case c.OK:
+		return LevelOK
+	default:
+		return LevelFail
+	}
+}
+
+// Warn builds a warning check: something worth reporting that is not a
+// failure, so it never changes an exit code.
+func Warn(name, detail string) Check {
+	return Check{Name: name, OK: true, Level: LevelWarn, Detail: detail}
 }
 
 // DoctorConfig carries the parts of the workspace configuration a
