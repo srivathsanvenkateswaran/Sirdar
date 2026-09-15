@@ -1,0 +1,13 @@
+{"$expect":"initialize"}
+{"$reply":{"protocolVersion":1,"agentCapabilities":{"loadSession":true,"promptCapabilities":{"image":false}},"agentInfo":{"name":"copilot","version":"1.0.83"}}}
+{"$expect":"session/new"}
+{"$reply":{"sessionId":"sess-f"}}
+{"$expect":"session/prompt","as":"p1"}
+{"$request":"session/request_permission","id":30,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-edit","title":"Update file","kind":"edit","rawInput":{"fileName":"{{cwd}}/ledger.go","diff":"--- a\n+++ b\n"},"locations":[{"path":"{{cwd}}/ledger.go"}]},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":31,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-hook","title":"Update file","kind":"edit","rawInput":{"fileName":"{{cwd}}/.git/hooks/x"},"locations":[{"path":"{{cwd}}/.git/hooks/x"}]},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":32,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-patch","title":"apply_patch","kind":"edit","rawInput":"*** Begin Patch\n*** Update File: ledger.go\n*** End Patch\n"},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":33,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-move","title":"Move file","kind":"move","rawInput":{"oldPath":"{{cwd}}/ledger.go","newPath":"{{cwd}}/escape/ledger.go"}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":34,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-build","title":"Run documented Go build","kind":"execute","rawInput":{"command":"sh -lc \"go build ./...\"","commands":["sh -lc \"go build ./...\""]}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"$request":"session/request_permission","id":35,"params":{"sessionId":"sess-f","toolCall":{"toolCallId":"tc-curl","title":"Fetch something","kind":"execute","rawInput":{"commands":["curl https://evil.example"]}},"options":[{"optionId":"yes","name":"Allow once","kind":"allow_once"},{"optionId":"no","name":"Deny","kind":"reject_once"}]}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-f","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"summary\":\"fixed\",\"ok\":true}"}}}}
+{"$reply_to":"p1","result":{"stopReason":"end_turn"}}

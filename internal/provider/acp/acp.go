@@ -805,9 +805,17 @@ func (s *session) finishAnswer(text string, raw json.RawMessage) {
 	s.mu.Lock()
 	s.finalText = text
 	s.mu.Unlock()
+	// An empty turn and a prose turn are different failures and the
+	// operator has to be able to tell them apart: one agent answered the
+	// wrong way, the other stopped without answering at all — which is
+	// what a turn spent entirely on tool calls and thinking looks like.
+	reason := "acp: the agent did not return a JSON note"
+	if strings.TrimSpace(text) == "" {
+		reason = "acp: the agent ended the turn without an answer"
+	}
 	s.emit(provider.Event{
 		Kind: provider.EvError,
-		Text: "acp: the agent did not return a JSON note",
+		Text: reason,
 		Raw:  raw,
 	})
 	s.emit(provider.Event{Kind: provider.EvFinal, Text: text, Raw: raw})
@@ -830,6 +838,16 @@ func promptText(spec provider.SessionSpec) string {
 		b.WriteString("\n```")
 		b.WriteString("\n\nThat schema describes the shape of your answer; it is not the answer. " +
 			"Reply with the JSON object only: no `$schema`, no `title`, no surrounding text or code fence.")
+	}
+	if spec.Policy.IsFix() {
+		// A fix session is here to edit, and telling it otherwise is how
+		// the read-only wording used to turn a fix run into a turn spent
+		// explaining that it could not make the change.
+		b.WriteString("\n\nYou may edit files in this workspace. Every write has to land inside " +
+			"the workspace directory, and writes to .git/, .sirdar/ and the repository's hooks " +
+			"directory are refused by the harness, which cannot tell you why at the moment it " +
+			"refuses. Shell commands are limited to the workspace's allow-list.")
+		return b.String()
 	}
 	b.WriteString("\n\nThis run is read-only. Do not write, edit, move or delete any file, " +
 		"and do not run a command that changes anything: such a request is refused by the harness, " +
@@ -1466,6 +1484,9 @@ type permissionRequest struct {
 		Title      string          `json:"title"`
 		Kind       string          `json:"kind"`
 		RawInput   json.RawMessage `json:"rawInput"`
+		Locations  []struct {
+			Path string `json:"path"`
+		} `json:"locations"`
 	} `json:"toolCall"`
 	Options []struct {
 		OptionID string `json:"optionId"`
@@ -1551,10 +1572,7 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 	s.markAsked(req.ToolCall.ToolCallID, req.ToolCall.Kind)
 
 	tool := policyTool(req.ToolCall.Kind, req.ToolCall.Title)
-	decision := provider.Decision{Allow: false, Message: "Sirdar policy: no permission policy is configured"}
-	if s.spec.Policy != nil {
-		decision = s.spec.Policy.Decide(tool, req.ToolCall.RawInput)
-	}
+	decision := s.decide(tool, req)
 
 	want := []string{"reject_once", "reject_always"}
 	verdict := "deny"
@@ -1599,6 +1617,146 @@ func (s *session) onPermission(id json.RawMessage, params, raw json.RawMessage) 
 		Text:     decision.Message,
 		Raw:      raw,
 	})
+}
+
+// writeKinds are the ACP kinds that change a file. In a fix run each one
+// is decided on the destinations it named rather than on its raw
+// arguments, which ACP does not standardise (see decideFixWrite).
+var writeKinds = map[string]bool{"edit": true, "delete": true, "move": true}
+
+// decide judges one permission request.
+//
+// Two kinds carry arguments in a shape PermissionPolicy cannot read off
+// the wire, so they are unpacked first: an execute's command may be an
+// argv or a shell wrapper, and a write names its destination in
+// toolCall.locations, which no ACP agent is obliged to repeat under a
+// field name the policy knows. Everything else goes to the policy as it
+// arrived, which is also what a triage run does with a write: the kind
+// maps to Write, Write is AlwaysDenied outside a fix, and the answer is
+// the read-only refusal.
+func (s *session) decide(tool string, req permissionRequest) provider.Decision {
+	if s.spec.Policy == nil {
+		return provider.Decision{Allow: false, Message: "Sirdar policy: no permission policy is configured"}
+	}
+	switch {
+	case req.ToolCall.Kind == "execute":
+		return s.decideExecute(tool, req)
+	case writeKinds[req.ToolCall.Kind] && s.spec.Policy.IsFix():
+		return s.decideFixWrite(tool, req)
+	}
+	return s.spec.Policy.Decide(tool, req.ToolCall.RawInput)
+}
+
+// decideExecute judges a shell call on the command it would actually run.
+// The agent may send "command" as a line or as an argv, and either may be
+// a login-shell wrapper around the real script, so it goes through the
+// same UnwrapCommand the Codex path uses; a "commands" list without a
+// "command" is judged entry by entry, and every entry has to pass, because
+// the approval covers the lot.
+func (s *session) decideExecute(tool string, req permissionRequest) provider.Decision {
+	var args struct {
+		Command  json.RawMessage `json:"command"`
+		Commands []string        `json:"commands"`
+	}
+	if len(req.ToolCall.RawInput) > 0 {
+		_ = json.Unmarshal(req.ToolCall.RawInput, &args)
+	}
+
+	fields := []json.RawMessage{}
+	if len(args.Command) > 0 && !isJSONNull(args.Command) {
+		fields = append(fields, args.Command)
+	} else {
+		for _, line := range args.Commands {
+			raw, err := json.Marshal(line)
+			if err != nil {
+				continue
+			}
+			fields = append(fields, raw)
+		}
+	}
+	if len(fields) == 0 {
+		// Nothing this reader recognises as a command. The raw arguments
+		// go to the policy, which refuses a call naming no command at all
+		// and says so in its own words.
+		return s.spec.Policy.Decide(tool, req.ToolCall.RawInput)
+	}
+
+	for _, field := range fields {
+		command, err := provider.UnwrapCommand(field)
+		if err != nil {
+			return provider.Decision{Allow: false, Message: "Sirdar policy: " + err.Error()}
+		}
+		input, _ := json.Marshal(map[string]string{"command": command})
+		if d := s.spec.Policy.Decide(tool, input); !d.Allow {
+			return d
+		}
+	}
+	return provider.Decision{Allow: true}
+}
+
+// decideFixWrite judges a fix run's edit, delete or move on where it would
+// write, through the same PermissionPolicy.decideWrite a Claude fix's Edit
+// goes through: the path is resolved through symlinks, anything outside
+// the run's worktree is refused, and so is anything inside .git/,
+// .sirdar/ or the repository's hooks directory.
+//
+// The destinations come from toolCall.locations, which is the one place
+// ACP defines for them, and from the argument names agents use when they
+// send locations with the tool_call but not with the approval. A request
+// that names none is denied: an accept would be a write nobody looked at.
+// Every path has to pass, since one approval covers the whole call.
+func (s *session) decideFixWrite(tool string, req permissionRequest) provider.Decision {
+	paths := requestPaths(req)
+	if len(paths) == 0 {
+		kind := req.ToolCall.Kind
+		return provider.Decision{Allow: false, Message: "Sirdar policy: this " + kind +
+			" named no path, in its locations or in its arguments, so where it would write cannot be checked"}
+	}
+	for _, path := range paths {
+		input, _ := json.Marshal(map[string]string{"file_path": path})
+		if d := s.spec.Policy.Decide(tool, input); !d.Allow {
+			return d
+		}
+	}
+	return provider.Decision{Allow: true}
+}
+
+// requestPaths lifts the destinations out of a permission request:
+// toolCall.locations first, and the file-naming arguments agents send
+// otherwise. rawInput that is not an object — apply_patch sends the patch
+// text itself — yields nothing, which decideFixWrite turns into a denial.
+func requestPaths(req permissionRequest) []string {
+	var out []string
+	for _, loc := range req.ToolCall.Locations {
+		if strings.TrimSpace(loc.Path) != "" {
+			out = append(out, loc.Path)
+		}
+	}
+	if len(out) > 0 {
+		return out
+	}
+
+	var args struct {
+		FileName     string `json:"fileName"`
+		FilePath     string `json:"file_path"`
+		FilePathCC   string `json:"filePath"`
+		Path         string `json:"path"`
+		NotebookPath string `json:"notebook_path"`
+		OldPath      string `json:"oldPath"`
+		NewPath      string `json:"newPath"`
+	}
+	if len(req.ToolCall.RawInput) > 0 {
+		_ = json.Unmarshal(req.ToolCall.RawInput, &args)
+	}
+	for _, p := range []string{
+		args.FileName, args.FilePath, args.FilePathCC, args.Path,
+		args.NotebookPath, args.OldPath, args.NewPath,
+	} {
+		if strings.TrimSpace(p) != "" {
+			out = append(out, p)
+		}
+	}
+	return out
 }
 
 // kindTools maps ACP's portable tool kinds onto the names
