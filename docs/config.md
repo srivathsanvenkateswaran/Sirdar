@@ -1158,10 +1158,19 @@ mcp__oxo-mysql-stg__sql_execute	denied	write word "execute" in the name
 4 tool(s) in 612ms; permissions.mcp is empty, so each tool is judged by its name
 ```
 
-`sirdar mcp call <server> <tool> [--args '<json>']` runs one by hand. A denied tool is refused
-with the same reason and exit status 2, and its server is never started — the verdict is taken
-before anything is spawned. An allowed one prints the tool's output, capped at 64 KiB with a
-`truncated at 65536 bytes` line when the cap bites.
+`sirdar mcp call <server> <tool> [--args '<json>']` runs one by hand. A denied tool is refused on
+stderr with exit status 2, and its server is never started — the verdict is taken before anything
+is spawned:
+
+```
+$ sirdar mcp call fs write_file --args '{"path":"/tmp/x","contents":"y"}'
+sirdar: refused: write_file is denied: write word "write" in the name
+```
+
+The verdict and the rule are the ones a session would get. The sentence a run's policy hands the
+agent instead is worded differently — it is written to be read by a model mid-turn, not at a
+prompt — and the wording is the only thing that differs. An allowed tool prints its output,
+capped at 64 KiB with a `truncated at 65536 bytes` line when the cap bites.
 
 `sirdar serve` exposes the same three, loopback-only and behind the same cross-site guard as
 every other route:

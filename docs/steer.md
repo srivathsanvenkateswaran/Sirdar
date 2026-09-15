@@ -97,10 +97,11 @@ Every refusal happens before `state.json` is touched. Over HTTP a run-level refu
 a provider-level one is only known once the job has built its dependencies, so it ends the job
 failed with the reason on the activity pane, the way a refused fix does.
 
-## Unverified
+## Verified live, 2026-09-15
 
-No live steer has run against a real provider yet. Whether Claude's `--resume` reports
-`num_turns` and `total_cost_usd` for the resumed invocation alone, or for the whole
-conversation, is read off the CLI's documented result shape rather than watched; if it is the
-latter, a resumed session's usage would be counted twice against the cap, which errs toward
-refusing rather than overspending.
+A steer ran end to end on `provider: claude`, which settles the one number this feature depended
+on. Claude's `--resume` reports `num_turns` and `total_cost_usd` **for the resumed invocation
+alone**, not for the whole conversation: the resumed result line carried 3 turns and $0.3043, and
+the run that already held 14 turns and $0.7198 came out at 17 turns and $1.0241. So the
+accumulation above is right as written, and a resumed session's usage is not counted twice
+against the cap.
