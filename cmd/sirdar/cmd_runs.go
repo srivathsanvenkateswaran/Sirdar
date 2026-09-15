@@ -24,6 +24,12 @@ type runRow struct {
 }
 
 func cmdRuns(args []string, stdout, stderr io.Writer) int {
+	// `sirdar runs diff RUN_ID` is a subcommand rather than a flag,
+	// because it answers about one run rather than listing them: the
+	// positional argument means a run id there and a ticket key here.
+	if len(args) > 0 && args[0] == "diff" {
+		return cmdRunsDiff(args[1:], stdout, stderr)
+	}
 	fs := newFlagSet("runs", stderr, "usage: sirdar runs [KEY] [--json]")
 	asJSON := fs.Bool("json", false, "print the runs as a JSON array")
 	positional, ok := parseFlags(fs, args, 0, 1, stderr)
