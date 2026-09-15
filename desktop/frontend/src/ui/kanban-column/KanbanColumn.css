@@ -1,14 +1,19 @@
 /*
- * Kanban column. A card-row well, 248 wide, with a 3px rail across its top
- * in the lane's hue — which is the board's whole legend — and a tracked
- * uppercase head with the count beside it.
+ * Kanban column. A card-row well with a 3px rail across its top in the
+ * lane's hue — which is the board's whole legend — and a tracked uppercase
+ * head with the count beside it.
+ *
+ * The lanes share their row: `flex: 1 1 0` with a 200px floor, so six of
+ * them fit a 1440 sheet at 248-ish each and the row only scrolls sideways
+ * once six times 200 no longer fit.
  */
 
 .sd-lane {
   display: flex;
-  flex: 0 0 248px;
+  flex: 1 1 0;
   flex-direction: column;
   box-sizing: border-box;
+  min-inline-size: 200px;
   min-height: 0;
   padding: var(--sd-space-2);
   border-radius: var(--sd-radius-sm);
@@ -70,11 +75,20 @@
   color: var(--sd-ink-3);
 }
 
+/* Compact (under 1200): the head steps down one notch. */
+@media (max-width: 1199px) {
+  .sd-lane__head {
+    font-size: calc(var(--sd-text-micro) - 1px);
+    letter-spacing: 0.06em;
+  }
+}
+
 /* Under 720px the lanes stack and the board scrolls as one page. */
 @media (max-width: 720px) {
   .sd-lane {
     flex: 0 0 auto;
     inline-size: 100%;
+    min-inline-size: 0;
   }
 
   .sd-lane__body {

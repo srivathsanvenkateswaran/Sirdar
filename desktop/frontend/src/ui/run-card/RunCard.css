@@ -57,6 +57,7 @@ a.sd-run-card:hover {
 
 .sd-run-card__foot {
   display: flex;
+  flex-wrap: nowrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--sd-space-2);
@@ -64,13 +65,27 @@ a.sd-run-card:hover {
   margin-block-start: var(--sd-space-3);
 }
 
-/* The state is the side that gives way when the card is narrow: the key and
-   the mark keep their width and the state's word is cut with an ellipsis. */
+/*
+ * The foot never wraps. The state is the side that gives way when the card
+ * is narrow: the key and the mark keep their width, and inside the glyph it
+ * is the word that is cut with an ellipsis — the icon and the clock keep
+ * theirs, so a running card at 200 wide still says when it started.
+ */
 .sd-run-card__state {
+  display: flex;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
+.sd-run-card__state > .sd-state {
+  max-inline-size: 100%;
+  min-inline-size: 0;
+}
+
+.sd-run-card__state .sd-state__word {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .sd-run-card__who {
@@ -91,6 +106,26 @@ a.sd-run-card:hover {
   /* A key is an identifier: it stays left to right whichever way the prose
      around it runs. */
   unicode-bidi: isolate;
+}
+
+/* Compact (under 1200): the card's type steps down one notch. */
+@media (max-width: 1199px) {
+  .sd-run-card {
+    padding-block: var(--sd-space-3);
+    padding-inline: var(--sd-space-3);
+  }
+
+  .sd-run-card__title {
+    font-size: var(--sd-text-meta);
+  }
+
+  .sd-run-card__state > .sd-state {
+    font-size: var(--sd-text-ledger);
+  }
+
+  .sd-run-card__key {
+    font-size: var(--sd-text-micro);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

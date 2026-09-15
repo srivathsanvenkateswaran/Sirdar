@@ -2,7 +2,8 @@
 
 ## What it is
 
-One column of the board: a card-row well, 248 wide, with a 3px rail across
+One column of the board: a card-row well, one sixth of the row and never
+under 200 wide, with a 3px rail across
 its top in the lane's hue, a tracked uppercase head with a count, and either
 cards or a sentence saying why there are none.
 
@@ -12,7 +13,7 @@ Built. `desktop/frontend/src/ui/kanban-column/`, in the shape of `.col` in
 
 ## Anatomy
 
-- `section.sd-lane[data-lane]` — the column. `flex: 0 0 248px`,
+- `section.sd-lane[data-lane]` — the column. `flex: 1 1 0`, `min-inline-size: 200px`,
   `padding: 8px`, `--sd-radius-sm`, `--sd-card-row` fill, `overflow: hidden`.
 - `span.sd-lane__rail` — 3px tall, radius 2px, the lane's hue via
   `--sd-lane-hue`; `aria-hidden`.
@@ -72,6 +73,13 @@ board's own heading structure. Contrast: the head and the empty prose are
 motion: nothing moves.
 
 ## Changelog
+
+### 2026-09-15 (responsive)
+The column shares its row: `flex: 1 1 0` with `min-inline-size: 200px`
+replaces `flex: 0 0 248px`, so six lanes fit a 1440 sheet at their mock
+width and the board's row only scrolls sideways once six times 200 no
+longer fit. Under 1200 the head steps down one notch (micro minus 1px,
+tracked at 0.06em).
 
 ### 2026-09-15 (Board build)
 Reshaped to the Board mock's `.col`: a 248-wide card-row well at radius 8

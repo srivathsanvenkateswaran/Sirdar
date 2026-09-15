@@ -17,9 +17,10 @@
   flex: 1;
   flex-direction: column;
   min-block-size: 0;
-  /* The mock's page: 40 above, 48 at the sides, 32 below. */
-  padding-block: 40px var(--sd-space-6);
-  padding-inline: var(--sd-space-7);
+  /* The mock's page: 40 above, 48 at the sides, 32 below — stepping down
+     with the window through the page-pad tokens. */
+  padding-block: var(--sd-page-pad-block) var(--sd-space-6);
+  padding-inline: var(--sd-page-pad-inline);
   overflow-y: auto;
 }
 
@@ -90,10 +91,12 @@
 /* ---------- the lanes ---------- */
 
 /*
- * Six wells at 248 are wider than the sheet, so the row scrolls sideways and
- * bleeds to the sheet's edge: the negative end margin is the page padding
- * given back, and the padding inside it is what keeps the last well off the
- * edge when the row is scrolled to its end.
+ * The six lanes share the row (`flex: 1 1 0` with a 200px floor, in the
+ * Kanban column's own sheet), so at 1440 and up they fit the sheet and the
+ * row only scrolls sideways once six times 200 no longer do. When it does
+ * scroll it bleeds to the sheet's edge: the negative end margin is the page
+ * padding given back, and the padding inside it is what keeps the last well
+ * off the edge when the row is scrolled to its end.
  */
 .board-lanes {
   display: flex;
@@ -102,8 +105,8 @@
   min-block-size: 0;
   max-block-size: 60vh;
   margin-block-start: var(--sd-space-5);
-  margin-inline-end: calc(-1 * var(--sd-space-7));
-  padding-inline-end: var(--sd-space-7);
+  margin-inline-end: calc(-1 * var(--sd-page-pad-inline));
+  padding-inline-end: var(--sd-page-pad-inline);
   overflow-x: auto;
 }
 
@@ -166,7 +169,23 @@
 .board-landed__outcome[data-outcome='skipped'] { color: var(--sd-st-blocked); }
 .board-landed__outcome[data-outcome='rejected'] { color: var(--sd-st-failed); }
 
-/* ---------- narrow windows ---------- */
+/* ---------- narrower windows ---------- */
+
+/* The breakpoints are the ones styles/tokens.css names: 1440, 1200, 1024. */
+
+/* Standard: two deliveries to a row. */
+@media (max-width: 1439px) {
+  .board-landed__items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Narrow: the deliveries in one column. */
+@media (max-width: 1023px) {
+  .board-landed__items {
+    grid-template-columns: 1fr;
+  }
+}
 
 @media (max-width: 720px) {
   .board {
