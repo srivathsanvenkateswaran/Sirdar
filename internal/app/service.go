@@ -292,9 +292,12 @@ func (s *Service) Runs(wsID, key string) ([]RunSummary, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Who the workspace itself is, read once for the whole list: it is what
+	// decides which of these runs the board calls the reader's own.
+	self := selfIn(root)
 	out := make([]RunSummary, 0, len(states))
 	for _, st := range states {
-		out = append(out, SummaryAt(runDir(root, st.Key, st.RunID), st))
+		out = append(out, SummaryFor(runDir(root, st.Key, st.RunID), st, self))
 	}
 	return out, nil
 }
@@ -502,6 +505,7 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 		return nil, err
 	}
 
+	self := SelfOf(cfg)
 	out := make([]Ticket, 0, len(tickets))
 	for _, t := range tickets {
 		row := Ticket{
@@ -515,7 +519,7 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 			UpdatedAt:   wireTime(t.UpdatedAt),
 		}
 		if states, err := store.List(ws.Root, t.Key); err == nil && len(states) > 0 {
-			latest := SummaryAt(runDir(ws.Root, t.Key, states[0].RunID), states[0])
+			latest := SummaryFor(runDir(ws.Root, t.Key, states[0].RunID), states[0], self)
 			row.LatestRun = &latest
 		}
 		out = append(out, row)

@@ -54,6 +54,12 @@ type Budget struct {
 // title or helpdesk subject, else the title of the first note the run
 // wrote, else empty. A card shows it over the key; without it the key is
 // the title.
+//
+// Assignee is who the bundle said the ticket belonged to when the run
+// gathered it, and Mine says that person is the workspace's own account.
+// Both are facts about the ticket rather than the run, which is why a card
+// can show an avatar and the board can filter by owner without asking the
+// tracker anything.
 type RunSummary struct {
 	RunID     string   `json:"runId"`
 	Key       string   `json:"key"`
@@ -65,6 +71,8 @@ type RunSummary struct {
 	StartedAt string   `json:"startedAt"`
 	UpdatedAt string   `json:"updatedAt"`
 	Reason    string   `json:"reason"`
+	Assignee  string   `json:"assignee"`
+	Mine      bool     `json:"mine"`
 	Usage     Usage    `json:"usage"`
 	Notes     []string `json:"notes"`
 }
@@ -392,27 +400,75 @@ func SummaryOf(s store.State) RunSummary {
 	}
 }
 
-// SummaryAt is SummaryOf with the ticket title the run directory holds.
+// SummaryAt is SummaryOf with what the run directory holds: the ticket's
+// title and the assignee its bundle recorded. Nobody is the reader, so Mine
+// stays false; SummaryFor is the one that knows.
 func SummaryAt(dir string, s store.State) RunSummary {
+	return SummaryFor(dir, s, "")
+}
+
+// SummaryFor is SummaryAt told who the workspace itself is, so the summary
+// can say whether the run is the reader's own. A self of "" leaves Mine
+// false for every run: a workspace whose credentials name nobody has no
+// "me" to match against, and guessing would put the whole board behind the
+// Mine filter.
+func SummaryFor(dir string, s store.State, self string) RunSummary {
 	out := SummaryOf(s)
-	out.Title = titleOf(dir, s.Notes)
+	b := bundleAt(dir)
+	out.Title = titleOf(b, s.Notes)
+	out.Assignee = assigneeOf(b)
+	out.Mine = SameAssignee(out.Assignee, self)
 	return out
 }
 
-// titleOf finds the ticket title for a run kept at dir: the bundle's
-// tracker title, else its helpdesk subject, else the first note's own
-// title, else "". A run directory with neither is not an error; the key
-// stands in.
-func titleOf(dir string, notes []string) string {
-	if data, err := os.ReadFile(filepath.Join(dir, "bundle", "ticket.json")); err == nil {
-		var b ticket.Bundle
-		if json.Unmarshal(data, &b) == nil {
-			if b.Tracker != nil && strings.TrimSpace(b.Tracker.Title) != "" {
-				return strings.TrimSpace(b.Tracker.Title)
+// bundleAt reads the ticket bundle a run gathered, or nil when the run
+// directory has none and when what it has cannot be parsed. Neither is an
+// error: a run that never got as far as a bundle still has a card.
+func bundleAt(dir string) *ticket.Bundle {
+	data, err := os.ReadFile(filepath.Join(dir, "bundle", "ticket.json"))
+	if err != nil {
+		return nil
+	}
+	var b ticket.Bundle
+	if json.Unmarshal(data, &b) != nil {
+		return nil
+	}
+	return &b
+}
+
+// assigneeOf is who a bundle says its ticket belongs to: the tracker's
+// assignee, else the one the helpdesk adapter recorded among its fields —
+// Zendesk, Help Scout, Front and Gorgias each write the conversation's
+// owner there. Empty when neither says, which is what draws no avatar.
+func assigneeOf(b *ticket.Bundle) string {
+	if b == nil {
+		return ""
+	}
+	if b.Tracker != nil {
+		if a := strings.TrimSpace(b.Tracker.Assignee); a != "" {
+			return a
+		}
+	}
+	if b.Helpdesk != nil {
+		for _, field := range []string{"assignee", "owner"} {
+			if a := strings.TrimSpace(b.Helpdesk.Fields[field]); a != "" {
+				return a
 			}
-			if b.Helpdesk != nil && strings.TrimSpace(b.Helpdesk.Subject) != "" {
-				return strings.TrimSpace(b.Helpdesk.Subject)
-			}
+		}
+	}
+	return ""
+}
+
+// titleOf finds the ticket title for a run: the bundle's tracker title,
+// else its helpdesk subject, else the first note's own title, else "". A
+// run with none of them is not an error; the key stands in.
+func titleOf(b *ticket.Bundle, notes []string) string {
+	if b != nil {
+		if b.Tracker != nil && strings.TrimSpace(b.Tracker.Title) != "" {
+			return strings.TrimSpace(b.Tracker.Title)
+		}
+		if b.Helpdesk != nil && strings.TrimSpace(b.Helpdesk.Subject) != "" {
+			return strings.TrimSpace(b.Helpdesk.Subject)
 		}
 	}
 	for _, path := range notes {
@@ -451,15 +507,23 @@ func noteTitle(text string) string {
 }
 
 // DetailOf converts a persisted run state into its wire detail, resolving
-// the run's own paths against the workspace root.
+// the run's own paths against the workspace root. The root is also where
+// the workspace's own identity is read from, so a detail says whether the
+// run is the reader's the same way a summary does.
 func DetailOf(root string, s store.State) RunDetail {
+	return DetailFor(root, s, selfIn(root))
+}
+
+// DetailFor is DetailOf told who the workspace itself is, for a caller that
+// has already loaded the configuration.
+func DetailFor(root string, s store.State, self string) RunDetail {
 	dir := runDir(root, s.Key, s.RunID)
 	warnings := s.Warnings
 	if warnings == nil {
 		warnings = []string{}
 	}
 	d := RunDetail{
-		RunSummary: SummaryAt(dir, s),
+		RunSummary: SummaryFor(dir, s, self),
 		PromptPath: filepath.Join(dir, "prompt.md"),
 		BundleDir:  filepath.Join(dir, "bundle"),
 		Warnings:   warnings,

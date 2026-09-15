@@ -50,6 +50,10 @@ type watchedRun struct {
 	dir   string
 	wsID  string
 	runID string
+	// self is the workspace's own assignee, refreshed on every sweep so a
+	// summary the watcher publishes says whether the run is the reader's
+	// own — the same answer Service.Runs gives for the same run.
+	self string
 
 	mtime time.Time
 	size  int64
@@ -144,6 +148,13 @@ func (w *Watcher) tick() {
 		if err != nil {
 			continue
 		}
+		// One configuration read per workspace per sweep, and only when the
+		// workspace has a run to publish about: an edit to the config is
+		// picked up on the next tick rather than at the next restart.
+		self := ""
+		if len(matches) > 0 {
+			self = selfIn(ws.Root)
+		}
 		for _, path := range matches {
 			dir := filepath.Dir(path)
 			id := ws.ID + "\x00" + dir
@@ -164,6 +175,7 @@ func (w *Watcher) tick() {
 					w.adopt(r)
 				}
 			}
+			r.self = self
 			w.check(r, path, now)
 			if active(r.status) || now.Before(r.flushUntil) {
 				w.tail(r)
@@ -209,7 +221,7 @@ func (w *Watcher) check(r *watchedRun, path string, now time.Time) {
 	if active(previous) && !active(r.status) {
 		r.flushUntil = now.Add(flushGrace)
 	}
-	summary := SummaryAt(r.dir, state)
+	summary := SummaryFor(r.dir, state, r.self)
 	w.sink(Event{Kind: KindRunUpdated, WorkspaceID: r.wsID, Run: &summary})
 }
 
