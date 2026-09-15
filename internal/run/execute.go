@@ -739,6 +739,20 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 		return
 	}
 
+	// A budget that went over before this line arrived has already
+	// cancelled the session, and the answer can still be on its way: the
+	// CLI's one `result` line becomes the usage event that breaks the
+	// budget and then the final note, in that order, so the note is
+	// already in flight when the cancel lands. Whether it gets read
+	// before the stream drains is a race, and letting it through would
+	// file the note and call the run completed — the verdict the budget
+	// refused a moment earlier. The budget decided first, so it stands;
+	// a budget that goes over after the note was filed is still only a
+	// warning on a completed run, which is the ordering above.
+	if ex.overBudget != "" {
+		return
+	}
+
 	doc := []byte(ev.Final)
 	if len(doc) == 0 {
 		doc = []byte(strings.TrimSpace(ev.Text))

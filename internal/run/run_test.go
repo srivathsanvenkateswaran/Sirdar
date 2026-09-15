@@ -849,6 +849,36 @@ func TestOverBudgetUSD(t *testing.T) {
 	}
 }
 
+// TestOverBudgetUSDBeatsAFinalOnTheSameLine pins the ordering the CLI
+// actually produces. One `result` line becomes a usage event and then the
+// final answer, back to back, so the note is already in flight by the time
+// the cost budget cancels the session. The budget was decided first and has
+// to hold, whichever of the two the runner happens to read next.
+func TestOverBudgetUSDBeatsAFinalOnTheSameLine(t *testing.T) {
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: func(_ provider.SessionSpec, s *stubSession) {
+		defer s.finish()
+		// Sent without consulting s.cancelled, unlike replay: the
+		// provider wrote both events before the runner could cancel, so
+		// the final is delivered whatever the budget decided.
+		s.events <- provider.Event{Kind: provider.EvUsage, Turns: 2, CostUSD: 6}
+		s.events <- finalEvent(triageDoc)
+	}}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Status != store.StatusOverBudget {
+		t.Fatalf("status %q reason %q", out.State.Status, out.State.Reason)
+	}
+	if _, err := os.Stat(filepath.Join(runDir(t, cfg, out), "note.md")); !os.IsNotExist(err) {
+		t.Fatalf("note.md should not exist: %v", err)
+	}
+}
+
 func TestBlockedOnQuestion(t *testing.T) {
 	cfg := newWorkspace(t)
 	p := &stubProvider{script: replay(
