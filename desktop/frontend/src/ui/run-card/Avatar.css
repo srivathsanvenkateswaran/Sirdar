@@ -43,8 +43,11 @@
   white-space: nowrap;
 }
 
-/* The session topbar's line: who the ticket on this screen belongs to. */
+/* The session topbar's line: who the ticket on this screen belongs to. The
+   width cap is the line's own: a long name cuts itself rather than pushing
+   the run's figures off the end of the bar. */
 .sd-assigned {
+  max-inline-size: 24ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

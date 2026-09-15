@@ -27,10 +27,16 @@ function files(component: string): string[] {
   return readdirSync(join(UI, component))
 }
 
+/**
+ * Every stylesheet the component ships, read as one. A component may keep
+ * more than one — `run-card` puts the assignee avatar in its own file, and
+ * `kanban-column` its lane note — and the rules below hold over all of them,
+ * not just whichever comes first in the directory.
+ */
 function css(component: string): string {
-  const name = files(component).find((file) => file.endsWith('.css'))
-  if (!name) throw new Error(`${component} has no stylesheet`)
-  return readFileSync(join(UI, component, name), 'utf8')
+  const names = files(component).filter((file) => file.endsWith('.css'))
+  if (names.length === 0) throw new Error(`${component} has no stylesheet`)
+  return names.map((name) => readFileSync(join(UI, component, name), 'utf8')).join('\n')
 }
 
 describe('the component library', () => {
