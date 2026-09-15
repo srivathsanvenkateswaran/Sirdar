@@ -17,11 +17,14 @@ human has made and merged the actual fix, `sirdar rca` writes the RCA and Resolu
 notes that record what changed and why — Sirdar never opens a PR or writes to a
 tracker or helpdesk itself.
 
-Three ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
+Five ways to drive a run: `provider: claude` and `provider: codex` spawn the Claude
 Code or Codex CLI already installed and signed in, so a run counts against the plan
 already being paid for; `provider: openai` runs Sirdar's own agent loop against any
 OpenAI-compatible endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or
-a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config.
+a local Ollama/vLLM/llama.cpp), billed per token against a budget set in config;
+`provider: acp` drives any Agent Client Protocol agent (Gemini CLI, Goose, OpenCode);
+`provider: qwen` is a native Qwen Code adapter with a fail-closed loopback permission
+hook.
 
 Built-in tracker adapters for Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally,
 and ServiceNow; built-in helpdesk adapters for Zoho Desk (with OAuth refresh), Zendesk,
@@ -106,6 +109,12 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   qwen, in Sirdar's own agent loop, and for an ACP `fetch` request. The list is empty by
   default, which denies every fetch; Codex's built-in web search stays governed by Codex's own
   `config.toml` and sandbox, which is documented rather than fixed.
+- The desktop app and `sirdar serve` reached parity with the CLI: an Eval screen replays the
+  golden set or adds a completed run to it, a Fix panel shows a run's commit, deviation and pull
+  request and lets you accept a deviation, a shared provider/model picker appears on every start
+  form, an inbound-webhook panel shows each delivery and why it was started, skipped or ignored,
+  and a read-only config summary shows the notify and webhook blocks a workspace has configured,
+  without resolving any credential (`docs/eval.md`, `docs/config.md`).
 - Closed two paths by which something other than the operator could start an agent session that
   writes code through `sirdar serve`. Every mutating route now requires `Content-Type:
   application/json`, refuses an `Origin` that is neither the listener's own nor the Wails shell's,

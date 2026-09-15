@@ -1,18 +1,15 @@
-# Handoff (updated 2026-09-11)
+# Handoff (updated 2026-09-15)
 
 Read this first when opening a new session in this project.
 
 ## Where things are
 
-Three worktrees, one repo (`git@github.com:srivathsanvenkateswaran/Sirdar.git`, personal identity
+One worktree, one repo (`git@github.com:srivathsanvenkateswaran/Sirdar.git`, personal identity
 via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. Tracker adapters: Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Jira Cloud/Data Center, Linear, Azure DevOps, Rally, external stdio adapters, generic `helpdeskRef` regex. Helpdesk adapters: Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, all on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`). Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
-| `desktop`, `adapters`, `providers` | branches on origin | Merged into `main` (a968576, 01172d3, 3129779); worktrees removed. |
-| `~/Documents/Personal/Sirdar-qwen`, `~/Documents/Personal/Sirdar-codexmcp` | `qwen`, `codexmcp` | Merged into `main` (a411cfa, 38104a8); worktrees removed. |
-| `~/Documents/Personal/Sirdar-stallwt` | `stallwt` | Two features, complete and green, not yet committed: `budget.stallMinutes` (stall detection on the provider's stream) and `sirdar fix` in a linked worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback. Based on `e3b7e32`, which predates `main`'s `docs/fix.md`; that page is re-added here with a Worktree mode section, so merging `main` raises one add/add conflict on `docs/fix.md` whose resolution is to keep this branch's copy. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs`, `register`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP with fix/eval/golden routes, a provider picker, an inbound-delivery panel and a read-only config summary. Five providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent, e.g. Gemini CLI, Goose, OpenCode, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook). Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). Research + plans in `docs/`. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -47,7 +44,7 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
   `provider: acp` the same `PermissionPolicy` applied to every `session/request_permission`
   call, declining outright when the agent asks for a write-shaped capability.
 - `internal/source/httpx` centralises what every adapter needed anyway (host trust, redirect
-  policy, Retry-After, capped reads, per-ticket warnings). All ten built-in source adapters,
+  policy, Retry-After, capped reads, per-ticket warnings). All 13 built-in source adapters,
   trackers and helpdesks alike, use it now.
 - Credential refs resolve four schemes: `env:`, `keychain:` (Keychain on macOS, libsecret on
   Linux, a DPAPI-backed store on Windows), `file:`, `cmd:`. A resolved secret is held only for
@@ -65,6 +62,21 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
   (`docs/architecture.md`); a MkDocs site published through GitHub Pages.
 - i18n: a `language:` config block plus bilingual note fields (the original-language complaint,
   a customer-language draft) and an RTL-aware desktop UI.
+- Three more helpdesk adapters, each on the shared `httpx` client: Front (merges the `messages`
+  and `comments` feeds into one ordered thread, trusts both the `api2.frontapp.com` and
+  per-company `.api.frontapp.com` host forms since a live tenant's actual host could not be
+  confirmed), Gorgias (per-account host, HTTP Basic with `email` + `apiKey`, cursor-paginated
+  `/api/messages`, downloads trust only `*.gorgias.com` since the signed-URL storage host is
+  undocumented), and ServiceNow (the Table API plus `sys_journal_field` for the conversation and
+  the Attachment API for files, basic or OAuth-bearer auth). ServiceNow is the first adapter that
+  serves either role — tracker or helpdesk — from the same incident record (`docs/adapters.md`,
+  `docs/research/adapters/`).
+- Desktop and `sirdar serve` reached parity with the CLI: fix, eval and golden routes, a
+  provider/model picker shared by every start form, an inbound-webhook delivery panel, and a
+  read-only config summary of the notify and webhook blocks. Every mutating route is now refused
+  unless it looks like the UI's own request — JSON content type, a same-origin or Wails
+  `Origin`, no cross-site `Sec-Fetch-Site` — and the fix route itself answers 403 on a listener
+  bound with `--allow-remote` (`docs/config.md`).
 - Web fetches are judged by destination, not by tool name. `permissions.fetch` is one
   allow-list of hosts (`docs.example.com`, `*.example.com` for subdomains only,
   `http://localhost:3000` for a loopback service), empty by default, and empty denies every
@@ -129,37 +141,58 @@ binary, completed two tickets cleanly (OMNI-3217, OMNI-3193); its findings are f
 
 ## Next steps, in order
 
+Live verification first, since almost nothing built in the last two weeks has run against a real
+account, a real model, or a real browser:
+
 1. Dogfood the new features for real: a webhook-triggered run, a notify post, `sirdar eval`
-   against the golden set, and `sirdar fix` on an actual ticket. None of them has a live run yet.
+   against the golden set, and `sirdar fix` on an actual ticket, including once in the default
+   worktree mode. None of them has a live run yet.
 2. First live runs against a real model: `provider: openai` (Ollama `qwen3-coder` or
    OpenRouter), `provider: acp` (start with Gemini CLI per `docs/research/providers/acp-agents.md`),
    and `provider: qwen` against a real Qwen Code login. None of the three has run against
    anything but scripted fake agents so far.
-3. Janus get-by-key is fixed in the private adapter (`?ticket_keys=` filter); `sirdar doctor` in
-   OXO.APIs passed every row on 2026-09-11 with the merged binary, and a `--dry-run` triage of the
-   golden ticket produced its bundle and prompt. Nothing to do here unless doctor regresses.
-4. Continue dogfood run 2's follow-ups: the workspace `.mcp.json` in OXO.APIs exists (doctor reports
-   it with 12 `permissions.mcp` patterns); next is two or three more tickets and a comparison against hand-written notes; fold gotchas into
-   `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
-   sees the commands it is asked about.
+3. Verify the three new helpdesk adapters against real accounts: Front's actual tenant host
+   (`api2.frontapp.com` vs. per-company `.api.frontapp.com`), Gorgias's signed-URL attachment
+   storage host, and ServiceNow's `sys_journal_field` rows and timestamp shape against a live
+   instance.
+4. Open `sirdar serve` in a real browser against a workspace and confirm the same-origin /
+   `Sec-Fetch-Site` guard behaves as documented — it has only been driven by tests that construct
+   requests directly, never by an actual cross-site page.
 5. Live-check `permissions.fetch` against a real Claude Code install: confirm that a
    `WebFetch(domain:…)` rule in `~/.claude/settings.json` is in fact what it is documented to
    be — an allow rule the CLI applies before `--permission-prompt-tool`, and one that
    `--disallowedTools WebFetch` still beats. Both halves are read off Claude Code's documented
    precedence, not watched on a live turn.
+6. Continue dogfood run 2's follow-ups: the workspace `.mcp.json` in OXO.APIs exists (doctor reports
+   it with 12 `permissions.mcp` patterns); next is two or three more tickets and a comparison against hand-written notes; fold gotchas into
+   `.sirdar/playbooks/`. Known: Claude self-approves read-shaped Bash, so `permissions.bash` only
+   sees the commands it is asked about.
+7. Janus get-by-key is fixed in the private adapter (`?ticket_keys=` filter); `sirdar doctor` in
+   OXO.APIs passed every row on 2026-09-11 with the merged binary, and a `--dry-run` triage of the
+   golden ticket produced its bundle and prompt. Nothing to do here unless doctor regresses.
+
+Then the not-built items:
+
+8. A Salesforce adapter (tracker and/or Service Cloud helpdesk role) — no research pass or code
+   exists yet.
+9. A query guard for `WebSearch`/`web_search`, the one residual channel `permissions.fetch`
+   leaves open: both carry a query rather than a destination, so there is no host to allow-list
+   against, and nothing narrows what a session can search for today.
+10. A multi-user shared board, so more than one operator can see the same runs and workspaces —
+    pending a design conversation; nothing here is built or even planned in detail.
 
 ## What is unverified
 
 No live run yet for `provider: openai`, `provider: acp`, `provider: qwen`, `notify`, `webhooks`,
-or `sirdar fix`. Each has only been exercised against a scripted fake server or fixture, never a
-real model or a real destination. `provider: qwen`'s fail-closed loopback permission hook has
-never been run against a real Qwen login — only against the scripted fake CLI in tests. Help
-Scout's `threadsPageSize` (50) is inferred from the vendor's documented default for list
-endpoints, not observed against a real paginated account. `permissions.fetch` has been exercised
-against the fake CLIs and the tool set, never against a real agent's fetch: the argument shape a
-live Qwen `web_fetch` or a given ACP agent's fetch request actually uses is read off the protocol
-and the tool schemas, and a shape carrying the URL under none of `url`, `urls` or `prompt` would
-be denied as "named no URL" rather than judged.
+`sirdar fix`, or `sirdar fix`'s worktree mode. Each has only been exercised against a scripted
+fake server or fixture, never a real model or a real destination. `provider: qwen`'s fail-closed
+loopback permission hook has never been run against a real Qwen login — only against the
+scripted fake CLI in tests. Help Scout's `threadsPageSize` (50) is inferred from the vendor's
+documented default for list endpoints, not observed against a real paginated account.
+`permissions.fetch` has been exercised against the fake CLIs and the tool set, never against a
+real agent's fetch: the argument shape a live Qwen `web_fetch` or a given ACP agent's fetch
+request actually uses is read off the protocol and the tool schemas, and a shape carrying the URL
+under none of `url`, `urls` or `prompt` would be denied as "named no URL" rather than judged.
 
 Codex's fix-mode sandbox is a `workspace-write` config Sirdar sets but does not implement or
 verify; the snapshot guard (`internal/fix/guard.go`) is the actual backstop if that sandbox lets
@@ -171,6 +204,27 @@ file-change path was built the same way, off the app-server's declared `ServerRe
 but has not itself been watched fire — no turn that actually has Codex write a file has been run
 against it. One dogfood fix turn where the agent writes through a hook would confirm it; none has
 been run, to keep this round free of paid Codex turns.
+
+Three new helpdesk adapters carry the same kind of gap. Front's per-company API host is inferred
+from reference examples rather than confirmed against a real workspace, so the adapter trusts
+both the `api2.frontapp.com` form and a per-company `.api.frontapp.com` form
+(`docs/research/adapters/front.md`). Gorgias's attachment download redirects to a signed URL
+whose host no page names; the adapter trusts only `*.gorgias.com` and refuses any other redirect
+target (`docs/research/adapters/gorgias.md`). ServiceNow's conversation history depends on
+`sys_journal_field`, which is ACL-restricted on plenty of instances and unverified against a live
+one, and its timestamps are read as naive values in the integration user's own display timezone
+with no offset named — both flagged as the adapter's biggest open risks
+(`docs/research/adapters/servicenow.md`).
+
+`sirdar serve`'s same-origin and `Sec-Fetch-Site` guard on mutating routes
+(`internal/httpapi/guard.go`, `docs/config.md`) is exercised only by tests that build requests
+directly with the headers a real browser would send; no real cross-site page has been pointed at
+a running listener to confirm the browser actually sends those headers the way the guard assumes.
+
+`sirdar fix`'s worktree mode (`internal/fix/git.go`, the default since `stallwt` landed) has run
+green against every test in the suite but never against a real provider on a real ticket — the
+linked-worktree lifecycle, the `--git-common-dir` hooks lookup, and the removal-on-success path
+are all unverified outside fixtures.
 
 ## Known gaps (deliberate)
 
