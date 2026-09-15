@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -1015,7 +1016,8 @@ func TestCursorProviderIsBuiltFromTheBlock(t *testing.T) {
 // things this provider cannot do before an operator finds out the hard
 // way.
 func TestAgyProviderWiring(t *testing.T) {
-	p, err := ProviderFor(&config.Config{Provider: "agy"}, envResolver(nil))
+	cfg := &config.Config{Provider: "agy", Agy: &config.AgyConfig{AcknowledgeTerms: true}}
+	p, err := ProviderFor(cfg, envResolver(nil))
 	if err != nil {
 		t.Fatalf("ProviderFor: %v", err)
 	}
@@ -1038,6 +1040,36 @@ func TestAgyProviderWiring(t *testing.T) {
 	_, err = p.Start(context.Background(), provider.SessionSpec{Mode: provider.ModeFix})
 	if err == nil || !strings.Contains(err.Error(), "fix mode is refused") {
 		t.Fatalf("fix start err = %v", err)
+	}
+}
+
+// TestAgyProviderIsRefusedWithoutTheAcknowledgement covers the override
+// path. A workspace's own `provider: agy` never loads, so what reaches the
+// wiring is `--provider agy` on triage or rca, the desktop picker or an
+// HTTP start — each of which replaces cfg.Provider after the config has
+// been validated, and each of which has to be refused with the same
+// sentence.
+func TestAgyProviderIsRefusedWithoutTheAcknowledgement(t *testing.T) {
+	for _, cfg := range []*config.Config{
+		{Provider: "agy"},
+		{Provider: "agy", Agy: &config.AgyConfig{Model: "gemini-3.6-flash-low"}},
+	} {
+		p, err := ProviderFor(cfg, envResolver(nil))
+		if err == nil {
+			t.Fatalf("ProviderFor built %v, want the disabled refusal", p)
+		}
+		if !errors.Is(err, config.ErrAgyDisabled) {
+			t.Fatalf("ProviderFor error = %v, want ErrAgyDisabled", err)
+		}
+		for _, want := range []string{
+			"provider agy is disabled",
+			"Google's Antigravity terms do not allow driving the CLI from another program",
+			"choose claude, codex, openai, acp, qwen or cursor",
+		} {
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("ProviderFor error = %q, want it to mention %q", err, want)
+			}
+		}
 	}
 }
 

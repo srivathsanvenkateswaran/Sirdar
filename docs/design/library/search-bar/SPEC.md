@@ -29,6 +29,8 @@ round; the board's filter used to be a bare `.field-input`.
   placeholder in `--sd-ink-3`.
 - `span.sd-search__aside` — optional, at the inline end, `--sd-text-meta` in
   `--sd-ink-2`.
+- `inputRef` reaches the input itself, for a shortcut that puts the cursor in
+  it (the board's `/`).
 
 ## States
 
@@ -75,6 +77,9 @@ placeholder `--sd-ink-3` on the sheet **5.25:1** and on the well's sunk fill
 **4.56:1**, the tightest pair the tokens ship. No motion.
 
 ## Changelog
+
+### 2026-09-15 (Board build)
+`inputRef` joins the props so the board's `/` shortcut can focus the well.
 
 ### 2026-09-15
 Added, from `.search` in `docs/design/2026-09-15-screens/SessionEmpty.html`

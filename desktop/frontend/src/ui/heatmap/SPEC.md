@@ -15,11 +15,18 @@ chevron are refused.
 
 - `section.sd-heatmap` — the block, named for a screen reader, pinned
   `direction: ltr`.
+- `div.sd-heatmap__body` — the weekday column beside the scroll container.
+- `div.sd-heatmap__weekdays[aria-hidden]` — seven letters, M to S, on the
+  cells' own 14px rows, in `--sd-ink-3` at `--sd-text-ledger`.
 - `div.sd-heatmap__scroll` — the horizontal scroll container, focusable so a
-  keyboard reader can scroll it.
-- `div.sd-heatmap__grid` — `grid-auto-flow: column`, seven 12px rows, 4px gap,
-  one column per week.
-- `button.sd-heatmap__cell[data-heat]` — 12 by 12, `--sd-radius-xs`, one of
+  keyboard reader can scroll it. It holds the month row and the grid, so
+  they scroll together.
+- `div.sd-heatmap__months[aria-hidden]` — a 16px row on the grid's columns;
+  a three-letter month name sits on each column whose Monday starts a new
+  month. The first column is never labelled.
+- `div.sd-heatmap__grid` — `grid-auto-flow: column`, seven 14px rows, 6px
+  gap, one column per week, Monday at the top.
+- `button.sd-heatmap__cell[data-heat]` — 14 by 14, `--sd-radius-xs`, one of
   the five steps. Every cell is a button.
 - `p.sd-heatmap__legend` — the word "Runs a day", then five swatches each
   labelled with its bucket: `0`, `1`, `2-4`, `5-9`, `10+`.
@@ -80,6 +87,14 @@ own text is `--sd-ink-3`, **4.98:1** on the paper and **4.73:1** on a card.
 Reduced motion: nothing here moves in any state.
 
 ## Changelog
+
+### 2026-09-15 (register screen)
+Weeks now run Monday to Sunday, as the Register mock draws them and ISO
+8601 counts them (the grid ended on a Saturday before). A month row over the
+grid names each column whose Monday starts a new month, and a weekday
+column letters the rows; both are `aria-hidden`, since every cell already
+speaks its weekday and date. `monthLabels` is exported so the screen's tests
+can pin which columns are named.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: 14px cells at a 6px gap (were 12 and 4),

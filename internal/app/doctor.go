@@ -68,6 +68,13 @@ func checkOf(c provider.Check) Check {
 }
 
 func providerChecks(ctx context.Context, cfg *config.Config) []Check {
+	// A workspace that still names the disabled provider gets one row
+	// saying so rather than the binary, model and permission rows of a
+	// provider no run will reach. The adapter is still in the tree, and
+	// agy.acknowledgeTerms brings the rest of the report back.
+	if cfg.AgyDisabled() {
+		return []Check{{Name: "agy", Detail: "disabled (Antigravity terms)"}}
+	}
 	p, err := ProviderFor(cfg, config.Resolver{Keychain: KeychainFor()})
 	if err != nil {
 		return []Check{{Name: "provider", Detail: err.Error()}}

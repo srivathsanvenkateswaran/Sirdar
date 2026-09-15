@@ -23,7 +23,7 @@ func cmdDoctor(args []string, stdout, stderr io.Writer) int {
 		return exitUsage
 	}
 
-	cfg, ok := loadWorkspace(stderr)
+	cfg, ok := loadDoctorWorkspace(stderr)
 	if !ok {
 		return exitUsage
 	}

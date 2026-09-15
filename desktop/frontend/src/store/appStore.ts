@@ -150,9 +150,15 @@ export interface AppStore {
    * that names both a workspace and a screen inside it.
    */
   openRoute(screen: Screen, workspaceId?: string): void
-  startTriage(keys: string[], opts?: TriageOptions): Promise<void>
-  startRCA(key: string, opts?: RCAOptions): Promise<void>
-  startFix(key: string, opts?: FixOptions): Promise<void>
+  /**
+   * Each start answers with the job id the service gave it, or '' when
+   * nothing was started (no workspace, no key — both toasted). A screen that
+   * wants the run the job produces watches `lib/jobs` for a run paired with
+   * that id, which is how New session opens the session it just started.
+   */
+  startTriage(keys: string[], opts?: TriageOptions): Promise<string>
+  startRCA(key: string, opts?: RCAOptions): Promise<string>
+  startFix(key: string, opts?: FixOptions): Promise<string>
   startEval(keys?: string[], opts?: EvalOptions): Promise<void>
   /** Stops a job this window started, by id. */
   cancelJob(jobId: string): Promise<void>
@@ -491,19 +497,21 @@ export function createAppStore(transport: Transport): AppStore {
       const workspaceId = state.currentWorkspaceId
       if (!workspaceId) {
         toast('Add a workspace before starting a run.', 'error')
-        return
+        return ''
       }
       if (keys.length === 0) {
         toast('Enter at least one ticket key.', 'error')
-        return
+        return ''
       }
       const askedAt = Date.now()
       try {
         const started = await transport.startTriage(workspaceId, keys, opts)
-        if (disposed) return
-        track(started?.jobId ?? '', workspaceId, keys, askedAt)
+        if (disposed) return ''
+        const jobId = started?.jobId ?? ''
+        track(jobId, workspaceId, keys, askedAt)
         toast(`Triage started for ${keys.length === 1 ? keys[0] : `${keys.length} keys`}.`)
         void loadRuns(workspaceId)
+        return jobId
       } catch (err) {
         if (!disposed) toast(`Triage did not start. ${errorText(err)}`, 'error')
         throw err
@@ -514,23 +522,25 @@ export function createAppStore(transport: Transport): AppStore {
       const workspaceId = state.currentWorkspaceId
       if (!workspaceId) {
         toast('Add a workspace before starting a run.', 'error')
-        return
+        return ''
       }
       if (!key) {
         toast('Enter a ticket key.', 'error')
-        return
+        return ''
       }
       const askedAt = Date.now()
       try {
         const started = await transport.startFix(workspaceId, key, opts)
-        if (disposed) return
-        track(started?.jobId ?? '', workspaceId, [key], askedAt)
+        if (disposed) return ''
+        const jobId = started?.jobId ?? ''
+        track(jobId, workspaceId, [key], askedAt)
         toast(
           opts?.acceptDeviation
             ? `Publishing the reviewed commit for ${key}.`
             : `Fix started for ${key}.`,
         )
         void loadRuns(workspaceId)
+        return jobId
       } catch (err) {
         if (!disposed) toast(`Fix did not start. ${errorText(err)}`, 'error')
         throw err
@@ -564,19 +574,21 @@ export function createAppStore(transport: Transport): AppStore {
       const workspaceId = state.currentWorkspaceId
       if (!workspaceId) {
         toast('Add a workspace before starting a run.', 'error')
-        return
+        return ''
       }
       if (!key) {
         toast('Enter a ticket key.', 'error')
-        return
+        return ''
       }
       const askedAt = Date.now()
       try {
         const started = await transport.startRCA(workspaceId, key, opts)
-        if (disposed) return
-        track(started?.jobId ?? '', workspaceId, [key], askedAt)
+        if (disposed) return ''
+        const jobId = started?.jobId ?? ''
+        track(jobId, workspaceId, [key], askedAt)
         toast(`Root cause analysis started for ${key}.`)
         void loadRuns(workspaceId)
+        return jobId
       } catch (err) {
         if (!disposed) toast(`Root cause analysis did not start. ${errorText(err)}`, 'error')
         throw err

@@ -10,7 +10,7 @@ rather than being silently ignored.
 | Key | Type | Default | Meaning |
 |---|---|---|---|
 | `workspace` | string | directory name (set by `init`) | A label for the workspace; not otherwise interpreted |
-| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `cursor` (the Cursor Agent CLI), `agy` (Google's Antigravity CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent) |
+| `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `cursor` (the Cursor Agent CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent). `agy` (Google's Antigravity CLI) is **disabled** — config load and `--provider agy` both refuse it, see [`provider: agy`](#provider-agy) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
@@ -103,6 +103,7 @@ rather than being silently ignored.
 | `qwen.baseUrl` | string, optional | unset | OpenAI-compatible base URL the CLI is pointed at; with the whole block unset it uses its own login |
 | `qwen.model` | string, optional | unset | Model the endpoint serves; required alongside `qwen.baseUrl`. `--model` and `model` override it |
 | `qwen.apiKey` | string, optional | unset | Credential reference (`env:NAME` or `keychain:SERVICE`) for the endpoint's key; required alongside `qwen.baseUrl` |
+| `agy.acknowledgeTerms` | bool, optional | `false` | `provider: agy` is disabled; `true` runs it anyway, at your own risk. Not recommended — see [`provider: agy`](#provider-agy) |
 | `agy.path` | string, optional | `""` (look up `agy` on `PATH`) | Path to the Antigravity CLI binary |
 | `agy.model` | string, optional | `gemini-3.6-flash-low` | Model the session asks for; `agy models` lists what the account may use. `--model` and `model` override it |
 | `agy.effort` | string, optional | unset (the CLI's own default) | Reasoning tier: `low`, `medium` or `high` |
@@ -1742,6 +1743,20 @@ server, so the shapes are the CLI's own but no vendor model has run through this
 
 ### `provider: agy`
 
+> **Disabled.** Google's Antigravity terms do not allow driving the CLI from another program,
+> and an account that does it can be banned. Config load refuses `provider: agy`, and so does
+> `--provider agy` on `triage` and `rca`:
+>
+> ```
+> provider agy is disabled: Google's Antigravity terms do not allow driving the CLI from
+> another program; choose claude, codex, openai, acp, qwen or cursor
+> ```
+>
+> The adapter stays in the tree (`internal/provider/agy`) and the rest of this section still
+> describes what it does, for reference. `agy.acknowledgeTerms: true` takes the refusal off —
+> at your own risk, not recommended — and until it is set `sirdar doctor` reports the whole
+> provider as one row, `agy — disabled (Antigravity terms)`.
+
 [Antigravity](https://antigravity.google) is Google's agent product, and `agy` is its CLI. It
 runs against the Google account it is already signed in to — a Google AI Pro or Ultra
 subscription, or a Workspace plan — so a run costs nothing per token the way `provider: claude`
@@ -1750,6 +1765,7 @@ and `provider: codex` do not.
 ```yaml
 provider: agy
 agy:
+  acknowledgeTerms: true         # required, and at your own risk; see the note above
   path: agy                      # optional; empty looks it up on PATH
   model: gemini-3.6-flash-low    # optional; this is also the default
   effort: low                    # optional: low | medium | high

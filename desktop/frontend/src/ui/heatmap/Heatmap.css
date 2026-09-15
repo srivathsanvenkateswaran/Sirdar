@@ -1,6 +1,7 @@
 /*
  * Heatmap. Weekday rows by week columns, one sequential ramp, no second
- * series.
+ * series. A month row over the grid and a weekday column beside it, both in
+ * the third ink, both decorative: the cells carry the names.
  */
 
 .sd-heatmap {
@@ -12,9 +13,47 @@
   direction: ltr;
 }
 
+.sd-heatmap__body {
+  display: flex;
+  gap: 6px;
+  min-inline-size: 0;
+}
+
+/* Seven letters, one per row, aligned to the cells by sharing their track. */
+.sd-heatmap__weekdays {
+  display: grid;
+  flex: 0 0 auto;
+  grid-template-rows: repeat(7, 14px);
+  gap: 6px;
+  inline-size: 18px;
+  /* Under the month row: its 16px plus the 6px gap. */
+  padding-block-start: 22px;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-ledger);
+  line-height: 14px;
+}
+
 .sd-heatmap__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-inline-size: 0;
   max-inline-size: 100%;
   overflow-x: auto;
+}
+
+/* The month names, each placed on the column whose Monday starts the month. */
+.sd-heatmap__months {
+  display: grid;
+  block-size: 16px;
+  gap: 6px;
+  inline-size: max-content;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-ledger);
+  line-height: 16px;
+  white-space: nowrap;
 }
 
 .sd-heatmap__grid {

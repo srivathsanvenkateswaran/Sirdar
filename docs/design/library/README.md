@@ -135,7 +135,7 @@ In build order. The first five are shared by all three surfaces and unblock the 
 | 3 | **Segmented control** | landing, app | new | Two to four options, one track, a sliding thumb at `--sd-dur-2`. Roving tabindex, arrow keys. The reduced-motion answer is that the thumb jumps. |
 | 4 | **Card** | all | exists: `.card`, `.panel` | The base box: `--sd-surface`, 1px `--sd-rule-strong`, `--sd-radius-md`, no shadow. Everything else on this list that looks like a box is this component with content. |
 | 5 | **Status badge** | app, landing | exists: `.badge`, `.run-badge`, `.badge--priority` | Six status hues plus a priority variant. Hue comes from the lane when inside one, from `data-status` otherwise. Always carries its word. |
-| 6 | **Kanban column** | app | exists: `.lane`, `.lane-head`, `.lane-body` | 2px top rail in the lane hue, which is the board's legend. Stacks under 720px. Empty state is prose, not an icon. |
+| 6 | **Kanban column** | app | exists: `.lane`, `.lane-head`, `.lane-body` | A 248-wide card-row well with a 3px rail in the lane hue, which is the board's legend, and a tracked uppercase head. Stacks under 720px. Empty state is prose, not an icon. |
 | 7 | **Run card** | app | exists: `.card--run` | Key in mono, title clamped to two lines, reason behind an inline-start rail, footer of badge + elapsed + cost. A live run gets the accent inline-start edge. |
 | 8 | **Event row** | app | exists: `.ev` and its eight variants | The ledger row: fixed mono gutter, one-character glyph, a hairline rail down the column, colour on the rail only. The densest thing in the product and the one most likely to be broken by a radius change. |
 | 9 | **Note pane** | app | exists: `.pane`, `.md` | Prose at `--sd-measure-prose`. Carries `dir` from `lib/rtl.ts`. Arabic body, English headings, both in one column. The only place the display serif appears inside the app. |
@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All thirty-one are built. Each row links the spec in this folder, which is a
+All thirty-two are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -221,6 +221,7 @@ time (40px controls, 72px setting rows, 48px table rows, 14px heat cells, the
 | 29 | Page head | app | built | `src/ui/page-head/` | [page-head/SPEC.md](page-head/SPEC.md) |
 | 30 | Kind chip | app | built | `src/ui/kind-chip/` | [kind-chip/SPEC.md](kind-chip/SPEC.md) |
 | 31 | State glyph | app | built | `src/ui/state-glyph/` | [state-glyph/SPEC.md](state-glyph/SPEC.md) |
+| 32 | Diff view | app | built | `src/ui/diff-view/` | [diff-view/SPEC.md](diff-view/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee

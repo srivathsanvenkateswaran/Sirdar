@@ -17,10 +17,10 @@ export interface KanbanColumnProps {
 /**
  * One column of the board.
  *
- * The 2px rail across the top is the lane's hue and every badge on every card
- * inside the column repeats it, so the rail is the board's legend and no key
- * is needed anywhere else. The heading says the same thing in words, which is
- * what keeps the column readable when the hue is not.
+ * The 3px rail across the top is the lane's hue and the state glyph on every
+ * card inside the column repeats it, so the rail is the board's legend and no
+ * key is needed anywhere else. The heading says the same thing in words, which
+ * is what keeps the column readable when the hue is not.
  *
  * An empty column says what its emptiness means. An icon of an empty box says
  * only that somebody thought about the empty case.
@@ -35,6 +35,7 @@ export default function KanbanColumn({
   const isEmpty = !children || (Array.isArray(children) && children.length === 0)
   return (
     <section className="sd-lane" data-lane={lane} aria-label={`${title} (${count})`}>
+      <span className="sd-lane__rail" aria-hidden="true" />
       <h2 className="sd-lane__head">
         <span>{title}</span>
         <span className="sd-lane__count">{count}</span>

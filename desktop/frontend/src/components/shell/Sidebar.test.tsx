@@ -240,6 +240,22 @@ describe('the sidebar footer', () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
   })
 
+  it('demotes New session to the bordered style while a screen draws its own filled button', () => {
+    setShowLibrary(false)
+
+    function OnScreen(): null {
+      useProvidePrimaryAction({ label: 'Start', onRun: () => {}, placement: 'screen' })
+      return null
+    }
+
+    const { onNavigate } = mount({}, <OnScreen />)
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+    const button = screen.getByRole('button', { name: 'New session' })
+    expect(button).toHaveAttribute('data-variant', 'secondary')
+    fireEvent.click(button)
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'new' })
+  })
+
   it('is titled Plan usage', () => {
     setShowLibrary(false)
     mount()
