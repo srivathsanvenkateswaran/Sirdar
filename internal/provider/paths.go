@@ -53,7 +53,17 @@ func ResolveWithin(root, path string) (string, error) {
 	}
 
 	candidate := filepath.Clean(path)
-	if !filepath.IsAbs(candidate) {
+	if IsRooted(candidate) {
+		// Rooted without being absolute is a Windows shape — "\etc\hosts",
+		// "/etc/passwd", "C:sub" — and it resolves against the current
+		// drive or the drive's working directory, never against the
+		// workspace. filepath.Abs is what makes that explicit; the
+		// containment check below then judges the path it really names.
+		candidate, err = filepath.Abs(candidate)
+		if err != nil {
+			return "", ErrPathEscape
+		}
+	} else {
 		candidate, err = filepath.Abs(filepath.Join(root, path))
 		if err != nil {
 			return "", ErrPathEscape
@@ -67,6 +77,34 @@ func ResolveWithin(root, path string) (string, error) {
 		return "", ErrPathEscape
 	}
 	return real, nil
+}
+
+// IsRooted reports whether p names a location on its own rather than one
+// relative to some other directory. It is filepath.IsAbs everywhere except
+// Windows, where three more shapes are rooted without being absolute and
+// all three would otherwise be joined onto the workspace root and judged as
+// if they were inside it:
+//
+//   - "/etc/passwd" and "\Windows\System32" are rooted on the current
+//     drive. Joining them onto "C:\ws" invents "C:\ws\etc\passwd", a path
+//     that passes the confinement check and is not what was asked for;
+//     Go's own os.Open, given the original, reads the file on the drive.
+//   - "D:sub" is relative to D:'s own working directory, which is not the
+//     workspace whatever the workspace is.
+//
+// Taking them as rooted lets filepath.Abs say where they really point, and
+// the confinement check then refuses them like any other outside path.
+func IsRooted(p string) bool {
+	if filepath.IsAbs(p) {
+		return true
+	}
+	if runtime.GOOS != "windows" {
+		return false
+	}
+	if strings.HasPrefix(p, "/") || strings.HasPrefix(p, `\`) {
+		return true
+	}
+	return filepath.VolumeName(p) != ""
 }
 
 // EvalNearest resolves symlinks in p. When p itself does not exist it walks

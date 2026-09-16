@@ -4,6 +4,7 @@ import (
 	"embed"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -85,7 +86,10 @@ func ScaffoldPlaybooks(dir string) error {
 			return fmt.Errorf("prompt: stat %s: %w", dst, err)
 		}
 
-		data, err := defaultPlaybooks.ReadFile(filepath.Join(defaultPlaybooksSubdir, e.Name()))
+		// An embedded FS is addressed with "/" on every OS, so the name
+		// is joined with path.Join: filepath.Join would ask for
+		// "playbooks\10-helpdesk.md" on Windows and find nothing.
+		data, err := defaultPlaybooks.ReadFile(path.Join(defaultPlaybooksSubdir, e.Name()))
 		if err != nil {
 			return fmt.Errorf("prompt: read embedded playbook %s: %w", e.Name(), err)
 		}

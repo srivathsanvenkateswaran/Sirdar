@@ -112,8 +112,17 @@ func (s ReadScope) Resolve(path string) (string, error) {
 	switch {
 	case strings.HasPrefix(raw, "~"):
 		candidate = filepath.Clean(raw)
-	case filepath.IsAbs(raw):
-		candidate = filepath.Clean(raw)
+	case IsRooted(raw):
+		// filepath.Abs, not Clean: a Windows path that is rooted without
+		// being absolute ("\etc\hosts", "/etc/passwd", "D:sub") has to be
+		// resolved against the drive it names before it can be compared
+		// with a root, or it matches nothing and is denied for the wrong
+		// reason.
+		if abs, err := filepath.Abs(raw); err == nil {
+			candidate = abs
+		} else {
+			candidate = filepath.Clean(raw)
+		}
 	default:
 		candidate = filepath.Join(s.Roots[0], raw)
 	}

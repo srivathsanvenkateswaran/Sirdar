@@ -527,7 +527,7 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 			// The shell would expand this to a home directory the
 			// workspace is not inside; the policy only ever sees the "~".
 			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
-		case filepath.IsAbs(arg):
+		case IsRooted(arg):
 			if root == "" {
 				continue
 			}
@@ -571,7 +571,7 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 // comparison silently reports "not reserved".
 func reservedArgument(root string, extraReserved []string, arg string) string {
 	candidate := arg
-	if !filepath.IsAbs(candidate) {
+	if !IsRooted(candidate) {
 		candidate = filepath.Join(root, candidate)
 	}
 	real, err := EvalNearest(candidate)

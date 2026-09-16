@@ -21,6 +21,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -372,11 +373,21 @@ var shellOperators = map[string]bool{
 	">": true, ">>": true, "<": true, "<<": true, "2>": true, "2>&1": true,
 }
 
+// backslashEscapes reports whether "\" introduces an escape in a command
+// template. It does on macOS and Linux, where a shell would read it that
+// way. It does not on Windows, where "\" is the path separator: reading
+// `C:\Users\me\whisper.exe {in}` as a set of escapes silently hands the
+// run `C:Usersmewhisper.exe`, which then fails to resolve with the
+// separators already gone from the message that says so.
+var backslashEscapes = runtime.GOOS != "windows"
+
 // SplitCommand splits a command template into argv the way a shell would
 // split a simple command, and no further: single quotes are literal,
 // double quotes allow a backslash escape, and a backslash outside quotes
 // escapes the next character. Nothing is expanded — no variables, no
-// globs, no substitution — because nothing here runs a shell.
+// globs, no substitution — because nothing here runs a shell. On Windows
+// the two backslash rules are off (see backslashEscapes); a path with a
+// space is quoted there as it is everywhere else.
 func SplitCommand(s string) ([]string, error) {
 	var (
 		argv  []string
@@ -403,7 +414,7 @@ func SplitCommand(s string) ([]string, error) {
 			}
 			cur.WriteRune(c)
 		case quote == '"':
-			if c == '\\' && i+1 < len(runes) {
+			if backslashEscapes && c == '\\' && i+1 < len(runes) {
 				next := runes[i+1]
 				if next == '"' || next == '\\' {
 					cur.WriteRune(next)
@@ -419,7 +430,7 @@ func SplitCommand(s string) ([]string, error) {
 		case c == '\'' || c == '"':
 			quote = c
 			open = true
-		case c == '\\' && i+1 < len(runes):
+		case backslashEscapes && c == '\\' && i+1 < len(runes):
 			cur.WriteRune(runes[i+1])
 			open = true
 			i++
