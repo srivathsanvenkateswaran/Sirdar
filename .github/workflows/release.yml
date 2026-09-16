@@ -101,6 +101,16 @@ jobs:
         working-directory: desktop
         run: wails build -ldflags "-X main.version=${GITHUB_REF_NAME#v}"
 
+      # The Linux zip is meant to be an install rather than a loose
+      # binary, so the app ships with sirdar.desktop, the 512px icon and
+      # an install.sh that copies the three of them into ~/.local with no
+      # sudo. desktop/build/README.md says where the added files live;
+      # scripts/package-linux.sh is shared with desktop.yml and the
+      # desktop-linux make target, so the three copies cannot drift.
+      - name: Package (Linux)
+        if: runner.os == 'Linux'
+        run: ./scripts/package-linux.sh
+
       - name: Zip build output (macOS, Linux)
         if: runner.os != 'Windows'
         shell: bash

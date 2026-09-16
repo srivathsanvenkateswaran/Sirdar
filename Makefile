@@ -1,4 +1,4 @@
-.PHONY: build test vet ui desktop desktop-windows desktop-dev install serve release-snapshot dist-desktop dist-desktop-windows version tokens check-tokens site
+.PHONY: build test vet ui desktop desktop-windows desktop-linux desktop-dev install serve release-snapshot dist-desktop dist-desktop-windows version tokens check-tokens site
 
 # `wails` is installed with `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`,
 # which puts it in $(go env GOPATH)/bin. Override WAILS if it is not on PATH.
@@ -28,8 +28,13 @@ ui:
 	mkdir -p $(UI_DIST)
 	cp -R desktop/frontend/dist/. $(UI_DIST)/
 
+# Ubuntu 24.04 and every other current distro dropped libwebkit2gtk-4.0-dev,
+# and Wails v2 builds against 4.1 only under this tag. Empty on macOS and
+# Windows, which have nothing to select.
+DESKTOP_TAGS := $(if $(filter linux,$(GOOS)),-tags webkit2_41,)
+
 desktop:
-	cd desktop && $(WAILS) build -ldflags "-X main.version=$(VERSION)"
+	cd desktop && $(WAILS) build $(DESKTOP_TAGS) -ldflags "-X main.version=$(VERSION)"
 
 # The Windows app, cross-compiled from whatever machine you are on. Wails v2
 # builds windows/amd64 with CGO off, so a macOS or Linux box produces a real
@@ -38,6 +43,27 @@ desktop:
 # apart by name.
 desktop-windows:
 	cd desktop && $(WAILS) build -platform windows/amd64 -ldflags "-X main.version=$(VERSION)"
+
+# The Linux app plus the launcher entry, icon and installer that make the
+# result installable — the same contents the release zip carries.
+#
+# **This only works on a Linux host.** Unlike desktop-windows above there is
+# no cross-build to be had: the Linux app is a GTK/WebKitGTK program, cgo
+# links it against libgtk-3 and libwebkit2gtk-4.1, and a macOS or Windows
+# machine has neither those headers nor a C toolchain aimed at them. The
+# guard below says so rather than letting the C compiler say it three
+# screens later. `.github/workflows/desktop.yml` is what builds this for
+# people who are not on Linux.
+#
+# Deps on Ubuntu/Debian: libgtk-3-dev libwebkit2gtk-4.1-dev.
+# On Fedora:             gtk3-devel webkit2gtk4.1-devel.
+desktop-linux:
+	@[ "$(GOOS)" = "linux" ] || { \
+	  echo "make desktop-linux: this is a $(GOOS) host. The Linux app needs GTK and WebKitGTK headers"; \
+	  echo "                    and cannot be cross-compiled; build it on Linux, or take the artifact"; \
+	  echo "                    from the desktop workflow. See docs/release.md."; exit 1; }
+	$(MAKE) desktop
+	./scripts/package-linux.sh
 
 desktop-dev:
 	cd desktop && $(WAILS) dev
@@ -66,6 +92,10 @@ install: desktop
 # build/bin and a leftover .exe would otherwise ride along inside the
 # macOS or Linux archive.
 dist-desktop: desktop
+	@# On a Linux host the zip is an install, not a loose binary: the
+	@# launcher entry, the icon and install.sh go in beside the app, the
+	@# same three files the release workflow stages.
+	@if [ "$(GOOS)" = "linux" ]; then ./scripts/package-linux.sh; fi
 	mkdir -p dist
 	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" . -x 'Sirdar.exe'
 	$(MAKE) dist-desktop-windows

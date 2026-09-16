@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Version=1.5
+Name=Sirdar
+GenericName=Support Triage
+Comment=Agentic L2 triage for OSS maintainers
+Exec=sirdar-desktop
+Icon=sirdar
+Terminal=false
+Categories=Development;Utility;
+Keywords=triage;support;tickets;helpdesk;agent;
+StartupNotify=true
+StartupWMClass=sirdar

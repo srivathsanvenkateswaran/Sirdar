@@ -7,6 +7,7 @@ The structure is:
 * bin - Output directory
 * darwin - macOS specific files
 * windows - Windows specific files
+* linux - Linux specific files (Sirdar's own; see below)
 
 ## Mac
 
@@ -33,3 +34,20 @@ build with `wails build`.
 - `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
   as well as the application itself (right click the exe -> properties -> details)
 - `wails.exe.manifest` - The main application manifest file.
+
+## Linux
+
+The `linux` directory is Sirdar's own, not Wails': `wails build` reads
+nothing from it and produces a bare `Sirdar` executable. These three files
+are what turn that executable into something a person can install, and
+`scripts/package-linux.sh` copies them next to it in `bin/` before anything
+zips that directory.
+
+- `sirdar.desktop` - the launcher entry. Its `StartupWMClass` must stay equal
+  to the `programName` constant in `desktop/main.go`, or the running window
+  does not group under the icon that launched it.
+- `sirdar.png` - the icon, 512x512, the size a hicolor theme indexes it
+  under. `scripts/make-icons.sh` writes it from the same raster as
+  `appicon.png`; do not edit it by hand.
+- `install.sh` - copies all three into `~/.local`, with no sudo and nothing
+  outside `$HOME`. `--uninstall` takes them back out.
