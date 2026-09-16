@@ -3,44 +3,142 @@ package run
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
 
-// fakeTranscriberScript writes a stand-in for whisper.cpp: it takes
-// "-of <stem>" and writes "<stem>.txt", announces a detected language on
-// stderr, and produces the same fixed transcript every time. Nothing in
-// the tests below installs or needs a real model.
+// TestMain belongs to the whole package; it lives in this file because
+// the transcription tests are the only thing here that runs an external
+// program, and internal/testbin's contract is that Dispatch is the first
+// statement of TestMain.
+//
+// The three stand-ins below were `#!/bin/sh` scripts with no file
+// extension. Windows can execute neither half of that — a shebang means
+// nothing to CreateProcess, and exec.LookPath does not consider an
+// extensionless file executable at all — so every transcription test here
+// failed there with "<path> is not on PATH", a message about the fixture
+// rather than about the runner. testbin installs a copy of this test
+// binary under each name instead, and Dispatch notices when the process
+// was started as one of them.
+var fakes = map[string]func() int{
+	fakeWhisperName: fakeWhisper,
+	"ffprobe":       fakeFFprobe,
+	"broken":        fakeBrokenTranscriber,
+}
+
+// fakeDir holds one copy of the test binary per entry in fakes. They are
+// installed once here rather than per test because a copy is what testbin
+// falls back to when the filesystem refuses a hard link, and this binary
+// is tens of megabytes.
+var fakeDir string
+
+func TestMain(m *testing.M) {
+	testbin.Dispatch(fakes)
+
+	dir, err := os.MkdirTemp("", "sirdar-run-fakes")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "run test:", err)
+		os.Exit(1)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "run test:", err)
+		os.Exit(1)
+	}
+	for name := range fakes {
+		if err := testbin.LinkOrCopy(self, filepath.Join(dir, name+testbin.Ext)); err != nil {
+			fmt.Fprintf(os.Stderr, "run test: install %s: %v\n", name, err)
+			os.RemoveAll(dir)
+			os.Exit(1)
+		}
+	}
+	fakeDir = dir
+
+	code := m.Run()
+	os.RemoveAll(dir)
+	os.Exit(code)
+}
+
+// fakeBin is the path to run one of the stand-ins by, with whatever
+// extension this platform needs to consider it executable.
+func fakeBin(name string) string {
+	return filepath.Join(fakeDir, name+testbin.Ext)
+}
+
+// fakeWhisperName is the file name the whisper stand-in is installed
+// under and the key Dispatch selects it by. It is also what a transcript
+// header credits, which TestVoiceNotesAreTranscribedIntoTheBundle checks.
+const fakeWhisperName = "fake-whisper"
+
+// fakeTranscriberScript returns the start of a command template running
+// the stand-in for whisper.cpp: its path plus the -body flag carrying the
+// transcript to produce. Nothing in the tests below installs or needs a
+// real model.
+//
+// The transcript travels as an argument rather than an environment
+// variable because a Transcriber hands its child nothing but PATH, HOME,
+// LANG and TMPDIR — see transcribe.keptEnv — so an environment variable
+// would be filtered out before the command ever started.
 func fakeTranscriberScript(t *testing.T, body string) string {
 	t.Helper()
-	if runtime.GOOS == "windows" {
-		t.Skip("the fake transcriber is a shell script")
+	return fakeBin(fakeWhisperName) + ` -body "` + body + `"`
+}
+
+// fakeWhisper takes "-of <stem>" and writes "<stem>.txt", announcing a
+// detected language on stderr the way whisper.cpp does. With no -of it
+// prints the transcript on stdout, which is the other command shape the
+// runner supports.
+func fakeWhisper() int {
+	var body, out string
+	args := testbin.Args()
+	for i := 0; i < len(args); i++ {
+		next := ""
+		if i+1 < len(args) {
+			next = args[i+1]
+		}
+		switch args[i] {
+		case "-body":
+			body, i = next, i+1
+		case "-of":
+			out, i = next, i+1
+		case "-l", "-m":
+			i++
+		}
 	}
-	path := filepath.Join(t.TempDir(), "fake-whisper")
-	script := `#!/bin/sh
-out=""
-while [ $# -gt 0 ]; do
-  case "$1" in
-    -of) out="$2"; shift 2;;
-    -l) shift 2;;
-    -otxt) shift;;
-    *) shift;;
-  esac
-done
-echo "auto-detected language: ar (p = 0.98)" >&2
-printf '%s\n' "` + body + `" > "$out.txt"
-`
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
+	fmt.Fprintln(os.Stderr, "auto-detected language: ar (p = 0.98)")
+	if out == "" {
+		fmt.Println(body)
+		return 0
 	}
-	return path
+	if err := os.WriteFile(out+".txt", []byte(body+"\n"), 0o644); err != nil {
+		return testbin.Fail("fake whisper: %v", err)
+	}
+	return 0
+}
+
+// fakeFFprobe answers the one question transcribe.duration asks — how
+// long the audio is — with a recording well past any maxSeconds a test
+// configures. It ignores its arguments: the real ffprobe is asked for
+// exactly one number and nothing else here depends on the flags.
+func fakeFFprobe() int {
+	fmt.Println("912.4")
+	return 0
+}
+
+// fakeBrokenTranscriber is a transcription tool that cannot run at all,
+// saying why on stderr before exiting non-zero. What it printed is what
+// the run's warning has to carry.
+func fakeBrokenTranscriber() int {
+	fmt.Fprintln(os.Stderr, "failed to load model")
+	return 1
 }
 
 // transcribeWorkspace is the default test workspace plus a transcription
@@ -92,8 +190,8 @@ func bundleAttachments(t *testing.T, dir string) []ticket.Attachment {
 // end: the audio a session cannot open becomes a text file beside it, the
 // manifest says so, and the prompt points the agent at it.
 func TestVoiceNotesAreTranscribedIntoTheBundle(t *testing.T) {
-	bin := fakeTranscriberScript(t, "الطلب لا يعمل")
-	cfg := transcribeWorkspace(t, bin+" -l auto -otxt -of {out} {in}", "")
+	cmd := fakeTranscriberScript(t, "الطلب لا يعمل")
+	cfg := transcribeWorkspace(t, cmd+" -l auto -otxt -of {out} {in}", "")
 	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64, 64)))
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})
@@ -109,7 +207,7 @@ func TestVoiceNotesAreTranscribedIntoTheBundle(t *testing.T) {
 		t.Errorf("the transcript does not carry what the tool produced:\n%s", body)
 	}
 	header := strings.SplitN(body, "\n", 2)[0]
-	for _, want := range []string{"PTT-2026a.ogg", filepath.Base(bin), "ar"} {
+	for _, want := range []string{"PTT-2026a.ogg", fakeWhisperName + testbin.Ext, "ar"} {
 		if !strings.Contains(header, want) {
 			t.Errorf("the header %q does not name %q", header, want)
 		}
@@ -184,15 +282,15 @@ func TestTranscriptionIsOffWithoutTheConfigBlock(t *testing.T) {
 // ffprobe to answer. A fake one stands in for it, the way a fake
 // transcriber stands in for whisper.
 func TestAudioOverMaxSecondsIsSkipped(t *testing.T) {
-	bin := fakeTranscriberScript(t, "never reached")
-	binDir := t.TempDir()
-	probe := "#!/bin/sh\necho 912.4\n"
-	if err := os.WriteFile(filepath.Join(binDir, "ffprobe"), []byte(probe), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	cmd := fakeTranscriberScript(t, "never reached")
+	// The stand-in has to be named "ffprobe" and found on PATH, because
+	// that is how transcribe.duration looks for it: by name, through
+	// exec.LookPath, which on Windows also wants the ".exe" testbin adds.
+	// Putting the whole fake directory on PATH costs nothing — every
+	// other stand-in in it is run by absolute path.
+	t.Setenv("PATH", fakeDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
-	cfg := transcribeWorkspace(t, bin+" -otxt -of {out} {in}", "    maxSeconds: 300\n")
+	cfg := transcribeWorkspace(t, cmd+" -otxt -of {out} {in}", "    maxSeconds: 300\n")
 	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64)))
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})
@@ -219,8 +317,8 @@ func TestAudioOverMaxSecondsIsSkipped(t *testing.T) {
 // TestMaxFilesLeavesTheRestUnreadAndSaysSoOnce: the cap is reported once,
 // and every file past it is reported the way any unread attachment is.
 func TestMaxFilesLeavesTheRestUnreadAndSaysSoOnce(t *testing.T) {
-	bin := fakeTranscriberScript(t, "heard it")
-	cfg := transcribeWorkspace(t, bin+" -otxt -of {out} {in}", "    maxFiles: 1\n")
+	cmd := fakeTranscriberScript(t, "heard it")
+	cfg := transcribeWorkspace(t, cmd+" -otxt -of {out} {in}", "    maxFiles: 1\n")
 	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64, 64, 64)))
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})
@@ -253,11 +351,7 @@ func TestMaxFilesLeavesTheRestUnreadAndSaysSoOnce(t *testing.T) {
 // TestAFailingTranscriberIsAWarningNotARunFailure: nothing about audio is
 // allowed to stop a triage.
 func TestAFailingTranscriberIsAWarningNotARunFailure(t *testing.T) {
-	bin := filepath.Join(t.TempDir(), "broken")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 'failed to load model' >&2\nexit 1\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfg := transcribeWorkspace(t, bin+" {in}", "")
+	cfg := transcribeWorkspace(t, fakeBin("broken")+" {in}", "")
 	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64)))
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
@@ -277,8 +371,8 @@ func TestAFailingTranscriberIsAWarningNotARunFailure(t *testing.T) {
 // reads: the note says which attachments never reached the session, and a
 // transcribed one is not among them.
 func TestTheNoteNamesTheAttachmentsNobodyRead(t *testing.T) {
-	bin := fakeTranscriberScript(t, "heard it")
-	cfg := transcribeWorkspace(t, bin+" -otxt -of {out} {in}", "")
+	cmd := fakeTranscriberScript(t, "heard it")
+	cfg := transcribeWorkspace(t, cmd+" -otxt -of {out} {in}", "")
 	hd := voiceNotes(64)
 	hd.files = append(hd.files, stubAttachment{
 		Attachment: ticket.Attachment{ID: "v1", Name: "screen.mov", MIME: "video/quicktime", Path: "attachments/screen.mov"},
@@ -314,9 +408,9 @@ func TestTheNoteNamesTheAttachmentsNobodyRead(t *testing.T) {
 // than landing at whatever size transcribe.Result.Text happened to be.
 func TestTranscriptIsCappedAtAttachmentsMaxBytes(t *testing.T) {
 	long := strings.Repeat("x", 2000)
-	bin := fakeTranscriberScript(t, long)
+	cmd := fakeTranscriberScript(t, long)
 	cfg := newWorkspaceWith(t, configYAML+
-		"attachments:\n  maxBytes: 300\n  transcribe:\n    command: "+bin+" -otxt -of {out} {in}\n")
+		"attachments:\n  maxBytes: 300\n  transcribe:\n    command: "+cmd+" -otxt -of {out} {in}\n")
 	r := withRealEnv(newRunner(cfg, &stubProvider{script: replay(finalEvent(triageDoc))}, stubTracker{}, voiceNotes(64)))
 
 	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{DryRun: true})

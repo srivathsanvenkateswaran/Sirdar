@@ -106,17 +106,27 @@ func TestFindRoot(t *testing.T) {
 	}
 }
 
+// TestExpandPath builds every expectation with filepath rather than
+// writing it out with "/" separators, and takes both the root and the
+// already-absolute case from t.TempDir. Neither is fussiness: a joined
+// path is "\ws\rel\y" on Windows, and "/ws" is not an absolute path there
+// at all — it is rooted on whatever the current drive happens to be, so
+// filepath.IsAbs says no and ExpandPath joins it onto the root. Hardcoded
+// POSIX strings would have this test measuring the separator instead of
+// the expansion.
 func TestExpandPath(t *testing.T) {
-	c := &Config{Root: "/ws"}
+	root := filepath.Join(t.TempDir(), "ws")
+	c := &Config{Root: root}
 	home, _ := os.UserHomeDir()
-	if got := c.ExpandPath("~/x"); got != filepath.Join(home, "x") {
-		t.Fatal(got)
+	if got, want := c.ExpandPath("~/x"), filepath.Join(home, "x"); got != want {
+		t.Fatalf("ExpandPath(%q) = %q, want %q", "~/x", got, want)
 	}
-	if got := c.ExpandPath("rel/y"); got != "/ws/rel/y" {
-		t.Fatal(got)
+	if got, want := c.ExpandPath("rel/y"), filepath.Join(root, "rel", "y"); got != want {
+		t.Fatalf("ExpandPath(%q) = %q, want %q", "rel/y", got, want)
 	}
-	if got := c.ExpandPath("/abs"); got != "/abs" {
-		t.Fatal(got)
+	abs := filepath.Join(t.TempDir(), "abs")
+	if got := c.ExpandPath(abs); got != abs {
+		t.Fatalf("ExpandPath(%q) = %q, want it left alone", abs, got)
 	}
 }
 
@@ -1507,11 +1517,23 @@ permissions:
 // scope: it reaches the config, the default is empty, and an entry that
 // cannot mean what the operator meant fails the load.
 func TestPermissionsReadAlso(t *testing.T) {
+	// The reference directory is taken from t.TempDir rather than written
+	// as "/opt/reference": on Windows that spelling is not an absolute
+	// path — it is rooted on the current drive — and validateReadAlso is
+	// right to refuse it, because an operator widening a session's read
+	// scope by hand has to name a location that does not depend on which
+	// drive the process happens to be sitting on. ToSlash keeps the
+	// result free of backslashes, which would otherwise have to be
+	// escaped inside the YAML and the JSON below.
+	refDir := filepath.ToSlash(filepath.Join(t.TempDir(), "reference"))
+	if err := os.MkdirAll(refDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	root := writeCfg(t, minimal+`
 permissions:
   readAlso:
     - "~/.claude/skills/*"
-    - "/opt/reference"
+    - "`+refDir+`"
 `)
 	cfg, err := Load(root)
 	if err != nil {
@@ -1521,7 +1543,7 @@ permissions:
 		t.Fatalf("permissions.readAlso %v", cfg.Permissions.ReadAlso)
 	}
 	policy := &provider.PermissionPolicy{Root: cfg.Root, ReadAlso: cfg.Permissions.ReadAlso}
-	if d := policy.Decide("Read", json.RawMessage(`{"file_path":"/opt/reference/runbook.md"}`)); !d.Allow {
+	if d := policy.Decide("Read", json.RawMessage(`{"file_path":"`+refDir+`/runbook.md"}`)); !d.Allow {
 		t.Errorf("a readAlso path was denied: %s", d.Message)
 	}
 	if d := policy.Decide("Read", json.RawMessage(`{"file_path":"/etc/passwd"}`)); d.Allow {
