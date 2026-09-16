@@ -208,11 +208,13 @@ function StarIcon({ filled }: { filled: boolean }): JSX.Element {
  * 5". It opens a 480-wide popover pinned to the viewport beside it
  * (`lib/anchor`): a search field across the top, a 48px rail of provider
  * marks down the left, and the list — the favourites under their own
- * heading, then CLI default, the curated ids, and Other… with its free-text
- * box. The first nine rows carry ⌘1…⌘9 and answer to them while the popover
- * is open; a star on each row keeps a favourite in localStorage, per
- * provider. Every choice applies as it is made, so the chip is always the
- * truth; picking a row closes and hands focus back to the chip.
+ * heading, then CLI default and the curated ids. The search field is also
+ * the free-text entry: text that answers no row is offered back as one row,
+ * "Use “…” as the model id", which Enter picks. The first nine rows carry
+ * ⌘1…⌘9 and answer to them while the popover is open; a star on each row
+ * keeps a favourite in localStorage, per provider. Every choice applies as
+ * it is made, so the chip is always the truth; picking a row closes and
+ * hands focus back to the chip.
  */
 export default function ModelPicker({
   provider,
@@ -236,19 +238,9 @@ export default function ModelPicker({
   const popover = useRef<HTMLDivElement | null>(null)
   const search = useRef<HTMLInputElement | null>(null)
   const list = useRef<HTMLDivElement | null>(null)
-  const input = useRef<HTMLInputElement | null>(null)
   const id = useId()
 
   const pair = effectivePair(provider, model, defaultProvider, defaultModel)
-  const curated = modelsFor(pair.provider).some((m) => m.id === pair.model)
-  const [text, setText] = useState(curated ? '' : pair.model)
-
-  // A choice made elsewhere — the workspace changing under the chip — is
-  // reflected in the free-text row rather than left as stale words.
-  useEffect(() => {
-    setText(curated ? '' : pair.model)
-  }, [curated, pair.model])
-
   const value = describeModel(pair.provider, pair.model, lastUsed, unknownAs)
   const label = !pair.provider
     ? 'not set'
@@ -289,6 +281,10 @@ export default function ModelPicker({
     [pair.provider, query, starred, open],
   )
   const rows = [...favourites, ...rest]
+  // The search field is the free-text entry: text that answers no row is
+  // offered back as a model id, on one row of its own.
+  const typed = query.trim()
+  const offerTyped = typed !== '' && rows.length === 0
 
   function emit(next: ModelChoicePair): void {
     // The workspace's own provider is the absence of an override.
@@ -300,19 +296,19 @@ export default function ModelPicker({
 
   function pickProvider(next: string): void {
     if (next === pair.provider) return
-    setText('')
     emit({ provider: next, model: '' })
   }
 
   function pickRow(row: ModelRow): void {
-    setText('')
     emit({ provider: row.provider, model: row.id })
     close()
   }
 
-  function typeModel(raw: string): void {
-    setText(raw)
-    emit({ provider: pair.provider, model: raw.trim() })
+  /** Takes what was typed as the model id, on the provider the rail has. */
+  function useTyped(): void {
+    if (!typed) return
+    emit({ provider: pair.provider, model: typed })
+    close()
   }
 
   function toggleFavourite(row: ModelRow): void {
@@ -325,8 +321,6 @@ export default function ModelPicker({
   function isSelected(row: ModelRow): boolean {
     return row.provider === pair.provider && row.id === pair.model
   }
-
-  const onOther = pair.provider !== '' && !curated
 
   function options(): HTMLElement[] {
     return [...(list.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])]
@@ -365,7 +359,7 @@ export default function ModelPicker({
         if (at < 0) return
         event.preventDefault()
         if (at < rows.length) pickRow(rows[at])
-        else input.current?.focus()
+        else useTyped()
         return
       }
       case 'f':
@@ -409,9 +403,10 @@ export default function ModelPicker({
     if (event.key === 'ArrowDown') {
       event.preventDefault()
       focusOption(0)
-    } else if (event.key === 'Enter' && rows.length > 0) {
+    } else if (event.key === 'Enter') {
       event.preventDefault()
-      pickRow(rows[0])
+      if (rows.length > 0) pickRow(rows[0])
+      else useTyped()
     }
   }
 
@@ -608,49 +603,31 @@ export default function ModelPicker({
                   {query.trim() ? 'Matches' : 'Models'}
                 </span>
                 {rest.map((row, i) => renderRow(row, favourites.length + i))}
-                {rows.length === 0 ? (
-                  <p className="sd-model-picker__none">No model matches “{query.trim()}”.</p>
+                {offerTyped ? (
+                  <div
+                    role="option"
+                    className="sd-model-picker__row sd-model-picker__row--use"
+                    aria-selected={false}
+                    tabIndex={-1}
+                    onClick={useTyped}
+                  >
+                    <span className="sd-model-picker__text">
+                      <span className="sd-model-picker__label">
+                        Use “<span dir="ltr">{typed}</span>” as the model id
+                      </span>
+                      {hintFor(pair.provider) ? (
+                        <span className="sd-model-picker__hint">{hintFor(pair.provider)}</span>
+                      ) : null}
+                    </span>
+                  </div>
                 ) : null}
-              </div>
-              <div
-                role="option"
-                className="sd-model-picker__row sd-model-picker__row--other"
-                aria-selected={onOther}
-                tabIndex={-1}
-                onClick={() => input.current?.focus()}
-              >
-                <span className="sd-model-picker__text">
-                  <span className="sd-model-picker__label">Other…</span>
-                  <label className="visually-hidden" htmlFor={`${id}-other`}>
-                    Other model
-                  </label>
-                  <input
-                    ref={input}
-                    id={`${id}-other`}
-                    className="sd-model-picker__input"
-                    value={text}
-                    placeholder={`Type a model id for ${pair.provider || 'the provider'}`}
-                    autoComplete="off"
-                    spellCheck={false}
-                    dir="ltr"
-                    onChange={(e) => typeModel(e.target.value)}
-                    onKeyDown={(e) => {
-                      // The row's own keys must not walk the list.
-                      e.stopPropagation()
-                      if (e.key === 'Escape') {
-                        e.preventDefault()
-                        close()
-                      } else if (e.key === 'Enter') {
-                        e.preventDefault()
-                        close()
-                      }
-                    }}
-                  />
-                  {hintFor(pair.provider) ? (
-                    <span className="sd-model-picker__hint">{hintFor(pair.provider)}</span>
-                  ) : null}
-                </span>
-                {onOther ? <CheckIcon /> : null}
+                {!typed && rows.length === 1 && hintFor(pair.provider) ? (
+                  // A provider with no curated names: say where an id would
+                  // come from before anything is typed.
+                  <p className="sd-model-picker__hint sd-model-picker__hint--foot">
+                    {hintFor(pair.provider)}
+                  </p>
+                ) : null}
               </div>
             </div>
           </div>

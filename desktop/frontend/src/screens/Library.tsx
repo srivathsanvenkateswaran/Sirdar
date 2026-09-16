@@ -1354,7 +1354,7 @@ export default function Library(): JSX.Element {
         <Section
           id="model-picker"
           name="Model picker"
-          note="The chip says which pair will run; the popover beside it — search, provider rail, favourites, ⌘1…⌘9 — is where it changes."
+          note="The chip says which pair will run; the popover beside it — a search that also takes a typed id, the provider rail, favourites, ⌘1…⌘9 — is where it changes."
         >
           <div className="lib-row">
             <State label="Nothing chosen, with what the last run used">

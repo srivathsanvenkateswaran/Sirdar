@@ -320,9 +320,11 @@ describe('NewSession', () => {
     fireEvent.click(modelChip())
     const popover = screen.getByRole('dialog', { name: 'Provider and model' })
     fireEvent.click(within(popover).getByRole('tab', { name: 'Codex' }))
-    const other = within(popover).getByRole('textbox', { name: 'Other model' })
-    fireEvent.change(other, { target: { value: ' o3 ' } })
-    fireEvent.keyDown(other, { key: 'Enter' })
+    // The search field is the free-text entry: an id no list has is typed
+    // there and taken with Enter.
+    const search = within(popover).getByRole('searchbox', { name: 'Search models' })
+    fireEvent.change(search, { target: { value: ' o3 ' } })
+    fireEvent.keyDown(search, { key: 'Enter' })
     // The chip follows the override, so the reader sees what will run.
     expect(modelChip()).toHaveAccessibleName('Model codex · o3')
     // Provider and model are not under More options; dry run still is.

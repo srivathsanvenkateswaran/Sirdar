@@ -343,9 +343,11 @@ describe('Eval run suite', () => {
     const picker = screen.getByRole('dialog', { name: 'Provider and model' })
     expect(within(picker).getByRole('tab', { name: 'Claude, workspace default' })).toBeInTheDocument()
     fireEvent.click(within(picker).getByRole('tab', { name: 'Qwen' }))
-    const other = within(picker).getByRole('textbox', { name: 'Other model' })
-    fireEvent.change(other, { target: { value: ' qwen3-coder ' } })
-    fireEvent.keyDown(other, { key: 'Enter' })
+    // The search field is the free-text entry: an id no list has is typed
+    // there and taken with Enter.
+    const search = within(picker).getByRole('searchbox', { name: 'Search models' })
+    fireEvent.change(search, { target: { value: ' qwen3-coder ' } })
+    fireEvent.keyDown(search, { key: 'Enter' })
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(change).toHaveFocus()
     expect(screen.getByText('qwen · qwen3-coder')).toBeInTheDocument()
