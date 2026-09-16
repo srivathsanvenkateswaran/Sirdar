@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Sirdar — a read-only harness for support tickets</title>
-<meta name="description" content="Sirdar gathers the evidence a support ticket needs, in the customer's own language, and writes a root-cause note for you to review. Open source, runs on your machine, on a coding agent you already pay for.">
+<meta name="description" content="Sirdar gathers the evidence a support ticket needs, in the customer's own language, and writes a root-cause note for you to review. A desktop app for macOS and Windows and a command-line tool, open source, on the coding agent you already pay for.">
 <meta name="color-scheme" content="light">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Noto+Naskh+Arabic:wght@400;600&display=swap">
 <link rel="stylesheet" href="styles.css">
 <script>document.documentElement.classList.add("js");</script>
 </head>
@@ -29,9 +29,9 @@
       <a href="#step-rca">rca</a>
     </div>
     <div class="navend">
-      <a class="navlink" href="https://srivathsanvenkateswaran.github.io/Sirdar/">Docs</a>
+      <a class="navlink" href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/">Docs</a>
       <a class="navlink" href="https://github.com/srivathsanvenkateswaran/Sirdar">GitHub</a>
-      <a class="navpill" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Install</a>
+      <a class="navpill" href="#download">Download</a>
     </div>
   </nav>
 </div>
@@ -47,115 +47,46 @@
         <h1>A ticket arrives. <em>Something reads it first.</em></h1>
         <p class="deck">Sirdar gathers the evidence a support ticket needs, in the
           customer's own language, and writes a root-cause note for you to review.
-          The note is a hypothesis, not a verdict.</p>
+          A desktop app for macOS and Windows, and a command-line tool, over the
+          coding agent you already pay for.</p>
 
         <div class="actions">
-          <a class="btn" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Install</a>
+          <a class="btn" href="#download">Download</a>
           <div class="copyline">
-            <code id="brewcmd" dir="ltr">brew install srivathsanvenkateswaran/sirdar/sirdar</code>
-            <button class="copybtn" type="button" data-copy="#brewcmd" aria-label="Copy the install command"><span data-copy-label>Copy</span></button>
+            <code id="gocmd" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
+            <button class="copybtn" type="button" data-copy="#gocmd" aria-label="Copy the install command"><span data-copy-label>Copy</span></button>
           </div>
           <span class="vh" role="status" id="copystatus"></span>
         </div>
 
-        <p class="fineprint">The tap goes live with the first published release; until then
-          <code dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
-          builds any commit.</p>
-        <p class="fineprint">Apache-2.0. It runs on your machine, on your logins, on a coding
-          agent you already pay for: Claude Code, Codex, Qwen Code, or any OpenAI-compatible
-          endpoint.</p>
+        <p class="fineprint">Apache-2.0. It runs on your machine, on your logins, and it
+          never writes to the tracker. The note is a hypothesis, not a verdict.</p>
       </div>
 
-      <!-- The one animated thing on the page: a ticket becoming a note. -->
-      <figure class="sheet" id="sheet">
-        <figcaption class="sheet-head">
-          <code class="sheet-cmd" dir="ltr">sirdar triage OMNI-1412</code>
-          <span class="chip" id="sheet-state" data-state="live">running</span>
-        </figcaption>
-
-        <div class="scan" id="scan" aria-hidden="true"></div>
-
-        <ol class="rows">
-          <li class="row">
-            <span class="row-label" data-in>subject</span>
-            <span class="row-label" data-out>complaint</span>
-            <span class="row-face" data-in lang="ar" dir="rtl">تصدير كشف الحساب لا يعمل</span>
-            <span class="row-face" data-out>Statement export fails for any range longer than one month.</span>
-          </li>
-          <li class="row">
-            <span class="row-label" data-in>message</span>
-            <span class="row-label" data-out>repro</span>
-            <span class="row-face" data-in lang="ar" dir="rtl">حاولت تصدير كشف الحساب لآخر ستة أشهر ثلاث مرات، وفي كل مرة تظهر رسالة خطأ بعد حوالي دقيقة. التصدير لشهر واحد يعمل.</span>
-            <span class="row-face" data-out>Statements, range six months, Export. Fails after about a minute,
-              three times out of three. A one-month range succeeds.</span>
-          </li>
-          <li class="row">
-            <span class="row-label" data-in>attachment</span>
-            <span class="row-label" data-out>evidence</span>
-            <span class="row-face" data-in lang="ar" dir="rtl">لقطة-الشاشة.png</span>
-            <span class="row-face" data-out><code dir="ltr">504</code> at the gateway, 11:42Z,
-              beside the export worker's own timeout in the same second.</span>
-          </li>
-          <li class="row">
-            <span class="row-label" data-in></span>
-            <span class="row-label" data-out>root cause</span>
-            <span class="row-face blank" data-in></span>
-            <span class="row-face" data-out>A six-month export crosses two table partitions and runs past the
-              gateway's 60s ceiling. Hypothesis, not a verdict.</span>
-          </li>
-          <li class="row">
-            <span class="row-label" data-in></span>
-            <span class="row-label" data-out>confidence</span>
-            <span class="row-face blank" data-in></span>
-            <span class="row-face" data-out><span class="conf">medium</span>, with two open questions
-              for the reader.</span>
-          </li>
-        </ol>
-
-        <p class="sheet-foot pending" id="sheet-foot">
-          <code dir="ltr">notes/OMNI-1412-triage.md</code>
-          <span>read it before you run <code dir="ltr">sirdar fix</code></span>
-        </p>
+      <figure class="shot shot--hero">
+        <img src="shots/session-conversation.png" width="1440" height="900"
+          alt="The Sirdar Session window in its Conversation layout: a sidebar of sessions on the left, the agent's answer as a card in the middle with the root cause and its file references, and the rendered triage note on the right, including the customer's complaint translated from Arabic.">
+        <figcaption>The Session window, Conversation layout, on a run against the sandbox
+          workspace. The shop, the ticket and the code are fabricated.</figcaption>
       </figure>
     </div>
   </section>
 
-  <!-- 2. Sources and providers ------------------------------------------ -->
-  <section class="section" aria-labelledby="sources-h">
-    <div class="wide">
-      <h2 id="sources-h" class="h-small">What it reads, and what reads it</h2>
-      <dl class="badges">
-        <dt>Trackers</dt>
-        <dd>
-          <span class="badge-pill">Jira Cloud</span><span class="badge-pill">Jira Data Center</span><span class="badge-pill">Linear</span><span class="badge-pill">Azure DevOps</span><span class="badge-pill">Rally</span><span class="badge-pill">ServiceNow</span>
-        </dd>
-        <dt>Helpdesks</dt>
-        <dd>
-          <span class="badge-pill">Zoho Desk</span><span class="badge-pill">Zendesk</span><span class="badge-pill">Freshdesk</span><span class="badge-pill">Help Scout</span><span class="badge-pill">Intercom</span><span class="badge-pill">HubSpot Service Hub</span><span class="badge-pill">Front</span><span class="badge-pill">Gorgias</span>
-        </dd>
-        <dt>Agents</dt>
-        <dd>
-          <span class="badge-pill">Claude Code</span><span class="badge-pill">Codex</span><span class="badge-pill">Qwen Code</span><span class="badge-pill">ACP agents</span><span class="badge-pill">OpenAI-compatible</span><span class="badge-pill">Ollama</span><span class="badge-pill">vLLM</span><span class="badge-pill">llama.cpp</span>
-        </dd>
-      </dl>
-      <p class="aside">These are names set in Sirdar's own type, never a vendor's mark: a logo
-        would imply an endorsement, and this is only a statement about what the adapters read.
-        Anything not on the list is a separate executable speaking line-delimited JSON over
-        stdin, named in config, so a vendor integration and its credentials never touch
-        Sirdar's core.</p>
-    </div>
-  </section>
-
-  <!-- 3. How it works ---------------------------------------------------- -->
+  <!-- 2. How it works ---------------------------------------------------- -->
   <section class="band" aria-labelledby="how-h">
     <div class="wide">
-      <h2 id="how-h" class="h-band">Four commands. <em>You read the note between the second and the third.</em></h2>
+      <h2 id="how-h" class="h-band">Five commands. <em>You read the note between the third and the fourth.</em></h2>
 
       <ol class="steps">
         <li class="step" id="step-init">
           <code class="step-cmd" dir="ltr">sirdar init</code>
           <p class="step-what">Scaffolds <code dir="ltr">.sirdar/config.yaml</code>, the playbooks, and the git excludes.</p>
           <p class="step-so">Nothing runs yet.</p>
+        </li>
+        <li class="step" id="step-doctor">
+          <code class="step-cmd" dir="ltr">sirdar doctor</code>
+          <p class="step-what">Checks that the provider CLI is installed and signed in, that each configured source answers, and that the notes directory and templates are usable.</p>
+          <p class="step-so">Still nothing runs.</p>
         </li>
         <li class="step" id="step-triage">
           <code class="step-cmd" dir="ltr">sirdar triage KEY</code>
@@ -166,7 +97,7 @@
 
       <p class="gate"><span>you read the note here</span></p>
 
-      <ol class="steps" start="3">
+      <ol class="steps" start="4">
         <li class="step" id="step-fix">
           <code class="step-cmd" dir="ltr">sirdar fix KEY</code>
           <p class="step-what">Implements that note's Proposed Fix on a branch in a linked worktree, commits, pushes, opens the pull request.</p>
@@ -178,15 +109,145 @@
           <p class="step-so">Marks the note resolved.</p>
         </li>
       </ol>
+
+      <p class="band-foot">The desktop app and <code dir="ltr">sirdar serve</code> start the
+        same runs from a New session form, show them on a board, and stream each one as it
+        happens. Same binary, same workspace, same notes.</p>
     </div>
   </section>
 
-  <!-- 4. Read-only by construction --------------------------------------- -->
+  <!-- 3. The board -------------------------------------------------------- -->
+  <section class="section" aria-labelledby="board-h">
+    <div class="wide">
+      <h2 id="board-h" class="h-mid">Every run on one board. <em>The rail is the legend.</em></h2>
+      <p class="lede">Six lanes: queue, gathering, blocked, triaged, done, failed. One hue per
+        state, on the lane rail and on every badge in that lane, so a run's state is never
+        colour alone. The tracker's queue sits in the first lane and the day's webhook
+        deliveries under them.</p>
+
+      <figure class="shot">
+        <img src="shots/board.png" width="1440" height="900" loading="lazy"
+          alt="The Sirdar Board: six lanes headed queue, gathering, blocked, triaged, done and failed, each with a coloured rail, with run cards in the done and failed lanes and a Deliveries today strip beneath.">
+        <figcaption>The Board in the desktop app, against the sandbox workspace: fifteen runs
+          of one fabricated ticket.</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <!-- 4. Three ways to read a run ---------------------------------------- -->
+  <section class="section" aria-labelledby="ways-h">
+    <div class="wide">
+      <h2 id="ways-h" class="h-mid">Three ways to read a run.</h2>
+      <p class="lede">The Session window has three layouts. Pick one in Settings or from the
+        switcher in the session header; the window remembers it.</p>
+
+      <ul class="ways">
+        <li class="way">
+          <figure class="shot shot--small">
+            <img src="shots/session-conversation.png" width="1440" height="900" loading="lazy"
+              alt="The Conversation layout: the answer card in the centre, the note in an inspector on the right.">
+          </figure>
+          <h3>Conversation</h3>
+          <p>The transcript as a chat, the answer as a card at its end, an inspector on the right.</p>
+        </li>
+        <li class="way">
+          <figure class="shot shot--small">
+            <img src="shots/session-document.png" width="1080" height="675" loading="lazy"
+              alt="The Document layout: the note fills the window, with the path the agent took as a timeline down the left.">
+          </figure>
+          <h3>Document</h3>
+          <p>The note or the change as the window, the path the agent took beside it.</p>
+        </li>
+        <li class="way">
+          <figure class="shot shot--small">
+            <img src="shots/session-workbench.png" width="1080" height="675" loading="lazy"
+              alt="The Workbench layout: turn, minute and cost gauges in the header, the answer in tabs above a console listing every tool call.">
+          </figure>
+          <h3>Workbench</h3>
+          <p>Documents in tabs over a console of every call, with gauges in the header.</p>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- 5. Providers -------------------------------------------------------- -->
+  <section class="section" aria-labelledby="prov-h">
+    <div class="wide">
+      <h2 id="prov-h" class="h-mid">It drives the coding agent <em>you already have.</em></h2>
+      <p class="lede">Each one signs in with its own login. Sirdar spawns the CLI you are
+        already signed in to and never stores or proxies a credential: no Sirdar account, no
+        server, no telemetry.</p>
+
+      <ul class="providers">
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/claude.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Claude Code<code dir="ltr">claude</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/codex.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Codex<code dir="ltr">codex</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/qwen.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Qwen Code<code dir="ltr">qwen</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/cursor.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Cursor Agent CLI<code dir="ltr">cursor</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/copilot.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">GitHub Copilot CLI<code dir="ltr">acp</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/opencode.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">OpenCode<code dir="ltr">acp</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/kimi.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Kimi CLI<code dir="ltr">acp</code></span>
+        </li>
+        <li class="prov">
+          <span class="prov-tile"><img src="marks/openai.svg" width="28" height="28" alt=""></span>
+          <span class="prov-name">Any OpenAI-compatible endpoint<code dir="ltr">openai</code></span>
+        </li>
+      </ul>
+
+      <p class="aside">The <code dir="ltr">acp</code> provider speaks the Agent Client Protocol,
+        so one adapter covers the three above. The <code dir="ltr">openai</code> provider is
+        Sirdar's own agent loop against any Chat Completions endpoint, a vendor's or a server
+        on this machine. Cursor approves its own tool calls, so Sirdar cannot judge them first:
+        a write that completes there fails the run, and <code dir="ltr">fix</code> refuses it.
+        The marks are the vendors' trademarks, shown only to say which CLI a run is on.</p>
+    </div>
+  </section>
+
+  <!-- 6. Sources ---------------------------------------------------------- -->
+  <section class="section section--tight" aria-labelledby="sources-h">
+    <div class="wide">
+      <h2 id="sources-h" class="h-small">What it reads</h2>
+    </div>
+    <div class="marquee" id="marquee">
+      <ul class="marquee-track" id="marquee-track" aria-label="Trackers and helpdesks with a built-in adapter">
+        <li class="badge-pill">Jira</li><li class="badge-pill">Linear</li><li class="badge-pill">Azure DevOps</li><li class="badge-pill">Rally</li><li class="badge-pill">Zoho Desk</li><li class="badge-pill">Zendesk</li><li class="badge-pill">Freshdesk</li><li class="badge-pill">Help Scout</li><li class="badge-pill">Intercom</li><li class="badge-pill">HubSpot Service Hub</li><li class="badge-pill">Front</li><li class="badge-pill">Gorgias</li><li class="badge-pill">ServiceNow</li>
+      </ul>
+    </div>
+    <div class="wide">
+      <p class="aside">Names set in Sirdar's own type, never a vendor's mark: a logo would imply
+        an endorsement, and this is only a statement about what the adapters read. Anything not
+        on the list is a separate executable speaking line-delimited JSON over stdin, named in
+        config, so a vendor integration and its credentials never touch Sirdar's core.</p>
+    </div>
+  </section>
+
+  <!-- 7. Read-only by construction --------------------------------------- -->
   <section class="section" aria-labelledby="ro-h">
     <div class="wide">
       <h2 id="ro-h" class="h-mid">It cannot write to your tracker.</h2>
       <p class="lede">Each line below names the mechanism, because a guarantee without a
-        mechanism is a promise.</p>
+        mechanism is a promise. Every run also carries a turn budget, a wall-clock budget and
+        a USD budget, and one that goes silent for six minutes is cancelled rather than held to
+        the end of the clock.</p>
 
       <dl class="ledger">
         <div class="ledger-row">
@@ -196,15 +257,16 @@
         </div>
         <div class="ledger-row">
           <dt>A triage session cannot edit files.</dt>
-          <dd><code dir="ltr">Edit</code>, <code dir="ltr">Write</code>,
-            <code dir="ltr">MultiEdit</code> and <code dir="ltr">NotebookEdit</code> are denied
-            outright. Every segment of a compound Bash command has to match a pattern from
-            <code dir="ltr">permissions.bash</code>; command substitution and redirection are
-            refused, and so is an argument pointing outside the workspace root.</dd>
+          <dd>Each provider rests that on its own mechanism. Claude Code and Qwen Code run
+            with their write tools off and every other call sent to Sirdar's policy to answer.
+            Codex runs in its read-only sandbox with approvals on. The OpenAI-compatible loop is
+            Sirdar's own, so it decides before each call. An ACP agent is put in its read-only
+            session mode. Every segment of a compound shell command has to match a pattern from
+            <code dir="ltr">permissions.bash</code>; substitution and redirection are refused.</dd>
         </div>
         <div class="ledger-row">
           <dt>Fetching is judged by destination, not by tool name.</dt>
-          <dd><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/config.md"><code dir="ltr">permissions.fetch</code></a>
+          <dd><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/config/"><code dir="ltr">permissions.fetch</code></a>
             lists the hosts a session may reach and it is empty by default, so a workspace that
             has not said where a run may fetch from fetches nowhere. An instruction hidden in a
             ticket comment cannot pick the destination.</dd>
@@ -221,136 +283,77 @@
           <dd>sha256 of everything under <code dir="ltr">.sirdar/</code> and under the directory
             git runs this repository's hooks from, before the session and again the moment it
             ends. Any difference fails the run
-            <a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/fix.md">before the first git command</a>,
+            <a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/fix/">before the first git command</a>,
             so nothing is committed and nothing is pushed.</dd>
         </div>
         <div class="ledger-row">
-          <dt>Config carries references, not secrets.</dt>
+          <dt>Your logins, your machine.</dt>
           <dd>Credentials are written as <code dir="ltr">env:NAME</code>,
             <code dir="ltr">keychain:SERVICE</code>, <code dir="ltr">file:PATH</code> or
-            <code dir="ltr">cmd:COMMAND</code>. A webhook secret written out literally fails the
-            first time the workspace loads, rather than the first time a hook fires.</dd>
-        </div>
-        <div class="ledger-row">
-          <dt>Every run is bounded, and a silent one is cancelled.</dt>
-          <dd>A turn budget, a wall-clock budget and a USD budget. A session with no tool call,
-            no text and no usage line for six minutes is marked failed rather than held to the
-            end of the clock.</dd>
-        </div>
-        <div class="ledger-row">
-          <dt>Your logins, your machine.</dt>
-          <dd>Sirdar spawns the <code dir="ltr">claude</code>, <code dir="ltr">codex</code>,
-            <code dir="ltr">qwen</code> or <code dir="ltr">agy</code> binary you are already
-            signed in to, and never stores or proxies a credential. No Sirdar account, no
-            server, no telemetry.</dd>
+            <code dir="ltr">cmd:COMMAND</code>, never as a literal; a secret written out fails
+            the first time the workspace loads. Sirdar spawns the provider binary you are
+            already signed in to. No Sirdar account, no server, no telemetry.</dd>
         </div>
       </dl>
     </div>
   </section>
 
-  <!-- 5. The board -------------------------------------------------------- -->
-  <section class="section" aria-labelledby="board-h">
+  <!-- 8. Download --------------------------------------------------------- -->
+  <section class="section" id="download" aria-labelledby="dl-h">
     <div class="wide">
-      <h2 id="board-h" class="h-mid">Six lanes. <em>The rail is the legend.</em></h2>
-      <p class="lede">The desktop app and <code dir="ltr">sirdar serve</code> show the same
-        board. One hue per state, on the lane rail and on every badge in that lane, so a run's
-        state is never colour alone.</p>
+      <h2 id="dl-h" class="h-mid">Download.</h2>
+      <p class="lede">Both come from the same GitHub release. Every release opens as a draft
+        and a person publishes it.</p>
 
-      <figure class="frame">
-        <div class="lanes">
-          <section class="lane" data-state="queue" aria-label="Queued, 2 runs">
-            <h3 class="lane-head"><span>Queued</span><span class="lane-n" dir="ltr">2</span></h3>
-            <ul class="cards">
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1471</code><span class="badge" data-state="queue">queued</span></p>
-                <p class="rcard-title">Statement export times out past ninety days</p>
-                <p class="rcard-meta"><span dir="ltr">—</span><span dir="ltr">—</span></p>
-              </li>
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1469</code><span class="badge" data-state="queue">queued</span></p>
-                <p class="rcard-title">Duplicate receipt email after a retry</p>
-                <p class="rcard-meta"><span dir="ltr">—</span><span dir="ltr">—</span></p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="lane" data-state="live" aria-label="Running, 1 run">
-            <h3 class="lane-head"><span>Running</span><span class="lane-n" dir="ltr">1</span></h3>
-            <ul class="cards">
-              <li class="rcard is-live">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1412</code><span class="badge" data-state="live">running</span></p>
-                <p class="rcard-title">Invoice PDF renders blank for one branch</p>
-                <p class="rcard-meta"><span dir="ltr">04:12</span><span dir="ltr">$0.38</span></p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="lane" data-state="blocked" aria-label="Blocked, 1 run">
-            <h3 class="lane-head"><span>Blocked</span><span class="lane-n" dir="ltr">1</span></h3>
-            <ul class="cards">
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1398</code><span class="badge" data-state="blocked">blocked</span></p>
-                <p class="rcard-title">Webhook retries stop after the first 401</p>
-                <p class="rcard-meta"><span dir="ltr">asked a question</span><span dir="ltr">$0.11</span></p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="lane" data-state="triaged" aria-label="Triaged, 2 runs">
-            <h3 class="lane-head"><span>Triaged</span><span class="lane-n" dir="ltr">2</span></h3>
-            <ul class="cards">
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1377</code><span class="badge" data-state="triaged">triaged</span></p>
-                <p class="rcard-title">Login loop on the Arabic locale</p>
-                <p class="rcard-meta"><span dir="ltr">high</span><span dir="ltr">$0.52</span></p>
-              </li>
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1355</code><span class="badge" data-state="triaged">triaged</span></p>
-                <p class="rcard-title">Search returns stale rows for fifteen minutes</p>
-                <p class="rcard-meta"><span dir="ltr">medium</span><span dir="ltr">$0.44</span></p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="lane" data-state="done" aria-label="Resolved, 1 run">
-            <h3 class="lane-head"><span>Resolved</span><span class="lane-n" dir="ltr">1</span></h3>
-            <ul class="cards">
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1340</code><span class="badge" data-state="done">resolved</span></p>
-                <p class="rcard-title">Refund posts twice under load</p>
-                <p class="rcard-meta"><span dir="ltr">rca written</span><span dir="ltr">$0.73</span></p>
-              </li>
-            </ul>
-          </section>
-
-          <section class="lane" data-state="failed" aria-label="Failed, 1 run">
-            <h3 class="lane-head"><span>Failed</span><span class="lane-n" dir="ltr">1</span></h3>
-            <ul class="cards">
-              <li class="rcard">
-                <p class="rcard-top"><code class="key" dir="ltr">OMNI-1329</code><span class="badge" data-state="failed">over budget</span></p>
-                <p class="rcard-title">Nightly report job never returns</p>
-                <p class="rcard-meta"><span dir="ltr">40 turns</span><span dir="ltr">$1.00</span></p>
-              </li>
-            </ul>
-          </section>
+      <div class="dl">
+        <div class="dl-col">
+          <h3>The desktop app</h3>
+          <p>macOS and Windows. <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>:
+            unzip it and run the app inside.</p>
+          <p>On Windows the app needs Microsoft's WebView2 runtime. Windows 11 and current
+            Windows 10 ship it; a machine without it opens a window and draws nothing, and the
+            <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Evergreen Bootstrapper</a>
+            puts it right.</p>
+          <p>The builds are unsigned. macOS asks you to right-click the app and choose Open the
+            first time; SmartScreen asks for More info, then Run anyway.</p>
         </div>
-        <figcaption>A mock of the board, built from the app's own lane and card markup. The
-          keys and titles are fabricated; no customer's text appears on this page.</figcaption>
-      </figure>
+        <div class="dl-col">
+          <h3>The CLI</h3>
+          <p>macOS, Linux and Windows, amd64 and arm64.
+            <code dir="ltr">sirdar_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code>
+            (<code dir="ltr">.zip</code> on Windows), with <code dir="ltr">checksums.txt</code>
+            beside them and deb and rpm packages for Linux. Put <code dir="ltr">sirdar</code>
+            on your <code dir="ltr">PATH</code>.</p>
+          <p>Or from source, any commit, released or not:</p>
+          <div class="copyline">
+            <code id="gocmd2" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
+            <button class="copybtn" type="button" data-copy="#gocmd2" aria-label="Copy the go install command"><span data-copy-label>Copy</span></button>
+          </div>
+        </div>
+      </div>
+
+      <div class="actions actions--row">
+        <a class="btn" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Releases on GitHub</a>
+        <a class="navlink" href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/release/">How a release is cut</a>
+      </div>
+      <p class="fineprint">No release has been published yet, so the releases page is empty
+        until the first one is; <code dir="ltr">go install</code> works today. A Homebrew tap
+        is planned and not live, which is why there is no <code dir="ltr">brew</code> line
+        here.</p>
     </div>
   </section>
 
 </main>
 
-<!-- 6. Footer ------------------------------------------------------------- -->
+<!-- 9. Footer ------------------------------------------------------------- -->
 <footer class="footer">
   <div class="wide">
     <div class="foot-grid">
       <nav class="foot-col" aria-labelledby="f-product">
         <h2 id="f-product">Product</h2>
         <ul>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Install</a></li>
-          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/">Docs</a></li>
+          <li><a href="#download">Download</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/">Docs</a></li>
           <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/CHANGELOG.md">Changelog</a></li>
           <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Releases</a></li>
         </ul>
@@ -367,11 +370,12 @@
       <nav class="foot-col" aria-labelledby="f-docs">
         <h2 id="f-docs">Reading</h2>
         <ul>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/concepts.md">Concepts</a></li>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/config.md">Configuration</a></li>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/adapters.md">Sources</a></li>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/fix.md">Fix flow</a></li>
-          <li><a href="https://github.com/srivathsanvenkateswaran/Sirdar/blob/main/docs/eval.md">Evaluation</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/getting-started/">Getting started</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/concepts/">Concepts</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/config/">Configuration</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/adapters/">Sources</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/fix/">Fix flow</a></li>
+          <li><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/release/">Releases and Windows</a></li>
         </ul>
       </nav>
       <div class="foot-col foot-about">

@@ -3,7 +3,8 @@
  *
  * Every colour, radius, duration and family comes from tokens.css, which is a
  * byte-identical copy of desktop/frontend/src/styles/tokens.css. Nothing here
- * declares a colour; `make tokens` is what keeps the copy honest.
+ * declares a colour; `make tokens` is what keeps the copy honest. (The marquee's
+ * edge mask names black and transparent, which are alpha stops, not paint.)
  *
  * Layout is written in logical properties throughout, because a Sirdar note is
  * routinely half Arabic: setting `dir="rtl"` on <html> mirrors this page
@@ -12,6 +13,17 @@
  */
 
 @import url("tokens.css");
+
+/* The ink a colour band carries. tokens.css ships one token for it,
+   --sd-band-fg (paper in light, the warm ink in dark); the secondary ink and
+   the hairline on a band are that same ink at the alphas
+   docs/design/02-landing-page.md names (70% for meta, 30% for a rule), so no
+   colour is declared here. */
+:root {
+  --sd-on-band: var(--sd-band-fg);
+  --sd-on-band-2: color-mix(in srgb, var(--sd-band-fg) 72%, transparent);
+  --sd-on-band-rule: color-mix(in srgb, var(--sd-band-fg) 30%, transparent);
+}
 
 /* Reset and base ------------------------------------------------------- */
 
@@ -37,6 +49,7 @@ body {
 
 h1, h2, h3, p, ul, ol, dl, dd, figure, blockquote { margin: 0; }
 ul, ol { padding: 0; list-style: none; }
+img { max-width: 100%; }
 
 code, .mono {
   font-family: var(--sd-font-mono);
@@ -163,12 +176,13 @@ a { color: var(--sd-accent); text-underline-offset: 3px; }
 /* Sections -------------------------------------------------------------- */
 
 .section { padding-block: var(--sd-space-9); }
+.section--tight { padding-block: var(--sd-space-7); }
 .hero { position: relative; overflow: hidden; padding-block: var(--sd-space-8) var(--sd-space-7); }
 
 h1 {
   font-family: var(--sd-font-display);
   font-weight: 400;
-  font-size: clamp(2.5rem, 7.2vw, 4.5rem);
+  font-size: clamp(2.5rem, 6vw, 4.25rem);
   line-height: 1.04;
   letter-spacing: -0.02em;
   text-wrap: balance;
@@ -217,16 +231,16 @@ h1 em { font-style: italic; }
 
 /* Hero ------------------------------------------------------------------ */
 
-.hero-grid { position: relative; display: grid; gap: var(--sd-space-8); }
+.hero-grid { position: relative; display: grid; gap: var(--sd-space-7); }
 
 /* A grid item's automatic minimum size is its min-content width, and the
    install command does not wrap. Without this the hero column is as wide as
    that command and the page clips itself at 360px. */
-.hero-copy, .sheet, .actions { min-width: 0; }
+.hero-copy, .shot, .actions { min-width: 0; }
 
 @media (min-width: 980px) {
   .hero-grid {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.02fr);
+    grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
     align-items: center;
     gap: var(--sd-space-7);
   }
@@ -237,6 +251,12 @@ h1 em { font-style: italic; }
   flex-direction: column;
   align-items: flex-start;
   gap: var(--sd-space-4);
+  margin-block-start: var(--sd-space-6);
+}
+.actions--row {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
   margin-block-start: var(--sd-space-6);
 }
 
@@ -304,7 +324,7 @@ h1 em { font-style: italic; }
 
 .fineprint {
   margin-block-start: var(--sd-space-4);
-  max-width: 54ch;
+  max-width: 58ch;
   font-size: 0.875rem;
   line-height: 1.6;
   color: var(--sd-ink-3);
@@ -343,170 +363,38 @@ h1 em { font-style: italic; }
 
 @media (max-width: 1279px) { .ringwrap { display: none; } }
 
-/* The sheet: a ticket that becomes a note ------------------------------- */
+/* Media frames: real screenshots of the served app ----------------------- */
 
-.sheet {
-  position: relative;
-  overflow: hidden;
-  padding: var(--sd-space-5);
+.shot {
+  padding: var(--sd-space-3);
   background: var(--sd-surface);
-  border: 1px solid var(--sd-rule-strong);
+  border: 1px solid var(--sd-rule);
   border-radius: var(--sd-radius-lg);
+  box-shadow: var(--sd-shadow-soft);
 }
-
-.sheet-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--sd-space-3);
-  padding-block-end: var(--sd-space-4);
-  border-block-end: 1px solid var(--sd-rule);
+.shot img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--sd-rule);
+  border-radius: calc(var(--sd-radius-lg) - var(--sd-space-3));
 }
-.sheet-cmd { font-size: 0.8125rem; color: var(--sd-ink-2); }
-
-.chip {
-  flex: none;
-  padding: 3px var(--sd-space-3);
-  font-family: var(--sd-font-mono);
-  font-size: 0.6875rem;
-  border: 1px solid currentcolor;
-  border-radius: var(--sd-radius-pill);
-  transition: color var(--sd-dur-3) ease;
-}
-.chip[data-state="live"] { color: var(--sd-st-live); }
-.chip[data-state="triaged"] { color: var(--sd-st-triaged); }
-
-.scan {
-  position: absolute;
-  inset-inline: 0;
-  inset-block-start: 0;
-  height: 1px;
-  background: var(--sd-accent);
-  opacity: 0;
-  will-change: transform;
-}
-
-.rows { padding-block: var(--sd-space-2); }
-
-.row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 2px var(--sd-space-4);
-  padding-block: var(--sd-space-3);
-  border-block-end: 1px solid var(--sd-rule);
-}
-.row:last-child { border-block-end: 0; }
-
-@media (min-width: 420px) {
-  .row { grid-template-columns: 6.5rem minmax(0, 1fr); }
-}
-
-.row-label { grid-row: 1; grid-column: 1; }
-.row-face { grid-row: 2; grid-column: 1; }
-
-@media (min-width: 420px) {
-  .row-face { grid-row: 1; grid-column: 2; }
-}
-
-.row-label {
-  align-self: start;
-  padding-block-start: 4px;
-  font-family: var(--sd-font-mono);
-  font-size: 0.6875rem;
-  color: var(--sd-ink-3);
-}
-
-.row-face[data-in] {
-  font-family: var(--sd-font-arabic);
-  font-size: 1rem;
-  line-height: 1.95;
-  color: var(--sd-ink);
-}
-.row-face[data-out] {
-  font-family: var(--sd-font-display);
-  font-size: 1.0625rem;
-  line-height: 1.5;
-  color: var(--sd-ink);
-}
-.row-face[data-out] code { color: var(--sd-ink-2); }
-
-.row-face.blank {
-  align-self: center;
-  height: 1px;
-  width: 42%;
-  background: var(--sd-rule);
-}
-
-.conf {
-  padding: 1px 8px;
-  font-family: var(--sd-font-mono);
-  font-size: 0.75rem;
-  color: var(--sd-st-triaged);
-  border: 1px solid currentcolor;
-  border-radius: var(--sd-radius-pill);
-}
-
-.sheet-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sd-space-2) var(--sd-space-4);
-  padding-block-start: var(--sd-space-4);
-  border-block-start: 1px solid var(--sd-rule);
+.shot figcaption {
+  padding: var(--sd-space-3) var(--sd-space-2) 0;
   font-size: 0.8125rem;
   color: var(--sd-ink-3);
-  transition: opacity var(--sd-dur-4) var(--sd-ease);
 }
 
-/* The one orchestrated moment. Without JS the sheet renders as the finished
-   note, which is the state that matters; the script rewinds it and plays. */
-.js .sheet .row [data-out] {
-  opacity: 0;
-  transform: translateY(5px);
-  transition: opacity var(--sd-dur-3) var(--sd-ease), transform var(--sd-dur-3) var(--sd-ease);
-}
-.js .sheet .row [data-in] {
-  opacity: 1;
-  transition: opacity var(--sd-dur-3) var(--sd-ease);
-}
-.js .sheet .row.done [data-out] { opacity: 1; transform: none; }
-.js .sheet .row.done [data-in] { opacity: 0; }
-.js .sheet .scan.on { opacity: 1; }
-.js .sheet-foot.pending { opacity: 0; }
+.section .shot { margin-block-start: var(--sd-space-7); }
 
-/* Text badges: names in Sirdar's own type, never a vendor's mark --------- */
-
-.badges { display: grid; gap: var(--sd-space-4); }
-
-@media (min-width: 720px) {
-  .badges { grid-template-columns: 7rem minmax(0, 1fr); align-items: baseline; }
+.shot--small {
+  padding: var(--sd-space-2);
+  box-shadow: none;
+  border-radius: var(--sd-radius-md);
 }
+.shot--small img { border-radius: calc(var(--sd-radius-md) - var(--sd-space-2)); }
 
-.badges dt {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--sd-ink-3);
-}
-.badges dd {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--sd-space-2);
-  margin: 0;
-  padding-block-end: var(--sd-space-4);
-  border-block-end: 1px solid var(--sd-rule);
-}
-.badges dd:last-of-type { border-block-end: 0; padding-block-end: 0; }
-
-.badge-pill {
-  padding: 5px var(--sd-space-3);
-  font-family: var(--sd-font-mono);
-  font-size: 0.8125rem;
-  color: var(--sd-ink-2);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-pill);
-  white-space: nowrap;
-}
-
-/* The deep band: four commands ------------------------------------------ */
+/* The deep band: five commands ------------------------------------------ */
 
 .band {
   background: var(--sd-band-deep);
@@ -562,6 +450,132 @@ h1 em { font-style: italic; }
   color: var(--sd-on-band-2);
 }
 
+.band-foot {
+  margin-block-start: var(--sd-space-6);
+  padding-block-start: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-on-band-rule);
+  max-width: 64ch;
+  color: var(--sd-on-band-2);
+}
+
+/* Three ways to read a run ---------------------------------------------- */
+
+.ways {
+  display: grid;
+  gap: var(--sd-space-6);
+  margin-block-start: var(--sd-space-7);
+}
+
+@media (min-width: 900px) {
+  .ways { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sd-space-5); }
+}
+
+.way { min-width: 0; }
+.way h3 {
+  margin-block-start: var(--sd-space-4);
+  font-size: 1.0625rem;
+  font-weight: 500;
+  color: var(--sd-ink);
+}
+.way p {
+  margin-block-start: var(--sd-space-2);
+  font-size: 0.9375rem;
+  color: var(--sd-ink-2);
+}
+
+/* Providers: the vendors' own marks, each on a neutral tile ------------- */
+
+.providers {
+  display: grid;
+  gap: var(--sd-space-3);
+  margin-block-start: var(--sd-space-7);
+  grid-template-columns: repeat(auto-fill, minmax(15.5rem, 1fr));
+}
+
+.prov {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-4);
+  min-width: 0;
+  padding: var(--sd-space-3) var(--sd-space-4);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+}
+
+.prov-tile {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  background: var(--sd-sunk);
+  border-radius: var(--sd-radius-sm);
+}
+.prov-tile img { display: block; width: 26px; height: 26px; }
+
+.prov-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  font-size: 0.9375rem;
+  font-weight: 500;
+  color: var(--sd-ink);
+  line-height: 1.35;
+}
+.prov-name code {
+  font-weight: 400;
+  font-size: 0.75rem;
+  color: var(--sd-ink-3);
+}
+
+/* Text badges and the marquee: names in Sirdar's own type, never a mark --- */
+
+.badge-pill {
+  padding: 5px var(--sd-space-3);
+  font-family: var(--sd-font-mono);
+  font-size: 0.8125rem;
+  color: var(--sd-ink-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  white-space: nowrap;
+}
+
+.marquee {
+  overflow: hidden;
+  padding-block: var(--sd-space-1);
+}
+.marquee-track {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  max-width: var(--sd-measure-wide);
+  margin-inline: auto;
+  padding-inline: var(--sd-space-5);
+}
+
+/* With JS the track is duplicated once and translated by half its width, so
+   the loop is seamless. Without JS (or under reduced motion) it is a wrapped
+   row. The 64px gradient at each edge is the design language's marquee mask. */
+.js .marquee-track.on {
+  flex-wrap: nowrap;
+  width: max-content;
+  max-width: none;
+  margin-inline: 0;
+  padding-inline: 0;
+  animation: marquee 34s linear infinite;
+}
+.js .marquee.on {
+  -webkit-mask-image: linear-gradient(to right, transparent, black 64px, black calc(100% - 64px), transparent);
+  mask-image: linear-gradient(to right, transparent, black 64px, black calc(100% - 64px), transparent);
+}
+.marquee:hover .marquee-track { animation-play-state: paused; }
+[dir="rtl"] .js .marquee-track.on { animation-name: marquee-rtl; }
+
+@keyframes marquee { to { transform: translateX(-50%); } }
+@keyframes marquee-rtl { to { transform: translateX(50%); } }
+
 /* The ledger: one row per guarantee, mechanism named -------------------- */
 
 .ledger { margin-block-start: var(--sd-space-7); }
@@ -603,103 +617,37 @@ h1 em { font-style: italic; }
 }
 .ledger a:hover { background-size: 100% 0.85em; }
 
-/* The board mock: real markup, fabricated keys --------------------------- */
+/* Download --------------------------------------------------------------- */
 
-.frame {
+.dl {
+  display: grid;
+  gap: var(--sd-space-5);
   margin-block-start: var(--sd-space-7);
-  padding: var(--sd-space-4);
+}
+
+@media (min-width: 820px) {
+  .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.dl-col {
+  min-width: 0;
+  padding: var(--sd-space-6);
   background: var(--sd-surface);
-  border: 1px solid var(--sd-rule);
+  border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-lg);
-  box-shadow: var(--sd-shadow-soft);
 }
-.frame figcaption {
-  padding-block-start: var(--sd-space-4);
-  font-size: 0.8125rem;
-  color: var(--sd-ink-3);
-}
-
-.lanes {
-  display: flex;
-  gap: var(--sd-space-3);
-  overflow-x: auto;
-  padding-block-end: var(--sd-space-2);
-}
-
-.lane {
-  /* Six lanes fit the frame at desktop widths: the point of the section is
-     that you can see all six rails at once. Narrow, they scroll. */
-  flex: 1 1 0;
-  min-width: 158px;
-  padding: var(--sd-space-3);
-  background: var(--sd-sunk);
-  border-radius: var(--sd-radius-sm);
-  border-block-start: 2px solid var(--hue);
-}
-.lane[data-state="queue"]   { --hue: var(--sd-st-queue); }
-.lane[data-state="live"]    { --hue: var(--sd-st-live); }
-.lane[data-state="blocked"] { --hue: var(--sd-st-blocked); }
-.lane[data-state="triaged"] { --hue: var(--sd-st-triaged); }
-.lane[data-state="done"]    { --hue: var(--sd-st-done); }
-.lane[data-state="failed"]  { --hue: var(--sd-st-failed); }
-
-.lane-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--sd-space-2);
-  margin-block-end: var(--sd-space-3);
-  font-size: 0.8125rem;
+.dl-col h3 {
+  font-size: 1.125rem;
   font-weight: 500;
-  color: var(--sd-ink-2);
-}
-.lane-n { font-family: var(--sd-font-mono); font-size: 0.6875rem; color: var(--sd-ink-3); }
-
-.cards { display: grid; gap: var(--sd-space-2); }
-
-.rcard {
-  padding: var(--sd-space-3);
-  background: var(--sd-surface);
-  border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-sm);
-}
-.rcard.is-live { border-color: var(--sd-accent); }
-
-.rcard-top {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  align-items: baseline;
-  gap: var(--sd-space-2);
-}
-.key { font-size: 0.6875rem; color: var(--sd-ink-2); white-space: nowrap; }
-.badge {
-  font-family: var(--sd-font-mono);
-  font-size: 0.625rem;
-  white-space: nowrap;
-}
-.badge[data-state="queue"]   { color: var(--sd-st-queue); }
-.badge[data-state="live"]    { color: var(--sd-st-live); }
-.badge[data-state="blocked"] { color: var(--sd-st-blocked); }
-.badge[data-state="triaged"] { color: var(--sd-st-triaged); }
-.badge[data-state="done"]    { color: var(--sd-st-done); }
-.badge[data-state="failed"]  { color: var(--sd-st-failed); }
-
-.rcard-title {
-  margin-block-start: var(--sd-space-2);
-  font-size: 0.8125rem;
-  line-height: 1.45;
   color: var(--sd-ink);
 }
-.rcard-meta {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--sd-space-2);
-  margin-block-start: var(--sd-space-2);
-  font-family: var(--sd-font-mono);
-  font-size: 0.6875rem;
-  color: var(--sd-ink-3);
+.dl-col p {
+  margin-block-start: var(--sd-space-3);
+  color: var(--sd-ink-2);
 }
+.dl-col p code { color: var(--sd-ink); overflow-wrap: anywhere; }
+.dl-col .copyline { margin-block-start: var(--sd-space-4); }
+.dl-col a { color: inherit; text-decoration: underline; }
 
 /* Footer ---------------------------------------------------------------- */
 
@@ -777,12 +725,14 @@ h1 em { font-style: italic; }
   .footer { padding-block: var(--sd-space-8) var(--sd-space-6); }
   .wide { padding-inline: var(--sd-space-4); }
   .navwrap { padding-inline: var(--sd-space-4); }
+  .marquee-track { padding-inline: var(--sd-space-4); }
+  .dl-col { padding: var(--sd-space-5); }
 }
 
 /* Reduced motion --------------------------------------------------------
-   The ring freezes with its first word at 9 o'clock; the sheet is rendered
-   as the finished note, with no scan. Nothing on the page depends on an
-   animation finishing. */
+   The ring freezes with its first word at 9 o'clock; the marquee is a wrapped
+   row with the mask removed. Nothing on the page depends on an animation
+   finishing. */
 
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
@@ -795,5 +745,15 @@ h1 em { font-style: italic; }
 
   .ring { animation: none; transform: rotate(-90deg); }
   [dir="rtl"] .ring { transform: rotate(90deg); }
-  .js .sheet .scan { display: none; }
+
+  .js .marquee.on { -webkit-mask-image: none; mask-image: none; }
+  .js .marquee-track.on {
+    animation: none;
+    flex-wrap: wrap;
+    width: auto;
+    max-width: var(--sd-measure-wide);
+    margin-inline: auto;
+    padding-inline: var(--sd-space-5);
+  }
+  .js .marquee-track.on [data-clone] { display: none; }
 }

@@ -1,5 +1,6 @@
 site_name: Sirdar
 site_description: An open-source harness for engineering-level support tickets.
+site_url: https://srivathsanvenkateswaran.github.io/Sirdar/docs/
 repo_url: https://github.com/srivathsanvenkateswaran/Sirdar
 repo_name: srivathsanvenkateswaran/Sirdar
 edit_uri: edit/main/docs/
@@ -7,6 +8,12 @@ docs_dir: docs
 # site/ holds the landing page, so the docs build goes elsewhere.
 site_dir: .mkdocs-site
 use_directory_urls: true
+# The two design rounds ship an index.html beside a README.md; the html is the
+# artefact and the README its note, and only one of them can be the directory
+# index. Strict mode treats the collision as a warning, so name the losers.
+exclude_docs: |
+  design/2026-09-15-screens/README.md
+  design/2026-09-16-logo/README.md
 
 theme:
   name: material

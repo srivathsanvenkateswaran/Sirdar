@@ -219,3 +219,32 @@ No testimonials, because there are no users yet and inventing one is fraud. No c
 logo wall. No comparison table against a named competitor. No pricing section, because
 there is no price. No cookie banner, because there are no cookies: the page loads
 self-hosted fonts, no analytics, and no third-party script.
+
+## Publishing
+
+`.github/workflows/site.yml` deploys the page on every push to `main` that touches
+`site/**`, `docs/**`, `mkdocs.yml` or the workflow, and on `workflow_dispatch`: `site/` is
+copied to `public/`, `mkdocs build --strict` writes into `public/docs/`, and the directory
+is uploaded with `actions/upload-pages-artifact` and deployed with `actions/deploy-pages`
+to the `github-pages` environment. The page is served at
+<https://srivathsanvenkateswaran.github.io/Sirdar/> and the docs at
+<https://srivathsanvenkateswaran.github.io/Sirdar/docs/>, which is `site_url` in
+`mkdocs.yml`. The old `docs.yml` (`mkdocs gh-deploy` to a `gh-pages` branch) is retired.
+
+This needs the repository's Pages source set to **GitHub Actions** (Settings › Pages ›
+Build and deployment › Source); with the source still on a branch, the workflow uploads
+an artifact that is never served. Every asset path in `site/` is relative so the page
+works under the `/Sirdar/` prefix.
+
+## What the built page does differently (2026-09-16)
+
+The page as built follows this document's language and departs from its section list in
+these ways, each for a reason in the repository: the hero shows a real screenshot of the
+Session window (Conversation layout) rather than an animated ticket, and names the desktop
+app for macOS and Windows beside the CLI; the step band has five commands (`doctor` is a
+real step between `init` and `triage`); the providers band shows the vendors' marks, which
+the user chose over original glyphs on 2026-09-15, while sources stay as type; a "three
+ways to read a run" band shows the Conversation, Document and Workbench layouts; the note
+and cost sections are folded into the hero shot and the read-only lede; the licence is
+Apache-2.0, not MIT; and there is no `brew` line because the tap does not exist yet.
+`site/README.md` says where each sentence comes from.
