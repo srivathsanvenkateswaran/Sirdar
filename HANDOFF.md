@@ -9,7 +9,7 @@ via the includeIf rule; never set `user.email` by hand):
 
 | Worktree | Branch | State |
 |---|---|---|
-| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs` (including `runs diff`), `register`, `mcp`, `steer`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP: the UI wave landed at `cccdc55` — eight screens (Board, New session, Session with the live transcript, composer and Changes pane, Change review, Register, Eval, the Settings modal with providers, MCP servers and Try a tool, and the Library) on the `src/ui` component library, over one `Transport` the HTTP+SSE client, the Wails bridge and the test fake all implement; `make ui` stages the frontend `sirdar serve` embeds, `make desktop` (`wails build`) makes the app. Seven providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent — Copilot CLI, OpenCode and Kimi are the three driven live, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook), `cursor` (Cursor Agent CLI, `internal/provider/cursor`), `agy` (Google's Antigravity CLI, `internal/provider/agy`, **disabled** — Google's terms do not allow driving it from another program, and the adapter is kept for reference only); the table under Providers below says what each one's read-only guarantee rests on and whether it can fix or be steered. Reads are confined to the workspace, the run directory and its bundle, widened only by `permissions.readAlso`. Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (Keychain on macOS, libsecret on Linux, DPAPI-backed store on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). `sirdar runs diff` and the diff-review API (per-hunk drop with an amend, `docs/fix.md`). `sirdar mcp list/tools/call` and the matching serve routes, answering what a run's MCP access would be without starting one (`docs/config.md`, "Checking it"). `sirdar steer` continuing a finished run in place (`docs/steer.md`). The screen mocks the UI was built from (`docs/design/2026-09-15-screens`) and the design it was built to (`docs/superpowers/specs/2026-09-15-ui-build-design.md`). Research + plans in `docs/`. |
+| `~/Documents/Personal/Sirdar` | `main` | Everything landed. CLI: `init`, `doctor`, `triage`, `rca`, `resume`, `runs` (including `runs diff`), `register`, `mcp`, `steer`, `serve`, `eval`, `golden`, `fix`. Wails v2 desktop app under `desktop/`, and `sirdar serve` giving the same frontend over HTTP: the UI wave landed at `cccdc55` — eight screens (Board, New session, Session with the live transcript, composer and Changes pane, Change review, Register, Eval, the Settings modal with providers, MCP servers and Try a tool, and the Library) on the `src/ui` component library, over one `Transport` the HTTP+SSE client, the Wails bridge and the test fake all implement; `make ui` stages the frontend `sirdar serve` embeds, `make desktop` (`wails build`) makes the app. Seven providers: `claude`, `codex`, `openai` (Sirdar's own agent loop, any OpenAI-compatible endpoint), `acp` (any Agent Client Protocol agent — Copilot CLI, OpenCode and Kimi are the three driven live, `internal/provider/acp`), `qwen` (native Qwen Code adapter, fail-closed loopback permission hook), `cursor` (Cursor Agent CLI, `internal/provider/cursor`), `agy` (Google's Antigravity CLI, `internal/provider/agy`, **disabled** — Google's terms do not allow driving it from another program, and the adapter is kept for reference only); the table under Providers below says what each one's read-only guarantee rests on and whether it can fix or be steered. Reads are confined to the workspace, the run directory and its bundle, widened only by `permissions.readAlso`. Codex workspace-MCP parity: a per-session `CODEX_HOME` carrying only the workspace's `.mcp.json` servers under `mcp.workspaceOnly`, with MCP, shell and file-change approvals routed through Sirdar's permissions. 13 built-in source adapters plus external stdio adapters: tracker role — Jira Cloud/Data Center, Linear, Azure DevOps, Rally, ServiceNow; helpdesk role — Zoho Desk (OAuth refresh), Zendesk, Freshdesk, Help Scout, Intercom, HubSpot, Front, Gorgias, ServiceNow. ServiceNow is the one adapter that serves either role from the same incident record. All on the shared `internal/source/httpx` HTTP helpers (host trust, redirect policy, Retry-After, capped reads). Credential stores: `env:`, `keychain:` (login Keychain on macOS, libsecret/Secret Service on Linux, the Credential Manager read through PowerShell `CredRead` on Windows), `file:`, `cmd:` (`docs/credentials.md`). Arabic/RTL i18n: `language:` config block, bilingual note fields, RTL-aware desktop UI. Inbound webhooks: `sirdar serve` triggers per source with signature verification (`docs/webhooks.md`). Run-completion notifications: Slack, Teams, generic webhook, timestamped HMAC (`docs/notifications.md`). `sirdar eval` + `sirdar golden add` (golden-set scoring, `internal/eval`, `docs/eval.md`) and the confined `sirdar fix` (human-gated fix flow, `internal/fix`, running in a linked git worktree under `.sirdar/worktrees/<run-id>` with `fix.inPlace` as the fallback). `budget.stallMinutes` cancels a run whose provider goes silent. Release pipeline: goreleaser, Homebrew tap, desktop zips (`docs/release.md`). Repo hygiene: CONTRIBUTING, SECURITY, CODE_OF_CONDUCT, issue/PR templates, dependabot, `docs/architecture.md`. MkDocs docs site published via GitHub Pages. Cross-provider web-fetch allow-list (`permissions.fetch`, empty by default, denies every fetch). Same-origin and loopback guard on every mutating `sirdar serve` route (`docs/config.md`). Both dogfood fix waves (finish-on-final, `permissions.mcp`, attachment caps, host trust in every adapter, command policy, turn counting). `sirdar runs diff` and the diff-review API (per-hunk drop with an amend, `docs/fix.md`). `sirdar mcp list/tools/call` and the matching serve routes, answering what a run's MCP access would be without starting one (`docs/config.md`, "Checking it"). `sirdar steer` continuing a finished run in place (`docs/steer.md`). The screen mocks the UI was built from (`docs/design/2026-09-15-screens`) and the design it was built to (`docs/superpowers/specs/2026-09-15-ui-build-design.md`). Research + plans in `docs/`. |
 
 Ledgers (git-ignored) with every ruling and deferred minor: `.superpowers/sdd/*/progress.md` in
 each worktree. Reports per task sit beside them.
@@ -45,6 +45,36 @@ for each and every session records the same on its own event log.
 `agy` is off by default as of the `agy-off` change: the adapter stays in
 `internal/provider/agy` and its tests still drive it directly, but nothing in a default
 workspace can start a session with it.
+
+## Platforms
+
+macOS, Linux and Windows, for both the CLI and the desktop app. The CLI has shipped for all
+three since the first goreleaser config; the Windows desktop app is real as of the `windows`
+round.
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| CLI | native | native | native (amd64, arm64) |
+| Desktop app | `wails build` | `wails build -tags webkit2_41`, needs `libwebkit2gtk-4.1-dev` | `wails build -platform windows/amd64`, cross-compiles from either of the others; needs the WebView2 runtime to **run** |
+| `keychain:` refs | login Keychain (`security`) | Secret Service (`secret-tool`) | Credential Manager (PowerShell `CredRead`) |
+| Opening a file or URL | `open` | `xdg-open` | `rundll32 url.dll,FileProtocolHandler` |
+| Killing a run's subtree | `SIGKILL` to the process group | same | `taskkill /T /F` on the pid tree |
+| Shell for `permissions.bash` | `sh -c` | `sh -c` | `cmd /C` |
+
+The per-platform opener lives in `internal/osopen` and nowhere else; the shell choice is
+`agenttools.shellFor`; the kill is `internal/procgroup`. Each has its non-host branches
+unit-tested by passing the GOOS in rather than reading `runtime.GOOS`, which is how a macOS
+laptop covers them at all.
+
+Two things are Windows-shaped rather than merely Windows-ported. `os.Symlink` fails there for
+any account without Developer Mode, so a workspace-only Codex session falls back to a directory
+junction (`mklink /J`) or a hard link when it links the entries a generated `CODEX_HOME` shares
+with the operator's real one. And `taskkill /T` walks parent pids rather than holding a kernel
+object, so a descendant that re-parents itself escapes it — a Job Object would not, but
+`os/exec` hands out neither the suspended thread nor a post-start hook to assign one.
+
+Keyboard shortcuts already answer to Ctrl everywhere they answer to ⌘ (every handler tests
+`e.metaKey || e.ctrlKey`). Their **labels** still draw ⌘ on every platform; see Known gaps.
 
 ## Decisions taken today
 
@@ -379,6 +409,19 @@ Then the not-built items:
 
 ## What is unverified
 
+Nothing on Windows has been run on Windows. The `windows` round was done on a macOS machine:
+`wails build -platform windows/amd64` produces a real PE32+ GUI binary and
+`GOOS=windows go build ./... && go vet ./...` are green, but a cross-build proves only that the
+code compiles for the target. Left for a Windows machine, or for the `windows` CI job, to
+answer: whether `go test ./...` passes there (the tests that need a POSIX shell, a symlink or
+Unix mode bits now skip themselves and say so, but the list was arrived at by reading, not by
+running); whether the Credential Manager reader finds a secret `cmdkey` stored; whether
+`taskkill /T` actually reaps a wrapper's grandchildren; whether the junction fallback satisfies
+a real Codex session; whether the WebView2 host draws the frontend, what the native title bar
+and DPI scaling look like, and whether SmartScreen's warning is the one `docs/release.md`
+describes. The CI job is the standing check for the first of those; the rest need someone at a
+Windows desktop.
+
 `provider: agy` has now run end to end twice against a real Google account: a probe turn that
 watched a `view_file` succeed and a `write_to_file` be refused by Sirdar's own project rule, and
 a full `sirdar triage` that read four files, was refused `go test ./...`, and filed a note
@@ -461,6 +504,12 @@ wire to check a budget against. The breach watch — a completed edit or shell c
 — has been exercised against fixtures, not against a Cursor session that actually wrote something.
 
 ## Known gaps (deliberate)
+
+- Shortcut **labels** are drawn as ⌘↵, ⌘B, ⌘\, ⌘F, ⌘1…⌘9 on every platform, so a Windows or
+  Linux operator reads a glyph their keyboard does not have. Every handler accepts Ctrl, so the
+  shortcuts work; only the hint is wrong. The fix is one formatter over the ~12 render sites and
+  a platform signal the frontend does not currently get from either shell, which is why it was
+  not done blind in the `windows` round.
 
 No writes to any helpdesk or tracker (`sirdar fix` writes to git and GitHub and
 to nothing else). No auth on `sirdar serve` (loopback only unless `--allow-remote`); the `/hooks/`

@@ -15,6 +15,7 @@
   "info": {
     "productName": "Sirdar",
     "productVersion": "0.1.0",
+    "copyright": "Copyright © 2026 Srivathsan Venkateswaran. Apache-2.0.",
     "comments": "Agentic L2 triage for OSS maintainers"
   }
 }

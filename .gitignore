@@ -18,6 +18,9 @@ internal/httpapi/ui/dist/*
 
 # Wails artefacts
 desktop/build/bin/
+# Cut from desktop/build/appicon.png by `wails build` whenever it is absent,
+# so the logo has one source and a Windows build does not dirty the tree.
+desktop/build/windows/icon.ico
 desktop/frontend/wailsjs/
 desktop/frontend/package.json.md5
 *.tsbuildinfo
