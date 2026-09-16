@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 )
 
@@ -50,10 +51,10 @@ type watchedRun struct {
 	dir   string
 	wsID  string
 	runID string
-	// self is the workspace's own assignee, refreshed on every sweep so a
-	// summary the watcher publishes says whether the run is the reader's
-	// own — the same answer Service.Runs gives for the same run.
-	self string
+	// self is who the workspace's own work belongs to, refreshed on every
+	// sweep so a summary the watcher publishes says whether the run is the
+	// reader's own — the same answer Service.Runs gives for the same run.
+	self config.Identity
 
 	mtime time.Time
 	size  int64
@@ -151,7 +152,7 @@ func (w *Watcher) tick() {
 		// One configuration read per workspace per sweep, and only when the
 		// workspace has a run to publish about: an edit to the config is
 		// picked up on the next tick rather than at the next restart.
-		self := ""
+		self := config.Identity{}
 		if len(matches) > 0 {
 			self = selfIn(ws.Root)
 		}

@@ -331,6 +331,7 @@ export function configSummary(over: Partial<ConfigSummary> = {}): ConfigSummary 
       tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
       helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
     },
+    me: { email: 'sri@acme.com', names: ['Sri Venkateswaran', 'sri'], source: 'me' },
     ...over,
   }
 }

@@ -94,7 +94,49 @@ automatically.)
   ```
 
   Windows SmartScreen may show a similar "unknown publisher" warning; choose
-  **More info → Run anyway**.
+  **More info → Run anyway**. The Windows section below has the detail.
+
+## Windows
+
+The CLI is an ordinary static binary: unzip `sirdar_<version>_windows_amd64.zip`
+(or `_arm64`), put `sirdar.exe` somewhere on your `PATH`, and it runs. Nothing
+else is needed.
+
+The desktop app has one requirement and one warning.
+
+**The WebView2 runtime.** The app is a native window around Microsoft's
+WebView2, the same engine Edge uses, and Wails does not bundle it. Windows 11
+and every current Windows 10 ship it preinstalled, so on a machine that takes
+Windows Update this is already satisfied. On one that does not — a fresh LTSC
+or Server image, most often — the app opens a window and then fails to draw
+anything. Install the **Evergreen Bootstrapper** from
+<https://developer.microsoft.com/microsoft-edge/webview2/> and start it again.
+
+**SmartScreen.** The build is unsigned: there is no Windows code-signing
+certificate on this project, so `Sirdar.exe` has no publisher and
+Microsoft Defender SmartScreen shows "Windows protected your PC" the first
+time it runs. Choose **More info → Run anyway**. A download from a browser
+also carries the Mark of the Web; if Windows refuses to run it outright,
+right-click the `.exe` → **Properties** → tick **Unblock** → **OK**. Both
+prompts go away once someone buys a certificate and the release workflow
+signs with it; until then this is what an unsigned binary looks like and
+telling people to expect it is better than having them wonder.
+
+**Where it keeps things.** The workspace registry and the golden set live
+under `%USERPROFILE%\.sirdar`, the same relative place they take on the
+other platforms. `keychain:` credential references read the **Windows
+Credential Manager** through a PowerShell `CredRead` call — store one with
+`cmdkey /generic:<name> /user:<anything> /pass`, or with the Credential
+Manager control panel — and `env:`, `file:` and `cmd:` references work as
+they do everywhere. `docs/credentials.md` has the detail.
+
+**Building it.** `wails build -platform windows/amd64` cross-compiles from
+macOS or Linux — Wails v2 needs no cgo for the Windows target — so
+`make desktop-windows` produces a real `Sirdar.exe` on a machine that has no
+Windows at all, and `make dist-desktop` zips it alongside the host build.
+The `windows` job in `.github/workflows/ci.yml` builds it natively on
+`windows-latest` and uploads the `.exe` as an artifact on every push, which
+is the copy to grab when you want to try a branch without cutting a tag.
 
 ## Local dry runs
 
@@ -104,8 +146,11 @@ automatically.)
   producing all six CLI binaries into `dist/` without touching GitHub or the
   tap. Delete `dist/` when done looking.
 - `make dist-desktop` — builds and zips the desktop app for whichever OS/arch
-  you're running the command on (not all three platforms; that's what the
-  workflow's matrix is for).
+  you're running the command on, plus the cross-compiled `windows_amd64` zip,
+  both under the names the workflow's desktop job uploads. Linux is the one
+  platform this cannot stand in for; that's what the workflow's matrix is for.
+- `make desktop-windows` — just the Windows cross-build, straight into
+  `desktop/build/bin/Sirdar.exe`.
 - `goreleaser check` validates `.goreleaser.yaml` without building anything.
 
 ## What's in `CHANGELOG.md`

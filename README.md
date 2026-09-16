@@ -427,6 +427,24 @@ agent to relay. Neither draft may promise a fix, a cause or a date, and Sirdar s
 itself. Set `language.notes` and `language.customer` in `.sirdar/config.yaml` for a workspace
 that reads a different pair.
 
+## Platforms
+
+| Platform | CLI | Desktop app | Credential store | Notes |
+|---|---|---|---|---|
+| macOS (arm64, amd64) | yes | yes | login Keychain | The platform this is developed on; everything is exercised here first |
+| Linux (arm64, amd64) | yes | yes | freedesktop Secret Service (`secret-tool`) | The desktop app needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev`, build with `-tags webkit2_41`) |
+| Windows (amd64) | yes | yes | Credential Manager | Needs the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/), preinstalled on Windows 11 and on current Windows 10. See `docs/release.md` |
+
+The desktop app's Windows build cross-compiles from macOS or Linux — `make desktop-windows`
+produces a real `Sirdar.exe` without a Windows machine — and the `windows` CI job builds and
+tests on `windows-latest`. What no cross-build can answer is how the app behaves once it runs:
+the WebView2 host, the native title bar and DPI scaling, and whether the Credential Manager
+reader finds a stored secret. Those are checked on Windows.
+
+Which provider you can drive is a separate question from which platform you are on: each agent
+CLI ships for its own set (Claude Code, Codex and Cursor Agent run on all three; an ACP agent
+runs wherever its own binary does).
+
 ## Configuration
 
 See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,

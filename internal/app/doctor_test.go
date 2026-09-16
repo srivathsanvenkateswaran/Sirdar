@@ -409,3 +409,53 @@ func TestTranscribeCheckRefusesAnUnrunnableCommand(t *testing.T) {
 		t.Fatalf("a pipeline should fail the row: %+v", c)
 	}
 }
+
+func TestIdentityCheckSaysWhoYouAreAndWhereThatCameFrom(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Me = config.MeConfig{Email: "srivathsan.v@silq.net", Names: []string{"Srivathsan V"}}
+	c := identityCheck(cfg)
+	if !c.OK || c.Name != "identity" {
+		t.Fatalf("me block: %+v", c)
+	}
+	for _, want := range []string{"you are srivathsan.v@silq.net", "from me:"} {
+		if !strings.Contains(c.Detail, want) {
+			t.Errorf("the row does not state %q: %s", want, c.Detail)
+		}
+	}
+
+	written := &config.Config{}
+	written.Webhooks.Match.Assignee = "rana@acme.com"
+	if c := identityCheck(written); !strings.Contains(c.Detail, "from webhooks.match.assignee") {
+		t.Errorf("an assignee written out: %s", c.Detail)
+	}
+
+	credentials := &config.Config{}
+	credentials.Sources.Tracker = &config.SourceConfig{Adapter: "jira", Email: "sri@acme.com"}
+	if c := identityCheck(credentials); !strings.Contains(c.Detail, "from the source account email") {
+		t.Errorf("the source credentials: %s", c.Detail)
+	}
+}
+
+// TestIdentityCheckWarnsWhenNobody: a workspace that cannot say who the
+// reader is still runs. What stops working is telling one person's tickets
+// from another's, which is worth a warning and not an exit code.
+func TestIdentityCheckWarnsWhenNobody(t *testing.T) {
+	// Root "" keeps the git fallback out of it: there is no directory to read.
+	cfg := &config.Config{}
+	cfg.Sources.Tracker = &config.SourceConfig{Adapter: "linear"}
+	c := identityCheck(cfg)
+	if c.Level != string(provider.LevelWarn) {
+		t.Fatalf("level = %q, want warn: %+v", c.Level, c)
+	}
+	if !c.OK {
+		t.Error("an unknown identity is not a reason for doctor to exit non-zero")
+	}
+	for _, want := range []string{
+		"Mine filters and the queue lane cannot tell your tickets apart",
+		"set me: in config.yaml",
+	} {
+		if !strings.Contains(c.Detail, want) {
+			t.Errorf("the row does not state %q: %s", want, c.Detail)
+		}
+	}
+}

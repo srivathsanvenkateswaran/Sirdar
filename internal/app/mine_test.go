@@ -78,6 +78,57 @@ func TestSelfOfResolvesTheSameAccountTheHookFilterDoes(t *testing.T) {
 	}
 }
 
+func TestIdentityOfPrefersTheMeBlock(t *testing.T) {
+	c := withTracker("credentials@acme.com")
+	c.Webhooks.Match.Assignee = "rana@acme.com"
+	c.Me = config.MeConfig{
+		Email:   "srivathsan.v@silq.net",
+		Names:   []string{"Srivathsan V"},
+		Aliases: []string{"sriv"},
+	}
+	id := IdentityOf(c)
+	if id.Source != config.IdentityFromMe {
+		t.Fatalf("Source = %q, want %q", id.Source, config.IdentityFromMe)
+	}
+	if got := SelfOf(c); got != "srivathsan.v@silq.net" {
+		t.Fatalf("SelfOf = %q", got)
+	}
+	// Every spelling the block names is the same person, and so is the
+	// display name an address's local part spells.
+	for _, spelling := range []string{"Srivathsan V", "sriv", "SRIVATHSAN.V@SILQ.NET", "srivathsan.v"} {
+		if !id.Matches(spelling) {
+			t.Errorf("Matches(%q) = false, want true", spelling)
+		}
+	}
+	if id.Matches("rana@acme.com") {
+		t.Error(`Matches("rana@acme.com") = true, want false`)
+	}
+}
+
+func TestSelfOfReadsANameWhenNothingNamesAnAddress(t *testing.T) {
+	c := &config.Config{}
+	c.Me = config.MeConfig{Names: []string{"Noura A"}}
+	if got := SelfOf(c); got != "Noura A" {
+		t.Fatalf("SelfOf = %q, want the display name", got)
+	}
+}
+
+func TestSummaryForMatchesAnyOfTheReadersSpellings(t *testing.T) {
+	state := store.State{RunID: "20260910T090000Z-aaaa", Key: "OMNI-1"}
+	self := config.Identity{Email: "srivathsan.v@silq.net", Names: []string{"Srivathsan V", "sriv"}}
+
+	// The tracker writes a display name the address does not spell; the
+	// alias list is what ties the two together.
+	dir := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","Title":"Export times out","Assignee":"sriv"}}`)
+	if got := SummaryFor(dir, state, self); !got.Mine {
+		t.Fatal("Mine = false for a ticket assigned to the reader's username")
+	}
+	other := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-2","Assignee":"Noura A"}}`)
+	if got := SummaryFor(other, state, self); got.Mine {
+		t.Fatal("Mine = true for somebody else's ticket")
+	}
+}
+
 func TestSameAssignee(t *testing.T) {
 	cases := []struct {
 		a, b string
@@ -109,11 +160,12 @@ func TestSameAssignee(t *testing.T) {
 
 func TestSummaryForReadsTheAssigneeOffTheBundle(t *testing.T) {
 	state := store.State{RunID: "20260910T090000Z-aaaa", Key: "OMNI-1"}
+	sri := config.Identity{Email: "sri@acme.com"}
 
 	t.Run("the tracker's assignee wins", func(t *testing.T) {
 		dir := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","Title":"Export times out","Assignee":" sri@acme.com "},
 			"Helpdesk":{"ID":"h1","Fields":{"assignee":"rana@acme.com"}}}`)
-		got := SummaryFor(dir, state, "SRI@ACME.COM")
+		got := SummaryFor(dir, state, config.Identity{Email: "SRI@ACME.COM"})
 		if got.Assignee != "sri@acme.com" {
 			t.Fatalf("Assignee = %q, want the tracker's", got.Assignee)
 		}
@@ -124,7 +176,7 @@ func TestSummaryForReadsTheAssigneeOffTheBundle(t *testing.T) {
 
 	t.Run("the helpdesk's owner stands in", func(t *testing.T) {
 		dir := fakeRunDir(t, `{"Helpdesk":{"ID":"h1","Subject":"Export","Fields":{"assignee":"rana@acme.com"}}}`)
-		got := SummaryFor(dir, state, "sri@acme.com")
+		got := SummaryFor(dir, state, sri)
 		if got.Assignee != "rana@acme.com" {
 			t.Fatalf("Assignee = %q, want the helpdesk's", got.Assignee)
 		}
@@ -135,7 +187,7 @@ func TestSummaryForReadsTheAssigneeOffTheBundle(t *testing.T) {
 
 	t.Run("a bundle that names nobody draws no avatar", func(t *testing.T) {
 		dir := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","Title":"Export times out"}}`)
-		got := SummaryFor(dir, state, "sri@acme.com")
+		got := SummaryFor(dir, state, sri)
 		if got.Assignee != "" {
 			t.Fatalf("Assignee = %q, want empty", got.Assignee)
 		}
@@ -146,7 +198,7 @@ func TestSummaryForReadsTheAssigneeOffTheBundle(t *testing.T) {
 
 	t.Run("a run with no bundle at all", func(t *testing.T) {
 		dir := fakeRunDir(t, "")
-		got := SummaryFor(dir, state, "sri@acme.com")
+		got := SummaryFor(dir, state, sri)
 		if got.Assignee != "" || got.Mine {
 			t.Fatalf("Assignee = %q, Mine = %v, want empty and false", got.Assignee, got.Mine)
 		}

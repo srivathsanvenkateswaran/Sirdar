@@ -1,6 +1,7 @@
 import type {
   AppEvent,
   HookOutcome,
+  MeSummary,
   Quota,
   RunSummary,
   SearchHit,
@@ -91,6 +92,13 @@ export interface AppState {
    * cannot be loaded (Settings says why).
    */
   sourcesByWorkspace: Record<string, SourcesSummary>
+  /**
+   * Who each workspace thinks the reader is, from the same config summary.
+   * Absent until it has been read; present with an empty `source` for a
+   * workspace that can name nobody, which is what the board's assignee menu
+   * disables Me on.
+   */
+  meByWorkspace: Record<string, MeSummary>
   /** Workspaces whose tracker cannot list a queue (the API answers 501). */
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
@@ -290,6 +298,7 @@ export function createAppStore(transport: Transport): AppStore {
     runsByWorkspace: {},
     ticketsByWorkspace: {},
     sourcesByWorkspace: {},
+    meByWorkspace: {},
     queueUnsupported: {},
     quota: [],
     toasts: [],
@@ -368,9 +377,11 @@ export function createAppStore(transport: Transport): AppStore {
   }
 
   /**
-   * The sources block of the config summary. A summary that cannot be read
-   * is not reported here: the lists fall back to bare numbers, and Settings
-   * is where the reason is shown.
+   * The two things every screen reads off the config summary: which products
+   * the workspace's numbers belong to, and who the reader is. A summary that
+   * cannot be read is not reported here — the lists fall back to bare
+   * numbers, the board's Me option stays disabled, and Settings is where the
+   * reason is shown.
    */
   async function loadSources(workspaceId: string): Promise<void> {
     try {
@@ -378,6 +389,10 @@ export function createAppStore(transport: Transport): AppStore {
       if (disposed) return
       set({
         sourcesByWorkspace: { ...state.sourcesByWorkspace, [workspaceId]: summary.sources ?? {} },
+        meByWorkspace: {
+          ...state.meByWorkspace,
+          [workspaceId]: summary.me ?? { email: '', names: [], source: '' },
+        },
       })
     } catch {
       // Left absent on purpose.

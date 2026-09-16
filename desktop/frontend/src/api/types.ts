@@ -207,8 +207,19 @@ export interface RetroReport {
 export interface ConfigSummary {
   general: GeneralSummary; budget: BudgetSummary; permissions: PermissionsSummary;
   notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary;
-  sources: SourcesSummary
+  sources: SourcesSummary; me: MeSummary
 }
+/**
+ * Who the workspace thinks the reader is, and which rule said so. `email` is
+ * the one address, `names` every other spelling the config named (display
+ * names and usernames together), and `source` names the rule: 'me' for the
+ * config's own `me:` block, 'webhooks' for `webhooks.match.assignee`,
+ * 'sources' for the tracker or helpdesk account email, 'git' for the
+ * repository's own committer. An empty `source` is a workspace that can name
+ * nobody, and then no run is anyone's.
+ */
+export type IdentitySource = ''|'me'|'webhooks'|'sources'|'git'
+export interface MeSummary { email: string; names: string[]; source: IdentitySource }
 /**
  * The tracker and the helpdesk the workspace reads, so a ticket number can be
  * drawn under its own product's mark. A role the workspace has not configured

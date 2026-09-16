@@ -12,6 +12,69 @@ jobs:
       - run: go vet $(go list ./... | grep -v '/desktop$')
       - run: go test $(go list ./... | grep -v '/desktop$')
 
+  # macOS and Windows run the same Go packages the Linux job does. They are
+  # separate jobs rather than a matrix on `test` because each needs its own
+  # shell for the package list, and because the Windows one also builds the
+  # desktop app: Wails cross-compiles windows/amd64 from any machine, but
+  # only a Windows runner can compile it natively and only there does the
+  # result get exercised by the platform it targets.
+  #
+  # What these jobs cover that a macOS laptop cannot: the Windows halves of
+  # internal/osopen, internal/procgroup (taskkill), internal/agenttools
+  # (cmd /C) and internal/config's Credential Manager reader. Tests that
+  # need a POSIX shell, a symlink or Unix mode bits skip themselves on
+  # Windows and say so in the log.
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26' }
+      - run: go build $(go list ./... | grep -v '/desktop$')
+      - run: go vet $(go list ./... | grep -v '/desktop$')
+      - run: go test $(go list ./... | grep -v '/desktop$')
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with: { go-version: '1.26' }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      # Unlike the Linux job, this one keeps ./desktop in: Wails needs no
+      # cgo and no WebKitGTK on Windows, and the bridge's OpenConfig and
+      # OpenNote are two of the call sites this platform changes. The
+      # committed desktop/frontend/dist/.gitkeep is what the embed directive
+      # matches before the frontend has been built.
+      - name: go build
+        run: go build ./...
+
+      - name: go vet
+        run: go vet ./...
+
+      - name: go test
+        run: go test ./...
+
+      - name: Install wails CLI
+        run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      - name: wails build
+        working-directory: desktop
+        run: wails build -platform windows/amd64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sirdar-desktop-windows-amd64
+          path: desktop/build/bin/Sirdar.exe
+          if-no-files-found: error
+
   # The shared frontend is the same bundle both shells load, and neither Go
   # job compiles a line of it, so it is checked on its own.
   frontend:
