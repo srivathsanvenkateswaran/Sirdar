@@ -605,10 +605,15 @@ export default function Board(props: BoardProps): JSX.Element {
   const ownerOf = (card: BoardCard): string =>
     foldName(card.kind === 'run' ? (card.run.assignee ?? '') : card.ticket.assignee)
 
+  // Me and a named person are asked separately, because they are answered by
+  // different things: Me by the `mine` the service decided, a name by the
+  // spelling on the card. A run the service called the reader's own has no
+  // row of its own in the menu, so the two can never both answer for it.
   const byAssignee = (card: BoardCard): boolean => {
     if (assignees.size === 0) return true
     if (assignees.has(ME) && isMine(card)) return true
-    return assignees.has(ownerOf(card)) && !isMine(card)
+    const owner = ownerOf(card)
+    return owner !== '' && assignees.has(owner)
   }
 
   const keep = (card: BoardCard): boolean =>
@@ -709,7 +714,7 @@ export default function Board(props: BoardProps): JSX.Element {
             <p className="board-filters__note">{NO_IDENTITY}</p>
           ) : !ownershipKnown && runs.length > 0 ? (
             <p className="board-filters__note">
-              This service records no owner on a run, so every run is shown whoever is picked.
+              This service records no owner on a run, so Me shows every run rather than none.
             </p>
           ) : null}
         </div>

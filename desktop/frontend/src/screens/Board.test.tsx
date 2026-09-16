@@ -503,7 +503,9 @@ describe('Board', () => {
   })
 
   it('narrows nothing under Me when the service says nothing about ownership', async () => {
-    const older = RUNS.map(({ assignee: _assignee, mine: _mine, ...rest }) => rest)
+    // The cards still name a person; what the service never decided is
+    // whether that person is the reader.
+    const older = RUNS.map(({ mine: _mine, ...rest }) => rest)
     const { container } = mount({ runs: older })
     await screen.findByRole('region', { name: 'Queue (1)' })
 
@@ -513,6 +515,13 @@ describe('Board', () => {
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
     expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
     expect(screen.getByText(/records no owner on a run/)).toBeInTheDocument()
+
+    // A name still narrows, because the card carries the spelling whatever
+    // the service says about ownership.
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
+    fireEvent.click(within(list).getByRole('option', { name: /rana@acme\.com/ }))
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
   })
 
   it('lists the day’s deliveries with the outcome coloured and the reason in the meta line', () => {
