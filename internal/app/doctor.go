@@ -32,6 +32,7 @@ const doctorTimeout = 30 * time.Second
 // same list.
 func RunDoctor(ctx context.Context, cfg *config.Config) []Check {
 	checks := []Check{{Name: "config", OK: true, Detail: filepath.Join(cfg.Root, ".sirdar", "config.yaml")}}
+	checks = append(checks, identityCheck(cfg))
 	checks = append(checks, providerChecks(ctx, cfg)...)
 	checks = append(checks, sourceChecks(ctx, cfg)...)
 	checks = append(checks, mcpCheck(cfg), fetchCheck(cfg), transcribeCheck(cfg))
@@ -545,6 +546,32 @@ func deskProbe(ctx context.Context, name string, sc *config.SourceConfig, ts zoh
 
 // notesCheck proves the notes directory exists and takes writes, since a
 // run that discovers otherwise has already spent an agent session.
+// identitySource is how the doctor row and the Settings "You" row name
+// where an identity was read from. The map is the one place the words live.
+var identitySource = map[string]string{
+	config.IdentityFromMe:       "me:",
+	config.IdentityFromWebhooks: "webhooks.match.assignee",
+	config.IdentityFromSources:  "the source account email",
+	config.IdentityFromGit:      "git config",
+}
+
+// identityCheck says who this workspace thinks the reader is. It warns
+// rather than fails when nobody: every other check still passes, runs still
+// start, and the only thing that does not work is telling one person's
+// tickets from another's — which is worth a line in the report and not an
+// exit code.
+func identityCheck(cfg *config.Config) Check {
+	id := IdentityOf(cfg)
+	if id.Empty() {
+		return warn("identity", "nobody. Mine filters and the queue lane cannot tell your tickets apart; set me: in config.yaml")
+	}
+	from := identitySource[id.Source]
+	if from == "" {
+		from = id.Source
+	}
+	return Check{Name: "identity", OK: true, Detail: fmt.Sprintf("you are %s (from %s)", id.Display(), from)}
+}
+
 func notesCheck(cfg *config.Config) Check {
 	dir := cfg.ExpandPath(cfg.Notes.Dir)
 	check := Check{Name: "notes.dir", Detail: dir}

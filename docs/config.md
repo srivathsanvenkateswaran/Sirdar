@@ -276,7 +276,12 @@ tools at all); the Codex `mcp servers` row when the session would see none; the
 `claude environment` row under `billing: api` with a custom `ANTHROPIC_BASE_URL`, where
 `budget.maxUsd` cannot be trusted; and the qwen `workspace settings` row when a session that
 keeps folder trust for MCP would load the repository's own `.qwen/settings.json` or
-`.qwen/agents`.
+`.qwen/agents`; and the `identity` row when nothing says who you are, since runs still start and
+only the Mine filter and the queue lane stop working (see [Who you are](#who-you-are)).
+
+The `identity` row reads `you are <address or name> (from me: / webhooks.match.assignee / the
+source account email / git config)`, so the report says not only who Sirdar thinks you are but
+which of the four rules answered.
 
 The desktop Settings screen reads the same list and marks the rows the same way. On the wire
 each check carries `level` (`"ok"`, `"warn"`, `"fail"`) alongside the older `ok` boolean, which

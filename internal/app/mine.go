@@ -1,75 +1,38 @@
 package app
 
 import (
-	"strings"
-
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 )
 
-// SelfOf is who a workspace's own work belongs to, in the spelling a
-// ticket carries it: whatever `webhooks.match.assignee` names — "me"
-// resolved the way the hook filter resolves it, or the address written out
-// there — and, for a workspace that configures no match at all, the account
-// email its tracker or helpdesk credentials belong to.
+// IdentityOf is who a workspace's own work belongs to, in every spelling
+// something might write it as: the `me:` block, else whatever
+// `webhooks.match.assignee` names, else the account the tracker or helpdesk
+// credentials belong to, else the workspace repository's own git committer.
+// `config.Config.Self` is the resolver and the order is documented there.
 //
-// It is the same resolver the hook filter and `queue --assignee me` use, so
+// It is the same answer the hook filter and `queue --assignee me` reach, so
 // a run the board calls the reader's own is a run a hook would have started
 // for them. It is empty for a workspace whose sources authenticate with a
-// token that names nobody — a Linear API key, an Azure DevOps PAT — and an
-// empty self makes every run not-mine rather than everyone's.
-func SelfOf(cfg *config.Config) string {
-	if cfg == nil {
-		return ""
-	}
-	if a, err := cfg.MatchAssignee(); err == nil {
-		if a = strings.TrimSpace(a); a != "" {
-			return a
-		}
-	}
-	return cfg.SelfIdentity()
-}
+// token that names nobody and which is not a git repository — and an empty
+// identity makes every run not-mine rather than everyone's.
+func IdentityOf(cfg *config.Config) config.Identity { return cfg.Self() }
 
-// selfIn is SelfOf for the workspace rooted at root. A configuration
+// SelfOf is IdentityOf in one line: the address, else the display name,
+// else "". It is what a status line or an empty-state sentence says, and
+// what a tracker filter is given for an adapter that cannot resolve "me".
+func SelfOf(cfg *config.Config) string { return IdentityOf(cfg).Display() }
+
+// selfIn is IdentityOf for the workspace rooted at root. A configuration
 // that cannot be read names nobody rather than failing the read it is part
 // of: a broken config.yaml should not empty the board.
-func selfIn(root string) string {
+func selfIn(root string) config.Identity {
 	cfg, err := config.Load(root)
 	if err != nil {
-		return ""
+		return config.Identity{}
 	}
-	return SelfOf(cfg)
+	return IdentityOf(cfg)
 }
 
-// SameAssignee reports whether two spellings name one person.
-//
-// Case never matters: a tracker writes the address the way the account was
-// created and a config the way somebody typed it. A bare local part matches
-// the address it is the local part of, which is what a tracker naming
-// accounts "sri" and a config that knows sri@acme.com need to agree on; two
-// addresses, though, have to match in full, so sri@acme.com is not
-// sri@other.com.
-func SameAssignee(a, b string) bool {
-	a, b = strings.TrimSpace(a), strings.TrimSpace(b)
-	if a == "" || b == "" {
-		return false
-	}
-	if strings.EqualFold(a, b) {
-		return true
-	}
-	aAddr, bAddr := strings.Contains(a, "@"), strings.Contains(b, "@")
-	if aAddr == bAddr {
-		return false
-	}
-	if aAddr {
-		return strings.EqualFold(localPart(a), b)
-	}
-	return strings.EqualFold(a, localPart(b))
-}
-
-// localPart is everything before the "@" of an address.
-func localPart(addr string) string {
-	if i := strings.Index(addr, "@"); i > 0 {
-		return addr[:i]
-	}
-	return addr
-}
+// SameAssignee reports whether two spellings name one person. The rules are
+// config.SameSpelling's; this is the name the rest of the app knows them by.
+func SameAssignee(a, b string) bool { return config.SameSpelling(a, b) }
