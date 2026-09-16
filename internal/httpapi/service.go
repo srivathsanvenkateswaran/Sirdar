@@ -19,6 +19,8 @@ type Service interface {
 	Queue(ctx context.Context, wsID string, f QueueFilter) ([]Ticket, error)
 	Runs(wsID, key string) ([]RunSummary, error)
 	Run(wsID, runID string) (RunDetail, error)
+	DeleteRun(wsID, runID string) error
+	Search(wsID, q string) ([]SearchHit, error)
 	Events(wsID, runID string, after int) ([]RunEvent, int, error)
 	Note(wsID, runID string, kind string) (string, error)
 	Prompt(wsID, runID string) (string, error)
@@ -72,6 +74,9 @@ var (
 	// ErrRefused is a change that exists and must not be edited right now.
 	// It becomes 409: the caller can read the diff again and try again.
 	ErrRefused = app.ErrRefused
+	// ErrRunLive is a run whose runner is still writing, asked to be
+	// deleted. It becomes 409: cancel the job, or wait, and ask again.
+	ErrRunLive = app.ErrRunLive
 )
 
 // classify maps a Service error onto an HTTP status and an error code.
@@ -90,7 +95,7 @@ func classify(err error) (int, string) {
 		return 409, "conflict"
 	case errors.Is(err, app.ErrMCPDenied):
 		return 403, "forbidden"
-	case errors.Is(err, ErrRefused):
+	case errors.Is(err, ErrRefused), errors.Is(err, ErrRunLive):
 		return 409, "conflict"
 	case errors.Is(err, ErrNoDiff):
 		return 404, "no_diff"

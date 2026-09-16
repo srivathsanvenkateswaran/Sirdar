@@ -1,16 +1,19 @@
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { Workspace } from '../../api/types'
 import { resetShowLibrary, setShowLibrary } from '../../lib/library'
 import { stubMatchMedia } from '../../lib/mediaStub'
-import { run } from '../../store/fakeTransport'
+import { resetSessionPrefs } from '../../lib/sessionPrefs'
+import { run, searchHit } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
-import Sidebar, { CARD_OPEN_MS, RAIL_AT, SIDEBAR_COLLAPSED_KEY } from './Sidebar'
+import Sidebar, { CARD_OPEN_MS, NOTES_SEARCH_DEBOUNCE_MS, RAIL_AT, SIDEBAR_COLLAPSED_KEY } from './Sidebar'
 
 afterEach(() => {
+  cleanup()
   localStorage.clear()
   resetShowLibrary()
+  resetSessionPrefs()
   vi.useRealTimers()
 })
 
@@ -311,10 +314,157 @@ describe('the sessions list', () => {
     expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r2' })
   })
 
-  it('draws nothing when the workspace has no runs', () => {
+  it('draws nothing when the workspace has no runs, and no search field either', () => {
     setShowLibrary(false)
     mount({ runs: [] })
     expect(screen.queryByRole('navigation', { name: 'Sessions' })).toBeNull()
+    expect(screen.queryByRole('searchbox')).toBeNull()
+  })
+
+  it('hands the row menu its actions', async () => {
+    setShowLibrary(false)
+    const onOpenSettings = vi.fn()
+    mount({ runs, now: NOW, sessionActions: { onOpenSettings } })
+    fireEvent.contextMenu(screen.getByRole('button', { name: /OMNI-2/ }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Workspace settings' }))
+    expect(onOpenSettings).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('the search', () => {
+  const NOW = new Date(2026, 8, 16, 10, 0, 0).getTime()
+  const runs = [
+    run({ runId: 'r1', key: 'OMNI-1', kind: 'triage', status: 'running', title: 'Login loop after reset', updatedAt: new Date(NOW - 55 * 60_000).toISOString() }),
+    run({ runId: 'r2', key: 'OMNI-2', kind: 'fix', status: 'completed', provider: 'codex', updatedAt: new Date(NOW - 86_400_000).toISOString() }),
+  ]
+  const field = () => screen.getByRole('searchbox', { name: /Search (sessions|notes)/ }) as HTMLInputElement
+  const list = () => screen.getByRole('navigation', { name: 'Sessions' })
+  const rowNames = () =>
+    within(list())
+      .getAllByRole('button', { name: /OMNI/ })
+      .map((r) => r.getAttribute('aria-label'))
+
+  it('sits at the top, filters the list as it is typed, says when nothing answers, and clears on Escape', () => {
+    setShowLibrary(false)
+    const { container } = mount({ runs, now: NOW })
+    const search = container.querySelector('.sd-sidebar__search')!
+    expect(search.previousElementSibling).toHaveClass('sd-sidebar__brand')
+    expect(field()).toHaveAccessibleName('Search sessions')
+    expect(field().placeholder).toBe('Search sessions')
+
+    fireEvent.change(field(), { target: { value: 'codex' } })
+    expect(rowNames()).toEqual(['OMNI-2, fix'])
+    fireEvent.change(field(), { target: { value: 'nothing here' } })
+    expect(list()).toHaveTextContent('No sessions match “nothing here”.')
+
+    field().focus()
+    fireEvent.keyDown(field(), { key: 'Escape' })
+    expect(field().value).toBe('')
+    expect(rowNames()).toHaveLength(2)
+    expect(document.activeElement).toBe(field())
+    fireEvent.keyDown(field(), { key: 'Escape' })
+    expect(document.activeElement).not.toBe(field())
+  })
+
+  it('takes the cursor on ⌘K, and not on a bare k; while folded by hand the sidebar opens first', () => {
+    setShowLibrary(false)
+    const { container } = mount({ runs, now: NOW })
+    fireEvent.keyDown(window, { key: 'k' })
+    expect(document.activeElement).not.toBe(field())
+    fireEvent.keyDown(window, { key: 'k', metaKey: true })
+    expect(document.activeElement).toBe(field())
+    ;(document.activeElement as HTMLElement).blur()
+
+    fireEvent.keyDown(window, { key: 'b', metaKey: true })
+    expect(container.querySelector('.sd-sidebar')).toHaveAttribute('data-collapsed', 'true')
+    fireEvent.keyDown(window, { key: 'K', ctrlKey: true })
+    expect(container.querySelector('.sd-sidebar')).not.toHaveAttribute('data-collapsed')
+    expect(document.activeElement).toBe(field())
+  })
+
+  it('does nothing on ⌘K while the width has made the sidebar a rail', () => {
+    const media = stubMatchMedia([RAIL_AT])
+    try {
+      setShowLibrary(false)
+      const { container } = mount({ runs, now: NOW })
+      fireEvent.keyDown(window, { key: 'k', metaKey: true })
+      expect(container.querySelector('.sd-sidebar')).toHaveAttribute('data-collapsed', 'true')
+      expect(document.activeElement).not.toBe(field())
+    } finally {
+      media.restore()
+    }
+  })
+
+  it('offers the notes mode only with a searcher, asks it once the text is still, and lists the hits', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    setShowLibrary(false)
+    let answer: () => void = () => {}
+    const onSearchNotes = vi.fn(
+      (_q: string) =>
+        new Promise<ReturnType<typeof searchHit>[]>((resolve) => {
+          answer = () => resolve([searchHit({ runId: 'r2', excerpt: 'the Export pool was exhausted' })])
+        }),
+    )
+    const { rerender } = mount({ runs, now: NOW })
+    expect(screen.queryByRole('button', { name: 'Notes' })).toBeNull()
+    rerender(
+      <PrimaryActionProvider>
+        <Sidebar
+          workspaces={WS}
+          currentWorkspaceId="ws1"
+          quota={[]}
+          screen={{ name: 'board' }}
+          runs={runs}
+          now={NOW}
+          onSearchNotes={onSearchNotes}
+          onSelectWorkspace={() => {}}
+          onAddWorkspace={() => {}}
+          onNavigate={() => {}}
+        />
+      </PrimaryActionProvider>,
+    )
+    const toggle = screen.getByRole('button', { name: 'Notes' })
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    fireEvent.click(toggle)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(field()).toHaveAccessibleName('Search notes')
+    expect(list()).toHaveTextContent('Type to search the notes.')
+
+    fireEvent.change(field(), { target: { value: 'exp' } })
+    fireEvent.change(field(), { target: { value: 'export' } })
+    expect(onSearchNotes).not.toHaveBeenCalled()
+    await act(async () => {
+      vi.advanceTimersByTime(NOTES_SEARCH_DEBOUNCE_MS)
+    })
+    expect(onSearchNotes).toHaveBeenCalledTimes(1)
+    expect(onSearchNotes).toHaveBeenCalledWith('export')
+    expect(list()).toHaveTextContent('Searching notes…')
+
+    await act(async () => {
+      answer()
+    })
+    expect(rowNames()).toEqual(['OMNI-2, fix'])
+    expect(list().querySelector('.sd-session-row__match')).toHaveTextContent('the Export pool was exhausted')
+    expect(list().querySelector('.sd-session-row__match mark')).toHaveTextContent('Export')
+
+    // Back to the sessions filter: the same text narrows the list instead.
+    fireEvent.click(toggle)
+    expect(field()).toHaveAccessibleName('Search sessions')
+    expect(list()).toHaveTextContent('No sessions match “export”.')
+  })
+
+  it('says why the notes search failed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    setShowLibrary(false)
+    const onSearchNotes = vi.fn((_q: string) => Promise.reject(new Error('500 Internal Server Error')))
+    mount({ runs, now: NOW, onSearchNotes })
+    fireEvent.click(screen.getByRole('button', { name: 'Notes' }))
+    fireEvent.change(field(), { target: { value: 'export' } })
+    await act(async () => {
+      vi.advanceTimersByTime(NOTES_SEARCH_DEBOUNCE_MS)
+    })
+    await act(async () => {})
+    expect(list()).toHaveTextContent('Could not search notes. 500 Internal Server Error')
   })
 })
 

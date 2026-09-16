@@ -68,6 +68,24 @@ func (b *Bridge) Runs(ws, key string) ([]app.RunSummary, error) { return b.svc.R
 // Run returns one run's full detail.
 func (b *Bridge) Run(ws, runId string) (app.RunDetail, error) { return b.svc.Run(ws, runId) }
 
+// DeleteRun removes one run's directory under .sirdar/runs. A run whose
+// runner is still writing is refused; the register row and any filed note
+// stay. The run.removed event reaches the frontend through forward().
+func (b *Bridge) DeleteRun(ws, runId string) error { return b.svc.DeleteRun(ws, runId) }
+
+// Search finds q, case folded, in every run's answer JSON and note text,
+// capped at app.SearchLimit hits with a line's worth of excerpt each.
+func (b *Bridge) Search(ws, q string) ([]app.SearchHit, error) {
+	hits, err := b.svc.Search(ws, q)
+	if err != nil {
+		return nil, err
+	}
+	if hits == nil {
+		hits = []app.SearchHit{}
+	}
+	return hits, nil
+}
+
 // Events returns the run's events after index `after`, and the index the
 // next poll should pass.
 func (b *Bridge) Events(ws, runId string, after int) (EventsPage, error) {

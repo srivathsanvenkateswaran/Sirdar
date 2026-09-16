@@ -15,6 +15,7 @@ import type {
   RunDiff,
   RunEvent,
   RunSummary,
+  SearchHit,
   SteerStarted,
   Ticket,
   Transport,
@@ -33,6 +34,7 @@ interface ApiError {
 const EVENT_KINDS: AppEvent['kind'][] = [
   'run.updated',
   'run.event',
+  'run.removed',
   'quota.updated',
   'job.finished',
   'hook.received',
@@ -138,6 +140,13 @@ export function createHTTPTransport(): Transport {
       getJSON<RunDetail>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}`,
       ),
+    deleteRun: async (ws, runId) => {
+      await request(`/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}`, {
+        method: 'DELETE',
+      })
+    },
+    search: (ws, q) =>
+      getJSON<SearchHit[]>(`/workspaces/${encodeURIComponent(ws)}/search${query({ q })}`),
     events: (ws, runId, after) =>
       getJSON<{ events: RunEvent[]; next: number }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/events${query({
@@ -269,6 +278,8 @@ interface BridgeBindings {
   Queue(ws: string, f: { assignee: string; status: string; limit: number }): Promise<Ticket[] | null>
   Runs(ws: string, key: string): Promise<RunSummary[] | null>
   Run(ws: string, runId: string): Promise<RunDetail>
+  DeleteRun(ws: string, runId: string): Promise<void>
+  Search(ws: string, q: string): Promise<SearchHit[] | null>
   Events(ws: string, runId: string, after: number): Promise<{ events: RunEvent[] | null; next: number }>
   Note(ws: string, runId: string, kind: string): Promise<string>
   Prompt(ws: string, runId: string): Promise<string>
@@ -326,6 +337,7 @@ interface BridgeBindings {
   Version(): Promise<string>
   OpenConfig(ws: string): Promise<void>
   OpenNote(ws: string, runId: string, path: string): Promise<void>
+  OpenRunDir(ws: string, runId: string): Promise<void>
 }
 
 /** The subset of the Wails runtime the transport uses. */
@@ -362,6 +374,10 @@ export function createWailsTransport(): Transport {
       ),
     runs: async (ws, key) => list(await bridge().Runs(ws, key ?? '')),
     run: (ws, runId) => bridge().Run(ws, runId),
+    deleteRun: async (ws, runId) => {
+      await bridge().DeleteRun(ws, runId)
+    },
+    search: async (ws, q) => list(await bridge().Search(ws, q)),
     events: async (ws, runId, after) => {
       const page = await bridge().Events(ws, runId, after)
       return { events: list(page.events), next: page.next }
@@ -450,6 +466,9 @@ export function createWailsTransport(): Transport {
     },
     openNote: async (ws, runId, path) => {
       await bridge().OpenNote(ws, runId, path)
+    },
+    openRunDir: async (ws, runId) => {
+      await bridge().OpenRunDir(ws, runId)
     },
     subscribe: (handler) => {
       const rt = (window as any).runtime as WailsRuntime | undefined

@@ -15,6 +15,7 @@ import type {
   RunDiff,
   RunEvent,
   RunSummary,
+  SearchHit,
   Ticket,
   Transport,
   Usage,
@@ -38,6 +39,8 @@ export interface TransportCalls {
   mcpServers: { ws: string; connect: boolean }[]
   mcpTools: { ws: string; server: string }[]
   mcpCall: { ws: string; server: string; tool: string; args?: unknown }[]
+  deleteRun: { ws: string; runId: string }[]
+  search: { ws: string; q: string }[]
 }
 
 export interface FakeTransport extends Transport {
@@ -51,7 +54,25 @@ export interface FakeTransport extends Transport {
   failQueue(err: Error | null): void
   /** Swaps what `runDiff()` answers with; `dropHunk()` edits it in place. */
   setDiff(diff: RunDiff | null): void
+  /** Makes `deleteRun()` reject, e.g. with the 409 a live run gives. */
+  failDelete(err: Error | null): void
+  /** Makes `search()` reject. */
+  failSearch(err: Error | null): void
   subscriberCount(): number
+}
+
+/** A search hit as the service answers one: the note of the sample run, matched on "export". */
+export function searchHit(over: Partial<SearchHit> = {}): SearchHit {
+  return {
+    runId: 'r1',
+    key: 'OMNI-1',
+    kind: 'triage',
+    status: 'completed',
+    source: 'note',
+    path: '/repos/omni/notes/OMNI-1-triage.md',
+    excerpt: '…the statement export times out on the second page of the report…',
+    ...over,
+  }
 }
 
 /** The unified patch `diff()` answers with: two files, three hunks, the shape a review screen has to lay out. */
@@ -333,6 +354,8 @@ export function createFakeTransport(seed: {
   mcpTools?: Record<string, MCPToolList>
   /** What `register()` answers: the rows the workspace's register.jsonl holds. */
   register?: RegisterRow[]
+  /** What `search()` picks from: the hits whose excerpt contains the query, case folded. */
+  hits?: SearchHit[]
   /**
    * Whole runs by run id — the detail, the log, the note, the prompt and
    * the change — for the session screen: `run`, `events`, `note`, `prompt`
@@ -344,6 +367,8 @@ export function createFakeTransport(seed: {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
   let queueError: Error | null = null
+  let deleteError: Error | null = null
+  let searchError: Error | null = null
   let currentDiff: RunDiff | null = seed.diff === undefined ? diff() : seed.diff
   /** A fixture run's change, edited in place by `dropHunk` like the shared one. */
   const sessionDiffs = new Map<string, RunDiff | null>(
@@ -372,6 +397,8 @@ export function createFakeTransport(seed: {
     mcpServers: [],
     mcpTools: [],
     mcpCall: [],
+    deleteRun: [],
+    search: [],
   }
 
   const fake: FakeTransport = {
@@ -390,6 +417,12 @@ export function createFakeTransport(seed: {
     },
     setDiff(next) {
       currentDiff = next
+    },
+    failDelete(err) {
+      deleteError = err
+    },
+    failSearch(err) {
+      searchError = err
     },
     subscriberCount: () => handlers.size,
 
@@ -420,6 +453,25 @@ export function createFakeTransport(seed: {
         handle: '',
         budget: { maxTurns: 20, maxMinutes: 20, maxUsd: 2 },
       } as RunDetail
+    },
+    deleteRun: async (ws, runId) => {
+      calls.deleteRun.push({ ws, runId })
+      if (deleteError) throw deleteError
+      const target = runList.find((r) => r.runId === runId)
+      if (!target) throw new Error(`not_found: no run ${runId}`)
+      if (target.status === 'preparing' || target.status === 'running') {
+        throw new Error(`conflict: run is live: ${runId} is ${target.status}`)
+      }
+      runList = runList.filter((r) => r.runId !== runId)
+      // The service publishes run.removed once the directory is gone.
+      fake.emit({ kind: 'run.removed', workspaceId: ws, runId })
+    },
+    search: async (ws, q) => {
+      calls.search.push({ ws, q })
+      if (searchError) throw searchError
+      const needle = q.trim().toLowerCase()
+      if (!needle) return []
+      return (seed.hits ?? []).filter((h) => h.excerpt.toLowerCase().includes(needle))
     },
     events: async (_ws, runId) => {
       const fixture = seed.sessions?.[runId]

@@ -118,10 +118,26 @@ export function placeBeside(
   return { top, left, maxHeight, side }
 }
 
-/** The reading direction an element is laid out in. */
-function directionOf(node: HTMLElement): 'ltr' | 'rtl' {
-  const computed = typeof getComputedStyle === 'function' ? getComputedStyle(node).direction : ''
-  if (computed === 'rtl' || computed === 'ltr') return computed
+/**
+ * What a popover can hang from: an element, or anything else that can say
+ * where it is — the point a pointer pressed at, for a context menu, made by
+ * `pointAnchor`.
+ */
+export interface Anchorable {
+  getBoundingClientRect(): Box
+}
+
+/** A zero-sized trigger at a viewport point: a context menu opens under the pointer. */
+export function pointAnchor(x: number, y: number): Anchorable {
+  return { getBoundingClientRect: () => ({ top: y, left: x, width: 0, height: 0 }) }
+}
+
+/** The reading direction an element is laid out in; the document's for a point. */
+function directionOf(node: Anchorable): 'ltr' | 'rtl' {
+  if (node instanceof Element && typeof getComputedStyle === 'function') {
+    const computed = getComputedStyle(node).direction
+    if (computed === 'rtl' || computed === 'ltr') return computed
+  }
   return document.dir === 'rtl' ? 'rtl' : 'ltr'
 }
 
@@ -137,7 +153,7 @@ function directionOf(node: HTMLElement): 'ltr' | 'rtl' {
  */
 export function useAnchor(
   open: boolean,
-  trigger: RefObject<HTMLElement | null>,
+  trigger: RefObject<Anchorable | null>,
   popover: RefObject<HTMLElement | null>,
   options: Pick<PlaceOptions, 'align' | 'gap' | 'margin'> & {
     /** Beside the trigger (`placeBeside`) instead of under it. */

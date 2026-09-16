@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All thirty-eight are built. Each row links the spec in this folder, which is a
+All thirty-nine are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -249,6 +249,18 @@ BundleView, ToolsTable, ChangesView, the composer strip) live in
 |---|---|---|---|---|---|
 | 37 | Marker | app | built | `src/ui/marker/` | [marker/SPEC.md](marker/SPEC.md) |
 | 38 | Drawer | app | built | `src/ui/drawer/` | [drawer/SPEC.md](drawer/SPEC.md) |
+
+### The session-menu round
+
+Added on 2026-09-16 with the sidebar's session menu: a right-click, a
+double-click or the dots at a row's end opens Pin, Mark settled, Snooze ▸,
+Rename, Mark unread, Copy ▸, Open ▸, Workspace settings, Archive and Delete….
+The menu is the primitive; the rows' arrangements it drives live in
+`desktop/frontend/src/lib/sessionPrefs.ts`.
+
+| # | Component | Surfaces | Status | Code | Spec |
+|---|---|---|---|---|---|
+| 39 | Context menu | app | built | `src/ui/context-menu/` | [context-menu/SPEC.md](context-menu/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee
