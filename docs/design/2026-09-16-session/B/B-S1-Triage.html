@@ -1,0 +1,513 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=1470"><title>Sirdar · B-S1-Triage</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap">
+  <style>
+:root{--sd-shell:#F2EEE0;--sd-sheet:#FFFDF7;--sd-surface:#FFFDF7;--sd-sunk:#F1EDDF;--sd-card-row:#F5F1E4;--sd-rule-faint:#EAE6D6;--sd-rule:#E3DFD1;--sd-rule-strong:#C9C4B2;--sd-nav-hover:#EDE8D8;--sd-nav-active:#E7E2D1;--sd-primary:#17181C;--sd-primary-ink:#FFFDF7;--sd-ink:#17181C;--sd-ink-2:#4A4E58;--sd-ink-3:#676B74;--sd-accent:#3B3AA6;--sd-accent-soft:rgba(59,58,166,.10);--sd-highlight:#E4E0FF;--sd-highlight-ink:#17181C;--sd-st-queue:#63676F;--sd-st-live:#3B3AA6;--sd-st-blocked:#A15C07;--sd-st-triaged:#0E6F66;--sd-st-done:#17713A;--sd-st-failed:#B02418;--sd-heat-0:#EEEADB;--sd-heat-1:#CFCBEE;--sd-heat-2:#A7A2DE;--sd-heat-3:#6E69C4;--sd-heat-4:#3B3AA6;--sd-scrim:rgba(23,24,28,.32);--sd-font-display:Newsreader,Georgia,serif;--sd-font-ui:Figtree,Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;--sd-font-mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,monospace}
+/* v2 scale: the reference app's register. 16px base, 44px nav rows, 24px card padding, 40px controls. */
+body{margin:0;background:var(--sd-shell);color:var(--sd-ink);font:16px/1.5 var(--sd-font-ui);-webkit-font-smoothing:antialiased}
+a{color:#3B3AA6}a:hover{color:#2B2A80}
+.app{display:flex;width:1440px;height:900px;background:var(--sd-shell);overflow:hidden}
+/* ---------- sidebar ---------- */
+.sidebar{display:flex;flex-direction:column;flex:0 0 248px;padding:20px 16px 16px;background:transparent}
+.brand{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 12px 4px;font-size:22px;font-weight:600;letter-spacing:-0.01em}
+.brand .fact{margin-left:2px}
+.nav{display:flex;flex-direction:column;gap:2px;padding-top:16px}
+.navrow{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 14px;border-radius:10px;color:var(--sd-ink);font-size:16px;font-weight:500;line-height:1.3}
+.navrow[data-current="true"]{background:var(--sd-nav-active)}
+.navrow svg{width:20px;height:20px;flex:0 0 auto;color:var(--sd-ink)}
+.navcount{margin-left:auto;padding:0 9px;border-radius:999px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:12px;line-height:20px}
+.recent{display:flex;flex-direction:column;gap:2px;margin-top:20px;padding-top:16px;border-top:1px solid var(--sd-rule)}
+.recent-label{padding:0 14px 6px;color:var(--sd-ink-3);font-size:13px}
+.recentrow{display:flex;align-items:center;gap:10px;min-height:36px;padding:0 14px;border-radius:10px;color:var(--sd-ink-2);font-size:15px}
+.recentrow[data-current="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.recentrow .key{font-family:var(--sd-font-mono);font-weight:600;font-size:13.5px;color:var(--sd-ink)}
+.recentrow .kind{margin-left:auto;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.dot{width:7px;height:7px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.dot[data-live="true"]{background:var(--sd-accent)}
+.dot[data-blocked="true"]{background:var(--sd-st-blocked)}
+.foot{display:flex;flex-direction:column;gap:12px;margin-top:auto;padding:16px;border-radius:12px;background:var(--sd-card-row)}
+.switcher{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:24px;font-size:15px;font-weight:500}
+.switcher svg{width:16px;height:16px;color:var(--sd-ink-3)}
+.quotas{display:flex;flex-direction:column;gap:6px}
+.quota{display:flex;align-items:center;gap:10px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-2)}
+.quota .p{font-weight:600;color:var(--sd-ink);width:80px;white-space:nowrap}
+.quota .bar{display:block;flex:1;height:6px;border-radius:999px;background:var(--sd-sunk);box-shadow:inset 0 0 0 1px var(--sd-rule);overflow:hidden}
+.quota .fill{display:block;height:100%;border-radius:999px;background:var(--sd-st-queue)}
+.quota .pct{min-width:3.5ch;text-align:right}
+.quota[data-level="warn"] .fill{background:var(--sd-st-blocked)}.quota[data-level="warn"] .pct{color:var(--sd-st-blocked)}
+/* ---------- controls ---------- */
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:40px;padding:0 20px;border:0;border-radius:8px;background:var(--sd-primary);color:var(--sd-primary-ink);font-family:var(--sd-font-ui);font-size:15px;font-weight:500;line-height:1.3;white-space:nowrap}
+.primary[data-disabled="true"]{opacity:.45}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 18px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-surface);color:var(--sd-ink);font-size:15px;font-weight:500;line-height:1.3;white-space:nowrap}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--sd-ink-2)}
+.btn.pale{border:0;background:var(--sd-nav-active);color:var(--sd-ink)}
+.btn.small{min-height:32px;padding:0 12px;font-size:13.5px}
+.btn svg{width:16px;height:16px}
+.seg{display:inline-flex;padding:3px;border:1px solid var(--sd-rule);border-radius:999px;background:var(--sd-sunk)}
+.seg span{min-height:32px;padding:5px 16px;border-radius:999px;color:var(--sd-ink-2);font-size:14px;line-height:22px;white-space:nowrap}
+.seg span[data-on="true"]{background:var(--sd-surface);box-shadow:0 0 0 1px var(--sd-rule-strong);color:var(--sd-ink);font-weight:500}
+.toggle{position:relative;display:inline-block;width:44px;height:24px;border-radius:999px;background:var(--sd-rule-strong);flex:0 0 auto}
+.toggle::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:999px;background:var(--sd-surface)}
+.toggle[data-on="true"]{background:var(--sd-ink)}
+.toggle[data-on="true"]::after{left:23px}
+.sel{display:inline-flex;align-items:center;justify-content:space-between;gap:10px;min-height:40px;padding:0 14px;border:1px solid var(--sd-rule-strong);border-radius:8px;background:var(--sd-sheet);color:var(--sd-ink);font-size:15px;white-space:nowrap}
+.sel svg{width:16px;height:16px;color:var(--sd-ink-3)}
+.chip-outline{display:inline-block;padding:3px 10px;border:1px solid var(--sd-rule-strong);border-radius:6px;font-size:13px;line-height:1.5;color:var(--sd-ink-3);white-space:nowrap}
+.chip-outline[data-tone="done"]{color:var(--sd-st-done);border-color:var(--sd-st-done)}
+.chip-outline[data-tone="blocked"]{color:var(--sd-st-blocked);border-color:var(--sd-st-blocked)}
+.chip-outline[data-tone="failed"]{color:var(--sd-st-failed);border-color:var(--sd-st-failed)}
+.badge{display:inline-flex;align-items:center;padding:3px 12px;border-radius:999px;font-size:13.5px;line-height:1.5;font-weight:500;white-space:nowrap;background:rgba(99,103,111,.13);color:var(--sd-st-queue)}
+.badge[data-s="running"]{background:rgba(59,58,166,.13);color:var(--sd-st-live)}
+.badge[data-s="blocked"]{background:rgba(161,92,7,.13);color:var(--sd-st-blocked)}
+.badge[data-s="completed"]{background:rgba(14,111,102,.13);color:var(--sd-st-triaged)}
+.badge[data-s="done"]{background:rgba(23,113,58,.13);color:var(--sd-st-done)}
+.badge[data-s="failed"]{background:rgba(176,36,24,.13);color:var(--sd-st-failed)}
+.fact{display:inline-flex;align-items:center;min-height:26px;padding:0 10px;border-radius:6px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-size:13px;font-weight:500;line-height:26px;white-space:nowrap}
+.mono{font-family:var(--sd-font-mono);font-variant-numeric:tabular-nums}
+.kbd{padding:0 5px;border:1px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:12px;line-height:1.5;opacity:.6}
+.icon{width:20px;height:20px;flex:0 0 auto}
+/* ---------- sheet ---------- */
+.sheet{display:flex;flex:1;flex-direction:column;min-width:0;min-height:0;margin:12px 12px 12px 0;border:1px solid var(--sd-rule);border-radius:16px;background:var(--sd-sheet);overflow:hidden}
+.page{padding:40px 48px 32px;display:flex;flex-direction:column;min-height:0;flex:1}
+.h-page{margin:0;font-size:32px;font-weight:500;line-height:1.2;letter-spacing:-0.01em}
+.lede{margin:6px 0 0;font-size:16px;color:var(--sd-ink-3)}
+.h-serif{margin:0;font-size:32px;font-weight:500;line-height:1.2;letter-spacing:-0.01em}
+.tabs{display:flex;gap:32px;border-bottom:1px solid var(--sd-rule)}
+.tab{padding:14px 0;margin-bottom:-1px;border-bottom:2px solid transparent;color:var(--sd-ink-2);font-size:16px}
+.tab[data-on="true"]{border-bottom-color:var(--sd-ink);color:var(--sd-ink);font-weight:500}
+.tab .n{margin-left:8px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.topbar{display:flex;align-items:center;gap:16px;min-height:72px;padding:0 32px;border-bottom:1px solid var(--sd-rule)}
+.topbar .key{font-family:var(--sd-font-mono);font-size:18px;font-weight:600;letter-spacing:.01em}
+.topbar .kind{font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-3)}
+.topbar .title{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:16px;color:var(--sd-ink-2)}
+.stats{display:flex;align-items:center;margin-left:auto;font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-3)}
+.stat{padding:0 14px;border-left:1px solid var(--sd-rule);font-variant-numeric:tabular-nums}
+.stat:first-child{border-left:0;padding-left:0}
+.stat b{font-weight:500;color:var(--sd-ink-2)}
+/* ---------- cards ---------- */
+.card{border-radius:12px;background:var(--sd-card-row);padding:24px}
+.card-title{margin:0 0 4px;font-size:22px;font-weight:500;line-height:1.25}
+.card-head{display:flex;align-items:baseline;justify-content:space-between;gap:16px;margin-bottom:16px}
+.card-side{font-size:13px;color:var(--sd-ink-3)}
+.big{font-size:36px;font-weight:500;line-height:1.1;letter-spacing:-0.01em}
+.big-label{margin-top:6px;font-size:13.5px;color:var(--sd-ink-3)}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:24px;min-height:72px;padding:12px 0;border-top:1px solid var(--sd-rule-faint)}
+.srow:first-of-type{border-top:0}
+.srow .lab{font-size:16px;font-weight:500}
+.srow .val{margin-top:2px;font-size:14.5px;color:var(--sd-ink-2)}
+.srow .help{margin-top:2px;font-size:13.5px;color:var(--sd-ink-3);max-width:60ch}
+/* ---------- v2 addendum, from the reference's Notetaker / Insights / Settings screens ---------- */
+.h-serif{font-family:var(--sd-font-display);font-size:34px;font-weight:400;line-height:1.15;letter-spacing:0}
+.h-serif-card{margin:0;font-family:var(--sd-font-display);font-size:30px;font-weight:400;line-height:1.15}
+.group-label{display:flex;align-items:center;gap:12px;font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink-2)}
+.group-label::after{content:"";flex:1;border-top:1px dashed var(--sd-rule-strong)}
+.group-label.plain::after{display:none}
+.page-head{display:flex;align-items:center;justify-content:space-between;gap:16px}
+.page-head .actions{display:flex;align-items:center;gap:12px}
+.banner{display:flex;align-items:center;gap:12px;padding:16px 20px;border-radius:12px;background:rgba(14,111,102,.10);color:var(--sd-st-triaged);font-size:16px}
+.banner b{font-weight:600}
+.banner .sep{color:var(--sd-st-triaged);opacity:.6}
+.banner[data-tone="blocked"]{background:rgba(161,92,7,.10);color:var(--sd-st-blocked)}
+.banner[data-tone="failed"]{background:rgba(176,36,24,.10);color:var(--sd-st-failed)}
+.item{position:relative;display:flex;align-items:center;gap:16px;padding:16px 20px 16px 24px;border-radius:12px;background:var(--sd-card-row)}
+.item::before{content:"";position:absolute;left:12px;top:16px;bottom:16px;width:3px;border-radius:2px;background:var(--sd-rule-strong)}
+.item[data-tone="live"]::before{background:var(--sd-accent)}
+.item[data-tone="blocked"]::before{background:var(--sd-st-blocked)}
+.item[data-tone="done"]::before{background:var(--sd-st-done)}
+.item[data-tone="failed"]::before{background:var(--sd-st-failed)}
+.item .ic{display:flex;align-items:center;justify-content:center;width:44px;height:44px;border-radius:10px;background:var(--sd-sunk);color:var(--sd-ink-2);flex:0 0 auto}
+.item .ic svg{width:20px;height:20px}
+.item .t{font-size:17px;font-weight:500;line-height:1.3}
+.item .m{margin-top:2px;font-size:15px;color:var(--sd-ink-2)}
+.search{display:flex;align-items:center;gap:16px;min-height:64px;padding:0 24px;border:1px solid var(--sd-rule);border-radius:16px;background:var(--sd-sheet);font-size:17px;color:var(--sd-ink-3)}
+.search .aside{margin-left:auto;font-size:15px;color:var(--sd-ink-2);white-space:nowrap}
+.srow.tall{min-height:104px;padding:20px 0}
+.srow.tall .lab{font-size:18px}
+.srow.tall .val{font-size:16px}
+.btn.wide{min-width:160px;min-height:48px;font-size:16px}
+.note-prose{font-size:16.5px;line-height:1.7;color:var(--sd-ink)}
+.note-prose b{font-weight:600}
+/* ---------- provider marks ---------- */
+/* The vendors' own marks (their trademarks, used to say which provider is running), in the inverted form each
+   vendor ships: the mark in white on a tile of its brand colour. Black-branded marks sit on the ink. */
+.pv{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;flex:0 0 auto;background:var(--sd-ink);color:#FFFDF7}
+.pv svg{width:16px;height:16px}
+.pv.lg{width:40px;height:40px;border-radius:10px}.pv.lg svg{width:22px;height:22px}
+.pv.sm{width:22px;height:22px;border-radius:6px}.pv.sm svg{width:13px;height:13px}
+.pv[data-p="claude"]{background:#D97757}
+.pv[data-p="qwen"]{background:#6950EF}
+.pv[data-p="gemini"]{background:#8E75B2}
+.pv[data-p="antigravity"]{background:#1A73E8}
+.pv[data-p="copilot"]{background:#24292F}
+.pvrow{display:inline-flex;align-items:center;gap:10px}
+.pvrow .pn{font-weight:500}
+.pvrow .pm{color:var(--sd-ink-3);font-family:var(--sd-font-mono);font-size:13px}
+/* B — the note is the work. Centre: the deliverable as a document. Left: the path the agent took, grouped by turn.
+   Bundle and Tools slide over the path as drawers. The agent's question / the steer composer sit under the document. */
+.topbar>*{flex:0 0 auto}.topbar .title{flex:1 1 auto}.topbar .stat{white-space:nowrap}
+.topbar .pvrow .pn{font-family:var(--sd-font-ui);font-size:14px;color:var(--sd-ink)}
+.topbar .badge{margin-left:2px}
+.win{position:relative;display:grid;grid-template-columns:432px minmax(0,1fr);flex:1;min-height:0}
+.mono,.step,.pre,.cmd,.otbl,.dl,.checks,.ttbl td,.kv .v.mono,.meta .v.mono,.ref,code{font-variant-ligatures:none}
+/* every scrolling region shows its bar */
+.scroll{overflow-y:scroll;overflow-x:hidden;min-height:0}
+.scroll::-webkit-scrollbar{width:10px}
+.scroll::-webkit-scrollbar-thumb{background:var(--sd-rule-strong);border-radius:999px;border:3px solid var(--sd-sheet)}
+.scroll::-webkit-scrollbar-track{background:transparent}
+/* ---------- the path (investigation timeline) ---------- */
+.path{display:flex;flex-direction:column;min-width:0;min-height:0;border-right:1px solid var(--sd-rule);background:var(--sd-sheet)}
+.path-head{display:flex;align-items:center;gap:8px;min-height:52px;padding:0 10px 0 20px;border-bottom:1px solid var(--sd-rule)}
+.plab{font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink-2)}
+.path-head .n{font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.path-head .drawers{margin-left:auto;display:flex;gap:2px}
+.dbtn{display:inline-flex;align-items:center;gap:6px;min-height:32px;padding:0 10px;border-radius:8px;color:var(--sd-ink-2);font-size:13.5px;font-weight:500;white-space:nowrap}
+.dbtn svg{width:15px;height:15px}
+.dbtn .n{font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.dbtn[data-on="true"]{background:var(--sd-nav-active);color:var(--sd-ink)}
+.path-scroll{flex:1;padding:6px 0 16px}
+.tg{display:flex;align-items:center;gap:10px;margin:14px 18px 2px 20px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3);font-variant-numeric:tabular-nums}
+.tg .line{flex:1;height:1px;background:var(--sd-rule-faint)}
+.ann{margin:4px 18px 0 62px;font-size:14px;line-height:1.45;color:var(--sd-ink-2)}
+.ann::before{content:"“"}.ann::after{content:"”"}
+.step{display:grid;grid-template-columns:42px minmax(0,1fr) auto;align-items:baseline;min-height:30px;padding:3px 12px 3px 20px;font-family:var(--sd-font-mono);font-size:13.5px;line-height:1.5}
+.step .at{color:var(--sd-ink-3);font-size:12.5px;font-variant-numeric:tabular-nums}
+.step .what{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.step .verb{font-weight:600}
+.step .res{color:var(--sd-ink-3)}
+.step .side{display:flex;align-items:center;gap:4px;padding-left:8px}
+.step[data-v="deny"] .verb,.step[data-v="deny"] .obj{color:var(--sd-st-failed)}
+.step[data-v="wait"] .verb,.step[data-v="wait"] .obj{color:var(--sd-st-blocked)}
+.step[data-v="note"] .verb,.step[data-v="note"] .obj{color:var(--sd-accent)}
+.step .reason{grid-column:2/-1;padding:2px 0 4px;font-family:var(--sd-font-ui);font-size:13.5px;line-height:1.45;color:var(--sd-ink-2);white-space:normal}
+.xstep{margin:4px 10px 6px 10px;border-radius:12px;background:var(--sd-card-row);padding:4px 0 0}
+.xstep .step{padding-left:10px}
+.xstep .step .what{white-space:normal;overflow:visible}
+.mk{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:20px;padding:0 5px;border-radius:5px;background:var(--sd-highlight);color:var(--sd-highlight-ink);font-family:var(--sd-font-mono);font-size:11.5px;font-weight:600;line-height:1;white-space:nowrap}
+.mk[data-hot="true"]{background:var(--sd-accent);color:var(--sd-primary-ink)}
+.stamp{display:inline-flex;align-items:center;gap:4px;height:20px;padding:0 6px;border:1.5px solid currentColor;border-radius:4px;font-family:var(--sd-font-mono);font-size:11px;font-weight:600;letter-spacing:.03em;line-height:1;white-space:nowrap}
+.stamp[data-t="deny"]{color:var(--sd-st-failed)}
+.stamp[data-t="allow"]{color:var(--sd-st-triaged)}
+.stamp[data-t="wait"]{color:var(--sd-st-blocked)}
+.stamp[data-t="list"]{color:var(--sd-ink-3);border-style:dashed}
+.stamp[data-t="you"]{color:var(--sd-accent)}
+.stamp[data-t="done"]{color:var(--sd-st-done)}
+.you{margin:12px 12px 4px 20px;padding:12px 14px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface)}
+.you .who{display:flex;gap:8px;align-items:center;margin-bottom:4px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.you .say{font-size:15px;line-height:1.5}
+.sysline{display:flex;align-items:center;gap:8px;margin:8px 18px 0 62px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.io{margin:2px 10px 10px;padding:0 10px 12px}
+.io .lab{margin:10px 0 4px;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sd-ink-3)}
+.io .cmd{padding:8px 10px;border:1px solid var(--sd-rule);border-radius:6px;background:var(--sd-sheet);font-family:var(--sd-font-mono);font-size:13px;line-height:1.5;white-space:pre-wrap;word-break:break-all}
+.io .said{font-size:14px;line-height:1.45;color:var(--sd-ink-2)}
+.otbl{border:1px solid var(--sd-rule);border-radius:6px;background:var(--sd-sheet);overflow:hidden}
+.otbl .scroll{max-height:296px}
+.otbl table{width:100%;border-collapse:collapse;font-family:var(--sd-font-mono);font-size:12.5px;line-height:1.5}
+.otbl td{padding:3px 8px;border-top:1px solid var(--sd-rule-faint);vertical-align:top;white-space:nowrap}
+.otbl tr:first-child td{border-top:0}
+.otbl td.f{color:var(--sd-ink-2);white-space:nowrap}.otbl td.t{max-width:230px;overflow:hidden;text-overflow:ellipsis}
+.otbl tr[data-hit="true"] td{background:var(--sd-accent-soft)}
+.io .foot{display:flex;align-items:center;gap:10px;margin-top:8px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.io .foot .btn{margin-left:auto;font-family:var(--sd-font-ui)}
+.pre{padding:8px 10px;border:1px solid var(--sd-rule);border-radius:6px;background:var(--sd-sheet);font-family:var(--sd-font-mono);font-size:12.5px;line-height:1.5;white-space:pre;overflow-x:auto}
+.pre .bad{color:var(--sd-st-failed)}.pre .good{color:var(--sd-st-done)}
+/* ---------- the document ---------- */
+.doc{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--sd-sheet)}
+.doc-scroll{flex:1}
+.note{max-width:734px;padding:26px 40px 40px 44px}
+.meta[data-cols="3"]{grid-template-columns:repeat(3,minmax(0,1fr))}
+.meta .sp2{grid-column:span 2}
+.meta{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px 18px;padding-bottom:14px;border-bottom:1px dashed var(--sd-rule-strong)}
+.meta .k{font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sd-ink-3)}
+.meta .v{margin-top:2px;font-size:14px;color:var(--sd-ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta .v.mono{font-size:13px}
+.meta .v .badge{font-size:12.5px;padding:1px 9px}
+.note h1{margin:20px 0 6px;font-family:var(--sd-font-display);font-size:30px;font-weight:400;line-height:1.2;letter-spacing:0}
+.note .sub{display:flex;flex-wrap:wrap;gap:6px 10px;font-size:14px;color:var(--sd-ink-3)}
+.note .sub .mono{color:var(--sd-ink-2);font-size:13px}
+.sec{display:flex;align-items:center;gap:12px;margin:26px 0 10px;font-size:12.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--sd-ink-2)}
+.sec::after{content:"";flex:1;border-top:1px dashed var(--sd-rule-strong)}
+.sec .tag{font-family:var(--sd-font-mono);font-weight:500;letter-spacing:0;text-transform:none;color:var(--sd-ink-3);font-size:12.5px}
+.p{margin:0 0 10px;font-size:16px;line-height:1.65}
+.p code,.ref,.li code{font-family:var(--sd-font-mono);font-size:.88em;padding:0 5px;border-radius:4px;background:rgba(23,24,28,.06);white-space:nowrap}
+.ref .mk{margin-left:4px;height:16px;min-width:18px;font-size:10.5px;vertical-align:1px}
+.verdict{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 12px}
+.complaint{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--sd-rule);border-radius:12px;overflow:hidden}
+.complaint>div{padding:14px 16px}
+.complaint .ar{direction:rtl;text-align:right;border-left:1px solid var(--sd-rule);font-size:16px;line-height:1.9}
+.complaint .en{font-size:15px;line-height:1.55}
+.complaint .when{display:block;direction:ltr;margin-bottom:6px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.complaint .ar .when{text-align:right}
+.complaint p{margin:0 0 10px}.complaint p:last-child{margin:0}
+.tone{margin-top:8px;font-size:14px;color:var(--sd-ink-2)}
+.evc{display:grid;grid-template-columns:30px minmax(0,1fr);gap:4px 12px;margin:0 0 8px;padding:12px 14px;border-radius:10px;background:var(--sd-card-row)}
+.evc[data-hot="true"]{outline:1.5px solid var(--sd-accent);outline-offset:-1.5px}
+.evc .mk{align-self:start;margin-top:3px}
+.evc .where{font-family:var(--sd-font-mono);font-size:13px}
+.evc .find{font-size:15px;line-height:1.55}
+.evc .from{display:flex;align-items:center;gap:8px;min-width:0;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.evc .from .q{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--sd-ink-2)}
+.evc .from .go{margin-left:auto;white-space:nowrap;color:var(--sd-accent)}
+.src{padding:1px 6px;border-radius:4px;background:var(--sd-sunk);font-size:11.5px;white-space:nowrap}
+.qs{margin:0;padding-left:20px;font-size:15px;line-height:1.55}
+.qs li{margin-bottom:6px}
+.letter{margin-top:6px;padding:20px 24px;border:1px solid var(--sd-rule-strong);border-radius:12px;background:var(--sd-surface)}
+.letter .lh{display:flex;align-items:center;gap:10px;margin-bottom:12px;font-size:13px;color:var(--sd-ink-3)}
+.letter .lh .mono{color:var(--sd-ink-2)}
+.letter .body{direction:rtl;text-align:right;font-size:17px;line-height:2}
+.letter .acts{display:flex;gap:8px;margin-top:14px}
+/* the change (fix run) */
+.filehead{display:flex;align-items:center;gap:10px;min-height:40px;padding:0 14px;border:1px solid var(--sd-rule);border-bottom:0;border-radius:10px 10px 0 0;background:var(--sd-card-row);font-family:var(--sd-font-mono);font-size:13.5px}
+.filehead .add{color:var(--sd-st-done)}.filehead .del{color:var(--sd-st-failed)}
+.filehead .mk{margin-left:auto}
+.diff{margin-bottom:14px;border:1px solid var(--sd-rule);border-radius:0 0 10px 10px;overflow:hidden;font-family:var(--sd-font-mono);font-size:13px;line-height:1.65}
+.hunk{display:flex;align-items:center;gap:8px;padding:6px 12px;border-top:1px solid var(--sd-rule);border-bottom:1px solid var(--sd-rule);background:var(--sd-sunk);color:var(--sd-ink-3);font-size:12.5px}
+.hunk:first-child{border-top:0}
+.hunk .h{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hunk .btn{font-family:var(--sd-font-ui)}
+.dl{display:grid;grid-template-columns:3rem 3rem 1fr;white-space:pre}
+.dl .n{padding:0 8px;text-align:right;font-size:12px;color:var(--sd-ink-3)}
+.dl .c{padding-right:12px;overflow:hidden;text-overflow:ellipsis}
+.dl[data-t="add"]{background:rgba(23,113,58,.10)}.dl[data-t="del"]{background:rgba(176,36,24,.10)}
+.dl[data-t="add"] .c{color:var(--sd-st-done)}.dl[data-t="del"] .c{color:var(--sd-st-failed)}
+.diff[data-dropped="true"] .dl{opacity:.5}
+.checks{display:grid;grid-template-columns:auto minmax(0,1fr);gap:6px 14px;align-items:baseline;font-family:var(--sd-font-mono);font-size:13.5px}
+.checks .ok{color:var(--sd-st-done);font-weight:600}.checks .fail{color:var(--sd-st-failed);font-weight:600}
+.checks .r{font-size:13px;color:var(--sd-ink-2)}
+.decide{display:flex;align-items:center;gap:10px;margin-top:18px}
+.decide .hint{margin-left:auto;font-size:13.5px;color:var(--sd-ink-3)}
+/* ---------- the strip under the document: Steer when finished, Reply when blocked ---------- */
+.strip{padding:12px 40px 16px 44px;border-top:1px solid var(--sd-rule);background:var(--sd-sheet)}
+.strip .sh{display:flex;align-items:center;gap:10px;margin-bottom:8px;font-size:13.5px;color:var(--sd-ink-3)}
+.strip[data-mode="reply"] .sh .plab{color:var(--sd-st-blocked)}
+.q{display:grid;grid-template-columns:auto minmax(0,1fr);gap:12px;margin-bottom:10px;padding:12px 14px;border:1px solid rgba(161,92,7,.35);border-radius:12px;background:rgba(161,92,7,.08)}
+.q .ic{display:flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:10px;background:var(--sd-sheet);color:var(--sd-st-blocked)}
+.q .ic svg{width:18px;height:18px}
+.q .qt{font-size:16px;line-height:1.5}
+.q .qm{margin-top:4px;font-family:var(--sd-font-mono);font-size:13px;color:var(--sd-ink-2)}
+.q .qm b{font-weight:600;color:var(--sd-ink)}
+.box{border:1px solid var(--sd-rule-strong);border-radius:14px;background:var(--sd-surface)}
+.box .text{min-height:26px;padding:12px 18px 6px;font-size:16px;line-height:1.5;color:var(--sd-ink-3)}
+.box .text[data-filled="true"]{color:var(--sd-ink)}
+.box .bar{display:flex;align-items:center;gap:8px;padding:6px 12px 12px 14px}
+.box .bar .primary{margin-left:auto}
+.chip{display:inline-flex;align-items:center;gap:8px;min-height:32px;padding:0 12px;border:1px solid var(--sd-rule);border-radius:999px;font-size:13.5px;color:var(--sd-ink-2);background:transparent;white-space:nowrap}
+.chip .mono{color:var(--sd-ink-3)}
+.chip .pv{margin-left:-4px}
+.seg.tight span{min-height:28px;padding:3px 12px;font-size:13.5px;line-height:22px}
+/* ---------- drawers over the path ---------- */
+.drawer{position:absolute;left:0;top:0;bottom:0;z-index:3;display:flex;flex-direction:column;width:432px;background:var(--sd-sheet);border-right:1px solid var(--sd-rule-strong)}
+.dh{display:flex;align-items:center;gap:10px;min-height:52px;padding:0 10px 0 20px;border-bottom:1px solid var(--sd-rule)}
+.dh .n{font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.dh .x{display:flex;align-items:center;justify-content:center;width:32px;height:32px;margin-left:auto;border-radius:8px;color:var(--sd-ink-2)}
+.dh .x svg{width:16px;height:16px}
+.dbody{flex:1;padding:6px 16px 20px 20px}
+.dbody .sec{margin:20px 0 10px}
+.kv{display:grid;grid-template-columns:92px minmax(0,1fr);gap:5px 12px;font-size:14px}
+.kv .k{color:var(--sd-ink-3)}
+.kv .v{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv .v.wrap{white-space:normal;line-height:1.45}
+.kv .v.ar{direction:rtl;text-align:left}
+.msg{margin-bottom:8px;padding:10px 12px;border-radius:10px;background:var(--sd-card-row)}
+.msg[data-role="agent"]{background:transparent;border:1px solid var(--sd-rule)}
+.msg .mh{display:flex;gap:8px;align-items:baseline;margin-bottom:4px;font-family:var(--sd-font-mono);font-size:12px;color:var(--sd-ink-3)}
+.msg .mh b{font-family:var(--sd-font-ui);font-size:13.5px;font-weight:500;color:var(--sd-ink)}
+.msg .mh .role{margin-left:auto}
+.msg .mt{direction:rtl;text-align:right;font-size:15.5px;line-height:1.85}
+.empty{padding:12px 14px;border:1px dashed var(--sd-rule-strong);border-radius:10px;font-size:14px;color:var(--sd-ink-3)}
+.plist{display:flex;flex-wrap:wrap;gap:6px}
+.ttbl table{width:100%;border-collapse:collapse;table-layout:fixed}
+.ttbl th:first-child,.ttbl td:first-child{width:26px}
+.ttbl th:last-child,.ttbl td:last-child{width:92px}
+.ttbl .out{display:block;font-size:12px}
+.ttbl th{padding:6px 8px;border-bottom:1px solid var(--sd-rule);text-align:left;font-size:11.5px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sd-ink-3);white-space:nowrap}
+.ttbl td{padding:6px 8px;border-bottom:1px solid var(--sd-rule-faint);vertical-align:baseline;font-family:var(--sd-font-mono);font-size:12.5px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.ttbl .call{display:flex;align-items:center;gap:6px;font-family:var(--sd-font-ui);font-size:13.5px;font-weight:500}
+.ttbl .inp{display:block;overflow:hidden;text-overflow:ellipsis;font-size:12px;color:var(--sd-ink-3)}
+.ttbl td{overflow:hidden}
+.ttbl td.r,.ttbl th.r{text-align:right}
+.ttbl td.dim{color:var(--sd-ink-3)}
+.ttbl tr[data-on="true"] td{background:var(--sd-card-row)}
+.tsum{display:flex;flex-wrap:wrap;gap:6px 16px;margin:12px 0 4px;font-family:var(--sd-font-mono);font-size:12.5px;color:var(--sd-ink-3)}
+.tsum b{font-weight:500;color:var(--sd-ink-2)}
+  </style>
+</head><body>
+<div class="app">
+<div class="sidebar">
+  <div class="brand">Sirdar <span class="fact">acme-support</span></div>
+  <nav class="nav">
+    <div class="navrow" data-current="true"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path><path d="M8 9h8M8 13h5"></path></svg><span>Sessions</span></div>
+    <div class="navrow" data-cur="board"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M9 3v18M15 3v18"></path></svg><span>Board</span><span class="navcount">3</span></div>
+    <div class="navrow" data-cur="register"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"></rect><path d="M3 9h18M3 15h18"></path></svg><span>Register</span></div>
+    <div class="navrow" data-cur="eval"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M10 2v7.5a2 2 0 0 1-.3 1L4 20a1 1 0 0 0 .9 1.5h14.2A1 1 0 0 0 20 20l-5.7-9.5a2 2 0 0 1-.3-1V2"></path><path d="M8.5 2h7M7 16h10"></path></svg><span>Eval</span></div>
+    <div class="navrow" data-cur="library"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 2.5 0 0 1 0-5H20"></path><path d="M10 2v8l3-3 3 3V2"></path></svg><span>Library</span></div>
+    <div class="navrow" data-cur="settings"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3"></path><path d="M14 2v4M8 10v4M16 18v4"></path></svg><span>Settings</span></div>
+  </nav>
+  <div class="recent">
+    <div class="recent-label">Recent sessions</div>
+    <div class="recentrow" data-current="true"><span class="dot" data-blocked="true"></span><span class="key">SBX-1</span><span class="kind">fix</span></div>
+    <div class="recentrow"><span class="dot" data-live="true"></span><span class="key">SBX-4</span><span class="kind">triage</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-3</span><span class="kind">rca</span></div>
+    <div class="recentrow"><span class="dot"></span><span class="key">SBX-2</span><span class="kind">triage</span></div>
+  </div>
+  <div class="foot">
+    <div class="switcher"><span>Plan usage</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m7 15 5 5 5-5M7 9l5-5 5 5"></path></svg></div>
+    <div class="quotas">
+      <div class="quota" data-level="warn"><span class="p">claude 7d</span><span class="bar"><span class="fill" style="width:88%"></span></span><span class="pct">88%</span></div>
+      <div class="quota"><span class="p">claude 5h</span><span class="bar"><span class="fill" style="width:51%"></span></span><span class="pct">51%</span></div>
+      <div class="quota"><span class="p">codex</span><span class="bar"><span class="fill" style="width:9%"></span></span><span class="pct">9%</span></div>
+    </div>
+    <div class="btn" data-sb="new">New session</div>
+  </div>
+</div>
+<div class="sheet">
+  <div class="topbar">
+    <span class="key">SBX-1</span><span class="kind">triage</span><span class="badge" data-s="completed">completed · note saved</span>
+    <span class="title">Product 00219 stock shows 1 more than the movement report</span>
+    <div class="stats"><span class="stat"><span class="pvrow"><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span><span class="pn">claude</span><span class="pm">opus</span></span></span><span class="stat"><b>03:15</b></span><span class="stat"><b>17</b> turns</span><span class="stat"><b>$1.02</b></span></div>
+    <span class="btn ghost">Open note <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span>
+  </div>
+  <div class="win">
+    <aside class="path">
+      <div class="path-head"><span class="plab">Path</span><span class="n">15 calls</span>
+        <div class="drawers"><span class="dbtn"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h5"/></svg>Bundle<span class="n">4</span></span><span class="dbtn"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m4 17 6-6-6-6M12 19h8"/></svg>Tools<span class="n">15</span></span></div></div>
+      <div class="path-scroll scroll">
+<div class="tg"><span>turn 1</span><span class="line"></span><span>00:03</span></div>
+<div class="ann">List repository root files</div>
+<div class="step"><span class="at">00:03</span><span class="what"><span class="verb">Ran</span> <span class="obj">ls -la …/app</span><span class="res"> · 10 entries</span></span><span class="side"></span></div>
+<div class="sysline"><span>claude 7-day window at 90%</span><span>· 00:04</span></div>
+<div class="tg"><span>turn 2</span><span class="line"></span><span>00:04</span></div>
+<div class="ann">List ticket bundle directory</div>
+<div class="step"><span class="at">00:04</span><span class="what"><span class="verb">Ran</span> <span class="obj">ls -la …/bundle</span><span class="res"> · 3 entries</span></span><span class="side"></span></div>
+<div class="tg"><span>turns 3–8</span><span class="line"></span><span>00:06</span></div>
+<div class="step"><span class="at">00:06</span><span class="what"><span class="verb">Read</span> <span class="obj">ledger.go</span><span class="res"> · 65 lines</span></span><span class="side"><span class="mk">E1</span><span class="mk">E4</span></span></div>
+<div class="step"><span class="at">00:07</span><span class="what"><span class="verb">Read</span> <span class="obj">movement.go</span><span class="res"> · 63 lines</span></span><span class="side"><span class="mk">E2</span></span></div>
+<div class="step"><span class="at">00:07</span><span class="what"><span class="verb">Read</span> <span class="obj">reconcile.go</span><span class="res"> · 24 lines</span></span><span class="side"><span class="mk">E3</span></span></div>
+<div class="step"><span class="at">00:08</span><span class="what"><span class="verb">Read</span> <span class="obj">ledger_test.go</span><span class="res"> · 94 lines</span></span><span class="side"><span class="mk">E7</span></span></div>
+<div class="step"><span class="at">00:09</span><span class="what"><span class="verb">Read</span> <span class="obj">product.go</span><span class="res"> · 24 lines</span></span><span class="side"></span></div>
+<div class="step"><span class="at">00:10</span><span class="what"><span class="verb">Read</span> <span class="obj">bundle/ticket.json</span><span class="res"> · 64 lines</span></span><span class="side"><span class="mk">E9</span></span></div>
+<div class="tg"><span>turn 9</span><span class="line"></span><span>00:19</span></div>
+<div class="ann">Show commit history with changed files</div>
+<div class="step" data-v="deny"><span class="at">00:19</span><span class="what"><span class="verb">Ran</span> <span class="obj">git -C …/app log --stat</span></span><span class="side"><span class="stamp" data-t="deny">denied</span></span><div class="reason">Sirdar policy: passes git &quot;-C&quot; before the subcommand, which moves where git reads its configuration or runs code from for everything that follows; no allow-list pattern approves it</div></div>
+<div class="tg"><span>turn 10</span><span class="line"></span><span>00:20</span></div>
+<div class="ann">Check weekday of the first customer message date</div>
+<div class="step" data-v="deny"><span class="at">00:20</span><span class="what"><span class="verb">Ran</span> <span class="obj">date -j -f %Y-%m-%d 2026-09-12 +%A</span></span><span class="side"><span class="stamp" data-t="deny">denied</span></span><div class="reason">Sirdar policy: not in the allow-list; every segment of a pipeline or compound command has to match</div></div>
+<div class="tg"><span>turn 11</span><span class="line"></span><span>00:22</span></div>
+<div class="ann">Show commit history with changed files</div>
+<div class="step"><span class="at">00:22</span><span class="what"><span class="verb">Ran</span> <span class="obj">git log --stat --format=…</span><span class="res"> · 1 commit · 6 files</span></span><span class="side"><span class="mk">E8</span></span></div>
+<div class="tg"><span>turn 12</span><span class="line"></span><span>00:23</span></div>
+<div class="ann">Search Go code for return and restock usages</div>
+<div class="step"><span class="at">00:23</span><span class="what"><span class="verb">Ran</span> <span class="obj">rg -n "Return|restock"</span><span class="res"> · 10 matches</span></span><span class="side"><span class="mk">E5</span></span></div>
+<div class="tg"><span>turn 13</span><span class="line"></span><span>01:41</span></div>
+<div class="step" data-v="note"><span class="at">01:41</span><span class="what"><span class="verb">Wrote</span> <span class="obj">the note</span><span class="res"> · v1 · 12.6 kB</span></span><span class="side"></span></div>
+<div class="you"><div class="who"><span class="stamp" data-t="you">you</span><span>02:02</span><span>· resumed the session</span></div><div class="say">Re-check whether the partial-return path is also affected, and say so in one sentence.</div></div>
+<div class="sysline"><span>claude 7-day window at 91%</span><span>· 02:06</span></div>
+<div class="tg"><span>resumed · turn 1</span><span class="line"></span><span>02:06</span></div>
+<div class="ann">Search Go code for partial-return handling</div>
+<div class="step"><span class="at">02:06</span><span class="what"><span class="verb">Ran</span> <span class="obj">rg -n -i "partial|Quantity"</span><span class="res"> · 17 matches</span></span><span class="side"><span class="mk">E6</span></span></div>
+<div class="tg"><span>resumed · turn 2</span><span class="line"></span><span>03:13</span></div>
+<div class="step" data-v="note"><span class="at">03:13</span><span class="what"><span class="verb">Rewrote</span> <span class="obj">the note</span><span class="res"> · final · 13.3 kB → document</span></span><span class="side"></span></div>
+<div class="sysline"><span>Saved to notes/SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md</span><span>· 03:15</span></div>
+      </div>
+    </aside>
+
+    <main class="doc">
+      <div class="doc-scroll scroll">
+<article class="note">
+<div class="meta" data-cols="3"><div><div class="k">Customer</div><div class="v">متجر الفهد للأدوات المنزلية</div></div><div><div class="k">Helpdesk</div><div class="v mono">88341 · email · أحمد الفهد</div></div><div><div class="k">Tracker</div><div class="v mono">SBX-1 · normal · open</div></div><div><div class="k">Service</div><div class="v mono">sandbox/ledger</div></div><div><div class="k">Classification</div><div class="v"><span class="badge" data-s="completed">code</span> confidence high</div></div><div><div class="k">Status</div><div class="v">triaged · 2026-09-15</div></div><div><div class="k">Reported</div><div class="v mono">2026-09-12 09:14 +03:00</div></div><div class="sp2"><div class="k">Run</div><div class="v mono">20260915T121105Z-076d · claude · 17 turns · $1.02</div></div></div>
+<h1>Recording a customer return adds its quantity to stock twice, so on-hand stock drifts above the movement report</h1>
+<div class="sub"><span>Triage note · written by the agent at 03:13 after your steer</span><span>·</span><span class="mono">notes/SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md</span><span>·</span><span>Ticket: Product 00219 stock shows 1 more than the movement report</span></div>
+<div class="sec"><span>Root cause</span><span class="tag">code · confidence high</span></div>
+<p class="p">In <code>Ledger.ApplyMovement</code>, the Return case adds the return quantity to the running stock twice: once directly at <span class="ref">ledger.go:33<span class="mk">E1</span></span> and again through <code>l.restock</code> at <span class="ref">ledger.go:34<span class="mk">E1</span></span>, which does its own <code>+=</code> at <span class="ref">ledger.go:45<span class="mk">E1</span></span>. The movement report (SumMovements/Movement.Delta) counts a return once, as +Quantity <span class="mk">E2</span> <span class="mk">E3</span>. After any return, on-hand stock therefore sits above the report by that return's quantity. A 1-unit return gives the +1 gap the customer sees <span class="mk">E9</span>. The code comment at <span class="ref">ledger.go:28-32</span> describes this double application: restock used to be the only increment, driven by a separate "item scanned back in" event, and a direct increment was added without removing it. Purchase, Sale and Adjustment each apply their quantity once, with the same sign Delta uses, so Return is the only case that disagrees <span class="mk">E4</span>. I have not confirmed this against the customer's actual data because no log, APM or database source is configured for this run.</p>
+<p class="p"><b>Partial returns are affected too.</b> This module has no separate partial-return path, so returning fewer units than were sold is an ordinary Return movement with a smaller Quantity and is double-counted by that amount <span class="mk">E6</span>.</p>
+<div class="sec" id="complaint"><span>Customer complaint</span><span class="tag">translated · original</span></div>
+<div class="complaint">
+  <div class="en"><span class="when">2026-09-12 09:14 +03:00 · أحمد الفهد</span><p>"Peace be upon you and God's mercy. I have a problem with the inventory: for product number 00219, the quantity showing in the system is one more than what's in the report. I processed a returned product last week and the difference appeared after that. Could you look into it for me? May God give you strength."</p>
+  <span class="when">2026-09-12 10:41 +03:00 · answering L1</span><p>"The return was last Tuesday. I don't remember the order number exactly, but it's the same product code, 00219. Before I returned it, the quantity in the system matched the report, and after I recorded the return the quantity in the system became one more than the report."</p></div>
+  <div class="ar"><span class="when">2026-09-12T09:14:00+03:00</span><p>السلام عليكم ورحمة الله<br>عندي مشكلة بالمخزون، المنتج رقم 00219 الكمية الظاهرة عندي بالنظام أكبر بواحد عن اللي بالتقرير. رجعت منتج مرتجع الأسبوع اللي فات وبعدها صار الفرق. ممكن تشوفولي الموضوع؟ الله يعطيكم العافية</p>
+  <span class="when">2026-09-12T10:41:00+03:00</span><p>المرتجع كان يوم الثلاثاء الماضي، رقم الطلب مو متذكره بالضبط بس المنتج نفس الكود 00219. قبل ما أرجعه كانت الكمية بالنظام مطابقة للتقرير، وبعد ما سجلت المرتجع صارت الكمية بالنظام زايدة وحدة عن التقرير.</p></div>
+</div>
+<div class="tone">Tone: polite and calm, not escalated. The customer is asking for a check, not demanding anything urgently.</div>
+<div class="sec"><span>Evidence</span><span class="tag">9 items · each traces to a step on the left</span></div>
+<div class="evc"><span class="mk">E1</span><div class="where">ledger.go:27-34 · 44-46</div>
+  <span></span><div class="find"><code>case Return:</code> runs <code>l.Stock[m.ProductID] += m.Quantity</code> (line 33) and then <code>l.restock(m.ProductID, m.Quantity)</code> (line 34). restock does <code>l.Stock[productID] += qty</code> at 44-46. Net effect on Stock is +2×Quantity.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">Read ledger.go</span><span class="go">step 00:06 →</span></div></div>
+<div class="evc"><span class="mk">E2</span><div class="where">movement.go:51-62</div>
+  <span></span><div class="find">Delta returns +Quantity for Purchase and Return, −Quantity for Sale and +Quantity for Adjustment. A return adds +1×Quantity to the report.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">Read movement.go</span><span class="go">step 00:07 →</span></div></div>
+<div class="evc"><span class="mk">E3</span><div class="where">reconcile.go:7-13 · 19-23</div>
+  <span></span><div class="find">SumMovements sums m.Delta() over the history. Reconcile compares CurrentStock (the Stock map) with that sum. The report arithmetic is correct. The drift is in the Stock fold.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">Read reconcile.go</span><span class="go">step 00:07 →</span></div></div>
+<div class="evc"><span class="mk">E4</span><div class="where">ledger.go:24 · 26 · 33-34 · 36</div>
+  <span></span><div class="find">Purchase +Quantity (24) = Delta. Sale −Quantity (26) = Delta. Adjustment +Quantity (36) = Delta. Return +2×Quantity (33-34, 45) ≠ Delta (+Quantity). Return is the only mismatching case.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">Read ledger.go lines 22-37 against movement.go:51-62, case by case</span><span class="go">step 00:06 →</span></div></div>
+<div class="evc"><span class="mk">E5</span><div class="where">ledger.go:44 · 34</div>
+  <span></span><div class="find">restock is defined at ledger.go:44 and its only caller is ledger.go:34, so no other code path in this module reaches it. No test in ledger_test.go refers to Return.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">rg -n &quot;Return|restock&quot; --type go</span><span class="go">step 00:23 →</span></div></div>
+<div class="evc"><span class="mk">E6</span><div class="where">movement.go:23-29 · ledger.go:33-34</div>
+  <span></span><div class="find">No match for "partial" in the module. The Movement struct has no field linking a return to its original sale or sold quantity, so a partial return is just a Return movement with a smaller Quantity. It goes through the same <code>case Return</code> double increment at ledger.go:33-34.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">rg -n -i &quot;partial|Quantity&quot; --type go</span><span class="go">step 02:06 →</span></div></div>
+<div class="evc"><span class="mk">E7</span><div class="where">ledger_test.go:12 · 22 · 31 · 40 · 53 · 65-86</div>
+  <span></span><div class="find">Tests cover Purchase (line 12), Sale (22), Adjustment (31), validation (40), MovementsFor (53), and Reconcile/SumMovements with Purchase, Sale and Adjustment only (65-86). No test applies a Return movement, so the existing tests don't catch the double count.</div>
+  <span></span><div class="from"><span class="src">code</span><span class="q">Read ledger_test.go</span><span class="go">step 00:08 →</span></div></div>
+<div class="evc"><span class="mk">E8</span><div class="where">a9b28cd · 2026-09-15 14:06:20 +0530</div>
+  <span></span><div class="find">The repository has one commit: "Add sandbox/ledger: inventory stock tracked from movement history". Git history can't show when the direct increment was added next to restock.</div>
+  <span></span><div class="from"><span class="src">git</span><span class="q">git log --stat --format=&#x27;%h %ad %s&#x27; --date=iso</span><span class="go">step 00:22 →</span></div></div>
+<div class="evc"><span class="mk">E9</span><div class="where">Thread[0] · Thread[2]</div>
+  <span></span><div class="find">The customer says stock matched the report before the return and was 1 higher right after recording it («قبل ما أرجعه كانت الكمية بالنظام مطابقة للتقرير، وبعد ما سجلت المرتجع صارت الكمية بالنظام زايدة وحدة عن التقرير»). This matches a defect that only fires on Return movements, provided the return quantity was 1, which the customer has not stated.</div>
+  <span></span><div class="from"><span class="src">helpdesk thread</span><span class="q">ticket.json Thread[0], Thread[2]</span><span class="go">step 00:10 →</span></div></div>
+<div class="sec"><span>Proposed fix</span><span class="tag">ledger.go · ledger_test.go</span></div>
+<p class="p">Apply a return's quantity once in ApplyMovement. The smallest change is to delete one of the two increments in the Return case: either remove line 33 and keep restock, or remove the restock call at line 34 along with the now-unused restock helper at <code>ledger.go:43-46</code>, since rg shows no other caller. A sturdier option is to fold every movement type with <code>l.Stock[m.ProductID] += m.Delta()</code>, so the running total and the report share one sign rule and can't diverge again. Add a regression test in ledger_test.go: Purchase 10, Return 1, then assert CurrentStock == 11 and Reconcile ok. After deploying, any stock already inflated by past returns needs to be recomputed from the movement history.</p>
+<p class="p"><b>Remediation SQL:</b> none provided. No database source is configured for this run and this module keeps Stock as an in-memory running map (<code>ledger.go:5-8</code>), so I don't know the persistence layer or table names and won't guess at SQL.</p>
+<p class="p"><b>Risks:</b> if the separate "item scanned back in" event mentioned at ledger.go:28-31 still exists in some other service or integration and adds stock on its own, returns may be counted more than twice in production, and removing only one increment here wouldn't fully close the gap. A stock rebuild changes the on-hand figures shop owners see, and a store that has already hand-corrected the gap with an Adjustment would end up under-counted unless that adjustment is found and reversed.</p>
+<div class="sec"><span>Blast radius</span></div>
+<p class="p">From the code: every product, for every customer using this ledger, that has at least one Return movement has on-hand stock overstated by the total quantity of all its returns. The error builds up, so a product with several returns drifts further, and a return of N units adds an N-unit gap, not 1. Purchases, sales and adjustments are not affected. The movement report is correct, so the shop owner's report shows the true figure while the system's on-hand number is too high. That can lead to selling stock that doesn't exist. I could not count affected customers, products or return movements because this run has no database, log or APM source.</p>
+<div class="sec"><span>Repro steps</span><span class="tag">traced through the code, not run</span></div>
+<ol class="qs">
+<li><code>l := NewLedger()</code></li>
+<li><code>l.ApplyMovement(Movement{ProductID: "00219", Type: Purchase, Quantity: 10})</code> → CurrentStock("00219") = 10 and Reconcile reports ok (10 == 10), matching the customer's account that stock and report agreed before the return.</li>
+<li><code>l.ApplyMovement(Movement{ProductID: "00219", Type: Return, Quantity: 1})</code></li>
+<li>Expected: CurrentStock("00219") = 11, the same as SumMovements(MovementsFor("00219")) = 10 + 1 = 11.</li>
+<li>Actual: ledger.go:33 adds 1 and ledger.go:34 → restock (ledger.go:45) adds another 1, so CurrentStock = 12. Movement.Delta for Return is +1, so the report stays 11 and Reconcile returns (12, 11, false). That is a gap of exactly 1, the return quantity.</li>
+</ol>
+<div class="sec"><span>Conversation</span><span class="tag">5 entries · +03:00</span></div>
+<ul class="qs">
+<li><b>2026-09-08 (Tuesday, inferred, not confirmed)</b> customer: records a return movement for product 00219. "Last Tuesday" relative to the 2026-09-12 message; 2026-09-12 is a Saturday, so the likeliest date is 2026-09-08. Order number and quantity not given.</li>
+<li><b>2026-09-12 09:14</b> customer: أحمد الفهد reports product 00219's on-hand quantity is 1 higher than the report, since a return last week.</li>
+<li><b>2026-09-12 10:05</b> agent (Layla, L1): asks the customer to confirm the exact date of the return. Reasonable; no incorrect guidance.</li>
+<li><b>2026-09-12 10:41</b> customer: the return was last Tuesday; doesn't remember the order number. Stock matched before, 1 higher after.</li>
+<li><b>2026-09-13 11:02</b> agent (Layla, L1): confirms receipt and says the team will review product 00219's movement history. No cause, fix or date was promised.</li>
+</ul>
+<div class="sec"><span>Open questions</span><span class="tag">8</span></div>
+<ul class="qs">
+<li>I couldn't check the customer's actual movement history for product 00219: no database, log or APM source is configured for this run. The +1 gap matches the code defect only if the return was for 1 unit.</li>
+<li>Which date is the return? "Last Tuesday" (يوم الثلاثاء الماضي), written on Saturday 2026-09-12, most likely means 2026-09-08 but could mean 2026-09-01.</li>
+<li>The ticket doesn't say which timezone the customer's "last Tuesday" refers to. The thread timestamps are +03:00. The timezone movement timestamps are stored in is unknown.</li>
+<li>Is the separate "item scanned back in" event that used to drive restock (ledger.go:28-31) still wired up outside this module?</li>
+<li>Has the customer, or anyone else, already posted a manual Adjustment to correct the gap?</li>
+<li>How many other customers and products have Return movements and therefore inflated stock?</li>
+<li>ticket.service isn't given in the bundle. I filled it with the module name "sandbox/ledger" from the environment playbook.</li>
+<li>Side note, unrelated to this ticket: movement.go:47-50 says negative adjustments carry their sign through Quantity, but Validate (movement.go:36-37) rejects Quantity ≤ 0, so a negative adjustment can't be recorded through ApplyMovement.</li>
+</ul>
+<div class="sec"><span>Reply to the customer</span><span class="tag">draft · ar · not sent</span></div>
+<div class="letter">
+  <div class="lh"><span>To</span><span class="mono">أحمد الفهد · desk 88341</span><span>·</span><span>A draft, not a sent reply. It promises nothing the ticket does not already record.</span></div>
+  <div class="body">وعليكم السلام أستاذ أحمد،<br>شكراً على التفاصيل اللي أرسلتها بخصوص المنتج 00219 والفرق بين الكمية بالنظام والتقرير بعد تسجيل المرتجع. الموضوع حالياً عند الفريق الفني وقاعدين نراجعه، وراح نتواصل معك أول ما يكون عندنا تحديث.<br>الله يعطيك العافية.</div>
+  <div class="acts"><span class="btn small"><svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg> Copy</span><span class="btn ghost small">Open desk 88341 <svg class="" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17 17 7M8 7h9v9"/></svg></span></div>
+</div>
+</article>
+      </div>
+      <div class="strip" data-mode="steer">
+        <div class="sh"><span class="plab">Steer</span><span>The agent resumes this session with the document and its evidence in context.</span></div>
+        <div class="box">
+          <div class="text">Steer the agent — it resumes from where it stopped. Your last steer at 02:02 added the partial-return check.</div>
+          <div class="bar"><span class="chip">Resume <span class="mono">1e0a60c8</span></span><span class="chip">Playbooks <span class="mono">6</span></span><span class="chip"><span class="pv sm" data-p="claude" title="Claude"><svg viewBox="0 0 24 24" fill="currentColor" fill-rule="evenodd" aria-hidden="true"><path d="m4.7144 15.9555 4.7174-2.6471.079-.2307-.079-.1275h-.2307l-.7893-.0486-2.6956-.0729-2.3375-.0971-2.2646-.1214-.5707-.1215-.5343-.7042.0546-.3522.4797-.3218.686.0608 1.5179.1032 2.2767.1578 1.6514.0972 2.4468.255h.3886l.0546-.1579-.1336-.0971-.1032-.0972L6.973 9.8356l-2.55-1.6879-1.3356-.9714-.7225-.4918-.3643-.4614-.1578-1.0078.6557-.7225.8803.0607.2246.0607.8925.686 1.9064 1.4754 2.4893 1.8336.3643.3035.1457-.1032.0182-.0728-.164-.2733-1.3539-2.4467-1.445-2.4893-.6435-1.032-.17-.6194c-.0607-.255-.1032-.4674-.1032-.7285L6.287.1335 6.6997 0l.9957.1336.419.3642.6192 1.4147 1.0018 2.2282 1.5543 3.0296.4553.8985.2429.8318.091.255h.1579v-.1457l.1275-1.706.2368-2.0947.2307-2.6957.0789-.7589.3764-.9107.7468-.4918.5828.2793.4797.686-.0668.4433-.2853 1.8517-.5586 2.9021-.3643 1.9429h.2125l.2429-.2429.9835-1.3053 1.6514-2.0643.7286-.8196.85-.9046.5464-.4311h1.0321l.759 1.1293-.34 1.1657-1.0625 1.3478-.8804 1.1414-1.2628 1.7-.7893 1.36.0729.1093.1882-.0183 2.8535-.607 1.5421-.2794 1.8396-.3157.8318.3886.091.3946-.3278.8075-1.967.4857-2.3072.4614-3.4364.8136-.0425.0304.0486.0607 1.5482.1457.6618.0364h1.621l3.0175.2247.7892.522.4736.6376-.079.4857-1.2142.6193-1.6393-.3886-3.825-.9107-1.3113-.3279h-.1822v.1093l1.0929 1.0686 2.0035 1.8092 2.5075 2.3314.1275.5768-.3218.4554-.34-.0486-2.2039-1.6575-.85-.7468-1.9246-1.621h-.1275v.17l.4432.6496 2.3436 3.5214.1214 1.0807-.17.3521-.6071.2125-.6679-.1214-1.3721-1.9246L14.38 17.959l-1.1414-1.9428-.1397.079-.674 7.2552-.3156.3703-.7286.2793-.6071-.4614-.3218-.7468.3218-1.4753.3886-1.9246.3157-1.53.2853-1.9004.17-.6314-.0121-.0425-.1397.0182-1.4328 1.9672-2.1796 2.9446-1.7243 1.8456-.4128.164-.7164-.3704.0667-.6618.4008-.5889 2.386-3.0357 1.4389-1.882.929-1.0868-.0062-.1579h-.0546l-6.3385 4.1164-1.1293.1457-.4857-.4554.0608-.7467.2307-.2429 1.9064-1.3114Z"/></svg></span><span class="mono">claude · opus</span></span><span class="primary">Steer <span class="kbd">⌘↵</span></span></div>
+        </div>
+      </div>
+    </main>
+  </div>
+</div>
+<script>
+document.querySelectorAll('.scroll[data-scroll]').forEach(function(c){var sel=c.getAttribute('data-scroll');if(sel==='end'){c.scrollTop=c.scrollHeight;return}var t=c.querySelector(sel);if(t){var r=t.getBoundingClientRect(),cr=c.getBoundingClientRect();c.scrollTop+=r.top-cr.top-14}});
+</script>
+</div>
+</body></html>
