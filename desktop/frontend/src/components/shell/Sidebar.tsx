@@ -1,4 +1,4 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import type { Quota, RunSummary, SourcesSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
@@ -79,7 +79,7 @@ function rowOf(screen: Screen): NavName {
  * behind it, because settings is a place you leave and the board staying
  * painted is what says you are coming back.
  */
-export default function Sidebar(props: {
+function Sidebar(props: {
   workspaces: Workspace[]
   currentWorkspaceId: string
   quota: Quota[]
@@ -136,6 +136,8 @@ export default function Sidebar(props: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [auto, folded])
+
+  const openRun = useCallback((runId: string) => onNavigate({ name: 'run', runId }), [onNavigate])
 
   const current = rowOf(screen)
   const rows = library ? ROWS : ROWS.filter((row) => row.name !== 'library')
@@ -198,7 +200,7 @@ export default function Sidebar(props: {
         workspaceName={workspaceName}
         currentRunId={currentRunId}
         rail={rail}
-        onOpen={(runId) => onNavigate({ name: 'run', runId })}
+        onOpen={openRun}
       />
 
       <SidebarFooterCard
@@ -242,3 +244,11 @@ export default function Sidebar(props: {
     </div>
   )
 }
+
+/**
+ * Memoised: the shell re-renders for every slice a screen reads, and the
+ * sidebar's inputs — the runs, the quota, the screen — change far less often
+ * than that. The callbacks it is given are stable, so a render of the shell
+ * that changed none of them costs the sidebar nothing.
+ */
+export default memo(Sidebar)

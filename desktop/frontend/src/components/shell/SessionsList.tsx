@@ -1,7 +1,9 @@
-import { useId, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
+import { memo, useCallback, useId, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import type { RunSummary, SourcesSummary } from '../../api/types'
 import { useAnchor } from '../../lib/anchor'
 import { parseTime } from '../../lib/format'
+import { probeRender } from '../../lib/renderProbe'
+import Age from '../Age'
 import {
   sessionsShow,
   shownNumber,
@@ -13,7 +15,7 @@ import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
 import SourceMark from '../../ui/source-mark'
 import { stateWord } from '../../ui/status-badge'
-import { useHoverCard } from './useHoverCard'
+import { useHoverCard, type HoverCard } from './useHoverCard'
 import './sessions.css'
 
 export { CARD_CLOSE_MS, CARD_OPEN_MS } from './useHoverCard'
@@ -72,6 +74,9 @@ export function splitRuns(runs: RunSummary[]): { live: RunSummary[]; settled: Ru
 const MINUTE = 60_000
 const HOUR = 60 * MINUTE
 const DAY = 24 * HOUR
+
+/** How often a row's age is re-read. Its finest word is the minute. */
+export const AGE_PERIOD_MS = 15_000
 
 /**
  * The age at a row's end, as short as it goes: `now`, `4m`, `18h`, `5d`.
@@ -148,6 +153,89 @@ export interface SessionsListProps {
 }
 
 /**
+ * One row: the ticket number under its source's mark and the age at the end.
+ *
+ * Memoised on its own inputs, so a render of the list — the card opening on
+ * another row, a store emit that changed a different run — draws nothing
+ * here. `hover` is one object per change of the open card, which is what
+ * makes the memo hold; a row opens and closes the card through it.
+ */
+const SessionRow = memo(function SessionRow({
+  run,
+  show,
+  sources,
+  current,
+  isOpen,
+  cardId,
+  now,
+  hover,
+  pinned,
+  onOpen,
+  register,
+}: {
+  run: RunSummary
+  show: SessionsShow
+  sources?: SourcesSummary
+  current: boolean
+  isOpen: boolean
+  cardId: string
+  /** A still clock for tests; the row ticks on its own without one. */
+  now?: number
+  hover: HoverCard
+  pinned: boolean
+  onOpen: (runId: string) => void
+  register: (runId: string, el: HTMLButtonElement | null) => void
+}): JSX.Element {
+  probeRender('SessionRow')
+  const shown = shownNumber(run, show, sources)
+  const running = run.status === 'preparing' || run.status === 'running'
+  const blocked = run.status === 'blocked'
+  const word = running || blocked ? `, ${stateWord(run.status)}` : ''
+  const name = `${shown.text}, ${run.kind}${word}`
+  const stamp = run.updatedAt || run.startedAt
+  const id = run.runId
+  return (
+    <button
+      ref={(el) => register(id, el)}
+      type="button"
+      className="sd-session-row"
+      aria-current={current ? 'page' : undefined}
+      aria-label={name}
+      aria-describedby={isOpen ? cardId : undefined}
+      onClick={() => onOpen(id)}
+      onPointerEnter={pinned ? undefined : () => hover.enterRow(id)}
+      onPointerLeave={pinned ? undefined : () => hover.leaveRow(id)}
+      onPointerDown={pinned ? undefined : hover.pressRow}
+      onFocus={pinned ? undefined : () => hover.focusRow(id)}
+      onBlur={pinned ? undefined : () => hover.blurRow(id)}
+    >
+      <span className="sd-session-row__tile">
+        <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
+        {running || blocked ? (
+          <span
+            className="sd-session-row__dot"
+            data-live={running ? 'true' : undefined}
+            data-blocked={blocked ? 'true' : undefined}
+            aria-hidden="true"
+          />
+        ) : null}
+      </span>
+      <span className="sd-session-row__number" dir="ltr">
+        {shown.text}
+      </span>
+      <Age
+        className="sd-session-row__age"
+        dir="ltr"
+        at={stamp}
+        now={now}
+        period={AGE_PERIOD_MS}
+        format={(at) => shortAge(stamp, at)}
+      />
+    </button>
+  )
+})
+
+/**
  * The workspace's sessions, one line each, newest first: the runs still
  * running or waiting on a person, then a "Settled" divider that folds the
  * finished ones away, remembered in this browser.
@@ -167,7 +255,7 @@ export interface SessionsListProps {
  * with no wait, and it stays 150ms after the pointer leaves so the pointer
  * can reach it.
  */
-export default function SessionsList({
+function SessionsList({
   runs,
   currentRunId,
   onOpen,
@@ -205,6 +293,11 @@ export default function SessionsList({
   })
   useAnchor(card !== null && !pinned, anchor.current, cardEl, { beside: true, track: card })
 
+  const register = useCallback((runId: string, el: HTMLButtonElement | null) => {
+    if (el) rows.current.set(runId, el)
+    else rows.current.delete(runId)
+  }, [])
+
   function toggleSettled(): void {
     const next = !collapsed
     setCollapsed(next)
@@ -212,57 +305,27 @@ export default function SessionsList({
   }
 
   if (runs.length === 0) return null
-  const at = now ?? Date.now()
   const { live, settled } = splitRuns(runs)
   const settledShown = showAll ? settled : settled.slice(0, SHOWN_LIMIT)
   const hidden = settled.length - settledShown.length
   const open = card ? runs.find((run) => run.runId === card) : undefined
 
   function renderRow(run: RunSummary): JSX.Element {
-    const shown = shownNumber(run, show, sources)
-    const running = run.status === 'preparing' || run.status === 'running'
-    const blocked = run.status === 'blocked'
-    const word = running || blocked ? `, ${stateWord(run.status)}` : ''
-    const name = `${shown.text}, ${run.kind}${word}`
-    const age = shortAge(run.updatedAt || run.startedAt, at)
-    const isOpen = card === run.runId
     return (
-      <button
+      <SessionRow
         key={run.runId}
-        ref={(el) => {
-          if (el) rows.current.set(run.runId, el)
-          else rows.current.delete(run.runId)
-        }}
-        type="button"
-        className="sd-session-row"
-        aria-current={run.runId === currentRunId ? 'page' : undefined}
-        aria-label={name}
-        aria-describedby={isOpen ? cardId : undefined}
-        onClick={() => onOpen(run.runId)}
-        onPointerEnter={pinned ? undefined : () => hover.enterRow(run.runId)}
-        onPointerLeave={pinned ? undefined : () => hover.leaveRow(run.runId)}
-        onPointerDown={pinned ? undefined : hover.pressRow}
-        onFocus={pinned ? undefined : () => hover.focusRow(run.runId)}
-        onBlur={pinned ? undefined : () => hover.blurRow(run.runId)}
-      >
-        <span className="sd-session-row__tile">
-          <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
-          {running || blocked ? (
-            <span
-              className="sd-session-row__dot"
-              data-live={running ? 'true' : undefined}
-              data-blocked={blocked ? 'true' : undefined}
-              aria-hidden="true"
-            />
-          ) : null}
-        </span>
-        <span className="sd-session-row__number" dir="ltr">
-          {shown.text}
-        </span>
-        <span className="sd-session-row__age" dir="ltr">
-          {age}
-        </span>
-      </button>
+        run={run}
+        show={show}
+        sources={sources}
+        current={run.runId === currentRunId}
+        isOpen={card === run.runId}
+        cardId={cardId}
+        now={now}
+        hover={hover}
+        pinned={pinned}
+        onOpen={onOpen}
+        register={register}
+      />
     )
   }
 
@@ -360,3 +423,5 @@ export default function SessionsList({
     </>
   )
 }
+
+export default memo(SessionsList)

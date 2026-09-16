@@ -3,6 +3,7 @@ import type { RunDiff, Ticket, Transport } from '../api/types'
 import { elapsed } from '../lib/events'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { changeTotals, checksFromEvents, fixReport, noteLabel, OUTCOME_WORDS, pushCommand, rekeyAfterDrop } from '../lib/review'
+import Age from '../components/Age'
 import { LIVE, useRunFeed } from '../components/run/useRunFeed'
 import { BELOW_COMPACT, useMediaQuery } from '../lib/useMediaQuery'
 import Button from '../ui/button'
@@ -75,7 +76,6 @@ export default function Review({
   const [dropError, setDropError] = useState('')
   const [copied, setCopied] = useState(false)
   const [copyError, setCopyError] = useState('')
-  const [now, setNow] = useState(() => Date.now())
   const copyTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   // Under 1024 the rail runs across the top of the change and the file list
   // is a select rather than a column of rows.
@@ -124,12 +124,6 @@ export default function Review({
     if (finished === 0) return
     return loadDiff()
   }, [finished, loadDiff])
-
-  useEffect(() => {
-    if (!live) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [live])
 
   useEffect(
     () => () => {
@@ -256,7 +250,9 @@ export default function Review({
             <span className="review-provider__model">{detail.model}</span>
           </span>
           <span className="review-stat">
-            <b>{elapsed(detail, now)}</b>
+            <b>
+              <Age active={live} format={(now) => elapsed(detail, now)} />
+            </b>
           </span>
           <span className="review-stat">
             <b>{detail.usage?.turns ?? 0}</b> {detail.usage?.turns === 1 ? 'turn' : 'turns'}

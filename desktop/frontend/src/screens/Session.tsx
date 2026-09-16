@@ -21,6 +21,7 @@ import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/re
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import { readStoredFlag, writeStoredFlag } from '../lib/storedFlag'
 import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
+import Age from '../components/Age'
 import BundleView from '../components/run/BundleView'
 import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../components/run/Composer'
@@ -149,7 +150,6 @@ export default function Session(props: {
   /** How many sends went through, so the composer knows to clear. */
   const [sent, setSent] = useState(0)
   const [changed, setChanged] = useState<number | null>(null)
-  const [now, setNow] = useState(() => Date.now())
   const jobId = useRunJob(runId)
   const tabsId = useId()
   const paneId = `${tabsId}-pane`
@@ -173,12 +173,6 @@ export default function Session(props: {
   useEffect(() => {
     setSteerRefusal('')
   }, [status])
-
-  useEffect(() => {
-    if (!live) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [live])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -494,7 +488,9 @@ export default function Session(props: {
             </span>
           )}
           <span className="session-stat">
-            <b>{elapsed(detail, now)}</b>
+            <b>
+              <Age active={live} format={(now) => elapsed(detail, now)} />
+            </b>
           </span>
           {compact ? null : (
             <span className="session-stat">

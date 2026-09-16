@@ -1,6 +1,7 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useSyncExternalStore } from 'react'
 import type { RunSummary, SourcesSummary } from '../../api/types'
 import { elapsedSince } from '../../lib/format'
+import { useNow } from '../../lib/useNow'
 import {
   sessionsShow,
   shownNumber,
@@ -41,18 +42,14 @@ export default function RunCard(props: {
   const { run, title, sources, done = false, onOpen } = props
   const live = LIVE.has(run.status)
   const blocked = run.status === 'blocked'
-  const [now, setNow] = useState(() => Date.now())
+  // The shared second: one interval for every live card, none for a card
+  // whose run has settled.
+  const now = useNow(1000, live || blocked)
   const show = useSyncExternalStore(
     subscribeSessionsShow,
     sessionsShow,
     () => 'tracker' as SessionsShow,
   )
-
-  useEffect(() => {
-    if (!live && !blocked) return
-    const id = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(id)
-  }, [live, blocked])
 
   const clock = live
     ? elapsedSince(run.startedAt, now)
