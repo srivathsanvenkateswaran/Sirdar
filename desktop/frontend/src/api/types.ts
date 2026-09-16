@@ -25,8 +25,14 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * query. Both let a card draw an avatar and the board filter by owner without
  * a second call to the tracker. An `assignee` of '' draws nothing, and `mine`
  * is false for every run of a workspace whose credentials name nobody.
+ *
+ * `helpdeskKey` is the helpdesk's own number for the same ticket (`25312`),
+ * read off the bundle: the helpdesk record's id, else the reference the
+ * tracker carried. Absent or '' when the run has neither, in which case every
+ * screen shows `key` under the tracker's mark whatever the reader's
+ * "Sessions show" preference says.
  */
-export interface RunSummary { runId: string; key: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
+export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
 export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`
@@ -186,8 +192,22 @@ export interface RetroReport {
  */
 export interface ConfigSummary {
   general: GeneralSummary; budget: BudgetSummary; permissions: PermissionsSummary;
-  notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary
+  notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary;
+  sources: SourcesSummary
 }
+/**
+ * The tracker and the helpdesk the workspace reads, so a ticket number can be
+ * drawn under its own product's mark. A role the workspace has not configured
+ * is absent.
+ */
+export interface SourcesSummary { tracker?: SourceSummary; helpdesk?: SourceSummary }
+/**
+ * One source as the UI names it. `adapter` is the config value (`jira`,
+ * `zohodesk`, `exec`); `name` is the product's name, or for an exec adapter
+ * the first label of its ticket URL's host, title-cased ("Janus"); `host` is
+ * where its tickets live, '' when no run has recorded a URL yet.
+ */
+export interface SourceSummary { adapter: string; name: string; host: string }
 /** The top of config.yaml: the workspace, where it is, and the provider a new session gets. `configPath` is the file the Settings rows point at. */
 export interface GeneralSummary {
   workspace: string; root: string; configPath: string; provider: string; model: string; billing: string;
