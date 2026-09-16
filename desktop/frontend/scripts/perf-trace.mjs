@@ -297,7 +297,23 @@ async function openRun(cdp) {
     const t0 = performance.now()
     location.hash = ${JSON.stringify(RUN_HASH)}
     const first = await __sd.whenPainted(() => document.querySelector('[data-testid="event-stream"] section[aria-label^="turn"]'))
-    const settled = await __sd.whenSettled(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event-row, [data-testid="event-stream"] section').length)
+    const settled = await __sd.whenSettled(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length)
+    return { first: first - t0, settled: settled.at - t0, rows: settled.value }
+  })()`)
+}
+
+/** "Show everything" on the open run: the raw stream lines join the transcript. */
+async function showEverything(cdp) {
+  return cdp.eval(`(async () => {
+    const toggle = document.querySelector('.stream-head [role="switch"]')
+    if (!toggle) throw new Error('no Show everything toggle')
+    const before = document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length
+    const t0 = performance.now()
+    toggle.click()
+    const first = await __sd.whenPainted(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length !== before)
+    const settled = await __sd.whenSettled(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length)
+    toggle.click()
+    await __sd.whenPainted(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length === before)
     return { first: first - t0, settled: settled.at - t0, rows: settled.value }
   })()`)
 }
@@ -475,6 +491,23 @@ async function main() {
     }
     out.run = { first: median(firsts), settled: median(settleds), rows, longest: median(traces.map((t) => t.longest)), taskTotal: median(traces.map((t) => t.taskTotal)), layouts: median(traces.map((t) => t.layouts)) }
     console.log(`run    first turn painted ${ms(out.run.first)}, transcript settled ${ms(out.run.settled)} (${rows} rows); main-thread ${ms(out.run.taskTotal)}, longest task ${ms(out.run.longest)}, layouts ${out.run.layouts}`)
+  }
+
+  // (c2) the same run with every raw line shown.
+  {
+    const firsts = []
+    const settleds = []
+    const traces = []
+    let rows = 0
+    for (let i = 0; i < ROUNDS; i++) {
+      const r = await traced(cdp, () => showEverything(cdp))
+      firsts.push(r.result.first)
+      settleds.push(r.result.settled)
+      rows = r.result.rows
+      traces.push(r.trace)
+    }
+    out.everything = { first: median(firsts), settled: median(settleds), rows, longest: median(traces.map((t) => t.longest)), taskTotal: median(traces.map((t) => t.taskTotal)) }
+    console.log(`all    Show everything → first change painted ${ms(out.everything.first)}, settled ${ms(out.everything.settled)} (${rows} rows); main-thread ${ms(out.everything.taskTotal)}, longest task ${ms(out.everything.longest)}`)
   }
 
   // (d) hover on a sessions row (from the board).
