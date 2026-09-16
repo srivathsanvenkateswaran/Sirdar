@@ -775,14 +775,19 @@
   background: var(--sd-sheet);
 }
 
+/* The inset is the scroller's, so the note inside centres in the same
+   region the strip's card does and the two share a width and a left edge. */
 .sn-doc__scroll {
   flex: 1 1 auto;
+  padding-inline: 44px 40px;
 }
 
+/* The column: 960 at most, centred when the region is wider than that, the
+   region itself below it — the same rule as the Conversation's flow. */
 .sn-note {
-  max-inline-size: 734px;
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
   padding-block: 26px 40px;
-  padding-inline: 44px 40px;
 }
 
 .sn-note__pending {
@@ -1285,6 +1290,12 @@
   background: var(--sd-sheet);
 }
 
+/* The heading line, the question and the card: the document's column. */
+.sn-strip > * {
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
+}
+
 .sn-strip__sh {
   display: flex;
   align-items: center;
@@ -1617,7 +1628,7 @@
     grid-template-columns: 400px minmax(0, 1fr);
   }
 
-  .sn-note {
+  .sn-doc__scroll {
     padding-inline: 32px;
   }
 

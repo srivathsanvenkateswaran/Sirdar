@@ -1,4 +1,4 @@
-import { useId, type KeyboardEvent, type ReactNode, type Ref } from 'react'
+import { useCallback, useId, useLayoutEffect, useRef, type KeyboardEvent, type ReactNode, type Ref } from 'react'
 import Button from '../../ui/button'
 import './composer.css'
 
@@ -28,7 +28,11 @@ export interface ComposerCardProps {
   placeholder: string
   disabled?: boolean
   autoFocus?: boolean
-  rows?: number
+  /**
+   * How many lines the box grows to before it scrolls inside. It starts one
+   * line high and follows the text; the default is eight.
+   */
+  maxRows?: number
   textareaRef?: Ref<HTMLTextAreaElement>
   /** One line under the text, in the failed hue: what the last send came back with. */
   error?: string
@@ -68,6 +72,37 @@ function ArrowUpIcon(): JSX.Element {
   )
 }
 
+/** The most lines the box grows to before the text scrolls inside it. */
+export const MAX_ROWS = 8
+
+/**
+ * Sizes the box to its text: one line at rest, one more per line typed,
+ * `maxRows` at most. Hard newlines are counted from the value; soft wraps
+ * are measured off `scrollHeight` against the computed line height, which
+ * is zero where nothing lays out (jsdom), so the count of newlines is the
+ * floor. An empty box is measured with its placeholder standing in as the
+ * text, so a prompt that wraps in a narrow column is read whole rather than
+ * cut off — and so every engine sizes it the same, whether or not it counts
+ * the placeholder in `scrollHeight` (Chromium does, WebKit does not). The
+ * height comes from `rows`, so the card's chrome never moves on focus —
+ * nothing here reads the focus state.
+ */
+export function fitRows(el: HTMLTextAreaElement, maxRows: number): number {
+  const hard = el.value.split('\n').length
+  // Measure from one row, or a box that shrank never reports it.
+  el.rows = 1
+  const standIn = el.value === '' && el.placeholder !== ''
+  if (standIn) el.value = el.placeholder
+  const style = getComputedStyle(el)
+  const line = parseFloat(style.lineHeight)
+  const pad = (parseFloat(style.paddingBlockStart) || 0) + (parseFloat(style.paddingBlockEnd) || 0)
+  const soft = Number.isFinite(line) && line > 0 && el.scrollHeight > 0 ? Math.round((el.scrollHeight - pad) / line) : 0
+  if (standIn) el.value = ''
+  const rows = Math.min(maxRows, Math.max(1, hard, soft))
+  el.rows = rows
+  return rows
+}
+
 /**
  * The composer: one card holding a textarea and a bottom bar.
  *
@@ -79,7 +114,9 @@ function ArrowUpIcon(): JSX.Element {
  *
  * Cmd or Ctrl with Enter sends; Enter alone is a new line, because what is
  * typed here is often more than one — an answer to an agent's question, an
- * instruction, a description of what to look at.
+ * instruction, a description of what to look at. The box is one line high
+ * at rest, with the chip bar directly under it, and grows a line at a time
+ * to `maxRows` before the text scrolls inside it.
  */
 export default function ComposerCard({
   label,
@@ -88,7 +125,7 @@ export default function ComposerCard({
   placeholder,
   disabled = false,
   autoFocus = false,
-  rows = 3,
+  maxRows = MAX_ROWS,
   textareaRef,
   error,
   chips,
@@ -100,6 +137,20 @@ export default function ComposerCard({
 }: ComposerCardProps): JSX.Element {
   const id = useId()
   const strip = variant === 'strip'
+  const box = useRef<HTMLTextAreaElement | null>(null)
+  const setBox = useCallback(
+    (el: HTMLTextAreaElement | null) => {
+      box.current = el
+      if (typeof textareaRef === 'function') textareaRef(el)
+      else if (textareaRef) (textareaRef as { current: HTMLTextAreaElement | null }).current = el
+    },
+    [textareaRef],
+  )
+
+  // Before paint, so a box that grew or shrank never shows its old height.
+  useLayoutEffect(() => {
+    if (box.current) fitRows(box.current, maxRows)
+  }, [value, maxRows, disabled, placeholder])
 
   function submit(): void {
     if (send.disabled || send.busy) return
@@ -128,13 +179,13 @@ export default function ComposerCard({
       </label>
       <textarea
         id={id}
-        ref={textareaRef}
+        ref={setBox}
         className="composer-text"
         value={value}
         placeholder={placeholder}
         disabled={disabled}
         autoFocus={autoFocus}
-        rows={strip ? 1 : rows}
+        rows={1}
         dir="auto"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}

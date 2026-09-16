@@ -222,6 +222,58 @@ describe('the session', () => {
   })
 })
 
+/*
+ * The document column, in all three session layouts: `min(100%, 960px)`,
+ * centred in its region when there is spare width and the region itself
+ * below that, with the composer on the same width and left edge — never a
+ * fixed 640 with the rest of the sheet empty. The inset moves to the
+ * region so the centring has one box to happen in.
+ */
+describe('the session column', () => {
+  const COLUMN = ['inline-size: min(100%, 960px)', 'margin-inline: auto'] as const
+
+  it('is the Conversation flow and its composer, inside the stream inset', () => {
+    const css = sheet('screens/session/session-conversation.css')
+    for (const d of COLUMN) {
+      expect(rule(css, '.sc-flow')).toContain(d)
+      expect(rule(css, '.sc-composer > .session-composer')).toContain(d)
+    }
+    expect(rule(css, '.sc-flow')).not.toContain('640px')
+    expect(rule(css, '.sc-stream')).toContain('padding-inline: var(--sd-space-6) 40px')
+    expect(rule(css, '.sc-composer')).toContain('padding-inline: var(--sd-space-6) 40px')
+    expect(rule(css, '.sc-composer')).not.toContain('margin-inline')
+    expect(rule(atMost(css, BANDS.compact), '.sc-composer')).toContain('padding-inline: var(--sd-space-5)')
+    // The inspector keeps its clamp; only the flow beside it changed.
+    expect(rule(css, '.sc-body')).toContain('grid-template-columns: minmax(0, 1fr) clamp(360px, 34vw, 500px)')
+    expect(rule(css, ".sc-body[data-pane='collapsed']")).toContain('grid-template-columns: minmax(0, 1fr) 36px')
+  })
+
+  it('is the Document note and everything in its strip, inside the scroller inset', () => {
+    const css = sheet('components/session/session.css')
+    for (const d of COLUMN) {
+      expect(rule(css, '.sn-note')).toContain(d)
+      expect(rule(css, '.sn-strip > *')).toContain(d)
+    }
+    expect(rule(css, '.sn-note')).not.toContain('max-inline-size')
+    expect(rule(css, '.sn-doc__scroll')).toContain('padding-inline: 44px 40px')
+    expect(rule(css, '.sn-strip')).toContain('padding-inline: 44px 40px')
+    expect(rule(atMost(css, BANDS.standard), '.sn-doc__scroll')).toContain('padding-inline: 32px')
+    expect(rule(atMost(css, BANDS.standard), '.sn-strip')).toContain('padding-inline: 32px')
+  })
+
+  it('is the Workbench page column inside its scroller', () => {
+    const css = sheet('screens/session/session-workbench.css')
+    for (const d of COLUMN) expect(rule(css, '.wb-doccol')).toContain(d)
+    expect(rule(css, '.wb-docbody')).toContain('overflow: auto')
+  })
+
+  it('has no layout capping its column at the old 640', () => {
+    for (const path of ['screens/session/session-conversation.css', 'components/session/session.css', 'screens/session/session-workbench.css']) {
+      expect(sheet(path), path).not.toMatch(/max-inline-size:\s*640px/)
+    }
+  })
+})
+
 describe('the review', () => {
   const css = sheet('screens/review.css')
 

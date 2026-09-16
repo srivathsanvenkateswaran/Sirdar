@@ -399,6 +399,12 @@
 .wb-docbody[data-pad='tight'] {
   padding-block-start: 14px;
 }
+/* The page's column: 960 at most, centred when the area is wider, the area
+   itself below that — the same rule as the other two layouts' columns. */
+.wb-doccol {
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
+}
 .wb-doc-h {
   margin-block: 0 10px;
   font-size: 22px;

@@ -4,7 +4,11 @@
  * One card — 16px corner, a hairline, the sheet's fill — holding a textarea
  * and a bottom bar. The bar is T3 Code's shape drawn on Sirdar's tokens: the
  * chips at the inline start with a hairline between each, and one round
- * 36px send button at the inline end. Every value here is a token; nothing
+ * 36px send button at the inline end. The textarea is one line high at rest
+ * (the mock's 52px text block, A-session.css) and follows the text a row at
+ * a time: `ComposerCard` sets `rows` from the content, so nothing here
+ * declares a height for it, and the ring sits on the box's outline so the
+ * card never moves when focus arrives. Every value here is a token; nothing
  * declares a colour, and `src/styles.library.test.ts` checks it.
  */
 
@@ -35,8 +39,8 @@
 .composer-text {
   display: block;
   inline-size: 100%;
-  min-block-size: 96px;
-  padding-block: 18px var(--sd-space-2);
+  min-block-size: 52px;
+  padding-block: 16px 6px;
   padding-inline: 20px;
   border: 0;
   border-radius: var(--sd-radius-sheet) var(--sd-radius-sheet) 0 0;
@@ -46,6 +50,7 @@
   font-size: var(--sd-text-body);
   line-height: 1.5;
   resize: none;
+  overflow-y: auto;
 }
 
 .composer-text:focus-visible {
@@ -126,8 +131,8 @@
 
 /*
  * Under a document (the session's Document layout): a 14px corner on the
- * strong rule, one line of 16px text at 26px until typed into, and the bar
- * at 6/12/12/14 with a labelled primary at its end rather than the arrow.
+ * strong rule, one line of 16px text until typed into, and the bar at
+ * 6/12/12/14 with a labelled primary at its end rather than the arrow.
  */
 .composer[data-variant='strip'] {
   border-color: var(--sd-rule-strong);
@@ -136,12 +141,10 @@
 }
 
 .composer[data-variant='strip'] .composer-text {
-  min-block-size: 26px;
+  min-block-size: 0;
   padding-block: 12px 6px;
   padding-inline: 18px;
   border-radius: 14px 14px 0 0;
-  field-sizing: content;
-  max-block-size: 40vh;
 }
 
 .composer[data-variant='strip'] .composer-bar {
