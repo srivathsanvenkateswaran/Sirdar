@@ -29,14 +29,17 @@
 }
 
 /* The wordmark with the workspace as a badge beside it, and the fold
-   control at the end. */
+   control at the end. The mock's row had 10px gaps and 12px at each side;
+   the toggle costs 28, so the gaps go to 8 and the end padding to 0 (the
+   toggle's own box ends flush with the nav rows), which is what keeps an
+   eight-letter workspace name whole. */
 .sd-sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
   min-block-size: 36px;
   padding-block: 0 var(--sd-space-1);
-  padding-inline: var(--sd-space-3) var(--sd-space-1);
+  padding-inline: var(--sd-space-3) 0;
 }
 
 .sd-sidebar__brand > .sd-panel-toggle {
@@ -266,6 +269,14 @@
 
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__sessions {
   align-items: center;
+}
+
+/* The footer's one button, as the plus alone: 32 square inside the card's
+   8px padding in the 56px rail. Sidebar.tsx draws it icon-only. */
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__action > .sd-button {
+  inline-size: 32px;
+  min-height: 32px;
+  padding-inline: 0;
 }
 
 /*

@@ -142,10 +142,16 @@ describe('the fold', () => {
     expect(row.querySelector('.sd-session-row__tile')).not.toBeNull()
     fireEvent.click(row)
     expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r1' })
+    // New session is the plus alone, still named, still filled.
+    const plus = screen.getByRole('button', { name: 'New session' })
+    expect(plus).toHaveAttribute('data-icon-only', 'true')
+    expect(plus).toHaveAttribute('data-variant', 'primary')
+    expect(plus).toHaveAttribute('title', 'New session')
 
     fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }))
     expect(sidebar).not.toHaveAttribute('data-collapsed')
     expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('0')
+    expect(screen.getByRole('button', { name: 'New session' })).not.toHaveAttribute('data-icon-only')
   })
 
   it('answers ⌘B, and not a bare b, which is not a chord', () => {

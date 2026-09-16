@@ -99,3 +99,12 @@ export function SwitcherIcon(): JSX.Element {
     </Icon>
   )
 }
+
+/** lucide `plus` — New session, when the rail has no room for the words. */
+export function PlusIcon(): JSX.Element {
+  return (
+    <Icon width="16" height="16">
+      <path d="M5 12h14M12 5v14" />
+    </Icon>
+  )
+}

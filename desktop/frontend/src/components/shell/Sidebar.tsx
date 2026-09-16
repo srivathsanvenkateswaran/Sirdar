@@ -13,6 +13,7 @@ import {
   BoardIcon,
   EvalIcon,
   LibraryIcon,
+  PlusIcon,
   RegisterIcon,
   SessionsIcon,
   SettingsIcon,
@@ -223,9 +224,14 @@ export default function Sidebar(props: {
             </Button>
           ) : (
             // Demoted to the bordered style while a screen draws its own
-            // filled button, so the window never has two.
+            // filled button, so the window never has two. In the rail the
+            // words go and a plus stays, named the same.
             <Button
               variant={primary ? 'secondary' : 'primary'}
+              size={rail ? 'sm' : 'md'}
+              iconOnly={rail}
+              icon={rail ? <PlusIcon /> : undefined}
+              title={rail ? 'New session' : undefined}
               onClick={() => onNavigate({ name: 'new' })}
             >
               New session
