@@ -138,6 +138,11 @@ describe('the session model, on the triage run', () => {
     expect(model.composer).toEqual({ kind: 'steer' })
   })
 
+  it('names the model off the log when the record has none', () => {
+    expect(model.model).toBe('claude-opus-5')
+    expect(buildSessionModel(null, []).model).toBe('')
+  })
+
   it('reads a clock off the run\'s start', () => {
     expect(clock('2026-09-15T12:11:11Z', '2026-09-15T12:11:05Z')).toBe('00:06')
     expect(clock(undefined, '2026-09-15T12:11:05Z')).toBe('')

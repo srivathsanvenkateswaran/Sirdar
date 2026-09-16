@@ -103,7 +103,8 @@
 
 .sn-head__title {
   flex: 1 1 auto;
-  min-inline-size: 0;
+  /* Never squeezed to one letter: the figures give way before the title does. */
+  min-inline-size: 12ch;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

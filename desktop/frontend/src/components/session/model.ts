@@ -131,6 +131,12 @@ export interface SessionModel {
   counts: SessionCounts
   /** The steer the run recorded last, for the strip's "Your last steer at 02:02". */
   lastSteer?: { at: string; text: string }
+  /**
+   * The model the log names, for a run whose record has not reported one:
+   * a workspace configured no model, so state.json says '' while the
+   * provider's lines say which one answered.
+   */
+  model: string
 }
 
 const LIVE = new Set(['preparing', 'running'])
@@ -327,6 +333,18 @@ export function systemLine(event: RunEvent, provider: string): string {
   if (text) return text
   const subtype = str(raw?.subtype) || str(asRecord(raw?.event)?.type) || str(raw?.type)
   return subtype || event.kind
+}
+
+/** The model the provider's lines name: Claude's `message.model` or its init line's `model`; '' when none says. */
+export function modelOf(events: IndexedEvent[]): string {
+  for (const { event } of events) {
+    const raw = asRecord(event.payload?.raw)
+    const fromMessage = str(asRecord(raw?.message)?.model)
+    if (fromMessage) return fromMessage
+    if (raw?.type === 'system' && raw.subtype === 'init' && str(raw.model)) return str(raw.model)
+    if (str(event.payload?.model)) return str(event.payload?.model)
+  }
+  return ''
 }
 
 /** True for a system line worth a row without Show everything: the provider's rate-limit warnings and errors. */
@@ -624,5 +642,6 @@ export function buildSessionModel(
     composer,
     counts: { calls: steps.length, denied, outBytes, byTool: [...byTool.values()] },
     lastSteer,
+    model: modelOf(events),
   }
 }

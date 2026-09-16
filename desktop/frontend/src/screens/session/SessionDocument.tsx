@@ -45,6 +45,8 @@ function reveal(el: Element | null | undefined): void {
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
   const { detail, data, title, notesDir, sources, show, narrow, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
+  // The record's model, else the one the log names, so the header never says "model unknown" for a run that did say.
+  const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
   const [drawer, setDrawer] = useState<DrawerName>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
   const [hot, setHot] = useState<string | undefined>()
@@ -233,7 +235,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   return (
     <div className="sn" data-layout="document" data-testid="session-document">
       <RunHeader
-        detail={detail}
+        detail={named}
         title={title}
         sources={sources}
         show={show}
@@ -326,7 +328,7 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
           </div>
           <ComposerStrip
             state={composerState}
-            detail={detail}
+            detail={named}
             busy={sendBusy}
             error={composerError}
             onSend={(text, decision) => (model.composer.kind === 'reply' ? actions.answer(text, decision) : actions.steer(text))}
