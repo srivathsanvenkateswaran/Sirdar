@@ -3,8 +3,8 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Sirdar — a read-only harness for support tickets</title>
-<meta name="description" content="Sirdar gathers the evidence a support ticket needs, in the customer's own language, and writes a root-cause note for you to review. A desktop app for macOS and Windows and a command-line tool, open source, on the coding agent you already pay for.">
+<title>Sirdar — a support harness from ticket to fix to root cause</title>
+<meta name="description" content="Sirdar takes a support ticket from arrival to closed. It reads the ticket, the code and the customer's own words and writes the triage with a root cause and a proposed fix; when you say go it implements the fix on its own branch; after the merge it writes the RCA and the resolution. A desktop app for macOS, Windows and Linux and a command-line tool, open source, on the coding agent you already pay for.">
 <meta name="color-scheme" content="light">
 <link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -44,14 +44,24 @@
 
     <div class="wide hero-grid">
       <div class="hero-copy">
-        <h1>A ticket arrives. <em>Something reads it first.</em></h1>
-        <p class="deck">Sirdar gathers the evidence a support ticket needs, in the
-          customer's own language, and writes a root-cause note for you to review.
-          A desktop app for macOS and Windows, and a command-line tool, over the
-          coding agent you already pay for.</p>
+        <h1>A ticket arrives. <em>It leaves fixed.</em></h1>
+        <p class="deck">Sirdar reads the ticket, the code, the logs and the customer's own
+          words and writes the triage; when you say go it implements the fix on its own
+          branch; after the merge it writes the root cause and the resolution. A desktop
+          app for macOS, Windows and Linux, and a command-line tool, over the coding agent
+          you already pay for.</p>
 
         <div class="actions">
-          <a class="btn" href="#download">Download</a>
+          <!-- Static: "Download", to the releases page, which is right with JS off and
+               when the API cannot be reached. download.js names the visitor's OS in the
+               label and, once a release exists, points the button at that OS's zip. -->
+          <div class="dl-primary">
+            <a class="btn" id="dl-hero" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Download</a>
+            <p class="dl-alt" id="dl-hero-alt" hidden>Apple silicon.
+              <a href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_x64">Intel Mac</a>
+              <span aria-hidden="true">&middot;</span>
+              <a href="#download">All platforms</a></p>
+          </div>
           <div class="copyline">
             <code id="gocmd" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
             <button class="copybtn" type="button" data-copy="#gocmd" aria-label="Copy the install command"><span data-copy-label>Copy</span></button>
@@ -60,7 +70,7 @@
         </div>
 
         <p class="fineprint">Apache-2.0. It runs on your machine, on your logins, and it
-          never writes to the tracker. The note is a hypothesis, not a verdict.</p>
+          never posts to your tracker.</p>
       </div>
 
       <figure class="shot shot--hero">
@@ -75,7 +85,7 @@
   <!-- 2. How it works ---------------------------------------------------- -->
   <section class="band" aria-labelledby="how-h">
     <div class="wide">
-      <h2 id="how-h" class="h-band">Five commands. <em>You read the note between the third and the fourth.</em></h2>
+      <h2 id="how-h" class="h-band">Triage, fix, root cause. <em>The gate between them is you.</em></h2>
 
       <ol class="steps">
         <li class="step" id="step-init">
@@ -90,29 +100,30 @@
         </li>
         <li class="step" id="step-triage">
           <code class="step-cmd" dir="ltr">sirdar triage KEY</code>
-          <p class="step-what">Fetches the ticket host-side, runs one agent session in your workspace, writes a Triage Note.</p>
+          <p class="step-what">Fetches the ticket host-side, runs one agent session in your workspace, and writes the triage note: the evidence, a root-cause hypothesis and a proposed fix.</p>
           <p class="step-so">Reads only.</p>
         </li>
       </ol>
 
-      <p class="gate"><span>you read the note here</span></p>
+      <p class="gate"><span>you read the note here; running fix is the approval</span></p>
 
       <ol class="steps" start="4">
         <li class="step" id="step-fix">
           <code class="step-cmd" dir="ltr">sirdar fix KEY</code>
-          <p class="step-what">Implements that note's Proposed Fix on a branch in a linked worktree, commits, pushes, opens the pull request.</p>
-          <p class="step-so">Running it is the approval.</p>
+          <p class="step-what">Implements that note's proposed fix on a branch in a linked worktree and shows you the diff; commits, pushes, opens the pull request.</p>
+          <p class="step-so">Writes only in its worktree.</p>
         </li>
         <li class="step" id="step-rca">
           <code class="step-cmd" dir="ltr">sirdar rca KEY --pr URL</code>
-          <p class="step-what">Writes the RCA and the Resolution draft, and reviews whether the triage hypothesis held.</p>
+          <p class="step-what">After the merge, writes the RCA and the resolution draft, and says whether the triage hypothesis held.</p>
           <p class="step-so">Marks the note resolved.</p>
         </li>
       </ol>
 
       <p class="band-foot">The desktop app and <code dir="ltr">sirdar serve</code> start the
         same runs from a New session form, show them on a board, and stream each one as it
-        happens. Same binary, same workspace, same notes.</p>
+        happens; the composer answers a blocked run or steers a finished one. Same binary,
+        same workspace, same notes.</p>
     </div>
   </section>
 
@@ -137,9 +148,11 @@
   <!-- 4. Three ways to read a run ---------------------------------------- -->
   <section class="section" aria-labelledby="ways-h">
     <div class="wide">
-      <h2 id="ways-h" class="h-mid">Three ways to read a run.</h2>
+      <h2 id="ways-h" class="h-mid">Three ways to work a run.</h2>
       <p class="lede">The Session window has three layouts. Pick one in Settings or from the
-        switcher in the session header; the window remembers it.</p>
+        switcher in the session header; the window remembers it. In each, the composer at the
+        bottom answers a blocked run or steers a finished one, and on a fix the Changes pane
+        shows the diff hunk by hunk, with Keep or Drop on each, before anything is pushed.</p>
 
       <ul class="ways">
         <li class="way">
@@ -156,7 +169,7 @@
               alt="The Document layout: the note fills the window, with the path the agent took as a timeline down the left.">
           </figure>
           <h3>Document</h3>
-          <p>The note or the change as the window, the path the agent took beside it.</p>
+          <p>The note or the diff as the window, the path the agent took beside it.</p>
         </li>
         <li class="way">
           <figure class="shot shot--small">
@@ -240,59 +253,72 @@
     </div>
   </section>
 
-  <!-- 7. Read-only by construction --------------------------------------- -->
+  <!-- 7. Confined where it must be ----------------------------------------- -->
   <section class="section" aria-labelledby="ro-h">
     <div class="wide">
-      <h2 id="ro-h" class="h-mid">It cannot write to your tracker.</h2>
-      <p class="lede">Each line below names the mechanism, because a guarantee without a
-        mechanism is a promise. Every run also carries a turn budget, a wall-clock budget and
-        a USD budget, and one that goes silent for six minutes is cancelled rather than held to
-        the end of the clock.</p>
+      <h2 id="ro-h" class="h-mid">Confined where it must be.</h2>
+      <p class="lede">Reading only is how the triage session is held; its own worktree is how
+        the fix session is held. Each line below names the mechanism, because a guarantee
+        without a mechanism is a promise. Every run also carries a turn budget, a wall-clock
+        budget and a USD budget, and one that goes silent for six minutes is cancelled rather
+        than held to the end of the clock.</p>
 
       <dl class="ledger">
         <div class="ledger-row">
-          <dt>Never writes to the tracker or the helpdesk.</dt>
-          <dd>In any mode. No adapter has a write path. Sirdar reads tickets and writes notes
-            to disk, full stop.</dd>
-        </div>
-        <div class="ledger-row">
-          <dt>A triage session cannot edit files.</dt>
+          <dt>The triage session reads only.</dt>
           <dd>Each provider rests that on its own mechanism. Claude Code and Qwen Code run
             with their write tools off and every other call sent to Sirdar's policy to answer.
             Codex runs in its read-only sandbox with approvals on. The OpenAI-compatible loop is
             Sirdar's own, so it decides before each call. An ACP agent is put in its read-only
             session mode. Every segment of a compound shell command has to match a pattern from
-            <code dir="ltr">permissions.bash</code>; substitution and redirection are refused.</dd>
+            <code dir="ltr">permissions.bash</code>; substitution and redirection are refused.
+            Reads stay inside the workspace, the run directory and its bundle unless
+            <code dir="ltr">permissions.readAlso</code> widens them, and
+            <a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/config/"><code dir="ltr">permissions.fetch</code></a>
+            lists the hosts a session may reach and is empty by default, so an instruction hidden
+            in a ticket comment cannot pick a destination.</dd>
         </div>
         <div class="ledger-row">
-          <dt>Fetching is judged by destination, not by tool name.</dt>
-          <dd><a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/config/"><code dir="ltr">permissions.fetch</code></a>
-            lists the hosts a session may reach and it is empty by default, so a workspace that
-            has not said where a run may fetch from fetches nowhere. An instruction hidden in a
-            ticket comment cannot pick the destination.</dd>
+          <dt>The fix session writes only inside its own worktree.</dt>
+          <dd><code dir="ltr">fix</code> checks the branch out in a linked worktree under
+            <code dir="ltr">.sirdar/worktrees/&lt;run-id&gt;</code>; the session stands there and
+            its writes are confined to it. sha256 of everything under
+            <code dir="ltr">.sirdar/</code> and under the directory git runs this repository's
+            hooks from is taken before the session and again the moment it ends, and any
+            difference fails the run
+            <a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/fix/">before the first git command</a>.</dd>
         </div>
         <div class="ledger-row">
-          <dt>Fix is gated on a person.</dt>
-          <dd>It refuses to start unless the note's frontmatter status is
-            <code dir="ltr">triaged</code> or <code dir="ltr">fix-approved</code>. There is no
-            separate approval record: running the command is the approval. If the agent's fix
-            deviated from the note, the commit is made and nothing is pushed.</dd>
+          <dt>Nothing is pushed or opened as a pull request without you.</dt>
+          <dd><code dir="ltr">fix</code> refuses to start unless the note's frontmatter status is
+            <code dir="ltr">triaged</code> or <code dir="ltr">fix-approved</code>; there is no
+            separate approval record, because running the command is the approval. If the
+            agent's fix deviated from the note, the commit is made and nothing is pushed until
+            you have read the diff and said so. A steer never pushes and never widens
+            permissions.</dd>
         </div>
         <div class="ledger-row">
-          <dt>The snapshot check, after every fix session.</dt>
-          <dd>sha256 of everything under <code dir="ltr">.sirdar/</code> and under the directory
-            git runs this repository's hooks from, before the session and again the moment it
-            ends. Any difference fails the run
-            <a href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/fix/">before the first git command</a>,
-            so nothing is committed and nothing is pushed.</dd>
+          <dt>It never posts to the helpdesk or the tracker.</dt>
+          <dd>In any mode. No adapter has a write path. Sirdar reads tickets and writes notes
+            to disk; what it publishes is a branch and its pull request, in your repository.</dd>
         </div>
         <div class="ledger-row">
-          <dt>Your logins, your machine.</dt>
-          <dd>Credentials are written as <code dir="ltr">env:NAME</code>,
+          <dt>Credentials are references it never stores.</dt>
+          <dd>They are written as <code dir="ltr">env:NAME</code>,
             <code dir="ltr">keychain:SERVICE</code>, <code dir="ltr">file:PATH</code> or
             <code dir="ltr">cmd:COMMAND</code>, never as a literal; a secret written out fails
-            the first time the workspace loads. Sirdar spawns the provider binary you are
-            already signed in to. No Sirdar account, no server, no telemetry.</dd>
+            the first time the workspace loads.</dd>
+        </div>
+        <div class="ledger-row">
+          <dt>Each person uses their own agent login.</dt>
+          <dd>Sirdar spawns the provider binary you are already signed in to and never proxies
+            a credential. No Sirdar account, no server, no telemetry.</dd>
+        </div>
+        <div class="ledger-row">
+          <dt>Every note is a hypothesis for you to check.</dt>
+          <dd>The triage names its evidence and its confidence; the RCA says whether the triage
+            held. Neither is a verdict. The person who reads the note is the one who decides
+            what happens next.</dd>
         </div>
       </dl>
     </div>
@@ -302,44 +328,84 @@
   <section class="section" id="download" aria-labelledby="dl-h">
     <div class="wide">
       <h2 id="dl-h" class="h-mid">Download.</h2>
-      <p class="lede">Both come from the same GitHub release. Every release opens as a draft
-        and a person publishes it.</p>
+      <p class="lede">The desktop app and the CLI come from the same GitHub release. Every
+        release opens as a draft and a person publishes it.</p>
 
-      <div class="dl">
-        <div class="dl-col">
-          <h3>The desktop app</h3>
-          <p>macOS and Windows. <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>:
-            unzip it and run the app inside.</p>
-          <p>On Windows the app needs Microsoft's WebView2 runtime. Windows 11 and current
-            Windows 10 ship it; a machine without it opens a window and draws nothing, and the
-            <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Evergreen Bootstrapper</a>
-            puts it right.</p>
-          <p>The builds are unsigned. macOS asks you to right-click the app and choose Open the
-            first time; SmartScreen asks for More info, then Run anyway.</p>
-        </div>
-        <div class="dl-col">
-          <h3>The CLI</h3>
-          <p>macOS, Linux and Windows, amd64 and arm64.
-            <code dir="ltr">sirdar_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code>
-            (<code dir="ltr">.zip</code> on Windows), with <code dir="ltr">checksums.txt</code>
-            beside them and deb and rpm packages for Linux. Put <code dir="ltr">sirdar</code>
-            on your <code dir="ltr">PATH</code>.</p>
-          <p>Or from source, any commit, released or not:</p>
-          <div class="copyline">
-            <code id="gocmd2" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
-            <button class="copybtn" type="button" data-copy="#gocmd2" aria-label="Copy the go install command"><span data-copy-label>Copy</span></button>
+      <!-- Static order: macOS, Windows, Linux. download.js moves the visitor's platform
+           to the front and, once a release exists, points each button at its zip. With
+           JS off every button opens the releases page, which is the right answer today.
+           The asset suffixes here are the four the release workflow's desktop job
+           uploads (.github/workflows/release.yml); never add one it does not build. -->
+      <ul class="plats" id="plats">
+        <li class="plat" data-os="mac">
+          <div class="plat-head">
+            <h3>macOS</h3>
+            <span class="plat-tag" hidden>Your platform</span>
           </div>
+          <p class="plat-req">macOS 12 or later, Apple silicon or Intel. The build is unsigned:
+            right-click the app and choose Open the first time.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_arm64">Download for macOS</a>
+            <a class="plat-alt" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_x64">Intel Mac</a>
+          </div>
+        </li>
+        <li class="plat" data-os="windows">
+          <div class="plat-head">
+            <h3>Windows</h3>
+            <span class="plat-tag" hidden>Your platform</span>
+          </div>
+          <p class="plat-req">Windows 10 or 11, x64, with Microsoft's WebView2 runtime. Windows 11
+            and current Windows 10 ship it; on a machine without it the app opens a window and
+            draws nothing, and the
+            <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Evergreen Bootstrapper</a>
+            puts it right. The build is unsigned: SmartScreen asks for More info, then Run
+            anyway.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="windows_x64">Download for Windows</a>
+          </div>
+        </li>
+        <li class="plat" data-os="linux">
+          <div class="plat-head">
+            <h3>Linux</h3>
+            <span class="plat-tag" hidden>Your platform</span>
+          </div>
+          <p class="plat-req">x64, with libwebkit2gtk-4.1 and libgtk-3 installed. Unzip it and run
+            the binary inside.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="linux_x64">Download for Linux</a>
+          </div>
+        </li>
+      </ul>
+
+      <p class="fineprint dl-note" data-dl-when="none">The buttons open the releases page: no
+        release has been published yet, so it is empty until the first one is. Once one exists,
+        each links straight to its zip,
+        <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>.</p>
+      <p class="fineprint dl-note" data-dl-when="some" hidden>Each button links to the zip in
+        <span data-dl-tag>the latest release</span>,
+        <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>. Unzip it
+        and run the app inside.</p>
+
+      <div class="dl-col dl-col--cli">
+        <h3>The CLI</h3>
+        <p>macOS, Linux and Windows, amd64 and arm64.
+          <code dir="ltr">sirdar_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code>
+          (<code dir="ltr">.zip</code> on Windows), with <code dir="ltr">checksums.txt</code>
+          beside them and deb and rpm packages for Linux. Put <code dir="ltr">sirdar</code>
+          on your <code dir="ltr">PATH</code>.</p>
+        <p>Or from source, any commit, released or not:</p>
+        <div class="copyline">
+          <code id="gocmd2" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
+          <button class="copybtn" type="button" data-copy="#gocmd2" aria-label="Copy the go install command"><span data-copy-label>Copy</span></button>
         </div>
       </div>
 
       <div class="actions actions--row">
-        <a class="btn" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Releases on GitHub</a>
+        <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">All releases on GitHub</a>
         <a class="navlink" href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/release/">How a release is cut</a>
       </div>
-      <p class="fineprint">No release has been published yet, so the releases page is empty
-        until the first one is; <code dir="ltr">go install</code> works today. A Homebrew tap
-        is planned and not live, which is why there is no <code dir="ltr">brew</code> line
-        here.</p>
+      <p class="fineprint"><code dir="ltr">go install</code> works today. A Homebrew tap is
+        planned and not live, which is why there is no <code dir="ltr">brew</code> line here.</p>
     </div>
   </section>
 
@@ -395,5 +461,6 @@
 </footer>
 
 <script src="hero.js" defer></script>
+<script src="download.js" defer></script>
 </body>
 </html>

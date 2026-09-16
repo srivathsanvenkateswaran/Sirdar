@@ -241,7 +241,10 @@ works under the `/Sirdar/` prefix.
 The page as built follows this document's language and departs from its section list in
 these ways, each for a reason in the repository: the hero shows a real screenshot of the
 Session window (Conversation layout) rather than an animated ticket, and names the desktop
-app for macOS and Windows beside the CLI; the step band has five commands (`doctor` is a
+app for macOS, Windows and Linux beside the CLI, with a download band that detects the
+visitor's platform (`site/download.js`); the headline is "A ticket arrives. It leaves fixed."
+and the page sells the whole arc, triage, fix and RCA, with read-only confinement kept to the
+safety band; the step band has five commands (`doctor` is a
 real step between `init` and `triage`); the providers band shows the vendors' marks, which
 the user chose over original glyphs on 2026-09-15, while sources stay as type; a "three
 ways to read a run" band shows the Conversation, Document and Workbench layouts; the note

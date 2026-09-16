@@ -24,12 +24,18 @@ draft, and a human reads it and clicks Publish.
      this isn't a prerelease, it also pushes the Homebrew formula to the tap
      repo (see below) — draft releases are skipped for that push, so nothing
      reaches the tap until you publish.
-   - `desktop` builds the Wails desktop app on macOS, Windows, and Linux,
-     zips each platform's output, and uploads the zips onto the same draft
-     release.
+   - `desktop` builds the Wails desktop app on macOS (Apple silicon and
+     Intel, on separate runners), Windows, and Linux, zips each build's
+     output, and uploads the zips onto the same draft release. The names are
+     `sirdar-desktop_<tag>_<os>_<arch>.zip` with `<os>` one of `darwin`,
+     `windows`, `linux` and `<arch>` GitHub's `runner.arch` lower-cased, so
+     `arm64` or `x64` (not Go's `amd64`): `darwin_arm64`, `darwin_x64`,
+     `windows_x64`, `linux_x64`. The landing page's download buttons resolve
+     exactly those four names, so a rename here is a change to
+     `site/download.js` too.
 4. Once both jobs finish, open the draft release on GitHub. Check the
    changelog, that six CLI archives plus checksums plus the deb/rpm packages
-   plus three desktop zips are attached, then click **Publish release**.
+   plus four desktop zips are attached, then click **Publish release**.
 5. Publishing is what makes the tag's artifacts and the Homebrew formula (if
    the tap step ran) publicly visible. Nothing before this step is
    downloadable by anyone but you.
@@ -82,7 +88,9 @@ automatically.)
   packages built by `nfpm`, install directly with `dpkg -i` / `rpm -i` (or
   your distro's front end).
 - **Desktop app**: download the zip for your OS from the release's Assets
-  (`sirdar-desktop_<tag>_<os>_<arch>.zip`), unzip it, and run the app inside.
+  (`sirdar-desktop_<tag>_<os>_<arch>.zip`; on a Mac, `darwin_arm64` for Apple
+  silicon and `darwin_x64` for Intel), unzip it, and run the app inside. The
+  landing page picks the right one from the visitor's browser.
   The desktop builds are **unsigned** — no Apple notarization, no Windows
   code-signing certificate. On macOS, Gatekeeper will refuse to open it with
   a plain double-click; either right-click the app and choose **Open** (and

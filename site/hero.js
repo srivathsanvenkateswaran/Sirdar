@@ -21,7 +21,7 @@
     var ring = document.getElementById("ring");
     if (!ring) { return; }
 
-    var phrase = "triage / evidence / root cause / proposed fix / rca / resolution / ";
+    var phrase = "triage / fix / rca / steer / resolution / ";
     var cs = window.getComputedStyle(ring);
     var radius = parseFloat(cs.getPropertyValue("--ring-r")) || 190;
     var advance = (parseFloat(cs.fontSize) || 13) * 0.62;
