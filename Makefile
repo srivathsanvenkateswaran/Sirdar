@@ -1,4 +1,4 @@
-.PHONY: build test vet ui desktop desktop-dev serve release-snapshot dist-desktop version tokens check-tokens site
+.PHONY: build test vet ui desktop desktop-dev install serve release-snapshot dist-desktop version tokens check-tokens site
 
 # `wails` is installed with `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`,
 # which puts it in $(go env GOPATH)/bin. Override WAILS if it is not on PATH.
@@ -46,6 +46,12 @@ release-snapshot:
 # Zips the desktop build for the machine you're running on, named the same
 # way the release workflow's desktop job names its uploads. Only covers this
 # machine's OS/arch; the workflow covers all three platforms.
+# Build the desktop app and put it where Launchpad finds it. The copy replaces
+# whatever is there; quit a running Sirdar first or macOS keeps the old code.
+install: desktop
+	rm -rf /Applications/Sirdar.app
+	cp -R desktop/build/bin/Sirdar.app /Applications/Sirdar.app
+
 dist-desktop: desktop
 	mkdir -p dist
 	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" .
