@@ -11,6 +11,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"testing"
@@ -1095,12 +1096,22 @@ func TestTranscriptIsTheResumeHandle(t *testing.T) {
 	}
 
 	// 0600: the file holds everything the session read.
+	//
+	// Checked off Windows only. The POSIX permission bits are a POSIX
+	// facility: on Windows a file's access is an ACL, os.Chmod there can
+	// only toggle the read-only attribute, and every file Go creates
+	// reads back as 0666 whatever mode it was opened with. So 0600 is not
+	// merely unasserted on Windows, it is unrepresentable — the transcript
+	// is left readable by anyone who can read the run directory, and it is
+	// the run directory's own ACL that has to carry that confinement.
 	info, err := os.Stat(handle)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if perm := info.Mode().Perm(); perm != 0o600 {
-		t.Errorf("transcript mode = %04o, want 0600", perm)
+	if runtime.GOOS != "windows" {
+		if perm := info.Mode().Perm(); perm != 0o600 {
+			t.Errorf("transcript mode = %04o, want 0600", perm)
+		}
 	}
 
 	// No credential is in it: the API key travels in a header, never as a

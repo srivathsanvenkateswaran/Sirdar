@@ -547,9 +547,19 @@ func TestDoctorSetting(t *testing.T) {
 }
 
 func TestSpecRoot(t *testing.T) {
-	if got := specRoot("/w", "/elsewhere/.mcp.json"); got != "/elsewhere" {
-		t.Errorf("specRoot with a config path = %q", got)
+	// specRoot takes the directory of the config path with filepath.Dir,
+	// which is a platform operation: on Windows it answers "\elsewhere"
+	// for "/elsewhere/.mcp.json", the same directory spelled the way the
+	// platform spells it. The expectation is built with the same package
+	// rather than pinned to the Unix spelling, because what the runner
+	// really hands in is a platform path — the directory Sirdar resolved
+	// the workspace to, not a literal from a test.
+	dir := filepath.FromSlash("/elsewhere")
+	if got := specRoot("/w", filepath.Join(dir, ".mcp.json")); got != dir {
+		t.Errorf("specRoot with a config path = %q, want %q", got, dir)
 	}
+	// With no config path the working directory comes back untouched, so
+	// this half reads the same everywhere.
 	if got := specRoot("/w", ""); got != "/w" {
 		t.Errorf("specRoot without a config path = %q", got)
 	}

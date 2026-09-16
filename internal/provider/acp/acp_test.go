@@ -51,7 +51,8 @@ type inbound struct {
 //
 // Any other line is an agent-to-client message written to stdout verbatim,
 // with {{cwd}} replaced by the fake's working directory — which is the
-// session's Cwd, since the provider sets cmd.Dir. Every stdin line is
+// session's Cwd, since the provider sets cmd.Dir — escaped as the JSON
+// string it sits inside. Every stdin line is
 // echoed to stderr prefixed "STDIN: " so tests can assert on what the
 // provider sent.
 func fakeAgent(scriptPath string) int {
@@ -91,12 +92,31 @@ func fakeAgent(scriptPath string) int {
 	ids := map[string]json.RawMessage{}
 	var lastID json.RawMessage
 
+	// {{cwd}} only ever appears inside a JSON string in a script, so what
+	// replaces it has to be escaped the way a JSON string escapes it.
+	// Dropping the directory in raw costs nothing on a Unix path, but on
+	// Windows the working directory is C:\Users\...\Temp\..., and each of
+	// those backslashes starts an escape sequence the client's decoder
+	// rejects ("invalid character 'U' in string escape code"). The line is
+	// then not a JSON-RPC message at all: the client's reader stops, the
+	// agent's stdout reads as closed, and every test driving a script that
+	// names the workspace fails as "rpc error 0: connection closed"
+	// instead of exercising what it was written for.
+	cwdJSON, err := json.Marshal(cwd)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "fake acp: encode cwd:", err)
+		return 2
+	}
+	// json.Marshal of a string always comes back quoted; the quotes belong
+	// to the string the script already has around the placeholder.
+	cwdJSON = cwdJSON[1 : len(cwdJSON)-1]
+
 	for _, raw := range bytes.Split(script, []byte("\n")) {
 		line := bytes.TrimSpace(raw)
 		if len(line) == 0 || bytes.HasPrefix(line, []byte("//")) {
 			continue
 		}
-		line = bytes.ReplaceAll(line, []byte("{{cwd}}"), []byte(cwd))
+		line = bytes.ReplaceAll(line, []byte("{{cwd}}"), cwdJSON)
 
 		var d map[string]json.RawMessage
 		if err := json.Unmarshal(line, &d); err != nil {
