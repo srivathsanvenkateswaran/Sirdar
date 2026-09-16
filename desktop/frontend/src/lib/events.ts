@@ -493,11 +493,23 @@ export function callId(event: RunEvent): string {
 
 /** True for a provider line that is one token delta of a message, not a message. */
 export function isDelta(event: RunEvent): boolean {
+  if (event.payload?.delta) return true
+  if (event.payload?.replace) return false
   const raw = asRecord(event.payload?.raw)
   if (!raw) return false
   const type = str(raw.type)
   if (type === 'stream_event' || type === 'content_block_delta') return true
   return /delta/i.test(str(raw.method))
+}
+
+/**
+ * True for an assistant line that is a finished message standing in for the
+ * deltas that streamed it. Claude Code says a message twice — a delta per
+ * fragment, then the whole block — so the block replaces what came before it
+ * in the same message instead of being appended as a second copy.
+ */
+export function isReplace(event: RunEvent): boolean {
+  return event.kind === 'assistant_text' && event.payload?.replace === true
 }
 
 /**
@@ -600,7 +612,8 @@ export interface ToolCall {
 /**
  * A row of the conversation. A message is every consecutive assistant line
  * merged into one block, so a provider that streams deltas grows the block
- * rather than stacking rows; a call is a tool call with its result and the
+ * rather than stacking rows and the finished block, when it lands, replaces
+ * them; a call is a tool call with its result and the
  * policy's word on it; a fold is a run of raw stream lines; anything else is
  * one event.
  */
@@ -612,12 +625,18 @@ export type ConversationItem =
 
 /**
  * Joins consecutive assistant lines. A delta continues the text as it is; a
- * whole message that follows another starts a new paragraph.
+ * finished message marked `replace` is the block the deltas before it were
+ * spelling, so it stands in for them; any other whole message that follows
+ * another starts a new paragraph.
  */
 export function joinText(parts: IndexedEvent[]): string {
   let out = ''
   for (const part of parts) {
     const text = part.event.payload?.text ?? ''
+    if (isReplace(part.event)) {
+      if (text !== '') out = text
+      continue
+    }
     if (text === '') continue
     if (out === '' || isDelta(part.event)) out += text
     else out += (out.endsWith('\n\n') ? '' : '\n\n') + text
@@ -638,6 +657,8 @@ export function joinText(parts: IndexedEvent[]): string {
 export function conversation(events: IndexedEvent[], fold = false): ConversationItem[] {
   const out: ConversationItem[] = []
   const open: ToolCall[] = []
+  /** Messages a `replace` line finished; a later assistant line starts a new one. */
+  const sealed = new WeakSet<ConversationItem>()
   let system: IndexedEvent[] = []
 
   const flushSystem = () => {
@@ -700,12 +721,19 @@ export function conversation(events: IndexedEvent[], fold = false): Conversation
 
     if (event.kind === 'assistant_text') {
       const last = out[out.length - 1]
-      if (last && last.kind === 'message') {
+      let message: ConversationItem
+      if (last && last.kind === 'message' && !sealed.has(last)) {
         last.parts.push(item)
         last.text = joinText(last.parts)
+        message = last
       } else {
-        out.push({ kind: 'message', index: item.index, parts: [item], text: joinText([item]) })
+        message = { kind: 'message', index: item.index, parts: [item], text: joinText([item]) }
+        out.push(message)
       }
+      // The finished block closes the message it completes: the next
+      // assistant line is the next message, not more of this one. Without
+      // this, two text blocks in one turn would collapse into the second.
+      if (isReplace(event)) sealed.add(message)
       continue
     }
 

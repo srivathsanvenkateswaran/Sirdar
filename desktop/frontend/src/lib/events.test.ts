@@ -437,6 +437,37 @@ describe('conversation', () => {
     expect(item.parts).toHaveLength(4)
   })
 
+  it('lets the finished block replace the deltas that streamed it', () => {
+    const delta = (text: string) => ev('assistant_text', { text, delta: true, raw: { type: 'stream_event' } })
+    const items = conversation(
+      indexed([
+        delta('The return '),
+        delta('is counted twice.'),
+        ev('assistant_text', {
+          text: 'The return is counted twice.',
+          replace: true,
+          raw: { type: 'assistant' },
+        }),
+      ]),
+    )
+    expect(items).toHaveLength(1)
+    const item = items[0] as Extract<ConversationItem, { kind: 'message' }>
+    expect(item.text).toBe('The return is counted twice.')
+    expect(item.parts).toHaveLength(3)
+  })
+
+  it('starts a new message after a finished block', () => {
+    const items = conversation(
+      indexed([
+        ev('assistant_text', { text: 'First block.', replace: true, raw: { type: 'assistant' } }),
+        ev('assistant_text', { text: 'Second block.', replace: true, raw: { type: 'assistant' } }),
+      ]),
+    )
+    expect(items.map((i) => i.kind)).toEqual(['message', 'message'])
+    expect((items[0] as Extract<ConversationItem, { kind: 'message' }>).text).toBe('First block.')
+    expect((items[1] as Extract<ConversationItem, { kind: 'message' }>).text).toBe('Second block.')
+  })
+
   it('breaks a message at a tool call', () => {
     const items = conversation(
       indexed([

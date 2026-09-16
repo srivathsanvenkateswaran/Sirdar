@@ -51,8 +51,14 @@ export interface FixInfo { branch?: string; base?: string; commit?: string; prUr
  * hunk index within that file. A 'steer' event carries the instruction as
  * `text` and how the run was continued (`resume` or `primed`). Every other
  * kind carries the agent's fields.
+ *
+ * An 'assistant_text' event says how its `text` joins the text around it:
+ * `delta` is one fragment of a message the provider is still streaming, and
+ * `replace` is the finished message, which stands in for the fragments that
+ * preceded it rather than following them. A provider that reports a message
+ * once sets neither.
  */
-export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string } }
+export interface RunEvent { t: string; kind: string; payload: { tool?: string; decision?: string; text?: string; turns?: number; costUsd?: number; raw?: unknown; model?: string; action?: string; path?: string; hunk?: number; continuation?: string; delta?: boolean; replace?: boolean } }
 /** One file in a fix run's change. A renamed file is named by the path it now has. */
 export interface DiffFile { path: string; status: 'added'|'modified'|'deleted'|'renamed'; additions: number; deletions: number }
 /**
