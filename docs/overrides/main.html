@@ -1,0 +1,18 @@
+{#-
+  Sirdar's docs template. Everything structural is Material's; this adds the
+  head tags the design needs and swaps the header and footer partials, which
+  live beside this file under partials/.
+-#}
+{% extends "base.html" %}
+
+{% block extrahead %}
+  {# tokens.css follows the system preference unless the root says otherwise;
+     the docs are light only, the same way the landing page is, and setting
+     the attribute from the head means no dark first paint. #}
+  <script>document.documentElement.setAttribute("data-theme", "light");</script>
+  <meta name="color-scheme" content="light">
+  <link rel="icon" type="image/svg+xml" href="{{ config.theme.favicon | url }}">
+  {# The two faces every page paints with; the display italic is home-only and loads on demand. #}
+  <link rel="preload" href="{{ 'fonts/figtree-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="{{ 'fonts/jetbrains-mono-latin.woff2' | url }}" as="font" type="font/woff2" crossorigin>
+{% endblock %}
