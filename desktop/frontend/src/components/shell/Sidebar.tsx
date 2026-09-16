@@ -21,7 +21,7 @@ import SessionsList, { recentRuns } from './SessionsList'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import './sidebar.css'
 
-export { CARD_DELAY_MS, SHOWN_LIMIT, recentRuns, shortAge, splitRuns } from './SessionsList'
+export { CARD_CLOSE_MS, CARD_OPEN_MS, SHOWN_LIMIT, recentRuns, shortAge, splitRuns } from './SessionsList'
 
 type NavName = 'sessions' | 'board' | 'register' | 'eval' | 'library' | 'settings'
 
