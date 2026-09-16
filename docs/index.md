@@ -8,7 +8,7 @@ hide:
 <div class="sd-hero" markdown>
 <div class="sd-hero__copy" markdown>
 
-# A ticket arrives. *Something reads it first.*
+# A ticket arrives. *It leaves fixed.*
 
 Sirdar works a support ticket end to end with the coding agent you already have a login for:
 it writes the triage note, implements the fix on its own branch, and writes the root cause once
