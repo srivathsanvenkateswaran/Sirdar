@@ -151,6 +151,35 @@ describe('http transport', () => {
     )
   })
 
+  it('deletes a run with DELETE on its own route and resolves on 204', async () => {
+    const fetchMock = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) =>
+      new Response(null, { status: 204 }),
+    )
+    vi.stubGlobal('fetch', fetchMock)
+
+    await createTransport().deleteRun('ws1', 'r/1')
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/runs/r%2F1')
+    expect((fetchMock.mock.calls[0]![1] as RequestInit).method).toBe('DELETE')
+  })
+
+  it('reports a refused delete with the route\'s reason', async () => {
+    mockFetch({ error: { code: 'conflict', message: 'run is live' } }, { status: 409 })
+    await expect(createTransport().deleteRun('ws1', 'r1')).rejects.toThrow('conflict: run is live')
+  })
+
+  it('searches with the query encoded', async () => {
+    const fetchMock = mockFetch([
+      { runId: 'r1', key: 'OMNI-1', kind: 'triage', status: 'completed', source: 'note', path: '/n.md', excerpt: 'times out' },
+    ])
+
+    const got = await createTransport().search('ws1', 'times out & more')
+
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/search?q=times+out+%26+more')
+    expect(got).toHaveLength(1)
+    expect(got[0]!.source).toBe('note')
+  })
+
   // --- the review, steer and MCP routes, in the shapes internal/httpapi reads ---
 
   it('posts a steer with its text and reads the job and run back', async () => {
@@ -340,6 +369,22 @@ describe('wails transport', () => {
       runId: 'r1',
     })
     expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on')
+  })
+
+  it('deletes, searches and reveals a run directory through their bound methods', async () => {
+    const bridge = stubBridge({
+      DeleteRun: async () => undefined,
+      Search: async () => null,
+      OpenRunDir: async () => undefined,
+    })
+    const t = createWailsTransport()
+
+    await t.deleteRun('ws1', 'r1')
+    expect(bridge.DeleteRun).toHaveBeenCalledWith('ws1', 'r1')
+    await expect(t.search('ws1', 'export')).resolves.toEqual([])
+    expect(bridge.Search).toHaveBeenCalledWith('ws1', 'export')
+    await t.openRunDir!('ws1', 'r1')
+    expect(bridge.OpenRunDir).toHaveBeenCalledWith('ws1', 'r1')
   })
 
   it('reads the diff and drops a hunk with positional arguments, listing null files as none', async () => {
