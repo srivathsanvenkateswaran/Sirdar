@@ -1199,6 +1199,15 @@ func (s *session) finishTurn(stopReason string, raw json.RawMessage) {
 	text := strings.TrimSpace(s.chunks.String())
 	s.mu.Unlock()
 
+	// The turn's whole message, standing in for the chunks that streamed
+	// it. Every stop reason gets one, not just end_turn: a turn that was
+	// cancelled or refused still wrote whatever it wrote, and the
+	// transcript should hold it as one block rather than as the fragments
+	// it arrived in. See provider.Event.Replace.
+	if text != "" {
+		s.emit(provider.Event{Kind: provider.EvAssistantText, Text: text, Replace: true, Raw: raw})
+	}
+
 	// ACP reports no per-turn token usage, so the turn counter is the one
 	// meter the runner's budget can be enforced against. It is emitted for
 	// every stop reason, including the ones that end the run.
@@ -1771,7 +1780,13 @@ func (s *session) onNotify(method string, params json.RawMessage) {
 		s.mu.Lock()
 		s.chunks.WriteString(u.Content.Text)
 		s.mu.Unlock()
-		s.emit(provider.Event{Kind: provider.EvAssistantText, Text: u.Content.Text, Raw: raw})
+		// A fragment of the turn's message, not a message: ACP chunks a
+		// single answer into as many updates as the agent feels like,
+		// and a reader that treated each as its own message would print
+		// one answer as a stack of one-line rows. See
+		// provider.Event.Delta; finishTurn emits the whole block after
+		// them, marked Replace.
+		s.emit(provider.Event{Kind: provider.EvAssistantText, Text: u.Content.Text, Delta: true, Raw: raw})
 
 	case "agent_thought_chunk":
 		if u.Content.Text == "" {

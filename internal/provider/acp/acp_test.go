@@ -378,7 +378,9 @@ func TestSessionRunsATurnAndReturnsTheNote(t *testing.T) {
 	// The assistant text is streamed as well as parsed.
 	var text strings.Builder
 	for _, ev := range only(evs, provider.EvAssistantText) {
-		text.WriteString(ev.Text)
+		if ev.Delta {
+			text.WriteString(ev.Text)
+		}
 	}
 	if !strings.Contains(text.String(), "Checkout 500s") {
 		t.Errorf("assistant text = %q", text.String())
@@ -444,6 +446,50 @@ func TestSteerIsPrimed(t *testing.T) {
 	c, err := provider.PlanSteer(New(Config{}))
 	if err != nil || c != provider.ContinuePrimed {
 		t.Fatalf("PlanSteer = %q, %v; want primed", c, err)
+	}
+}
+
+// TestChunkedMessageJoinsIntoOneBlock: ACP splits one answer across as many
+// agent_message_chunk updates as the agent feels like, and a reader that
+// took each for a message would render one answer as a stack of one-line
+// rows. So every chunk is a delta, and the prompt's stop reason is followed
+// by the turn's whole text once, marked Replace.
+func TestChunkedMessageJoinsIntoOneBlock(t *testing.T) {
+	cwd := workspace(t)
+	sess := spawn(t, "script-basic.jsonl", cwd, nil)
+
+	evs := drain(sess)
+	if _, err := sess.Wait(); err != nil {
+		t.Fatalf("Wait: %v", err)
+	}
+
+	texts := only(evs, provider.EvAssistantText)
+	// script-basic streams a two-chunk sentence and a two-chunk JSON note.
+	if len(texts) != 5 {
+		t.Fatalf("assistant text events = %d, want 4 chunks and the block that replaces them: %+v", len(texts), texts)
+	}
+
+	var joined strings.Builder
+	for _, ev := range texts[:len(texts)-1] {
+		if !ev.Delta || ev.Replace {
+			t.Errorf("chunk %q: delta=%v replace=%v, want a delta", ev.Text, ev.Delta, ev.Replace)
+		}
+		joined.WriteString(ev.Text)
+	}
+
+	whole := texts[len(texts)-1]
+	if whole.Delta || !whole.Replace {
+		t.Errorf("last assistant event: delta=%v replace=%v, want the replacement block", whole.Delta, whole.Replace)
+	}
+	if want := strings.TrimSpace(joined.String()); whole.Text != want {
+		t.Errorf("replacement text = %q, want the joined chunks %q", whole.Text, want)
+	}
+	if !strings.Contains(whole.Text, "The empty cart takes the 500 branch.") ||
+		!strings.Contains(whole.Text, `{"title":"Checkout 500s","ok":true}`) {
+		t.Errorf("replacement text = %q, want the whole turn", whole.Text)
+	}
+	if whole.Raw == nil {
+		t.Error("the replacement block carries no raw line")
 	}
 }
 

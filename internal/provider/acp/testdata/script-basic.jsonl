@@ -12,6 +12,8 @@
 {"$request":"fs/read_text_file","id":13,"params":{"sessionId":"sess-1","path":"{{cwd}}/../outside.txt"}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"plan","entries":[{"content":"read the checkout service","status":"completed"}]}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"usage_update","used":17104,"size":272000,"cost":{"amount":0.25,"currency":"USD"}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"The empty cart "}}}}
+{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"takes the 500 branch.\n"}}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"{\"title\":\"Checkout 500s\","}}}}
 {"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"sess-1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"\"ok\":true}"}}}}
 {"$reply_to":"p1","result":{"stopReason":"end_turn"}}
