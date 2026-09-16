@@ -224,6 +224,12 @@ func expandHome(p string) (string, error) {
 	if p == "" {
 		return "", fmt.Errorf("the path is empty")
 	}
+	// A Windows operator writes `~\secrets\token`, and the separator they
+	// typed is the one their shell completes to. Both spellings expand;
+	// filepath.Join below settles the rest.
+	if runtime.GOOS == "windows" {
+		p = strings.ReplaceAll(p, `\`, "/")
+	}
 	if p != "~" && !strings.HasPrefix(p, "~/") {
 		return p, nil
 	}

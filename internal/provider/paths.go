@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 )
 
@@ -256,6 +257,13 @@ func expandHome(value string) (string, bool) {
 		return value, false
 	}
 	rest := value[1:]
+	// A Windows operator writes `~\runbooks\*` in permissions.readAlso, and
+	// that backslash is a separator, not part of a user name. Git's own
+	// path-type values always use "/", so this only ever widens what is
+	// understood.
+	if runtime.GOOS == "windows" {
+		rest = strings.ReplaceAll(rest, `\`, "/")
+	}
 	name, tail, hasTail := strings.Cut(rest, "/")
 	var home string
 	if name == "" {
