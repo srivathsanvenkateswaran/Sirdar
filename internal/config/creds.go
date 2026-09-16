@@ -189,9 +189,9 @@ func runSecretCommand(command string) (string, error) {
 	// everything it started: a piped helper ("op read ... | tr -d '\n'")
 	// leaves children that keep stdout open, and killing only the shell
 	// would leave them running with Wait blocked on that pipe. WaitDelay is
-	// the backstop for a grandchild that survives the group kill. This is a
-	// no-op on Windows, which has no addressable process group here; see
-	// internal/procgroup.
+	// the backstop for a grandchild that survives the group kill. Windows has
+	// no process group to set up, so Setup does nothing there and the subtree
+	// comes down by `taskkill /T` at kill time; see internal/procgroup.
 	procgroup.Setup(cmd)
 	cmd.Cancel = func() error { return procgroup.Kill(cmd) }
 	cmd.WaitDelay = killGrace
