@@ -158,13 +158,17 @@ export function useAnchor(
       const chip = trigger.current
       const pop = popover.current
       if (!chip || !pop) return
-      pop.style.position = 'fixed'
-      pop.style.maxHeight = ''
+      // Reads first, writes after, so the frame lays out once: the two
+      // rectangles and the direction are taken together, and the styles are
+      // set only once all three are known. The one write before a read is
+      // clearing a max-height a previous measure left, and only when it did.
+      if (pop.style.position !== 'fixed') pop.style.position = 'fixed'
+      if (pop.style.maxHeight !== '') pop.style.maxHeight = ''
       const view = { width: window.innerWidth, height: window.innerHeight }
       const opts = { align, gap, margin, dir: directionOf(chip) }
-      const at = beside
-        ? placeBeside(chip.getBoundingClientRect(), pop.getBoundingClientRect(), view, opts)
-        : place(chip.getBoundingClientRect(), pop.getBoundingClientRect(), view, opts)
+      const chipBox = chip.getBoundingClientRect()
+      const popBox = pop.getBoundingClientRect()
+      const at = beside ? placeBeside(chipBox, popBox, view, opts) : place(chipBox, popBox, view, opts)
       pop.style.top = `${at.top}px`
       pop.style.left = `${at.left}px`
       pop.style.maxHeight = `${at.maxHeight}px`
