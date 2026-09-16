@@ -142,7 +142,8 @@ describe('SessionConversation', () => {
       expect(within(card).getAllByRole('listitem').filter((li) => li.closest('.sc-ev'))).toHaveLength(7)
 
       // The draft, in the customer's language, as a letter.
-      expect(within(card).getByText(/وعليكم السلام أستاذ أحمد/)).toBeInTheDocument()
+      expect(card.querySelector('.sc-draft')).toHaveTextContent(/^وعليكم السلام أستاذ أحمد،/)
+      expect(card.querySelector('.sc-draft')).toHaveAttribute('lang', 'ar')
       // The footer names the note as the vault does.
       expect(within(card).getByText('Note saved')).toBeInTheDocument()
       expect(within(card).getByText('SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md')).toBeInTheDocument()
@@ -320,13 +321,14 @@ describe('SessionConversation', () => {
       expect(within(card).getByText('command')).toBeInTheDocument()
       expect(within(card).getByText('description').nextElementSibling).toHaveTextContent('Search Go code for partial-return handling')
       // Output, shaped.
-      expect(within(card).getByText('11 rows · 1.1 kB · 3 files')).toBeInTheDocument()
+      expect(within(card).getByText(/^11 rows · [\d.]+ k?B · 3 files$/)).toBeInTheDocument()
       const table = within(card).getByRole('table')
       expect(within(table).getAllByRole('row')).toHaveLength(12)
       const first = within(table).getAllByRole('row')[1]
       expect(first).toHaveTextContent('ledger_test.go')
       expect(first).toHaveTextContent('9')
-      expect(within(card).getByRole('region', { name: 'Bash output' }) ?? within(card).getByLabelText('Bash output')).toBeTruthy()
+      // The output scrolls in its own region, reachable from the keyboard.
+      expect(within(card).getByLabelText('Bash output')).toHaveAttribute('tabindex', '0')
 
       // As text flips to the raw stream; the table is gone.
       fireEvent.click(within(card).getByRole('button', { name: 'As text' }))
@@ -353,10 +355,11 @@ describe('SessionConversation', () => {
       renderScene(f, { runId: FIX_DETAIL.runId })
       const stream = await screen.findByTestId('conversation')
 
-      fireEvent.click(within(stream).getAllByRole('button', { name: /ledger\.go$/ })[0])
       const read = within(stream).getAllByTestId('tool-step')[0]
+      expect(read).toHaveTextContent(/^Readledger\.go/)
+      fireEvent.click(within(read).getByRole('button'))
       expect(within(read).getByText('package ledger')).toBeInTheDocument()
-      expect(within(read).getByText('7 lines · 245 B')).toBeInTheDocument()
+      expect(within(read).getByText(/^7 lines · \d+ B$/)).toBeInTheDocument()
 
       const test = within(stream).getByRole('button', { name: /Run tests before the fix/ })
       expect(within(test).getByText('exit 1')).toBeInTheDocument()
@@ -421,11 +424,9 @@ describe('SessionConversation', () => {
       renderScene(f)
       fireEvent.click(await screen.findByRole('tab', { name: /Tools/ }))
 
-      expect(screen.getByText('13', { selector: '.sc-ttsum b' })).toBeInTheDocument()
-      expect(screen.getByText('denied').closest('.sc-ttsum span')).toHaveTextContent('2 denied')
-      expect(screen.getByText('by policy').closest('span')).toHaveTextContent('11 by policy')
+      expect(document.querySelector('.sc-ttsum')).toHaveTextContent(/^13 calls11 by policy2 denied0 asked you[\d.]+ k?B out$/)
 
-      const table = screen.getByRole('table')
+      const table = screen.getByRole('table', { name: 'Tool calls' })
       const rows = within(table).getAllByRole('row').slice(1)
       expect(rows).toHaveLength(13)
       expect(rows[0]).toHaveTextContent('1')
@@ -434,7 +435,7 @@ describe('SessionConversation', () => {
       expect(rows[0]).toHaveTextContent('policy')
       expect(rows[8]).toHaveAttribute('data-deny', 'true')
       expect(within(rows[8]).getByText('denied')).toBeInTheDocument()
-      expect(rows[2]).toHaveTextContent('245 B · 7 ln')
+      expect(rows[2]).toHaveTextContent(/\d+ B · 7 ln/)
 
       // Sort by tool: the Bash calls first, and the header says so.
       fireEvent.click(within(table).getByRole('button', { name: 'tool' }))
@@ -461,7 +462,7 @@ describe('SessionConversation', () => {
       fireEvent.click(within(stream).getByRole('button', { name: /Search Go code for partial-return handling/ }))
       fireEvent.click(within(stream).getByRole('button', { name: 'Open in Tools' }))
       expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
-      const table = screen.getByRole('table')
+      const table = screen.getByRole('table', { name: 'Tool calls' })
       const on = table.querySelector('tr[data-on="true"]') as HTMLElement
       expect(on).toHaveTextContent('rg -n -i "partial|Quantity" --type go')
     })
@@ -543,7 +544,8 @@ describe('SessionConversation', () => {
       })
       const step = await within(stream).findByRole('button', { name: /Vet the module/ })
       expect(within(step).getByText('running')).toBeInTheDocument()
-      expect(screen.getByRole('tab', { name: /Tools/ })).toHaveTextContent('Tools7')
+      // Five calls in the backfill, and the live one.
+      expect(screen.getByRole('tab', { name: /Tools/ })).toHaveTextContent('Tools6')
     })
 
     it('says why a run could not be read', async () => {

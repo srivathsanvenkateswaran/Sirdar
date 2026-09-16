@@ -93,7 +93,7 @@ export default function ToolsTable({ calls, highlighted, onLocate }: ToolsTableP
           <b>{formatBytes(out)}</b> out
         </span>
       </div>
-      <table className="sc-tt">
+      <table className="sc-tt" aria-label="Tool calls">
         <thead>
           <tr>
             {head('n', '#')}

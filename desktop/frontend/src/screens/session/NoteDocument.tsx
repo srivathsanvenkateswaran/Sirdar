@@ -52,10 +52,12 @@ export function chipsOf(fields: Frontmatter['fields']): Chip[] {
       }
       continue
     }
+    // `tracker_key` with a `tracker_url` beside it is one chip, "tracker",
+    // linked; `customer_id` with no url is the customer's id, "id".
     const m = /^(.*)_(?:key|id)$/.exec(f.key)
-    const stem = m ? m[1] : f.key
-    const url = urls.get(stem)
-    out.push({ key: m ? m[1] : f.key === 'customer_id' ? 'id' : f.key, value: f.value, url })
+    const url = m ? urls.get(m[1]) : undefined
+    const key = m && url ? m[1] : /_id$/.test(f.key) ? 'id' : f.key
+    out.push({ key, value: f.value, url })
   }
   // A url with no key beside it still gets its chip.
   for (const [stem, url] of urls) {
