@@ -1,10 +1,10 @@
 /*
- * Sirdar landing page — the ring, the hero sheet, and the copy control.
+ * Sirdar landing page — the ring, the marquee, and the copy control.
  *
- * The page is readable and complete without this file: the sheet renders as
- * the finished note and the install command can be selected by hand. All this
- * script does is rewind the sheet and play it once, draw the ring, and save a
- * selection. It respects prefers-reduced-motion by jumping to the end state.
+ * The page is readable and complete without this file: the sources row is a
+ * wrapped list and the install command can be selected by hand. All this
+ * script does is draw the ring, set the sources row moving, and save a
+ * selection. It respects prefers-reduced-motion by leaving the row still.
  */
 (function () {
   "use strict";
@@ -42,68 +42,25 @@
     ring.appendChild(frag);
   }
 
-  /* The sheet -----------------------------------------------------------
-     A rule travels down the ticket once. As it passes a row, that row stops
-     being the customer's Arabic and becomes the note's English field. One
-     orchestrated moment; nothing else on this page moves on its own. */
+  /* The marquee ---------------------------------------------------------
+     The track is duplicated once, with the copies hidden from assistive
+     technology, and translated by half its width, so the loop has no seam.
+     Under reduced motion the row stays a wrapped list and nothing is cloned. */
 
-  function playSheet() {
-    var sheet = document.getElementById("sheet");
-    if (!sheet) { return; }
+  function buildMarquee() {
+    var wrap = document.getElementById("marquee");
+    var track = document.getElementById("marquee-track");
+    if (!wrap || !track || reduce) { return; }
 
-    var rows = Array.prototype.slice.call(sheet.querySelectorAll(".row"));
-    var scan = document.getElementById("scan");
-    var chip = document.getElementById("sheet-state");
-    var foot = document.getElementById("sheet-foot");
-    if (!rows.length) { return; }
-
-    function finish() {
-      for (var i = 0; i < rows.length; i++) { rows[i].classList.add("done"); }
-      if (chip) {
-        chip.setAttribute("data-state", "triaged");
-        chip.textContent = "triaged";
-      }
-      if (foot) { foot.classList.remove("pending"); }
-      if (scan) { scan.classList.remove("on"); }
-    }
-
-    if (reduce) { finish(); return; }
-
-    var first = rows[0];
-    var last = rows[rows.length - 1];
-    var from = first.offsetTop;
-    var to = last.offsetTop + last.offsetHeight;
-    var duration = 2600;
-
-    // When the rule reaches a row, that row turns over. The times are worked
-    // out up front from the inverse of the easing, so the sequence is driven
-    // by timers and a CSS transition rather than a frame loop: a browser that
-    // throttles animation frames still lands on the finished note.
-    var schedule = rows.map(function (row) {
-      var mid = row.offsetTop + row.offsetHeight * 0.45;
-      var p = Math.max(0, Math.min(1, (mid - from) / (to - from)));
-      return (1 - Math.pow(1 - p, 1 / 3)) * duration;
+    var items = Array.prototype.slice.call(track.children);
+    items.forEach(function (item) {
+      var copy = item.cloneNode(true);
+      copy.setAttribute("aria-hidden", "true");
+      copy.setAttribute("data-clone", "");
+      track.appendChild(copy);
     });
-
-    function start() {
-      scan.classList.add("on");
-      scan.style.transform = "translateY(" + from + "px)";
-      void scan.offsetHeight; // flush, so the transition has a start value
-      scan.style.transition = "transform " + duration + "ms var(--sd-ease)";
-      scan.style.transform = "translateY(" + to + "px)";
-
-      rows.forEach(function (row, i) {
-        window.setTimeout(function () { row.classList.add("done"); }, schedule[i]);
-      });
-      window.setTimeout(finish, duration + 80);
-    }
-
-    // Measure after the display serif and the Naskh face land, but never wait
-    // on a font promise that does not settle.
-    var started = false;
-    function once() { if (!started) { started = true; window.setTimeout(start, 250); } }
-    if (document.fonts && document.fonts.ready) { document.fonts.ready.then(once, once); }
-    window.setTimeout(once, 1200);
+    wrap.classList.add("on");
+    track.classList.add("on");
   }
 
   /* The copy control ----------------------------------------------------- */
@@ -154,6 +111,6 @@
   }
 
   buildRing();
-  playSheet();
+  buildMarquee();
   wireCopy();
 })();
