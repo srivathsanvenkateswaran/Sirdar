@@ -120,9 +120,11 @@ describe('groupRuns', () => {
 
   it('pins in pin order, above everything, and unpins on the second toggle', () => {
     togglePin(WS, 'r4', NOW)
-    togglePin(WS, 'r1', NOW + 1)
+    // The same instant: the second pin still goes under the first.
+    togglePin(WS, 'r1', NOW)
     let g = groupRuns(RUNS, sessionPrefs(WS), NOW)
     expect(ids(g.pinned)).toEqual(['r4', 'r1'])
+    expect(sessionPrefs(WS).pinned).toEqual({ r4: NOW, r1: NOW + 1 })
     expect(ids(g.live)).toEqual(['r2'])
     expect(ids(g.settled)).toEqual(['r3', 'r5'])
     togglePin(WS, 'r4', NOW + 2)
@@ -241,7 +243,8 @@ describe('forgetRun', () => {
     togglePin(WS, 'r2', NOW)
     forgetRun(WS, 'r1')
     const p = sessionPrefs(WS)
-    expect(p.pinned).toEqual({ r2: NOW })
+    // Pinned in the same instant as r1, so stamped just after it.
+    expect(p.pinned).toEqual({ r2: NOW + 1 })
     expect(p.group).toEqual({})
     expect(p.snoozed).toEqual({})
     expect(p.aliases).toEqual({})

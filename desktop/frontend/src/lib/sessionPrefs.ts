@@ -172,9 +172,12 @@ function patch<K extends keyof SessionPrefs>(p: SessionPrefs, name: K, next: Ses
 // --- pin ---
 
 export function togglePin(workspaceId: string, runId: string, now = Date.now()): void {
-  update(workspaceId, (p) =>
-    patch(p, 'pinned', runId in p.pinned ? without(p.pinned, runId) : { ...p.pinned, [runId]: now }),
-  )
+  update(workspaceId, (p) => {
+    if (runId in p.pinned) return patch(p, 'pinned', without(p.pinned, runId))
+    // A pin made in the same instant as the last one still goes under it.
+    const stamp = Math.max(now, ...Object.values(p.pinned).map((t) => t + 1))
+    return patch(p, 'pinned', { ...p.pinned, [runId]: stamp })
+  })
 }
 
 // --- settled / live ---
