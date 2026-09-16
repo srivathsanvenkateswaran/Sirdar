@@ -172,7 +172,7 @@ describe('NewSession', () => {
     expect(within(modes).getByRole('radio', { checked: true })).toHaveTextContent('Triage')
     expect(screen.getByText('auto')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-    expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+    expect(modelChip()).toHaveAccessibleName('Model claude · sonnet')
     // Start is on the screen, filled, and off until there is a key; the
     // footer is told to stand down rather than draw a second one.
     expect(startButton()).toHaveAttribute('data-variant', 'primary')
@@ -268,13 +268,12 @@ describe('NewSession', () => {
     fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
     fireEvent.click(modelChip())
     const popover = screen.getByRole('dialog', { name: 'Provider and model' })
-    fireEvent.click(within(popover).getByRole('option', { name: /codex/ }))
-    fireEvent.change(within(popover).getByRole('textbox', { name: 'Other model' }), {
-      target: { value: ' o3 ' },
-    })
-    fireEvent.click(within(popover).getByRole('button', { name: 'Done' }))
+    fireEvent.click(within(popover).getByRole('tab', { name: 'Codex' }))
+    const other = within(popover).getByRole('textbox', { name: 'Other model' })
+    fireEvent.change(other, { target: { value: ' o3 ' } })
+    fireEvent.keyDown(other, { key: 'Enter' })
     // The chip follows the override, so the reader sees what will run.
-    expect(screen.getByText('codex · o3')).toBeInTheDocument()
+    expect(modelChip()).toHaveAccessibleName('Model codex · o3')
     // Provider and model are no longer under More options; dry run still is.
     fireEvent.click(screen.getByLabelText(/Dry run/))
     expect(screen.queryByLabelText('Provider')).toBeNull()
@@ -295,10 +294,10 @@ describe('NewSession', () => {
     fireEvent.change(bar(), { target: { value: 'OMNI-9' } })
     fireEvent.click(modelChip())
     const popover = screen.getByRole('dialog', { name: 'Provider and model' })
-    expect(within(popover).getByText('workspace default')).toBeInTheDocument()
-    fireEvent.click(within(popover).getByRole('option', { name: 'Sonnet 5' }))
+    expect(within(popover).getByRole('tab', { name: 'Claude, workspace default' })).toBeInTheDocument()
+    fireEvent.click(within(popover).getByRole('option', { name: /Sonnet 5/ }))
     expect(screen.queryByRole('dialog')).toBeNull()
-    expect(screen.getByText('claude · Sonnet 5')).toBeInTheDocument()
+    expect(modelChip()).toHaveAccessibleName('Model claude · Sonnet 5')
 
     fireEvent.click(startButton())
     await waitFor(() =>
@@ -315,12 +314,12 @@ describe('NewSession', () => {
 
     it('names the workspace model when the config has one', () => {
       mount()
-      expect(screen.getByText('claude · sonnet')).toBeInTheDocument()
+      expect(modelChip()).toHaveAccessibleName('Model claude · sonnet')
     })
 
     it('says CLI default when the config names no model and no run has reported one', () => {
       mount({ workspace: noModel() })
-      expect(screen.getByText('claude · CLI default')).toBeInTheDocument()
+      expect(modelChip()).toHaveAccessibleName('Model claude · CLI default')
     })
 
     it('appends what the newest run on that provider reported', () => {
@@ -332,22 +331,20 @@ describe('NewSession', () => {
           run({ runId: 'c', provider: 'codex', model: 'gpt-5.6-luna', updatedAt: '2026-09-12T09:00:00Z' }),
         ],
       })
-      expect(
-        screen.getByText('claude · CLI default · last used claude-sonnet-5'),
-      ).toBeInTheDocument()
+      expect(modelChip()).toHaveAccessibleName('Model claude · CLI default · last used claude-sonnet-5')
       // Switching provider follows that provider's newest run instead.
       fireEvent.click(modelChip())
       const popover = screen.getByRole('dialog', { name: 'Provider and model' })
-      fireEvent.click(within(popover).getByRole('option', { name: /codex/ }))
-      expect(screen.getByText('codex · CLI default · last used gpt-5.6-luna')).toBeInTheDocument()
+      fireEvent.click(within(popover).getByRole('tab', { name: 'Codex' }))
+      expect(modelChip()).toHaveAccessibleName('Model codex · CLI default · last used gpt-5.6-luna')
     })
 
     it('drops the last-used clause once a model is chosen', () => {
       mount({ workspace: noModel(), runs: [run({ provider: 'claude', model: 'claude-sonnet-5' })] })
       fireEvent.click(modelChip())
       const popover = screen.getByRole('dialog', { name: 'Provider and model' })
-      fireEvent.click(within(popover).getByRole('option', { name: 'Opus 5' }))
-      expect(screen.getByText('claude · Opus 5')).toBeInTheDocument()
+      fireEvent.click(within(popover).getByRole('option', { name: /Opus 5/ }))
+      expect(modelChip()).toHaveAccessibleName('Model claude · Opus 5')
     })
   })
 

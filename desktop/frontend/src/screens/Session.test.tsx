@@ -182,7 +182,8 @@ describe('Session', () => {
     expect(screen.getByText('Statement export times out')).toBeInTheDocument()
     // The mark is in the topbar and again on the composer's Model chip.
     expect(screen.getAllByRole('img', { name: 'Claude' })).toHaveLength(2)
-    expect(screen.getByText('claude-haiku-4-5')).toBeInTheDocument()
+    // The model is in the topbar and again on the composer's chip.
+    expect(screen.getByText('claude-haiku-4-5', { selector: '.session-provider-model' })).toBeInTheDocument()
     expect(screen.getByText('turns')).toBeInTheDocument()
     expect(f.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
   })
@@ -256,8 +257,9 @@ describe('Session', () => {
     const f = fake({ detail: { ...RUN, model: '' } })
     renderSession(f)
     await screen.findByRole('heading', { name: 'OMNI-2510' })
-    expect(screen.getByText('model unknown')).toHaveClass('session-provider-model')
-    expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
+    expect(screen.getByText('model unknown', { selector: '.session-provider-model' })).toBeInTheDocument()
+    // The composer's chip says the same, by its name.
+    expect(screen.getByRole('button', { name: /^Model claude · model unknown/ })).toBeInTheDocument()
   })
 
   // The run record starts with whatever the workspace configured, which for
@@ -269,11 +271,13 @@ describe('Session', () => {
     const f = fake({ detail: { ...RUN, model: '' } })
     renderSession(f)
     await screen.findByRole('heading', { name: 'OMNI-2510' })
-    expect(screen.getByText('claude · model unknown')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /^Model claude · model unknown/ })).toBeInTheDocument()
 
     f.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...RUN, model: 'claude-sonnet-5-20260514' } })
     await waitFor(() =>
-      expect(screen.getByText('claude-sonnet-5-20260514')).toHaveClass('session-provider-model'),
+      expect(
+        screen.getByText('claude-sonnet-5-20260514', { selector: '.session-provider-model' }),
+      ).toBeInTheDocument(),
     )
     expect(screen.queryByText('model unknown')).toBeNull()
   })
@@ -285,7 +289,7 @@ describe('Session', () => {
     const chip = screen.getByRole('button', { name: /^Model claude · claude-haiku-4-5/ })
     expect(chip).toBeDisabled()
     expect(chip).toHaveAttribute('title', expect.stringContaining('A steer resumes the same session'))
-    expect(screen.getByText('claude · claude-haiku-4-5')).toBeInTheDocument()
+    expect(chip).toHaveTextContent('claude-haiku-4-5')
   })
 
   it('appends a subscribed run.event for this run and ignores another run', async () => {

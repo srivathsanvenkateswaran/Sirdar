@@ -71,4 +71,12 @@ describe('what floats over the sheet', () => {
     expect(rule(css, '.sd-dialog__body')).toContain('overflow-y: auto')
     expect(rule(css, '.sd-dialog__body')).toContain('min-block-size: 0')
   })
+
+  it('the model picker popover is pinned to the viewport, not hung under the chip', () => {
+    const css = sheet('ui/model-picker/ModelPicker.css')
+    expect(rule(css, '.sd-model-picker__popover')).toContain('position: fixed')
+    expect(rule(css, '.sd-model-picker__popover')).not.toContain('inset-block-start')
+    expect(rule(css, '.sd-model-picker__list')).toContain('overflow-y: auto')
+    expect(rule(css, '.sd-model-picker__list')).toContain('min-block-size: 0')
+  })
 })
