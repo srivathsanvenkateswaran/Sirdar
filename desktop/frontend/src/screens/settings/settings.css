@@ -24,6 +24,27 @@
 
 /* ---------- shared ---------- */
 
+/*
+ * The "You" row's value: the avatar, the identity, and the rule that
+ * answered. The rule is the quieter ink, since the identity is the fact and
+ * the rule is the footnote.
+ */
+.settings-you {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  flex-wrap: wrap;
+}
+
+.settings-you__who {
+  overflow-wrap: anywhere;
+}
+
+.settings-you__from {
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
 .settings-mono {
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-ledger);

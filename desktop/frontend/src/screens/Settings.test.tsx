@@ -180,6 +180,30 @@ describe('General', () => {
     expect(screen.getByText("Notes in en, customer replies in the ticket's own language")).toBeInTheDocument()
   })
 
+  it('says who you are, where that came from, and the other spellings', async () => {
+    open()
+    expect(await screen.findByText('sri@acme.com')).toBeInTheDocument()
+    expect(screen.getByText('from the me block in config.yaml')).toBeInTheDocument()
+    expect(screen.getByText(/Also known as Sri Venkateswaran, sri/)).toBeInTheDocument()
+    // The avatar is the initials of the address's local part.
+    expect(document.querySelector('.settings-you .sd-avatar')?.textContent).toBe('S')
+  })
+
+  it('names the rule that answered when it is not the me block', async () => {
+    const summary = configSummary({ me: { email: 'sri@acme.com', names: [], source: 'git' } })
+    open({}, transportWith({}, { configSummary: summary }))
+    expect(await screen.findByText('from git config')).toBeInTheDocument()
+  })
+
+  it('says what to add when the workspace can name nobody', async () => {
+    const summary = configSummary({ me: { email: '', names: [], source: '' } })
+    open({}, transportWith({}, { configSummary: summary }))
+    expect(
+      await screen.findByText('Nobody. Add a me block with your email to config.yaml.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /config.*: You/ })).toBeInTheDocument()
+  })
+
   it('offers to copy the config path where the transport cannot open files', async () => {
     const writeText = vi.fn().mockResolvedValue(undefined)
     Object.assign(navigator, { clipboard: { writeText } })
