@@ -1,0 +1,2853 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The Sirdar UI asset library - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-sirdar-ui-asset-library" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The Sirdar UI asset library
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#folder-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Folder layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-specmd-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What SPEC.md contains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-examplehtml-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What example.html contains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-changelogmd-contains" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What CHANGELOG.md contains
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#rules-that-hold-across-every-component" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Rules that hold across every component
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-first-15-components" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The first 15 components
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-app-shell-six" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The app-shell six
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-index" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The index
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The index">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-screens-round-ten" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The screens-round ten
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-logo-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The logo round
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-session-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The session round
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-session-menu-round" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The session-menu round
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-each-spec-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where each spec lives
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-changelog" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The changelog
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#catalogue" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Catalogue
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-sirdar-ui-asset-library">The Sirdar UI asset library<a class="headerlink" href="#the-sirdar-ui-asset-library" title="Permanent link">&para;</a></h1>
+<p>One folder per component. The folder is the component's whole record: what it is made of,
+every state it has, which tokens it reads, what it must not do, a page you can open in a
+browser, and a log of what changed.</p>
+<p>The convention is Tatak's, adapted. Tatak organises by <em>round</em> (<code>docs/design/&lt;date&gt;-&lt;slug&gt;/</code>
+with a brief, a decisions file, and a contact sheet) and keeps a flat <code>screens/</code> folder of
+self-contained mockups, with <code>library/STANDARD.md</code> recording the vocabulary those rounds
+converged on and <code>library/tokens.css</code> as the file new work links instead of hand-copying a
+<code>:root</code>. Sirdar keeps the first two habits and changes the third.</p>
+<p><strong>Keep: derived, not invented.</strong> Tatak's STANDARD.md opens with "Every claim below was
+measured out of the 39 mockups". A spec in this library states what the component <em>is</em>,
+sourced from the code or from an approved example, and marks anything aspirational as
+aspirational. A spec that describes a component nobody has built says so in its first line.</p>
+<p><strong>Keep: one tokens file, linked, never copied.</strong> No example in this library declares a
+<code>:root</code>. Every one of them links <code>../../../../desktop/frontend/src/styles/tokens.css</code>.
+Tatak's own header explains what happens otherwise: hand-copying also copies mistakes, and
+five rounds of it produced five spellings of the same idea.</p>
+<p><strong>Change: organise by component, not by round.</strong> Tatak is a consumer app designed in
+discrete rounds, so a round is the natural unit. Sirdar has one app, one landing page, and
+one docs site that all have to stay in step for years, so the unit is the component and the
+round becomes a line in a changelog. Design rounds still happen and still get a folder at
+<code>docs/design/&lt;date&gt;-&lt;slug&gt;/</code> with a brief and a contact sheet; they just do not own the
+components they touch.</p>
+<h2 id="folder-layout">Folder layout<a class="headerlink" href="#folder-layout" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>docs/design/library/
+  README.md            this file
+  index.html           the catalogue: every component, its status, a link to its example
+  button/
+    SPEC.md
+    example.html
+    CHANGELOG.md
+  status-badge/
+    SPEC.md
+    example.html
+    CHANGELOG.md
+  ...
+  _kit.css             shared example-page chrome (the dark catalogue page, the frames)
+</code></pre></div>
+<p>Files beginning with <code>_</code> are shared partials and are not components. The catalogue's
+scanner skips them, which is the same convention Tatak's explorer build uses.</p>
+<h2 id="what-specmd-contains">What SPEC.md contains<a class="headerlink" href="#what-specmd-contains" title="Permanent link">&para;</a></h2>
+<p>Six headings, in this order, every time.</p>
+<ol>
+<li><strong>What it is.</strong> One sentence. Then where it is used: which of the three surfaces
+   (landing, app, docs), and the file and selector if it already exists in code.</li>
+<li><strong>Anatomy.</strong> The parts, named, in DOM order, with the box model that matters (padding,
+   gap, min-height, hit target). A labelled list, not a paragraph.</li>
+<li><strong>States.</strong> Every state as a row: rest, hover, active/pressed, focus-visible, disabled,
+   loading, error, empty, selected, RTL. A state that does not apply is written "n/a" with
+   the reason, not omitted, because omission is indistinguishable from an oversight.</li>
+<li><strong>Tokens used.</strong> The exact <code>--sd-*</code> names, one per line, with what each one paints. If
+   the component needs a value that is not a token, this section says so and the component
+   does not ship until section 4 of <code>../01-tokens.md</code> has been consulted.</li>
+<li><strong>Do / Don't.</strong> Pairs. Each "don't" names the failure it prevents and, where one exists,
+   the place in the codebase where it already went wrong.</li>
+<li><strong>Accessibility.</strong> The role and ARIA, keyboard behaviour, the contrast pair being
+   claimed with its measured ratio, and the reduced-motion answer.</li>
+</ol>
+<p>Specs are written in plain prose. No component is described as "flexible", "modern", or
+"clean".</p>
+<h2 id="what-examplehtml-contains">What example.html contains<a class="headerlink" href="#what-examplehtml-contains" title="Permanent link">&para;</a></h2>
+<p>A single self-contained page that opens with a double-click and no build step:</p>
+<div class="highlight"><pre><span></span><code><span class="cp">&lt;!doctype html&gt;</span>
+<span class="p">&lt;</span><span class="nt">meta</span> <span class="na">charset</span><span class="o">=</span><span class="s">"utf-8"</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">title</span><span class="p">&gt;</span>Sirdar library - Button<span class="p">&lt;/</span><span class="nt">title</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">link</span> <span class="na">rel</span><span class="o">=</span><span class="s">"stylesheet"</span> <span class="na">href</span><span class="o">=</span><span class="s">"../../../../desktop/frontend/src/styles/tokens.css"</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">link</span> <span class="na">rel</span><span class="o">=</span><span class="s">"stylesheet"</span> <span class="na">href</span><span class="o">=</span><span class="s">"../_kit.css"</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">style</span><span class="p">&gt;</span><span class="c">/* only rules this component needs, copied from or destined for the real CSS */</span><span class="p">&lt;/</span><span class="nt">style</span><span class="p">&gt;</span>
+
+<span class="p">&lt;</span><span class="nt">h1</span><span class="p">&gt;</span>Button<span class="p">&lt;/</span><span class="nt">h1</span><span class="p">&gt;</span>
+<span class="p">&lt;</span><span class="nt">p</span> <span class="na">class</span><span class="o">=</span><span class="s">"lede"</span><span class="p">&gt;</span>...<span class="p">&lt;/</span><span class="nt">p</span><span class="p">&gt;</span>
+
+<span class="p">&lt;</span><span class="nt">section</span> <span class="na">data-theme</span><span class="o">=</span><span class="s">"light"</span><span class="p">&gt;</span>  <span class="cm">&lt;!-- every state, labelled, at real size --&gt;</span>
+<span class="p">&lt;</span><span class="nt">section</span> <span class="na">data-theme</span><span class="o">=</span><span class="s">"dark"</span><span class="p">&gt;</span>   <span class="cm">&lt;!-- the same grid again --&gt;</span>
+<span class="p">&lt;</span><span class="nt">section</span> <span class="na">dir</span><span class="o">=</span><span class="s">"rtl"</span><span class="p">&gt;</span>           <span class="cm">&lt;!-- the same grid a third time --&gt;</span>
+</code></pre></div>
+<p>Three grids, always: light, dark, RTL. A component whose example does not render the RTL
+grid is not finished, because Arabic is first-class in Sirdar's notes and RTL bugs are
+found by looking, not by reading.</p>
+<p>The example renders the component at the size it ships at. A button shown at 3x is a
+drawing, not an example.</p>
+<h2 id="what-changelogmd-contains">What CHANGELOG.md contains<a class="headerlink" href="#what-changelogmd-contains" title="Permanent link">&para;</a></h2>
+<p>Newest first. One entry per change:</p>
+<div class="highlight"><pre><span></span><code>## 2026-09-15
+Added. Initial spec from desktop/frontend/src/styles.css `.button`, `.button--accent`,
+`.button--quiet`. Radius moves 3px to --sd-radius-sm (8px); the accent variant gains
+--sd-shadow-hard.
+</code></pre></div>
+<p>An entry says what changed and what it was before. "Polish" and "improvements" are not
+entries. When a change is forced by a token change, the entry names the token.</p>
+<h2 id="rules-that-hold-across-every-component">Rules that hold across every component<a class="headerlink" href="#rules-that-hold-across-every-component" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>No component declares a colour.</strong> If the spec needs a hex, the answer is a token.</li>
+<li><strong>Logical properties only.</strong> <code>padding-inline</code>, <code>margin-inline-start</code>, <code>inset-inline-end</code>.
+  The one documented exception is <code>--sd-shadow-hard</code>, which flips under <code>[dir="rtl"]</code>.</li>
+<li><strong>Every focusable part gets <code>:focus-visible</code> with <code>2px solid var(--sd-accent)</code> at
+  <code>outline-offset: 2px</code>.</strong> No component removes it.</li>
+<li><strong>Status is never colour alone.</strong> The word is always present.</li>
+<li><strong>Motion is optional behaviour.</strong> Nothing a component does depends on an animation
+  finishing, and every animation has a <code>prefers-reduced-motion</code> answer stated in the spec.</li>
+<li><strong>The example is the proof.</strong> A spec whose example disagrees with it is a bug in the
+  spec.</li>
+</ul>
+<h2 id="the-first-15-components">The first 15 components<a class="headerlink" href="#the-first-15-components" title="Permanent link">&para;</a></h2>
+<p>In build order. The first five are shared by all three surfaces and unblock the rest.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status today</th>
+<th>Notes for the spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td><strong>Button</strong> (primary, secondary, ghost)</td>
+<td>all</td>
+<td>exists: <code>.button</code>, <code>.button--accent</code>, <code>.button--quiet</code></td>
+<td>Primary is the only variant carrying <code>--sd-shadow-hard</code>, and the only one that may mutate anything. Pressed state translates 1px and shrinks the shadow. Ghost has no border at rest.</td>
+</tr>
+<tr>
+<td>2</td>
+<td><strong>Pill nav</strong></td>
+<td>landing, docs, app</td>
+<td>partial: <code>.nav</code>, <code>.nav-item</code></td>
+<td>Surface-coloured pill row, <code>--sd-radius-pill</code>, <code>--sd-shadow-soft</code>, sticky, sits over any band. Current item uses <code>--sd-accent-soft</code>, not a border.</td>
+</tr>
+<tr>
+<td>3</td>
+<td><strong>Segmented control</strong></td>
+<td>landing, app</td>
+<td>new</td>
+<td>Two to four options, one track, a sliding thumb at <code>--sd-dur-2</code>. Roving tabindex, arrow keys. The reduced-motion answer is that the thumb jumps.</td>
+</tr>
+<tr>
+<td>4</td>
+<td><strong>Card</strong></td>
+<td>all</td>
+<td>exists: <code>.card</code>, <code>.panel</code></td>
+<td>The base box: <code>--sd-surface</code>, 1px <code>--sd-rule-strong</code>, <code>--sd-radius-md</code>, no shadow. Everything else on this list that looks like a box is this component with content.</td>
+</tr>
+<tr>
+<td>5</td>
+<td><strong>Status badge</strong></td>
+<td>app, landing</td>
+<td>exists: <code>.badge</code>, <code>.run-badge</code>, <code>.badge--priority</code></td>
+<td>Six status hues plus a priority variant. Hue comes from the lane when inside one, from <code>data-status</code> otherwise. Always carries its word.</td>
+</tr>
+<tr>
+<td>6</td>
+<td><strong>Kanban column</strong></td>
+<td>app</td>
+<td>exists: <code>.lane</code>, <code>.lane-head</code>, <code>.lane-body</code></td>
+<td>A 248-wide card-row well with a 3px rail in the lane hue, which is the board's legend, and a tracked uppercase head. Stacks under 720px. Empty state is prose, not an icon.</td>
+</tr>
+<tr>
+<td>7</td>
+<td><strong>Run card</strong></td>
+<td>app</td>
+<td>exists: <code>.card--run</code></td>
+<td>Key in mono, title clamped to two lines, reason behind an inline-start rail, footer of badge + elapsed + cost. A live run gets the accent inline-start edge.</td>
+</tr>
+<tr>
+<td>8</td>
+<td><strong>Event row</strong></td>
+<td>app</td>
+<td>exists: <code>.ev</code> and its eight variants</td>
+<td>The ledger row: fixed mono gutter, one-character glyph, a hairline rail down the column, colour on the rail only. The densest thing in the product and the one most likely to be broken by a radius change.</td>
+</tr>
+<tr>
+<td>9</td>
+<td><strong>Note pane</strong></td>
+<td>app</td>
+<td>exists: <code>.pane</code>, <code>.md</code></td>
+<td>Prose at <code>--sd-measure-prose</code>. Carries <code>dir</code> from <code>lib/rtl.ts</code>. Arabic body, English headings, both in one column. The only place the display serif appears inside the app.</td>
+</tr>
+<tr>
+<td>10</td>
+<td><strong>Data table</strong></td>
+<td>app, docs</td>
+<td>exists: <code>.register-table</code>, <code>.eval-table</code></td>
+<td>Tabular figures, hairline rows, sortable headers, sticky header, a horizontal scroll container so the page body never scrolls sideways.</td>
+</tr>
+<tr>
+<td>11</td>
+<td><strong>Toast</strong></td>
+<td>app</td>
+<td>exists: <code>.toast</code>, <code>.toasts</code></td>
+<td>Inline-start 2px accent edge, error tone swaps it for <code>--sd-st-failed</code>. 140ms entrance, already reduced-motion guarded.</td>
+</tr>
+<tr>
+<td>12</td>
+<td><strong>Dialog</strong></td>
+<td>app, landing</td>
+<td>exists: <code>.dialog</code>, <code>.scrim</code></td>
+<td><code>--sd-radius-md</code>, <code>--sd-shadow-soft</code>, scrim at 32% ink. Focus trap, Escape closes, focus returns to the opener.</td>
+</tr>
+<tr>
+<td>13</td>
+<td><strong>Quota chip</strong></td>
+<td>app, landing</td>
+<td>exists: <code>.quota-meter</code>, <code>.quota-bar</code>, <code>.cost</code></td>
+<td>Provider name, a bar, a percentage, a reset time. Mono tabular throughout. Over-budget is the failed hue and says the word.</td>
+</tr>
+<tr>
+<td>14</td>
+<td><strong>Hero band</strong></td>
+<td>landing, docs home</td>
+<td>new</td>
+<td>Full-bleed, <code>--sd-radius-band</code> on the leading corners, paper ink on <code>--sd-band-deep</code> or <code>--sd-band-ink</code>. Holds a display headline with an italic second clause, one deck line, one button.</td>
+</tr>
+<tr>
+<td>15</td>
+<td><strong>Marquee / ring text</strong></td>
+<td>landing</td>
+<td>new</td>
+<td>Both ambient motions in one folder because they share the reduced-motion contract and the RTL direction flip. Ring text: a sentence on a circular path, 48s linear. Marquee: one track, 34s linear, 64px edge mask. Neither carries information.</td>
+</tr>
+</tbody>
+</table>
+<h2 id="the-app-shell-six">The app-shell six<a class="headerlink" href="#the-app-shell-six" title="Permanent link">&para;</a></h2>
+<p>Added from <code>../03-desktop-app.md</code>, which reads the desktop app language off a capture of
+Wispr Flow's macOS settings screen. Five are new and Badge extends the markup <code>.badge</code>
+already has. They come after the fifteen because each one is the Card, the Dialog or the
+Button with a job, and none of them can be specified before those are settled.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status today</th>
+<th>Notes for the spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>16</td>
+<td><strong>Sidebar nav item</strong></td>
+<td>app</td>
+<td>new</td>
+<td>Icon 16 plus label 13/500 in a 28-tall pill at 32 pitch, inset 8. Rest <code>--sd-ink-2</code>, hover <code>--sd-nav-hover</code>, current <code>--sd-nav-active</code> with <code>--sd-ink</code>. No accent, no border, and never <code>--sd-ink-3</code>, which clears only 4.12:1 on the active fill.</td>
+</tr>
+<tr>
+<td>17</td>
+<td><strong>Sidebar footer card</strong></td>
+<td>app</td>
+<td>new</td>
+<td>The block pinned under a <code>--sd-rule</code> hairline at the foot of the sidebar: workspace switcher row, one quota chip per budgeted provider, then the screen's primary button at full content width. <code>--sd-card-row</code> fill, <code>--sd-radius-md</code>, no shadow.</td>
+</tr>
+<tr>
+<td>18</td>
+<td><strong>Modal sheet with secondary nav</strong></td>
+<td>app</td>
+<td>new; extends Dialog (12)</td>
+<td>The large Dialog variant: <code>min(900px,92vw)</code> by <code>min(640px,88vh)</code>, centred, <code>--sd-scrim</code> behind it, a 200-wide <code>--sd-card-row</code> nav column on the leading edge carrying the modal's leading corners, and a <code>--sd-sheet</code> content panel at 32 padding with the app's one serif heading. Settings is the only screen that gets one.</td>
+</tr>
+<tr>
+<td>19</td>
+<td><strong>Setting row</strong></td>
+<td>app</td>
+<td>new</td>
+<td>One setting per row, 64 tall, inside a <code>--sd-card-row</code> card: label 13/500 over its current value in <code>--sd-ink-2</code> on the leading side, exactly one control on the trailing side, rows split by a <code>--sd-rule-faint</code> divider inset 16 and none after the last. Two controls means two rows.</td>
+</tr>
+<tr>
+<td>20</td>
+<td><strong>Heatmap</strong></td>
+<td>app</td>
+<td>new</td>
+<td>Runs per day above the Register table: 12px cells, 4px gaps, weekday rows by week columns, 12 weeks in a scroll container, five <code>--sd-heat-*</code> steps. Every cell is a button with an accessible name like <code>14 September, 6 runs</code>, and the legend prints bucket boundaries as numbers, not only More and Less.</td>
+</tr>
+<tr>
+<td>21</td>
+<td><strong>Badge</strong></td>
+<td>app, landing</td>
+<td>partial: shares markup with <code>.badge</code></td>
+<td>The account or workspace chip: 20 tall, <code>--sd-radius-xs</code>, padding-inline 8, 11/500 sentence case, <code>--sd-badge-bg</code> with <code>--sd-badge-ink</code> at 13.86:1 light and 9.72:1 dark. It carries a fact about the account, never a run state; anything that could be either is the Status badge (5).</td>
+</tr>
+</tbody>
+</table>
+<p>After these twenty-one: Code block, Kbd, Link with marker sweep, Text badge row, Media
+frame, Step band, Inbound row, Fix panel. Workspace switcher and Settings panel leave that
+list: the switcher is a row inside 17 and the settings panel is 18 and 19 together.</p>
+<h2 id="the-index">The index<a class="headerlink" href="#the-index" title="Permanent link">&para;</a></h2>
+<p>All thirty-nine are built. Each row links the spec in this folder, which is a
+copy of the one beside the code; <code>desktop/frontend/scripts/sync-specs.mjs</code>
+writes the copies and <code>--check</code> fails CI when one is stale. The live examples
+are not static pages here but the gallery inside the app, at <code>#/library</code>, which
+renders every component in every state with a light/dark switch and an
+LTR/RTL switch — that is the "example is the proof" rule, moved from a folder of
+hand-written HTML into the app itself so a specimen cannot drift from the
+component it is showing.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status</th>
+<th>Code</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Button</td>
+<td>all</td>
+<td>built</td>
+<td><code>src/ui/button/</code></td>
+<td><a href="button/SPEC/">button/SPEC.md</a></td>
+</tr>
+<tr>
+<td>2</td>
+<td>Pill nav</td>
+<td>landing, docs, app</td>
+<td>built</td>
+<td><code>src/ui/pill-nav/</code></td>
+<td><a href="pill-nav/SPEC/">pill-nav/SPEC.md</a></td>
+</tr>
+<tr>
+<td>3</td>
+<td>Segmented control</td>
+<td>landing, app</td>
+<td>built</td>
+<td><code>src/ui/segmented-control/</code></td>
+<td><a href="segmented-control/SPEC/">segmented-control/SPEC.md</a></td>
+</tr>
+<tr>
+<td>4</td>
+<td>Card</td>
+<td>all</td>
+<td>built</td>
+<td><code>src/ui/card/</code></td>
+<td><a href="card/SPEC/">card/SPEC.md</a></td>
+</tr>
+<tr>
+<td>5</td>
+<td>Status badge</td>
+<td>app, landing</td>
+<td>built</td>
+<td><code>src/ui/status-badge/</code></td>
+<td><a href="status-badge/SPEC/">status-badge/SPEC.md</a></td>
+</tr>
+<tr>
+<td>6</td>
+<td>Kanban column</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/kanban-column/</code></td>
+<td><a href="kanban-column/SPEC/">kanban-column/SPEC.md</a></td>
+</tr>
+<tr>
+<td>7</td>
+<td>Run card</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/run-card/</code></td>
+<td><a href="run-card/SPEC/">run-card/SPEC.md</a></td>
+</tr>
+<tr>
+<td>8</td>
+<td>Event row</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/event-row/</code></td>
+<td><a href="event-row/SPEC/">event-row/SPEC.md</a></td>
+</tr>
+<tr>
+<td>9</td>
+<td>Note pane</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/note-pane/</code></td>
+<td><a href="note-pane/SPEC/">note-pane/SPEC.md</a></td>
+</tr>
+<tr>
+<td>10</td>
+<td>Data table</td>
+<td>app, docs</td>
+<td>built</td>
+<td><code>src/ui/data-table/</code></td>
+<td><a href="data-table/SPEC/">data-table/SPEC.md</a></td>
+</tr>
+<tr>
+<td>11</td>
+<td>Toast</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/toast/</code></td>
+<td><a href="toast/SPEC/">toast/SPEC.md</a></td>
+</tr>
+<tr>
+<td>12</td>
+<td>Dialog</td>
+<td>app, landing</td>
+<td>built</td>
+<td><code>src/ui/dialog/</code></td>
+<td><a href="dialog/SPEC/">dialog/SPEC.md</a></td>
+</tr>
+<tr>
+<td>13</td>
+<td>Quota chip</td>
+<td>app, landing</td>
+<td>built</td>
+<td><code>src/ui/quota-chip/</code></td>
+<td><a href="quota-chip/SPEC/">quota-chip/SPEC.md</a></td>
+</tr>
+<tr>
+<td>14</td>
+<td>Hero band</td>
+<td>landing, docs home</td>
+<td>built</td>
+<td><code>src/ui/hero-band/</code></td>
+<td><a href="hero-band/SPEC/">hero-band/SPEC.md</a></td>
+</tr>
+<tr>
+<td>15</td>
+<td>Ring text and marquee</td>
+<td>landing</td>
+<td>built</td>
+<td><code>src/ui/ambient/</code></td>
+<td><a href="ambient/SPEC/">ambient/SPEC.md</a></td>
+</tr>
+<tr>
+<td>16</td>
+<td>Sidebar nav item</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/sidebar-nav-item/</code></td>
+<td><a href="sidebar-nav-item/SPEC/">sidebar-nav-item/SPEC.md</a></td>
+</tr>
+<tr>
+<td>17</td>
+<td>Sidebar footer card</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/sidebar-footer-card/</code></td>
+<td><a href="sidebar-footer-card/SPEC/">sidebar-footer-card/SPEC.md</a></td>
+</tr>
+<tr>
+<td>18</td>
+<td>Modal sheet with secondary nav</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/modal-sheet/</code></td>
+<td><a href="modal-sheet/SPEC/">modal-sheet/SPEC.md</a></td>
+</tr>
+<tr>
+<td>19</td>
+<td>Setting row</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/setting-row/</code></td>
+<td><a href="setting-row/SPEC/">setting-row/SPEC.md</a></td>
+</tr>
+<tr>
+<td>20</td>
+<td>Heatmap</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/heatmap/</code></td>
+<td><a href="heatmap/SPEC/">heatmap/SPEC.md</a></td>
+</tr>
+<tr>
+<td>21</td>
+<td>Badge</td>
+<td>app, landing</td>
+<td>built</td>
+<td><code>src/ui/badge/</code></td>
+<td><a href="badge/SPEC/">badge/SPEC.md</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-screens-round-ten">The screens-round ten<a class="headerlink" href="#the-screens-round-ten" title="Permanent link">&para;</a></h3>
+<p>Added on 2026-09-15 with the reviewed mocks in <code>../2026-09-15-screens/</code>, which
+re-based the app on the reference's 16px register. Each is a piece the mocks
+draw on more than one screen; the components above were re-scaled at the same
+time (40px controls, 72px setting rows, 48px table rows, 14px heat cells, the
+16px sheet) and each one's changelog says what moved.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status</th>
+<th>Code</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>22</td>
+<td>Provider mark</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/provider-mark/</code></td>
+<td><a href="provider-mark/SPEC/">provider-mark/SPEC.md</a></td>
+</tr>
+<tr>
+<td>23</td>
+<td>Banner</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/banner/</code></td>
+<td><a href="banner/SPEC/">banner/SPEC.md</a></td>
+</tr>
+<tr>
+<td>24</td>
+<td>Group label</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/group-label/</code></td>
+<td><a href="group-label/SPEC/">group-label/SPEC.md</a></td>
+</tr>
+<tr>
+<td>25</td>
+<td>Item row</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/item-row/</code></td>
+<td><a href="item-row/SPEC/">item-row/SPEC.md</a></td>
+</tr>
+<tr>
+<td>26</td>
+<td>Search bar</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/search-bar/</code></td>
+<td><a href="search-bar/SPEC/">search-bar/SPEC.md</a></td>
+</tr>
+<tr>
+<td>27</td>
+<td>Stat card</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/stat-card/</code></td>
+<td><a href="stat-card/SPEC/">stat-card/SPEC.md</a></td>
+</tr>
+<tr>
+<td>28</td>
+<td>Toggle</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/toggle/</code></td>
+<td><a href="toggle/SPEC/">toggle/SPEC.md</a></td>
+</tr>
+<tr>
+<td>29</td>
+<td>Page head</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/page-head/</code></td>
+<td><a href="page-head/SPEC/">page-head/SPEC.md</a></td>
+</tr>
+<tr>
+<td>30</td>
+<td>Kind chip</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/kind-chip/</code></td>
+<td><a href="kind-chip/SPEC/">kind-chip/SPEC.md</a></td>
+</tr>
+<tr>
+<td>31</td>
+<td>State glyph</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/state-glyph/</code></td>
+<td><a href="state-glyph/SPEC/">state-glyph/SPEC.md</a></td>
+</tr>
+<tr>
+<td>32</td>
+<td>Diff view</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/diff-view/</code></td>
+<td><a href="diff-view/SPEC/">diff-view/SPEC.md</a></td>
+</tr>
+<tr>
+<td>33</td>
+<td>Model picker</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/model-picker/</code></td>
+<td><a href="model-picker/SPEC/">model-picker/SPEC.md</a></td>
+</tr>
+<tr>
+<td>34</td>
+<td>Source mark</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/source-mark/</code></td>
+<td><a href="source-mark/SPEC/">source-mark/SPEC.md</a></td>
+</tr>
+<tr>
+<td>35</td>
+<td>Panel toggle</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/panel-toggle/</code></td>
+<td><a href="panel-toggle/SPEC/">panel-toggle/SPEC.md</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-logo-round">The logo round<a class="headerlink" href="#the-logo-round" title="Permanent link">&para;</a></h3>
+<p>Added on 2026-09-16 with the chosen mark in <code>../2026-09-16-logo/</code>, which put
+Sirdar's own logo into the app for the first time — the Wails default "W" was
+the icon until then.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status</th>
+<th>Code</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>36</td>
+<td>Brand mark</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/brand-mark/</code></td>
+<td><a href="brand-mark/SPEC/">brand-mark/SPEC.md</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-session-round">The session round<a class="headerlink" href="#the-session-round" title="Permanent link">&para;</a></h3>
+<p>Added on 2026-09-16 with the three Session directions in <code>../2026-09-16-session/</code>,
+all three of which the app now draws as selectable layouts. These two are the
+pieces every layout shares that are primitives rather than session blocks: the
+blocks themselves (RunHeader, ToolStep, TurnGroup, NoteDocument, AnswerCard,
+BundleView, ToolsTable, ChangesView, the composer strip) live in
+<code>desktop/frontend/src/components/session/</code> and are documented there.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status</th>
+<th>Code</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>37</td>
+<td>Marker</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/marker/</code></td>
+<td><a href="marker/SPEC/">marker/SPEC.md</a></td>
+</tr>
+<tr>
+<td>38</td>
+<td>Drawer</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/drawer/</code></td>
+<td><a href="drawer/SPEC/">drawer/SPEC.md</a></td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-session-menu-round">The session-menu round<a class="headerlink" href="#the-session-menu-round" title="Permanent link">&para;</a></h3>
+<p>Added on 2026-09-16 with the sidebar's session menu: a right-click, a
+double-click or the dots at a row's end opens Pin, Mark settled, Snooze ▸,
+Rename, Mark unread, Copy ▸, Open ▸, Workspace settings, Archive and Delete….
+The menu is the primitive; the rows' arrangements it drives live in
+<code>desktop/frontend/src/lib/sessionPrefs.ts</code>.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Component</th>
+<th>Surfaces</th>
+<th>Status</th>
+<th>Code</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>39</td>
+<td>Context menu</td>
+<td>app</td>
+<td>built</td>
+<td><code>src/ui/context-menu/</code></td>
+<td><a href="context-menu/SPEC/">context-menu/SPEC.md</a></td>
+</tr>
+</tbody>
+</table>
+<p><code>src/ui/motion/</code> is not a component. It holds the reduced-motion switch, the
+two ambient keyframes and the RTL reversal that ring text and the marquee
+share, and since 2026-09-15 the app's two entrances as well — the sheet's
+content rising 8px over 160ms on the window's first paint (a move between
+screens after that is drawn in place), and the settings modal scaling from
+0.98 over 200ms behind a 120ms scrim, both frozen under reduced motion.
+It is described inside the ambient spec and is skipped by the sync script, the
+same way this folder's <code>_</code>-prefixed partials are skipped by the catalogue
+scanner.</p>
+<p>Every screen is on the library now. Board draws its lanes with Kanban column
+and its cards with Run card and Card; Run detail's ledger is Event row, its
+note is Note pane and its state is Status badge; Register is Data table with
+Heatmap above it; Eval is Data table; and Settings is Modal sheet with Setting
+row inside it. The rules those components replaced are gone from <code>styles.css</code>,
+<code>components/panels.css</code> and <code>components/run/run.css</code> rather than left beside
+them, and <code>src/styles.library.test.ts</code> holds the app's own stylesheets to the
+same two rules this file states for the library: no component declares a
+colour, and logical properties only.</p>
+<h3 id="where-each-spec-lives">Where each spec lives<a class="headerlink" href="#where-each-spec-lives" title="Permanent link">&para;</a></h3>
+<p>The original is <code>desktop/frontend/src/ui/&lt;component&gt;/SPEC.md</code>, beside the
+component, so a change to one is reviewed with the other. The copy in this
+folder is generated and opens with a comment saying so. Editing the copy is
+lost work: the next sync overwrites it.</p>
+<h3 id="the-changelog">The changelog<a class="headerlink" href="#the-changelog" title="Permanent link">&para;</a></h3>
+<p>Each spec ends with its own changelog rather than carrying a separate
+<code>CHANGELOG.md</code>, so the record of what changed travels with the description of
+what the thing is. The layout sketch above keeps the separate file for the
+components that have not been built yet.</p>
+<h2 id="catalogue">Catalogue<a class="headerlink" href="#catalogue" title="Permanent link">&para;</a></h2>
+<p><code>index.html</code> lists every component: name, the three-surface flags, status (<code>spec only</code>,
+<code>built</code>, <code>drifted</code>), a one-line description, and an Open link to its example. It is written
+by hand, newest entries at the bottom since the order is build order, not recency. A
+component that is not in <code>index.html</code> does not exist.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,83 @@
+# PROPOSED, not active. Copy to .github/workflows/site.yml after the owner decides: it publishes the landing page at the Pages root and moves the docs under /docs/.
+# PROPOSED. Not merged, not wired to push, and not to be enabled without the
+# repository owner's say-so, because running it publishes.
+#
+# What it would change: today `docs.yml` runs `mkdocs gh-deploy`, which pushes
+# the built docs to the `gh-pages` branch and serves them at the Pages root, so
+# https://srivathsanvenkateswaran.github.io/Sirdar/ is the docs home. This
+# workflow serves site/ at that root instead and puts the docs under /docs/,
+# publishing through the Pages artifact API rather than a branch.
+#
+# Adopting it is three decisions, all the owner's:
+#
+#   1. Switch the repository's Pages source from "Deploy from a branch
+#      (gh-pages)" to "GitHub Actions". Until that is done this workflow
+#      uploads an artifact that is never served.
+#   2. Retire docs.yml in the same change. Left in place, the two race: one
+#      pushes gh-pages, the other deploys an artifact, and which one wins is
+#      whichever ran last.
+#   3. Set `site_url` in mkdocs.yml to
+#      https://srivathsanvenkateswaran.github.io/Sirdar/docs/ and update the
+#      two "Docs" links in site/index.html, since the docs move down a level.
+#
+# Until then the `push` trigger below stays commented out and the only way to
+# run this is by hand, on purpose.
+
+name: site
+
+on:
+  workflow_dispatch:
+  # push:
+  #   branches: [main]
+  #   paths:
+  #     - 'site/**'
+  #     - 'docs/**'
+  #     - 'mkdocs.yml'
+  #     - '.github/workflows/site.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r docs/requirements.txt
+
+      # The landing page reads a copy of the app's token file. A stale copy is
+      # a design bug that would ship silently, so fail here instead.
+      - name: Tokens copies match the source
+        run: ./scripts/check-tokens.sh
+
+      - name: Build the docs into _site/docs
+        run: mkdocs build --site-dir _site/docs
+
+      - name: Put the landing page at the root
+        run: cp -R site/. _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

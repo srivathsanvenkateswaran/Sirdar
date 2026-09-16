@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Sirdar mark 1: Twin peak with route">
+<!-- Sirdar logo exploration, 2026-09-16. Mark 1, Twin peak with route. Drawn on a 512 grid for a macOS squircle tile; colours are the light-tile set (Nepal crimson #DC143C, Nepal blue #003893). Original vector, no fonts. -->
+<path d="M152 408 L304 104 L456 408 Z" fill="#003893"/>
+<path d="M64 408 L176 220 L288 408 Z" fill="#DC143C"/>
+<path d="M116 408 C200 380 150 300 236 262 C300 234 276 200 302 160" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+<circle cx="302" cy="160" r="19" fill="#FFFFFF"/>
+</svg>

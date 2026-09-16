@@ -1,0 +1,2633 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>The desktop app language - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#the-desktop-app-language" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              The desktop app language
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-how-the-measurements-were-taken" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. How the measurements were taken
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-what-the-app-does-that-the-website-does-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. What the app does that the website does not
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-measured-from-the-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Measured from the capture
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-window-ground-and-sheet-in-sirdar" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Window ground and sheet in Sirdar
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-sidebar-navigation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Sidebar navigation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="5. Sidebar navigation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#sidebar-footer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sidebar footer
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-settings-as-a-modal-sheet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Settings as a modal sheet
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-setting-rows-and-the-card" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Setting rows and the card
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-one-black-button-per-screen" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. One black button per screen
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-badges" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Badges
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-runs-per-day-on-the-register" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Runs per day, on the Register
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-motion-in-the-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. Motion in the app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#12-dark-mode-is-a-variant-not-a-fallback" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        12. Dark mode is a variant, not a fallback
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#13-what-is-not-taken-from-the-capture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        13. What is not taken from the capture
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="the-desktop-app-language">The desktop app language<a class="headerlink" href="#the-desktop-app-language" title="Permanent link">&para;</a></h1>
+<p><code>00-design-language.md</code> was derived from wisprflow.ai, a marketing page. This file is
+derived from a capture of the same product's macOS app, settings screen open, read on
+2026-09-15. The capture is reference material and is not in this repository.</p>
+<p>The app is a different register of the same language. Everything below says what changed
+and what Sirdar takes.</p>
+<h2 id="1-how-the-measurements-were-taken">1. How the measurements were taken<a class="headerlink" href="#1-how-the-measurements-were-taken" title="Permanent link">&para;</a></h2>
+<p>The capture is 2700x1688 device pixels at 2x, so the window is <strong>1350 x 844 CSS px</strong>. Every
+number in this file is CSS px, halved from the pixel measurement. macOS traffic lights
+measured 24 device px across, which is 12pt, which is what fixes the scale factor.</p>
+<p>The app behind the settings modal is dimmed. The scrim solves as <code>#1A1A1A</code> at <strong>31%</strong>: pure
+white reads back as <code>#B8B8B7</code> and <code>#1A1A1A</code> reads back as itself, which is two equations for
+the two unknowns. The green traffic light checks it one channel deep, <code>#28C840</code> predicting
+146 in green against a measured 146; its red and blue do not match, because the window is
+not frontmost and macOS desaturates the lights. Every colour quoted for a dimmed region
+below is the value with that scrim removed, and is marked <em>reconstructed</em>.</p>
+<h2 id="2-what-the-app-does-that-the-website-does-not">2. What the app does that the website does not<a class="headerlink" href="#2-what-the-app-does-that-the-website-does-not" title="Permanent link">&para;</a></h2>
+<p><strong>The ground is grey and the content is white.</strong> The website is one warm cream with
+full-bleed colour bands cut into it. The app is a single warm off-white window ground,
+reconstructed <code>#F8F6F3</code>, with one white content sheet floating on it at <code>#FFFFFF</code>. The step
+between them is <strong>1.08:1</strong>. That is barely a colour difference and it is doing the entire
+job of the website's bands: it says <em>this is the chrome, that is the work</em>.</p>
+<p><strong>There are no bands at all.</strong> Not one full-bleed colour section, no deep green, no black.
+The only saturated colour in the whole window is the heatmap and one teal percentage chip.</p>
+<p><strong>The header is gone.</strong> The website's floating pill nav is replaced by a 216px left sidebar
+of icon-and-label rows. Nothing is sticky, nothing floats, nothing is pill-shaped except
+the badge.</p>
+<p><strong>There is no shadow anywhere.</strong> Not under the sheet, not under the settings modal, not
+under the primary button. Separation is done with a 1px hairline (<code>#F0EEE6</code> around the
+sheet, 1.08:1 against the ground) and with the scrim behind the modal. The website's hard
+offset shadow does not appear in the app at all.</p>
+<p><strong>Type is smaller and the serif is rationed.</strong> The serif appears once per screen, on the
+page heading, at 28px. Everything else is sans at 15 to 16px.</p>
+<p>The one-line version: the app is the website with the volume down, the colour removed, and
+the chrome moved to the left edge.</p>
+<h2 id="3-measured-from-the-capture">3. Measured from the capture<a class="headerlink" href="#3-measured-from-the-capture" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Thing</th>
+<th>Measurement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Window</td>
+<td>1350 x 844</td>
+</tr>
+<tr>
+<td>Window ground</td>
+<td><code>#F8F6F3</code> reconstructed</td>
+</tr>
+<tr>
+<td>Content sheet</td>
+<td><code>#FFFFFF</code>, 1px <code>#F0EEE6</code> border, inset 53 top (title bar), 9 right, 9 bottom, flush left against the sidebar</td>
+</tr>
+<tr>
+<td>Sidebar</td>
+<td>216 wide, no fill of its own, sits directly on the window ground</td>
+</tr>
+<tr>
+<td>Sidebar row pitch</td>
+<td>40; active pill 36 tall, inset 12 from the window edge</td>
+</tr>
+<tr>
+<td>Sidebar active pill</td>
+<td><code>#F0EEE6</code> reconstructed, <strong>1.08:1</strong> against the ground, no border, no accent</td>
+</tr>
+<tr>
+<td>Sidebar label</td>
+<td>16px, cap height 11.5, ink <code>#1A1A1A</code></td>
+</tr>
+<tr>
+<td>Account card</td>
+<td>12 from the window edge, 159 tall, fill <code>#FCF5FF</code>, 1px <code>#F3E5FF</code> border, both reconstructed</td>
+</tr>
+<tr>
+<td>Primary button</td>
+<td>135 x 36, fill <code>#1A1A1A</code>, radius 6, 16 inside the card</td>
+</tr>
+<tr>
+<td>Plan badge</td>
+<td>70.5 x 25, fill <code>#EFDBFF</code>, radius 6, label <code>#1A1A1A</code> at 12px, <strong>13.46:1</strong></td>
+</tr>
+<tr>
+<td>Settings modal</td>
+<td>961 x 641, centred both axes, top 101, scrim <code>#1A1A1A</code> at 31%</td>
+</tr>
+<tr>
+<td>Modal secondary nav</td>
+<td>210 wide, fill <code>#F5F4F1</code>, row pitch 36, active pill <code>#EEEBE4</code> inset 8 each side</td>
+</tr>
+<tr>
+<td>Modal content panel</td>
+<td><code>#FFFFFF</code>, 48 padding</td>
+</tr>
+<tr>
+<td>Page heading</td>
+<td>serif, cap height 20, so about 28px, ink <code>#1A1A1A</code></td>
+</tr>
+<tr>
+<td>Setting card</td>
+<td>655 wide, fill <code>#F5F4F1</code> (<strong>1.10:1</strong> on the sheet), radius about 10</td>
+</tr>
+<tr>
+<td>Setting row</td>
+<td>86 tall, card padding-inline 20, divider 1px <code>#EEEBE4</code> (<strong>1.08:1</strong> on the card) inset 20 from each card edge</td>
+</tr>
+<tr>
+<td>Row label / body</td>
+<td>15px, <code>#1A1A1A</code> (<strong>15.82:1</strong>) over <code>#30302F</code> (<strong>12.01:1</strong>)</td>
+</tr>
+<tr>
+<td>Change button</td>
+<td>164 x 36, fill <code>#EEEBE4</code>, radius 7, label <code>#30302F</code> at 15px, <strong>11.10:1</strong></td>
+</tr>
+<tr>
+<td>Heatmap cell</td>
+<td>16 x 16, 8 gap, 24 pitch</td>
+</tr>
+<tr>
+<td>Heatmap ramp</td>
+<td><code>#C2D8D6</code>, <code>#8ABBB1</code>, <code>#4D877E</code>, <code>#3B6E6A</code>, all reconstructed; empty cell <code>#F0EEE6</code></td>
+</tr>
+<tr>
+<td>Version string</td>
+<td><code>#ACAAA5</code> on <code>#F5F4F1</code>, <strong>2.11:1</strong></td>
+</tr>
+</tbody>
+</table>
+<p>That last row is the one thing in the capture Sirdar copies the opposite of. A 2.11:1
+version string is unreadable, and Sirdar's floor is 4.5:1 for every string including this
+one.</p>
+<h2 id="4-window-ground-and-sheet-in-sirdar">4. Window ground and sheet in Sirdar<a class="headerlink" href="#4-window-ground-and-sheet-in-sirdar" title="Permanent link">&para;</a></h2>
+<p>Sirdar's paper is already warm, so the pair inverts cleanly rather than being restated in
+grey.</p>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Token</th>
+<th>Light</th>
+<th>Dark</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Window ground, behind everything</td>
+<td><code>--sd-shell</code></td>
+<td><code>#F2EEE0</code></td>
+<td><code>#0C0D11</code></td>
+</tr>
+<tr>
+<td>The content sheet</td>
+<td><code>--sd-sheet</code></td>
+<td><code>#FFFDF7</code></td>
+<td><code>#191A20</code></td>
+</tr>
+</tbody>
+</table>
+<p>Sheet against shell is <strong>1.14:1</strong> light and <strong>1.12:1</strong> dark, close to the reference's 1.08
+and enough to read as two planes. <code>--sd-paper</code> keeps its job on the landing page and the
+docs site and stops being the app's background; the app's background is <code>--sd-shell</code>.</p>
+<p>The sheet holds the screen: the board and its lanes, the run detail split, the register
+table, the eval table. The sidebar sits on the shell with no fill, as in the reference. The
+title bar strip above the sheet is shell, 40px in Sirdar rather than 53 because the app's
+base size is 13px, not 16px.</p>
+<p>No shadow under the sheet. A 1px <code>--sd-rule</code> border and the colour step do the separation,
+which is the rule <code>00-design-language.md</code> section 6 already states for board cards and is
+now the rule for the shell too.</p>
+<h2 id="5-sidebar-navigation">5. Sidebar navigation<a class="headerlink" href="#5-sidebar-navigation" title="Permanent link">&para;</a></h2>
+<p>The header, the pill nav and the workspace select move to a left sidebar. This is the
+largest structural change to the app and the reason for it is the same reason the reference
+did it: a board that scrolls horizontally has no room to spare at the top, and a nav that
+does not move is one less thing that can cover a lane.</p>
+<div class="highlight"><pre><span></span><code>+--------------+---------------------------------------------+
+| SIRDAR   [3] |                                             |
+|              |   Board                                     |
+| [] Board     |   +-----------------------------------+     |
+| [] Register  |   |  lanes, cards, inbound strip      |     |
+| [] Eval      |   |                                   |     |
+| [] Library   |   |                                   |     |
+| [] Settings  |   |                                   |     |
+|              |   |                                   |     |
+|              |   +-----------------------------------+     |
+| -----------  |                                             |
+| acme-support |                                             |
+| anthropic 62%|                                             |
+| openai    9% |                                             |
+| [ New triage]|                                             |
++--------------+---------------------------------------------+
+</code></pre></div>
+<p><strong>The five items, in order, with their icon.</strong> Icon names are Lucide, 16px, stroke 1.5,
+<code>currentColor</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Icon</th>
+<th>What it is</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Board</td>
+<td><code>columns-3</code></td>
+<td>the kanban, the default screen, the inbound strip lives inside it</td>
+</tr>
+<tr>
+<td>Register</td>
+<td><code>rows-3</code></td>
+<td>every run ever, as a table, with the runs-per-day heatmap above it</td>
+</tr>
+<tr>
+<td>Eval</td>
+<td><code>flask-conical</code></td>
+<td>the eval suite and its last result</td>
+</tr>
+<tr>
+<td>Library</td>
+<td><code>book-marked</code></td>
+<td>saved prompts, fix recipes, workspace playbooks</td>
+</tr>
+<tr>
+<td>Settings</td>
+<td><code>sliders-horizontal</code></td>
+<td>opens the modal in section 6, does not change the screen behind it</td>
+</tr>
+</tbody>
+</table>
+<p>Settings is a nav row that opens a modal rather than a screen. That is what the reference
+does and it is right: settings is a place you leave, and keeping the board painted behind
+the scrim tells you that you are coming back.</p>
+<p><strong>Geometry.</strong> Sidebar 208 wide (216 in the reference, one step down for Sirdar's 13px
+base). Row pitch 32, pill height 28, icon 16, gap 8 between icon and label, label 13px
+weight 500, pill inset 8 from the window edge and 8 from the sidebar's inner edge. Collapsed
+rail at 56 wide, icons only, label as a tooltip, below 900px window width.</p>
+<p><strong>States.</strong> Rest label <code>--sd-ink-2</code>. Hover fill <code>--sd-nav-hover</code>, label <code>--sd-ink-2</code>
+(<strong>6.79:1</strong> light, <strong>7.16:1</strong> dark). Current fill <code>--sd-nav-active</code>, label <code>--sd-ink</code> at
+weight 500 (<strong>13.68:1</strong> light, <strong>12.19:1</strong> dark). The current row carries no accent and no
+border. <code>--sd-ink-3</code> is never used on a nav pill: it clears only 4.12:1 there.</p>
+<p>The accent is deliberately absent from navigation. In Sirdar the accent means a live run,
+and a nav row that wears it competes with the one card on the board that has earned it.
+The reference makes the same call for a different reason and the result is the same: the
+only coloured thing in the window is the data.</p>
+<p><strong>A count badge</strong> sits inline-end in the Board row when the inbound strip is not empty: a
+<code>--sd-radius-pill</code> chip, 11px mono tabular, <code>--sd-badge-bg</code> fill. It is the only number in
+the sidebar above the footer.</p>
+<h3 id="sidebar-footer">Sidebar footer<a class="headerlink" href="#sidebar-footer" title="Permanent link">&para;</a></h3>
+<p>Below a <code>--sd-rule</code> hairline, pinned to the bottom of the sidebar, in this order:</p>
+<ol>
+<li><strong>Workspace switcher.</strong> The current workspace name at 13px weight 500, a <code>chevrons-up-down</code>
+   icon at the inline end, the whole row a 28-tall button with the same hover fill as a nav
+   row. It opens a popover list, not a native select. The reference puts the account card
+   here and this is Sirdar's version of that card.</li>
+<li><strong>Quota chips.</strong> One row per provider that has a budget: provider name in 11px mono, a
+   4px-tall bar at <code>--sd-radius-pill</code> filled to the used fraction, the percentage in 11px
+   mono tabular at the inline end. Bar fill <code>--sd-accent</code>, track <code>--sd-sunk</code>. Over budget
+   swaps the fill to <code>--sd-st-failed</code> and the row gains the word <code>over</code>, because status is
+   never colour alone. These are the existing <code>.quota-meter</code> component moved, not a new one.</li>
+<li><strong>New triage</strong>, the primary button, full width of the sidebar content, 28 tall. See
+   section 7.</li>
+</ol>
+<p>The reference's version string and its sync-state cloud icon go in the settings modal
+footer instead of the sidebar, where 4.5:1 is affordable at 11px.</p>
+<h2 id="6-settings-as-a-modal-sheet">6. Settings as a modal sheet<a class="headerlink" href="#6-settings-as-a-modal-sheet" title="Permanent link">&para;</a></h2>
+<p>Settings is a dialog, not a screen. Measured from the reference and translated:</p>
+<ul>
+<li><strong>Size.</strong> 71% of window width and 76% of height in the reference (961 x 641 in a 1350 x 844
+  window). Sirdar clamps rather than scaling: <code>min(900px, 92vw)</code> by <code>min(640px, 88vh)</code>,
+  centred both axes.</li>
+<li><strong>Scrim.</strong> <code>--sd-scrim</code>, which is <code>--sd-ink</code> at 32% light and <code>#07080A</code> at 56% dark. The
+  reference measured 31%. The board stays legible behind it, which is the point.</li>
+<li><strong>Shape.</strong> <code>--sd-radius-md</code>, <code>--sd-sheet</code> fill, 1px <code>--sd-rule</code>, no shadow. The reference
+  has no shadow under its modal either; the scrim is the elevation.</li>
+<li><strong>Secondary nav.</strong> A 200-wide column at <code>--sd-card-row</code>, flush to the modal's leading
+  edge, full height, with the modal's leading corners. Rows at 32 pitch, 28-tall pill inset
+  8 each side, fill <code>--sd-nav-active</code>. Two groups separated by a <code>--sd-rule-faint</code> hairline
+  and a group label at 11px, <code>--sd-ink-3</code>, letter-spacing 0.06em.</li>
+<li><strong>Groups.</strong> <code>Workspace</code> (General, Providers, Budgets, Sources, Eval) and <code>Account</code>
+  (Identity, Keys, Data and privacy). The version string and the last-sync time sit at the
+  bottom of this column at 11px <code>--sd-ink-3</code>, which is <strong>4.60:1</strong> on <code>--sd-card-row</code> and is
+  where the reference fails.</li>
+<li><strong>Content panel.</strong> <code>--sd-sheet</code>, 32 padding (48 in the reference, one step down for
+  Sirdar). A serif page heading at 1.5rem, then setting cards. The heading is the only
+  serif in the app, as <code>00-design-language.md</code> section 4 already allows for the note pane.</li>
+<li><strong>Keyboard.</strong> Escape closes, focus traps, focus returns to the Settings nav row, arrow
+  keys move within the secondary nav. That is the existing Dialog component's contract.</li>
+</ul>
+<p>The same modal pattern serves New triage and Fix, which are today's dialogs. Settings is
+the large variant: a secondary nav on the leading edge. Nothing else in the app gets one.</p>
+<h2 id="7-setting-rows-and-the-card">7. Setting rows and the card<a class="headerlink" href="#7-setting-rows-and-the-card" title="Permanent link">&para;</a></h2>
+<p>A settings page is a stack of cards. Each card is a group of rows sharing one heading; each
+row is one setting.</p>
+<p><strong>Card.</strong> <code>--sd-card-row</code> fill, <code>--sd-radius-md</code>, no border, no shadow. On <code>--sd-sheet</code> it
+is <strong>1.11:1</strong> light and <strong>1.12:1</strong> dark, matching the reference's 1.10.</p>
+<p><strong>Row.</strong> 64 tall in Sirdar (86 in the reference, scaled to the 13px base), padding-inline 16.
+Leading side: label at 13px weight 500 <code>--sd-ink</code> (<strong>15.70:1</strong> light, <strong>12.51:1</strong> dark),
+then the current value at 13px <code>--sd-ink-2</code> on the line below (<strong>7.37:1</strong> / <strong>6.60:1</strong>).
+Trailing side: one control. Rows are separated by a 1px <code>--sd-rule-faint</code> divider inset 16
+from each card edge, never a full-bleed line, and the last row has none.</p>
+<p><strong>The row control.</strong> One per row, and it is the pale button the reference uses: fill
+<code>--sd-nav-active</code>, <code>--sd-radius-sm</code>, 28 tall, padding-inline 12, label 13px <code>--sd-ink-2</code>.
+It is flat, it is quiet, and it is the same shape whether it opens a picker, a file dialog
+or a sub-page. Select controls that need to show their own value use the existing input
+style instead, at <code>--sd-sheet</code> with a 1px <code>--sd-rule-strong</code>, which is what the reference
+does for its one dropdown row.</p>
+<p>A row never carries two controls. A setting that needs two is two rows.</p>
+<h2 id="8-one-black-button-per-screen">8. One black button per screen<a class="headerlink" href="#8-one-black-button-per-screen" title="Permanent link">&para;</a></h2>
+<p>The reference has exactly one filled black button in the window, and it is the only thing
+that spends money. Sirdar adopts that as a rule with teeth.</p>
+<p><code>--sd-primary</code> is the ink colour, inverted per theme: <code>#17181C</code> light with <code>#FFFDF7</code> label
+at <strong>17.44:1</strong>, <code>#E9E7DF</code> dark with <code>#0C0D11</code> label at <strong>15.69:1</strong>. Hover is
+<code>--sd-primary-hover</code>, <code>#2B2D33</code> / <code>#D5D2C6</code>, <strong>13.53:1</strong> / <strong>12.82:1</strong>. Radius
+<code>--sd-radius-sm</code>; the reference measured 6, which is not a pill despite reading as one at a
+glance.</p>
+<p><strong>At most one per screen, and it is the screen's commit action.</strong></p>
+<table>
+<thead>
+<tr>
+<th>Screen</th>
+<th>The one button</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Board</td>
+<td>New triage (in the sidebar footer)</td>
+</tr>
+<tr>
+<td>Run detail</td>
+<td>Resume, or Answer when the run is blocked</td>
+</tr>
+<tr>
+<td>Register</td>
+<td>none; the register is read-only and has no commit</td>
+</tr>
+<tr>
+<td>Eval</td>
+<td>Run suite</td>
+</tr>
+<tr>
+<td>Settings modal</td>
+<td>Save, in the modal footer, disabled until something changes</td>
+</tr>
+</tbody>
+</table>
+<p>If a screen has no commit action it has no black button, and the Register having none is
+the proof that the rule is real rather than decorative.</p>
+<p>This replaces the hard offset shadow as the app's mutation marker. The shadow stays on the
+landing page where it belongs to the printed look; inside the app a filled black button is
+a clearer signal at 13px than a 2px shadow, and the reference is right about that. Section
+6 of <code>00-design-language.md</code> should be read as: hard shadow on the landing page, filled ink
+button in the app, both meaning the same thing.</p>
+<h2 id="9-badges">9. Badges<a class="headerlink" href="#9-badges" title="Permanent link">&para;</a></h2>
+<p>The reference's plan badge is a lavender chip with black text at 13.46:1, 25 tall, radius
+6, sitting beside the wordmark. Sirdar's badge is the same object on Sirdar's own hue:
+<code>--sd-badge-bg</code> and <code>--sd-badge-ink</code>, which resolve to the existing highlight pair
+(<code>#E4E0FF</code> with <code>#17181C</code> at <strong>13.86:1</strong> light, <code>#2E2A55</code> with <code>#DDD8FF</code> at <strong>9.72:1</strong>
+dark). No new hue enters the palette.</p>
+<p>Badges carry a fact about the account or the workspace, never a run state. Run state is the
+existing status badge with its six hues and its word. A badge that could be either is the
+status badge.</p>
+<p>Geometry: 20 tall, <code>--sd-radius-xs</code>, padding-inline 8, 11px weight 500. Sentence case, not
+uppercase.</p>
+<h2 id="10-runs-per-day-on-the-register">10. Runs per day, on the Register<a class="headerlink" href="#10-runs-per-day-on-the-register" title="Permanent link">&para;</a></h2>
+<p>The reference puts a streak heatmap on its home screen: 16px cells, 8px gaps, a four-step
+teal ramp plus an empty cell, a <code>More</code>/<code>Less</code> legend under it, and a month label with a
+next-month chevron.</p>
+<p>Taken honestly, that is a calendar of activity, and Sirdar has one worth showing: how many
+runs happened each day. It goes above the Register table, not on the Board, because the
+Board is about what is happening now and the Register is about what happened.</p>
+<p><strong>Spec.</strong> Rows are weekdays, columns are weeks, 12 weeks visible by default with a
+horizontal scroll container. Cell 12 x 12 with a 4px gap (16/8 in the reference, scaled to
+Sirdar's density), <code>--sd-radius-xs</code>. The ramp is five steps of Sirdar's accent:</p>
+<table>
+<thead>
+<tr>
+<th>Step</th>
+<th>Meaning</th>
+<th>Light</th>
+<th>Dark</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>--sd-heat-0</code></td>
+<td>no runs</td>
+<td><code>#EEEADB</code></td>
+<td><code>#232630</code></td>
+</tr>
+<tr>
+<td><code>--sd-heat-1</code></td>
+<td>1 run</td>
+<td><code>#CFCBEE</code></td>
+<td><code>#34315F</code></td>
+</tr>
+<tr>
+<td><code>--sd-heat-2</code></td>
+<td>2 to 4</td>
+<td><code>#A7A2DE</code></td>
+<td><code>#4C4894</code></td>
+</tr>
+<tr>
+<td><code>--sd-heat-3</code></td>
+<td>5 to 9</td>
+<td><code>#6E69C4</code></td>
+<td><code>#736ECF</code></td>
+</tr>
+<tr>
+<td><code>--sd-heat-4</code></td>
+<td>10 or more</td>
+<td><code>#3B3AA6</code> (<code>--sd-accent</code>)</td>
+<td><code>#A6A2FF</code> (<code>--sd-accent</code>)</td>
+</tr>
+</tbody>
+</table>
+<p>Consecutive steps separate by 1.26:1 to 1.98:1, and step 0 separates from the sheet by
+1.18:1 light and 1.15:1 dark. That is a sequential ramp, not a set of categories, so
+neighbouring pairs are not held to 3:1; what the floor applies to is the text. Every cell
+is a <code>&lt;button&gt;</code> with an accessible name reading <code>14 September, 6 runs</code>, the count is in the
+tooltip and in the day's row when you click through to the filtered table, and the legend
+prints the bucket boundaries as numbers rather than only <code>More</code> and <code>Less</code>. Colour is the
+summary, never the only copy of the fact.</p>
+<p><strong>What is not taken.</strong> The word streak, the flame, the "longest streak" counter, the
+next-month chevron that implies a future. A support engineer's good week is a week with few
+runs. Counting consecutive days of work as an achievement is a habit-app idea and it would
+be a lie on this screen.</p>
+<p>The reference's grid mixes warm grey cells (<code>#C7C2B7</code> reconstructed) with teal ones, and a
+single dimmed frame does not say what separates them. Sirdar's grid uses one ramp and no
+second series.</p>
+<h2 id="11-motion-in-the-app">11. Motion in the app<a class="headerlink" href="#11-motion-in-the-app" title="Permanent link">&para;</a></h2>
+<p>The landing page's ambient motions (ring text, marquee, curved caption, band radius) do not
+exist in the app. <code>00-design-language.md</code> section 7 keeps them and they stay on the landing
+page and the docs home.</p>
+<p>Inside the app, motion answers an action or reports a state change, and nothing else moves.</p>
+<table>
+<thead>
+<tr>
+<th>What</th>
+<th>Spec</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Modal open</td>
+<td>scrim fades over <code>--sd-dur-2</code>, sheet scales 0.98 to 1 and fades over <code>--sd-dur-3</code> at <code>--sd-ease</code></td>
+</tr>
+<tr>
+<td>Modal close</td>
+<td>both over <code>--sd-dur-2</code>, no scale</td>
+</tr>
+<tr>
+<td>Nav pill</td>
+<td>fill only, <code>--sd-dur-1</code>, plain <code>ease</code>. The pill does not slide between rows</td>
+</tr>
+<tr>
+<td>Setting row control</td>
+<td>fill and border colour, <code>--sd-dur-1</code></td>
+</tr>
+<tr>
+<td>Primary button press</td>
+<td>translate 1px 1px, <code>--sd-dur-1</code>. No shadow to shrink in the app</td>
+</tr>
+<tr>
+<td>Card moves lane</td>
+<td>200ms transform at <code>--sd-ease</code>, once, when the state actually changed</td>
+</tr>
+<tr>
+<td>Live run pulse</td>
+<td>the accent edge on a running card breathes opacity 1 to 0.6 over 2s. This is the one looping animation in the app and it carries information: something is running</td>
+</tr>
+<tr>
+<td>Heatmap</td>
+<td>no entrance animation. Cells paint at their final value</td>
+</tr>
+<tr>
+<td>Toast</td>
+<td>unchanged, 140ms translateY(4px) and fade</td>
+</tr>
+</tbody>
+</table>
+<p>Under <code>prefers-reduced-motion: reduce</code> the modal cross-fades with no scale, the live-run
+pulse becomes a static accent edge at full opacity, the lane move is instant, and every
+other duration goes to 1ms. Nothing in the app waits for an animation.</p>
+<h2 id="12-dark-mode-is-a-variant-not-a-fallback">12. Dark mode is a variant, not a fallback<a class="headerlink" href="#12-dark-mode-is-a-variant-not-a-fallback" title="Permanent link">&para;</a></h2>
+<p>The engineer running Sirdar has a dark terminal open beside it. Dark is not the degraded
+theme and it is not derived by inverting light; every token in section 4 of
+<code>01-tokens.md</code> ships both values and both are measured.</p>
+<p>What the app owes dark mode specifically:</p>
+<ul>
+<li><strong>The shell is darker than the sheet, so the plane order is preserved.</strong> Light goes shell
+  <code>#F2EEE0</code> under sheet <code>#FFFDF7</code>; dark goes shell <code>#0C0D11</code> under sheet <code>#191A20</code>. In both
+  themes the sheet is the lifted plane.</li>
+<li><strong>A card on the sheet moves the other way.</strong> <code>--sd-card-row</code> is darker than the sheet in
+  light (<code>#F5F1E4</code>) and lighter in dark (<code>#22242B</code>), a step of 1.11:1 and 1.12:1. This is
+  the standard inversion and the reason <code>--sd-card-row</code> cannot be <code>--sd-sunk</code>, which stays
+  recessed in both themes for input wells and code blocks.</li>
+<li><strong>The primary button inverts entirely.</strong> A black button on a <code>#0C0D11</code> shell is invisible.
+  <code>--sd-primary</code> is the ink colour in both themes, so in dark the commit action is a pale
+  button with dark text. That keeps the rule "the primary button is the ink, filled" true in
+  one sentence for both themes.</li>
+<li><strong>The heatmap ramp runs the same direction in both.</strong> More runs is always more saturated
+  and more accent, never darker in one theme and lighter in the other.</li>
+<li><strong>Theme follows the OS with a manual override in Settings.</strong> Three states: System, Light,
+  Dark. The override writes an attribute on the root element and the tokens file defines
+  dark under both <code>@media (prefers-color-scheme: dark)</code> and <code>[data-theme="dark"]</code>, so the
+  manual choice wins in either direction.</li>
+<li><strong>The contrast test runs against both.</strong> <code>styles.contrast.test.ts</code> already parses both
+  blocks. Every ratio quoted in this file is stated for light and dark, and a token that
+  ships one value ships neither.</li>
+</ul>
+<h2 id="13-what-is-not-taken-from-the-capture">13. What is not taken from the capture<a class="headerlink" href="#13-what-is-not-taken-from-the-capture" title="Permanent link">&para;</a></h2>
+<ul>
+<li>The product's name, wordmark, icon set, copy, and its lavender <code>#EFDBFF</code> and teals.</li>
+<li>The ring-text share control in the top-right corner of the sheet. It is a marketing
+  affordance on a workspace screen and Sirdar has nothing to share. The ring-text motion
+  stays on the landing page where <code>00-design-language.md</code> section 7 already put it.</li>
+<li>Streaks, the "get a free month" referral row, the trial countdown, the upgrade card. The
+  entire commercial half of the sidebar footer has no Sirdar equivalent, and its slot is
+  taken by the workspace switcher and the quota chips, which are the facts a person
+  actually needs pinned.</li>
+<li>The 2.11:1 version string.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

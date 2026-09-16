@@ -1,0 +1,2639 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Sirdar design language - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#sirdar-design-language" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Sirdar design language
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-is-borrowed-and-what-is-not" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What is borrowed and what is not
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-mood-and-principles" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Mood and principles
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-colour-system" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Colour system
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="3. Colour system">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#light" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Light
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dark" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dark
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-hues" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status hues
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-typography" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Typography
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#5-spacing-and-radius" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Spacing and radius
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#6-elevation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Elevation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#7-motion" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        7. Motion
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#8-layout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        8. Layout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#9-component-inventory" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        9. Component inventory
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#10-accessibility-floor" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        10. Accessibility floor
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#11-rtl" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        11. RTL
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="sirdar-design-language">Sirdar design language<a class="headerlink" href="#sirdar-design-language" title="Permanent link">&para;</a></h1>
+<p>One language across three surfaces: the landing page, the desktop app, and the docs site.
+It is derived from Wispr Flow (wisprflow.ai), measured rather than remembered: every value
+attributed to them below was read out of
+<code>https://cdn.prod.website-files.com/682f84b3838c89f8ff7667db/css/flowsite-dev.webflow.shared.c2654b1f8.min.css</code>
+or sampled from a screenshot of the live page on 2026-09-15. Where a number is Sirdar's own
+invention this file says so.</p>
+<h2 id="1-what-is-borrowed-and-what-is-not">1. What is borrowed and what is not<a class="headerlink" href="#1-what-is-borrowed-and-what-is-not" title="Permanent link">&para;</a></h2>
+<p><strong>Borrowed (the language).</strong> A warm paper ground instead of white. One editorial serif set
+large, with the second clause of a headline in italic. A humanist sans for everything
+functional. Full-bleed colour bands with corner radii measured in whole rem, so a section
+reads as a card the width of the window. One soft tinted fill that appears only on the
+primary action. A hard offset shadow under that action, no blur, so the button looks
+printed rather than floating. Pill-shaped nav and segmented controls in a floating bar.
+Slow ambient motion (a ring of rotating text, a marquee) that never blocks reading.</p>
+<p><strong>Not borrowed (the assets).</strong> No Wispr Flow logo, wordmark, product name, or screenshot.
+No copy, headline, or sentence of theirs, including "Don't type, just speak" and "4x faster
+than typing". No customer logo wall built from third-party marks. Their deep green
+<code>#034f46</code> and lavender <code>#f0d7ff</code> are their brand pair and Sirdar does not reuse either
+value: Sirdar's band is a deep indigo derived from the accent the app already ships
+(<code>#4340c8</code>), and the soft highlight is a tint of that same indigo.</p>
+<p><strong>Typography is a middle case.</strong> They use EB Garamond (OFL), Figtree (OFL), Inter (OFL),
+IBM Plex Mono, JetBrains Mono, and Monaspace Neon. These are open-licence families anyone
+may use; choosing a serif for display is a genre convention, not their property. Sirdar
+still picks a different serif, because a Garamond set at 7.5rem beside the same lavender
+button is recognisably their page.</p>
+<h2 id="2-mood-and-principles">2. Mood and principles<a class="headerlink" href="#2-mood-and-principles" title="Permanent link">&para;</a></h2>
+<p>Sirdar is read by an L2 support engineer who has a ticket open in another window and a
+customer waiting. The page and the app both have to earn a second of attention and then
+get out of the way.</p>
+<ol>
+<li><strong>Evidence reads like a ledger, prose reads like a page.</strong> Keys, run ids, offsets,
+   costs, elapsed clocks, and file paths are monospace with tabular figures. Ticket titles,
+   root-cause notes, and marketing copy are the sans or the serif. The split is already the
+   rule in <code>desktop/frontend/src/styles.css</code> and it survives this redesign unchanged.</li>
+<li><strong>Colour only ever means something.</strong> Six status hues, one accent, one highlight. A
+   decorative hue is a bug. A run that is live is the only moving thing on the board and it
+   is the only thing wearing the accent.</li>
+<li><strong>Read-only by construction, visible in the design.</strong> Every mutating control in the app
+   (Fix, Resume, workspace edits) is the one button shape that carries the hard offset
+   shadow. Everything read-only is flat. A person should be able to tell what a click can
+   change without reading the label.</li>
+<li><strong>Warm, not cute.</strong> The paper ground is warm and the radii are large, but the density is
+   a workbench: 13px base in the app, hairline rules, no gradients, no illustration.</li>
+<li><strong>The landing page may be slower than the app.</strong> Ambient motion, a 4rem headline, and a
+   full-bleed band belong on the landing page and the docs home. Inside the app the same
+   tokens are used at the small end of every scale.</li>
+</ol>
+<h2 id="3-colour-system">3. Colour system<a class="headerlink" href="#3-colour-system" title="Permanent link">&para;</a></h2>
+<p>Four roles: a warm paper ground, one deep accent (which is also the band), one soft
+highlight, and an ink ramp. Status hues sit outside the four and are unchanged in meaning
+from today's app.</p>
+<p>Every ratio below was computed, not estimated. The numbers are in <code>01-tokens.md</code> alongside
+each token.</p>
+<h3 id="light">Light<a class="headerlink" href="#light" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Hex</th>
+<th>Where it lands</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paper (ground)</td>
+<td><code>#FAF7EC</code></td>
+<td>page and app background</td>
+</tr>
+<tr>
+<td>Surface</td>
+<td><code>#FFFDF7</code></td>
+<td>cards, panels, dialogs, the floating nav bar</td>
+</tr>
+<tr>
+<td>Sunk</td>
+<td><code>#F1EDDF</code></td>
+<td>kanban lane wells, input rest state, code blocks</td>
+</tr>
+<tr>
+<td>Band (deep)</td>
+<td><code>#1F2B52</code></td>
+<td>full-bleed section band, app title bar on the landing mock</td>
+</tr>
+<tr>
+<td>Band (ink)</td>
+<td><code>#17181C</code></td>
+<td>the second full-bleed band, used once per page at most</td>
+</tr>
+<tr>
+<td>Highlight</td>
+<td><code>#E4E0FF</code></td>
+<td>primary button fill, marker sweep under a hovered link</td>
+</tr>
+<tr>
+<td>Ink</td>
+<td><code>#17181C</code></td>
+<td>headlines, body</td>
+</tr>
+<tr>
+<td>Ink 2</td>
+<td><code>#4A4E58</code></td>
+<td>secondary body, card titles</td>
+</tr>
+<tr>
+<td>Ink 3</td>
+<td><code>#676B74</code></td>
+<td>meta, timestamps, help text</td>
+</tr>
+<tr>
+<td>Rule</td>
+<td><code>#E3DFD1</code></td>
+<td>hairlines between rows</td>
+</tr>
+<tr>
+<td>Rule strong</td>
+<td><code>#C9C4B2</code></td>
+<td>card borders, input borders, the ledger rail</td>
+</tr>
+<tr>
+<td>Accent</td>
+<td><code>#3B3AA6</code></td>
+<td>links, focus ring, a live run</td>
+</tr>
+</tbody>
+</table>
+<h3 id="dark">Dark<a class="headerlink" href="#dark" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Role</th>
+<th>Hex</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paper</td>
+<td><code>#14151A</code></td>
+</tr>
+<tr>
+<td>Surface</td>
+<td><code>#1C1E25</code></td>
+</tr>
+<tr>
+<td>Sunk</td>
+<td><code>#0F1014</code></td>
+</tr>
+<tr>
+<td>Band (deep)</td>
+<td><code>#232F58</code></td>
+</tr>
+<tr>
+<td>Band (ink)</td>
+<td><code>#0C0D10</code></td>
+</tr>
+<tr>
+<td>Highlight</td>
+<td><code>#2E2A55</code> (fill), <code>#DDD8FF</code> (its ink)</td>
+</tr>
+<tr>
+<td>Ink</td>
+<td><code>#E9E7DF</code></td>
+</tr>
+<tr>
+<td>Ink 2</td>
+<td><code>#A6A9B2</code></td>
+</tr>
+<tr>
+<td>Ink 3</td>
+<td><code>#8C919B</code></td>
+</tr>
+<tr>
+<td>Rule</td>
+<td><code>#2A2D34</code></td>
+</tr>
+<tr>
+<td>Rule strong</td>
+<td><code>#3D424B</code></td>
+</tr>
+<tr>
+<td>Accent</td>
+<td><code>#A6A2FF</code></td>
+</tr>
+</tbody>
+</table>
+<p>The dark ink <code>#E9E7DF</code> is warm on purpose. A neutral <code>#E6E8EC</code> (today's value) against a
+warm paper in light mode makes the two themes feel like two products.</p>
+<h3 id="status-hues">Status hues<a class="headerlink" href="#status-hues" title="Permanent link">&para;</a></h3>
+<p>Meaning is fixed and matches the CLI's run states. Light values are deepened from today's
+so they clear 4.5:1 on warm paper.</p>
+<table>
+<thead>
+<tr>
+<th>State</th>
+<th>Light</th>
+<th>Dark</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>queue</td>
+<td><code>#63676F</code></td>
+<td><code>#9298A3</code></td>
+<td>waiting, nothing has happened</td>
+</tr>
+<tr>
+<td>live</td>
+<td>accent</td>
+<td>accent</td>
+<td>preparing or running</td>
+</tr>
+<tr>
+<td>blocked</td>
+<td><code>#A15C07</code></td>
+<td><code>#E0A14A</code></td>
+<td>the agent asked something, or a rate limit</td>
+</tr>
+<tr>
+<td>triaged</td>
+<td><code>#0E6F66</code></td>
+<td><code>#58C7BA</code></td>
+<td>completed, a note exists to read</td>
+</tr>
+<tr>
+<td>done</td>
+<td><code>#17713A</code></td>
+<td><code>#6EC98A</code></td>
+<td>resolved, RCA written</td>
+</tr>
+<tr>
+<td>failed</td>
+<td><code>#B02418</code></td>
+<td><code>#F08C8C</code></td>
+<td>failed, over budget, stalled</td>
+</tr>
+</tbody>
+</table>
+<p>The lane rail at the top of a kanban column and every status badge inside that column carry
+the same hue, so the rail doubles as the legend. That rule exists today and is kept.</p>
+<h2 id="4-typography">4. Typography<a class="headerlink" href="#4-typography" title="Permanent link">&para;</a></h2>
+<p>Three families plus two Arabic companions. All are OFL and available on Google Fonts, and
+all should be self-hosted (woff2, <code>font-display: swap</code>) so the desktop app works offline
+and the landing page makes no third-party request.</p>
+<table>
+<thead>
+<tr>
+<th>Register</th>
+<th>Family</th>
+<th>Why this one</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Display</td>
+<td><strong>Newsreader</strong> (200 to 800 variable, true italic, optical sizes)</td>
+<td>Garamond-adjacent editorial voice, but drawn for screens, so a 4rem headline and a 1.25rem deck can come from one file. Its italic is a real cursive, which is what carries the "second clause in italic" pattern.</td>
+</tr>
+<tr>
+<td>UI</td>
+<td><strong>Inter</strong> (variable)</td>
+<td>Tabular figures, a large x-height at 13px, and coverage the board needs. The app is already effectively Inter-shaped: it runs on the system sans today.</td>
+</tr>
+<tr>
+<td>Mono</td>
+<td><strong>JetBrains Mono</strong></td>
+<td>Unambiguous <code>0/O</code> and <code>l/1</code>, tabular by default, reads well in the event stream's fixed gutter.</td>
+</tr>
+<tr>
+<td>Arabic UI</td>
+<td><strong>IBM Plex Sans Arabic</strong></td>
+<td>Naskh proportions that sit level with Inter at the same size, so a bilingual note does not step up and down.</td>
+</tr>
+<tr>
+<td>Arabic display</td>
+<td><strong>Noto Naskh Arabic</strong></td>
+<td>The serif slot has no Arabic counterpart. Arabic display text uses Naskh at the same optical size rather than a faux-italic.</td>
+</tr>
+</tbody>
+</table>
+<p>Alternative if more character is wanted on the landing page: <strong>Fraunces</strong>, whose <code>SOFT</code> and
+<code>WONK</code> axes give a headline more personality. Instrument Serif is the third option and is
+rejected here because it ships one weight, which forces a second family for the deck.</p>
+<p><strong>Italic is structural, not decorative.</strong> A display headline is one roman clause and one
+italic clause. Inside the app, italic is never used: it damages Arabic and it reads as an
+error state in a dense table.</p>
+<p>Scale (rem, off a 16px root):</p>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Landing</th>
+<th>App</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>display-xl</td>
+<td>4.5</td>
+<td>not used</td>
+</tr>
+<tr>
+<td>display-l</td>
+<td>3.5</td>
+<td>not used</td>
+</tr>
+<tr>
+<td>display-m</td>
+<td>2.5</td>
+<td>2 (screen title)</td>
+</tr>
+<tr>
+<td>title</td>
+<td>2</td>
+<td>1.375</td>
+</tr>
+<tr>
+<td>body-l</td>
+<td>1.25</td>
+<td>1.0625</td>
+</tr>
+<tr>
+<td>body</td>
+<td>1</td>
+<td>1 (16px)</td>
+</tr>
+<tr>
+<td>meta</td>
+<td>0.875</td>
+<td>0.875 (14px)</td>
+</tr>
+<tr>
+<td>micro</td>
+<td>0.75</td>
+<td>0.75 (12px)</td>
+</tr>
+<tr>
+<td>ledger</td>
+<td>not used</td>
+<td>0.84375 (13.5px mono)</td>
+</tr>
+</tbody>
+</table>
+<p>The app column was the small end of the same ladder (13px base) until the 2026-09-15 screens
+round, whose review found the UI too dense; it is now re-based on the reference app's 16px
+register, and only the display sizes still separate the two columns. The exact values are in
+<code>01-tokens.md</code> section 3.</p>
+<h2 id="5-spacing-and-radius">5. Spacing and radius<a class="headerlink" href="#5-spacing-and-radius" title="Permanent link">&para;</a></h2>
+<p>4px base. Steps: 4, 8, 12, 16, 24, 32, 48, 64, 96, 128.</p>
+<p>Radii are the largest change from today's app, which uses a single 3px value.</p>
+<table>
+<thead>
+<tr>
+<th>Token</th>
+<th>Value</th>
+<th>Used by</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>radius-xs</td>
+<td>4px</td>
+<td>badges, kbd, inline chips</td>
+</tr>
+<tr>
+<td>radius-sm</td>
+<td>8px</td>
+<td>inputs, buttons, cards on the board</td>
+</tr>
+<tr>
+<td>radius-md</td>
+<td>12px</td>
+<td>panels, dialogs, run cards</td>
+</tr>
+<tr>
+<td>radius-lg</td>
+<td>20px</td>
+<td>landing cards, media frames, the screenshot mock</td>
+</tr>
+<tr>
+<td>radius-band</td>
+<td>40px mobile, 64px desktop</td>
+<td>full-bleed section bands</td>
+</tr>
+<tr>
+<td>radius-pill</td>
+<td>999px</td>
+<td>nav pills, segmented control, status chips, quota chips</td>
+</tr>
+</tbody>
+</table>
+<p>Wispr Flow's own section-radius ladder runs <code>1rem</code> to <code>5rem</code> with a mobile/desktop pair at
+each step. Sirdar collapses that to one pair (2.5rem/4rem) because it has one band shape,
+not six.</p>
+<h2 id="6-elevation">6. Elevation<a class="headerlink" href="#6-elevation" title="Permanent link">&para;</a></h2>
+<p>Two shadows, and most things get neither.</p>
+<ul>
+<li><strong>Hard offset, primary only.</strong> <code>2px 2px 0 0 var(--sd-ink)</code> in light,
+  <code>2px 2px 0 0 var(--sd-rule-strong)</code> in dark. This is the printed look, and it marks the
+  one control on the surface that can change something. On press the button translates
+  <code>1px, 1px</code> and the shadow shrinks to <code>1px 1px</code>, so it appears to be pushed down.</li>
+<li><strong>Soft ambient.</strong> <code>0 4px 20px rgba(23,24,28,.10)</code> for dialogs, toasts, the floating nav
+  bar, and hovering media cards. Nothing else.</li>
+<li><strong>Nothing</strong> on board cards, lanes, table rows, or the event stream. Those separate with
+  hairlines, which is the rule today and the reason the board reads at a glance.</li>
+</ul>
+<p>Full-bleed bands do not cast a shadow. They separate by colour and corner radius.</p>
+<h2 id="7-motion">7. Motion<a class="headerlink" href="#7-motion" title="Permanent link">&para;</a></h2>
+<p>Durations: 120ms (colour, hover), 200ms (small transforms, dropdowns), 300ms (panel and
+dialog entrance), 350ms (band and page transitions).</p>
+<p>Easings: <code>--sd-ease</code> <code>cubic-bezier(.22,.61,.36,1)</code> for entrances and transforms,
+<code>ease</code> for pure colour changes. Wispr Flow uses plain <code>ease</code> everywhere at .15s to .35s;
+Sirdar keeps their duration range and adds one out-easing so a dialog does not feel linear.</p>
+<p><strong>Signature ambient motions.</strong> Each is decorative, carries no information, and has a
+reduced-motion answer.</p>
+<table>
+<thead>
+<tr>
+<th>Motion</th>
+<th>Where</th>
+<th>Spec</th>
+<th>Reduced motion</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ring text</td>
+<td>landing hero, left of the headline</td>
+<td>a short sentence set on a circular path, rotating 360deg over 48s, linear, infinite, at <code>--sd-ink-3</code></td>
+<td>frozen at the angle where the sentence starts at 9 o'clock and reads clockwise</td>
+</tr>
+<tr>
+<td>Marquee</td>
+<td>logo/source band, docs footer</td>
+<td>a single row translating one track width over 34s, linear, infinite, with a 64px gradient mask at each edge</td>
+<td>becomes a static wrapped row, mask removed</td>
+</tr>
+<tr>
+<td>Curved caption</td>
+<td>the board screenshot mock</td>
+<td>a caption on a shallow arc across the image, static by default, drifting 3deg over 12s on hover only</td>
+<td>no drift</td>
+</tr>
+<tr>
+<td>Band radius</td>
+<td>section boundaries</td>
+<td>the band's top corners interpolate from <code>radius-band</code> to 0 as it reaches the viewport top, over the scroll, no JS timeline</td>
+<td>fixed at <code>radius-band</code></td>
+</tr>
+<tr>
+<td>Toast</td>
+<td>app</td>
+<td>140ms translateY(4px) and fade, already shipped</td>
+<td>none, as today</td>
+</tr>
+</tbody>
+</table>
+<p><code>@media (prefers-reduced-motion: reduce)</code> sets every <code>transition-duration</code> and
+<code>animation-duration</code> to <code>1ms</code> except where the table above names a specific static pose.
+Nothing in the app depends on an animation finishing.</p>
+<h2 id="8-layout">8. Layout<a class="headerlink" href="#8-layout" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Centred content, full-bleed colour.</strong> A <code>--sd-measure</code> of 1200px for landing sections,
+  68ch for prose (docs, note pane). Colour bands run the full window width and the content
+  inside them respects the same measure.</li>
+<li><strong>The floating bar.</strong> Landing and docs carry a nav bar that is a surface-coloured pill
+  row, inset 16px from the top, <code>radius-pill</code>, soft ambient shadow, sticky. It sits on top
+  of whatever band it is over, which is how it survives the cream to green to black
+  sequence on Wispr's page and is the single cheapest way to make a colour-banded page feel
+  like one document.</li>
+<li><strong>Band sequence.</strong> Paper, then one deep band, then paper, then at most one ink band, then
+  paper. Two adjacent coloured bands is the failure mode.</li>
+<li><strong>App shell unchanged.</strong> Header, nav, board with horizontally scrolling lanes, inbound
+  strip, run detail as a two-pane split. The redesign changes the paint, not the structure.
+  Under 720px the lanes stack, as today.</li>
+</ul>
+<h2 id="9-component-inventory">9. Component inventory<a class="headerlink" href="#9-component-inventory" title="Permanent link">&para;</a></h2>
+<p><strong>Shared (all three surfaces):</strong> Button (primary, secondary, ghost), Pill nav, Segmented
+control, Card, Status badge, Quota chip, Toast, Dialog, Data table, Code block, Kbd, Focus
+ring, Link with marker sweep.</p>
+<p><strong>Landing only:</strong> Hero band, Ring text, Marquee, Media frame (the board mock), Text badge
+row (providers and sources as type, never third-party logos), Step band ("how it works"),
+Trust panel, Footer.</p>
+<p><strong>App only:</strong> Kanban column, Run card, Ticket card, Event row, Note pane, Register table,
+Settings panel, Quota meter, Inbound row, Workspace switcher, New-triage dialog, Fix panel.</p>
+<p><strong>Docs only:</strong> Sidebar nav, Table of contents rail, Admonition, Tabbed block, Version chip.
+These are Material for MkDocs primitives restyled through the same tokens, not new
+components.</p>
+<h2 id="10-accessibility-floor">10. Accessibility floor<a class="headerlink" href="#10-accessibility-floor" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>4.5:1 minimum for every text and token pair the tokens file ships.</strong> The measured
+  ratios are in <code>01-tokens.md</code>. <code>desktop/frontend/src/styles.contrast.test.ts</code> already
+  enforces this for the app; the same test should be pointed at the shared tokens file so
+  the landing page and docs inherit the check.</li>
+<li><strong>Focus is always visible.</strong> <code>2px solid var(--sd-accent)</code> at <code>outline-offset: 2px</code>, on
+  every focusable thing, in both themes. Never removed, never replaced by a colour change
+  alone. The accent clears 4.5:1 against paper, surface, and sunk in both themes.</li>
+<li><strong>Status is never colour alone.</strong> Every status hue is paired with its word in the badge.
+  The lane rail is redundant with the lane heading.</li>
+<li><strong>Hit targets 32px minimum in the app, 44px on the landing page.</strong></li>
+<li><strong>Motion.</strong> See section 7. No parallax, no scroll-jacking, no autoplaying video with
+  sound.</li>
+<li><strong>Text over a band.</strong> Only paper-coloured ink on <code>band-deep</code> and <code>band-ink</code>. No accent
+  text and no status hue inside a band.</li>
+</ul>
+<h2 id="11-rtl">11. RTL<a class="headerlink" href="#11-rtl" title="Permanent link">&para;</a></h2>
+<p>Arabic is first-class: the customer complaint and the reply draft in a Sirdar note are
+usually Arabic, and <code>desktop/frontend/src/lib/rtl.ts</code> already carries a per-person
+preference for laying the note pane out right to left.</p>
+<ul>
+<li><strong>Logical properties only.</strong> <code>margin-inline-start</code>, <code>padding-inline</code>, <code>inset-inline</code>,
+  <code>border-inline-start</code>. No <code>left</code>, <code>right</code>, <code>margin-left</code> in any component in the library.
+  The hard offset shadow is the one exception that needs a flip: it becomes
+  <code>-2px 2px 0 0</code> under <code>[dir="rtl"]</code>, so the light still comes from the leading edge.</li>
+<li><strong>The card's quote rail</strong> (<code>.card-reason</code>, a 2px left border today) becomes
+  <code>border-inline-start</code>.</li>
+<li><strong>Numbers, keys, ids, paths, and the event stream stay LTR</strong> even inside an RTL pane.
+  <code>rtl.ts</code> states the reason: tool names, paths, and JSON are unreadable mirrored. Wrap
+  them in <code>dir="ltr"</code> with <code>unicode-bidi: isolate</code>.</li>
+<li><strong><code>dir="auto"</code> per block</strong> for note prose, which handles a bilingual note paragraph by
+  paragraph without a global switch.</li>
+<li><strong>Type.</strong> IBM Plex Sans Arabic and Noto Naskh Arabic run about 8% smaller in apparent
+  size than Inter at the same px. The library sets <code>font-size-adjust</code> on the Arabic faces
+  rather than a second size scale.</li>
+<li><strong>Landing and docs.</strong> The ring text and the marquee both reverse direction under
+  <code>[dir="rtl"]</code>, because a sentence that rotates against its own reading direction is
+  unreadable in either script.</li>
+<li><strong>Italic.</strong> Arabic has no italic. A display headline in Arabic marks its second clause
+  with weight (600 against 400), not slant.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

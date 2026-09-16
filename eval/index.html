@@ -1,0 +1,2836 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../notifications/">
+      
+      
+        <link rel="next" href="../fix/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Evaluation - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#evaluating-triage-quality" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Evaluation
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-golden-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The golden set
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The golden set">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrating-a-pre-eval-golden-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating a pre-eval golden set
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expectedjson-assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expected.json assertions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoring
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scoring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-note-comparison-is-coarse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the note comparison is coarse
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-an-eval-does-not-leave-behind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an eval does not leave behind
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrospective-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrospective evaluation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrospective evaluation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cutoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-cutoff-removes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the cutoff removes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-still-visible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is still visible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retro-scoring-against-the-fix-that-was-merged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retro: scoring against the fix that was merged
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retro: scoring against the fix that was merged">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-golden-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The golden entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scoring_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-rubric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --rubric
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-retro-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The retro report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-desktop-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the desktop app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-eval-and-a-fix-are-each-trusted-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an eval and a fix are each trusted with
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-golden-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The golden set
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The golden set">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#migrating-a-pre-eval-golden-set" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Migrating a pre-eval golden set
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#expectedjson-assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        expected.json assertions
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#scoring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoring
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Scoring">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-the-note-comparison-is-coarse" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why the note comparison is coarse
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The report
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The report">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-an-eval-does-not-leave-behind" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an eval does not leave behind
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrospective-evaluation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrospective evaluation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrospective evaluation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-cutoff" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The cutoff
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-cutoff-removes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the cutoff removes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-still-visible" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is still visible
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retro-scoring-against-the-fix-that-was-merged" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retro: scoring against the fix that was merged
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retro: scoring against the fix that was merged">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-golden-entry" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The golden entry
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#scoring_1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Scoring
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-rubric" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --rubric
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-retro-report" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The retro report
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#from-the-desktop-app" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        From the desktop app
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-an-eval-and-a-fix-are-each-trusted-with" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What an eval and a fix are each trusted with
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="evaluating-triage-quality">Evaluating triage quality<a class="headerlink" href="#evaluating-triage-quality" title="Permanent link">&para;</a></h1>
+<p><code>sirdar eval</code> replays tickets you have already triaged by hand and scores what the agent
+produces against what you produced. It is a regression harness for a prompt, a playbook edit, a
+model change, or a provider swap: change one of those, run the eval, and read the diff in the
+table.</p>
+<p>Nothing here is simulated. An eval hands the runner a stored bundle instead of calling the
+tracker and the helpdesk, and then the ordinary path runs — the same prompt assembly, the same
+session, the same schema validation, the same note. What is scored is a run.</p>
+<div class="highlight"><pre><span></span><code>sirdar eval                      every key in the golden set
+sirdar eval OMNI-1 OMNI-2        just these
+  --golden DIR                   golden set directory (default ~/.sirdar/golden)
+  --provider claude|codex|openai
+  --model NAME
+  --concurrency N
+  --retro                        replay at the commit the fix branched from and score
+                                 against the merged pull request (see below)
+  --with-rca                     with --retro: add a blind RCA run
+  --rubric                       with --retro: one provider call comparing the two diffs
+sirdar golden add KEY [--from RUN_ID] [--golden DIR] [--force]
+sirdar golden add KEY --retro --pr URL [--pr URL...] [--as-of RFC3339] [--golden DIR] [--force]
+sirdar golden list [--golden DIR]
+sirdar golden migrate [KEY...] [--golden DIR]
+</code></pre></div>
+<p>Exit code is 1 if any key failed an assertion or produced a note that did not validate, so the
+command drops into CI as it stands. <code>--retro</code> is the exception and always exits 0: it is a
+measurement, not a gate.</p>
+<h2 id="the-golden-set">The golden set<a class="headerlink" href="#the-golden-set" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>~/.sirdar/golden/
+  OMNI-1234/
+    bundle/              copied from a completed run: ticket.json, thread.md, attachments/
+    expected.json        optional: the assertions you are prepared to stand behind
+    expected.md          optional: the note a human wrote for this ticket
+  OMNI-1240/
+    bundle/
+  OMNI-3217/
+    bundle/              a retrospective entry adds three files
+    expected.json
+    retro.json           the cutoff, the base commit and the merged pull request
+    pr.diff
+</code></pre></div>
+<p>It lives outside the repository by default, and should stay there: the bundles hold real
+customer conversations, names and attachments. <code>sirdar golden add</code> refuses a golden directory
+that sits inside a git work tree for that reason — the next <code>git add -A</code> would publish it, and
+a repository's history is not somewhere you can take a customer's conversation back out of.
+<code>--force</code> overrides the refusal for a repository you are certain may hold it.</p>
+<h3 id="migrating-a-pre-eval-golden-set">Migrating a pre-eval golden set<a class="headerlink" href="#migrating-a-pre-eval-golden-set" title="Permanent link">&para;</a></h3>
+<p>An older <code>bundle/</code> split had a key's files directly under its directory — <code>OMNI-1234/ticket.json</code>
+rather than <code>OMNI-1234/bundle/ticket.json</code>. <code>sirdar eval</code> cannot read that layout and says so by
+name rather than reporting an empty golden set:</p>
+<div class="highlight"><pre><span></span><code>eval: ~/.sirdar/golden holds no golden bundles `sirdar eval` can read; 2 in the pre-eval layout
+(files directly under the key, not under bundle/): OMNI-1234, OMNI-1240 — run `sirdar golden
+migrate` to fix them, or `sirdar golden migrate KEY` for one at a time
+</code></pre></div>
+<p><code>sirdar golden migrate</code> moves a key's bundle files into <code>bundle/</code> in place; <code>expected.json</code> and
+<code>expected.md</code>, a human's own files, are left exactly where they are. With no key named it
+migrates every entry still in the old layout.</p>
+<p>Building an entry is two steps. Triage the ticket for real, then:</p>
+<div class="highlight"><pre><span></span><code>sirdar golden add OMNI-1234
+</code></pre></div>
+<p>That copies the newest completed triage run's bundle into <code>~/.sirdar/golden/OMNI-1234/bundle/</code>
+and writes an <code>expected.json</code> skeleton from the note that run produced — its confidence, its
+classification, and the files it cited. <code>--from RUN_ID</code> picks a specific run instead.</p>
+<p><strong>The skeleton is a draft to trim, not a baseline to keep.</strong> It is generated from what the agent
+said, so keeping all of it asserts that the agent agreed with itself. Delete the lines you would
+not defend in review, correct the ones the agent got wrong, and keep the two or three that
+capture what a good answer to this ticket has to contain. An existing <code>expected.json</code> is never
+overwritten by a second <code>golden add</code>.</p>
+<p>If you have the note you wrote by hand, save it as <code>expected.md</code> in the same directory. It is
+compared coarsely (see below) and is optional.</p>
+<h2 id="expectedjson-assertions"><code>expected.json</code> assertions<a class="headerlink" href="#expectedjson-assertions" title="Permanent link">&para;</a></h2>
+<p>One JSON object. Each key names a field of the triage note by dot path; a suffix on the key
+chooses the comparison.</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"rootCause.confidence"</span><span class="p">:</span><span class="w"> </span><span class="s2">"medium"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"classification"</span><span class="p">:</span><span class="w"> </span><span class="s2">"code"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"rootCause.codeRefs_contains"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"Domain/Inventory.API/"</span><span class="p">],</span>
+<span class="w">  </span><span class="nt">"openQuestions_min"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span>
+<span class="p">}</span>
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Form</th>
+<th>Comparison</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>field.path</code></td>
+<td>Equality against the value at that path, after JSON decoding: <code>"medium"</code>, <code>3</code>, <code>true</code>, or a whole object or array</td>
+</tr>
+<tr>
+<td><code>field.path_contains</code></td>
+<td>The value at the path must be an array, and every string listed must appear as a <strong>substring</strong> of at least one element</td>
+</tr>
+<tr>
+<td><code>field.path_min</code></td>
+<td>The value at the path must be an array of at least that many elements</td>
+</tr>
+</tbody>
+</table>
+<p>Dot paths walk objects by key and arrays by index, so <code>timeline.0.role</code> reads. A path that does
+not exist is a failure, with "no value at ..." as the reason.</p>
+<p><code>_contains</code> is deliberately loose. Writing <code>"Domain/Inventory.API/"</code> says the note should have
+pointed into that area, which is a claim that survives the next refactor; writing
+<code>"Domain/Inventory.API/Export/Csv.cs:412"</code> says it should have cited one line, which stops being
+true the moment somebody adds an import. The generated skeleton already strips a code reference
+down to its bare file path for the same reason — no line number, no line range, and no
+parenthetical annotation an agent tacked on: <code>Domain/Fin.Logic/Models/FinReportModel.cs:253-282
+(default branch: main)</code> becomes <code>Domain/Fin.Logic/Models/FinReportModel.cs</code>. An annotation is
+free text the agent will not phrase the same way twice, so keeping it verbatim in the assertion
+would make <code>_contains</code> a substring check that can never match.</p>
+<p>Every failure is printed under the table with the value that was actually there:</p>
+<div class="highlight"><pre><span></span><code>OMNI-1234: rootCause.confidence — want "high", got "medium"
+OMNI-1234: openQuestions_min — want at least 3, got 1
+</code></pre></div>
+<h2 id="scoring">Scoring<a class="headerlink" href="#scoring" title="Permanent link">&para;</a></h2>
+<p>Each key gets one row:</p>
+<div class="highlight"><pre><span></span><code>KEY        STATE      TURNS  COST  MINS  VALID  ASSERT  REFS      HEADS
+OMNI-1234  completed  14     0.82  3.1   yes    3/4     2/3 67%   4/5 80%
+OMNI-1240  completed  9      0.41  1.8   yes    4/4     -         -
+</code></pre></div>
+<ul>
+<li><strong>STATE, TURNS, COST, MINS</strong> come from the run's own state: what it cost to get this answer is
+  half of whether the answer is any good.</li>
+<li><strong>VALID</strong> is whether the session's JSON validated against the triage schema. A <code>no</code> here means
+  there is nothing to score, and every assertion is counted as failed.</li>
+<li><strong>ASSERT</strong> is passed over total from <code>expected.json</code>.</li>
+<li><strong>REFS and HEADS</strong> are the coarse comparison against <code>expected.md</code>, and read <code>-</code> when there is
+  none.</li>
+</ul>
+<h3 id="why-the-note-comparison-is-coarse">Why the note comparison is coarse<a class="headerlink" href="#why-the-note-comparison-is-coarse" title="Permanent link">&para;</a></h3>
+<p>Two notes about the same bug share almost no prose, and scoring prose similarity would measure
+writing style rather than triage quality. Two things are worth measuring instead:</p>
+<ul>
+<li><strong>REFS</strong> — the fraction of <code>path/file.ext:123</code> references in your note that also appear in the
+  agent's. Did it look where you looked?</li>
+<li><strong>HEADS</strong> — the fraction of <code>##</code> section headings in your note that also appear in the agent's,
+  compared case-insensitively. Did it cover what you covered?</li>
+</ul>
+<p>Neither is a grade, and a run can score 100% on both while being wrong. What they are good for
+is telling you which two notes to open side by side: the report names the references and the
+headings that are missing, which is usually the fastest route to the thing the agent did not
+think to check.</p>
+<h2 id="the-report">The report<a class="headerlink" href="#the-report" title="Permanent link">&para;</a></h2>
+<p>Every invocation writes <code>.sirdar/eval/&lt;timestamp&gt;.json</code> in the workspace, carrying the provider,
+the model, the golden directory, and the full result for every key including each individual
+check and its failure detail. That is the file to diff across a prompt change, and the file to
+keep when a run tells you something.</p>
+<p>The runs themselves are ordinary runs, so their directories are under <code>.sirdar/runs/&lt;KEY&gt;/</code> as
+usual, with the prompt, the events and the note each one produced. An eval that scores badly is
+read by opening those.</p>
+<h3 id="what-an-eval-does-not-leave-behind">What an eval does not leave behind<a class="headerlink" href="#what-an-eval-does-not-leave-behind" title="Permanent link">&para;</a></h3>
+<p>A replay is a measurement, not a triage, and it is marked as one: its <code>state.json</code> carries
+<code>"Eval": true</code>, and that mark changes what the run leaves behind.</p>
+<p>The note it produces stays in the run directory as <code>note.md</code>. It is <strong>not</strong> filed into
+<code>notes.dir</code>, where a real triage run puts it — that directory holds the note you wrote and read
+for that ticket, and an eval overwriting it would cost you the note to compare against.</p>
+<p>No row is appended to <code>.sirdar/register.jsonl</code>. The register is the audit index of tickets that
+were actually worked; the eval's own record is the report under <code>.sirdar/eval/</code>.</p>
+<p>And nothing downstream mistakes the replay for the key's newest triage. <code>sirdar rca</code> and
+<code>sirdar fix</code> both start from the newest completed triage note for a key, and they skip eval
+runs when they look — so replaying <code>OMNI-1234</code> today cannot put tomorrow's fix to work on a
+bundle captured six months ago.</p>
+<h2 id="retrospective-evaluation">Retrospective evaluation<a class="headerlink" href="#retrospective-evaluation" title="Permanent link">&para;</a></h2>
+<p>An ordinary golden entry is built from a run you already made, so it measures a new prompt
+against an old session. A retrospective entry is built from a ticket that was closed months ago
+and fixed by a pull request that is already merged, so it measures against what a person
+actually did. There is no run to copy from and no note to skeleton off: the entry is assembled
+from the ticket itself.</p>
+<div class="highlight"><pre><span></span><code>sirdar golden add OMNI-3217 --retro --pr https://github.com/acme/omni/pull/482
+</code></pre></div>
+<p>That writes:</p>
+<div class="highlight"><pre><span></span><code>~/.sirdar/golden/OMNI-3217/
+  bundle/              the ticket as it stood at the cutoff, with manifest.json
+  expected.json        {} — assertions are yours to add
+  retro.json           the ground truth
+  pr.diff              the merged pull request's diff
+</code></pre></div>
+<p><code>retro.json</code> carries <code>key</code>, <code>asOf</code>, <code>baseCommit</code> (the pull request's <code>baseRefOid</code>, and for
+several pull requests the earliest one's), <code>prUrls</code>, <code>prDiff</code> (always <code>"pr.diff"</code>), <code>prFiles</code>
+(every path the pull requests touched, deduplicated and sorted) and <code>redacted</code>, which repeats
+the bundle manifest's three counts.</p>
+<p>The ticket is read through the same configured tracker and helpdesk adapters a triage run uses,
+with the same read-only calls — no MCP server is involved, and no provider session is started
+at all, so a workspace whose agent CLI is not installed on this machine can still build an
+entry. The pull request is read through <code>gh pr view</code> and <code>gh pr diff</code>, executed directly rather
+than through a shell. A missing or logged-out <code>gh</code> fails the command with the thing to fix,
+before anything is written.</p>
+<h3 id="the-cutoff">The cutoff<a class="headerlink" href="#the-cutoff" title="Permanent link">&para;</a></h3>
+<p>The bundle is assembled as of one instant, which is the point: a closed ticket's conversation
+ends with somebody posting the fix, and replaying it whole would score an agent on reading the
+answer. <code>--as-of RFC3339</code> sets the instant outright. Otherwise it is the <strong>earliest</strong> of two
+pieces of evidence about when the work started:</p>
+<ul>
+<li>the ticket's first transition into an <code>in_progress</code> status, when the tracker adapter
+  implements <code>source.Transitioner</code> and reports one;</li>
+<li>the earliest <code>--pr</code>'s <code>created_at</code>, read from <code>gh pr view --json createdAt,baseRefOid,mergeCommit,files</code>.</li>
+</ul>
+<p>Most adapters expose no status history, and a helpdesk-only workspace has no tracker at all, so
+the fallback is the pull request's <code>created_at</code> alone. That is later than the real pickup, and
+the error is in the direction of leaving a little early triage in the bundle — evidence the
+engineer did have — rather than removing what they had. It never leaves the fix in, because a
+pull request's own references are redacted whatever the cutoff. Where the cutoff came from is
+printed with the entry; if you disagree with it, pass <code>--as-of</code>.</p>
+<h3 id="what-the-cutoff-removes">What the cutoff removes<a class="headerlink" href="#what-the-cutoff-removes" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>Thread messages written after it.</strong> A message an adapter could not date is kept: a missing
+  timestamp is a gap in the source, and treating it as "later" would empty the bundle for
+  whichever helpdesk reports one.</li>
+<li><strong>Attachments only a dropped message pointed at.</strong> An attachment carries no timestamp of its
+  own, so the message that referenced it is the only evidence of when it arrived; one that no
+  message references at all is kept, because nothing dates it. The file is deleted from
+  <code>bundle/attachments/</code>, not merely unlisted — leaving a screenshot of the green build in the
+  directory hands the session exactly what the cutoff took out of the thread.</li>
+<li><strong>Every pull-request reference</strong>, in the tracker's title, description and fields, in the
+  helpdesk's subject and fields, and in the messages that survived. A GitHub <code>/pull/N</code> or
+  <code>/pulls/N</code> URL, a GitLab <code>/merge_requests/N</code> URL, and a prose mention (<code>PR #482</code>, <code>pull
+  request 482</code>, <code>MR!17</code>) each become <code>[redacted: pull request]</code>. A tracker field whose name says
+  it holds nothing but pull requests — <code>prs</code>, <code>pr_url</code>, <code>pullRequests</code> and the rest of the
+  spellings — is replaced whole rather than scanned, because a tracker that renders its links as
+  a branch name or a bare <code>#482</code> would otherwise slip one past the patterns.</li>
+</ul>
+<p>The marker is deliberately visible. The point is to take away what the fix was, not to pretend
+nothing was taken away: a silent deletion leaves a sentence that reads as if the customer never
+mentioned anything, which is a different ticket from the one the engineer picked up.</p>
+<p>What was removed is counted in <code>bundle/manifest.json</code> beside <code>ticket.json</code>:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"asOf"</span><span class="p">:</span><span class="w"> </span><span class="s2">"2026-03-02T10:30:00Z"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"commentsDropped"</span><span class="p">:</span><span class="w"> </span><span class="mi">4</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"attachmentsDropped"</span><span class="p">:</span><span class="w"> </span><span class="mi">1</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"prLinks"</span><span class="p">:</span><span class="w"> </span><span class="mi">3</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>The counts do <strong>not</strong> go into the bundle's <code>warnings</code>, which is what the prompt quotes to the
+agent. "Four later comments were dropped" tells a session being measured on this ticket that
+there is a conversation it is not being shown, and how much of one. The manifest is for you and
+for the scoring; the operator sees the same line on stderr when the entry is built.</p>
+<h3 id="what-is-still-visible">What is still visible<a class="headerlink" href="#what-is-still-visible" title="Permanent link">&para;</a></h3>
+<p>Redaction is not anonymisation. The bundle still says that something was redacted, and a
+determined session could infer that a fix exists — which it could anyway, from a ticket that is
+closed. What it cannot read is which pull request, which files, or which commit, and those are
+what a retrospective score is measured on.</p>
+<p>The same cutoff is available to a run directly, as <code>run.Options.AsOf</code>. It applies to a fetched
+bundle only: a replayed golden bundle is taken as it stands, because one built with a cutoff
+already carries it, and cutting it twice would say it had two.</p>
+<h2 id="retro-scoring-against-the-fix-that-was-merged">Retro: scoring against the fix that was merged<a class="headerlink" href="#retro-scoring-against-the-fix-that-was-merged" title="Permanent link">&para;</a></h2>
+<p>An ordinary eval scores a replay against what a human wrote about the ticket. A retro scores it
+against what a human <strong>did</strong> about it.</p>
+<p>For a golden key that carries a <code>retro.json</code>, <code>sirdar eval --retro</code> puts the agent back where the
+engineer stood: the bundle captured as of the moment work started, before any comment named the
+cause, and the repository at the commit the fix branched from. Then it runs the flow the engineer
+ran — triage, then a fix — and compares the result against the pull request that closed the
+ticket.</p>
+<div class="highlight"><pre><span></span><code>sirdar eval --retro                    every golden key that has a retro.json
+sirdar eval --retro OMNI-1 OMNI-2      just these
+  --with-rca                           add a blind RCA run (a third session per key)
+  --rubric                             add one provider call per key that reads both diffs
+</code></pre></div>
+<p>Three sessions, at most, per key. They are the ordinary commands, not an imitation of them:
+<code>sirdar triage --at</code>, <code>sirdar fix --local --at</code> and <code>sirdar rca --at</code>, each against the same
+<code>baseCommit</code>, each in a linked worktree of its own under <code>.sirdar/worktrees/&lt;run-id&gt;</code>.</p>
+<ol>
+<li><strong>Triage</strong> at the base commit, from the as-of bundle. It is an eval-marked run like any other
+   replay: the note stays in the run directory, nothing is filed, and no register row is written.</li>
+<li><strong><code>fix --local</code></strong> at the same commit, starting from <em>that</em> triage note rather than the newest
+   note for the key. It commits in its own worktree and stops: nothing is pushed and no pull
+   request is opened. The diff of that commit is what gets scored.</li>
+<li><strong>RCA</strong>, only with <code>--with-rca</code>, and blind — it is never given the pull request URL, because an
+   RCA shown the answer is not measuring anything.</li>
+</ol>
+<p>Stages two and three are handed the run id of stage one's note, rather than looking one up. The
+newest-triage-note lookup skips eval runs on purpose — that is what stops a replay becoming what
+tomorrow's real fix reads — so the retro's own note is invisible to it, and the only way to work
+from that note is to name it. The fix run is eval-marked too, which is why it appends no register
+row either.</p>
+<p><code>--retro</code> always exits 0. There is no threshold a retro passes or fails, and an exit code would
+invite one to be invented. A key whose bundle will not load, whose triage went nowhere, or whose
+<code>baseCommit</code> is not in this repository is a row with a reason printed under the table; the other
+keys still score.</p>
+<h3 id="the-golden-entry">The golden entry<a class="headerlink" href="#the-golden-entry" title="Permanent link">&para;</a></h3>
+<p>A retro key is an ordinary golden entry with two more files in it:</p>
+<div class="highlight"><pre><span></span><code>~/.sirdar/golden/OMNI-1234/
+  bundle/         the ticket as of `asOf`, with the PR links stripped out
+  expected.json   as before, optional
+  retro.json      { key, asOf, baseCommit, prUrls, prDiff, prFiles, redacted }
+  pr.diff         the unified diff of the merged pull request
+</code></pre></div>
+<p><code>sirdar golden add KEY --retro --pr URL</code> writes both, as above. <code>baseCommit</code> is what every session in the
+retro stands at; <code>prFiles</code> is the list the score compares against, and a <code>retro.json</code> that carries
+none falls back to the paths in <code>pr.diff</code> itself. <code>redacted</code> counts what the as-of capture took
+out — PR links, later comments — so a reader can tell how much of the ticket the agent was
+deliberately not shown.</p>
+<h3 id="scoring_1">Scoring<a class="headerlink" href="#scoring_1" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>KEY        CLASS  CONF    REFS      PRFILES   FILES     HUNKS     BUILD  RUBRIC     COST
+OMNI-1234  code   high    1/2 50%   2/3 67%   1/2 50%   1/2 50%   yes    partial    3.85
+OMNI-1240  data   medium  0/1 0%    0/2 0%    0/3 0%    0/2 0%    no     different  2.10
+</code></pre></div>
+<p>The triage columns:</p>
+<ul>
+<li><strong>CLASS, CONF</strong> are the note's own <code>classification</code> and <code>rootCause.confidence</code>, copied out
+  rather than judged. There is no ground truth for either; what they are for is reading beside
+  the overlap columns — a <code>high</code> next to a <code>0/2</code> is the row to open first.</li>
+<li><strong>REFS</strong> is the fraction of the note's <code>rootCause.codeRefs</code> whose <strong>file</strong> the pull request in
+  fact touched. Line numbers and the annotations a generated skeleton leaves on
+  (<code>Export/Csv.cs:253-282 (default branch)</code>) come off first: the question is whether the agent
+  pointed at the right file, not whether it guessed the right line.</li>
+<li><strong>PRFILES</strong> is the other direction — the fraction of the pull request's files the note names
+  anywhere, in its references or in its prose. A file cited by its tail (<code>Export/Csv.cs</code> for
+  <code>src/Domain/Inventory.API/Export/Csv.cs</code>) counts, and so does a bare file name in a sentence.
+  The looseness is deliberate and it cuts both ways, which is why the files the note <strong>missed</strong>
+  are printed under the table rather than only counted.</li>
+</ul>
+<p>The fix columns compare two unified diffs taken against the same commit:</p>
+<ul>
+<li><strong>FILES</strong> is the Jaccard overlap of the two file sets — files in both, over files in either. It
+  is not a fraction of the pull request, because neither side is the reference: an agent that
+  changed three files the pull request never touched is as interesting as one that missed three.
+  Two empty diffs score a dash, not 100%: that is two missing diffs, not a match.</li>
+<li><strong>HUNKS</strong> is the fraction of the pull request's hunks whose file and line window a hunk of the
+  agent's also touches. Both diffs are against the same base commit, so the comparison is on the
+  <strong>base</strong> side: a base-side line number means the same line in both, while the new-side numbers
+  are renumbered independently by each diff and could not be compared at all. A file the pull
+  request renamed lines up by the name it had at the base commit. A hunk that only adds lines
+  covers no base line of its own, so its window is the gap it was inserted into — two insertions
+  at the same point are the same edit.</li>
+<li><strong>BUILD</strong> is what the fix session reported about its own build and tests, read off the
+  <code>testsRun</code> entries of its report. A session that ran nothing, or wrote a result that reads
+  neither way, is a dash rather than a failure.</li>
+<li>The report also carries <strong>linesAdded</strong> and <strong>linesRemoved</strong> for both sides. There is no score
+  on those: a fix half the size of the human's is not half as good, and the two numbers beside
+  each other are the whole point.</li>
+</ul>
+<h3 id="-rubric"><code>--rubric</code><a class="headerlink" href="#-rubric" title="Permanent link">&para;</a></h3>
+<p>Everything above is arithmetic on two diffs. <code>--rubric</code> adds the one judged column: one extra
+call to the workspace's own provider, given the pull request's diff and the agent's diff and
+nothing else — no tools, no MCP servers, no repository to wander into — answering a fixed JSON
+rubric:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"sameRootCause"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span><span class="p">,</span><span class="w"> </span><span class="nt">"sameFix"</span><span class="p">:</span><span class="w"> </span><span class="kc">false</span><span class="p">,</span><span class="w"> </span><span class="nt">"verdict"</span><span class="p">:</span><span class="w"> </span><span class="s2">"partial"</span><span class="p">,</span><span class="w"> </span><span class="nt">"reasoning"</span><span class="p">:</span><span class="w"> </span><span class="s2">"…"</span><span class="p">}</span>
+</code></pre></div>
+<p><code>verdict</code> is <code>equivalent</code>, <code>partial</code> or <code>different</code>; <code>reasoning</code> is capped at 400 characters and
+printed under the table. It is off by default because it costs a session per key and because it
+is an opinion: when a retro says something surprising, RUBRIC is the column to distrust first.</p>
+<h3 id="the-retro-report">The retro report<a class="headerlink" href="#the-retro-report" title="Permanent link">&para;</a></h3>
+<p>Every <code>--retro</code> invocation writes <code>.sirdar/eval/&lt;timestamp&gt;-retro.json</code>, next to the ordinary
+eval reports and named apart from them. It carries every score above, the run id of each session,
+the diff each one left behind, and the cost of the whole key including the rubric call — so the
+two notes and the two diffs can be opened side by side, which is what the table is for.</p>
+<h2 id="from-the-desktop-app">From the desktop app<a class="headerlink" href="#from-the-desktop-app" title="Permanent link">&para;</a></h2>
+<p>The desktop build and <code>sirdar serve</code> show the same golden set and the same report on their Eval
+screen: tick the keys to replay or leave them all unticked to replay the set, override the
+provider and model for that one run if you are comparing two, and read the score table back
+from the report the run wrote under <code>.sirdar/eval/</code>. A completed triage run has an <strong>Add to
+golden set</strong> button, which does what <code>sirdar golden add --from RUN_ID</code> does.</p>
+<p>Below it, a <strong>Retro</strong> section draws the last retro report's table, read from
+<code>GET /api/workspaces/{id}/eval/retro/latest</code>. A workspace that has never run one says so rather
+than showing an empty table. The eval route starts a retro when its body carries
+<code>{"retro": true}</code>, with <code>withRca</code> and <code>rubric</code> alongside it.</p>
+<p>Which directory that is comes from the command line and nowhere else:</p>
+<div class="highlight"><pre><span></span><code>sirdar serve --golden DIR
+</code></pre></div>
+<p>A request cannot name it. The bundles are real customers' conversations, and a UI that let a
+caller point the eval routes at an arbitrary directory would be a way to read any bundle on the
+machine.</p>
+<h2 id="what-an-eval-and-a-fix-are-each-trusted-with">What an eval and a fix are each trusted with<a class="headerlink" href="#what-an-eval-and-a-fix-are-each-trusted-with" title="Permanent link">&para;</a></h2>
+<p>A replay is read-only in the same sense every triage run is: the session gets the read tools,
+no editing tool at all, and a shell allow-list (<code>permissions.bash</code>) matched segment by segment.
+Scoring a replay changes nothing in the workspace except the report under <code>.sirdar/eval/</code>.</p>
+<p><code>sirdar fix</code> is the exception, and it is worth being plain about the size of it. A fix session
+may edit files — confined to the workspace's source, never <code>.git/</code>, never <code>.sirdar/</code>, never the
+directory <code>core.hooksPath</code> names — and its shell allow-list (<code>permissions.fixBash</code>) defaults to
+the read-only git commands plus <code>make *</code>, <code>go build*</code>, <code>go test*</code>, <code>npm test*</code>, <code>dotnet build*</code>
+and <code>dotnet test*</code>.</p>
+<p>Those build and test entries execute the workspace's own build system, which executes whatever
+the repository tells it to: a Makefile target, a <code>go:generate</code> directive, an npm <code>pretest</code>
+script. Sirdar does not read any of that and no allow-list can. A fix has to build and test
+what it changed or its report is worth nothing, so fix mode trusts the workspace's build system
+the way your own shell does when you check out a branch and type <code>make test</code>. The gate on what
+the session actually did is the pull request it opens, reviewed like any other change. A
+workspace that cannot extend that trust should run <code>sirdar fix</code> in a container.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sirdar mark, as shipped</title>
+<link rel="icon" type="image/svg+xml" href="sirdar-mark-light.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --paper: #FAF7EC; --surface: #FFFDF7; --sunk: #F1EDDF; --ink: #17181C; --ink-2: #4A4E58; --ink-3: #676B74;
+  --rule: #E3DFD1; --rule-strong: #C9C4B2; --crimson: #DC143C; --blue: #003893; --white: #FFFFFF;
+  --font-display: Newsreader, Georgia, serif;
+  --font-ui: Figtree, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; background: var(--paper); color: var(--ink); }
+body { font: 16px/1.5 var(--font-ui); padding: 64px 80px 96px; max-width: 1280px; margin: 0 auto; }
+h1, h2 { font-family: var(--font-display); font-weight: 500; letter-spacing: -0.01em; margin: 0; }
+h1 { font-size: 3.5rem; line-height: 1.05; }
+h1 em { font-style: italic; font-weight: 400; }
+h2 { font-size: 2rem; line-height: 1.1; }
+h3 { font: 500 0.875rem/1.4 var(--font-ui); color: var(--ink-3); margin: 0 0 12px; }
+p { margin: 0 0 16px; color: var(--ink-2); max-width: 62ch; }
+code { font-family: var(--font-mono); font-size: 0.875em; }
+.deck { font-family: var(--font-display); font-size: 1.375rem; line-height: 1.35; color: var(--ink-2); max-width: 64ch; margin: 20px 0 0; }
+.meta { color: var(--ink-3); font-size: 0.875rem; margin-top: 24px; display: flex; gap: 24px; flex-wrap: wrap; }
+
+.palette { display: flex; gap: 12px; margin: 40px 0 0; flex-wrap: wrap; }
+.swatch { display: flex; align-items: center; gap: 10px; border: 1px solid var(--rule-strong); border-radius: 999px; padding: 6px 14px 6px 6px; font-size: 0.875rem; background: var(--surface); }
+.swatch i { width: 28px; height: 28px; border-radius: 50%; display: inline-block; border: 1px solid rgba(23,24,28,.12); }
+.swatch code { color: var(--ink-3); }
+
+section { margin-top: 88px; padding-top: 40px; border-top: 1px solid var(--rule-strong); }
+section > p:first-of-type { margin-top: 12px; }
+
+.tiles { display: flex; gap: 48px; flex-wrap: wrap; margin-top: 32px; }
+figure { margin: 0; max-width: 424px; }
+figcaption { margin-top: 14px; font-size: 0.875rem; color: var(--ink-3); }
+
+/* The transparent corners are the point of the tile, and a paper tile on a
+   paper page shows neither them nor its own edge. The checks are 16px, so at
+   440 the squircle's curve is unmistakable and at 16 the mark still sits on a
+   plain square of one colour. */
+.checks { display: inline-block; background:
+    linear-gradient(45deg, var(--sunk) 25%, transparent 25%, transparent 75%, var(--sunk) 75%),
+    linear-gradient(45deg, var(--sunk) 25%, transparent 25%, transparent 75%, var(--sunk) 75%),
+    var(--surface);
+  background-size: 16px 16px; background-position: 0 0, 8px 8px;
+  border: 1px solid var(--rule); border-radius: 8px; padding: 20px; }
+.steps .checks { padding: 12px; }
+figcaption b { font-weight: 500; color: var(--ink-2); }
+img { display: block; }
+
+/* The steps. Each row is one tile shrunk by the browser the way the Dock,
+   the Finder sidebar and a favicon shrink it. */
+.steps { display: flex; align-items: flex-end; gap: 40px; margin-top: 28px; }
+.step { display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 0.8125rem; color: var(--ink-3); }
+
+/* The bare marks, which is what the app and the favicons use: no tile, so the
+   ground underneath is whatever surface they land on. */
+.grounds { display: flex; gap: 24px; flex-wrap: wrap; margin-top: 28px; }
+.ground { padding: 32px 40px; border-radius: 20px; display: flex; align-items: center; gap: 28px; border: 1px solid var(--rule-strong); }
+.ground--paper { background: var(--paper); }
+.ground--surface { background: var(--surface); }
+.ground--blue { background: var(--blue); border-color: var(--blue); }
+.ground--ink { background: var(--ink); border-color: var(--ink); }
+.ground span { font-size: 0.8125rem; color: var(--ink-3); }
+.ground--blue span, .ground--ink span { color: rgba(250,247,236,.72); }
+
+.lockups { display: flex; flex-direction: column; gap: 32px; align-items: flex-start; margin-top: 28px; }
+.row { display: flex; align-items: center; gap: 8px; }
+.row .word { font: 600 1.375rem/1 var(--font-ui); letter-spacing: -0.01em; color: var(--ink); }
+.row .word-mono { font: 500 0.9375rem/1 var(--font-mono); letter-spacing: 0.01em; color: var(--ink); }
+
+table { border-collapse: collapse; margin-top: 24px; font-size: 0.9375rem; }
+th, td { text-align: start; padding: 10px 24px 10px 0; border-bottom: 1px solid var(--rule); vertical-align: top; }
+th { font-weight: 500; color: var(--ink-3); font-size: 0.8125rem; }
+td code { color: var(--ink); }
+
+.foot { margin-top: 96px; border-top: 1px solid var(--rule-strong); padding-top: 24px; color: var(--ink-3); font-size: 0.875rem; }
+
+@media (max-width: 900px) { body { padding: 40px 24px 64px; } .tiles { gap: 32px; } }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>The mark, <em>as shipped</em></h1>
+  <p class="deck">Mark 1 of the six, twin peak with a route to the summit: a peak behind a crimson one, a route climbing to a summit marker. A sirdar is the head guide of a Himalayan expedition, and the colours are Nepal's flag.</p>
+  <div class="meta"><span>Chosen 16 September 2026</span><span>Every specimen below is one of the files in this folder, drawn at size</span><span>Original vector, no third-party marks</span></div>
+  <div class="palette">
+    <span class="swatch"><i style="background:#DC143C"></i>Crimson <code>#DC143C</code></span>
+    <span class="swatch"><i style="background:#003893"></i>Blue <code>#003893</code></span>
+    <span class="swatch"><i style="background:#FFFFFF"></i>White <code>#FFFFFF</code></span>
+    <span class="swatch"><i style="background:#FAF7EC"></i>Paper <code>#FAF7EC</code></span>
+  </div>
+</header>
+
+<section id="tiles">
+  <h2>The two tiles</h2>
+  <p>Blue and white simply trade places. The light tile is paper with a blue peak behind the crimson and a white route; the dark tile makes the blue the ground, the paper the back peak, and puts the route in blue. Crimson holds on both. There is no ink tile: the round drew one, and the swap replaced it, which leaves two colour sets to keep in step rather than three.</p>
+  <p>Both are on the 1024 grid with the mark and its squircle inset to 824 square, Apple's figure, so the 100pt margin is left for the system shadow. The corners are transparent; macOS draws no frame.</p>
+  <div class="tiles">
+    <figure>
+      <span class="checks"><img src="sirdar-tile-light.svg" width="380" height="380" alt="The light tile: a blue peak behind a crimson peak with a white route, on paper"></span>
+      <figcaption><b>sirdar-tile-light.svg</b> — paper ground, blue back peak, white route. This is the one <code>scripts/make-icons.sh</code> rasterises into <code>desktop/build/appicon.png</code>.</figcaption>
+    </figure>
+    <figure>
+      <span class="checks"><img src="sirdar-tile-dark.svg" width="380" height="380" alt="The dark tile: a paper peak behind a crimson peak with a blue route, on blue"></span>
+      <figcaption><b>sirdar-tile-dark.svg</b> — blue ground, paper back peak, blue route. Not shipped as an icon; it is what the mark becomes on a dark surface.</figcaption>
+    </figure>
+  </div>
+</section>
+
+<section id="steps">
+  <h2>128, 32, 16</h2>
+  <p>The sizes that decide whether a mark works: the Finder's list, the menu bar and a browser tab. The route is gone by 16 and two triangles are left, which the round said it would be. The gap between the peaks is what still reads, and it reads at 16.</p>
+  <h3>Light tile</h3>
+  <div class="steps">
+    <span class="step"><span class="checks"><img src="sirdar-tile-light.svg" width="128" height="128" alt=""></span>128</span>
+    <span class="step"><span class="checks"><img src="sirdar-tile-light.svg" width="32" height="32" alt=""></span>32</span>
+    <span class="step"><span class="checks"><img src="sirdar-tile-light.svg" width="16" height="16" alt=""></span>16</span>
+  </div>
+  <h3 style="margin-top:36px">Dark tile</h3>
+  <div class="steps">
+    <span class="step"><span class="checks"><img src="sirdar-tile-dark.svg" width="128" height="128" alt=""></span>128</span>
+    <span class="step"><span class="checks"><img src="sirdar-tile-dark.svg" width="32" height="32" alt=""></span>32</span>
+    <span class="step"><span class="checks"><img src="sirdar-tile-dark.svg" width="16" height="16" alt=""></span>16</span>
+  </div>
+</section>
+
+<section id="bare">
+  <h2>The bare mark</h2>
+  <p>What the app draws. The sidebar's brand row, the two favicons and the landing page's wordmark all take the mark with no tile under it, so it has to survive on whatever surface it lands on. Each variant is shown on the grounds it is meant for, and on one it is not.</p>
+  <div class="grounds">
+    <span class="ground ground--paper">
+      <img src="sirdar-mark-light.svg" width="72" height="72" alt="The light mark on paper">
+      <img src="sirdar-mark-light.svg" width="32" height="32" alt="">
+      <img src="sirdar-mark-light.svg" width="20" height="20" alt="">
+      <span>Light, on paper</span>
+    </span>
+    <span class="ground ground--surface">
+      <img src="sirdar-mark-light.svg" width="72" height="72" alt="The light mark on the app's card surface">
+      <span>Light, on the card surface</span>
+    </span>
+    <span class="ground ground--ink">
+      <img src="sirdar-mark-dark.svg" width="72" height="72" alt="The dark mark on the app's dark shell">
+      <img src="sirdar-mark-dark.svg" width="32" height="32" alt="">
+      <img src="sirdar-mark-dark.svg" width="20" height="20" alt="">
+      <span>Dark, on the dark shell</span>
+    </span>
+    <span class="ground ground--blue">
+      <img src="sirdar-mark-dark.svg" width="72" height="72" alt="The dark mark on the blue of its own tile">
+      <span>Dark, on its own tile's blue</span>
+    </span>
+  </div>
+  <p style="margin-top:24px">The white route on paper is the one thin place: where the route crosses the few pixels of ground between the two peaks it is invisible on a light surface, and the round accepted that when it drew the mark. On the tile it never shows, because the peaks sit on their own ground.</p>
+</section>
+
+<section id="wordmark">
+  <h2>The wordmark</h2>
+  <p>The mark with the word, at the gap the round drew: 0.36 of the mark's size, which is 8 against the 20px mark in the sidebar and 7 against the 18px one in the landing page's nav. <code>sirdar-wordmark.svg</code> is the standalone file — live text in Figtree, falling through to the shell's own grotesque, so it stays selectable.</p>
+  <div class="lockups">
+    <img src="sirdar-wordmark.svg" width="280" height="80" alt="Sirdar">
+    <span class="row">
+      <img src="sirdar-mark-light.svg" width="20" height="20" alt="">
+      <span class="word">Sirdar</span>
+    </span>
+    <span class="row" style="gap:7px">
+      <img src="sirdar-mark-light.svg" width="18" height="18" alt="">
+      <span class="word-mono">sirdar</span>
+    </span>
+  </div>
+  <p style="margin-top:28px">The first is the file. The second is the app's sidebar, 22px Figtree beside the 20px mark. The third is the landing page's nav, the lowercase mono wordmark that page has always used.</p>
+</section>
+
+<section id="files">
+  <h2>What is in this folder, and what reads it</h2>
+  <table>
+    <tr><th>File</th><th>What it is</th><th>What reads it</th></tr>
+    <tr><td><code>sirdar-mark-light.svg</code></td><td>The bare mark, light set, 512 grid</td><td><code>desktop/frontend/public/favicon.svg</code> and <code>site/favicon.svg</code> are copies of it; <code>src/ui/brand-mark/</code> redraws its geometry and a test holds the two together</td></tr>
+    <tr><td><code>sirdar-mark-dark.svg</code></td><td>The same, dark set</td><td>The dark half of <code>src/ui/brand-mark/</code>, held to it by the same test</td></tr>
+    <tr><td><code>sirdar-tile-light.svg</code></td><td>The mark on its squircle, 1024, inset to 824</td><td><code>scripts/make-icons.sh</code> → <code>desktop/build/appicon.png</code> → the <code>.icns</code> Wails builds into the app</td></tr>
+    <tr><td><code>sirdar-tile-dark.svg</code></td><td>The same, dark set</td><td>Nothing ships it. It is the reference for the dark surface.</td></tr>
+    <tr><td><code>sirdar-wordmark.svg</code></td><td>Mark and word, one file</td><td>Nothing in the build. It is the asset to hand somebody who asks for the logo.</td></tr>
+    <tr><td><code>index.html</code></td><td>This page</td><td>Nobody. It is the record of what was shipped.</td></tr>
+  </table>
+</section>
+
+<p class="foot">Sirdar, 16 September 2026. The six candidates and the brief are in <code>../index.html</code>; the recipe for the <code>.icns</code> is in <code>../README.md</code>, and <code>scripts/make-icons.sh</code> is that recipe, run.</p>
+
+</body>
+</html>

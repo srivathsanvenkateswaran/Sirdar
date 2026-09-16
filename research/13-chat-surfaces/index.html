@@ -1,0 +1,2388 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Chat surfaces: a Sirdar agent in Slack, and the Buzz alternative (2026-09-15) - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#chat-surfaces-a-sirdar-agent-in-slack-and-the-buzz-alternative-2026-09-15" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Chat surfaces: a Sirdar agent in Slack, and the Buzz alternative (2026-09-15)
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#1-what-a-sirdar-slack-agent-would-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. What a Sirdar Slack agent would do
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="1. What a Sirdar Slack agent would do">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-stays-out" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What stays out
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#2-architecture-for-a-laptop-daemon" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Architecture for a laptop daemon
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="2. Architecture for a laptop daemon">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#socket-mode-because-there-is-no-inbound-url" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Socket Mode, because there is no inbound URL
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#where-the-code-sits" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the code sits
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#who-may-command-it" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Who may command it
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#a-run-is-a-thread" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        A run is a thread
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-socket-cannot-do" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the socket cannot do
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#3-buzz" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Buzz
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#4-effort-risks-recommendation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Effort, risks, recommendation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#sources" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Sources
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="chat-surfaces-a-sirdar-agent-in-slack-and-the-buzz-alternative-2026-09-15">Chat surfaces: a Sirdar agent in Slack, and the Buzz alternative (2026-09-15)<a class="headerlink" href="#chat-surfaces-a-sirdar-agent-in-slack-and-the-buzz-alternative-2026-09-15" title="Permanent link">&para;</a></h1>
+<p>Research only. Nothing here is built, and the sequencing assumption is that the desktop app
+(HANDOFF "Next steps", items 1-2) lands first — a chat surface is a third front-end over the same
+core, and building it before the second one is finished buys nothing.</p>
+<p>External facts are dated and sourced at the end. Sirdar facts are read off this tree today.</p>
+<h2 id="1-what-a-sirdar-slack-agent-would-do">1. What a Sirdar Slack agent would do<a class="headerlink" href="#1-what-a-sirdar-slack-agent-would-do" title="Permanent link">&para;</a></h2>
+<p>Everything below already exists as a CLI verb or an HTTP route. The Slack app adds no capability;
+it adds a place to type from and a place to watch.</p>
+<table>
+<thead>
+<tr>
+<th>In Slack</th>
+<th>What it calls today</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/sirdar triage OMNI-3217</code></td>
+<td><code>StartTriage</code> (<code>POST …/triage</code>)</td>
+<td>Posts one parent message; the run's thread hangs off it</td>
+</tr>
+<tr>
+<td><code>/sirdar rca OMNI-3217</code></td>
+<td><code>StartRCA</code></td>
+<td>Same shape</td>
+</tr>
+<tr>
+<td><code>/sirdar queue</code>, <code>/sirdar runs [KEY]</code></td>
+<td><code>Queue</code>, <code>Runs</code></td>
+<td>Ephemeral reply, visible to the caller alone</td>
+</tr>
+<tr>
+<td>progress in the thread</td>
+<td><code>Subscribe()</code> → <code>run.event</code> / <code>run.updated</code></td>
+<td>One message, edited in place, not a message per tool call</td>
+</tr>
+<tr>
+<td>the agent's question, in the thread</td>
+<td>the <code>question</code> run event (<code>provider.EvQuestion</code>)</td>
+<td>Off by default — see below</td>
+</tr>
+<tr>
+<td>a thread reply while the run is <code>blocked</code></td>
+<td><code>Resume(ws, runID, answer)</code> (<code>POST …/resume</code> <code>{"answer":…}</code>)</td>
+<td>The existing answer path, unchanged</td>
+</tr>
+<tr>
+<td>a thread reply while the run is <code>completed</code></td>
+<td><code>Steer(ws, runID, text)</code> (<code>POST …/steer</code> <code>{"text":…}</code>)</td>
+<td>The existing steer path, with its own refusals</td>
+</tr>
+<tr>
+<td>a Cancel button on the parent message</td>
+<td><code>Cancel(jobID)</code></td>
+<td>The 2 s mis-pairing caveat in HANDOFF applies here too</td>
+</tr>
+<tr>
+<td>the completion digest</td>
+<td><code>internal/notify</code></td>
+<td>Unchanged, including <code>includeTitle</code></td>
+</tr>
+</tbody>
+</table>
+<p>The blocked-question turn is the one that makes the app worth building. Today a question parks a
+run until the operator is back at the laptop; <code>notify</code> deliberately posts <code>reason: agent asked a
+question</code> and never the question, because the text can quote the ticket. In Slack the thread is
+the natural place to answer it, so the question has to be posted — which is a real widening of an
+existing rule, not an incidental detail. It gets its own key (<code>chat.slack.includeQuestion</code>,
+default <code>false</code>, same posture as <code>includeTitle</code>), and with it off the thread says a question is
+waiting and the answer still works: the operator replies, the reply goes to <code>Resume</code>, and the
+question itself never left the machine.</p>
+<p>The digest already posts to Slack through an incoming webhook. With a bot token the connector can
+post it into the run's own thread instead of a channel's flat history, and the "one workspace,
+one webhook, one channel" limit in <code>docs/notifications.md</code> goes away — a bot token can post to
+any channel it is in, so <code>channel:</code> becomes a real setting for the first time.</p>
+<h3 id="what-stays-out">What stays out<a class="headerlink" href="#what-stays-out" title="Permanent link">&para;</a></h3>
+<ul>
+<li><strong>No writes to a helpdesk or a tracker, ever.</strong> Slack does not become the exception to the
+  standing constraint. No status transitions, no comments, no assignment.</li>
+<li><strong>No note body in a message.</strong> The thread carries the note's path — relative to the workspace
+  root, as <code>notify</code> already renders it — and reading the finding means opening the note. Same rule
+  for the complaint, the root-cause hypothesis, and any log line the agent quoted.</li>
+<li><strong>Ticket titles only under <code>includeTitle</code>.</strong> The existing key governs the chat surface too, and
+  keeps its default of off.</li>
+<li><strong>No <code>sirdar fix</code> from Slack.</strong> The precedent is already in the tree: <code>POST …/fix</code> answers 403
+  on a non-loopback listener because a fix writes code and opens a PR under the operator's GitHub
+  login. A message typed from a phone is further from the keyboard than that listener is, so fix
+  stays a laptop verb. Reviewing a fix (<code>runs diff</code>, per-hunk drop) stays out for the same reason.</li>
+<li><strong>No secrets, no absolute paths.</strong> Workspace-relative paths only, no <code>/Users/&lt;name&gt;/…</code>, and the
+  existing rule that an error never quotes a credential or a receiver's body carries over.</li>
+<li><strong>No free-text prompt injection into a run's permissions.</strong> A steer reaches the agent as prompt
+  text and nothing else (<code>docs/steer.md</code>); the Slack path adds no way to widen a policy.</li>
+</ul>
+<h2 id="2-architecture-for-a-laptop-daemon">2. Architecture for a laptop daemon<a class="headerlink" href="#2-architecture-for-a-laptop-daemon" title="Permanent link">&para;</a></h2>
+<h3 id="socket-mode-because-there-is-no-inbound-url">Socket Mode, because there is no inbound URL<a class="headerlink" href="#socket-mode-because-there-is-no-inbound-url" title="Permanent link">&para;</a></h3>
+<p>Slack's Socket Mode replaces the public Request URL with an outbound WebSocket the app opens
+itself: no reverse proxy, no tunnel, no TLS termination, and no request-signing secret to verify,
+since nothing arrives unsolicited. Events, slash commands, interactivity, modals and shortcuts all
+ride the same socket. This is the opposite posture from <code>/hooks/</code>, which needs the operator to
+expose a port and warns about it at length in <code>docs/webhooks.md</code>; a Socket Mode connector needs
+neither <code>--allow-remote</code> nor a tunnel, and a laptop that sleeps simply drops the socket.</p>
+<p>The cost is distribution: Socket Mode apps are not allowed in the public Slack Marketplace. For
+Sirdar that is the right trade anyway — the app is per-operator, holds no server-side state, and
+would be installed as an internal (customer-built) app from a manifest checked into this repo.
+That also sidesteps the 2025-26 rate-limit squeeze on non-Marketplace apps, which caps
+<code>conversations.history</code> / <code>conversations.replies</code> at 15 messages a minute for existing installs
+from 3 March 2026 but excludes internal customer-built apps — and the connector reads no history
+regardless, since it works off events it was pushed.</p>
+<p>Go has no official Bolt. <code>github.com/slack-go/slack</code> is the community library, it carries
+<code>socketmode</code> with a <code>SocketmodeHandler</code> that routes by event type, and it already has the agent
+surfaces (<code>AssistantThreadStarted</code>, <code>SetAssistantThreadsStatus</code>). That is the dependency; the
+alternative is hand-rolling <code>apps.connections.open</code> plus a WebSocket loop, which is a day of work
+and a permanent maintenance tax.</p>
+<h3 id="where-the-code-sits">Where the code sits<a class="headerlink" href="#where-the-code-sits" title="Permanent link">&para;</a></h3>
+<p><code>internal/chat/slack</code>, a second front-end over <code>app.Service</code>, exactly as <code>internal/httpapi</code> is the
+first. The service interface already has everything the connector needs — <code>StartTriage</code>,
+<code>StartRCA</code>, <code>Resume</code>, <code>Steer</code>, <code>Cancel</code>, <code>Runs</code>, <code>Queue</code>, and <code>Subscribe()</code> for the fan-out — so
+nothing in <code>internal/run</code> or <code>internal/app</code> changes. <code>sirdar serve</code> starts the connector when the
+config block is present; a <code>--no-chat</code> flag silences it the way <code>SIRDAR_NO_NOTIFY</code> silences a post.</p>
+<h3 id="who-may-command-it">Who may command it<a class="headerlink" href="#who-may-command-it" title="Permanent link">&para;</a></h3>
+<p>An allow-list of Slack <strong>user ids</strong> (<code>U…</code>), matched against the <code>user_id</code> Slack puts on every
+slash command and event. Not emails, not display names, not "anyone in the channel": a workspace
+admin can change a display name, and an email match would quietly grant a guest account whatever
+the operator's laptop can do. Anything from an id not on the list gets an ephemeral refusal and a
+line on the run log. A channel allow-list on top of it, so a run's thread cannot be started in a
+channel the operator did not nominate.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">chat</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">slack</span><span class="p">:</span>
+<span class="w">    </span><span class="nt">botToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:sirdar-slack-bot</span><span class="w">      </span><span class="c1"># xoxb-…</span>
+<span class="w">    </span><span class="nt">appToken</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">keychain:sirdar-slack-app</span><span class="w">      </span><span class="c1"># xapp-…, connections:write</span>
+<span class="w">    </span><span class="nt">allow</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">U024BE7LH</span><span class="p p-Indicator">]</span><span class="w">                       </span><span class="c1"># Slack user ids, never emails</span>
+<span class="w">    </span><span class="nt">channels</span><span class="p">:</span><span class="w"> </span><span class="p p-Indicator">[</span><span class="nv">C07SUPPORT</span><span class="p p-Indicator">]</span>
+<span class="w">    </span><span class="nt">includeTitle</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+<span class="w">    </span><span class="nt">includeQuestion</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">false</span>
+</code></pre></div>
+<p>Both tokens are credential references, resolved once at startup, rejected at config load if
+written literally — the rule <code>notify</code> already enforces for a webhook URL, and for the same reason:
+an <code>xoxb-</code> token is a bearer credential. Both are stripped from the agent session's environment
+alongside the adapters' credentials, so a session that can run shell commands cannot post to the
+channel as Sirdar. A token that will not resolve stops <code>sirdar serve</code> rather than leaving a
+connector up that fails every command.</p>
+<h3 id="a-run-is-a-thread">A run is a thread<a class="headerlink" href="#a-run-is-a-thread" title="Permanent link">&para;</a></h3>
+<table>
+<thead>
+<tr>
+<th>Thing</th>
+<th>Slack thing</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the run</td>
+<td>one parent message in the nominated channel, edited in place as status changes</td>
+</tr>
+<tr>
+<td>the run's progress</td>
+<td><code>thread_ts</code> of that message; one edited progress message inside it</td>
+</tr>
+<tr>
+<td>the agent's question</td>
+<td>a thread reply</td>
+</tr>
+<tr>
+<td>the operator's answer / steer</td>
+<td>a thread reply, routed by the run's status at the moment it arrives</td>
+</tr>
+<tr>
+<td>the digest</td>
+<td>a thread reply, plus the channel-level post if <code>notify.slack</code> is still configured</td>
+</tr>
+</tbody>
+</table>
+<p>The mapping lives in <code>.sirdar/chat/threads.jsonl</code> — <code>runId ↔ (channel, thread_ts)</code>, both
+directions — so a reconnect after a laptop wakes finds the thread again. It is written where every
+other per-run artefact is written, and it is not a secret.</p>
+<p>Two Slack limits shape the posting: roughly one message per second per channel, and 50 Block Kit
+blocks per message. So progress is one message edited via <code>chat.update</code> on a timer (a second or
+two), never a message per tool call — which is also what keeps a 40-turn run from filling a
+channel. In the assistant/agent surface, <code>assistant.threads.setStatus</code> gives the "thinking" line
+for free, and it clears itself when a message is sent.</p>
+<h3 id="what-the-socket-cannot-do">What the socket cannot do<a class="headerlink" href="#what-the-socket-cannot-do" title="Permanent link">&para;</a></h3>
+<p>Slack does not replay events an app missed. A command typed while the laptop is asleep is lost —
+Slack shows the slash command failing, which is honest, and the operator retries. A run that was
+live when the socket dropped keeps running locally and its thread catches up on reconnect from
+<code>Runs</code>/<code>Run</code>, since the state is on disk. Nothing queues.</p>
+<h2 id="3-buzz">3. Buzz<a class="headerlink" href="#3-buzz" title="Permanent link">&para;</a></h2>
+<p><strong>Which Buzz.</strong> In 2026 the unambiguous reading is Block's <strong>Buzz</strong>, launched 21 July 2026: an
+Apache-2.0 group-chat workspace where AI agents are members with their own identity, with Git
+hosting in the same window, built on Nostr (<code>github.com/block/buzz</code>). Older or lesser claimants —
+Google Buzz, retired in 2011, and "buzz" as a generic feed feature in various suites — are not
+platforms anyone would ask this question about. This section takes the Block reading.</p>
+<p><strong>What it is, technically.</strong> A relay you run (Rust/Axum, Postgres, Redis, MinIO, Docker Compose in
+<code>deploy/compose</code>, or Block's managed deployment), speaking Nostr NIP-01 with NIP-42 Schnorr
+authentication and NIP-34 for git events, with channel/DM/media/workflow/git REST endpoints and a
+WebSocket event stream beside the signed log. Every participant, human or agent, holds a keypair
+and every message is signed — so an agent's actions are attributable in a way a Slack bot's are
+not. The agent surface is <code>buzz-cli</code> (JSON in, JSON out, built for tool calls), <code>buzz-acp</code> (an ACP
+harness driving goose, Codex and Claude Code, with ACP↔MCP translation), <code>buzz-agent</code>, and
+<code>buzz-dev-mcp</code>. The README says plainly that it is not finished.</p>
+<p><strong>What a Sirdar agent would do there.</strong> The same list as section 1, unchanged, and the exclusions
+are the same. Two differences are worth naming. First, identity: Sirdar would hold its own keypair
+and its posts would be signed as itself, which fits a tool whose whole pitch is an auditable
+read-only trail — the run's event log and the chat log would be two signed records of the same
+work. Second, the allow-list is cleaner: a Nostr pubkey is a cryptographic identity, not a name an
+admin can reassign, so <code>allow: [npub…]</code> means what it says.</p>
+<p><strong>Architecture.</strong> The same seam — <code>internal/chat/buzz</code> over <code>app.Service</code> — and the same
+outbound-only posture: the daemon opens a WebSocket to the relay and authenticates with NIP-42, so
+the laptop still exposes nothing. The difference is that Slack is a service that exists whether or
+not the operator does anything, while Buzz is a relay somebody has to run. For a solo operator
+that means standing up Postgres, Redis and MinIO — or trusting a managed relay — before a single
+message is exchanged. There is no Go SDK; the client would be hand-written against the REST and
+NIP-01 endpoints plus a Schnorr signer (<code>secp256k1</code>, which Go has good libraries for).</p>
+<p><strong>The other door.</strong> Buzz drives agents over ACP. Sirdar is an ACP <em>client</em> (<code>internal/provider/acp</code>
+speaks the client half to Copilot CLI, OpenCode, Kimi). Implementing the <em>agent</em> half — an ACP
+facade that answers <code>session/new</code> and <code>session/prompt</code> by starting a Sirdar run — would make
+Sirdar joinable by any ACP host, Buzz included, with no Buzz-specific code. That is speculative:
+whether <code>buzz-acp</code> would accept an arbitrary ACP agent binary as a channel member, and what
+<code>buzz-agent</code> does that a plain ACP agent cannot, is not established from the README and would need
+an hour against a running relay. If it holds, it is the cheapest route into Buzz and into whatever
+else speaks ACP next year.</p>
+<h2 id="4-effort-risks-recommendation">4. Effort, risks, recommendation<a class="headerlink" href="#4-effort-risks-recommendation" title="Permanent link">&para;</a></h2>
+<table>
+<thead>
+<tr>
+<th>Work</th>
+<th>Slack</th>
+<th>Buzz</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>connector skeleton + transport</td>
+<td>1 d (<code>slack-go</code> socketmode)</td>
+<td>3 d (hand-written client, NIP-42 signer)</td>
+</tr>
+<tr>
+<td>commands, allow-list, config block, credential refs</td>
+<td>1.5 d</td>
+<td>1.5 d</td>
+</tr>
+<tr>
+<td>run → thread mapping, progress throttling, message rendering</td>
+<td>1.5 d</td>
+<td>1.5 d</td>
+</tr>
+<tr>
+<td>question → answer → <code>Resume</code>, reply → <code>Steer</code></td>
+<td>1 d</td>
+<td>1 d</td>
+</tr>
+<tr>
+<td>app manifest / bot identity, install docs, <code>doctor</code> row</td>
+<td>1 d</td>
+<td>1.5 d (plus relay setup docs)</td>
+</tr>
+<tr>
+<td>tests against a fake transport, one live end-to-end run</td>
+<td>1.5 d</td>
+<td>2 d</td>
+</tr>
+<tr>
+<td><strong>first cut</strong></td>
+<td><strong>6-8 days</strong></td>
+<td><strong>10-13 days</strong>, plus a relay to run</td>
+</tr>
+</tbody>
+</table>
+<p>Risks, both:</p>
+<ul>
+<li>The question text is the privacy decision, not a detail. Default it off, and make the "a
+  question is waiting" message useful enough that most operators never turn it on.</li>
+<li>A chat surface is a remote control for a laptop. Keeping <code>fix</code> and diff review out is what
+  bounds the blast radius of a stolen token or a compromised Slack account.</li>
+<li>Two bearer tokens now sit on the laptop and in a channel's history of what Sirdar can do.</li>
+<li>Rendering is where leaks happen. One function builds every outbound message, it takes a typed
+  struct rather than strings, and the note body is not reachable from it.</li>
+</ul>
+<p>Slack-specific: <code>slack-go</code> is community-maintained, and Slack is moving the status scope from
+<code>assistant:write</code> to <code>chat:write</code> (changelog, March 2026), so the app definition will drift.
+Socket Mode forecloses the Marketplace, which is fine for an internal app and means every OSS user
+creates their own app from the manifest.</p>
+<p>Buzz-specific: the platform is two months old and says it is unfinished, the wire surface will
+move, and the population of workspaces that run a Buzz relay today is close to nobody — including
+this operator. Anything built now is built against a moving target for an audience of zero.</p>
+<p><strong>Recommendation: Slack, after the desktop UI, as an internal Socket Mode app with the manifest in
+this repo.</strong> It costs about a working week, needs no inbound URL, no tunnel and no new
+authentication story, and reuses <code>app.Service</code> whole. Ship it with <code>includeQuestion: false</code>,
+<code>includeTitle: false</code>, a user-id allow-list, and no fix route. Leave Buzz alone for now, and
+revisit it when the README stops saying "not finished" — and when revisiting, price the ACP agent
+facade first, since it may reach Buzz and every other ACP host for less than a Buzz connector
+costs on its own.</p>
+<h2 id="sources">Sources<a class="headerlink" href="#sources" title="Permanent link">&para;</a></h2>
+<p>Slack: <a href="https://docs.slack.dev/apis/events-api/using-socket-mode/">Socket Mode</a> ·
+<a href="https://docs.slack.dev/apis/web-api/rate-limits/">rate limits</a> ·
+<a href="https://api.slack.com/changelog/2025-05-terms-rate-limit-update-and-faq">non-Marketplace rate-limit changes</a> ·
+<a href="https://docs.slack.dev/reference/methods/assistant.threads.setStatus/">assistant.threads.setStatus</a> ·
+<a href="https://docs.slack.dev/reference/methods/assistant.threads.setSuggestedPrompts/">setSuggestedPrompts</a> ·
+<a href="https://docs.slack.dev/changelog/2026/03/05/set-status-scope-update/">set-status scope change, 2026-03-05</a> ·
+<a href="https://api.slack.com/bolt">Bolt (JS, Python, Java only)</a> ·
+<a href="https://github.com/slack-go/slack">slack-go/slack</a> ·
+<a href="https://slack.com/blog/news/add-to-slack">Add to Slack, 2026</a> ·
+<a href="https://slack.com/blog/news/slack-code-channels-for-agents">Slack Code channels</a>.</p>
+<p>Buzz: <a href="https://github.com/block/buzz">github.com/block/buzz</a> ·
+<a href="https://techcrunch.com/2026/07/21/jack-dorsey-is-taking-on-slack-with-buzz-a-group-chat-platform-for-teams-and-their-ai-agents/">TechCrunch, 2026-07-21</a> ·
+<a href="https://www.opensourceforu.com/2026/07/block-unveils-buzz-an-open-source-workspace-built-for-human-agent-parity/">Open Source For You</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

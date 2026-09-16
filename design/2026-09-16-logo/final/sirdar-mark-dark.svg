@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Sirdar">
+<!-- Sirdar mark. Mark 1 of the 2026-09-16 logo round, twin peak with a route to the
+  summit: a paper peak behind a crimson one, the route and its summit marker in blue.
+  Colours are Nepal's flag (crimson #DC143C, blue #003893) on the app's paper; blue and
+  white trade places between the two themes. Original vector, no fonts, 512 grid. -->
+<path d="M152 408 L304 104 L456 408 Z" fill="#FAF7EC"/>
+<path d="M64 408 L176 220 L288 408 Z" fill="#DC143C"/>
+<path d="M116 408 C200 380 150 300 236 262 C300 234 276 200 302 160" fill="none" stroke="#003893" stroke-width="22" stroke-linecap="round"/>
+<circle cx="302" cy="160" r="19" fill="#003893"/>
+</svg>

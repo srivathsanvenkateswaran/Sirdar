@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 80" width="280" height="80" role="img" aria-label="Sirdar">
+<!-- Sirdar lockup: the light mark at 72 with the word at a 26px gap, the proportions of
+  the small sans lockup on the review page (gap 0.357 of the mark, size 0.714 of it).
+
+  The word is live text, not outlines, so it stays selectable and searchable and the file
+  stays small. Figtree is the app's UI face; the @import fetches it when the file is opened
+  in a browser, and the stack falls through to the shell's own grotesque offline, which is
+  what every other Sirdar surface does. That means the drawn width moves a little with the
+  face: the viewBox is cut for Figtree and leaves a few units of air at the end. Where a
+  fixed width matters more than live text — a print sheet, a partner's asset kit — open this
+  in an editor and convert the <text> to paths. -->
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=Figtree:wght@600&amp;display=swap");
+  .word {
+    font-family: Figtree, "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+    font-weight: 600;
+    font-size: 51px;
+    letter-spacing: -0.01em;
+    fill: #17181C;
+  }
+</style>
+<g transform="translate(4 4) scale(0.140625)">
+  <path d="M152 408 L304 104 L456 408 Z" fill="#003893"/>
+  <path d="M64 408 L176 220 L288 408 Z" fill="#DC143C"/>
+  <path d="M116 408 C200 380 150 300 236 262 C300 234 276 200 302 160" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
+  <circle cx="302" cy="160" r="19" fill="#FFFFFF"/>
+</g>
+<text class="word" x="102" y="58">Sirdar</text>
+</svg>

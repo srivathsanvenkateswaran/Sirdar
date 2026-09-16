@@ -1,0 +1,3245 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../09-qwen-wire-formats/">
+      
+      
+        <link rel="next" href="../11-cursor-wire-formats/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Antigravity wire formats - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#antigravity-cli-wire-formats-captured-2026-09-15" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Antigravity wire formats
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The binary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-command-sirdar-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command Sirdar runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The command Sirdar runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plan-mode-and-slash-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan mode and slash commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-output-format-stream-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output: --output-format stream-json
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output: --output-format stream-json">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step_update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        step_update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-input-format-stream-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input: --input-format stream-json
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions-there-is-no-mediation-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions: there is no mediation channel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions: there is no mediation channel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-project-lever-spiked-and-then-adopted-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project lever, spiked and then adopted 2026-09-15
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The project lever, spiked and then adopted 2026-09-15">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-schema-read-off-the-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schema, read off the binary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-sirdar-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Sirdar writes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified-live-round-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified live, round 2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-still-not-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is still not established
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-was-actually-observed-per-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was actually observed, per mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-conclusion-sirdar-draws" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The conclusion Sirdar draws
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-round-1s-live-triage-actually-did" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What round 1's live triage actually did
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-trust" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspace trust
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-print-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --print-timeout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-capture-did-not-establish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this capture did not establish
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The binary
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-command-sirdar-runs" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The command Sirdar runs
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The command Sirdar runs">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#plan-mode-and-slash-commands" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan mode and slash commands
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#output-output-format-stream-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Output: --output-format stream-json
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Output: --output-format stream-json">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#init" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        init
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#step_update" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        step_update
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#result" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        result
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#input-input-format-stream-json" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Input: --input-format stream-json
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissions-there-is-no-mediation-channel" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Permissions: there is no mediation channel
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Permissions: there is no mediation channel">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-project-lever-spiked-and-then-adopted-2026-09-15" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The project lever, spiked and then adopted 2026-09-15
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The project lever, spiked and then adopted 2026-09-15">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#the-schema-read-off-the-binary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The schema, read off the binary
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-sirdar-writes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Sirdar writes
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#verified-live-round-2" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Verified live, round 2
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-is-still-not-established" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is still not established
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-was-actually-observed-per-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What was actually observed, per mode
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-conclusion-sirdar-draws" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The conclusion Sirdar draws
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-round-1s-live-triage-actually-did" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What round 1's live triage actually did
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#workspace-trust" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Workspace trust
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#-print-timeout" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --print-timeout
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-capture-did-not-establish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this capture did not establish
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="antigravity-cli-wire-formats-captured-2026-09-15">Antigravity CLI wire formats, captured 2026-09-15<a class="headerlink" href="#antigravity-cli-wire-formats-captured-2026-09-15" title="Permanent link">&para;</a></h1>
+<blockquote>
+<p><strong><code>provider: agy</code> is disabled</strong> — Google's Antigravity terms do not allow driving the CLI from
+another program. The adapter and this capture are retained for reference only.</p>
+</blockquote>
+<p>Captured against <strong>Antigravity CLI <code>agy</code> 1.2.3</strong> on macOS, driving the real binary with a real
+Google account (Google AI Pro) against <code>gemini-3.6-flash-low</code> at <code>--effort low</code>. Unlike
+<code>docs/research/09-qwen-wire-formats.md</code>, there is no stub backend here: every line below came
+off a live model turn, and the spend was kept to six invocations in the first round because the
+account's quota is unknown.</p>
+<p><strong>Round 2, same day, two more live runs.</strong> The first round left the adapter with two defects
+that only a live triage could show, and both are fixed and verified below: <code>--mode plan</code> was
+being cancelled by <code>--disable-slash-commands</code>, and a headless run was auto-denying every read,
+so the agent answered the ticket out of its description. See "Plan mode and slash commands" and
+"The project lever" — the latter is no longer a rejected option but the mechanism the adapter
+runs on.</p>
+<p>Every claim is marked <strong>verified</strong> (watched on a live run, output quoted) or <strong>inferred</strong> (read
+off <code>--help</code>, the binary's embedded documentation, or its own changelog, and not exercised).
+Where the two disagree the verified line wins.</p>
+<p>Conversation ids and token counts below are the real ones from the capture session; paths are
+the scratch directories the capture ran in.</p>
+<h2 id="the-binary">The binary<a class="headerlink" href="#the-binary" title="Permanent link">&para;</a></h2>
+<p><code>agy</code> is a single ~180 MB Go binary. <code>agy --version</code> prints <code>1.2.3</code> (verified). It is the CLI
+front end for the same backend Antigravity 2.0 and the Antigravity IDE use; the CLI's own
+state lives under <code>~/.gemini/antigravity-cli/</code> and its shared configuration under
+<code>~/.gemini/config/</code> (verified: both directories exist and are written during a run).</p>
+<h2 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h2>
+<p><code>agy models</code> lists the models the signed-in account may use (verified):</p>
+<div class="highlight"><pre><span></span><code>gemini-3.8-flash-high / -medium / -low          Gemini 3.8 Flash
+gemini-3.7-flash-high / -medium / -low          Gemini 3.7 Flash
+gemini-3.6-flash-high / -medium / -low          Gemini 3.6 Flash
+gemini-3.1-pro-high / -low                      Gemini 3.1 Pro
+claude-sonnet-4-6                               Claude Sonnet 4.6 (Thinking)
+claude-opus-4-6-thinking                        Claude Opus 4.6 (Thinking)
+gpt-oss-120b-medium                             GPT-OSS 120B (Medium)
+</code></pre></div>
+<p>The reasoning tier is baked into the model id <strong>and</strong> available separately as <code>--effort
+low|medium|high</code>. Passing both is accepted (verified: <code>--model gemini-3.6-flash-low --effort
+low</code> ran). <code>--effort</code> is not universal — the binary carries the message <code>--effort is not
+supported for model %q</code> (inferred; no model was found that rejects it in this capture).</p>
+<p>No price list is published on the wire and the account is a subscription, so "cheapest" here
+means the smallest tier: <code>gemini-3.6-flash-low</code>, which is what Sirdar defaults to.</p>
+<h2 id="the-command-sirdar-runs">The command Sirdar runs<a class="headerlink" href="#the-command-sirdar-runs" title="Permanent link">&para;</a></h2>
+<div class="highlight"><pre><span></span><code>agy --output-format stream-json \
+    --input-format stream-json \
+    --json-schema '&lt;json schema&gt;' \
+    --model &lt;model&gt; --effort &lt;low|medium|high&gt; \
+    --mode plan \                       # triage only; see "Modes"
+    --project sirdar-&lt;16 hex&gt; \         # the session's own permission file; see "The project lever"
+    --print-timeout &lt;budget.maxMinutes&gt;m \
+    [--conversation &lt;id&gt;] \
+    --print=
+</code></pre></div>
+<p><code>--print=</code> (with the empty value attached) is load-bearing. <code>-p</code> / <code>--print</code> / <code>--prompt</code> all
+take the prompt <strong>as the flag's value</strong>, so the bare <code>agy -p --output-format stream-json</code> form
+is rejected outright (verified):</p>
+<div class="highlight"><pre><span></span><code>Error: -p took "--output-format" as its prompt, so the intended prompt was left as an argument
+and ignored.
+Attach the prompt to the flag (-p='your prompt') and move --output-format elsewhere on the
+command line.
+</code></pre></div>
+<p>With <code>--input-format stream-json</code> the prompt comes from stdin instead, so the flag is given an
+empty value to select print mode without claiming the next argument.</p>
+<p>That exact argv — every flag together, with and without <code>--conversation</code> — was verified to
+parse by running it against a deliberately malformed stdin line: the CLI emits <code>init</code> and then
+fails at the decode, so the whole command line is exercised and no model turn is spent. Round 2
+then ran the whole line on two real turns.</p>
+<h3 id="plan-mode-and-slash-commands">Plan mode and slash commands<a class="headerlink" href="#plan-mode-and-slash-commands" title="Permanent link">&para;</a></h3>
+<p>Round 1 also passed <code>--disable-slash-commands</code>, on the reasoning that the prompt carries ticket
+text somebody else wrote and expansion would let a line of it name a command. That was wrong,
+and the CLI said so on every run (<strong>verified</strong>, on stderr):</p>
+<div class="highlight"><pre><span></span><code>warning: --mode plan has no effect while slash command expansion is disabled.
+</code></pre></div>
+<p>Plan mode in print mode <strong>is</strong> an expansion: the binary's own flag plumbing carries
+<code>DisableSlashCommands</code> alongside the execution mode, and with expansion off the mode never
+takes. So every round-1 session ran in the CLI's <em>default</em> mode — the one the capture below
+watched perform a write — while the run record said plan mode. Nothing in <code>agy --help</code> makes
+the two coexist. The flag is gone, and round 2 confirmed the warning goes with it (<strong>verified</strong>:
+stderr was empty on both runs).</p>
+<p>What the injection surface actually is, with expansion back on:</p>
+<ul>
+<li>The CLI's own slash commands are <strong>not</strong> reachable from a stream-json prompt. The binary
+  carries <code>/%s is answered by the CLI itself and is unavailable with --input-format stream-json;
+  run it as its own --print /%s invocation</code> (<strong>inferred</strong>, read off the binary; not exercised).
+  So <code>/model</code>, <code>/logout</code>, <code>/plugin</code> and the rest cannot be driven from ticket text on this
+  command line.</li>
+<li>What remains expandable is a user or workspace <em>skill</em>. A skill that expanded into a write or
+  a command is refused by the session's own project rules (below), and a write or command that
+  completed anyway ends the run.</li>
+</ul>
+<p>That is the trade the adapter takes: an expansion surface that cannot reach the session's
+configuration, against a read-only mode that actually applies.</p>
+<h2 id="output-output-format-stream-json">Output: <code>--output-format stream-json</code><a class="headerlink" href="#output-output-format-stream-json" title="Permanent link">&para;</a></h2>
+<p>NDJSON, one object per line, each with a top-level <code>event</code> discriminator and a payload object
+named after it. Three event types were seen: <code>init</code>, <code>step_update</code>, <code>result</code> (verified — the
+changelog names exactly these three as the closed vocabulary).</p>
+<h3 id="init"><code>init</code><a class="headerlink" href="#init" title="Permanent link">&para;</a></h3>
+<p>One per process, first line:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"init"</span><span class="p">,</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"e836d45d-753d-4919-94ea-c42bb802fd9a"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"init"</span><span class="p">:{</span><span class="nt">"model"</span><span class="p">:</span><span class="s2">"gemini-3.6-flash-low"</span><span class="p">,</span>
+<span class="w">         </span><span class="nt">"cwd"</span><span class="p">:</span><span class="s2">"/private/tmp/.../agyspike/t1"</span><span class="p">,</span>
+<span class="w">         </span><span class="nt">"tools"</span><span class="p">:[</span><span class="s2">"ask_custom_permission"</span><span class="p">,</span><span class="s2">"ask_permission"</span><span class="p">,</span><span class="s2">"ask_question"</span><span class="p">,</span><span class="s2">"browser_click_element"</span><span class="p">,</span>
+<span class="w">                  </span><span class="s2">"..."</span><span class="p">,</span><span class="s2">"write_to_file"</span><span class="p">],</span>
+<span class="w">         </span><span class="nt">"permission_mode"</span><span class="p">:</span><span class="s2">"request-review"</span><span class="p">,</span>
+<span class="w">         </span><span class="nt">"json_schema"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"object"</span><span class="p">,</span><span class="nt">"properties"</span><span class="p">:{</span><span class="nt">"word"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"string"</span><span class="p">}},</span><span class="nt">"required"</span><span class="p">:[</span><span class="s2">"word"</span><span class="p">]}}}</span>
+</code></pre></div>
+<p><code>json_schema</code> is present only when <code>--json-schema</code> was passed (verified). <code>conversation_id</code> is
+the resume handle (see "Resume").</p>
+<p>The advertised tool set is fixed and large — 57 names in this build (verified, full list in the
+capture). The ones that matter to a read-only guarantee:</p>
+<ul>
+<li>writes: <code>write_to_file</code>, <code>replace_file_content</code>, <code>multi_replace_file_content</code>, <code>sed_file</code>,
+  <code>notebook_edit</code></li>
+<li>shell: <code>run_command</code>, <code>send_command_input</code>, <code>command_status</code>, <code>notebook_execution</code></li>
+<li>network: <code>read_url_content</code>, <code>search_web</code>, and the whole <code>browser_*</code> family plus
+  <code>open_browser_url</code>, <code>execute_browser_javascript</code></li>
+<li>MCP: <code>call_mcp_tool</code>, <code>list_resources</code>, <code>read_resource</code></li>
+<li>permission surface: <code>ask_permission</code>, <code>ask_custom_permission</code>, <code>list_permissions</code></li>
+<li>terminal: <code>finish</code></li>
+</ul>
+<p><strong>There is no flag that removes a tool.</strong> <code>agy --help</code> offers nothing resembling
+<code>--exclude-tools</code>, <code>--allowed-tools</code> or <code>--disallowedTools</code> (verified against the full help
+output). This is the single most important difference from every other provider Sirdar drives.</p>
+<h3 id="step_update"><code>step_update</code><a class="headerlink" href="#step_update" title="Permanent link">&para;</a></h3>
+<p>One or more per step; <code>state</code> moves <code>ACTIVE</code> → <code>DONE</code>, or <code>ACTIVE</code> → <code>ERROR</code>.</p>
+<p>Assistant text, streamed as deltas (verified):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"step_update"</span><span class="p">,</span><span class="nt">"step_update"</span><span class="p">:{</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"step_index"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"state"</span><span class="p">:</span><span class="s2">"ACTIVE"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"step_type"</span><span class="p">:</span><span class="s2">"agent_response"</span><span class="p">,</span><span class="nt">"text_delta"</span><span class="p">:</span><span class="s2">"ok"</span><span class="p">}}</span>
+<span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"step_update"</span><span class="p">,</span><span class="nt">"step_update"</span><span class="p">:{</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"step_index"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"state"</span><span class="p">:</span><span class="s2">"DONE"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"step_type"</span><span class="p">:</span><span class="s2">"agent_response"</span><span class="p">,</span><span class="nt">"text_delta"</span><span class="p">:</span><span class="s2">"\n"</span><span class="p">,</span><span class="nt">"duration_seconds"</span><span class="p">:</span><span class="mf">3.024587</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">14375</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"thinking_tokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">"cache_read_tokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span><span class="nt">"total_tokens"</span><span class="p">:</span><span class="mi">14376</span><span class="p">}}}</span>
+</code></pre></div>
+<p><code>text_delta</code> is a <strong>delta</strong>, not the whole text: the final <code>DONE</code> line carries only the last
+fragment. The <code>usage</code> object on the terminal <code>DONE</code> line is that step's own usage.</p>
+<p>A tool call (verified):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"step_update"</span><span class="p">,</span><span class="nt">"step_update"</span><span class="p">:{</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"step_index"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"state"</span><span class="p">:</span><span class="s2">"ACTIVE"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"step_type"</span><span class="p">:</span><span class="s2">"tool"</span><span class="p">,</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"write_to_file"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tool_info"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"write_to_file"</span><span class="p">,</span><span class="nt">"parameters"</span><span class="p">:{</span><span class="nt">"TargetFile"</span><span class="p">:</span><span class="s2">"/…/scratch/a.txt"</span><span class="p">}}}}</span>
+<span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"step_update"</span><span class="p">,</span><span class="nt">"step_update"</span><span class="p">:{</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"step_index"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span><span class="nt">"state"</span><span class="p">:</span><span class="s2">"DONE"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"step_type"</span><span class="p">:</span><span class="s2">"tool"</span><span class="p">,</span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"write_to_file"</span><span class="p">,</span><span class="nt">"duration_seconds"</span><span class="p">:</span><span class="mf">0.099246</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tool_info"</span><span class="p">:{</span><span class="err">…</span><span class="p">}}}</span>
+</code></pre></div>
+<p>A refused tool call (verified):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"step_update"</span><span class="p">,</span><span class="nt">"step_update"</span><span class="p">:{</span><span class="nt">"…"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"step_index"</span><span class="p">:</span><span class="mi">4</span><span class="p">,</span><span class="nt">"state"</span><span class="p">:</span><span class="s2">"ERROR"</span><span class="p">,</span><span class="nt">"step_type"</span><span class="p">:</span><span class="s2">"tool"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tool_name"</span><span class="p">:</span><span class="s2">"run_command"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"tool_info"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"run_command"</span><span class="p">,</span><span class="nt">"parameters"</span><span class="p">:{</span><span class="nt">"CommandLine"</span><span class="p">:</span><span class="s2">"touch x"</span><span class="p">},</span>
+<span class="w">   </span><span class="nt">"error"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"TOOL_ERROR"</span><span class="p">,</span>
+<span class="w">     </span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"permission check failed for command \"touch x\": user denied permission to run command:\ntouch x"</span><span class="p">}}}}</span>
+</code></pre></div>
+<p><code>step_type</code> values seen live: <code>user_input</code>, <code>agent_response</code>, <code>tool</code>, <code>finish</code>,
+<code>system_message</code> (verified). Others exist in the binary and were not exercised (inferred).</p>
+<p>Tool argument keys are <strong>PascalCase</strong> (<code>TargetFile</code>, <code>CommandLine</code>), not snake_case — this is
+Cascade's own convention and it matters for any policy that reads a path out of a tool call.</p>
+<h3 id="result"><code>result</code><a class="headerlink" href="#result" title="Permanent link">&para;</a></h3>
+<p><strong>One <code>result</code> event per turn</strong>, not one per process (verified — a two-message stdin stream
+produced two <code>result</code> lines on one conversation):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"result"</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"conversation_id"</span><span class="p">:</span><span class="s2">"b05ca9ac-…"</span><span class="p">,</span><span class="nt">"status"</span><span class="p">:</span><span class="s2">"SUCCESS"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"response"</span><span class="p">:</span><span class="s2">"{\"toolAction\":\"Finish task\",\"toolSummary\":\"Finish task\",\"word\":\"ok\"}\n"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"duration_seconds"</span><span class="p">:</span><span class="mf">3.740046</span><span class="p">,</span><span class="nt">"num_turns"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"structured_output"</span><span class="p">:{</span><span class="nt">"word"</span><span class="p">:</span><span class="s2">"ok"</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"json_schema"</span><span class="p">:{</span><span class="err">…</span><span class="p">},</span>
+<span class="w"> </span><span class="nt">"usage"</span><span class="p">:{</span><span class="nt">"input_tokens"</span><span class="p">:</span><span class="mi">6447</span><span class="p">,</span><span class="nt">"output_tokens"</span><span class="p">:</span><span class="mi">30</span><span class="p">,</span><span class="nt">"thinking_tokens"</span><span class="p">:</span><span class="mi">0</span><span class="p">,</span>
+<span class="w">          </span><span class="nt">"cache_read_tokens"</span><span class="p">:</span><span class="mi">8131</span><span class="p">,</span><span class="nt">"total_tokens"</span><span class="p">:</span><span class="mi">6477</span><span class="p">}}}</span>
+</code></pre></div>
+<ul>
+<li><code>status</code>: <code>SUCCESS</code> or <code>ERROR</code> (verified both).</li>
+<li><code>error</code>: string, present on <code>ERROR</code>.</li>
+<li><code>structured_output</code>: the validated object, present only with <code>--json-schema</code> (verified).
+  <code>response</code> carries the raw model text, which under a schema includes the <code>finish</code> tool's own
+  <code>toolAction</code> / <code>toolSummary</code> keys — <code>structured_output</code> is the clean one and is what Sirdar
+  reads.</li>
+<li><code>num_turns</code> and <code>usage</code> on the <code>result</code> line are <strong>cumulative for the conversation</strong>
+  (verified: turn 2 reported <code>num_turns: 2</code> and <code>input_tokens: 9031 = 6447 + 2584</code>).</li>
+<li><code>denied_actions</code>: present when the turn had a permission refused (verified):
+  <code>"denied_actions":[{"action":"command","display_name":"RunCommand"}]</code>. Seen with
+  <code>action</code> values <code>command</code> and <code>write_file</code>.</li>
+</ul>
+<p><strong>There is no cost field anywhere on the wire.</strong> No <code>total_cost_usd</code>, no credit figure, nothing.
+<code>budget.maxUsd</code> therefore cannot bite on this provider, exactly as with <code>provider: qwen</code>.</p>
+<h2 id="input-input-format-stream-json">Input: <code>--input-format stream-json</code><a class="headerlink" href="#input-input-format-stream-json" title="Permanent link">&para;</a></h2>
+<p>One NDJSON object per line on stdin, one turn run per line, all in a single conversation
+(verified). The shape is <strong>not</strong> Claude Code's. Each line needs a top-level <code>event</code>:</p>
+<div class="highlight"><pre><span></span><code>error: stream input message is missing the "event" field
+</code></pre></div>
+<p>and the <code>user</code> event's <code>message</code> is an object, not a string:</p>
+<div class="highlight"><pre><span></span><code>error: failed to decode stream input: json: cannot unmarshal string into Go struct field
+streamInputMessage.message of type printmode.streamInputUserMessage
+</code></pre></div>
+<p>The working shape (verified):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"event"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"message"</span><span class="p">:{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"user"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"text"</span><span class="p">,</span><span class="nt">"text"</span><span class="p">:</span><span class="s2">"reply with the word ok"</span><span class="p">}]}}</span>
+</code></pre></div>
+<p>Both of the malformed attempts above cost nothing: the decode fails before any model turn, and
+the process exits 1 after emitting <code>init</code> and an <code>ERROR</code> <code>result</code>.</p>
+<p>Two consequences, both good and both unlike qwen:</p>
+<ol>
+<li><code>--json-schema</code> and <code>--input-format stream-json</code> <strong>coexist</strong> (verified — <code>init</code> carried
+   <code>json_schema</code> and both turns produced <code>structured_output</code>). Qwen Code makes them mutually
+   exclusive, which is why that adapter has to carry its schema retry into a <code>--resume</code>.
+   Here the retry is just another stdin line.</li>
+<li>Follow-up user messages work, so <code>Session.Send</code> is a real in-session turn and
+   <code>Session.CloseInput</code> is what ends the process. On stdin EOF <code>agy</code> exits 0 (verified).</li>
+</ol>
+<h2 id="permissions-there-is-no-mediation-channel">Permissions: there is no mediation channel<a class="headerlink" href="#permissions-there-is-no-mediation-channel" title="Permanent link">&para;</a></h2>
+<p>This is the finding that shapes the whole adapter.</p>
+<p><strong>Verified:</strong> no permission request ever appears on the stream, and there is no way to answer
+one. With no TTY, a tool call that needs approval is <strong>auto-denied</strong>, and the CLI says so on
+stderr. This is what a Sirdar run hits first, and it is what made round 1's triage read nothing
+at all:</p>
+<div class="highlight"><pre><span></span><code>jetski: no output produced — a tool required the "command" permission that headless mode cannot
+prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in settings.json
+(e.g. command(&lt;target&gt;)). Alternatively, re-run with --dangerously-skip-permissions to
+auto-approve all tools.
+</code></pre></div>
+<p>So the permission model is <strong>static and file-based</strong>, not a per-call conversation. That rules
+out mediation, but not policy: a set of rules chosen before the session starts is still Sirdar's
+to choose, and one of the levers below turned out to be exactly that.</p>
+<table>
+<thead>
+<tr>
+<th>Lever</th>
+<th>Scope</th>
+<th>Can Sirdar use it?</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>permissions.allow</code> / <code>deny</code> / <code>ask</code> in <code>~/.gemini/antigravity-cli/settings.json</code></td>
+<td>global, all <code>agy</code> sessions</td>
+<td>no — it would rewrite the operator's own config</td>
+</tr>
+<tr>
+<td>project permissions under <code>~/.gemini/config/projects/&lt;id&gt;.json</code></td>
+<td>per project, highest precedence (verified)</td>
+<td><strong>yes</strong> — this is what the adapter uses; see "The project lever"</td>
+</tr>
+<tr>
+<td><code>&lt;workspace&gt;/.agents/hooks.json</code> <code>PreToolUse</code> command hook, returning <code>{"decision":"allow"\|"deny"\|"ask"\|"force_ask"}</code></td>
+<td>per workspace</td>
+<td><strong>no</strong> — it lives inside the customer's repository, and Sirdar never writes to the workspace</td>
+</tr>
+<tr>
+<td><code>--mode plan</code></td>
+<td>per session, a flag</td>
+<td><strong>yes</strong></td>
+</tr>
+<tr>
+<td><code>--sandbox</code></td>
+<td>per session, a flag</td>
+<td>yes, but see below</td>
+</tr>
+<tr>
+<td><code>--dangerously-skip-permissions</code></td>
+<td>per session, a flag</td>
+<td>never for triage</td>
+</tr>
+</tbody>
+</table>
+<h3 id="the-project-lever-spiked-and-then-adopted-2026-09-15">The project lever, spiked and then adopted 2026-09-15<a class="headerlink" href="#the-project-lever-spiked-and-then-adopted-2026-09-15" title="Permanent link">&para;</a></h3>
+<p><code>--new-project</code> is the one flag that looked like it could give Sirdar a permissions file of its
+own, so round 1 spiked it. What it does, <strong>verified</strong> with no model call (<code>agy --new-project
+models</code>, which resolves the project before running the subcommand):</p>
+<ul>
+<li>it writes <code>~/.gemini/config/projects/&lt;uuid&gt;.json</code>, named after the working directory and
+  pointing at it: <code>{"id":"&lt;uuid&gt;","name":"Sirdar","projectResources":{"resources":[{"folderUri":
+  "file:///…/Sirdar"}]}}</code>. A plain <code>--help</code> run creates nothing, so the file is written during
+  project resolution and not by flag parsing.</li>
+<li>the file it writes carries <strong>no permission block at all</strong> — three keys, none of them about
+  what a session may do.</li>
+<li>the changelog embedded in the binary says project files take precedence: "Improved permission
+  config merging priorities by ensuring project-specific configurations (located in
+  <code>~/.gemini/config/projects/</code>) take precedence over global settings in
+  <code>~/.gemini/antigravity-cli/settings.json</code>" (verified as a string).</li>
+</ul>
+<p>Round 1 stopped there and did not adopt it, on the grounds that <code>--new-project</code> mints a fresh
+uuid per invocation and that enforcement had never been exercised. Round 2 went further, because
+the alternative turned out to be worse: with no allow rule anywhere, a headless triage is
+refused <strong>every read</strong> and answers out of the ticket text (see "What round 1's live triage
+actually did"). So the lever was read off the binary properly and then driven live.</p>
+<h4 id="the-schema-read-off-the-binary">The schema, read off the binary<a class="headerlink" href="#the-schema-read-off-the-binary" title="Permanent link">&para;</a></h4>
+<p><code>--project</code> takes a <strong>project id or name</strong>, not only a uuid (verified, <code>agy --help</code>), and a
+project is looked up by id in the file named <code>&lt;id&gt;.json</code> — the CLI's own default project is
+<code>default-cli-project</code>. So Sirdar does not need <code>--new-project</code> at all: it writes the file
+itself, under an id that says whose it is.</p>
+<p>The <code>exa.project_pb.Project</code> descriptor embedded in the binary gives the exact shape
+(<strong>verified</strong>, extracted from the proto descriptor; protojson camelCase is the encoding the
+CLI's own file uses):</p>
+<div class="highlight"><pre><span></span><code>Project {
+  id, name
+  project_conversations, project_resources → Resources { resources: [ Resource { folder_uri } ] }
+  environments
+  permission_grants → PermissionGrants {
+      permission_grants → codeium_common_pb.PermissionGrantsConfig { allow, deny, ask }
+      v2_migrated }
+  settings → ProjectSettings {
+      file_access_policy    : AgentSettingPolicy
+      internet_policy       : AgentSettingPolicy
+      sandbox_mode          : bool
+      auto_execution_policy : CascadeCommandsAutoExecution
+      artifact_review_mode  : ArtifactReviewMode
+      permission_preset     : AgentPermissionPreset
+      enable_permissioned_github, shell_setup_script, security_plugins }
+  updated_at, is_workspace_only, archived
+}
+</code></pre></div>
+<p>Enum values, all <strong>verified</strong> off the same descriptor. Round 1's note guessed at
+<code>FILE_ACCESS_POLICY_DENY</code> and <code>AUTO_EXECUTION_POLICY_REQUIRE_REVIEW</code>; neither name exists.</p>
+<ul>
+<li><code>AgentSettingPolicy</code>: <code>AGENT_SETTING_POLICY_UNSPECIFIED | _ALLOW | _ASK | _DENY</code></li>
+<li><code>CascadeCommandsAutoExecution</code>: <code>..._UNSPECIFIED | _OFF | _AUTO | _EAGER | _PROCEED_IN_SANDBOX</code></li>
+<li><code>AgentPermissionPreset</code>: <code>..._UNSPECIFIED | _REQUEST_REVIEW | _DEFAULT | _VETTED | _TURBO | _NONE</code></li>
+<li><code>ArtifactReviewMode</code>: <code>..._UNSPECIFIED | _ALWAYS | _TURBO | _AUTO</code></li>
+</ul>
+<p><code>PermissionGrantsConfig</code> is three lists of <strong>rule strings</strong> — the same <code>allow</code> / <code>deny</code> / <code>ask</code>
+shape <code>settings.json</code> uses (verified: the binary's <code>PermissionGrantsToPermissions</code> and
+<code>applyUserSettings: stored shared config permissions: allow=%d deny=%d ask=%d from %s</code>). The
+rule syntax is <code>&lt;permission&gt;(&lt;target&gt;)</code>, and the permission vocabulary is <strong>four verbs</strong>, not
+one per tool (verified from the binary's own canonical forms <code>read_file(*)</code>, <code>read_file(/)</code>,
+<code>write_file(*)</code>, <code>execute_url(*)</code>, plus the deprecated <code>unsandboxed</code>, which 1.2.2's changelog
+says is ignored):</p>
+<table>
+<thead>
+<tr>
+<th>permission</th>
+<th>covers</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>read_file</code></td>
+<td>every read tool: <code>view_file</code>, <code>grep_search</code>, <code>list_dir</code>, <code>find_by_name</code></td>
+</tr>
+<tr>
+<td><code>write_file</code></td>
+<td>every write tool</td>
+</tr>
+<tr>
+<td><code>command</code></td>
+<td><code>run_command</code> and friends; target matches <strong>by prefix</strong> ("'git' matches 'git add', 'git commit'")</td>
+</tr>
+<tr>
+<td><code>execute_url</code></td>
+<td>fetching a URL</td>
+</tr>
+</tbody>
+</table>
+<p>There is no way to name an individual tool, so "allow the read tools" is exactly one rule.</p>
+<h4 id="what-sirdar-writes">What Sirdar writes<a class="headerlink" href="#what-sirdar-writes" title="Permanent link">&para;</a></h4>
+<p>One file per session, deleted when the session ends:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span>
+<span class="w">  </span><span class="nt">"id"</span><span class="p">:</span><span class="w"> </span><span class="s2">"sirdar-58db68ce673d5fdb"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"name"</span><span class="p">:</span><span class="w"> </span><span class="s2">"Sirdar triage (temporary)"</span><span class="p">,</span>
+<span class="w">  </span><span class="nt">"projectResources"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"resources"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nt">"folderUri"</span><span class="p">:</span><span class="w"> </span><span class="s2">"file:///…/app-agy"</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">]</span><span class="w"> </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"permissionGrants"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"permissionGrants"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">      </span><span class="nt">"allow"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"read_file(*)"</span><span class="p">],</span>
+<span class="w">      </span><span class="nt">"deny"</span><span class="p">:</span><span class="w"> </span><span class="p">[</span><span class="s2">"write_file(*)"</span><span class="p">,</span><span class="w"> </span><span class="s2">"command(*)"</span><span class="p">,</span><span class="w"> </span><span class="s2">"execute_url(*)"</span><span class="p">]</span>
+<span class="w">    </span><span class="p">},</span>
+<span class="w">    </span><span class="nt">"v2Migrated"</span><span class="p">:</span><span class="w"> </span><span class="kc">true</span>
+<span class="w">  </span><span class="p">},</span>
+<span class="w">  </span><span class="nt">"settings"</span><span class="p">:</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="nt">"autoExecutionPolicy"</span><span class="p">:</span><span class="w"> </span><span class="s2">"CASCADE_COMMANDS_AUTO_EXECUTION_OFF"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"permissionPreset"</span><span class="p">:</span><span class="w"> </span><span class="s2">"AGENT_PERMISSION_PRESET_REQUEST_REVIEW"</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>Three decisions in that file are worth stating.</p>
+<p><strong><code>read_file(*)</code> and not the workspace path.</strong> Prefix matching is documented for <code>command</code> and
+for nothing else; <code>read_file</code>'s canonical forms in the binary are <code>*</code> and <code>/</code>. A narrower rule
+read as a literal path would deny every read and put the run back where round 1 was, and
+establishing which it is costs a live run per guess. So the rule is the one whose meaning is not
+in doubt, and the cost is stated rather than hidden: the session can read a file outside the
+workspace. It cannot do anything with one — <code>command</code>, <code>execute_url</code> and every write are denied,
+so a read that wanders has nowhere to go but the triage note.</p>
+<p><strong><code>run_command</code> stays denied in triage.</strong> Sirdar cannot mediate an <code>agy</code> tool call, so a command
+allowed here would be a command judged by nobody: <code>permissions.bash</code>, which is what decides this
+on every other provider, has no attachment point on this wire. A triage that genuinely needs a
+command's output belongs on a provider Sirdar can mediate.</p>
+<p><strong>Most of <code>ProjectSettings</code> is left out.</strong> <code>fileAccessPolicy</code> and <code>internetPolicy</code> are both
+<code>AgentSettingPolicy</code> and neither the descriptor nor the help says what surface each governs — a
+<code>fileAccessPolicy: DENY</code> meant as "no files outside the workspace" and read as "no files" would
+blind the run it was added to protect. <code>sandboxMode</code> and <code>artifactReviewMode</code> are the same kind
+of guess. The two that are set say plainly what they do.</p>
+<p>The file lives in the operator's directory, which is why it is named <code>sirdar-&lt;16 hex&gt;.json</code> so
+it cannot be mistaken for theirs, is never reused across runs, is removed on every exit path
+(<code>Wait</code>, <code>Cancel</code>, and each failed <code>Start</code>), and is swept by the next session if a <code>SIGKILL</code>
+left one behind.</p>
+<h4 id="verified-live-round-2">Verified live, round 2<a class="headerlink" href="#verified-live-round-2" title="Permanent link">&para;</a></h4>
+<p>One probe turn in the sandbox workspace, plan mode, the project file above, no
+<code>--disable-slash-commands</code>, a prompt asking for one read and one write:</p>
+<div class="highlight"><pre><span></span><code>TOOL view_file      ACTIVE  {"AbsolutePath": "/…/app-agy/ledger.go"}
+TOOL view_file      DONE    {"AbsolutePath": "/…/app-agy/ledger.go"}
+TOOL write_to_file  ACTIVE  {"TargetFile": "/tmp/agy_r2_probe.txt"}
+TOOL write_to_file  ERROR   permission check failed for write_file "/private/tmp/agy_r2_probe.txt":
+                            Permission denied for write_file(/private/tmp/agy_r2_probe.txt).
+                            Matches user-configured deny rule.
+RESULT status=SUCCESS turns=1
+</code></pre></div>
+<ul>
+<li><strong>The read succeeded.</strong> Same call that round 1 had auto-denied.</li>
+<li><strong>The write was refused, by Sirdar's own rule.</strong> "Matches user-configured deny rule" is the
+  project file's <code>write_file(*)</code> speaking, not plan mode's generic refusal — so project grants
+  are confirmed to reach a headless run and to be the thing that decides.</li>
+<li><strong>stderr was empty.</strong> No plan-mode warning, no "headless mode cannot prompt" line.</li>
+<li><code>/tmp/agy_r2_probe.txt</code> does not exist on disk afterwards.</li>
+</ul>
+<p>Then one real <code>sirdar triage SBX-1</code> on the sandbox, same build: four <code>view_file</code> steps completed,
+<code>run_command "go test ./..."</code> was refused with <code>Permission denied for command(go test ./...).
+Matches user-configured deny rule.</code>, stderr was empty, no breach was raised, the project file was
+gone when the run ended, and the note that was filed cites <code>ledger.go#L27-L34</code> and
+<code>movement.go#L51-L62</code> for a real double-increment bug. Round 1's note, on the same ticket, had
+been written without opening a file.</p>
+<h4 id="what-is-still-not-established">What is still not established<a class="headerlink" href="#what-is-still-not-established" title="Permanent link">&para;</a></h4>
+<p>Whether a path-scoped <code>read_file(&lt;dir&gt;)</code> rule matches by prefix the way <code>command</code> does; whether
+<code>fileAccessPolicy</code> / <code>internetPolicy</code> govern what their names suggest; and whether
+<code>ANTIGRAVITY_PERM_GRANTS</code> — an environment variable the binary carries alongside
+<code>readPermGrants</code> / <code>loadPermGrants</code> symbols, which would let a session carry its rules without
+touching the operator's directory at all — is a supported channel or an internal one between the
+CLI and its own sidecar. The adapter strips every other <code>ANTIGRAVITY_*</code> variable for exactly
+that reason, so this one was left alone. Each of these costs a live run to settle.</p>
+<p>The <code>.agents/hooks.json</code> hook is the one thing here that resembles qwen's <code>PreToolUse</code> mediator
+— same event names, same allow/deny verdict, plus an <code>overwrite</code> that rewrites the tool's
+arguments — but it is a <code>type: "command"</code> hook only (the embedded documentation states "Only
+<code>type: "command"</code> is supported (no HTTP or prompt hooks yet)"), and its only discovery location
+is the workspace's own <code>.agents/</code> directory or the global <code>~/.gemini/config/</code>. Both are files
+Sirdar would have to write outside its own <code>.sirdar/</code>, which the standing constraint forbids.
+That is why this adapter has no equivalent of the qwen loopback hook.</p>
+<h3 id="what-was-actually-observed-per-mode">What was actually observed, per mode<a class="headerlink" href="#what-was-actually-observed-per-mode" title="Permanent link">&para;</a></h3>
+<p>A temp git repository, one prompt asking for a file write and a <code>touch</code>, no TTY, no allow rules:</p>
+<p><strong>Default mode</strong> (<code>permission_mode: "request-review"</code>), verified:</p>
+<ul>
+<li><code>run_command "touch x"</code> → <strong>denied</strong>, <code>state: ERROR</code>, <code>denied_actions: [{"action":"command"}]</code>.</li>
+<li><code>write_to_file</code> → <strong>allowed and executed</strong>. The model chose
+  <code>/Users/…/.gemini/antigravity-cli/scratch/a.txt</code> and the file was really created on disk
+  (content <code>hi</code>, confirmed by <code>stat</code>). The workspace itself was untouched, but a file did land
+  outside it, unasked and ungated.</li>
+</ul>
+<p><strong><code>--mode plan</code></strong>, verified:</p>
+<ul>
+<li><code>write_to_file /tmp/agyplan_a.txt</code> → <strong>denied</strong>:
+  <code>permission check failed for write_file "/private/tmp/agyplan_a.txt": user denied permission
+  for write_file(/private/tmp/agyplan_a.txt)</code>, <code>denied_actions: [{"action":"write_file"}]</code>.</li>
+<li><code>write_to_file ~/.gemini/antigravity-cli/brain/&lt;conv&gt;/implementation_plan.md</code> → <strong>allowed</strong>.
+  Plan mode's own artifact directory is exempt; it is inside <code>agy</code>'s state, not the workspace.
+  The adapter's exemption is that path and no wider: <code>&lt;state dir&gt;/brain/&lt;conversation id&gt;/</code>,
+  using the conversation id off the session's own stream. It deliberately does <strong>not</strong> cover
+  the state directory as a whole, because <code>scratch/</code> sits beside <code>brain/</code> and <code>scratch/</code> is
+  where the default-mode run above really did put a file.</li>
+<li><code>run_command</code> → observed <strong>both ways across two runs</strong>. A compound
+  <code>touch /tmp/agy_plan_marker &amp;&amp; echo MARKERDONE</code> was <strong>denied</strong> with the same "headless cannot
+  prompt" refusal. A bare <code>touch x</code> in an earlier plan-mode run reported <code>state: DONE</code> with no
+  error — and yet <strong>no <code>x</code> file exists anywhere on the machine</strong> (searched the workspace, the
+  scratch directory, the brain directory and <code>$HOME</code>). So that call produced no side effect
+  either, but it was not reported as a denial and the mechanism was not established.</li>
+</ul>
+<p><strong>Known false-positive risk, accepted.</strong> The adapter treats every completed <code>run_command</code> as
+  a breach, which ends the run. If the unexplained <code>DONE</code>-with-no-effect case is the CLI
+  reporting a plan-mode no-op rather than a command that ran, a run will occasionally fail over
+  a command that did nothing. That is the direction this fails in on purpose: the alternative
+  is filing a triage note that asserts a read-only run over a command that really executed, and
+  a spurious failure is cheap to rerun while a false read-only claim is not visible at all.
+  Removing the rule needs the CLI to explain the case — a <code>DONE</code> line that distinguishes "ran"
+  from "declined to run" — not a guess about which it was.</p>
+<p><strong><code>--sandbox</code></strong>, verified only that it does not change <code>permission_mode</code> (still
+<code>request-review</code>) and does not lift a denial. Its help text is "Run in a sandbox with terminal
+restrictions enabled", so it is a <em>terminal</em> restriction, not a filesystem one (inferred). It
+was not exercised against a command that the sandbox alone would refuse.</p>
+<p><strong><code>--dangerously-skip-permissions</code></strong>: "Auto-approve all tool permission requests without
+prompting" (inferred from <code>--help</code>; deliberately not run).</p>
+<h3 id="the-conclusion-sirdar-draws">The conclusion Sirdar draws<a class="headerlink" href="#the-conclusion-sirdar-draws" title="Permanent link">&para;</a></h3>
+<p><code>--mode plan</code> is the strongest read-only <em>mode</em> the CLI offers, and it is strictly better than
+the default: it refused the out-of-workspace write that the default mode performed. On its own
+it is neither a sandbox nor settings-proof — an operator's own <code>permissions.allow</code> entries in
+<code>~/.gemini/antigravity-cli/settings.json</code> still apply to headless runs (the changelog is
+explicit: "Fixed headless (<code>-p</code>/<code>--print</code>) runs so they now honor persisted <code>settings.json</code>
+policies, including <code>permissions</code>, file access, sandbox mode, auto-execution, and artifact
+review"), and Sirdar can neither see nor edit that file.</p>
+<p>What the project file adds is the part plan mode could not: rules Sirdar chooses, for one
+session, that <strong>outrank</strong> <code>settings.json</code>. So the guarantee this adapter makes is: <strong>plan mode,
+plus a per-session permission file allowing a read and denying every write, command and URL
+fetch, plus a workspace that is not trusted, with every denial reported as an event, nothing
+Sirdar writes outliving the run, and a completed write or command ending it.</strong></p>
+<p>That last clause is what makes it a guarantee rather than a hope. A write that gets through is
+not a warning on a note: the session is cancelled on the spot, its process group killed, and the
+run ends <code>failed</code> with the reason <code>read-only breach: &lt;tool&gt; &lt;path|command&gt;</code>. No note is filed
+and no register row is written, because both of them would assert the thing that just failed to
+be true. It is still weaker than Claude's <code>--disallowedTools</code> + policy or qwen's
+<code>--exclude-tools</code> — those refuse the call <em>and</em> let Sirdar judge each one, where this sets the
+rules up front and can only refuse the run afterwards — and <code>doctor</code> says so rather than
+pretending otherwise.</p>
+<p>What counts as a completed write, in the adapter: <code>write_to_file</code>, <code>replace_file_content</code>,
+<code>multi_replace_file_content</code>, <code>sed_file</code>, <code>notebook_edit</code>, and for commands <code>run_command</code>,
+<code>send_command_input</code>, <code>notebook_execution</code>, <code>browser_subagent</code>,
+<code>execute_browser_javascript</code> and <code>call_mcp_tool</code>. The MCP tool is on the list because the CLI
+reports one <code>call_mcp_tool</code> step whatever the server went on to do, and the session sees
+whichever servers the operator configured globally — left off, an MCP write is the one kind
+that completes in silence.</p>
+<p>The path a breach names comes off the step's <strong><code>ACTIVE</code></strong> line, matched to the <code>DONE</code> line by
+<code>step_index</code>. The capture above shows why: the <code>DONE</code> line elides <code>tool_info</code>, so reading the
+target off the line that says the write finished gets nothing at all.</p>
+<p>And for <code>sirdar fix</code>: there is no per-call mediation, so <code>provider.FixPolicy</code>'s path
+confinement — the thing that keeps a fix inside the workspace and out of <code>.git/</code> — has nothing
+to attach to. A project file could allow <code>write_file</code>, but not <em>which</em> write, which is the whole
+of what a fix policy decides. <strong>This provider refuses fix mode</strong>, and it refuses it before
+<code>sirdar fix</code> touches git at all: the provider answers <code>SupportsFix()</code> false, which the fix entry
+asks before it fetches the default branch, cuts a branch or adds a worktree.</p>
+<h2 id="what-round-1s-live-triage-actually-did">What round 1's live triage actually did<a class="headerlink" href="#what-round-1s-live-triage-actually-did" title="Permanent link">&para;</a></h2>
+<p>The first end-to-end triage on this provider is worth recording, because it is the reason for
+two of the changes above and for a third in the run layer.</p>
+<p><code>sirdar triage SBX-1</code> against the sandbox workspace: <strong>completed</strong> in 36 seconds, three turns,
+a note filed with classification <code>code</code> and confidence <strong>high</strong>. The event log, though:</p>
+<div class="highlight"><pre><span></span><code>tool_started   find_by_name          → tool_finished
+tool_started   view_file             → permission deny
+                 permission check failed for read_file "…/app-agy/ledger.go":
+                 user denied permission for read_file(…)
+tool_started   run_command "cat ledger.go"  → permission deny
+</code></pre></div>
+<p>and on stderr, twice:</p>
+<div class="highlight"><pre><span></span><code>jetski: no output produced — a tool required the "read_file" permission that headless mode
+cannot prompt for, so it was auto-denied. Add an allow-rule under permissions.allow in
+settings.json (e.g. read_file(&lt;target&gt;)).
+warning: --mode plan has no effect while slash command expansion is disabled.
+</code></pre></div>
+<p>So: the agent never opened a file, fell back to <code>cat</code> and was refused that too, and then wrote a
+high-confidence root-cause hypothesis out of the ticket description. The note reached the
+register and the digest looking exactly like one built on evidence, because nothing downstream
+can tell the difference.</p>
+<p>Three separate defects, and each got its own fix:</p>
+<ol>
+<li><strong>Plan mode was not in effect at all</strong> — <code>--disable-slash-commands</code> cancelled it. Fixed by
+   dropping the flag; see "Plan mode and slash commands".</li>
+<li><strong>Nothing granted a read.</strong> Fixed by the project file; see "The project lever".</li>
+<li><strong>A session that read nothing still filed.</strong> Fixed in the run layer, which is the one that
+   generalises: the provider now raises <code>EvBlind</code> immediately ahead of the final answer when the
+   session completed no read, and a run that sees it ends <code>failed</code> with
+   <code>the agent could read nothing (N reads denied)</code> — no note, no register row, the raw answer
+   kept in <code>result.raw.txt</code> where it can be read without being believed.</li>
+</ol>
+<p>A completed <code>find_by_name</code> does <strong>not</strong> count as a read, and that distinction comes straight
+   off the log above: that run's <code>find_by_name</code> succeeded while its <code>view_file</code> was refused, so a
+   check counting any completed tool would have passed a session that had seen a list of
+   filenames and not one line of code. The tools that count are the ones that put file contents
+   in the prompt: <code>view_file</code>, <code>read_file</code>, <code>grep_search</code>, <code>read_resource</code>, <code>read_url_content</code>,
+   <code>read_browser_page</code>.</p>
+<h2 id="workspace-trust">Workspace trust<a class="headerlink" href="#workspace-trust" title="Permanent link">&para;</a></h2>
+<p><code>~/.gemini/antigravity-cli/settings.json</code> carries a <code>trustedWorkspaces</code> array (verified — the
+file on this machine reads <code>{"trustedWorkspaces":["/Users/srivathsanv/Documents/Personal/Sirdar"]}</code>).
+An untrusted workspace produces the banner "%s requires permission to read, edit, and execute
+files here" (inferred, from the binary's strings) and, on the default-mode run above, the model
+redirected its write into <code>agy</code>'s own scratch directory rather than the workspace — consistent
+with the workspace being untrusted, though the causal link was not proved.</p>
+<p>This cuts both ways and is worth stating plainly: the default-mode write test ran in an
+<strong>untrusted</strong> temp repository. A workspace the operator has already trusted interactively —
+which is the normal case for a Sirdar workspace — may well behave differently, so the observed
+"it wrote to scratch, not the repo" must <strong>not</strong> be read as a guarantee. Plan mode's refusal is
+the property to rely on, because it refused an absolute path outside the workspace too.</p>
+<p>Sirdar does not add a workspace to <code>trustedWorkspaces</code> and does not remove one.</p>
+<h2 id="mcp">MCP<a class="headerlink" href="#mcp" title="Permanent link">&para;</a></h2>
+<p><code>~/.gemini/config/mcp_config.json</code> is the <strong>global</strong> server file, "applies to all sessions"
+(verified location; the file exists and is empty on this machine). The only other location is
+<code>plugins/&lt;plugin&gt;/mcp_config.json</code>, active when the plugin is enabled. The embedded
+documentation lists exactly these two and no project-scoped file.</p>
+<p><code>agy mcp list|add|remove|enable|disable</code> manages that one global file. <code>agy mcp add --help</code>
+shows <code>--type</code>, <code>--env</code>, <code>--header</code> and nothing resembling <code>--scope</code>, <code>--project</code> or <code>--local</code>
+(verified). <code>agy mcp list</code> reports <code>No MCP servers configured.</code> on this machine (verified).</p>
+<p>There is no <code>--mcp-config</code> flag, no <code>--strict-mcp-config</code>, and no allow-list by server name.</p>
+<p><strong>So <code>mcp.workspaceOnly</code> is not enforceable on this provider.</strong> The adapter cannot point a
+session at the workspace's <code>.mcp.json</code>, and cannot keep the operator's own global servers out.
+The tool set the session is offered still contains <code>call_mcp_tool</code>, and a call through it is
+judged by no Sirdar policy at all. Doctor warns, loudly, and <code>docs/config.md</code> records it. A
+<code>call_mcp_tool</code> step that completes is therefore treated as a breach like any other completed
+command: the adapter cannot tell a read from a write through it, and the read-only side of that
+guess is the one that fails silently.</p>
+<h2 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h2>
+<p>The variables <code>agy</code> reads, from the binary's own strings and embedded changelog (<strong>inferred</strong>
+— none was exercised):</p>
+<ul>
+<li><code>GEMINI_API_KEY</code> with <code>modelProvider: "gemini"</code> in settings runs against the Gemini API
+  directly instead of the signed-in account; <code>GOOGLE_GEMINI_BASE_URL</code> points that at a custom
+  endpoint. This is the same class of credential-redirection hazard the Claude adapter strips
+  <code>ANTHROPIC_BASE_URL</code> for, so the adapter strips all three.</li>
+<li><code>GOOGLE_CLOUD_QUOTA_PROJECT</code> selects the billing/quota project.</li>
+<li><code>ANTIGRAVITY_LS_ADDRESS</code>, <code>ANTIGRAVITY_CSRF_TOKEN</code>, <code>ANTIGRAVITY_SIDECAR_WEB_PORT</code>,
+  <code>ANTIGRAVITY_SIDECAR_UI_TOKEN</code>, <code>ANTIGRAVITY_AGENTAPI_EXE</code>, <code>ANTIGRAVITY_CONVERSATION_ID</code>,
+  <code>ANTIGRAVITY_PROJECT_ID</code>, <code>ANTIGRAVITY_EXECUTABLE_DATA_DIR</code> — the sidecar/extension
+  protocol, injected by the server into child processes. Stripped so a stray export cannot
+  make a Sirdar session think it is a sidecar.</li>
+<li><code>AGY_CLI_*</code> — presentation only (<code>AGY_CLI_HIDE_LOGO</code>, <code>AGY_CLI_DISABLE_LATEX</code>,
+  <code>AGY_CLI_CMD_OUTPUT_PERCENTAGE</code>, …). Left alone.</li>
+<li><code>JETSKI_APP_DATA_DIR</code>, <code>JETSKI_BROWSER_PORT</code> — internal state and browser-tool wiring.
+  Stripped.</li>
+</ul>
+<p>The OAuth credential itself is <strong>not</strong> in <code>~/.gemini</code>: the binary carries
+<code>Failed to persist token to keyring: %v</code> and <code>keyringAuth: context cancelled, skipping keyring
+auth</code>, so the login lives in the OS keyring (macOS Keychain here). That was not opened — the
+capture deliberately did not dump the keychain. Consequence for the adapter: it must <strong>not</strong>
+try to relocate <code>HOME</code> to isolate <code>~/.gemini</code>, because whether the keyring lookup survives a
+changed <code>HOME</code> is unknown, and a failed lookup is a broken run.</p>
+<h2 id="resume">Resume<a class="headerlink" href="#resume" title="Permanent link">&para;</a></h2>
+<p><code>--continue</code> / <code>-c</code> continues the most recent conversation; <code>--conversation &lt;id&gt;</code> resumes a
+named one. <strong>Verified</strong>: resuming <code>435f336d-0acc-46d7-93c0-2885aa5d03a6</code> with a fresh stdin
+message kept the same <code>conversation_id</code>, carried the prior turn's context (the model correctly
+recalled the shell command from the earlier message), and continued <code>num_turns</code> at 2.</p>
+<p>So <code>conversation_id</code> from the <code>init</code> line is the resume handle, and <code>SessionSpec.Resume</code> maps
+to <code>--conversation</code>. Note that flags are <strong>not</strong> carried across a resume: the resumed session
+above did not re-apply <code>--mode plan</code> because it was not passed again. The adapter therefore
+passes the full flag set on every start, resume included.</p>
+<h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
+<p>Verified:</p>
+<ul>
+<li><code>0</code> — the conversation ran, whatever the model decided, <strong>including</strong> a turn whose only tool
+  call was denied. The changelog confirms this is deliberate: "Fixed print mode … treating
+  benign tool execution errors and permission denials as fatal run failures with non-zero exit
+  codes, ensuring headless exit codes reflect only cascade-level failures".</li>
+<li><code>1</code> — a stream-input decode error (bad stdin line). An <code>ERROR</code> <code>result</code> is emitted first.</li>
+<li><code>2</code> — argument-parse failure (the <code>-p</code> swallowing case above). Nothing is emitted on stdout.</li>
+</ul>
+<p>Not exercised (inferred): timeouts under <code>--print-timeout</code> and auth failures.</p>
+<h2 id="-print-timeout"><code>--print-timeout</code><a class="headerlink" href="#-print-timeout" title="Permanent link">&para;</a></h2>
+<p>Defaults to <code>5m0s</code> and takes a Go duration. Sirdar maps <code>budget.maxMinutes</code> onto it, since the
+CLI has no turn or tool-call ceiling of its own — no <code>--max-turns</code>, no <code>--max-tool-calls</code>, no
+<code>--max-wall-time</code>. The turn budget has to be enforced by Sirdar counting <code>result</code> events.</p>
+<h2 id="what-this-capture-did-not-establish">What this capture did not establish<a class="headerlink" href="#what-this-capture-did-not-establish" title="Permanent link">&para;</a></h2>
+<ul>
+<li>Whether <code>--sandbox</code> refuses anything the permission layer would otherwise allow.</li>
+<li>Why one plan-mode <code>run_command</code> reported <code>DONE</code> with no side effect instead of a denial. The
+  adapter fails closed on it in the meantime; see the accepted false-positive note above.</li>
+<li>What <code>ProjectSettings.fileAccessPolicy</code> and <code>internetPolicy</code> actually govern. Round 2 settled
+  the part that mattered — a project file's <code>permissionGrants</code> <strong>are</strong> honoured in a headless
+  plan-mode run, and are what refused the write — but left these two unset rather than guess at
+  a policy whose <code>DENY</code> might mean "no files outside the workspace" or simply "no files". See
+  "The project lever".</li>
+<li>Whether <code>read_file(&lt;path&gt;)</code> matches by prefix the way <code>command(&lt;prefix&gt;)</code> documents. The
+  adapter allows <code>read_file(*)</code> because that form's meaning is not in doubt; a scoped rule would
+  be tighter and costs a live run to test.</li>
+<li>Whether <code>ANTIGRAVITY_PERM_GRANTS</code> is a supported way to carry a session's rules in the
+  environment instead of in a file. The binary has the variable and <code>readPermGrants</code> /
+  <code>loadPermGrants</code> beside it; the adapter strips every other <code>ANTIGRAVITY_*</code> variable as sidecar
+  protocol and left this one alone.</li>
+<li>How a <strong>trusted</strong> workspace behaves in default mode — every write test here ran in an
+  untrusted temp repository.</li>
+<li>Whether <code>--effort</code> is refused for the Claude and GPT-OSS models on the list.</li>
+<li>Anything about cost or quota: no credit figure appears on the wire, and the account's
+  remaining quota was never queried.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

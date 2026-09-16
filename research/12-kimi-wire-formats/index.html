@@ -1,0 +1,2967 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../11-cursor-wire-formats/">
+      
+      
+        <link rel="next" href="../adapters/azure-devops/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Kimi Code wire formats - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("../..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#kimi-cli-wire-formats-captured-2026-09-15" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href="../.." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Kimi Code wire formats
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href="../.." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../.." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../fix/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--active md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" checked>
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="true">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-headline-kimi-speaks-acp-natively-and-well" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The headline: Kimi speaks ACP, natively, and well
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-binary-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the binary lives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-acp-handshake-verbatim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ACP handshake, verbatim
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-read-only-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The read-only decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The read-only decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headless-p-is-unusable-and-not-for-the-usual-reason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless -p is unusable, and not for the usual reason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-permission-policy-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The permission policy chain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plan-mode-is-a-real-in-process-guard-not-an-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan mode is a real in-process guard, not an instruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hole-subagents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The hole: subagents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-operators-own-config-can-do-to-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the operator's own config can do to a run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hooks-exist-and-they-fail-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hooks exist, and they fail open
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quota" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headless-output-shapes-for-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless output shapes, for the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skills-leak-in-from-the-operators-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skills leak in from the operator's machine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-and-cost-on-the-wire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage and cost on the wire
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-capture-did-not-establish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this capture did not establish
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#the-headline-kimi-speaks-acp-natively-and-well" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The headline: Kimi speaks ACP, natively, and well
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#where-the-binary-lives" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Where the binary lives
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-acp-handshake-verbatim" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The ACP handshake, verbatim
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-read-only-decision" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The read-only decision
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The read-only decision">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#headless-p-is-unusable-and-not-for-the-usual-reason" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless -p is unusable, and not for the usual reason
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-permission-policy-chain" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The permission policy chain
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#plan-mode-is-a-real-in-process-guard-not-an-instruction" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Plan mode is a real in-process guard, not an instruction
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-hole-subagents" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The hole: subagents
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#what-the-operators-own-config-can-do-to-a-run" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the operator's own config can do to a run
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#hooks-exist-and-they-fail-open" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hooks exist, and they fail open
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#quota" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Quota
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headless-output-shapes-for-the-record" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless output shapes, for the record
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#models" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Models
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mcp-servers" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        MCP servers
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#skills-leak-in-from-the-operators-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Skills leak in from the operator's machine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#environment" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Environment
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#usage-and-cost-on-the-wire" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Usage and cost on the wire
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#exit-codes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Exit codes
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#resume" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Resume
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-this-capture-did-not-establish" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What this capture did not establish
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="kimi-cli-wire-formats-captured-2026-09-15">Kimi CLI wire formats, captured 2026-09-15<a class="headerlink" href="#kimi-cli-wire-formats-captured-2026-09-15" title="Permanent link">&para;</a></h1>
+<p>Captured against <strong>Kimi Code CLI <code>kimi</code> 0.43.1</strong> on macOS, driving the real binary
+(<code>~/.kimi-code/bin/kimi</code>) against the owner's <strong>Kimi Code free tier</strong>. It is a ~180 MB
+Node single-file executable; the JavaScript is readable in the binary, so claims below are
+marked <strong>verified</strong> (exercised against the live process, output quoted) or <strong>read off the
+bundle</strong> (taken from the embedded JavaScript, help text or documentation, and not exercised).
+Where the two disagree the verified line wins.</p>
+<p><strong>No model turn was ever spent.</strong> The first <code>session/prompt</code> came back with the account's
+monthly quota already exhausted, which ended the live half of the capture before a single
+token was billed — see "Quota". Everything below that needed a model reply is therefore read
+off the bundle and says so. The handshake, the mode machinery, the argument parser and the
+failure shapes were all exercised for real.</p>
+<p>Companion to <code>docs/research/06-wire-formats.md</code> (Claude Code, Codex),
+<code>09-qwen-wire-formats.md</code> (Qwen Code), <code>10-antigravity-wire-formats.md</code> (Antigravity) and
+<code>11-cursor-wire-formats.md</code> (Cursor).</p>
+<h2 id="the-headline-kimi-speaks-acp-natively-and-well">The headline: Kimi speaks ACP, natively, and well<a class="headerlink" href="#the-headline-kimi-speaks-acp-natively-and-well" title="Permanent link">&para;</a></h2>
+<p><code>kimi acp</code> is "Run kimi-code as an Agent Client Protocol (ACP) server over stdio" (verified,
+from <code>kimi acp --help</code>). It is built on <code>@agentclientprotocol/sdk@1.3.0</code> (read off the bundle)
+and answers <code>initialize</code> with protocol version 1. So Sirdar does not need a native adapter:
+<code>provider: acp</code> with <code>command: kimi</code>, <code>args: ["acp"]</code> reaches it today.</p>
+<p>That settles the provider question, and <code>docs/research/providers/acp-agents.md</code> — which listed
+Kimi CLI with "args unverified" — now has a verified row.</p>
+<h2 id="where-the-binary-lives">Where the binary lives<a class="headerlink" href="#where-the-binary-lives" title="Permanent link">&para;</a></h2>
+<p><code>which kimi</code> finds nothing: the installer does <strong>not</strong> put it on <code>PATH</code>, and it is not in
+<code>~/.local/bin</code>, Homebrew, pipx or a uv tool directory. On this machine it is
+<code>/Users/srivathsanv/.kimi-code/bin/kimi</code> (verified). Its whole world sits under
+<code>~/.kimi-code/</code>: <code>config.toml</code>, <code>tui.toml</code>, <code>credentials/kimi-code.json</code> (an OAuth
+access/refresh pair, mode <code>0600</code>), <code>device_id</code>, <code>region</code>, <code>logs/kimi-code.log</code>,
+<code>workspace-trust/</code>, <code>workspaces.json</code>, <code>telemetry/</code>, <code>updates/</code> (all verified — the directory
+was listed).</p>
+<p><code>acp.command</code> therefore has to be the <strong>absolute path</strong> unless the operator has put the
+directory on their own <code>PATH</code>. <code>sirdar doctor</code> reporting "command not found" is the expected
+first result for anyone who copies the config row blind, and <code>docs/config.md</code> says so.</p>
+<h2 id="the-acp-handshake-verbatim">The ACP handshake, verbatim<a class="headerlink" href="#the-acp-handshake-verbatim" title="Permanent link">&para;</a></h2>
+<p><code>initialize</code> (verified, reflowed):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"result"</span><span class="p">:{</span><span class="nt">"protocolVersion"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"agentCapabilities"</span><span class="p">:{</span><span class="nt">"loadSession"</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"promptCapabilities"</span><span class="p">:{</span><span class="nt">"image"</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span><span class="nt">"audio"</span><span class="p">:</span><span class="kc">false</span><span class="p">,</span><span class="nt">"embeddedContext"</span><span class="p">:</span><span class="kc">true</span><span class="p">},</span>
+<span class="w">   </span><span class="nt">"sessionCapabilities"</span><span class="p">:{</span><span class="nt">"list"</span><span class="p">:{},</span><span class="nt">"resume"</span><span class="p">:{},</span><span class="nt">"close"</span><span class="p">:{},</span><span class="nt">"delete"</span><span class="p">:{},</span><span class="nt">"fork"</span><span class="p">:{},</span>
+<span class="w">                          </span><span class="nt">"additionalDirectories"</span><span class="p">:{}},</span>
+<span class="w">   </span><span class="nt">"mcpCapabilities"</span><span class="p">:{</span><span class="nt">"http"</span><span class="p">:</span><span class="kc">true</span><span class="p">,</span><span class="nt">"sse"</span><span class="p">:</span><span class="kc">true</span><span class="p">},</span><span class="nt">"auth"</span><span class="p">:{</span><span class="nt">"logout"</span><span class="p">:{}}},</span>
+<span class="w"> </span><span class="nt">"authMethods"</span><span class="p">:[{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"login"</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"terminal"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Login with Kimi account"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Open the device-code login flow in a terminal."</span><span class="p">,</span><span class="nt">"args"</span><span class="p">:[</span><span class="s2">"--login"</span><span class="p">],</span><span class="nt">"env"</span><span class="p">:{},</span>
+<span class="w">   </span><span class="nt">"_meta"</span><span class="p">:{</span><span class="nt">"terminal-auth"</span><span class="p">:{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"terminal"</span><span class="p">,</span><span class="nt">"label"</span><span class="p">:</span><span class="s2">"Login with Kimi account"</span><span class="p">,</span>
+<span class="w">     </span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"/Users/srivathsanv/.kimi-code/bin/kimi"</span><span class="p">,</span><span class="nt">"args"</span><span class="p">:[</span><span class="s2">"login"</span><span class="p">],</span><span class="nt">"env"</span><span class="p">:{}}}}],</span>
+<span class="w"> </span><span class="nt">"agentInfo"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Kimi Code CLI"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"0.43.1"</span><span class="p">}}}</span>
+</code></pre></div>
+<p>Two capabilities matter to a Sirdar run and both are present:</p>
+<ul>
+<li><strong><code>loadSession: true</code></strong> — <code>sirdar resume</code> continues the real session rather than starting a
+  fresh one, and a schema retry has somewhere to go.</li>
+<li><strong><code>promptCapabilities.image: true</code></strong> — screenshot attachments go over the wire as image
+  content parts instead of being named in the prompt text.</li>
+</ul>
+<p><code>authMethods</code> carries a <code>terminal</code> auth method: a client that finds the agent unauthenticated
+is meant to run <code>kimi login</code> in a terminal. Sirdar has no terminal to offer, so an
+unauthenticated machine is an operator problem to fix once, out of band, not something a run
+can recover from.</p>
+<p><code>session/new</code> (verified) returns a <code>sessionId</code>, a <code>modes</code> block and a <code>configOptions</code> block:</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"sessionId"</span><span class="p">:</span><span class="s2">"session_11c71176-…"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"modes"</span><span class="p">:{</span><span class="nt">"currentModeId"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="nt">"availableModes"</span><span class="p">:[</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Default"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Manual approvals; tools execute normally."</span><span class="p">},</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"plan"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Plan"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Read-only planning; no tool execution."</span><span class="p">},</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"auto"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Auto"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Auto-approve safe operations."</span><span class="p">},</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"yolo"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"YOLO"</span><span class="p">,</span><span class="nt">"description"</span><span class="p">:</span><span class="s2">"Auto-approve everything."</span><span class="p">}]},</span>
+<span class="w"> </span><span class="nt">"configOptions"</span><span class="p">:[</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"select"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"model"</span><span class="p">,</span><span class="nt">"category"</span><span class="p">:</span><span class="s2">"model"</span><span class="p">,</span><span class="nt">"currentValue"</span><span class="p">:</span><span class="s2">"kimi-code/kimi-for-coding"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"options"</span><span class="p">:[{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"kimi-code/kimi-for-coding"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"K2.8 Preview"</span><span class="p">},</span>
+<span class="w">               </span><span class="p">{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"kimi-code/kimi-for-coding-highspeed"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"K2.7 Code Highspeed"</span><span class="p">},</span>
+<span class="w">               </span><span class="p">{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"kimi-code/k3"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"K3"</span><span class="p">},</span>
+<span class="w">               </span><span class="p">{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"kimi-code/k3-256k"</span><span class="p">,</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"K3-256k"</span><span class="p">}]},</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"select"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"thinking"</span><span class="p">,</span><span class="nt">"category"</span><span class="p">:</span><span class="s2">"thought_level"</span><span class="p">,</span><span class="nt">"currentValue"</span><span class="p">:</span><span class="s2">"max"</span><span class="p">,</span>
+<span class="w">    </span><span class="nt">"options"</span><span class="p">:[{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"low"</span><span class="p">,</span><span class="err">…</span><span class="p">},{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"high"</span><span class="p">,</span><span class="err">…</span><span class="p">},{</span><span class="nt">"value"</span><span class="p">:</span><span class="s2">"max"</span><span class="p">,</span><span class="err">…</span><span class="p">}]},</span>
+<span class="w">   </span><span class="p">{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"select"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"mode"</span><span class="p">,</span><span class="nt">"category"</span><span class="p">:</span><span class="s2">"mode"</span><span class="p">,</span><span class="nt">"currentValue"</span><span class="p">:</span><span class="s2">"default"</span><span class="p">,</span><span class="nt">"options"</span><span class="p">:[</span><span class="err">…</span><span class="p">]}]}</span>
+</code></pre></div>
+<p><code>session/set_mode</code> and <code>session/set_config_option</code> both work and both take effect immediately:</p>
+<div class="highlight"><pre><span></span><code>→ {"method":"session/set_mode","params":{"sessionId":"…","modeId":"plan"}}
+← {"result":{}}
+← {"method":"session/update","params":{"update":{"sessionUpdate":"current_mode_update",
+                                                "currentModeId":"plan"}}}
+</code></pre></div>
+<p>(verified). An unknown mode is refused cleanly: <code>-32602 Invalid params: Unknown modeId: bogus</code>
+(verified). <code>session/set_config_option</code> takes <strong><code>configId</code></strong>, not <code>optionId</code> — passing
+<code>optionId</code> earns <code>-32602 Invalid params … configId: expected string, received undefined</code>
+(verified both ways); with <code>configId</code> it returns the whole refreshed <code>configOptions</code> array with
+the new <code>currentValue</code> (verified, switching the model to <code>kimi-code/kimi-for-coding-highspeed</code>).</p>
+<p>So model selection and the thinking tier are per-session ACP calls, not command-line flags.
+Sirdar's ACP adapter sends neither today; a kimi session runs on <code>default_model</code> from
+<code>~/.kimi-code/config.toml</code> (<code>kimi-code/kimi-for-coding</code>, "K2.8 Preview") at thinking <code>max</code>.</p>
+<p>The full ACP method set the server registers (read off the bundle's SDK schema): <code>initialize</code>,
+<code>authenticate</code>, <code>providers/list|set|disable</code>, <code>session/new|load|set_mode|set_config_option|</code>
+<code>prompt|cancel|list|delete|fork|resume|close</code>, <code>logout</code>, <code>mcp/message</code>, <code>nes/*</code> (next-edit
+suggestions), <code>document/did*</code>. Client-side it calls <code>session/request_permission</code>,
+<code>session/update</code>, <code>fs/read_text_file</code>, <code>fs/write_text_file</code>, <code>terminal/*</code>, <code>mcp/*</code> and
+<code>elicitation/*</code>.</p>
+<p><code>session/update</code> kinds emitted: <code>agent_message_chunk</code>, <code>agent_thought_chunk</code>, <code>tool_call</code>,
+<code>tool_call_update</code>, <code>plan</code>, <code>available_commands_update</code>, <code>current_mode_update</code>,
+<code>config_option_update</code>, <code>session_info_update</code>, <code>usage_update</code>, <code>user_message_chunk</code> (read off
+the bundle; <code>available_commands_update</code>, <code>current_mode_update</code> and <code>session_info_update</code> were
+also seen live). Stop reasons: <code>end_turn</code>, <code>max_tokens</code>, <code>max_turn_requests</code>, <code>refusal</code>,
+<code>cancelled</code>.</p>
+<h2 id="the-read-only-decision">The read-only decision<a class="headerlink" href="#the-read-only-decision" title="Permanent link">&para;</a></h2>
+<p>This is the part that shapes everything, and it does <strong>not</strong> come out where the mode names
+suggest it would.</p>
+<h3 id="headless-p-is-unusable-and-not-for-the-usual-reason">Headless <code>-p</code> is unusable, and not for the usual reason<a class="headerlink" href="#headless-p-is-unusable-and-not-for-the-usual-reason" title="Permanent link">&para;</a></h3>
+<p><code>kimi -p '&lt;prompt&gt;'</code> runs one prompt non-interactively, <code>--output-format text|stream-json</code>.
+It looks like every other provider's print mode. It is not: <code>runV2Print</code> calls a helper the
+bundle names <code>forceAuto</code>, which does</p>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">forceAuto</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">(</span><span class="nx">agent</span><span class="p">)</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">permissionMode</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">agent</span><span class="p">.</span><span class="nx">accessor</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">IAgentPermissionModeService</span><span class="p">);</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">previous</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">permissionMode</span><span class="p">.</span><span class="nx">mode</span><span class="p">;</span>
+<span class="w">  </span><span class="nx">permissionMode</span><span class="p">.</span><span class="nx">setMode</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">);</span>
+<span class="w">  </span><span class="k">return</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">restorePermission</span><span class="o">:</span><span class="w"> </span><span class="k">async</span><span class="w"> </span><span class="p">()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">permissionMode</span><span class="p">.</span><span class="nx">setMode</span><span class="p">(</span><span class="nx">previous</span><span class="p">);</span><span class="w"> </span><span class="p">}</span><span class="w"> </span><span class="p">};</span>
+<span class="p">};</span>
+</code></pre></div>
+<p>on <strong>every</strong> path through print mode — fresh session, <code>--session &lt;id&gt;</code> and <code>--continue</code> alike
+(read off the bundle). "Auto" is the mode <code>--auto</code> selects interactively, described in
+<code>kimi --help</code> as "Never Ask mode: never interrupts you; everything runs and is decided
+automatically."</p>
+<p>And the flags that would claw that back are refused outright (all three verified live, exit 1,
+before any model turn):</p>
+<div class="highlight"><pre><span></span><code>$ kimi -p 'hi' --plan
+error: Cannot combine --prompt with --plan.
+$ kimi -p 'hi' --auto
+error: Cannot combine --prompt with --auto.
+$ kimi -p 'hi' -y
+error: Cannot combine --prompt with --yolo.
+</code></pre></div>
+<p>So headless mode has no read-only setting, no approval channel, and no way to refuse a call.
+There is no <code>--exclude-tools</code>, no <code>--allowed-tools</code>, no <code>--json-schema</code>, no <code>--input-format</code>
+and no <code>--sandbox</code> anywhere in <code>kimi --help</code> or its subcommands (verified against the full
+help output). A native <code>provider: kimi</code> adapter built on <code>-p</code> could not make the read-only
+guarantee at all. <strong>That, more than the presence of <code>kimi acp</code>, is why this provider is an ACP
+provider.</strong></p>
+<h3 id="the-permission-policy-chain">The permission policy chain<a class="headerlink" href="#the-permission-policy-chain" title="Permanent link">&para;</a></h3>
+<p>Both surfaces share one gate. <code>AgentPermissionPolicyService</code> evaluates policies in order and
+takes the first that returns a verdict (read off the bundle):</p>
+<ol>
+<li><code>auto-mode-ask-user-question-deny</code></li>
+<li><code>user-configured-deny</code> — the operator's own <code>permissions</code> deny rules</li>
+<li><code>dangerous-command-ask</code> — registered only when <code>nonInteractive</code> is false</li>
+<li><code>auto-mode-approve</code></li>
+<li><code>session-approval-history</code></li>
+<li><code>user-configured-ask</code></li>
+<li><code>user-configured-allow</code> — the operator's own allow rules</li>
+<li><code>sensitive-file-access-ask</code></li>
+<li><code>git-control-path-access-ask</code></li>
+<li><code>yolo-mode-approve</code></li>
+<li><code>default-tool-approve</code></li>
+<li><code>git-cwd-write-approve</code></li>
+<li><code>fallback-ask</code></li>
+</ol>
+<p>Only headless print mode sets <code>nonInteractive: true</code> (read off the bundle — it is the single
+occurrence), so row 3 is <strong>present</strong> in an ACP session and absent under <code>kimi -p</code>: the surface
+with no approval channel is also the one that stops asking about dangerous commands.</p>
+<p><code>fallback-ask</code> at the end is why ACP's <code>default</code> mode works at all: anything no earlier policy
+claims becomes an <code>ask</code>, which the ACP server turns into <code>session/request_permission</code> and
+Sirdar's <code>PermissionPolicy</code> answers. Three earlier rows are the problem.</p>
+<p><strong><code>default-tool-approve</code> approves a fixed list without asking</strong> (read off the bundle, verbatim):</p>
+<div class="highlight"><pre><span></span><code>Read  Grep  Glob  ReadMediaFile  SetTodoList  TodoList  TaskList  TaskOutput  WaitFor
+CronList  WebSearch  FetchURL  Agent  AgentSwarm  AskUserQuestion  NotifyUser  Skill
+EnterPlanMode  ExitPlanMode  CreateGoal  GetGoal  SetGoalBudget  UpdateGoal  select_tools
+</code></pre></div>
+<p><code>WebSearch</code> and <code>FetchURL</code> are on it, so <strong><code>permissions.fetch</code> can never be consulted</strong> — no
+fetch ever reaches the client as a permission request. <code>Agent</code> and <code>AgentSwarm</code> are on it too,
+which matters below.</p>
+<p><strong><code>git-cwd-write-approve</code> approves in-workspace writes without asking.</strong> Its evaluate, read off
+the bundle: for a tool named <code>Write</code> or <code>Edit</code>, on a posix path class, where every write access
+is within the workspace directory or an <code>--add-dir</code> additional directory, and the workspace is
+inside a git work tree, it returns <code>{kind: "approve"}</code>. A Sirdar triage workspace is always a
+git checkout, so in ACP <strong><code>default</code> mode a write into the repository is approved before the
+permission request is built.</strong> Sirdar would never be asked about exactly the writes the
+read-only guarantee exists to prevent. <code>default</code> mode is therefore not usable for triage.</p>
+<h3 id="plan-mode-is-a-real-in-process-guard-not-an-instruction">Plan mode is a real in-process guard, not an instruction<a class="headerlink" href="#plan-mode-is-a-real-in-process-guard-not-an-instruction" title="Permanent link">&para;</a></h3>
+<p>ACP's <code>plan</code> mode maps to <code>{plan: true, permission: "manual"}</code> (read off the bundle's
+<code>acpModeToToggles</code>, which the comment says is compiler-enforced exhaustive). The plan feature
+registers its <strong>own</strong> <code>onBeforeExecuteTool</code> listener, separate from the permission gate:</p>
+<div class="highlight"><pre><span></span><code><span class="k">async</span><span class="w"> </span><span class="nx">guardToolExecution</span><span class="p">(</span><span class="nx">event</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">toolName</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="nx">event</span><span class="p">.</span><span class="nx">toolCall</span><span class="p">.</span><span class="nx">name</span><span class="p">;</span>
+<span class="w">  </span><span class="kd">const</span><span class="w"> </span><span class="nx">plan</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">await</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">status</span><span class="p">();</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"ExitPlanMode"</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">plan</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="kc">null</span><span class="w"> </span><span class="o">&amp;&amp;</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">modeService</span><span class="p">.</span><span class="nx">mode</span><span class="w"> </span><span class="o">!==</span><span class="w"> </span><span class="s2">"auto"</span><span class="p">)</span>
+<span class="w">      </span><span class="nx">event</span><span class="p">.</span><span class="nx">waitUntil</span><span class="p">(()</span><span class="w"> </span><span class="p">=&gt;</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">review</span><span class="p">.</span><span class="nx">requestApproval</span><span class="p">(</span><span class="nx">event</span><span class="p">));</span>
+<span class="w">    </span><span class="k">return</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">plan</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="kc">null</span><span class="p">)</span><span class="w"> </span><span class="k">return</span><span class="p">;</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"Write"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"Edit"</span><span class="p">)</span><span class="w"> </span><span class="p">{</span>
+<span class="w">    </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">writesOnlyPlanFile</span><span class="p">(</span><span class="nx">event</span><span class="p">,</span><span class="w"> </span><span class="nx">plan</span><span class="p">.</span><span class="nx">path</span><span class="p">))</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">event</span><span class="p">.</span><span class="nx">allow</span><span class="p">();</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">    </span><span class="nx">event</span><span class="p">.</span><span class="nx">veto</span><span class="p">(</span><span class="nx">denyToolExecution</span><span class="p">(</span><span class="err">…</span><span class="nx">planModeWriteDeniedMessage</span><span class="p">(</span><span class="nx">plan</span><span class="p">.</span><span class="nx">path</span><span class="p">)));</span>
+<span class="w">    </span><span class="k">return</span><span class="p">;</span>
+<span class="w">  </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"TaskStop"</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">event</span><span class="p">.</span><span class="nx">veto</span><span class="p">(</span><span class="err">…</span><span class="p">);</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="w">  </span><span class="k">if</span><span class="w"> </span><span class="p">(</span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"CronCreate"</span><span class="w"> </span><span class="o">||</span><span class="w"> </span><span class="nx">toolName</span><span class="w"> </span><span class="o">===</span><span class="w"> </span><span class="s2">"CronDelete"</span><span class="p">)</span><span class="w"> </span><span class="p">{</span><span class="w"> </span><span class="nx">event</span><span class="p">.</span><span class="nx">veto</span><span class="p">(</span><span class="err">…</span><span class="p">);</span><span class="w"> </span><span class="k">return</span><span class="p">;</span><span class="w"> </span><span class="p">}</span>
+<span class="p">}</span>
+</code></pre></div>
+<p>A <code>veto</code> short-circuits the whole <code>BeforeToolExecuteEmitter</code>, while <code>git-cwd-write-approve</code>
+only calls <code>event.pass(metadata)</code> — so <strong>in plan mode the veto wins over the in-workspace
+approval</strong>. This is a hard, in-process denial of <code>Write</code> and <code>Edit</code> (except the plan file), not
+a line of prompt text. It is stronger than Antigravity's plan mode and stronger than Cursor's
+ask mode, both of which were server-side or model-side.</p>
+<p><code>Bash</code> is deliberately <strong>not</strong> guarded: the plan-mode reminder the bundle injects says "Use
+Bash only when needed; Bash follows the normal permission mode and rules." With
+<code>permission: "manual"</code>, a Bash call falls through to <code>fallback-ask</code> and arrives as
+<code>session/request_permission</code>, where <code>permissions.bash</code> decides. That is the right shape — it is
+the same posture <code>provider: acp</code> already applies to every other agent.</p>
+<p><code>ExitPlanMode</code> is the escape hatch, and it is gated: while plan mode is active and the
+permission mode is not <code>auto</code>, it requests approval. Over ACP that becomes a permission request
+the client can refuse. <strong>A client that sets plan mode must be ready to refuse <code>ExitPlanMode</code></strong>,
+or a long enough session can talk its way out of the guarantee. Sirdar's <code>PermissionPolicy</code>
+sees an unknown tool kind there and denies it, which is the right answer by accident rather
+than by design — worth making deliberate.</p>
+<h3 id="the-hole-subagents">The hole: subagents<a class="headerlink" href="#the-hole-subagents" title="Permanent link">&para;</a></h3>
+<p><code>Agent</code> and <code>AgentSwarm</code> are on <code>default-tool-approve</code>, so spawning a subagent is approved
+without asking. And the subagent is created like this (read off the bundle):</p>
+<div class="highlight"><pre><span></span><code><span class="kd">const</span><span class="w"> </span><span class="nx">created</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="k">this</span><span class="p">.</span><span class="nx">agentLifecycle</span><span class="p">.</span><span class="nx">handleOf</span><span class="p">(</span><span class="nx">createdContext</span><span class="p">.</span><span class="nx">agentId</span><span class="p">);</span>
+<span class="nx">created</span><span class="p">.</span><span class="nx">accessor</span><span class="p">.</span><span class="nx">get</span><span class="p">(</span><span class="nx">IAgentPermissionModeService</span><span class="p">).</span><span class="nx">setMode</span><span class="p">(</span><span class="s2">"auto"</span><span class="p">);</span>
+</code></pre></div>
+<p>Plan-mode state is per-agent (<code>agentState.get(planKey)</code>), so a freshly created subagent is
+<strong>not</strong> in plan mode <strong>and</strong> is in permission mode <code>auto</code>. Nothing it does produces a
+<code>session/request_permission</code>, and nothing vetoes its writes. The enter-plan-mode documentation
+actively encourages the model down this path: "use <code>Agent(subagent_type="explore")</code> to
+investigate first when the <code>Agent</code> tool is available."</p>
+<p>No flag, and no configuration Sirdar may write, removes the <code>Agent</code> tool. This is the one gap
+in the plan-mode guarantee and it should be stated plainly rather than papered over. It was
+<strong>not</strong> exercised — the quota ran out first — so whether an explore subagent actually writes
+anything in practice is unknown; what is established is that if it tried, nothing would stop
+it and nobody would be asked.</p>
+<h3 id="what-the-operators-own-config-can-do-to-a-run">What the operator's own config can do to a run<a class="headerlink" href="#what-the-operators-own-config-can-do-to-a-run" title="Permanent link">&para;</a></h3>
+<p><code>user-configured-deny</code> (row 2) and <code>user-configured-allow</code> (row 7) both sit <strong>above</strong>
+<code>fallback-ask</code>, so <code>permissions</code> rules in <code>~/.kimi-code/config.toml</code> silently decide calls
+before the ACP client is ever asked. Sirdar cannot see that file, must not write it, and cannot
+override it. This is the same caveat <code>provider: acp</code> already carries for Gemini CLI and Goose,
+and the same one <code>docs/research/10-antigravity-wire-formats.md</code> records for <code>agy</code>.</p>
+<h3 id="hooks-exist-and-they-fail-open">Hooks exist, and they fail open<a class="headerlink" href="#hooks-exist-and-they-fail-open" title="Permanent link">&para;</a></h3>
+<p>Kimi has external hooks configured as <code>[[hooks]]</code> entries in <code>config.toml</code> —
+<code>{event, matcher, command, timeout}</code>, with <code>timeout</code> an integer 1–600 seconds (read off the
+bundle's zod schema). The event vocabulary is <code>PreToolUse</code>, <code>PostToolUse</code>,
+<code>PostToolUseFailure</code>, <code>PermissionRequest</code>, <code>PermissionResult</code>, <code>UserPromptSubmit</code>,
+<code>UserPromptQueued</code>, <code>TurnStarted</code>, <code>Stop</code>, <code>StopFailure</code>, <code>Interrupt</code>, <code>SessionStart</code>,
+<code>SessionEnd</code>, <code>SessionHeartbeat</code>, <code>SubagentStart</code>, <code>SubagentStop</code>, <code>TaskStarted</code>, <code>PreCompact</code>,
+<code>PostCompact</code>, <code>Notification</code>. <code>PreToolUse</code> can block a call and supply a reason.</p>
+<p>Two reasons Sirdar does not use them. First, the only places the config is read are
+<code>&lt;KIMI_CODE_HOME&gt;/config.toml</code> (the operator's own file) and
+<code>&lt;projectRoot&gt;/.kimi-code/local.toml</code> (inside the customer's repository) — both outside
+<code>.sirdar/</code>, which is the same wall the Cursor and Antigravity spikes hit. Second, <code>runHook</code>
+returns <code>allowResult(...)</code> when the hook fails to spawn <strong>and</strong> when it times out (read off the
+bundle), so Kimi's hooks <strong>fail open</strong>, with no <code>failClosed</code> option of the kind Cursor offers.
+A mediator that lets the call through whenever it breaks is not a guarantee.</p>
+<p><code>KIMI_CODE_HOME</code> would relocate the whole Kimi home, which is the one way Sirdar could own a
+<code>config.toml</code> carrying deny rules. It would also relocate <code>credentials/</code>, where the OAuth token
+lives (<code>storage = "file"</code>, <code>key = "oauth/kimi-code"</code> in the default config), so the session
+would arrive unauthenticated unless Sirdar copied or linked the operator's refresh token into a
+directory of its own — which is precisely what a credential-handling rule exists to prevent.
+Not pursued; recorded here because it is the only lever that exists, not because it is a good
+one.</p>
+<h2 id="quota">Quota<a class="headerlink" href="#quota" title="Permanent link">&para;</a></h2>
+<p>The account is on the free <strong>Kimi Code</strong> tier and its monthly quota was already spent when the
+capture began. The refusal is clean and worth recording, because it is what a spent plan looks
+like on both surfaces.</p>
+<p>Over ACP, <code>session/prompt</code> answers with a JSON-RPC error and no partial stream (verified):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"jsonrpc"</span><span class="p">:</span><span class="s2">"2.0"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="mi">99</span><span class="p">,</span><span class="nt">"error"</span><span class="p">:{</span><span class="nt">"code"</span><span class="p">:</span><span class="mi">-32000</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"message"</span><span class="p">:</span><span class="s2">"Authentication required: 403 You've reached your monthly usage limit for this billing cycle. Your quota will be refreshed in the next cycle. To continue now, purchase extra usage or upgrade your plan: https://www.kimi.com/membership/subscription?tab=quota"</span><span class="p">}}</span>
+</code></pre></div>
+<p><code>-32000</code> is the generic server error; the "Authentication required:" prefix is Kimi mapping its
+own <code>provider.auth_error</code> code onto ACP's auth error class (the bundle's <code>AUTH_ERROR_CODES</code> set
+is <code>provider.auth_error</code>, <code>auth.login_required</code>, <code>auth.token_missing</code>,
+<code>auth.token_unauthorized</code>, <code>auth.provisioning_required</code>, <code>auth.model_not_resolved</code>). So <strong>a
+spent quota is indistinguishable from a broken login on the wire, except by reading the message
+text.</strong> A client that reacts to an auth error by telling the operator to log in again will send
+them somewhere useless.</p>
+<p>Headless, the same condition is exit 1 with the message on stderr (verified):</p>
+<div class="highlight"><pre><span></span><code>$ kimi -p 'reply with the word ok' --output-format stream-json
+{"role":"meta","type":"system.version","version":"0.43.1"}
+error: failed to run prompt: provider.auth_error: 403 You've reached your monthly usage limit …
+See log: /Users/srivathsanv/.kimi-code/logs/kimi-code.log
+</code></pre></div>
+<p>Everything below this line that would have needed a model reply — a completed tool call, a
+denial arriving as <code>session/request_permission</code>, plan mode actually refusing a write, whether
+the JSON-only instruction is honoured — is therefore <strong>unexercised</strong>.</p>
+<h2 id="headless-output-shapes-for-the-record">Headless output shapes, for the record<a class="headerlink" href="#headless-output-shapes-for-the-record" title="Permanent link">&para;</a></h2>
+<p><code>--output-format stream-json</code> is NDJSON, but it is <strong>OpenAI chat messages</strong>, not an event
+stream (read off the bundle's <code>PromptJsonWriter</code>; only the first line was seen live):</p>
+<div class="highlight"><pre><span></span><code><span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"meta"</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"system.version"</span><span class="p">,</span><span class="nt">"version"</span><span class="p">:</span><span class="s2">"0.43.1"</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"assistant"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"tool_calls"</span><span class="p">:[{</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"function"</span><span class="p">,</span><span class="nt">"id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span>
+<span class="w">   </span><span class="nt">"function"</span><span class="p">:{</span><span class="nt">"name"</span><span class="p">:</span><span class="s2">"Bash"</span><span class="p">,</span><span class="nt">"arguments"</span><span class="p">:</span><span class="s2">"{…}"</span><span class="p">}}]}</span>
+<span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"tool"</span><span class="p">,</span><span class="nt">"tool_call_id"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"meta"</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"turn.step.retrying"</span><span class="p">,</span><span class="nt">"failed_attempt"</span><span class="p">:</span><span class="mi">1</span><span class="p">,</span><span class="nt">"next_attempt"</span><span class="p">:</span><span class="mi">2</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"max_attempts"</span><span class="p">:</span><span class="mi">3</span><span class="p">,</span><span class="nt">"delay_ms"</span><span class="p">:</span><span class="mi">1000</span><span class="p">,</span><span class="nt">"error_name"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"error_message"</span><span class="p">:</span><span class="s2">"…"</span><span class="p">,</span><span class="nt">"status_code"</span><span class="p">:</span><span class="mi">429</span><span class="p">}</span>
+<span class="p">{</span><span class="nt">"role"</span><span class="p">:</span><span class="s2">"meta"</span><span class="p">,</span><span class="nt">"type"</span><span class="p">:</span><span class="s2">"session.resume_hint"</span><span class="p">,</span><span class="nt">"session_id"</span><span class="p">:</span><span class="s2">"session_…"</span><span class="p">,</span>
+<span class="w"> </span><span class="nt">"command"</span><span class="p">:</span><span class="s2">"kimi -r session_…"</span><span class="p">,</span><span class="nt">"content"</span><span class="p">:</span><span class="s2">"To resume this session: kimi -r session_…"</span><span class="p">}</span>
+</code></pre></div>
+<p>Three things a parser would have to live with: assistant text is <strong>accumulated and flushed
+whole</strong>, not streamed as deltas; thinking is <strong>dropped entirely</strong> in JSON mode
+(<code>writeThinkingDelta()</code> is an empty method); and there is <strong>no result line</strong> — no usage, no
+turn count, no cost, no stop reason. The session id appears only in the trailing
+<code>session.resume_hint</code>.</p>
+<h2 id="models">Models<a class="headerlink" href="#models" title="Permanent link">&para;</a></h2>
+<p>Four, all through the managed <code>kimi-code</code> provider (verified, from <code>session/new</code>'s
+<code>configOptions</code> and from <code>~/.kimi-code/config.toml</code>):</p>
+<table>
+<thead>
+<tr>
+<th>Alias</th>
+<th>Display name</th>
+<th>Max context</th>
+<th>Efforts</th>
+<th>Default effort</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>kimi-code/kimi-for-coding</code></td>
+<td>K2.8 Preview</td>
+<td>1 048 576</td>
+<td>low, high, max</td>
+<td>max</td>
+</tr>
+<tr>
+<td><code>kimi-code/kimi-for-coding-highspeed</code></td>
+<td>K2.7 Code Highspeed</td>
+<td>262 144</td>
+<td>—</td>
+<td>—</td>
+</tr>
+<tr>
+<td><code>kimi-code/k3</code></td>
+<td>K3</td>
+<td>1 048 576</td>
+<td>low, high, max</td>
+<td>high</td>
+</tr>
+<tr>
+<td><code>kimi-code/k3-256k</code></td>
+<td>K3-256k</td>
+<td>262 144</td>
+<td>low, high, max</td>
+<td>high</td>
+</tr>
+</tbody>
+</table>
+<p><code>kimi provider list</code> reports <code>managed:kimi-code  type=kimi  models=4  source=oauth</code>, and
+<code>kimi provider add &lt;url&gt;</code> / <code>kimi provider catalog</code> can import third-party providers from a
+registry or from models.dev (verified from help; not exercised). The default is
+<code>kimi-code/kimi-for-coding</code>. No price appears anywhere — see "Usage and cost".</p>
+<p>An unknown alias fails before any request: <code>error: failed to run prompt: Model "nope" is not
+configured in config.toml.</code>, exit 1 (verified).</p>
+<h2 id="mcp-servers">MCP servers<a class="headerlink" href="#mcp-servers" title="Permanent link">&para;</a></h2>
+<p>Three discovery locations (read off the bundle's <code>/mcp-config</code> skill, which is the authority
+the CLI gives its own model):</p>
+<ul>
+<li><code>&lt;KIMI_CODE_HOME&gt;/mcp.json</code> — user-global, default <code>~/.kimi-code/mcp.json</code></li>
+<li><code>&lt;cwd&gt;/.kimi-code/mcp.json</code> — Kimi's project file, keyed on the <strong>current working directory</strong>,
+  not the project root</li>
+<li><code>&lt;projectRoot&gt;/.mcp.json</code> — read as a Claude-compatible file</li>
+</ul>
+<p>Shape is the familiar <code>{"mcpServers":{"name":{"command":…,"args":[…],"env":{…}}}}</code>. Global
+defaults <code>[mcp] startup_timeout_ms</code> / <code>[mcp] tool_timeout_ms</code> in <code>config.toml</code>, overridable per
+server and by <code>KIMI_MCP_STARTUP_TIMEOUT_MS</code> / <code>KIMI_MCP_TOOL_TIMEOUT_MS</code>.</p>
+<p><code>session/new</code> accepts an <code>mcpServers</code> array and the agent advertises <code>mcpCapabilities</code>
+<code>{http: true, sse: true}</code> (verified — an empty array was accepted). Whether the servers a
+client passes there are <strong>added to</strong> the three files above or replace them was not exercised;
+every other ACP agent adds, and nothing in the bundle suggests otherwise. So
+<strong><code>mcp.workspaceOnly</code> is not enforceable here</strong>, the same as for every <code>provider: acp</code> agent,
+and <code>sirdar doctor</code> already says so for ACP generally.</p>
+<p>Print mode warns on stderr about MCP servers held back by workspace trust
+(<code>listTrustGatedMcpServers</code>, read off the bundle) — Kimi keeps a per-workspace trust record in
+<code>~/.kimi-code/workspace-trust/</code> and <code>workspaces.json</code> (verified: both exist).</p>
+<h2 id="skills-leak-in-from-the-operators-machine">Skills leak in from the operator's machine<a class="headerlink" href="#skills-leak-in-from-the-operators-machine" title="Permanent link">&para;</a></h2>
+<p><code>session/new</code>'s <code>available_commands_update</code> on this machine listed the owner's <strong>own</strong>
+Claude-style skills — <code>skill:embedded-captions</code>, <code>skill:faceless-explainer</code>, and two dozen more
+— alongside Kimi's built-ins (verified). Kimi auto-discovers <code>.agents/skills</code> at both user and
+project level (read off the bundle: <code>USER_GENERIC_DIRS = [".agents/skills"]</code>,
+<code>PROJECT_GENERIC_DIRS = [".agents/skills"]</code>).</p>
+<p><code>--skills-dir &lt;dir&gt;</code> "Load skills from this directory instead of auto-discovered user and
+project directories" (verified from help, not exercised) would shut that off — but it is a
+<strong>command-line</strong> flag, and <code>kimi acp</code> takes no such flag, so an ACP session cannot use it. A
+Sirdar run on this provider gets whatever skills the operator happens to have installed, in the
+model's context, unasked. Worth knowing; not, on its own, a safety problem.</p>
+<h2 id="environment">Environment<a class="headerlink" href="#environment" title="Permanent link">&para;</a></h2>
+<p>The variables the binary reads, from its own strings (<strong>read off the bundle</strong> — none was
+exercised). The ones that redirect a credential or relocate state are what matter:</p>
+<table>
+<thead>
+<tr>
+<th>Variable</th>
+<th>What it does</th>
+<th>Recommendation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>KIMI_API_KEY</code>, <code>MOONSHOT_API_KEY</code>, <code>KIMI_REGISTRY_API_KEY</code></td>
+<td>API-key auth instead of the OAuth login</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_BASE_URL</code>, <code>KIMI_CODE_BASE_URL</code>, <code>KIMI_CODE_OAUTH_HOST</code>, <code>KIMI_OAUTH_HOST</code></td>
+<td>point the session at another endpoint</td>
+<td>strip — the same hazard <code>ANTHROPIC_BASE_URL</code> is stripped for</td>
+</tr>
+<tr>
+<td><code>KIMI_CODE_CUSTOM_HEADERS</code></td>
+<td>arbitrary headers on every request</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_CODE_HOME</code></td>
+<td>relocates the whole <code>~/.kimi-code</code> tree, credentials included</td>
+<td>leave alone; changing it breaks the login (see "Hooks")</td>
+</tr>
+<tr>
+<td><code>KIMI_WEB_SEARCH_BASE_URL</code>, <code>KIMI_WEB_SEARCH_API_KEY</code>, <code>KIMI_WEB_FETCH_BASE_URL</code>, <code>KIMI_WEB_FETCH_API_KEY</code></td>
+<td>redirect the built-in search and fetch services</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>ANTHROPIC_*</code>, <code>OPENAI_API_KEY</code>, <code>OPENAI_BASE_URL</code></td>
+<td>recognised for imported/custom providers</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_MODEL_*</code> (<code>NAME</code>, <code>MAX_TOKENS</code>, <code>TEMPERATURE</code>, <code>TOP_P</code>, <code>THINKING_EFFORT</code>, <code>OUTPUT_FORMAT</code>, …)</td>
+<td>override model parameters</td>
+<td>strip, so the session is the one Sirdar configured</td>
+</tr>
+<tr>
+<td><code>KIMI_CODE_DANGEROUS_COMMAND_GUARD</code></td>
+<td>toggles the dangerous-command policy</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_CODE_BACKGROUND_*</code>, <code>KIMI_SUBAGENT_TIMEOUT_MS</code>, <code>KIMI_CODE_AGENT_SWARM_MAX_CONCURRENCY</code></td>
+<td>background-task and subagent limits</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_CODE_DISABLE_HOST_CHECK</code>, <code>KIMI_CODE_CORS_ORIGINS</code>, <code>KIMI_CODE_ALLOWED_HOSTS</code></td>
+<td><code>kimi web</code>'s DNS-rebinding and CORS guards</td>
+<td>strip</td>
+</tr>
+<tr>
+<td><code>KIMI_CLI_NO_AUTO_UPDATE</code> / <code>KIMI_CODE_NO_AUTO_UPDATE</code></td>
+<td>suppress the auto-updater</td>
+<td><strong>set</strong>, so a run never races an upgrade (<code>tui.toml</code> defaults <code>[upgrade] auto_install = true</code>)</td>
+</tr>
+</tbody>
+</table>
+<p><code>provider: acp</code> adds <code>acp.env</code> to the child's environment rather than replacing it, so none of
+this stripping happens today for kimi. That is a real difference from <code>provider: claude</code> and
+<code>provider: codex</code>, and it is a gap in the ACP adapter generally, not in kimi specifically.</p>
+<h2 id="usage-and-cost-on-the-wire">Usage and cost on the wire<a class="headerlink" href="#usage-and-cost-on-the-wire" title="Permanent link">&para;</a></h2>
+<p><code>usage_update</code> is emitted once after a turn settles, and the bundle's own comment is explicit:
+"<code>used</code> is the agent's current context token count, <code>size</code> the bound model's max context size;
+<code>cost</code> stays omitted (the engine has no cost data)."</p>
+<p>So, exactly as for every other ACP agent:</p>
+<ul>
+<li><strong><code>budget.maxUsd</code> cannot bite.</strong> There is no cost figure anywhere — not on ACP, not in the
+  headless stream, not in <code>kimi</code>'s own <code>/usage</code> builtin, which prints only
+  <code>Session total: N input, N output</code>.</li>
+<li><strong><code>budget.maxTurns</code> counts one turn per <code>session/prompt</code></strong>, so an ACP run normally ends at
+  turn one. <code>budget.maxMinutes</code> is the bound that works.</li>
+<li>There is no rate-limit event. A spent quota arrives as the <code>-32000</code> auth error above.</li>
+</ul>
+<h2 id="exit-codes">Exit codes<a class="headerlink" href="#exit-codes" title="Permanent link">&para;</a></h2>
+<p>Verified, all measured with output redirected so <code>$?</code> is the CLI's own:</p>
+<table>
+<thead>
+<tr>
+<th>Code</th>
+<th>Cause</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>--version</code>, <code>doctor</code>, <code>session list</code>, <code>provider list</code>, and an <code>acp</code> server that reaches stdin EOF</td>
+</tr>
+<tr>
+<td>1</td>
+<td>argument conflict (<code>-p</code> with <code>--plan</code>/<code>--auto</code>/<code>--yolo</code>), unknown flag, unknown model, quota exhausted / auth failure</td>
+</tr>
+</tbody>
+</table>
+<p><code>kimi doctor</code> validates <code>config.toml</code> and <code>tui.toml</code> and exits 0 on this machine. Signals map
+to conventional codes in print mode: SIGINT → 130, SIGHUP → 129, SIGTERM → 143 (read off the
+bundle).</p>
+<h2 id="resume">Resume<a class="headerlink" href="#resume" title="Permanent link">&para;</a></h2>
+<p><code>loadSession: true</code>, so <code>session/load</code> is the ACP resume path and <code>sirdar resume</code> works
+natively. <code>sessionCapabilities</code> also advertises <code>list</code>, <code>resume</code>, <code>close</code>, <code>delete</code>, <code>fork</code> and
+<code>additionalDirectories</code> — richer than the protocol requires and richer than Sirdar's adapter
+uses.</p>
+<p>On the command line the same sessions are reachable as <code>kimi -S &lt;id&gt;</code> / <code>--session &lt;id&gt;</code>,
+<code>-c</code> / <code>--continue</code>, and a hidden <code>-r, --resume [id]</code> (read off the bundle's option table; the
+resume hint the CLI prints uses the hidden form). <code>kimi session list</code> prints them with
+timestamps (verified). <code>kimi fork</code> and <code>kimi export</code> operate on a session by id.</p>
+<p>Print mode refuses to resume a session created elsewhere: <code>Session "…" was created under a
+different directory.</code> (read off the bundle).</p>
+<h2 id="what-this-capture-did-not-establish">What this capture did not establish<a class="headerlink" href="#what-this-capture-did-not-establish" title="Permanent link">&para;</a></h2>
+<ul>
+<li><strong>Any model turn.</strong> The quota was spent before the first prompt, so no completed tool call,
+  no <code>session/request_permission</code> on the wire, no assistant text, no <code>usage_update</code> payload and
+  no <code>stopReason</code> was ever observed.</li>
+<li><strong>Whether plan mode's veto actually fires.</strong> The guard is unambiguous in the bundle, and it
+  is an in-process veto rather than an instruction, but it was not watched refusing a write.
+  The same goes for <code>touch x</code> arriving as a Bash permission request.</li>
+<li><strong>Whether a plan-mode subagent writes.</strong> The mechanism that would let it is established; the
+  behaviour is not.</li>
+<li><strong>Whether <code>session/new</code>'s <code>mcpServers</code> merges with or replaces the three config files.</strong></li>
+<li><strong>Whether Kimi honours a JSON-only instruction</strong>, which under ACP is the whole of the
+  structured-output mechanism.</li>
+<li><strong>Every environment variable above.</strong> The names and their meaning come from the binary's
+  strings; none was exercised.</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "../..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

@@ -1,0 +1,2774 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="An open-source harness for engineering-level support tickets.">
+      
+      
+      
+      
+        <link rel="prev" href="../eval/">
+      
+      
+        <link rel="next" href="../steer/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.7">
+    
+    
+      
+        <title>Fix flow - Sirdar</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.ec1eaa64.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+      <link rel="stylesheet" href="../stylesheets/extra.css">
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#fix-flow" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="Sirdar" class="md-header__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            Sirdar
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Fix flow
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m17.75 4.09-2.53 1.94.91 3.06-2.63-1.81-2.63 1.81.91-3.06-2.53-1.94L12.44 4l1.06-3 1.06 3zm3.5 6.91-1.64 1.25.59 1.98-1.7-1.17-1.7 1.17.59-1.98L15.75 11l2.06-.05L18.5 9l.69 1.95zm-2.28 4.95c.83-.08 1.72 1.1 1.19 1.85-.32.45-.66.87-1.08 1.27C15.17 23 8.84 23 4.94 19.07c-3.91-3.9-3.91-10.24 0-14.14.4-.4.82-.76 1.27-1.08.75-.53 1.93.36 1.85 1.19-.27 2.86.69 5.83 2.89 8.02a9.96 9.96 0 0 0 8.02 2.89m-1.64 2.02a12.08 12.08 0 0 1-7.8-3.47c-2.17-2.19-3.33-5-3.49-7.82-2.81 3.14-2.7 7.96.31 10.98 3.02 3.01 7.84 3.12 10.98.31"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 7a5 5 0 0 1 5 5 5 5 0 0 1-5 5 5 5 0 0 1-5-5 5 5 0 0 1 5-5m0 2a3 3 0 0 0-3 3 3 3 0 0 0 3 3 3 3 0 0 0 3-3 3 3 0 0 0-3-3m0-7 2.39 3.42C13.65 5.15 12.84 5 12 5s-1.65.15-2.39.42zM3.34 7l4.16-.35A7.2 7.2 0 0 0 5.94 8.5c-.44.74-.69 1.5-.83 2.29zm.02 10 1.76-3.77a7.131 7.131 0 0 0 2.38 4.14zM20.65 7l-1.77 3.79a7.02 7.02 0 0 0-2.38-4.15zm-.01 10-4.14.36c.59-.51 1.12-1.14 1.54-1.86.42-.73.69-1.5.83-2.29zM12 22l-2.41-3.44c.74.27 1.55.44 2.41.44.82 0 1.63-.17 2.37-.44z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+        <div class="md-search__suggest" data-md-component="search-suggest"></div>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="Sirdar" class="md-nav__button md-logo" aria-label="Sirdar" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    Sirdar
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/srivathsanvenkateswaran/Sirdar" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    srivathsanvenkateswaran/Sirdar
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../getting-started/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Getting started
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../concepts/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Concepts
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../config/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Configuration
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Sources
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../credentials/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Credentials
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../webhooks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Webhooks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../notifications/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Notifications
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../eval/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Evaluation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Fix flow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisite-an-approved-triage-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisite: an approved triage note
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-run-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the run does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrospective-runs-local-and-at" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrospective runs: --local and --at
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrospective runs: --local and --at">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --local
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-at-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --at COMMIT
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worktree-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worktree mode
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Worktree mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixinplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.inPlace
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deviation-gate-and-accept-deviation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The deviation gate and --accept-deviation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reviewing-the-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing the change
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reviewing the change">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropping-a-hunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dropping a hunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confinement-per-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confinement, per provider
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsfixbash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.fixBash
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixprincludescomplaint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.prIncludesComplaint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-unverified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is unverified
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../steer/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../release/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Release
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../architecture/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Architecture
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14" id="__nav_14_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Research
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Research
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/00-context/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Overview
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/01-name-collisions/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Name collisions
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/02-landscape/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Landscape
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/03-licensing-byo-subscription/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Licensing (BYO subscription)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/04-harness-internals/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Harness internals
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/05-verdict-and-proposal/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Verdict and proposal
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/06-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/07-dogfood-findings/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Dogfood findings
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/08-httpx-extraction/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    httpx extraction
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/09-qwen-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Qwen Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/10-antigravity-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Antigravity wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/11-cursor-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Cursor CLI wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/12-kimi-wire-formats/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Kimi Code wire formats
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_14" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_14" id="__nav_14_14_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Adapters
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_14_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_14">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Adapters
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/azure-devops/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Azure DevOps
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/front/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Front
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/gorgias/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Gorgias
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/helpdesks/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Helpdesks
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/jira/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Jira
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/linear/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Linear
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/rally/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Rally
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/adapters/servicenow/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ServiceNow
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_14_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_14_15" id="__nav_14_15_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Providers
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_14_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_14_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Providers
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-protocol/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP protocol
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/acp-agents/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    ACP agents
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/multi-model-runtimes/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Multi-model runtimes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../research/providers/spike-anthropic-compatible/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Anthropic-compatible endpoints (spike)
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    
+    
+    
+    
+      
+        
+        
+      
+    
+    
+    <li class="md-nav__item md-nav__item--section md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15" >
+        
+          
+          <label class="md-nav__link" for="__nav_15" id="__nav_15_label" tabindex="">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs and plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="1" aria-labelledby="__nav_15_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs and plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_1" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_1" id="__nav_15_1_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Specs
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_1_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_1">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Specs
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-openai-provider-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    openai provider design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-desktop-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Desktop design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-10-sirdar-v0-triage-core-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/specs/2026-09-15-steer-design/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Steer design
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    
+    
+    
+    
+      
+    
+    
+    <li class="md-nav__item md-nav__item--nested">
+      
+        
+        
+        <input class="md-nav__toggle md-toggle " type="checkbox" id="__nav_15_2" >
+        
+          
+          <label class="md-nav__link" for="__nav_15_2" id="__nav_15_2_label" tabindex="0">
+            
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Plans
+  
+
+    
+  </span>
+  
+  
+
+            <span class="md-nav__icon md-icon"></span>
+          </label>
+        
+        <nav class="md-nav" data-md-level="2" aria-labelledby="__nav_15_2_label" aria-expanded="false">
+          <label class="md-nav__title" for="__nav_15_2">
+            <span class="md-nav__icon md-icon"></span>
+            
+  
+    Plans
+  
+
+          </label>
+          <ul class="md-nav__list" data-md-scrollfix>
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-provider-roadmap/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Provider roadmap
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-sirdar-v0-triage-core/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    v0 triage core
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+              
+                
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../superpowers/plans/2026-09-10-tracker-adapters/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Tracker adapters
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+              
+            
+          </ul>
+        </nav>
+      
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#prerequisite-an-approved-triage-note" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Prerequisite: an approved triage note
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-the-run-does" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What the run does
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#retrospective-runs-local-and-at" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Retrospective runs: --local and --at
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Retrospective runs: --local and --at">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#-local" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --local
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#-at-commit" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        --at COMMIT
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#worktree-mode" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Worktree mode
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Worktree mode">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#fixinplace" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.inPlace
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-deviation-gate-and-accept-deviation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The deviation gate and --accept-deviation
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reviewing-the-change" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reviewing the change
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Reviewing the change">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-is-read" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is read
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#dropping-a-hunk" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Dropping a hunk
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#confinement-per-provider" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Confinement, per provider
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#permissionsfixbash" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        permissions.fixBash
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#fixprincludescomplaint" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        fix.prIncludesComplaint
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#what-is-unverified" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What is unverified
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="fix-flow">Fix flow<a class="headerlink" href="#fix-flow" title="Permanent link">&para;</a></h1>
+<p><code>sirdar fix KEY</code> is the one Sirdar command that writes anything. Everything else in Sirdar is
+read-only; this is the exception a person opens deliberately, after reading a triage note.</p>
+<h2 id="prerequisite-an-approved-triage-note">Prerequisite: an approved triage note<a class="headerlink" href="#prerequisite-an-approved-triage-note" title="Permanent link">&para;</a></h2>
+<p><code>sirdar fix</code> reads the newest completed triage note for <code>KEY</code> and refuses to start unless its
+frontmatter <code>status</code> is <code>triaged</code> or <code>fix-approved</code>. Any other status — <code>resolved</code>, <code>fix-pushed</code>,
+<code>wont-fix</code>, or a status a workspace invented — means the ticket has moved on, and the command
+tells you to read the note and re-triage or restore its status rather than running blind.</p>
+<p>There is no separate approval record. Running the command <em>is</em> the approval: a person reads the
+note's Proposed Fix, agrees with it, and runs <code>sirdar fix</code>. If you change your mind, change the
+note's status and the fix will not run.</p>
+<p><code>sirdar rca</code> and <code>sirdar fix</code> both skip eval runs when they look for the newest triage note, so a
+replay from <code>sirdar eval</code> can never be mistaken for a real triage.</p>
+<h2 id="what-the-run-does">What the run does<a class="headerlink" href="#what-the-run-does" title="Permanent link">&para;</a></h2>
+<ol>
+<li><strong>Preflight.</strong> <code>git fetch origin</code>, and the default branch is read from <code>origin/HEAD</code> (falling
+   back to <code>main</code> or <code>master</code> if that symbolic ref is not set). <code>--at COMMIT</code> skips the fetch: the
+   start point is already in this repository, and a retrospective fix has no business updating
+   your remote-tracking refs on its way past. Under <code>fix.inPlace</code> the working
+   tree must also be clean, because that mode stages and commits everything in the tree you are
+   standing in; a tree whose only uncommitted entries sit under <code>.sirdar/</code> gets a specific message
+   pointing at <code>.git/info/exclude</code>, since that is what <code>sirdar init</code> writes and an older workspace
+   may be missing. The default mode has nothing to refuse: the session works in a tree of its own.</li>
+<li><strong>Branch and worktree.</strong> <code>git worktree add -B fix-&lt;key&gt;-&lt;title-slug&gt;
+   &lt;root&gt;/.sirdar/worktrees/&lt;run-id&gt; origin/&lt;default&gt;</code>, so the branch is checked out in a
+   directory of this run's own and your HEAD does not move. Under <code>fix.inPlace</code> it is
+   <code>git checkout -B fix-&lt;key&gt;-&lt;title-slug&gt; origin/&lt;default&gt;</code> in your own tree instead. <code>--base
+   BRANCH</code> overrides both the branch cut from and the branch targeted, and <code>--at COMMIT</code> replaces
+   the start point with that commit. The fix branch is refused if it would equal the base branch;
+   the default branch is never committed to and never force-pushed, and neither is anything else.
+   See Worktree mode and Retrospective runs below.</li>
+<li><strong>Snapshot.</strong> Before the session starts, <code>sirdar fix</code> sha256s every file under the workspace's
+   <code>.sirdar/</code> (excluding its own <code>runs/</code>, <code>register.jsonl</code>, <code>eval/</code> and <code>worktrees/</code>) and under
+   the directory git runs this repository's hooks from. See Confinement below.</li>
+<li><strong>One session</strong>, with write permission, given the triage note, the RCA note if one exists, and
+   the workspace's playbooks. It stands in the worktree and its writes are confined to it. It is
+   told to implement the note's Proposed Fix and nothing else, to run the workspace's build and
+   tests, and to make no commits of its own. It answers with JSON: <code>summary</code>, <code>filesChanged</code>,
+   <code>testsRun</code>, <code>risks</code>, and <code>deviationFromNote</code>.</li>
+<li><strong>Snapshot again</strong>, before the report is read and before any git command. A difference from
+   the first snapshot fails the run outright: nothing is committed, nothing is pushed, and the
+   run is marked <code>failed</code>. See Confinement below.</li>
+<li><strong>Commit</strong>, in the worktree. Everything but <code>.sirdar/</code> is staged
+   (<code>git add -A -- . :(exclude).sirdar</code>) and committed with <code>git commit --no-verify</code>. The subject
+   is <code>fix: &lt;summary&gt;</code>; the body carries the note's root cause and the files changed. The commit
+   carries no AI attribution trailer of any kind — the engineer who approved the note is the
+   author of the change.</li>
+<li><strong>Push and pull request</strong>, from the same worktree. <code>--local</code> stops before this step and the
+   two that follow: see Retrospective runs below. <code>git push --no-verify -u origin &lt;branch&gt;</code>.
+   Then, if <code>gh</code> is on <code>PATH</code> and authenticated, <code>gh pr create</code> with title <code>[KEY] fix: &lt;summary&gt;</code>
+   and a body carrying the symptom, the root cause, the fix, the checks run, and the tracker and
+   helpdesk links from the note. Without <code>gh</code> — or if <code>gh pr create</code> fails — the branch is still
+   pushed, and the compare-page URL (built from the remote's GitHub or GitLab URL) plus the
+   ready-to-paste title and body are printed instead. <code>--no-pr</code> pushes and stops there without
+   attempting <code>gh</code>.</li>
+<li><strong>Record.</strong> Both copies of the triage note (the run copy and the filed copy) get their
+   frontmatter set to <code>status: fix-pushed</code>, plus <code>pr:</code> and <code>commit:</code> when those exist. A
+   <code>kind: fix</code> row is appended to <code>.sirdar/register.jsonl</code>. A note or a row that fails to write is
+   reported and skipped rather than failing the command — the branch is already pushed by then.</li>
+<li><strong>Remove the worktree.</strong> <code>git worktree remove --force</code> followed by <code>git worktree prune</code>, run
+   from the main tree. <code>--force</code> is deliberate: what is left in the tree after the commit is
+   build output the session's <code>make test</code> produced, and refusing to clean up over it would strand
+   a directory for every fix that ever ran. A removal that fails is reported, not fatal — the
+   commit is pushed by then, and a leftover directory is untidy rather than wrong. The branch
+   itself stays: it is on the remote and in the pull request.</li>
+</ol>
+<p>Both the commit and the push run with <code>--no-verify</code>. A repository's hooks are code, and the
+commit and push happen moments after an agent session had write access to the tree; <code>--no-verify</code>
+means a hook written during that session is not what executes it. Nothing stops an operator from
+running their own hooks over the branch afterwards — the pull request is where that check
+belongs.</p>
+<p><code>--dry-run</code> stops after the branch and the prompt: no session, no commit, no push. It writes the
+prompt to <code>.sirdar/runs/&lt;KEY&gt;/&lt;run-id&gt;/prompt.md</code> so you can read exactly what would be sent. The
+worktree it made is taken away again, since nothing ran in it; the branch stays, because reading
+the prompt is usually the step before running the fix for real.</p>
+<h2 id="retrospective-runs-local-and-at">Retrospective runs: <code>--local</code> and <code>--at</code><a class="headerlink" href="#retrospective-runs-local-and-at" title="Permanent link">&para;</a></h2>
+<p>Two flags turn the fix flow into something that can be pointed at a ticket that was closed a year
+ago, and that will not touch anybody's remote while it is.</p>
+<h3 id="-local"><code>--local</code><a class="headerlink" href="#-local" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>sirdar fix OMNI-1 --local
+</code></pre></div>
+<p>The flow runs as far as the commit and stops there. Nothing is pushed, <code>gh</code> is never called, and:</p>
+<ul>
+<li>The commit's unified diff is written to <code>.sirdar/runs/&lt;KEY&gt;/&lt;run-id&gt;/fix.diff</code> — a plain patch
+  with no commit header, so <code>git apply</code> takes it as it stands.</li>
+<li>The worktree is <strong>kept</strong>, because the commit and the diff in it are the whole output. Its path
+  and the diff's are both printed.</li>
+<li>The run state records <code>Fix.Local: true</code>, <code>Fix.Commit</code>, <code>Fix.DiffPath</code> and <code>Fix.Worktree</code>, so a
+  screen reading the run directory can tell a local fix from one still waiting on a push.</li>
+<li>The triage note is left on whatever status it had. <code>status: fix-pushed</code> would be a claim about
+  work that never left the machine.</li>
+</ul>
+<p><code>--accept-deviation --local</code> means the same thing a plain <code>--accept-deviation</code> does — the commit
+you read is the one that counts — minus the push. It does not start a second session, and it does
+not publish: it names the reviewed commit, its diff and its worktree, and clears the deviation
+from the run state.</p>
+<p>The dirty-tree preflight is no part of this: it applies to <code>fix.inPlace</code> alone, and a local run
+commits only what the session put in its own worktree.</p>
+<h3 id="-at-commit"><code>--at COMMIT</code><a class="headerlink" href="#-at-commit" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code>sirdar fix OMNI-1 --local --at 4f2c1ab
+</code></pre></div>
+<p>cuts the fix branch from that commit rather than from <code>origin/&lt;base&gt;</code>. Anything <code>git rev-parse</code>
+accepts will do — a sha, a tag, <code>HEAD~40</code> — and what is recorded is the resolved sha, in the run
+state's <code>At</code> and in the result. A commit this repository does not have is refused in the
+preflight, before a worktree is made or an agent process exists.</p>
+<p>The base branch still names what a pull request would target, and is still read from
+<code>origin/HEAD</code> when <code>--base</code> does not say. A local run with <code>--at</code> in a repository whose origin has
+no discernible default — a bare retrospective clone, or no remote at all — is allowed anyway,
+because it was never going to open one.</p>
+<p><code>sirdar triage --at</code> and <code>sirdar rca --at</code> do the same thing one step earlier: they run the
+read-only session itself against a historical checkout. See <code>docs/config.md</code>, "Worktrees".</p>
+<h2 id="worktree-mode">Worktree mode<a class="headerlink" href="#worktree-mode" title="Permanent link">&para;</a></h2>
+<p>By default the session runs in a linked git worktree at <code>&lt;root&gt;/.sirdar/worktrees/&lt;run-id&gt;</code>, not
+in the tree you are standing in. That is what makes <code>sirdar fix</code> safe to run on a machine
+somebody is using:</p>
+<ul>
+<li>Your uncommitted work is not in the tree the agent edits, is not swept into its commit, and is
+  still there when the run ends.</li>
+<li>Your HEAD does not move. The fix branch is checked out somewhere else, and you stay on whatever
+  you were on.</li>
+<li>The agent's root, the paths reserved from its writes, and the hooks directory reserved for the
+  session all follow the worktree. The workspace's configuration and playbooks are still read
+  from the main tree's <code>.sirdar/</code>, which is exactly what the snapshot guard watches: those files
+  shape the session and must come out of it byte for byte as they went in.</li>
+<li>The commit, the push and the pull request are made from the worktree, because that is where the
+  branch is checked out.</li>
+</ul>
+<p>The directory is named after the run id, so <code>sirdar runs</code> and what is on disk say the same thing.
+<code>sirdar init</code> adds <code>.sirdar/worktrees/</code> to <code>.git/info/exclude</code>; that file lives in the
+repository's common git directory, so the one exclusion covers every linked worktree as well as
+the main tree.</p>
+<p>A <code>--local</code> run keeps its worktree too, for the same reason a blocked one does: the commit in it
+is the output.</p>
+<p><strong>A worktree is removed when the run succeeds and kept when it does not.</strong> A run blocked on a
+deviation keeps its worktree, and the blocked output prints the path: the commit sitting in it is
+what you are being asked to read, and <code>sirdar fix KEY --accept-deviation</code> pushes from it. A run
+that failed its guard check or errored keeps it too, for the same reason — the evidence is in it.
+A rerun for the same ticket clears any worktree of Sirdar's own that still holds the branch
+before making its own, since git checks a branch out in one worktree at a time. A worktree
+elsewhere — one of yours, holding that branch — is left alone, and git's refusal is the right
+answer there.</p>
+<p>You can delete a kept worktree yourself at any time (<code>git worktree remove --force &lt;path&gt;</code>);
+<code>--accept-deviation</code> falls back to publishing the recorded commit from the main tree, because the
+branch lives in the shared repository rather than in the directory.</p>
+<h3 id="fixinplace"><code>fix.inPlace</code><a class="headerlink" href="#fixinplace" title="Permanent link">&para;</a></h3>
+<div class="highlight"><pre><span></span><code><span class="nt">fix</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">inPlace</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>restores the behaviour the flow had before linked worktrees: <code>git checkout -B</code> on the tree you
+are standing in, which needs that tree clean and leaves it on the fix branch when the run ends.
+Use it for a repository where a fresh checkout is not usable on its own — an untracked <code>.env</code>, a
+<code>node_modules/</code> or a build cache the tests need and nothing rebuilds cheaply — and be aware of
+what you are giving up: the dirty-tree preflight is your only protection against a fix sweeping
+up uncommitted work, and it is the reason that preflight exists.</p>
+<h2 id="the-deviation-gate-and-accept-deviation">The deviation gate and <code>--accept-deviation</code><a class="headerlink" href="#the-deviation-gate-and-accept-deviation" title="Permanent link">&para;</a></h2>
+<p>If the agent's <code>deviationFromNote</code> field is non-empty — it found the cause elsewhere, the code
+had moved, the note's fix would have broken something — the commit is still made, but the run
+stops before the push. The deviation is printed prominently, the branch stays local and
+unpushed, and the command exits 1. This is deliberate: a fix that quietly became a different
+change from the one approved is the failure worth catching, so the agent is asked to declare it
+and the harness stops on it rather than pushing regardless.</p>
+<p>Read the diff on that local branch. If you accept it, rerun <code>sirdar fix KEY --accept-deviation</code>.</p>
+<p>A rerun with <code>--accept-deviation</code> does not start a second agent session. It looks for the newest
+completed fix run for the key whose branch still points at exactly the commit that run recorded.
+When it finds one, it pushes <strong>that commit</strong> — the one you already read — and opens the pull
+request for it, skipping the session, the commit step, and the register row entirely. If the
+branch has moved on, been deleted, or was never recorded (an older run, or one that failed before
+recording a commit), the ordinary flow runs from scratch instead: a fresh branch, a fresh session,
+a fresh commit.</p>
+<h2 id="reviewing-the-change">Reviewing the change<a class="headerlink" href="#reviewing-the-change" title="Permanent link">&para;</a></h2>
+<p>A fix that has run has a commit on a branch, and the step before you push it is reading that
+commit. Two surfaces do that, and both read the same thing through the same code: nothing here
+starts a session, asks a model anything, or pushes.</p>
+<div class="highlight"><pre><span></span><code>sirdar runs diff &lt;run-id&gt;                            # the unified patch
+sirdar runs diff &lt;run-id&gt; --files                    # the file list
+sirdar runs diff &lt;run-id&gt; --drop export/csv.go:1     # revert one hunk
+</code></pre></div>
+<p>and over HTTP:</p>
+<div class="highlight"><pre><span></span><code>GET  /api/workspaces/{id}/runs/{runId}/diff
+POST /api/workspaces/{id}/runs/{runId}/diff/drop     {"path":…, "hunk":…, "etag":…}
+</code></pre></div>
+<h3 id="what-is-read">What is read<a class="headerlink" href="#what-is-read" title="Permanent link">&para;</a></h3>
+<p>The change is <code>base..head</code>, where <strong>head</strong> is the commit the run made and <strong>base</strong> is the point
+the branch was cut from. Base is the <em>fork point</em> (<code>git merge-base</code>) rather than the tip of
+<code>origin/&lt;base&gt;</code>: the base branch has usually moved on since the fix ran, and diffing against its
+tip would report everything somebody else landed in the meantime as this fix having deleted it.</p>
+<p>Where it is read from depends on what is still there:</p>
+<ul>
+<li>the run's own worktree, <code>&lt;root&gt;/.sirdar/worktrees/&lt;run-id&gt;</code>, while it exists — that is where
+  the branch is checked out and where a drop would apply;</li>
+<li>otherwise the workspace's repository and the commit the run recorded, since the branch and the
+  commit live in the shared git directory whether or not the directory is still on disk;</li>
+<li>otherwise a 404 naming which of the two is missing. A run that is not a fix run gets the same
+  answer for the same reason.</li>
+</ul>
+<p>The JSON body carries <code>base</code>, <code>head</code>, <code>branch</code>, <code>worktree</code>, <code>worktreePresent</code>, <code>pushed</code>, a
+<code>files</code> array (<code>path</code>, <code>status</code> of <code>added</code>/<code>modified</code>/<code>deleted</code>/<code>renamed</code>, <code>additions</code>,
+<code>deletions</code>), and <code>patch</code>. The patch is capped at 2 MiB — cut on a line boundary, with
+<code>truncated: true</code> beside it; the file list is whole either way, since it is counts rather than
+text. <code>etag</code> hashes the patch.</p>
+<h3 id="dropping-a-hunk">Dropping a hunk<a class="headerlink" href="#dropping-a-hunk" title="Permanent link">&para;</a></h3>
+<p><code>--drop PATH:N</code>, or the <code>drop</code> route, reverts hunk <code>N</code> (0-based, within that file's hunks in the
+patch you were just served) out of the commit and <strong>amends</strong> the commit in place. The original
+commit message is kept — <code>git commit --amend --no-edit</code> — because a hunk a reviewer rejected is
+not a change worth recording as a change. Nothing is re-run: the agent is long gone, and this is
+a person editing the result of its session. A <code>review</code> event is appended to the run's
+<code>events.jsonl</code> (<code>{"kind":"review","payload":{"action":"drop","path":…,"hunk":…}}</code>), the run's
+<code>state.json</code> is updated to name the amended commit, and the new diff is returned.</p>
+<p>Dropping the last hunk of the last file leaves an empty commit rather than failing, which is a
+truthful record of a fix that was rejected outright.</p>
+<p>It is refused, with the reason, when:</p>
+<table>
+<thead>
+<tr>
+<th>Refusal</th>
+<th>Why</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>the run is still <code>preparing</code> or <code>running</code></td>
+<td>the session is writing into that tree right now</td>
+</tr>
+<tr>
+<td>the worktree is gone</td>
+<td>there is nothing to revert the hunk in; the diff is still readable</td>
+</tr>
+<tr>
+<td>the branch is pushed (<code>Fix.Pushed</code>)</td>
+<td>Sirdar does not rewrite a branch that has left the machine</td>
+</tr>
+<tr>
+<td>the <code>etag</code> does not match</td>
+<td>the patch has moved since it was served, so the hunk index means something else now</td>
+</tr>
+<tr>
+<td>there is no such file, or no such hunk index, in the diff</td>
+<td>the same staleness, seen from the other side</td>
+</tr>
+<tr>
+<td>the worktree is no longer on the run's branch</td>
+<td>this is not the run's commit to amend</td>
+</tr>
+</tbody>
+</table>
+<p>The etag is how a stale index is caught: the CLI passes the etag of the patch it just printed,
+and a UI passes the etag of the diff it is showing. Reverting hunk 2 of a patch that is no longer
+the patch hunk 2 was counted in is exactly the mistake worth failing over.</p>
+<p>Over HTTP the drop carries one more gate, the one <code>POST /fix</code> carries: it is refused outright on
+a listener other machines can reach (<code>sirdar serve --allow-remote</code>, which has no authentication
+of any kind), because it rewrites a commit in the operator's repository. Reading the diff is not
+refused there — it is a read.</p>
+<h2 id="confinement-per-provider">Confinement, per provider<a class="headerlink" href="#confinement-per-provider" title="Permanent link">&para;</a></h2>
+<p>A fix session gets more than a triage session: the read-only tools, plus <code>Edit</code>, <code>Write</code> and
+<code>MultiEdit</code> (or, in Sirdar's own agent loop, <code>write_file</code> and <code>edit_file</code>). <code>NotebookEdit</code> stays
+refused — nothing in the flow edits a notebook. Shell commands are matched against
+<code>permissions.fixBash</code> instead of <code>permissions.bash</code>. How much of that confinement each provider
+actually enforces differs, so the guard that does not depend on the provider is a separate, third
+layer:</p>
+<table>
+<thead>
+<tr>
+<th>Provider</th>
+<th>Confinement</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>claude</code>, <code>openai</code></td>
+<td><code>provider.PermissionPolicy.Decide</code> judges every <code>Edit</code>/<code>Write</code>/<code>MultiEdit</code>/<code>write_file</code>/<code>edit_file</code> call before it runs (<code>decideWrite</code> in <code>internal/provider/policy.go</code>), plus the snapshot guard</td>
+</tr>
+<tr>
+<td><code>codex</code></td>
+<td>Codex's own <code>sandbox: workspace-write</code> confines the session to the thread's working directory; <code>decideWrite</code> is never consulted, because Codex approves its own tool calls under <code>approvalPolicy: untrusted</code> without asking Sirdar, plus the snapshot guard</td>
+</tr>
+<tr>
+<td><code>acp</code></td>
+<td>Whatever the ACP agent itself implements for <code>session/request_permission</code>, plus the snapshot guard</td>
+</tr>
+</tbody>
+</table>
+<p><strong>The policy path check (<code>decideWrite</code>).</strong> For Claude and <code>openai</code>, every write-shaped tool call
+carries a target path (<code>file_path</code>, <code>notebook_path</code>, or <code>path</code>). <code>decideWrite</code> resolves it with
+<code>provider.ResolveWithin</code>, the same symlink-resolving confinement every path-taking surface in
+Sirdar goes through, and refuses anything that does not land inside the session's root — the
+worktree, or the workspace itself under <code>fix.inPlace</code>. A target that does resolve inside the root
+is checked again with <code>provider.ReservedWrite</code>, which refuses <code>.git</code> at any depth, the root's own
+<code>.sirdar</code>, and the repository's <code>core.hooksPath</code> when it sets one (carried on
+<code>PermissionPolicy.ExtraReserved</code>). The workspace's <code>.sirdar/</code> is outside the worktree altogether,
+so the path check refuses a write to it before the reserved-name rule is even reached.</p>
+<p><strong>The agenttools confinement.</strong> Sirdar's own agent loop (<code>provider: openai</code>) checks the same two
+rules a second time, inside the tool implementation itself
+(<code>internal/agenttools/agenttools.go</code>'s <code>resolve</code> and <code>resolveWrite</code>), rather than trusting the
+caller in front of it. <code>resolve</code> calls the same <code>provider.ResolveWithin</code>; <code>resolveWrite</code> then
+calls the same <code>provider.ReservedWrite</code> with the loop's own <code>Options.ExtraReserved</code>. A tool that
+is only as safe as the policy calling it is not safe on its own.</p>
+<p><strong>The reserved <code>.git</code>/<code>.sirdar</code>/hooks directory.</strong> <code>provider.ReservedWrite</code> folds case on every
+segment comparison, so <code>.GIT/hooks/pre-commit</code> is refused on macOS's and Windows's
+case-insensitive filesystems exactly as <code>.git/hooks/pre-commit</code> is refused on Linux.
+<code>provider.HooksDir</code> names the directory git actually runs this repository's hooks from:
+<code>core.hooksPath</code> (read once per run with <code>git config --get core.hooksPath</code>, with a leading <code>~</code> or
+<code>~user</code> expanded to a home directory the way git itself expands it) when the repository sets one,
+and the <code>hooks/</code> directory of the repository's <strong>common</strong> git directory otherwise. That path is
+carried as an extra reserved directory on top of the two built-in ones, so a repository using
+husky, lefthook, or a checked-in <code>.githooks/</code> is covered the same as one using the default
+<code>.git/hooks</code>.</p>
+<p>The common directory is what makes this right in a worktree. There, <code>&lt;root&gt;/.git</code> is a <em>file</em>
+pointing at <code>&lt;main&gt;/.git/worktrees/&lt;name&gt;</code>, and the hooks git would run on a commit made from
+that worktree are the main repository's, in <code>&lt;main&gt;/.git/hooks</code>. Joining <code>.git/hooks</code> onto the
+worktree would reserve and watch a path that cannot exist while leaving the hooks that actually
+run unwatched, so <code>provider.HooksDir</code> asks git (<code>git rev-parse --git-common-dir</code>) instead of
+assuming.</p>
+<p><strong>The snapshot guard (<code>internal/fix/guard.go</code>).</strong> This is the only layer that does not depend on
+a provider honouring anything. Before the session starts, and again the instant it ends, before
+the first git command, <code>sirdar fix</code> takes a sha256 of every file (mode included, so making a file
+executable counts as a change) under the workspace's <code>.sirdar/</code> — excluding <code>runs/</code>,
+<code>register.jsonl</code>, <code>eval/</code>, and <code>worktrees/</code>, which the run legitimately writes to itself — and
+under whatever <code>provider.HooksDir</code> names for the tree the session ran in. <code>worktrees/</code> is
+excluded because it is the tree the session is <em>supposed</em> to change: digesting it would hash the
+whole repository twice per run and then fail every fix for having made one. A file created,
+modified, or deleted between the
+two snapshots fails the run: nothing is restored, nothing is committed, and nothing is pushed. The
+run's <code>state.json</code> is marked <code>failed</code>. Nothing is restored deliberately — the operator's own copy
+of what changed is treated as better evidence than an automatic revert, and the point of the
+guard is that whatever produced the change was never supposed to be able to make it.</p>
+<p><strong>Codex's sandbox</strong> is a <code>sandbox: workspace-write</code> config value Sirdar sets on the thread; Sirdar
+does not implement or verify that Codex's own sandbox actually confines writes to the working
+directory. The snapshot guard is the real backstop if that sandbox lets a write through,
+including one onto <code>.git</code>.</p>
+<h2 id="permissionsfixbash"><code>permissions.fixBash</code><a class="headerlink" href="#permissionsfixbash" title="Permanent link">&para;</a></h2>
+<p>Shell commands in a fix session are matched against <code>permissions.fixBash</code>, not
+<code>permissions.bash</code> — a fix needs to branch, build and test, and widening the triage list would
+hand every read-only run the same reach. The syntax is identical to <code>permissions.bash</code>: the same
+segment splitting on <code>|</code>, <code>||</code>, <code>&amp;&amp;</code>, and <code>;</code>, the same refusal of command substitution and
+redirection (bar <code>2&gt;&amp;1</code> and <code>2&gt;/dev/null</code>), the same workspace-root check on path-shaped
+arguments.</p>
+<p>The default:</p>
+<div class="highlight"><pre><span></span><code><span class="nt">permissions</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">fixBash</span><span class="p">:</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">status*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">diff*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">log*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">show*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">grep*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"git</span><span class="nv"> </span><span class="s">blame*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"dotnet</span><span class="nv"> </span><span class="s">build*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"dotnet</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"npm</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"npx</span><span class="nv"> </span><span class="s">tsc</span><span class="nv"> </span><span class="s">--noEmit*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"go</span><span class="nv"> </span><span class="s">build*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"go</span><span class="nv"> </span><span class="s">test*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"go</span><span class="nv"> </span><span class="s">vet*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"gofmt</span><span class="nv"> </span><span class="s">-l*"</span>
+<span class="w">    </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="s">"make</span><span class="nv"> </span><span class="s">*"</span>
+</code></pre></div>
+<p>The git entries are the read-only ones, named individually rather than as <code>git *</code>, because
+Sirdar itself makes the branch, the commit, and the push — after the report comes back and after
+the deviation check — so nothing in the agent's own shell access needs <code>git commit</code>, <code>git push</code>,
+<code>git reset</code>, or <code>git config</code>. Naming your own <code>permissions.fixBash</code> list replaces the default
+outright.</p>
+<p>Some git flags and one subcommand are refused whatever pattern matches, because each moves where
+git reads its configuration, writes its output, or runs code from:</p>
+<ul>
+<li><code>--output</code>, <code>--output-directory</code>, <code>-o</code>, <code>--upload-pack</code>, and <code>--receive-pack</code> are denied
+  wherever they appear in the command — git accepts them after the subcommand too.</li>
+<li><code>-c</code>, <code>-C</code>, <code>--git-dir</code>, <code>--work-tree</code>, <code>--exec-path</code>, and <code>--config-env</code> are denied only
+  <em>before</em> the subcommand, since git accepts them nowhere else there; this lets <code>git grep -c foo</code>
+  and <code>git rev-parse --git-dir</code>, which reuse the same short flags after the subcommand for an
+  unrelated meaning, through.</li>
+<li><code>git config</code> is refused outright, because it writes the settings — <code>core.hooksPath</code> among
+  them — that decide what every later git command does.</li>
+<li>A <code>GIT_*</code> environment assignment (<code>GIT_DIR=x git log</code>, <code>env GIT_DIR=x git log</code>, or
+  <code>GIT_DIR=x make test</code>) ahead of any command, git or not, is refused the same way, since it
+  reaches the same configuration those flags do.</li>
+</ul>
+<p>A <code>permissions.fixBash</code> command's own flag-value path arguments go through <code>provider.ReservedWrite</code>
+too, not only <code>Edit</code>/<code>Write</code>/<code>MultiEdit</code>: <code>go test -coverprofile=.git/hooks/pre-commit</code> matches
+a <code>go test*</code> pattern and is refused anyway, because the path it names is a hook the next commit
+runs.</p>
+<p>What the allow-list does not confine: <code>make *</code>, <code>go test*</code>, <code>npm test*</code>, <code>npx tsc --noEmit*</code>, and
+<code>dotnet test*</code> run the workspace's own build system, which runs whatever the repository tells it
+to — a Makefile target, a <code>go:generate</code> directive, an npm <code>pretest</code> script. <code>go vet*</code> and
+<code>gofmt -l*</code> are read-only static checks and carry none of that reach. Sirdar does not read any of
+that, and no allow-list can. This is the accepted residual of fix mode: a fix has to build and
+test what it changed, and the trust extended is the trust you already give your own shell when
+you check out a branch and run <code>make test</code>. The pull request is the review gate for what the
+session actually
+did. A workspace that needs more than that should run <code>sirdar fix</code> in a container.</p>
+<h2 id="fixprincludescomplaint"><code>fix.prIncludesComplaint</code><a class="headerlink" href="#fixprincludescomplaint" title="Permanent link">&para;</a></h2>
+<p>By default, the pull request's Symptom section quotes the triage note's <strong>title</strong>, not its
+complaint. The complaint is the customer's own words out of a support ticket, and a pull request
+is often public or read by people with no business seeing that conversation.</p>
+<div class="highlight"><pre><span></span><code><span class="nt">fix</span><span class="p">:</span>
+<span class="w">  </span><span class="nt">prIncludesComplaint</span><span class="p">:</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">true</span>
+</code></pre></div>
+<p>Turn it on only for a private repository where the ticket text is already visible to the same
+people. The triage note is always linked from the pull request body either way, through the
+tracker and helpdesk URLs.</p>
+<h2 id="what-is-unverified">What is unverified<a class="headerlink" href="#what-is-unverified" title="Permanent link">&para;</a></h2>
+<p>No live run of <code>sirdar fix</code> exists yet against a real model or a real GitHub/GitLab remote — it
+has only been exercised against a scripted fake provider and fixture repositories in tests.
+Codex's <code>sandbox: workspace-write</code> is a config value Sirdar sets but does not implement or
+verify; the snapshot guard is the actual backstop if it lets a write through. Whether
+<code>item/fileChange/requestApproval</code> fires under Codex's <code>sandbox: workspace-write</code> and
+<code>approvalPolicy: untrusted</code> has not itself been watched on a live <code>codex app-server</code> turn: the
+file-change approval path was built off the app-server's declared <code>ServerRequest</code> schema, the
+same way the command-approval and MCP-elicitation paths were, but no turn that has Codex actually
+write a file has been run against it.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy", "search.suggest"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.d7400e89.min.js"></script>
+      
+    
+  </body>
+</html>

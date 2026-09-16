@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Sirdar mark 3: Rope and peak">
+<!-- Sirdar logo exploration, 2026-09-16. Mark 3, Rope and peak. Drawn on a 512 grid for a macOS squircle tile; colours are the light-tile set (Nepal crimson #DC143C, Nepal blue #003893). Original vector, no fonts. -->
+<path d="M96 408 L256 112 L328 296 A44 44 0 0 1 246 328 A44 44 0 0 1 328 296 L371 408" fill="none" stroke="#DC143C" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+<circle cx="256" cy="112" r="30" fill="#003893"/>
+</svg>
