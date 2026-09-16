@@ -26,7 +26,7 @@ jobs:
           # 1.25.0 and an older toolchain refuses to build it.
           go-version: '1.25'
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: '22'
           cache: npm
