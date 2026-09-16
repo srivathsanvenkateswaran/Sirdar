@@ -11,6 +11,7 @@ import (
 // the real reader back afterwards.
 func stubGit(t *testing.T, email, name string) {
 	t.Helper()
+	stubWorkTree(t, true)
 	was := gitConfigValue
 	gitConfigValue = func(_, key string) string {
 		switch key {
@@ -22,6 +23,14 @@ func stubGit(t *testing.T, email, name string) {
 		return ""
 	}
 	t.Cleanup(func() { gitConfigValue = was })
+}
+
+// stubWorkTree says whether the workspace is inside a repository at all.
+func stubWorkTree(t *testing.T, inside bool) {
+	t.Helper()
+	was := inWorkTree
+	inWorkTree = func(string) bool { return inside }
+	t.Cleanup(func() { inWorkTree = was })
 }
 
 func TestSelfResolvesInOrder(t *testing.T) {
@@ -132,7 +141,22 @@ func TestSelfIsEmptyWhenNothingNamesAnybody(t *testing.T) {
 	}
 }
 
+// TestSelfIgnoresGitOutsideARepository: `git config --get` answers from the
+// machine's global configuration wherever it is run, so a workspace that is
+// not in a repository would otherwise claim the operator's own committer.
+func TestSelfIgnoresGitOutsideARepository(t *testing.T) {
+	stubWorkTree(t, false)
+	was := gitConfigValue
+	gitConfigValue = func(string, string) string { return "global@example.com" }
+	t.Cleanup(func() { gitConfigValue = was })
+
+	if got := (&Config{Root: "/ws"}).Self(); !got.Empty() {
+		t.Fatalf("Self() = %+v, want nobody", got)
+	}
+}
+
 func TestSelfReadsGitOncePerLoadedConfig(t *testing.T) {
+	stubWorkTree(t, true)
 	reads := 0
 	was := gitConfigValue
 	gitConfigValue = func(_, key string) string {

@@ -226,9 +226,27 @@ func (c *Config) gitIdentity() Identity {
 }
 
 // gitConfigValue is the reader, swapped out in tests.
+//
+// It reads the whole configuration a command run in root would see, not the
+// repository's own file alone: a machine that routes its identity by
+// directory does it with an includeIf rule in ~/.gitconfig, and --local
+// would read past the answer.
 var gitConfigValue = func(root, key string) string {
-	cmd := exec.Command("git", "-C", root, "config", "--get", key)
-	out, err := cmd.Output()
+	return gitOutput(root, "config", "--get", key)
+}
+
+// inWorkTree reports whether root is inside a git repository at all.
+//
+// It is asked first because `git config --get` answers from the global
+// configuration wherever it is run: without this, a workspace in a plain
+// directory would claim the machine's own committer as its reader, and the
+// identity would never be empty on a developer's laptop.
+var inWorkTree = func(root string) bool {
+	return gitOutput(root, "rev-parse", "--is-inside-work-tree") == "true"
+}
+
+func gitOutput(root string, args ...string) string {
+	out, err := exec.Command("git", append([]string{"-C", root}, args...)...).Output()
 	if err != nil {
 		return ""
 	}
@@ -236,6 +254,9 @@ var gitConfigValue = func(root, key string) string {
 }
 
 func readGitIdentity(root string) Identity {
+	if !inWorkTree(root) {
+		return Identity{}
+	}
 	email := gitConfigValue(root, "user.email")
 	name := gitConfigValue(root, "user.name")
 	if email == "" && name == "" {
