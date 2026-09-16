@@ -56,11 +56,9 @@ describe('each screen scrolls inside the sheet', () => {
     ['screens/library.css', '.lib'],
     ['screens/review.css', '.review-rail'],
     ['screens/review.css', '.review-pane'],
-    ['components/run/run.css', '.stream-scroll'],
-    // The session's right pane: one container per tab.
-    ['components/run/run.css', '.pane'],
-    ['components/run/run.css', '.tools'],
-    ['components/run/run.css', '.changes-diff'],
+    // The session's two columns scroll on their own, and so does a drawer's body.
+    ['components/session/session.css', '.sn-scroll'],
+    ['ui/drawer/Drawer.css', '.sd-drawer__body'],
   ])('%s: %s is a scroll container that can shrink', (path, selector) => {
     const declarations = rule(sheet(path), selector)
     expect(declarations, `${selector} in ${path}`).toMatch(/overflow(-y)?: auto/)
@@ -68,30 +66,23 @@ describe('each screen scrolls inside the sheet', () => {
   })
 
   /*
-   * The session's right pane lost its scroll when the window became a fixed
-   * frame: the Note tab drew the library's article straight into the panel,
-   * and nothing between the sheet and the note could shrink. Every flex and
-   * grid ancestor from the screen down to the tab's container has to give
-   * up its content height, and the grid row itself has to be `minmax(0, 1fr)`
-   * — an `auto` row grows with the taller pane instead.
+   * The session is a grid of two columns that each scroll inside the sheet:
+   * every flex ancestor from the screen down to the scroll container gives
+   * up its content height, and the grid row itself is `minmax(0, 1fr)` — an
+   * `auto` row grows with the taller column instead.
    */
-  it('the session panes can shrink all the way down from the sheet', () => {
-    const css = sheet('components/run/run.css')
-    for (const selector of [
-      '.session',
-      '.session-body',
-      '.session-left',
-      '.session-right',
-      '.session-panel',
-      '.changes',
-      '.stream',
-    ]) {
+  it('the session columns can shrink all the way down from the sheet', () => {
+    const css = sheet('components/session/session.css')
+    for (const selector of ['.sn', '.sn__win', '.sn-path', '.sn-doc', '.sn-scroll']) {
       expect(rule(css, selector), selector).toContain('min-block-size: 0')
     }
-    expect(rule(css, '.session-body')).toMatch(/grid-template-rows: minmax\(0, 1fr\)/)
-    // The note's scroll container adds no padding of its own: the article
-    // inside it carries the measure.
-    expect(rule(css, '.pane--note')).toContain('padding: 0')
+    expect(rule(css, '.sn__win')).toMatch(/grid-template-rows: minmax\(0, 1fr\)/)
+    expect(rule(css, '.sn-path__scroll')).toContain('flex: 1 1 auto')
+    expect(rule(css, '.sn-doc__scroll')).toContain('flex: 1 1 auto')
+    // The drawer covers a column and scrolls its body, never the column under it.
+    const drawer = sheet('ui/drawer/Drawer.css')
+    expect(rule(drawer, '.sd-drawer')).toContain('position: absolute')
+    expect(rule(drawer, '.sd-drawer__body')).toContain('overflow-y: auto')
   })
 
   it('the sidebar scrolls its sessions list, not the window', () => {

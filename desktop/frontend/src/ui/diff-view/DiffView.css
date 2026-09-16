@@ -150,3 +150,17 @@
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-body);
 }
+
+/* What a screen adds to a hunk's bar or a file's head: a marker, a stamp. It
+   sits between the header text and the actions and takes no more than it needs. */
+.sd-diff__extra {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+}
+
+.sd-diff__extra + .sd-diff__acts {
+  margin-inline-start: 0;
+}

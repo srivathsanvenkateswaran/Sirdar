@@ -33,6 +33,15 @@ export interface ComposerCardProps {
   send: ComposerSend
   /** What the card is, for the form's name: `Start`, `Answer`, `Steer`. */
   name?: string
+  /**
+   * `card` is the New session and Conversation shape: a tall textarea and
+   * the round arrow send. `strip` is the Document layout's: one line of
+   * text until typed into, and the send as a labelled button with its
+   * shortcut, because the strip sits under a document and reads as a form.
+   */
+  variant?: 'card' | 'strip'
+  /** Drawn on the bar before the send, after the chips: a decision segment. */
+  trailing?: ReactNode
 }
 
 /** lucide `arrow-up`. */
@@ -80,8 +89,11 @@ export default function ComposerCard({
   aside,
   send,
   name,
+  variant = 'card',
+  trailing,
 }: ComposerCardProps): JSX.Element {
   const id = useId()
+  const strip = variant === 'strip'
 
   function submit(): void {
     if (send.disabled || send.busy) return
@@ -98,6 +110,7 @@ export default function ComposerCard({
   return (
     <form
       className="composer"
+      data-variant={strip ? 'strip' : undefined}
       aria-label={name ?? label}
       onSubmit={(e) => {
         e.preventDefault()
@@ -115,7 +128,7 @@ export default function ComposerCard({
         placeholder={placeholder}
         disabled={disabled}
         autoFocus={autoFocus}
-        rows={rows}
+        rows={strip ? 1 : rows}
         dir="auto"
         onChange={(e) => onChange(e.target.value)}
         onKeyDown={onKeyDown}
@@ -128,19 +141,34 @@ export default function ComposerCard({
       <div className="composer-bar">
         <div className="composer-bar__chips">{chips}</div>
         {aside ? <span className="composer-reason">{aside}</span> : null}
+        {trailing}
         <span className="composer-send">
-          <Button
-            type="submit"
-            variant="primary"
-            iconOnly
-            icon={<ArrowUpIcon />}
-            busy={send.busy}
-            disabled={send.disabled && !send.busy}
-            title={send.title}
-            aria-keyshortcuts="Meta+Enter"
-          >
-            {send.busy ? (send.busyLabel ?? send.label) : send.label}
-          </Button>
+          {strip ? (
+            <Button
+              type="submit"
+              variant="primary"
+              busy={send.busy}
+              disabled={send.disabled && !send.busy}
+              title={send.title}
+              shortcut="⌘↵"
+              aria-keyshortcuts="Meta+Enter"
+            >
+              {send.busy ? (send.busyLabel ?? send.label) : send.label}
+            </Button>
+          ) : (
+            <Button
+              type="submit"
+              variant="primary"
+              iconOnly
+              icon={<ArrowUpIcon />}
+              busy={send.busy}
+              disabled={send.disabled && !send.busy}
+              title={send.title}
+              aria-keyshortcuts="Meta+Enter"
+            >
+              {send.busy ? (send.busyLabel ?? send.label) : send.label}
+            </Button>
+          )}
         </span>
       </div>
     </form>

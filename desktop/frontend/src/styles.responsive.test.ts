@@ -75,7 +75,7 @@ describe('the breakpoints', () => {
       'styles.css',
       'components/shell/shell.css',
       'components/shell/sidebar.css',
-      'components/run/run.css',
+      'components/session/session.css',
       'components/composer/composer.css',
       'screens/board.css',
       'screens/eval.css',
@@ -198,23 +198,27 @@ describe('the settings modal', () => {
 })
 
 describe('the session', () => {
-  const css = sheet('components/run/run.css')
+  const css = sheet('components/session/session.css')
 
-  it('clamps the right pane between 360 and 480', () => {
-    expect(rule(css, '.session-body')).toContain('clamp(360px, 38vw, 480px)')
+  it('is a 432px path beside the document at wide, 400 at standard and 360 at compact', () => {
+    expect(rule(css, '.sn__win')).toContain('grid-template-columns: 432px minmax(0, 1fr)')
+    expect(rule(atMost(css, BANDS.standard), '.sn__win')).toContain('grid-template-columns: 400px minmax(0, 1fr)')
+    expect(rule(atMost(css, BANDS.compact), '.sn__win')).toContain('grid-template-columns: 360px minmax(0, 1fr)')
   })
 
-  it('stacks the panes under 1100 with the transcript first and the pane at 45vh', () => {
-    const stacked = rule(atMost(css, 1099), '.session-body')
-    expect(stacked).toContain('grid-template-columns: minmax(0, 1fr)')
-    expect(stacked).toContain('grid-template-rows: minmax(0, 1fr) 45vh')
+  it('puts the path under the document at 40vh below 1024, and stacks the complaint', () => {
+    const narrow = atMost(css, BANDS.narrow)
+    expect(rule(narrow, '.sn__win')).toContain('grid-template-columns: minmax(0, 1fr)')
+    expect(rule(narrow, '.sn__win')).toContain('grid-template-rows: minmax(0, 1fr) 40vh')
+    expect(rule(narrow, '.sn-complaint')).toContain('grid-template-columns: minmax(0, 1fr)')
   })
 
-  it('never lets the composer shrink below 96px', () => {
+  it('keeps the strip its own height and the drawer no wider than its column', () => {
+    expect(rule(css, '.sn-strip')).toContain('flex: 0 0 auto')
+    const drawer = sheet('ui/drawer/Drawer.css')
+    expect(rule(drawer, '.sd-drawer')).toContain('max-inline-size: 100%')
     const composer = sheet('components/composer/composer.css')
-    expect(rule(composer, '.composer-text')).toContain('min-block-size: 96px')
     expect(rule(composer, '.composer')).toContain('flex: 0 0 auto')
-    expect(rule(css, '.session-composer')).toContain('flex: 0 0 auto')
   })
 })
 

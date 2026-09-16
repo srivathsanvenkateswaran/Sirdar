@@ -44,7 +44,8 @@ describe("the app's own stylesheets", () => {
   it('finds the sheets it is meant to be checking', () => {
     const names = SHEETS.map((path) => relative(SRC, path))
     expect(names).toContain('styles.css')
-    expect(names).toContain('components/run/run.css')
+    expect(names).toContain('components/session/session.css')
+    expect(names).toContain('components/composer/composer.css')
     expect(names).toContain('components/shell/shell.css')
     expect(names).toContain('components/shell/sidebar.css')
     expect(names).toContain('screens/board.css')

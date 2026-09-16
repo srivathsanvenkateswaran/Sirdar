@@ -563,7 +563,13 @@ export function buildSessionModel(
   const lastFinal = [...runEvents].reverse().find((e) => e.kind === 'final')
   const answer = runKind === 'fix' ? undefined : parseAnswer(lastFinal?.payload?.text)
   const report = runKind === 'fix' ? fixReport(runEvents) : undefined
-  const checks = runKind === 'fix' ? checksFromEvents(runEvents) : []
+  // A check the run is still waiting to run is not a check yet: the strip
+  // asks about it, the Checks section says none have run.
+  const waitingCommands = new Set(steps.filter((s) => s.state === 'waiting' || s.state === 'running').map((s) => s.command))
+  const checks =
+    runKind === 'fix'
+      ? checksFromEvents(runEvents).filter((c) => !(c.outcome === 'ran' && waitingCommands.has(c.command)))
+      : []
 
   const stepLikes: StepLike[] = steps.map((s) => ({ index: s.index, tool: s.tool, path: s.path, command: s.command }))
   const evidence = evidenceOf(answer)

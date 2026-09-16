@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from 'react'
+import { useEffect, useMemo, useRef, type ReactNode } from 'react'
 import type { DiffFile } from '../../api/types'
 import Button from '../button'
 import { hunkKey, parsePatch, type DiffHunk, type DiffLine, type PatchFile } from './patch'
@@ -39,6 +39,13 @@ export interface DiffViewProps {
   activePath?: string
   /** Set when the service cut the patch at its size limit: the file list is whole, the text is not. */
   truncated?: boolean
+  /**
+   * Drawn in a hunk's bar before its actions: the session puts the hunk's
+   * change marker (C2) and a "dropped by you" stamp there.
+   */
+  hunkExtra?: (file: PatchFile, hunk: DiffHunk) => ReactNode
+  /** Drawn in a file's header after its counts: the file's markers. */
+  fileExtra?: (file: PatchFile) => ReactNode
 }
 
 function CheckIcon(): JSX.Element {
@@ -86,6 +93,7 @@ function Hunk({
   dropping,
   onKeep,
   onDrop,
+  extra,
 }: {
   file: PatchFile
   hunk: DiffHunk
@@ -94,12 +102,14 @@ function Hunk({
   dropping: boolean
   onKeep?: (path: string, hunk: number) => void
   onDrop?: (path: string, hunk: number) => void
+  extra?: ReactNode
 }): JSX.Element {
   const kept = decision === 'kept'
   return (
     <section className="sd-diff__hunk" aria-label={`${file.path} hunk ${hunk.index + 1}`}>
       <header className="sd-diff__hunkhead">
         <span className="sd-diff__header">{hunk.header}</span>
+        {extra ? <span className="sd-diff__extra">{extra}</span> : null}
         {editable && (
           <span className="sd-diff__acts">
             <Button
@@ -165,6 +175,8 @@ export default function DiffView({
   onDrop,
   activePath,
   truncated = false,
+  hunkExtra,
+  fileExtra,
 }: DiffViewProps): JSX.Element {
   const files = useMemo(() => {
     const parsed = parsePatch(patch)
@@ -220,6 +232,7 @@ export default function DiffView({
               {file.deletions > 0 && <span className="sd-diff__del">−{file.deletions}</span>}
             </span>
             <span className="sd-diff__status">{STATUS_WORDS[file.status]}</span>
+            {fileExtra ? <span className="sd-diff__extra">{fileExtra(file)}</span> : null}
           </header>
           {file.hunks.map((hunk) => {
             const key = hunkKey(file.path, hunk.index)
@@ -233,6 +246,7 @@ export default function DiffView({
                 dropping={dropping === key}
                 onKeep={onKeep}
                 onDrop={onDrop}
+                extra={hunkExtra?.(file, hunk)}
               />
             )
           })}
