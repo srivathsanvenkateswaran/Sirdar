@@ -8,7 +8,7 @@ import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
 import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
 import { BELOW_STANDARD } from '../lib/useMediaQuery'
 import { createFakeTransport, diff, type FakeTransport } from '../store/fakeTransport'
-import Session, { statsTitle } from './Session'
+import Session, { PANE_COLLAPSED_KEY, statsTitle } from './Session'
 
 const RUN: RunDetail = {
   runId: '20260910-1000-omni-2510',
@@ -905,5 +905,69 @@ describe('Session', () => {
     renderSession(f)
     expect(await screen.findByText('not_found: no such run')).toBeInTheDocument()
     expect(screen.getByTestId('published')).toHaveTextContent('none')
+  })
+})
+
+describe('the artefacts pane', () => {
+  beforeEach(() => {
+    resetRunJobs()
+    localStorage.clear()
+  })
+  afterEach(() => {
+    localStorage.clear()
+  })
+
+  it('folds to a rail of its tab glyphs on Hide panel, and any glyph brings it back open on that tab', async () => {
+    const f = fake({ detail: FIX })
+    const { container } = renderSession(f)
+    await screen.findByRole('tab', { name: /Changes/ })
+    const body = container.querySelector('.session-body')!
+    const toggle = screen.getByRole('button', { name: 'Hide panel' })
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(toggle).toHaveAttribute('title', 'Hide panel (⌘\\)')
+
+    fireEvent.click(toggle)
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
+    expect(body).toHaveAttribute('data-pane', 'collapsed')
+    expect(localStorage.getItem(PANE_COLLAPSED_KEY)).toBe('1')
+    const rail = container.querySelector<HTMLElement>('.session-rail')!
+    expect(within(rail).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Show panel',
+      'Changes',
+      'Note',
+      'Bundle',
+      'Tools',
+    ])
+    expect(within(rail).getByRole('button', { name: 'Show panel' })).toHaveAttribute('aria-expanded', 'false')
+    // The transcript and the composer are still there, now at the full width.
+    expect(screen.getByRole('form')).toBeInTheDocument()
+
+    fireEvent.click(within(rail).getByRole('button', { name: 'Tools' }))
+    expect(screen.getByRole('tab', { name: /Tools/ })).toHaveAttribute('aria-selected', 'true')
+    expect(body).not.toHaveAttribute('data-pane')
+    expect(localStorage.getItem(PANE_COLLAPSED_KEY)).toBe('0')
+  })
+
+  it('answers ⌘\\ from anywhere on the screen', async () => {
+    const f = fake()
+    renderSession(f)
+    await screen.findByRole('tablist')
+    fireEvent.keyDown(document.body, { key: '\\', metaKey: true })
+    expect(screen.queryByRole('tablist')).toBeNull()
+    fireEvent.keyDown(window, { key: '\\', ctrlKey: true })
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
+    // A bare backslash is a character, not the chord.
+    fireEvent.keyDown(document.body, { key: '\\' })
+    expect(screen.getByRole('tablist')).toBeInTheDocument()
+  })
+
+  it('opens folded when the fold was remembered, whichever run it is', async () => {
+    localStorage.setItem(PANE_COLLAPSED_KEY, '1')
+    const f = fake()
+    renderSession(f)
+    await screen.findByRole('heading', { name: RUN.key })
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Show panel' })).toHaveAttribute('title', 'Show panel (⌘\\)')
   })
 })
