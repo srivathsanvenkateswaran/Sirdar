@@ -32,47 +32,17 @@ import (
 // test binary under each name, and Dispatch — the first statement of
 // TestMain — notices when the process was started as one of them and runs
 // that function instead of any test.
-var fakes = map[string]func() int{
-	fakeWhisperName:    fakeWhisper,
-	"fake-py-whisper":  fakeOutdirWhisper,
-	"hang":             fakeHang,
-	"broken":           fakeBroken,
-	"dump-env":         fakeDumpEnv,
-	"echoes-on-stdout": fakeStdoutLanguage,
-	"huge-whisper":     fakeHugeTranscript,
-}
-
-// fakeDir holds one copy of the test binary per entry in fakes. They are
-// installed once here rather than per test because a copy is what
-// testbin falls back to when the filesystem refuses a hard link, and this
-// binary is tens of megabytes.
-var fakeDir string
-
 func TestMain(m *testing.M) {
-	testbin.Dispatch(fakes)
-
-	dir, err := os.MkdirTemp("", "sirdar-transcribe-fakes")
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "transcribe test:", err)
-		os.Exit(1)
-	}
-	self, err := os.Executable()
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "transcribe test:", err)
-		os.Exit(1)
-	}
-	for name := range fakes {
-		if err := testbin.LinkOrCopy(self, filepath.Join(dir, name+testbin.Ext)); err != nil {
-			fmt.Fprintf(os.Stderr, "transcribe test: install %s: %v\n", name, err)
-			os.RemoveAll(dir)
-			os.Exit(1)
-		}
-	}
-	fakeDir = dir
-
-	code := m.Run()
-	os.RemoveAll(dir)
-	os.Exit(code)
+	testbin.Dispatch(map[string]func() int{
+		fakeWhisperName:    fakeWhisper,
+		"fake-py-whisper":  fakeOutdirWhisper,
+		"hang":             fakeHang,
+		"broken":           fakeBroken,
+		"dump-env":         fakeDumpEnv,
+		"echoes-on-stdout": fakeStdoutLanguage,
+		"huge-whisper":     fakeHugeTranscript,
+	})
+	os.Exit(m.Run())
 }
 
 // fakeWhisperName is both the file name the whisper stand-in is installed
@@ -80,15 +50,21 @@ func TestMain(m *testing.M) {
 // filepath.Base of the command — reads like a real tool's name.
 const fakeWhisperName = "fake-whisper"
 
-// fakeBin is the path to run one of the stand-ins by, with whatever
-// extension this platform needs to consider it executable.
-func fakeBin(name string) string {
-	return filepath.Join(fakeDir, name+testbin.Ext)
+// installFake puts a copy of the test binary in a directory of the test's
+// own under name and returns the path to run it by. It goes through
+// testbin.Install rather than linking into t.TempDir directly because
+// Install also retires the copy when the test ends: Windows refuses to
+// delete a running executable, and the hang fake here is still winding
+// down from its kill when its test finishes — t.TempDir's own cleanup
+// would then fail and mark a passing test failed.
+func installFake(t *testing.T, name string) string {
+	t.Helper()
+	return testbin.Install(t, t.TempDir(), name, name)
 }
 
-// fakeTranscriber returns the whisper.cpp stand-in's path together with
-// the start of a command template: that path plus the -body flag carrying
-// the transcript this test wants back.
+// fakeTranscriber installs the whisper.cpp stand-in and returns its path
+// together with the start of a command template: that path plus the -body
+// flag carrying the transcript this test wants back.
 //
 // The transcript travels as an argument rather than an environment
 // variable because it has to: a Transcriber hands its child nothing but
@@ -96,7 +72,7 @@ func fakeBin(name string) string {
 // environment is dropped before the command ever starts.
 func fakeTranscriber(t *testing.T, body string) (bin, command string) {
 	t.Helper()
-	bin = fakeBin(fakeWhisperName)
+	bin = installFake(t, fakeWhisperName)
 	return bin, bin + ` -body "` + body + `"`
 }
 
@@ -288,7 +264,7 @@ func TestStdoutIsTheTranscriptWithoutAnOutputPlaceholder(t *testing.T) {
 // TestOutdirPlaceholderIsFound covers the whisper CLI shape: the tool
 // writes into a directory under a name this package did not choose.
 func TestOutdirPlaceholderIsFound(t *testing.T) {
-	bin := fakeBin("fake-py-whisper")
+	bin := installFake(t, "fake-py-whisper")
 	tx := newTranscriber(t, bin+" {in} --output_dir {outdir}", nil)
 
 	res, err := tx.Run(context.Background(), audioFile(t, "voice.ogg"))
@@ -318,7 +294,7 @@ func TestPinnedLanguageBeatsDetection(t *testing.T) {
 }
 
 func TestATimeoutIsAnError(t *testing.T) {
-	bin := fakeBin("hang")
+	bin := installFake(t, "hang")
 	tx := newTranscriber(t, bin+" {in}", nil)
 	tx.perFile = 200 * time.Millisecond
 
@@ -336,7 +312,7 @@ func TestATimeoutIsAnError(t *testing.T) {
 }
 
 func TestFailingCommandIsAnErrorNotAPanic(t *testing.T) {
-	bin := fakeBin("broken")
+	bin := installFake(t, "broken")
 	tx := newTranscriber(t, bin+" {in}", nil)
 
 	_, err := tx.Run(context.Background(), audioFile(t, "voice.ogg"))
@@ -532,7 +508,7 @@ func TestSpacesInTheAudioPathSurviveAsOneArgument(t *testing.T) {
 // triage run resolves helpdesk tokens into its own environment, and the
 // operator's transcription command is not something they go to.
 func TestTheChildSeesNothingButPathHomeAndLang(t *testing.T) {
-	bin := fakeBin("dump-env")
+	bin := installFake(t, "dump-env")
 	tx := newTranscriber(t, bin+" {in}", func(o *Options) {
 		o.Env = []string{"PATH=" + os.Getenv("PATH"), "HOME=/tmp", "LANG=en_US.UTF-8", "TMPDIR=/tmp/scratch", "ZOHO_TOKEN=secret", "AWS_SECRET_ACCESS_KEY=secret"}
 	})
@@ -622,7 +598,7 @@ func TestAHangingGrandchildThatIgnoresSIGTERMIsKilled(t *testing.T) {
 // contain (or a compromised tool that echoes) a line shaped like a
 // language announcement must not set Result.Language from stdout.
 func TestLanguageIsMatchedOnStderrOnly(t *testing.T) {
-	bin := fakeBin("echoes-on-stdout")
+	bin := installFake(t, "echoes-on-stdout")
 	tx := newTranscriber(t, bin+" {in}", nil)
 
 	res, err := tx.Run(context.Background(), audioFile(t, "voice.ogg"))
@@ -681,7 +657,7 @@ func TestLanguageLabelRejectsAndTruncates(t *testing.T) {
 // maxCapture bytes, with the rest replaced by a marker rather than held
 // in memory.
 func TestTranscriptFileIsCappedAtMaxCapture(t *testing.T) {
-	bin := fakeBin("huge-whisper")
+	bin := installFake(t, "huge-whisper")
 	tx := newTranscriber(t, bin+" {out} {in}", nil)
 
 	res, err := tx.Run(context.Background(), audioFile(t, "voice.ogg"))
