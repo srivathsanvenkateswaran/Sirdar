@@ -1,4 +1,4 @@
-import type { RunEvent } from '../api/types'
+import type { NoteKind, RunEvent } from '../api/types'
 import { duration, parseTime, tokens, usd } from './format'
 
 /**
@@ -437,4 +437,387 @@ export function askedQuestion(reason: string | undefined): string {
 export function baseName(path: string): string {
   const parts = path.split(/[\\/]/)
   return parts[parts.length - 1] || path
+}
+
+/**
+ * The file a note kind lives in, among the paths the run recorded. The run
+ * writes each note into its own directory and then files a copy in the vault,
+ * appending both paths in that order: the resolution note's pair starts at
+ * `note-resolution.md`, the other kind's pair is everything before it. The
+ * filed copy, when there is one, is the path a person opens.
+ */
+export function notePathFor(kind: NoteKind, notes: string[] | undefined): string {
+  if (!notes || notes.length === 0) return ''
+  const split = notes.findIndex((p) => baseName(p) === 'note-resolution.md')
+  let group: string[]
+  if (kind === 'resolution') group = split === -1 ? [] : notes.slice(split)
+  else group = split === -1 ? notes : notes.slice(0, split)
+  return group[group.length - 1] ?? ''
+}
+
+// ------------------------------------------------------------ conversation
+
+/**
+ * The id a provider uses to tie a call's start, the policy's answer to it and
+ * its result together: Claude's `tool_use` id (on the assistant block, the
+ * permission request and the `tool_result`), Codex's item id (on the item
+ * and on the approval that names it). '' when the line carries none.
+ */
+export function callId(event: RunEvent): string {
+  const raw = asRecord(event.payload?.raw)
+  if (!raw) return ''
+  const tool = str(event.payload?.tool)
+
+  const message = asRecord(raw.message)
+  const content = message?.content
+  if (Array.isArray(content)) {
+    const blocks = content.map(asRecord).filter(Boolean) as Record<string, unknown>[]
+    const uses = blocks.filter((b) => b.type === 'tool_use')
+    const match = uses.find((b) => str(b.name) === tool) ?? uses[0]
+    if (match) return str(match.id)
+    const result = blocks.find((b) => b.type === 'tool_result')
+    if (result) return str(result.tool_use_id)
+  }
+
+  const request = asRecord(raw.request)
+  if (request) return str(request.tool_use_id)
+
+  const params = asRecord(raw.params)
+  if (params) {
+    const item = asRecord(params.item)
+    if (item) return str(item.id)
+    return str(params.itemId) || str(params.callId) || str(params.toolCallId)
+  }
+  return ''
+}
+
+/** True for a provider line that is one token delta of a message, not a message. */
+export function isDelta(event: RunEvent): boolean {
+  const raw = asRecord(event.payload?.raw)
+  if (!raw) return false
+  const type = str(raw.type)
+  if (type === 'stream_event' || type === 'content_block_delta') return true
+  return /delta/i.test(str(raw.method))
+}
+
+/**
+ * What a finished tool call returned. The thin payload carries it as `text`
+ * for the providers Sirdar reads line by line; Codex keeps it on the item
+ * (`aggregatedOutput`), Cursor on the call's `result`, and an ACP agent in
+ * the update's content blocks. '' when the line carries nothing.
+ */
+export function outputText(event: RunEvent | undefined): string {
+  if (!event) return ''
+  const text = event.payload?.text ?? ''
+  if (text) return text
+  const raw = asRecord(event.payload?.raw)
+  if (!raw) return ''
+
+  const params = asRecord(raw.params)
+  const item = asRecord(params?.item)
+  if (item) {
+    for (const key of ['aggregatedOutput', 'output', 'result', 'content', 'text']) {
+      const value = item[key]
+      if (typeof value === 'string' && value !== '') return value
+      if (value !== null && typeof value === 'object') return stringify(value)
+    }
+    return ''
+  }
+
+  const update = asRecord(params?.update)
+  if (update) {
+    const content = update.content
+    if (typeof content === 'string') return content
+    if (Array.isArray(content)) {
+      return content
+        .map((b) => {
+          const block = asRecord(b)
+          const inner = asRecord(block?.content)
+          return str(inner?.text) || str(block?.text)
+        })
+        .filter(Boolean)
+        .join('\n')
+    }
+  }
+
+  const call = asRecord(raw.tool_call)
+  if (call) {
+    for (const [key, value] of Object.entries(call)) {
+      if (!key.endsWith('ToolCall')) continue
+      const body = asRecord(value)
+      const result = body?.result
+      if (typeof result === 'string') return result
+      if (result !== undefined) return stringify(result)
+    }
+  }
+  return ''
+}
+
+/** True when the provider marked the result an error, whichever way it says so. */
+export function outputFailed(event: RunEvent | undefined): boolean {
+  const raw = asRecord(event?.payload?.raw)
+  if (!raw) return false
+  const message = asRecord(raw.message)
+  const content = message?.content
+  if (Array.isArray(content)) {
+    const result = content.map(asRecord).find((b) => b?.type === 'tool_result')
+    if (result?.is_error === true) return true
+  }
+  const params = asRecord(raw.params)
+  const item = asRecord(params?.item)
+  if (item) {
+    if (item.status === 'failed') return true
+    if (typeof item.exitCode === 'number' && item.exitCode !== 0) return true
+  }
+  const update = asRecord(params?.update)
+  if (update?.status === 'failed') return true
+  const call = asRecord(raw.tool_call)
+  if (call) {
+    for (const [key, value] of Object.entries(call)) {
+      if (!key.endsWith('ToolCall')) continue
+      const result = asRecord(asRecord(value)?.result)
+      if (result && (result.error !== undefined || result.rejected !== undefined)) return true
+    }
+  }
+  return false
+}
+
+function stringify(value: unknown): string {
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return ''
+  }
+}
+
+/** One tool call as the transcript shows it: its start, and what followed. */
+export interface ToolCall {
+  started: IndexedEvent
+  finished?: IndexedEvent
+  permission?: IndexedEvent
+}
+
+/**
+ * A row of the conversation. A message is every consecutive assistant line
+ * merged into one block, so a provider that streams deltas grows the block
+ * rather than stacking rows; a call is a tool call with its result and the
+ * policy's word on it; a fold is a run of raw stream lines; anything else is
+ * one event.
+ */
+export type ConversationItem =
+  | { kind: 'message'; index: number; parts: IndexedEvent[]; text: string }
+  | { kind: 'call'; index: number; call: ToolCall }
+  | { kind: 'event'; index: number; item: IndexedEvent }
+  | { kind: 'fold'; index: number; items: IndexedEvent[] }
+
+/**
+ * Joins consecutive assistant lines. A delta continues the text as it is; a
+ * whole message that follows another starts a new paragraph.
+ */
+export function joinText(parts: IndexedEvent[]): string {
+  let out = ''
+  for (const part of parts) {
+    const text = part.event.payload?.text ?? ''
+    if (text === '') continue
+    if (out === '' || isDelta(part.event)) out += text
+    else out += (out.endsWith('\n\n') ? '' : '\n\n') + text
+  }
+  return out
+}
+
+/**
+ * Reads a turn's events as a conversation: pairs each tool call with its
+ * result and its permission, merges streamed text into one message, and
+ * with `fold` collapses runs of raw stream lines the way `foldSystem` does.
+ *
+ * A result is paired by id when the provider gives one, else with the oldest
+ * call still waiting — the same tool if the result names one. A permission
+ * attaches to the newest waiting call of its tool. Anything that pairs with
+ * nothing stays a row of its own, so no line of the log is lost.
+ */
+export function conversation(events: IndexedEvent[], fold = false): ConversationItem[] {
+  const out: ConversationItem[] = []
+  const open: ToolCall[] = []
+  let system: IndexedEvent[] = []
+
+  const flushSystem = () => {
+    if (system.length === 0) return
+    if (fold && system.length >= FOLD_MIN) {
+      out.push({ kind: 'fold', index: system[0].index, items: system })
+    } else {
+      for (const item of system) out.push({ kind: 'event', index: item.index, item })
+    }
+    system = []
+  }
+
+  for (const item of events) {
+    const event = item.event
+    if (classify(event) === 'system') {
+      system.push(item)
+      continue
+    }
+    flushSystem()
+
+    if (event.kind === 'tool_started') {
+      const call: ToolCall = { started: item }
+      open.push(call)
+      out.push({ kind: 'call', index: item.index, call })
+      continue
+    }
+
+    if (event.kind === 'tool_finished') {
+      const id = callId(event)
+      const tool = str(event.payload?.tool)
+      let at = id ? open.findIndex((c) => callId(c.started.event) === id) : -1
+      if (at === -1 && tool) at = open.findIndex((c) => str(c.started.event.payload?.tool) === tool)
+      if (at === -1 && open.length > 0) at = 0
+      if (at === -1) {
+        out.push({ kind: 'event', index: item.index, item })
+        continue
+      }
+      open[at].finished = item
+      open.splice(at, 1)
+      continue
+    }
+
+    if (event.kind === 'permission') {
+      const id = callId(event)
+      const tool = str(event.payload?.tool)
+      const newest = [...open].reverse()
+      let call = id ? newest.find((c) => callId(c.started.event) === id) : undefined
+      if (!call) {
+        call = newest.find(
+          (c) => !c.permission && (!tool || str(c.started.event.payload?.tool) === tool),
+        )
+      }
+      if (!call || call.permission) {
+        out.push({ kind: 'event', index: item.index, item })
+        continue
+      }
+      call.permission = item
+      continue
+    }
+
+    if (event.kind === 'assistant_text') {
+      const last = out[out.length - 1]
+      if (last && last.kind === 'message') {
+        last.parts.push(item)
+        last.text = joinText(last.parts)
+      } else {
+        out.push({ kind: 'message', index: item.index, parts: [item], text: joinText([item]) })
+      }
+      continue
+    }
+
+    out.push({ kind: 'event', index: item.index, item })
+  }
+  flushSystem()
+  return out
+}
+
+/** The index of the run's last tool call: the one that opens on its own. */
+export function lastCallIndex(events: IndexedEvent[]): number {
+  for (let i = events.length - 1; i >= 0; i--) {
+    if (events[i].event.kind === 'tool_started') return events[i].index
+  }
+  return -1
+}
+
+/** How long a call took, from its start to its result: `0.4s`, `12s`, `1:04`. */
+export function callDuration(call: ToolCall): string {
+  if (!call.finished) return ''
+  const a = parseTime(call.started.event.t)
+  const b = parseTime(call.finished.event.t)
+  if (Number.isNaN(a) || Number.isNaN(b)) return ''
+  const ms = Math.max(0, b - a)
+  if (ms < 10_000) return `${(ms / 1000).toFixed(1)}s`
+  if (ms < 60_000) return `${Math.round(ms / 1000)}s`
+  return duration(ms)
+}
+
+// ------------------------------------------------------------------ tables
+
+export interface TextTable {
+  head: string[]
+  rows: string[][]
+}
+
+/**
+ * Reads a table out of a tool's output when it is one: rows split by pipes
+ * or tabs, the same number of cells in nearly every row, and a markdown rule
+ * row (`|---|---|`) dropped. A tab table wants three columns, because a
+ * two-cell tab line is what every numbered file listing looks like.
+ */
+export function detectTable(text: string): TextTable | undefined {
+  const lines = text.split('\n').map((l) => l.replace(/\r$/, ''))
+  while (lines.length > 0 && lines[lines.length - 1].trim() === '') lines.pop()
+  while (lines.length > 0 && lines[0].trim() === '') lines.shift()
+  if (lines.length < 2) return undefined
+
+  const tabs = lines.filter((l) => l.includes('\t')).length
+  const pipes = lines.filter((l) => l.includes('|')).length
+  const sep = tabs >= pipes ? '\t' : '|'
+  const minCols = sep === '\t' ? 3 : 2
+  const withSep = sep === '\t' ? tabs : pipes
+  if (withSep < lines.length * 0.9) return undefined
+
+  const rows: string[][] = []
+  for (const line of lines) {
+    if (line.trim() === '') continue
+    if (sep === '|' && /^[\s|:-]+$/.test(line)) continue
+    let cells = line.split(sep)
+    if (sep === '|') {
+      if (cells[0].trim() === '') cells = cells.slice(1)
+      if (cells.length > 0 && cells[cells.length - 1].trim() === '') cells = cells.slice(0, -1)
+    }
+    rows.push(cells.map((c) => c.trim()))
+  }
+  if (rows.length < 2) return undefined
+  const cols = rows[0].length
+  if (cols < minCols) return undefined
+  if (rows[0].some((c) => c === '')) return undefined
+  const regular = rows.filter((r) => r.length === cols).length
+  if (regular < rows.length * 0.8) return undefined
+
+  const fit = (r: string[]) =>
+    r.length === cols ? r : [...r, ...(Array(cols).fill('') as string[])].slice(0, cols)
+  return { head: rows[0], rows: rows.slice(1).map(fit) }
+}
+
+// ------------------------------------------------------------------ answer
+
+/** The final event's text as the structured answer it is, or undefined when it is prose. */
+export function parseAnswer(text: string | undefined): Record<string, unknown> | undefined {
+  if (!text) return undefined
+  const trimmed = text.trim()
+  if (!trimmed.startsWith('{')) return undefined
+  try {
+    return asRecord(JSON.parse(trimmed))
+  } catch {
+    return undefined
+  }
+}
+
+/** `rootCause` → "Root cause", `customer_reply_draft` → "Customer reply draft". */
+export function fieldLabel(key: string): string {
+  const words = key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/[_-]+/g, ' ')
+    .trim()
+    .toLowerCase()
+  if (words === '') return key
+  return words.charAt(0).toUpperCase() + words.slice(1)
+}
+
+export function isURL(value: string): boolean {
+  return /^https?:\/\/\S+$/i.test(value.trim())
+}
+
+/** True for a value the answer card would draw nothing for. */
+export function isBlank(value: unknown): boolean {
+  if (value === null || value === undefined) return true
+  if (typeof value === 'string') return value.trim() === ''
+  if (Array.isArray(value)) return value.length === 0
+  if (typeof value === 'object') return Object.keys(value as object).length === 0
+  return false
 }

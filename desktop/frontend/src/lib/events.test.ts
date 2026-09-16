@@ -2,16 +2,28 @@ import { describe, expect, it } from 'vitest'
 import type { RunEvent } from '../api/types'
 import {
   askedQuestion,
+  callDuration,
+  callId,
+  conversation,
   DEFAULT_FILTER,
+  detectTable,
+  fieldLabel,
   filterTurns,
   FOLD_MIN,
   foldSystem,
   groupTurns,
   inputSummary,
+  isBlank,
+  lastCallIndex,
+  notePathFor,
   offsetLabel,
+  outputFailed,
+  outputText,
+  parseAnswer,
   promptAttachments,
   splitFrontmatter,
   toolLabel,
+  type ConversationItem,
 } from './events'
 
 function ev(kind: string, payload: RunEvent['payload'] = {}, t = ''): RunEvent {
@@ -305,5 +317,285 @@ describe('DEFAULT_FILTER', () => {
   // "All" is the raw file; a provider that streams deltas makes it unreadable.
   it('opens the stream on the tool calls', () => {
     expect(DEFAULT_FILTER).toBe('tools')
+  })
+})
+
+// ---------------------------------------------------------- conversation
+
+/** A Claude tool_use with the id the result and the permission will name. */
+function claudeCall(id: string, name: string, input: unknown, t = ''): RunEvent {
+  return ev(
+    'tool_started',
+    { tool: name, raw: { type: 'assistant', message: { content: [{ type: 'tool_use', id, name, input }] } } },
+    t,
+  )
+}
+
+function claudeResult(id: string, text: string, t = '', isError?: boolean): RunEvent {
+  return ev(
+    'tool_finished',
+    {
+      text,
+      raw: {
+        type: 'user',
+        message: { content: [{ type: 'tool_result', tool_use_id: id, content: text, is_error: isError }] },
+      },
+    },
+    t,
+  )
+}
+
+function claudePermission(id: string, name: string, decision: string, text = ''): RunEvent {
+  return ev('permission', {
+    tool: name,
+    decision,
+    text,
+    raw: { type: 'control_request', request: { tool_name: name, input: {}, tool_use_id: id } },
+  })
+}
+
+describe('callId', () => {
+  it('reads the tool_use id off a Claude call, its result and its permission', () => {
+    expect(callId(claudeCall('tu1', 'Read', { file_path: 'a.go' }))).toBe('tu1')
+    expect(callId(claudeResult('tu1', 'ok'))).toBe('tu1')
+    expect(callId(claudePermission('tu1', 'Read', 'allow'))).toBe('tu1')
+  })
+
+  it('reads the item id off a Codex item and the approval that names it', () => {
+    const item = { type: 'commandExecution', id: 'exec-1', command: 'ls' }
+    expect(callId(ev('tool_started', { tool: 'commandExecution', raw: { method: 'item/started', params: { item } } }))).toBe('exec-1')
+    expect(callId(ev('permission', { tool: 'commandExecution', raw: { method: 'item/commandExecution/requestApproval', params: { itemId: 'exec-1' } } }))).toBe('exec-1')
+  })
+
+  it('is empty when the line names nothing', () => {
+    expect(callId(ev('tool_finished', { text: 'ok' }))).toBe('')
+  })
+})
+
+describe('conversation', () => {
+  it('pairs a call with its result and its permission by id', () => {
+    const items = conversation(
+      indexed([
+        claudeCall('tu1', 'Edit', { file_path: 'a.go' }),
+        claudePermission('tu1', 'Edit', 'allow'),
+        claudeResult('tu1', 'The file a.go has been updated.'),
+      ]),
+    )
+    expect(items).toHaveLength(1)
+    const item = items[0]
+    expect(item.kind).toBe('call')
+    if (item.kind !== 'call') return
+    expect(item.call.permission?.event.payload.decision).toBe('allow')
+    expect(item.call.finished?.event.payload.text).toBe('The file a.go has been updated.')
+  })
+
+  it('pairs two parallel calls to their own results whichever order they land in', () => {
+    const items = conversation(
+      indexed([
+        claudeCall('tu1', 'Read', { file_path: 'a.go' }),
+        claudeCall('tu2', 'Read', { file_path: 'b.go' }),
+        claudeResult('tu2', 'contents of b'),
+        claudeResult('tu1', 'contents of a'),
+      ]),
+    )
+    expect(items.map((i) => i.kind)).toEqual(['call', 'call'])
+    const [a, b] = items as Extract<ConversationItem, { kind: 'call' }>[]
+    expect(a.call.finished?.event.payload.text).toBe('contents of a')
+    expect(b.call.finished?.event.payload.text).toBe('contents of b')
+  })
+
+  it('falls back to the oldest waiting call when the result carries no id', () => {
+    const items = conversation(
+      indexed([
+        ev('tool_started', { tool: 'shell', raw: { params: { command: 'ls' } } }),
+        ev('tool_finished', { text: 'a.go\nb.go' }),
+      ]),
+    )
+    expect(items).toHaveLength(1)
+    const item = items[0] as Extract<ConversationItem, { kind: 'call' }>
+    expect(item.call.finished?.event.payload.text).toBe('a.go\nb.go')
+  })
+
+  it('keeps a result or a permission that pairs with nothing as its own row', () => {
+    const items = conversation(indexed([claudeResult('tu9', 'orphan'), claudePermission('tu8', 'Bash', 'deny')]))
+    expect(items.map((i) => i.kind)).toEqual(['event', 'event'])
+  })
+
+  it('grows one message from streamed deltas and starts a paragraph for a whole message', () => {
+    const delta = (text: string) => ev('assistant_text', { text, raw: { type: 'stream_event' } })
+    const items = conversation(
+      indexed([
+        ev('assistant_text', { text: 'Looking at', raw: { type: 'assistant' } }),
+        delta(' the handler'),
+        delta('.'),
+        ev('assistant_text', { text: 'It nils the tenant.', raw: { type: 'assistant' } }),
+      ]),
+    )
+    expect(items).toHaveLength(1)
+    const item = items[0] as Extract<ConversationItem, { kind: 'message' }>
+    expect(item.text).toBe('Looking at the handler.\n\nIt nils the tenant.')
+    expect(item.parts).toHaveLength(4)
+  })
+
+  it('breaks a message at a tool call', () => {
+    const items = conversation(
+      indexed([
+        ev('assistant_text', { text: 'one' }),
+        claudeCall('tu1', 'Read', { file_path: 'a.go' }),
+        ev('assistant_text', { text: 'two' }),
+      ]),
+    )
+    expect(items.map((i) => i.kind)).toEqual(['message', 'call', 'message'])
+  })
+
+  it('folds a run of stream lines and leaves the rest as rows', () => {
+    const items = conversation(
+      indexed([
+        ev('system', { text: 'd1' }),
+        ev('system', { text: 'd2' }),
+        ev('system', { text: 'd3' }),
+        ev('final', { text: '{}' }),
+        ev('error', { text: 'boom' }),
+      ]),
+      true,
+    )
+    expect(items.map((i) => i.kind)).toEqual(['fold', 'event', 'event'])
+  })
+})
+
+describe('lastCallIndex', () => {
+  it('names the last tool call, or -1 without one', () => {
+    const events = indexed([ev('assistant_text', { text: 'hi' }), claudeCall('a', 'Read', {}), claudeResult('a', 'x'), claudeCall('b', 'Bash', {})])
+    expect(lastCallIndex(events)).toBe(3)
+    expect(lastCallIndex(indexed([ev('assistant_text', { text: 'hi' })]))).toBe(-1)
+  })
+})
+
+describe('callDuration', () => {
+  const at = (s: number) => `2026-09-10T10:00:${String(s).padStart(2, '0')}Z`
+  const call = (a: string, b?: string) => ({
+    started: { index: 0, event: claudeCall('x', 'Bash', {}, a) },
+    finished: b === undefined ? undefined : { index: 1, event: claudeResult('x', 'ok', b) },
+  })
+
+  it('reads in tenths under ten seconds, whole seconds under a minute, then the clock', () => {
+    expect(callDuration(call(at(0), '2026-09-10T10:00:00.400Z'))).toBe('0.4s')
+    expect(callDuration(call(at(0), at(12)))).toBe('12s')
+    expect(callDuration(call(at(0), '2026-09-10T10:01:04Z'))).toBe('1:04')
+  })
+
+  it('is empty until the result lands', () => {
+    expect(callDuration(call(at(0)))).toBe('')
+  })
+})
+
+describe('outputText', () => {
+  it('prefers the thin payload text', () => {
+    expect(outputText(claudeResult('a', 'hello'))).toBe('hello')
+  })
+
+  it('reads a Codex item\'s aggregated output', () => {
+    const raw = { method: 'item/completed', params: { item: { type: 'commandExecution', id: 'e1', aggregatedOutput: 'a.go\nb.go\n' } } }
+    expect(outputText(ev('tool_finished', { tool: 'commandExecution', raw }))).toBe('a.go\nb.go\n')
+  })
+
+  it('reads a Cursor call\'s result and an ACP update\'s content blocks', () => {
+    const cursor = { type: 'tool_call', subtype: 'completed', tool_call: { readToolCall: { args: {}, result: { success: { content: 'x' } } } } }
+    expect(outputText(ev('tool_finished', { tool: 'Read', raw: cursor }))).toContain('"content": "x"')
+    const acp = { method: 'session/update', params: { update: { sessionUpdate: 'tool_call_update', status: 'completed', content: [{ type: 'content', content: { type: 'text', text: 'done' } }] } } }
+    expect(outputText(ev('tool_finished', { tool: 'read', raw: acp }))).toBe('done')
+  })
+
+  it('is empty for nothing', () => {
+    expect(outputText(undefined)).toBe('')
+    expect(outputText(ev('tool_finished', {}))).toBe('')
+  })
+})
+
+describe('outputFailed', () => {
+  it('reads Claude\'s is_error and a Codex exit code', () => {
+    expect(outputFailed(claudeResult('a', 'denied', '', true))).toBe(true)
+    expect(outputFailed(claudeResult('a', 'ok'))).toBe(false)
+    const raw = { params: { item: { type: 'commandExecution', id: 'e1', exitCode: 2, status: 'completed' } } }
+    expect(outputFailed(ev('tool_finished', { raw }))).toBe(true)
+  })
+})
+
+describe('detectTable', () => {
+  it('reads a pipe table, dropping the markdown rule row', () => {
+    const table = detectTable('| OrderCode | Channel | Qty |\n|---|---|---|\n| A1 | web | 3 |\n| A2 | pos | 1 |')
+    expect(table?.head).toEqual(['OrderCode', 'Channel', 'Qty'])
+    expect(table?.rows).toEqual([['A1', 'web', '3'], ['A2', 'pos', '1']])
+  })
+
+  it('reads a tab table of three or more columns', () => {
+    const table = detectTable('id\tname\tstock\n1\tbolt\t40\n2\tnut\t12\n')
+    expect(table?.head).toEqual(['id', 'name', 'stock'])
+    expect(table?.rows).toHaveLength(2)
+  })
+
+  it('does not mistake a numbered file listing for a table', () => {
+    expect(detectTable('1\tpackage ledger\n2\t\n3\t// Ledger tracks stock')).toBeUndefined()
+  })
+
+  it('does not mistake prose or a single line for a table', () => {
+    expect(detectTable('ok  \tsandbox/ledger\t0.654s')).toBeUndefined()
+    expect(detectTable('a | b\nplain line\nanother plain line\nand one more')).toBeUndefined()
+  })
+
+  it('pads a short row rather than dropping the table', () => {
+    const table = detectTable('a | b | c\n1 | 2 | 3\n4 | 5 | 6\n7 | 8 | 9\n10 | 11')
+    expect(table?.rows[3]).toEqual(['10', '11', ''])
+  })
+})
+
+describe('parseAnswer', () => {
+  it('reads the JSON answer and leaves prose alone', () => {
+    expect(parseAnswer('{"title":"x","confidence":"high"}')).toEqual({ title: 'x', confidence: 'high' })
+    expect(parseAnswer('Committed the fix.')).toBeUndefined()
+    expect(parseAnswer('{not json')).toBeUndefined()
+    expect(parseAnswer(undefined)).toBeUndefined()
+  })
+})
+
+describe('fieldLabel', () => {
+  it('spells a key as a sentence-case label', () => {
+    expect(fieldLabel('rootCause')).toBe('Root cause')
+    expect(fieldLabel('customer_reply_draft')).toBe('Customer reply draft')
+    expect(fieldLabel('title')).toBe('Title')
+    expect(fieldLabel('prURLs')).toBe('Pr urls')
+  })
+})
+
+describe('isBlank', () => {
+  it('is true for nothing and false for a value', () => {
+    expect(isBlank(null)).toBe(true)
+    expect(isBlank('  ')).toBe(true)
+    expect(isBlank([])).toBe(true)
+    expect(isBlank({})).toBe(true)
+    expect(isBlank(0)).toBe(false)
+    expect(isBlank(false)).toBe(false)
+    expect(isBlank('x')).toBe(false)
+  })
+})
+
+describe('notePathFor', () => {
+  const notes = [
+    '/w/.sirdar/runs/K/r1/note.md',
+    '/vault/Triage/K.md',
+    '/w/.sirdar/runs/K/r1/note-resolution.md',
+    '/vault/Resolutions/K.md',
+  ]
+
+  it('opens the filed copy of each kind', () => {
+    expect(notePathFor('rca', notes)).toBe('/vault/Triage/K.md')
+    expect(notePathFor('resolution', notes)).toBe('/vault/Resolutions/K.md')
+    expect(notePathFor('triage', ['/w/.sirdar/runs/K/r1/note.md'])).toBe('/w/.sirdar/runs/K/r1/note.md')
+  })
+
+  it('is empty when the run recorded no such note', () => {
+    expect(notePathFor('resolution', ['/w/.sirdar/runs/K/r1/note.md'])).toBe('')
+    expect(notePathFor('triage', [])).toBe('')
+    expect(notePathFor('triage', undefined)).toBe('')
   })
 })
