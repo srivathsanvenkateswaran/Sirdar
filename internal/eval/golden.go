@@ -18,11 +18,17 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 )
 
 // DefaultDir is where a golden set lives unless the operator names another
 // one. It is outside the repository on purpose: the bundles hold real
 // customer conversations and belong nowhere near a git remote.
+//
+// It is the spelling to print and to write into a config file. Where it
+// actually resolves to is ExpandDir's answer, which follows the same
+// user-state directory the workspace registry does — see config.UserDir.
 const DefaultDir = "~/.sirdar/golden"
 
 // Golden is one key's entry in a golden set: the bundle a run replays, and
@@ -72,8 +78,15 @@ var suffixes = []struct {
 
 // ExpandDir expands a leading "~/" in a golden-set path. A relative path is
 // left as it is, so a caller can point at a fixture directory.
+//
+// The default — an empty dir, or DefaultDir written out literally — goes
+// through config.UserDir instead, so the golden set sits beside the
+// workspace registry wherever that turned out to be.
 func ExpandDir(dir string) string {
-	if dir == "" {
+	if dir == "" || dir == DefaultDir {
+		if base, err := config.UserDir(); err == nil {
+			return filepath.Join(base, "golden")
+		}
 		dir = DefaultDir
 	}
 	if rest, ok := strings.CutPrefix(dir, "~/"); ok {

@@ -20,6 +20,24 @@ import (
 //go:embed all:frontend/dist
 var assets embed.FS
 
+// appIcon is the same PNG Wails cuts the macOS .icns and the Windows .ico
+// from. Those two platforms read it off disk at build time; GTK wants the
+// bytes at run time, for the window's own icon — what a Linux taskbar,
+// alt-tab switcher and "minimised window" state draw. Without it the
+// window falls back to the desktop's generic application glyph.
+//
+//go:embed build/appicon.png
+var appIcon []byte
+
+// programName is what GTK's g_set_prgname is set to, which is where the
+// window's WM_CLASS comes from. It has to match the StartupWMClass of
+// build/linux/sirdar.desktop or the running window does not group under
+// the launcher icon that started it, and the taskbar draws the generic
+// glyph next to a correctly-iconified launcher. Lower case, never
+// localised: it is an identifier, not the display name, which is "Sirdar"
+// and is set separately below.
+const programName = "sirdar"
+
 // version is stamped at release time with
 // `wails build -ldflags "-X main.version=..."`, mirroring cmd/sirdar/main.go.
 // Unstamped desktop dev builds keep this default.
@@ -55,6 +73,8 @@ func run() error {
 		// title bar costs nothing here and keeps the window's own compositing.
 		Linux: &linux.Options{
 			WebviewGpuPolicy: linux.WebviewGpuPolicyAlways,
+			Icon:             appIcon,
+			ProgramName:      programName,
 		},
 		OnStartup: func(ctx context.Context) {
 			svc.Start(ctx)

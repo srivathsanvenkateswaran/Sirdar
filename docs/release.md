@@ -102,7 +102,10 @@ automatically.)
   ```
 
   Windows SmartScreen may show a similar "unknown publisher" warning; choose
-  **More info → Run anyway**. The Windows section below has the detail.
+  **More info → Run anyway**. The Windows section below has the detail. On
+  Linux the zip carries an `install.sh` that puts the app in the applications
+  menu without sudo, and the Linux section covers the two packages the app
+  needs to run at all.
 
 ## Windows
 
@@ -146,6 +149,98 @@ The `windows` job in `.github/workflows/ci.yml` builds it natively on
 `windows-latest` and uploads the `.exe` as an artifact on every push, which
 is the copy to grab when you want to try a branch without cutting a tag.
 
+## Linux
+
+The CLI needs nothing: unpack `sirdar_<version>_linux_amd64.tar.gz` (or
+`_arm64`), put `sirdar` on your `PATH`, and it runs. The release also carries
+`.deb` and `.rpm` packages, which is the tidier way to get the same binary.
+
+The desktop app is a GTK window around WebKitGTK, so it has real runtime
+dependencies and a real install.
+
+**Runtime dependencies.** GTK 3 and WebKitGTK 4.1 — the same 4.1 the build
+selects with `-tags webkit2_41`, not the 4.0 that current distros dropped:
+
+```
+# Debian, Ubuntu
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 xdg-utils
+
+# Fedora, RHEL
+sudo dnf install gtk3 webkit2gtk4.1 xdg-utils
+```
+
+A desktop image has GTK already; WebKitGTK is the one that is often absent,
+and without it the app exits at startup saying so. `xdg-utils` supplies
+`xdg-open`, which is what "Open config", "Open note" and `sirdar serve --open`
+hand a path to; `sirdar doctor`'s **platform** row says whether it is there.
+
+**Installing.** Unzip `sirdar-desktop_<tag>_linux_amd64.zip` and run the
+`install.sh` inside it:
+
+```
+unzip sirdar-desktop_<tag>_linux_amd64.zip -d sirdar-desktop
+cd sirdar-desktop && ./install.sh
+```
+
+It copies three files and touches nothing outside `$HOME`, so it never asks
+for sudo:
+
+| | |
+|---|---|
+| `~/.local/bin/sirdar-desktop` | the app |
+| `~/.local/share/applications/sirdar.desktop` | the launcher entry |
+| `~/.local/share/icons/hicolor/512x512/apps/sirdar.png` | the icon |
+
+`$XDG_DATA_HOME` and `$XDG_BIN_HOME` replace those two prefixes when they are
+set. `./install.sh --uninstall` removes all three again and leaves your
+workspaces, notes and golden set alone. Running the binary straight out of the
+unzipped directory works too; you just get no menu entry and no icon.
+
+**Unsigned.** There is no code-signing story on Linux to fail, so nothing
+warns and nothing has to be un-quarantined — but nothing vouches for the
+download either. `checksums.txt` on the release is what proves you got what
+was built. A zip downloaded through a browser can arrive without its
+executable bits; `chmod +x Sirdar install.sh` if `install.sh` will not run.
+The same applies to the artifact from the `desktop` workflow, because GitHub's
+artifact upload does not preserve permissions at all.
+
+**Where it keeps things.** The workspace registry and the golden set live in
+`~/.sirdar`, the same relative place they take on macOS and Windows — except
+that on Linux and the BSDs, a machine with `$XDG_DATA_HOME` set and no
+`~/.sirdar` yet gets `$XDG_DATA_HOME/sirdar` instead. An existing `~/.sirdar`
+always wins, so nothing moves under an upgrade. `keychain:` credential
+references read the **Secret Service** — GNOME Keyring, KWallet through the
+`org.freedesktop.secrets` portal, KeePassXC — through libsecret's
+`secret-tool`, and fall back to `pass(1)` where `secret-tool` is not
+installed:
+
+```
+sudo apt install libsecret-tools      # or: dnf install libsecret
+secret-tool store --label=sirdar service zoho-desk-refresh-token
+```
+
+On a headless box with no Secret Service running there is nothing to read, and
+`env:`, `file:` and `cmd:` references are the answer; `docs/credentials.md`
+has the detail.
+
+**Building it.** `make desktop-linux` builds the app and stages the launcher
+entry, the icon and `install.sh` beside it in `desktop/build/bin`, ready to
+zip. It only works **on a Linux host** — the app is cgo-linked against
+libgtk-3 and libwebkit2gtk-4.1, which no amount of `GOOS=linux` on a macOS or
+Windows machine supplies, and the target says so rather than letting the C
+compiler say it. Build-time dependencies are the `-dev`/`-devel` halves of the
+runtime list:
+
+```
+sudo apt install libgtk-3-dev libwebkit2gtk-4.1-dev   # Debian, Ubuntu
+sudo dnf install gtk3-devel webkit2gtk4.1-devel       # Fedora, RHEL
+```
+
+The `ubuntu-latest` entry in `.github/workflows/desktop.yml` does exactly this
+on every push that touches `desktop/`, and uploads the same four files as an
+artifact — the copy to grab when you want to try a branch without cutting a
+tag, and the standing check for anyone developing on a Mac.
+
 ## Local dry runs
 
 - `make version` — prints the version a local build would stamp in
@@ -155,10 +250,13 @@ is the copy to grab when you want to try a branch without cutting a tag.
   tap. Delete `dist/` when done looking.
 - `make dist-desktop` — builds and zips the desktop app for whichever OS/arch
   you're running the command on, plus the cross-compiled `windows_amd64` zip,
-  both under the names the workflow's desktop job uploads. Linux is the one
-  platform this cannot stand in for; that's what the workflow's matrix is for.
+  both under the names the workflow's desktop job uploads. On a Linux host the
+  zip gets the packaging files too. What no single machine can produce is all
+  three platforms at once; that's what the workflow's matrix is for.
 - `make desktop-windows` — just the Windows cross-build, straight into
   `desktop/build/bin/Sirdar.exe`.
+- `make desktop-linux` — the Linux build plus the three packaging files, into
+  `desktop/build/bin`. Linux hosts only; see the Linux section above.
 - `goreleaser check` validates `.goreleaser.yaml` without building anything.
 
 ## What's in `CHANGELOG.md`

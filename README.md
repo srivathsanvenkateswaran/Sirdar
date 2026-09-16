@@ -154,15 +154,18 @@ Nothing has been tagged or released yet, so there is no download and the Homebre
 go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest   # the CLI
 
 git clone https://github.com/srivathsanvenkateswaran/sirdar && cd sirdar
-make build      # ./sirdar
-make install    # macOS: builds the desktop app into /Applications/Sirdar.app
+make build         # ./sirdar
+make install       # macOS: builds the desktop app into /Applications/Sirdar.app
+make desktop-linux # Linux: builds the app and its launcher entry, icon and install.sh
 ```
 
-`make install` needs the Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`);
-on Linux the desktop app also needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev`, `-tags webkit2_41`).
-Once a release is cut, `.goreleaser.yaml` attaches CLI archives for darwin, linux and windows on
-amd64 and arm64, deb and rpm packages, `checksums.txt`, and a desktop zip per platform, and the
-Homebrew formula pushes to the tap once that repo and its token exist (`docs/release.md`).
+Both desktop targets need the Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`).
+`make desktop-linux` additionally needs GTK 3 and WebKitGTK 4.1 headers (`libgtk-3-dev
+libwebkit2gtk-4.1-dev` on Debian and Ubuntu, `gtk3-devel webkit2gtk4.1-devel` on Fedora) and only
+runs on a Linux host — that app is cgo-linked and does not cross-compile. Once a release is cut,
+`.goreleaser.yaml` attaches CLI archives for darwin, linux and windows on amd64 and arm64, deb and
+rpm packages, `checksums.txt`, and a desktop zip per platform, and the Homebrew formula pushes to
+the tap once that repo and its token exist (`docs/release.md`).
 
 The desktop builds are unsigned — no Apple notarization, no Windows code-signing certificate. On
 macOS, right-click the app and choose Open, or run
@@ -173,6 +176,13 @@ may also need Properties → Unblock. The app is a window around Microsoft's
 [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/), preinstalled on
 Windows 11 and current Windows 10; on an image without it the window opens and draws nothing until
 you install the Evergreen Bootstrapper.
+
+On Linux, unzip `sirdar-desktop_<tag>_linux_amd64.zip` and run the `install.sh` inside it: it copies
+the app to `~/.local/bin`, a `sirdar.desktop` launcher entry to `~/.local/share/applications` and the
+icon to `~/.local/share/icons`, with no sudo, and `--uninstall` takes all three back out. The app
+needs GTK 3 and WebKitGTK 4.1 installed (`libgtk-3-0 libwebkit2gtk-4.1-0`, or `gtk3 webkit2gtk4.1`),
+plus `xdg-utils` for opening files and links; `keychain:` references read the Secret Service through
+`secret-tool`. `sirdar doctor` reports on all three.
 
 ## Quick start
 

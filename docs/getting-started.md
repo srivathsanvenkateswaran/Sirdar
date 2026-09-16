@@ -25,6 +25,27 @@ Once releases start shipping, `.goreleaser.yaml` produces `tar.gz` archives per 
 architecture (`darwin`/`linux`, `amd64`/`arm64`) attached to each GitHub release, for anyone who
 would rather download a binary than build one.
 
+### On Linux
+
+The CLI above needs nothing extra. The desktop app does: it is a GTK window around WebKitGTK
+4.1, and the two libraries are a package away rather than part of the system.
+
+```sh
+sudo apt install libgtk-3-0 libwebkit2gtk-4.1-0 xdg-utils   # Debian, Ubuntu
+sudo dnf install gtk3 webkit2gtk4.1 xdg-utils               # Fedora, RHEL
+```
+
+`xdg-utils` is what supplies `xdg-open`, which is how the app opens a config file, a note or a
+run directory, and how `sirdar serve --open` reaches your browser. Add `libsecret-tools`
+(Debian) or `libsecret` (Fedora) if you want to keep credentials in the GNOME Keyring or
+KWallet and write `keychain:` references in your config; without it, use `env:`, `file:` or
+`cmd:` references instead — `sirdar doctor`'s **platform** row tells you which of these the
+machine in front of you has.
+
+The desktop app ships as a zip with an `install.sh` that copies it, a launcher entry and an
+icon into `~/.local`, no sudo involved; `docs/release.md` has the full Linux section, including
+building it from source on a Linux host with `make desktop-linux`.
+
 ## Scaffold a workspace
 
 Run `sirdar init` from the root of the codebase the ticket work belongs to — the same repo the

@@ -388,6 +388,28 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `src/ui/brand-mark/`, whose test reads the master SVGs so the app cannot end up wearing a
   logo nothing else does. `desktop/build/windows/icon.ico` was the Wails default and is deleted;
   `wails build` makes one from `appicon.png` when it is absent.
+- Linux gets a desktop app someone can install, rather than a zip with one bare
+  executable in it. The release archive now carries `sirdar.desktop`, a 512px icon and
+  an `install.sh` that copies the three of them into `~/.local/bin`,
+  `~/.local/share/applications` and `~/.local/share/icons/hicolor/512x512/apps` with no
+  sudo and nothing written outside `$HOME` (`--uninstall` takes them back out, and
+  `$XDG_DATA_HOME`/`$XDG_BIN_HOME` move the prefixes). `scripts/package-linux.sh` is the
+  single place that decides what goes in, shared by `release.yml`, `desktop.yml` and the
+  new `make desktop-linux` — which refuses on a non-Linux host and says why, because
+  unlike the Windows app the GTK one is cgo-linked and does not cross-compile. The window
+  itself gained the two things a Linux desktop needs to draw it properly: the app icon,
+  embedded and handed to GTK at run time, and a `sirdar` program name so WM_CLASS matches
+  the launcher entry's `StartupWMClass` and the running window groups under the icon that
+  started it. User-level state — the workspace registry, the default golden set — resolves
+  through one function, `config.UserDir`, which honours `$XDG_DATA_HOME` on Linux and the
+  BSDs; an existing `~/.sirdar` still wins everywhere, so no upgrade moves anyone's
+  registry, and macOS and Windows are untouched. `sirdar doctor` grew a **platform** row
+  naming the opener, the credential store and, on Linux, the WebKitGTK runtime the app
+  needs — it warns when `xdg-open` is missing, and explains a missing `secret-tool`
+  without raising a second alarm about a facility a workspace using `env:` refs never
+  touches. `docs/release.md` has a Linux section (runtime and build dependencies for
+  Debian/Ubuntu and Fedora, the installer, the Secret Service, where state lives),
+  getting-started and the README Install block have the short form.
 - Windows is a platform the desktop app actually runs on, not just one goreleaser
   emits a binary for. `make desktop-windows` cross-compiles `Sirdar.exe` from macOS or
   Linux (Wails v2 needs no cgo for that target) and `make dist-desktop` zips it beside

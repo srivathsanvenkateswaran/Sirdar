@@ -39,13 +39,15 @@ type Registry struct {
 	mu sync.Mutex
 }
 
-// DefaultRegistryPath is ~/.sirdar/workspaces.json.
+// DefaultRegistryPath is workspaces.json inside config.UserDir — normally
+// ~/.sirdar, and $XDG_DATA_HOME/sirdar on a Linux or BSD machine that has
+// relocated its data home and has no ~/.sirdar already.
 func DefaultRegistryPath() (string, error) {
-	home, err := os.UserHomeDir()
+	dir, err := config.UserDir()
 	if err != nil {
-		return "", fmt.Errorf("app: home directory: %w", err)
+		return "", fmt.Errorf("app: registry path: %w", err)
 	}
-	return filepath.Join(home, ".sirdar", "workspaces.json"), nil
+	return filepath.Join(dir, "workspaces.json"), nil
 }
 
 // registryFile is the on-disk shape: a list of roots and nothing else, so

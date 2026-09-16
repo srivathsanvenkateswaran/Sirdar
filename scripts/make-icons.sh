@@ -8,6 +8,9 @@
 #                                  Contents/Resources/iconfile.icns from this
 #                                  on every `wails build`, and build/windows/
 #                                  icon.ico too when that file is absent
+#   desktop/build/linux/sirdar.png the 512x512 icon the Linux release zip
+#                                  carries and install.sh drops into the
+#                                  hicolor theme
 #   <outdir>/Sirdar.iconset/       the ten sizes iconutil wants
 #   <outdir>/Sirdar.icns           assembled from them, for eyeballing
 #
@@ -19,7 +22,7 @@
 #   scripts/make-icons.sh [outdir]
 #
 # outdir defaults to a fresh directory under $TMPDIR, whose path is printed at
-# the end. Nothing outside desktop/build/appicon.png is written into the repo.
+# the end. Nothing outside those two files is written into the repo.
 #
 # Rasteriser: rsvg-convert (`brew install librsvg`) or ImageMagick if either is
 # on PATH, else headless Chrome, which every Mac with Chrome already has. All
@@ -29,6 +32,7 @@ set -eu
 root=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 src="$root/docs/design/2026-09-16-logo/final/sirdar-tile-light.svg"
 appicon="$root/desktop/build/appicon.png"
+linuxicon="$root/desktop/build/linux/sirdar.png"
 
 out=${1:-$(mktemp -d "${TMPDIR:-/tmp}/sirdar-icons.XXXXXX")}
 mkdir -p "$out"
@@ -74,6 +78,14 @@ size=$(sips -g pixelWidth -g pixelHeight "$png" | awk '/pixel/ { print $2 }' | p
 
 cp "$png" "$appicon"
 echo "ok   desktop/build/appicon.png (1024x1024)"
+
+# The Linux release carries its own copy at the one size a hicolor icon
+# theme indexes it under. It is a downsample of the same raster, written
+# here so the launcher icon cannot drift from the app icon, and committed
+# because install.sh copies it out of the release zip on a machine with no
+# rasteriser and no sips.
+sips -z 512 512 "$png" --out "$linuxicon" >/dev/null
+echo "ok   desktop/build/linux/sirdar.png (512x512)"
 
 # The ten names iconutil requires, nothing else in the folder.
 iconset="$out/Sirdar.iconset"
