@@ -388,3 +388,21 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `src/ui/brand-mark/`, whose test reads the master SVGs so the app cannot end up wearing a
   logo nothing else does. `desktop/build/windows/icon.ico` was the Wails default and is deleted;
   `wails build` makes one from `appicon.png` when it is absent.
+- The app knows who you are. A workspace that configured neither
+  `webhooks.match.assignee` nor a source account email could name nobody, so every run was
+  somebody else's and the board's Mine filter read "0 of 24 runs". A new top-level `me:` block
+  writes it down — `email`, `names` (the display names a tracker or helpdesk shows you as) and
+  `aliases` (usernames) — and `Config.Self` resolves in four steps: `me`, then
+  `webhooks.match.assignee`, then the tracker or helpdesk account email, then the repository's
+  own `git config user.email`/`user.name`, read once per load and never written. Matching folds
+  case and stray space, holds two addresses to full equality, lets a bare name match the address
+  it is the local part of, and reads dots and underscores in a local part as spaces, so
+  `srivathsan.v` is `Srivathsan V`. `sirdar doctor` gains an `identity` row saying who you are
+  and which rule said so, warning when nothing does; `ConfigSummary.me` carries the same to the
+  UI, where Settings › General opens with a "You" row. The Queue lane's `assignee: me` is now
+  resolved before it reaches an adapter that cannot resolve it itself — jira, linear, azdo,
+  rally and servicenow still get the word, an `exec` adapter gets the address. On the board the
+  Mine/All switch is gone: an Assignee menu in its place lists Me and everyone else the loaded
+  runs and the queue name, with their initials and a count of their runs, multi-select, searched
+  past eight people, and Me disabled with the reason on a workspace that can name nobody
+  (`docs/config.md`, "Who you are").
