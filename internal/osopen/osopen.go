@@ -37,6 +37,19 @@ func Open(target string) error {
 // instead of launching an editor on the machine running the tests.
 var start = func(cmd *exec.Cmd) error { return cmd.Start() }
 
+// Opener names the program Open would run on goos, or "" where the
+// platform has no desktop opener at all.
+//
+// It exists for `sirdar doctor`, which tells the operator which program
+// has to be installed for "Open config" and `serve --open` to work — on
+// Linux that is xdg-open, which a minimal or server install does not have.
+// Reading it off the same table Open uses is what keeps the report from
+// naming a program Open never runs.
+func Opener(goos string) string {
+	name, _ := commandFor(goos, "")
+	return name
+}
+
 // commandFor picks the opener for one GOOS. It takes the platform as an
 // argument rather than reading runtime.GOOS so the table below is testable
 // on whichever machine happens to be running the tests — the whole point of
