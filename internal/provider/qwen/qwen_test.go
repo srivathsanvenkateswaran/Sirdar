@@ -2420,29 +2420,39 @@ func TestFixModeWritesGoThroughThePolicy(t *testing.T) {
 	if len(perms) != 5 {
 		t.Fatalf("permission events %+v", perms)
 	}
-	for i, want := range []struct {
-		tool     string
-		decision string
-	}{
-		{"edit", "allow"},
-		{"write_file", "deny"},
-		{"write_file", "deny"},
-		{"write_file", "deny"},
-		{"notebook_edit", "deny"},
-	} {
-		if perms[i].Tool != want.tool || perms[i].Decision != want.decision {
-			t.Fatalf("permission %d: %s %s, want %s %s (%s)",
-				i, perms[i].Tool, perms[i].Decision, want.tool, want.decision, perms[i].Text)
+	// The hook answers each call on its own goroutine, so two denials that
+	// the fake fires back to back can be recorded in either order: assert on
+	// the set of decisions and reasons, not on their sequence.
+	var allowed, denied int
+	var reasons []string
+	for _, p := range perms {
+		switch p.Decision {
+		case "allow":
+			allowed++
+			if p.Tool != "edit" {
+				t.Errorf("only the in-root edit may be allowed, got %s (%s)", p.Tool, p.Text)
+			}
+		case "deny":
+			denied++
+			reasons = append(reasons, p.Tool+": "+p.Text)
+		default:
+			t.Errorf("permission %s %s: unknown decision", p.Tool, p.Decision)
 		}
 	}
-	if !strings.Contains(perms[1].Text, ".git") {
-		t.Errorf("the .git denial must say where it would have written: %q", perms[1].Text)
+	if allowed != 1 || denied != 4 {
+		t.Fatalf("want 1 allow and 4 denials, got %d/%d: %v", allowed, denied, reasons)
 	}
-	if !strings.Contains(perms[2].Text, "outside the workspace") {
-		t.Errorf("a write outside the root must say so: %q", perms[2].Text)
-	}
-	if !strings.Contains(perms[3].Text, "named no file path") {
-		t.Errorf("a write with no path must say so: %q", perms[3].Text)
+	for _, want := range []string{".git", "outside the workspace", "named no file path", "notebook_edit"} {
+		found := false
+		for _, r := range reasons {
+			if strings.Contains(r, want) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("no denial mentions %q: %v", want, reasons)
+		}
 	}
 }
 
