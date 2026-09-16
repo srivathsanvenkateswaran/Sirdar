@@ -522,86 +522,16 @@ section:first-child > .turn-rule {
 
 /* ---------------------------------------------------------------- composer */
 
-.composer {
+/*
+ * The card itself is `components/composer`, shared with New session. What
+ * is left here is where it sits: at the foot of the transcript, inside the
+ * pane's 24px margin, never shrinking when the stream is tall.
+ */
+.session-composer {
   flex: 0 0 auto;
   margin-block: 0 20px;
   margin-inline: var(--sd-space-5);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-sheet);
-  background: var(--sd-surface);
 }
-
-.composer:focus-within {
-  border-color: var(--sd-accent);
-}
-
-/*
- * The ring is on the box, not the textarea inside it: the textarea has no
- * border of its own, so a ring on it would sit inside the box's corners.
- * It is the same ring every other control wears.
- */
-.composer:has(.composer-text:focus-visible) {
-  outline: 2px solid var(--sd-accent);
-  outline-offset: 2px;
-}
-
-.composer-text {
-  display: block;
-  inline-size: 100%;
-  min-block-size: 96px;
-  padding-block: 20px var(--sd-space-2);
-  padding-inline: 20px;
-  border: 0;
-  border-radius: var(--sd-radius-sheet) var(--sd-radius-sheet) 0 0;
-  background: transparent;
-  color: var(--sd-ink);
-  font: inherit;
-  font-size: var(--sd-text-body);
-  line-height: 1.5;
-  resize: vertical;
-}
-
-.composer-text:focus-visible {
-  /* The box carries the ring; see `.composer:has(.composer-text:focus-visible)`. */
-  outline: none;
-}
-
-.composer-text::placeholder {
-  color: var(--sd-ink-3);
-}
-
-.composer-text:disabled {
-  color: var(--sd-ink-3);
-}
-
-.composer-error {
-  margin: 0;
-  padding-block: 0 var(--sd-space-2);
-  padding-inline: 20px;
-  font-size: var(--sd-text-meta);
-  color: var(--sd-st-failed);
-}
-
-.composer-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sd-space-2);
-  padding-block: var(--sd-space-2) 20px;
-  padding-inline: 20px;
-}
-
-.composer-bar > .sd-button {
-  margin-inline-start: auto;
-}
-
-.composer-reason {
-  min-inline-size: 0;
-  font-size: var(--sd-text-ledger);
-  color: var(--sd-ink-3);
-}
-
-/* The bar's Model chip is the library's model picker, read-only here. */
 
 /* ------------------------------------------------------------- right panes */
 

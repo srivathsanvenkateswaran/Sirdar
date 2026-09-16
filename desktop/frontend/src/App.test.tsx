@@ -168,7 +168,7 @@ describe('New session', () => {
     await screen.findByRole('heading', { name: /Queue/ })
 
     fireEvent.keyDown(window, { key: 'n' })
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
     await waitFor(() => expect(window.location.hash).toBe('#/new'))
     // The screen draws its own filled Start; the footer's New session steps
     // down to the bordered style so the window has one filled button.
@@ -177,10 +177,10 @@ describe('New session', () => {
       'secondary',
     )
 
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Ticket key or URL' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' }), {
       target: { value: 'https://acme.atlassian.net/browse/OMNI-11' },
     })
-    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'Start' })).getByRole('button', { name: /^Start/ }))
     await waitFor(() =>
       expect(transport.calls.startTriage).toEqual([
         {
@@ -206,20 +206,22 @@ describe('New session', () => {
     mount(transport)
     await screen.findByRole('heading', { name: /Queue/ })
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
 
-    const bar = screen.getByRole('searchbox', { name: 'Ticket key or URL' })
+    const bar = screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' })
     fireEvent.change(bar, { target: { value: 'OMNI-2' } })
-    fireEvent.click(screen.getByRole('radio', { name: 'RCA' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Mode:/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /RCA/ }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'Start' })).getByRole('button', { name: /^Start/ }))
     await waitFor(() => expect(transport.calls.startRCA).toEqual([{ ws: 'ws1', key: 'OMNI-2', opts: { provider: undefined, model: undefined } }]))
 
     // The RCA's job is still waiting on its run; end it so Fix can go.
     transport.emit({ kind: 'job.finished', jobId: 'job-rca', workspaceId: 'ws1', outcomes: [] })
     await screen.findByText('The job ended before a session started.')
 
-    fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
-    fireEvent.click(screen.getByRole('button', { name: /^Start/ }))
+    fireEvent.click(screen.getByRole('button', { name: /^Mode:/ }))
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Fix/ }))
+    fireEvent.click(within(screen.getByRole('form', { name: 'Start' })).getByRole('button', { name: /^Start/ }))
     await waitFor(() =>
       expect(transport.calls.startFix).toEqual([
         { ws: 'ws1', key: 'OMNI-2', opts: { provider: undefined, model: undefined, dryRun: undefined } },
@@ -231,13 +233,15 @@ describe('New session', () => {
     mount(seeded())
     await screen.findByRole('heading', { name: /Queue/ })
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
 
-    fireEvent.change(screen.getByRole('searchbox', { name: 'Ticket key or URL' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' }), {
       target: { value: 'OMNI-9' },
     })
-    expect(screen.getByRole('radio', { name: 'RCA' })).toBeDisabled()
-    expect(screen.getByRole('radio', { name: 'Fix' })).toBeDisabled()
+    fireEvent.click(screen.getByRole('button', { name: /^Mode:/ }))
+    expect(screen.getByRole('menuitemradio', { name: /RCA/ })).toHaveAttribute('aria-disabled', 'true')
+    expect(screen.getByRole('menuitemradio', { name: /Fix/ })).toHaveAttribute('aria-disabled', 'true')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     expect(screen.getByRole('status')).toHaveTextContent('RCA and Fix need a triage note for OMNI-9 first.')
   })
 
@@ -260,7 +264,7 @@ describe('New session', () => {
     const { store: s } = mount(
       createFakeTransport({ workspaces: [workspace({ id: 'ws1', name: 'omni' })] }),
     )
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
     expect(s.getState().screen).toEqual({ name: 'new' })
     await waitFor(() => expect(window.location.hash).toBe('#/new'))
 
@@ -277,7 +281,7 @@ describe('Sidebar', () => {
       workspaces: [workspace({ id: 'ws1', name: 'omni' }), workspace({ id: 'ws2', name: 'billing' })],
     })
     mount(transport)
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
 
     // The switcher is a popover in the sidebar footer now, not a select.
     fireEvent.click(screen.getByRole('button', { name: 'Workspace: omni' }))
@@ -333,7 +337,7 @@ describe('Eval tab', () => {
       ],
     })
     const { store: s } = mount(transport)
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
     expect(s.getState().screen).toEqual({ name: 'eval' })
@@ -357,7 +361,7 @@ describe('Eval tab', () => {
       ],
     })
     mount(transport)
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
     fireEvent.click(screen.getByRole('button', { name: 'Eval' }))
 
     // Run suite lives in the page head and runs the keys that were ticked;
@@ -471,7 +475,7 @@ describe('Deep links', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'New session' }))
     await waitFor(() => expect(window.location.hash).toBe('#/new'))
-    expect(screen.getByRole('heading', { name: 'Start with a ticket' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /What should we look at in/ })).toBeInTheDocument()
 
     fireEvent.click(screen.getByRole('button', { name: 'Sessions' }))
     await waitFor(() => expect(window.location.hash).toBe('#/runs/ws1/r1'))
@@ -536,7 +540,7 @@ describe('Settings', () => {
       }),
     })
     mount(transport)
-    await screen.findByRole('heading', { name: 'Start with a ticket' })
+    await screen.findByRole('heading', { name: /What should we look at in/ })
 
     fireEvent.click(screen.getByRole('button', { name: 'Settings' }))
     // Settings is a modal with its own secondary nav; the summary is two pages

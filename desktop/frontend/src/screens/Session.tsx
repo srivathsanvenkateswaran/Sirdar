@@ -481,6 +481,7 @@ export default function Session(props: {
             onSend={(text) => void send(text)}
             provider={detail.provider}
             model={detail.model}
+            kind={detail.kind}
             sentCount={sent}
           />
         </div>

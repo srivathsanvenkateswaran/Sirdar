@@ -41,6 +41,8 @@ function mount(
     transport?: FakeTransport
     runs?: RunSummary[]
     workspace?: Workspace
+    workspaces?: Workspace[]
+    onSelectWorkspace?: (id: string) => void
     onStart?: (mode: SessionMode, key: string, o: StartOverrides) => Promise<string>
   } = {},
 ) {
@@ -55,6 +57,8 @@ function mount(
         transport={transport}
         workspaceId="ws1"
         workspace={ws}
+        workspaces={over.workspaces}
+        onSelectWorkspace={over.onSelectWorkspace}
         runs={runs}
         onStart={onStart}
         onOpenRun={onOpenRun}
@@ -80,7 +84,7 @@ function mount(
   return { transport, onStart, onOpenRun, rerender }
 }
 
-const bar = () => screen.getByRole('searchbox', { name: 'Ticket key or URL' })
+const bar = () => screen.getByRole('textbox', { name: 'Ticket key, URL or what to look at' })
 const modelChip = () => screen.getByRole('button', { name: /^Model/ })
 
 describe('lastUsedModel', () => {
@@ -98,7 +102,9 @@ describe('lastUsedModel', () => {
     expect(lastUsedModel(runs, '')).toBe('')
   })
 })
-const startButton = () => screen.getByRole('button', { name: /^Start/ })
+const sendButton = () => within(screen.getByRole('form', { name: 'Start' })).getByRole('button', { name: /^Start/ })
+const modeChip = () => screen.getByRole('button', { name: /^Mode:/ })
+const accessChip = () => screen.getByRole('button', { name: /^Access:/ })
 
 describe('extractKey', () => {
   it('takes a key as typed, in any case', () => {
@@ -159,32 +165,54 @@ describe('newestFirst', () => {
 })
 
 describe('NewSession', () => {
-  it('draws the title, the bar, the three modes, the chips and its own Start', async () => {
+  it('asks what to look at in the workspace, and draws the card, the three chips and its own send', async () => {
     mount()
-    expect(screen.getByRole('heading', { name: 'Start with a ticket' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /What should we look at in/ })).toHaveTextContent(
+      'What should we look at in omni?',
+    )
     expect(bar()).toHaveFocus()
-    const modes = screen.getByRole('radiogroup', { name: 'Mode' })
-    expect(within(modes).getAllByRole('radio').map((r) => r.textContent)).toEqual([
-      'Triage',
-      'RCA',
-      'Fix',
+    expect(bar()).toHaveAttribute('placeholder', 'Paste a ticket key or URL, or describe what to look at')
+    const form = screen.getByRole('form', { name: 'Start' })
+    const chips = form.querySelector('.composer-bar__chips')!
+    expect(within(chips as HTMLElement).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual([
+      'Model claude · sonnet',
+      'Mode: Triage',
+      'Access: Read-only',
     ])
-    expect(within(modes).getByRole('radio', { checked: true })).toHaveTextContent('Triage')
-    expect(screen.getByText('auto')).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-    expect(modelChip()).toHaveAccessibleName('Model claude · sonnet')
-    // Start is on the screen, filled, and off until there is a key; the
-    // footer is told to stand down rather than draw a second one.
-    expect(startButton()).toHaveAttribute('data-variant', 'primary')
-    expect(startButton()).toBeDisabled()
+    // The send is on the screen, filled and round, off until there is a key;
+    // the footer is told to stand down rather than draw a second one.
+    expect(sendButton()).toHaveAttribute('data-variant', 'primary')
+    expect(sendButton()).toHaveAttribute('data-icon-only', 'true')
+    expect(sendButton()).toBeDisabled()
+    expect(sendButton()).toHaveAttribute('title', 'Paste a ticket key or URL first')
     await waitFor(() => expect(screen.getByTestId('primary')).toHaveTextContent('Start · screen · off'))
+    // The Playbook chip is gone; nothing in the bar is a fact without a menu.
+    expect(screen.queryByText('Playbook')).toBeNull()
   })
 
-  it('starts a triage for the key in the bar and opens the run once the job has one', async () => {
+  it('names the workspace as the switcher: the word opens the list and picks another', () => {
+    const onSelectWorkspace = vi.fn()
+    mount({
+      workspaces: [workspace(), workspace({ id: 'ws2', name: 'billing', root: '/repos/billing' })],
+      onSelectWorkspace,
+    })
+    const word = screen.getByRole('button', { name: 'omni. Change workspace' })
+    expect(word).toHaveClass('switcher-word')
+    fireEvent.click(word)
+    const list = screen.getByRole('listbox', { name: 'Workspaces' })
+    expect(list.style.position).toBe('fixed')
+    fireEvent.click(within(list).getByRole('option', { name: /billing/ }))
+    expect(onSelectWorkspace).toHaveBeenCalledWith('ws2')
+    expect(screen.queryByRole('listbox')).toBeNull()
+  })
+
+  it('starts a triage for the key in the box and opens the run once the job has one', async () => {
     const { onStart, onOpenRun, rerender } = mount()
     fireEvent.change(bar(), { target: { value: 'omni-2510' } })
-    expect(startButton()).toBeEnabled()
-    fireEvent.click(startButton())
+    expect(sendButton()).toBeEnabled()
+    expect(sendButton()).toHaveAttribute('title', 'Start (⌘↵)')
+    fireEvent.click(sendButton())
 
     await waitFor(() =>
       expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-2510', {
@@ -193,7 +221,7 @@ describe('NewSession', () => {
         dryRun: undefined,
       }),
     )
-    expect(await screen.findByRole('button', { name: /Starting/ })).toHaveAttribute('aria-disabled', 'true')
+    expect(await screen.findByRole('button', { name: 'Starting…' })).toHaveAttribute('aria-disabled', 'true')
     expect(onOpenRun).not.toHaveBeenCalled()
 
     // The store pairs the job with the run as its first update arrives; the
@@ -224,7 +252,7 @@ describe('NewSession', () => {
     )
     const view = render(tree([], first))
     fireEvent.change(bar(), { target: { value: 'OMNI-2510' } })
-    fireEvent.click(startButton())
+    fireEvent.click(sendButton())
     await waitFor(() => expect(onStart).toHaveBeenCalled())
 
     // App hands over a fresh callback every render; the pairing lands after.
@@ -235,37 +263,60 @@ describe('NewSession', () => {
     expect(first).not.toHaveBeenCalled()
   })
 
-  it('reads the key out of a tracker URL', async () => {
+  it('reads the key out of a tracker URL, and sends on Cmd with Enter', async () => {
     const { onStart } = mount()
     fireEvent.change(bar(), { target: { value: 'https://acme.atlassian.net/browse/OMNI-77' } })
-    fireEvent.submit(screen.getByRole('search'))
+    fireEvent.keyDown(bar(), { key: 'Enter', metaKey: true })
     await waitFor(() => expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-77', expect.anything()))
   })
 
-  it('says what a key looks like when the box holds something else', () => {
-    mount()
-    fireEvent.change(bar(), { target: { value: 'the export is slow' } })
-    expect(startButton()).toBeDisabled()
+  it('takes a description but says a key is needed to start, since a start carries no instruction', () => {
+    const { onStart } = mount()
+    fireEvent.change(bar(), { target: { value: 'the export is slow since Tuesday' } })
+    expect(sendButton()).toBeDisabled()
     expect(screen.getByRole('status')).toHaveTextContent(
-      'Enter a ticket key like OMNI-2510, or a tracker URL that ends in one.',
+      'A ticket key is needed to start — one like OMNI-2510, or a tracker URL that ends in one.',
     )
+    fireEvent.keyDown(bar(), { key: 'Enter', metaKey: true })
+    expect(onStart).not.toHaveBeenCalled()
   })
 
-  it('starts an RCA and a fix for a key that has a triage note', async () => {
+  it('starts an RCA and a fix for a key that has a triage note, from the Mode menu', async () => {
     const { onStart } = mount({ runs: [TRIAGED] })
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
-    fireEvent.click(screen.getByRole('radio', { name: 'RCA' }))
-    fireEvent.click(startButton())
+    fireEvent.click(modeChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /RCA/ }))
+    expect(modeChip()).toHaveAccessibleName('Mode: RCA')
+    fireEvent.click(sendButton())
     await waitFor(() => expect(onStart).toHaveBeenLastCalledWith('rca', 'OMNI-2', expect.anything()))
 
     // A dry run is a triage's or a fix's option, never an RCA's.
     expect(screen.getByLabelText(/Dry run/)).toBeDisabled()
   })
 
+  it('says what the mode does to the tree on the Access chip, which explains and does not change', () => {
+    mount({ runs: [TRIAGED] })
+    expect(accessChip()).toHaveAccessibleName('Access: Read-only')
+    expect(accessChip()).toHaveAttribute('aria-haspopup', 'dialog')
+    fireEvent.click(accessChip())
+    const dialog = screen.getByRole('dialog', { name: 'Access' })
+    expect(within(dialog).queryByRole('menuitemradio')).toBeNull()
+    expect(dialog).toHaveTextContent('Nothing is written.')
+    expect(dialog).toHaveTextContent('Sirdar commits and pushes, never the agent.')
+    fireEvent.keyDown(dialog, { key: 'Escape' })
+
+    // Fix runs in a worktree; the chip follows the mode.
+    fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
+    fireEvent.click(modeChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Fix/ }))
+    expect(accessChip()).toHaveAccessibleName('Access: Worktree')
+  })
+
   it('starts a fix with the provider and model from the chip and dry run from More options', async () => {
     const { onStart } = mount({ runs: [TRIAGED] })
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
-    fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
+    fireEvent.click(modeChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Fix/ }))
     fireEvent.click(modelChip())
     const popover = screen.getByRole('dialog', { name: 'Provider and model' })
     fireEvent.click(within(popover).getByRole('tab', { name: 'Codex' }))
@@ -274,12 +325,11 @@ describe('NewSession', () => {
     fireEvent.keyDown(other, { key: 'Enter' })
     // The chip follows the override, so the reader sees what will run.
     expect(modelChip()).toHaveAccessibleName('Model codex · o3')
-    // Provider and model are no longer under More options; dry run still is.
+    // Provider and model are not under More options; dry run still is.
     fireEvent.click(screen.getByLabelText(/Dry run/))
     expect(screen.queryByLabelText('Provider')).toBeNull()
-    expect(screen.queryByLabelText('Model')).toBeNull()
 
-    fireEvent.click(startButton())
+    fireEvent.click(sendButton())
     await waitFor(() =>
       expect(onStart).toHaveBeenCalledWith('fix', 'OMNI-2', {
         provider: 'codex',
@@ -299,7 +349,7 @@ describe('NewSession', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(modelChip()).toHaveAccessibleName('Model claude · Sonnet 5')
 
-    fireEvent.click(startButton())
+    fireEvent.click(sendButton())
     await waitFor(() =>
       expect(onStart).toHaveBeenCalledWith('triage', 'OMNI-9', {
         provider: undefined,
@@ -348,54 +398,61 @@ describe('NewSession', () => {
     })
   })
 
-  it('turns RCA and Fix off, with the reason, while the key has no triage note', () => {
+  it('turns RCA and Fix off in the menu, with the reason, while the key has no triage note', () => {
     mount({ runs: [TRIAGED] })
     fireEvent.change(bar(), { target: { value: 'OMNI-3' } })
-    const rca = screen.getByRole('radio', { name: 'RCA' })
-    const fix = screen.getByRole('radio', { name: 'Fix' })
-    expect(rca).toBeDisabled()
-    expect(fix).toBeDisabled()
+    fireEvent.click(modeChip())
+    const rca = screen.getByRole('menuitemradio', { name: /RCA/ })
+    const fix = screen.getByRole('menuitemradio', { name: /Fix/ })
+    expect(rca).toHaveAttribute('aria-disabled', 'true')
+    expect(fix).toHaveAttribute('aria-disabled', 'true')
     expect(rca).toHaveAttribute('title', 'Needs a triage note for OMNI-3 first')
+    fireEvent.click(rca)
+    expect(modeChip()).toHaveAccessibleName('Mode: Triage')
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
     expect(screen.getByRole('status')).toHaveTextContent(
       'RCA and Fix need a triage note for OMNI-3 first. Start a triage.',
     )
     // Triage itself is still on.
-    expect(startButton()).toBeEnabled()
+    expect(sendButton()).toBeEnabled()
 
     // A note arriving turns them back on.
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
-    expect(rca).toBeEnabled()
-    expect(fix).toBeEnabled()
+    fireEvent.click(modeChip())
+    expect(screen.getByRole('menuitemradio', { name: /RCA/ })).not.toHaveAttribute('aria-disabled')
+    expect(screen.getByRole('menuitemradio', { name: /Fix/ })).not.toHaveAttribute('aria-disabled')
   })
 
-  it('keeps Start off when the chosen mode is one the key cannot run yet', () => {
+  it('keeps the send off when the chosen mode is one the key cannot run yet', () => {
     mount({ runs: [TRIAGED] })
     fireEvent.change(bar(), { target: { value: 'OMNI-2' } })
-    fireEvent.click(screen.getByRole('radio', { name: 'Fix' }))
-    expect(startButton()).toBeEnabled()
-    // The key changes under the chosen mode; Start waits rather than
+    fireEvent.click(modeChip())
+    fireEvent.click(screen.getByRole('menuitemradio', { name: /Fix/ }))
+    expect(sendButton()).toBeEnabled()
+    // The key changes under the chosen mode; the send waits rather than
     // starting a fix the core would refuse.
     fireEvent.change(bar(), { target: { value: 'OMNI-3' } })
-    expect(startButton()).toBeDisabled()
+    expect(sendButton()).toBeDisabled()
+    expect(sendButton()).toHaveAttribute('title', 'Needs a triage note for OMNI-3 first')
   })
 
-  it('shows the reason a start was refused, beside the button', async () => {
+  it('shows the reason a start was refused, under the card', async () => {
     const onStart = vi.fn(async () => {
       throw new Error('OMNI-9 is busy')
     })
     mount({ onStart })
     fireEvent.change(bar(), { target: { value: 'OMNI-9' } })
-    fireEvent.click(startButton())
+    fireEvent.click(sendButton())
     expect(await screen.findByRole('status')).toHaveTextContent('OMNI-9 is busy')
-    expect(startButton()).toBeEnabled()
+    expect(sendButton()).toBeEnabled()
   })
 
   it('stops waiting when the job ends, opening the run it names if it names one', async () => {
     const transport = createFakeTransport({ tickets: [] })
     const { onOpenRun } = mount({ transport })
     fireEvent.change(bar(), { target: { value: 'OMNI-9' } })
-    fireEvent.click(startButton())
-    await screen.findByRole('button', { name: /Starting/ })
+    fireEvent.click(sendButton())
+    await screen.findByRole('button', { name: 'Starting…' })
 
     act(() =>
       transport.emit({
@@ -412,25 +469,13 @@ describe('NewSession', () => {
     const transport = createFakeTransport({ tickets: [] })
     const { onOpenRun } = mount({ transport })
     fireEvent.change(bar(), { target: { value: 'OMNI-9' } })
-    fireEvent.click(startButton())
-    await screen.findByRole('button', { name: /Starting/ })
+    fireEvent.click(sendButton())
+    await screen.findByRole('button', { name: 'Starting…' })
 
     act(() => transport.emit({ kind: 'job.finished', jobId: 'job-1', workspaceId: 'ws1', outcomes: [] }))
     expect(await screen.findByRole('status')).toHaveTextContent('The job ended before a session started.')
     expect(onOpenRun).not.toHaveBeenCalled()
-    expect(startButton()).toBeEnabled()
-  })
-
-  it('offers Recent sessions only when there is one, and it opens the newest run', () => {
-    const { onOpenRun, rerender } = mount()
-    expect(screen.queryByRole('button', { name: 'Recent sessions' })).toBeNull()
-
-    rerender([
-      run({ runId: 'r-1', key: 'OMNI-1', updatedAt: '2026-09-10T09:00:00Z' }),
-      run({ runId: 'r-2', key: 'OMNI-2', updatedAt: '2026-09-11T09:00:00Z' }),
-    ])
-    fireEvent.click(screen.getByRole('button', { name: 'Recent sessions' }))
-    expect(onOpenRun).toHaveBeenCalledWith('r-2')
+    expect(sendButton()).toBeEnabled()
   })
 
   describe('Landed today', () => {
