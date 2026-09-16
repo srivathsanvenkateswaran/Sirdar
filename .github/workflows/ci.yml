@@ -26,9 +26,15 @@ jobs:
   #
   # What these jobs cover that a macOS laptop cannot: the Windows halves of
   # internal/osopen, internal/procgroup (taskkill), internal/agenttools
-  # (cmd /C) and internal/config's Credential Manager reader. Tests that
-  # need a POSIX shell, a symlink or Unix mode bits skip themselves on
-  # Windows and say so in the log.
+  # (cmd /C) and internal/config's Credential Manager reader.
+  #
+  # A test that needs an external program stands one up with
+  # internal/testbin — a hard link to the running test binary, dispatched
+  # by the name it was installed under — rather than a #!/bin/sh script,
+  # so the MCP, serve, runs and transcription paths are exercised here and
+  # not skipped. What still skips itself on Windows, saying so in the log,
+  # is the handful of assertions about facilities the platform does not
+  # have: Unix mode bits, a POSIX user database, symlinks.
   macos:
     runs-on: macos-latest
     steps:
