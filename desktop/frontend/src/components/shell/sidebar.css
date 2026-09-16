@@ -32,7 +32,12 @@
    control at the end. The mock's row had 10px gaps and 12px at each side;
    the toggle costs 28, so the gaps go to 8 and the end padding to 0 (the
    toggle's own box ends flush with the nav rows), which is what keeps an
-   eight-letter workspace name whole. */
+   eight-letter workspace name whole.
+
+   Since 2026-09-16 the 20px brand mark opens the row. It needs no gap of its
+   own: 8 against a 20px mark is the 0.36 ratio the logo round's small lockup
+   was drawn at (docs/design/2026-09-16-logo/, `.lockup-small`), so the row's
+   own gap is already the lockup's. */
 .sd-sidebar__brand {
   display: flex;
   align-items: center;
@@ -262,7 +267,10 @@
   margin-inline-start: 0;
 }
 
+/* The rail keeps the fold control alone. The mark goes with the word: 20 plus
+   its gap plus the 28 toggle is the whole 56px rail with nothing left over. */
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand,
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .sd-brand-mark,
 .sd-sidebar[data-collapsed='true'] .switcher {
   display: none;
 }

@@ -121,6 +121,14 @@
   gap: var(--sd-space-5);
 }
 
+/* The brand row as the sidebar draws it, so the lockup can be read here at the
+   gap the sidebar gives it rather than only in the running app. */
+.lib-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
 /* A labelled specimen: the mock's `.sp`, label over stage at an 8px gap. */
 .lib-state {
   display: grid;

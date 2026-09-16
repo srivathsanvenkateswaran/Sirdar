@@ -3,6 +3,7 @@ import type { RunSummary, SourcesSummary } from '../api/types'
 import SessionsList from '../components/shell/SessionsList'
 import Badge from '../ui/badge'
 import Banner from '../ui/banner'
+import BrandMark from '../ui/brand-mark'
 import Button from '../ui/button'
 import Card from '../ui/card'
 import DataTable, { type DataColumn } from '../ui/data-table'
@@ -1426,6 +1427,36 @@ export default function Library(): JSX.Element {
                 model="claude-sonnet-5"
                 readOnly="التوجيه يستأنف الجلسة نفسها، فلا يتغيّر النموذج"
               />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="brand-mark"
+          name="Brand mark"
+          note="Sirdar's own mark, bare and on no tile — blue and white trade places between the themes while the crimson holds, and the light and dark switch above is what picks one."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="20px, the sidebar's">
+              <BrandMark />
+            </State>
+            <State label="16px">
+              <BrandMark size="sm" />
+            </State>
+            <State label="32px">
+              <BrandMark size="lg" />
+            </State>
+            <State label="In the brand row, where the word carries the name">
+              <span className="lib-lockup">
+                <BrandMark decorative />
+                <span className="brand">Sirdar</span>
+              </span>
+            </State>
+            <State label="Arabic, the same row mirrored">
+              <span className="lib-lockup" dir="rtl">
+                <BrandMark decorative />
+                <span className="brand">سردار</span>
+              </span>
             </State>
           </div>
         </Section>

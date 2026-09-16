@@ -1,0 +1,76 @@
+/*
+ * Brand mark. The drawing and its colours are in index.tsx; this file only
+ * sizes the box and decides which of the two variants the theme shows.
+ */
+
+.sd-brand-mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 20px;
+  block-size: 20px;
+  /* Not a word: the mountain does not mirror in an Arabic pane. */
+  direction: ltr;
+}
+
+.sd-brand-mark > svg {
+  inline-size: 100%;
+  block-size: 100%;
+  display: block;
+}
+
+.sd-brand-mark[data-size='sm'] {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-brand-mark[data-size='lg'] {
+  inline-size: 32px;
+  block-size: 32px;
+}
+
+/*
+ * Which variant is drawn, switched the way the palette is switched: a custom
+ * property set on whatever element carries the theme, and inherited down from
+ * there. Inheritance is what makes the gallery work — the nearest definition
+ * wins over the root's whatever its specificity, so a dark specimen frame in a
+ * light page gets the dark mark. Toggling `display` on the two groups with
+ * selectors instead would put the media query and the subtree rule in a
+ * specificity fight the subtree loses.
+ *
+ * The four blocks are the four in styles/tokens.css, in the same order and for
+ * the same reason: the system theme, the chosen theme, and both themes again
+ * as a subtree the gallery can nest.
+ */
+:root {
+  --sd-brand-light: block;
+  --sd-brand-dark: none;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --sd-brand-light: none;
+    --sd-brand-dark: block;
+  }
+}
+
+[data-theme='light'] {
+  --sd-brand-light: block;
+  --sd-brand-dark: none;
+}
+
+[data-theme='dark'] {
+  --sd-brand-light: none;
+  --sd-brand-dark: block;
+}
+
+/* The fallbacks are the light mark, so a mark rendered before this sheet
+   loads is the wrong theme rather than an empty box. */
+.sd-brand-mark [data-variant='light'] {
+  display: var(--sd-brand-light, block);
+}
+
+.sd-brand-mark [data-variant='dark'] {
+  display: var(--sd-brand-dark, none);
+}
