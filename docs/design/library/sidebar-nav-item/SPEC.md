@@ -72,6 +72,51 @@ and `docs/design/03-desktop-app.md` section 5 is where the sidebar comes from.
   `--sd-dur-1`; a thumb travelling down five rows outlasts the click it
   answers.
 
+## The sessions list under the nav
+
+Not a library component — it lives with the shell in
+`src/components/shell/SessionsList.tsx` and `sessions.css` — but it is the
+other thing the sidebar is made of, and this is where its shape is written
+down. The 2026-09-16 picker-sources round rebuilt it on T3 Code's sidebar,
+which the user showed as the reference.
+
+- One flat list, newest first. No day headings. The runs still `running`,
+  `preparing` or `blocked` come first; then `button.sd-sessions__settled`, a
+  "Settled" label in `--sd-ink-3` micro caps with a `--sd-rule` hairline to
+  the end and a chevron, `aria-expanded`, which folds the finished rows away
+  and remembers the fold in `localStorage` (`sirdar.settledCollapsed`).
+  "Show N more" follows the first eight settled rows; every live row shows.
+- `button.sd-session-row` — 36 tall, radius 10, `padding-inline: 12px 14px`,
+  gap 10. One line: `span.sd-session-row__tile` holding a 16px SourceMark
+  (`src/ui/source-mark`) for the number's product, `span.sd-session-row__number`
+  (the ticket number in `--sd-font-mono` at `--sd-text-meta`, ellipsised) and
+  `span.sd-session-row__age` (`5d`, `19h`, `--sd-ink-3` micro, at the end).
+  No title, no kind, no provider. Which number — the tracker's `OMNI-2815`
+  or the helpdesk's `#25312` — follows Settings › General's "Sessions show";
+  a run with no helpdesk number shows its key under the tracker's mark
+  either way.
+- `span.sd-session-row__dot` — 7px over the tile's trailing top corner,
+  ringed in `--sd-shell`: `--sd-accent` for a live run, `--sd-st-blocked`
+  for one waiting on a person, absent otherwise. The row's accessible name
+  carries the same state in words (`OMNI-2815, triage, running`).
+- Current: `aria-current="page"`, `--sd-nav-active`; hover `--sd-nav-hover`.
+  The row itself opens the run.
+- `div.sd-session-card[role="tooltip"]` — the hover card, opened after
+  `CARD_DELAY_MS` (300ms) of hover or focus, pinned by `lib/anchor`'s
+  `placeBeside` to the row's trailing edge so it opens into the sheet (the
+  leading side when there is no room), 280 wide on the dialog's surface
+  (`--sd-surface`, `--sd-rule-strong`, `--sd-radius-md`, `--sd-shadow-soft`),
+  `pointer-events: none`. The ticket title at 15px, then rows of icon and
+  text at 13px: the other number under its product's mark with the
+  product's name ("Zoho Desk #25312", or the row's own number when there is
+  only one), the kind chip and the state word, the provider mark and the
+  model id (`model unknown` when none), a folder icon and the workspace.
+  The row carries `aria-describedby` to it while it is open. Leaving the
+  row, blurring it or Escape closes it. In RTL it opens at the row's
+  trailing (left) edge and the folded chevron points into the text.
+- The gallery draws it with `pinnedCard`, which puts the card in the flow
+  under the list (`data-static`) instead of beside a row.
+
 ## Accessibility
 
 A `button` per row, `aria-current="page"` on the one the reader is on, which is
@@ -85,6 +130,13 @@ pitch, with the sidebar's own inline padding taking the clickable box past the
 moves.
 
 ## Changelog
+
+### 2026-09-16 (sessions list)
+The sessions list under the nav is rebuilt on T3 Code's sidebar: one flat
+list, a "Settled" fold instead of day headings, one line per session (a 16px
+source mark, the ticket number on the "Sessions show" preference, the age),
+and a hover card beside the row carrying the title and everything the row no
+longer says. Described in "The sessions list under the nav" above.
 
 ### 2026-09-15 (v2 register)
 Re-scaled to the reviewed mocks: the pill goes from 28 tall at 32 pitch to

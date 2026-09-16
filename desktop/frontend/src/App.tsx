@@ -316,6 +316,7 @@ function Shell(): JSX.Element {
         quota={state.quota}
         screen={state.screen}
         runs={runs}
+        sources={state.sourcesByWorkspace[workspaceId]}
         inboundCount={state.inbound?.length ?? 0}
         onSelectWorkspace={(id) => store.setWorkspace(id)}
         onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}

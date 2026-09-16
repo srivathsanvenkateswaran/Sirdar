@@ -6,7 +6,7 @@ import { stubMatchMedia } from '../../lib/mediaStub'
 import { run } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
-import Sidebar, { RAIL_AT, SHOWN_LIMIT, dayLabel, groupRuns, shortAge } from './Sidebar'
+import Sidebar, { RAIL_AT } from './Sidebar'
 
 afterEach(() => {
   localStorage.removeItem('sirdar.showLibrary')
@@ -170,114 +170,41 @@ describe('the sidebar nav', () => {
 })
 
 describe('the sessions list', () => {
-  /** A still clock: 2026-09-16 at 10:00 local. */
+  /** A still clock: 2026-09-16 at 10:00 local. The list itself is tested in SessionsList.test.tsx. */
   const NOW = new Date(2026, 8, 16, 10, 0, 0).getTime()
-  const at = (daysAgo: number, hour = 9, minute = 0) => {
-    const d = new Date(2026, 8, 16 - daysAgo, hour, minute, 0)
-    return d.toISOString()
-  }
   const runs = [
     run({
       runId: 'r1',
       key: 'OMNI-1',
+      helpdeskKey: '25312',
       kind: 'triage',
       status: 'running',
       title: 'Login loop after reset',
-      provider: 'claude',
-      updatedAt: at(0, 9, 5),
+      updatedAt: new Date(NOW - 55 * 60_000).toISOString(),
     }),
-    run({ runId: 'r2', key: 'OMNI-2', kind: 'fix', status: 'blocked', provider: 'codex', updatedAt: at(0, 8) }),
-    run({ runId: 'r3', key: 'OMNI-3', kind: 'rca', status: 'completed', updatedAt: at(1, 16) }),
-    run({ runId: 'r4', key: 'OMNI-4', kind: 'triage', status: 'completed', updatedAt: at(5) }),
-    run({ runId: 'r5', key: 'OMNI-5', kind: 'triage', status: 'failed', updatedAt: at(5, 8) }),
+    run({ runId: 'r2', key: 'OMNI-2', kind: 'fix', status: 'completed', updatedAt: new Date(NOW - 86_400_000).toISOString() }),
   ]
+  const sources = {
+    tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+    helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+  }
 
-  it('groups the runs by the day they last changed, newest first', () => {
-    const groups = groupRuns(runs.slice().reverse(), NOW)
-    expect(groups.map((g) => [g.label, g.runs.map((r) => r.runId)])).toEqual([
-      ['Today', ['r1', 'r2']],
-      ['Yesterday', ['r3']],
-      ['11 Sep', ['r4', 'r5']],
-    ])
-  })
-
-  it('heads a day by its date, with the year once it is not this one', () => {
-    expect(dayLabel(new Date(2026, 8, 16, 1).getTime(), NOW)).toBe('Today')
-    expect(dayLabel(new Date(2026, 8, 15, 23, 59).getTime(), NOW)).toBe('Yesterday')
-    expect(dayLabel(new Date(2026, 8, 14).getTime(), NOW)).toBe('14 Sep')
-    expect(dayLabel(new Date(2025, 11, 31).getTime(), NOW)).toBe('31 Dec 2025')
-  })
-
-  it('reads an age as short as it goes', () => {
-    expect(shortAge(new Date(NOW - 20_000).toISOString(), NOW)).toBe('now')
-    expect(shortAge(new Date(NOW - 4 * 60_000).toISOString(), NOW)).toBe('4m')
-    expect(shortAge(new Date(NOW - 18 * 3_600_000).toISOString(), NOW)).toBe('18h')
-    expect(shortAge(new Date(NOW - 5 * 86_400_000).toISOString(), NOW)).toBe('5d')
-    expect(shortAge('', NOW)).toBe('')
-  })
-
-  it('lists every run under its day with title or key, the key in mono under a title, the mark and the age', () => {
+  it('hands the workspace\'s runs and sources to the list, one number per row under its mark', () => {
     setShowLibrary(false)
-    mount({ runs, now: NOW })
+    mount({ runs, sources, now: NOW, screen: { name: 'run', runId: 'r1' } })
     const list = screen.getByRole('navigation', { name: 'Sessions' })
-    expect(within(list).getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
-      'Today',
-      'Yesterday',
-      '11 Sep',
-    ])
-    const rows = within(list).getAllByRole('button')
-    expect(rows.map((r) => r.getAttribute('aria-label'))).toEqual([
-      `Login loop after reset, OMNI-1 triage, ${STATE_WORDS.running}`,
-      `OMNI-2 fix, ${STATE_WORDS.blocked}`,
-      'OMNI-3 rca',
-      'OMNI-4 triage',
-      'OMNI-5 triage',
-    ])
-    // A titled row shows the title over the key; an untitled one the key alone.
-    expect(rows[0].querySelector('.sd-session-row__title')).toHaveTextContent('Login loop after reset')
-    expect(rows[0].querySelector('.sd-session-row__key')).toHaveTextContent('OMNI-1 · triage')
-    expect(rows[0]).toHaveAttribute('title', 'Login loop after reset')
-    expect(rows[1].querySelector('.sd-session-row__title')).toHaveTextContent('OMNI-2')
-    expect(rows[1].querySelector('.sd-session-row__key')).toBeNull()
-    expect(rows[1]).not.toHaveAttribute('title')
-    // The provider's mark, 14px by the sidebar's rule, and the age at the end.
-    expect(within(rows[0]).getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-    expect(within(rows[1]).getByRole('img', { name: 'Codex' })).toBeInTheDocument()
-    expect(rows.map((r) => r.querySelector('.sd-session-row__age')?.textContent)).toEqual([
-      '55m',
-      '2h',
-      '18h',
-      '5d',
-      '5d',
-    ])
-    // The dot is drawn for a live run and a blocked one, and for no other.
-    expect(rows[0].querySelector('.sd-session-row__dot')).toHaveAttribute('data-live', 'true')
-    expect(rows[1].querySelector('.sd-session-row__dot')).toHaveAttribute('data-blocked', 'true')
-    expect(rows[2].querySelector('.sd-session-row__dot')).toBeNull()
+    const row = within(list).getByRole('button', { name: `OMNI-1, triage, ${STATE_WORDS.running}` })
+    expect(row).toHaveAttribute('aria-current', 'page')
+    expect(within(row).getByRole('img', { name: 'Jira' })).toBeInTheDocument()
+    expect(row).not.toHaveTextContent('Login loop')
+    expect(within(list).getByRole('button', { name: 'Settled' })).toBeInTheDocument()
   })
 
-  it('shows eight rows and the rest behind Show N more', () => {
+  it('opens a run from its row', () => {
     setShowLibrary(false)
-    const many = Array.from({ length: 11 }, (_, i) =>
-      run({ runId: `r${i}`, key: `OMNI-${i}`, updatedAt: new Date(NOW - i * 3_600_000).toISOString() }),
-    )
-    mount({ runs: many, now: NOW })
-    const list = screen.getByRole('navigation', { name: 'Sessions' })
-    expect(within(list).getAllByRole('button', { name: /OMNI-/ })).toHaveLength(SHOWN_LIMIT)
-    const more = within(list).getByRole('button', { name: 'Show 3 more' })
-    fireEvent.click(more)
-    expect(within(list).getAllByRole('button', { name: /OMNI-/ })).toHaveLength(11)
-    expect(within(list).queryByRole('button', { name: /Show/ })).toBeNull()
-  })
-
-  it('marks the open run and opens another on click', () => {
-    setShowLibrary(false)
-    const { onNavigate } = mount({ runs, now: NOW, screen: { name: 'run', runId: 'r2' } })
-    const list = screen.getByRole('navigation', { name: 'Sessions' })
-    expect(within(list).getByRole('button', { name: /OMNI-2/ })).toHaveAttribute('aria-current', 'page')
-    expect(within(list).getByRole('button', { name: /OMNI-1/ })).not.toHaveAttribute('aria-current')
-    fireEvent.click(within(list).getByRole('button', { name: /OMNI-3/ }))
-    expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r3' })
+    const { onNavigate } = mount({ runs, now: NOW })
+    fireEvent.click(screen.getByRole('button', { name: /OMNI-2/ }))
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r2' })
   })
 
   it('draws nothing when the workspace has no runs', () => {

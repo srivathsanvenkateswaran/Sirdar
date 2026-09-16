@@ -1,0 +1,355 @@
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  useSyncExternalStore,
+  type KeyboardEvent,
+} from 'react'
+import type { RunSummary, SourcesSummary } from '../../api/types'
+import { useAnchor } from '../../lib/anchor'
+import { parseTime } from '../../lib/format'
+import {
+  sessionsShow,
+  shownNumber,
+  subscribeSessionsShow,
+  withSource,
+  type SessionsShow,
+} from '../../lib/sessionsShow'
+import KindChip from '../../ui/kind-chip'
+import ProviderMark from '../../ui/provider-mark'
+import SourceMark from '../../ui/source-mark'
+import { stateWord } from '../../ui/status-badge'
+import './sessions.css'
+
+/** How many settled rows the list shows before "Show N more". Live rows all show. */
+export const SHOWN_LIMIT = 8
+
+/** How long a pointer or focus rests on a row before its card opens. */
+export const CARD_DELAY_MS = 300
+
+const SETTLED_KEY = 'sirdar.settledCollapsed'
+
+/** localStorage is absent in some tests and can throw in a locked-down webview. */
+export function readSettledCollapsed(): boolean {
+  try {
+    return globalThis.localStorage?.getItem(SETTLED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
+function writeSettledCollapsed(value: boolean): void {
+  try {
+    globalThis.localStorage?.setItem(SETTLED_KEY, value ? '1' : '0')
+  } catch {
+    // A fold that cannot be remembered still holds this session.
+  }
+}
+
+function stamp(run: RunSummary): number {
+  const updated = Date.parse(run.updatedAt ?? '')
+  if (!Number.isNaN(updated)) return updated
+  const started = Date.parse(run.startedAt ?? '')
+  return Number.isNaN(started) ? 0 : started
+}
+
+/** The newest `limit` runs, by their last change. */
+export function recentRuns(runs: RunSummary[], limit = Infinity): RunSummary[] {
+  return runs
+    .slice()
+    .sort((a, b) => stamp(b) - stamp(a))
+    .slice(0, limit)
+}
+
+/** A run still happening or waiting on a person: the two the list keeps above the fold. */
+export function isLive(run: Pick<RunSummary, 'status'>): boolean {
+  return run.status === 'preparing' || run.status === 'running' || run.status === 'blocked'
+}
+
+/**
+ * The list's two halves, each newest first: the runs still live or blocked,
+ * and the settled ones under the divider.
+ */
+export function splitRuns(runs: RunSummary[]): { live: RunSummary[]; settled: RunSummary[] } {
+  const sorted = recentRuns(runs)
+  return { live: sorted.filter(isLive), settled: sorted.filter((run) => !isLive(run)) }
+}
+
+const MINUTE = 60_000
+const HOUR = 60 * MINUTE
+const DAY = 24 * HOUR
+
+/**
+ * The age at a row's end, as short as it goes: `now`, `4m`, `18h`, `5d`.
+ * Empty when the stamp is not one.
+ */
+export function shortAge(value: string | undefined, now = Date.now()): string {
+  const ms = parseTime(value)
+  if (Number.isNaN(ms)) return ''
+  const delta = Math.max(0, now - ms)
+  if (delta < MINUTE) return 'now'
+  if (delta < HOUR) return `${Math.round(delta / MINUTE)}m`
+  if (delta < DAY) return `${Math.round(delta / HOUR)}h`
+  return `${Math.round(delta / DAY)}d`
+}
+
+/** lucide `chevron-down`, turned on the Settled divider when it is folded. */
+function Chevron(): JSX.Element {
+  return (
+    <svg
+      className="sd-sessions__chevron"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
+
+/** lucide `folder`, for the card's workspace row. */
+function FolderIcon(): JSX.Element {
+  return (
+    <svg
+      className="sd-session-card__icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+    </svg>
+  )
+}
+
+export interface SessionsListProps {
+  runs: RunSummary[]
+  currentRunId?: string
+  onOpen: (runId: string) => void
+  /** The clock the ages are read against; tests hold it still. */
+  now?: number
+  /** The workspace's tracker and helpdesk, so each number sits under its own mark. */
+  sources?: SourcesSummary
+  /** Named on the card. */
+  workspaceName?: string
+  /**
+   * The run whose card is drawn open, in the flow under the list rather than
+   * pinned beside its row — for the gallery, which has no pointer to rest.
+   */
+  pinnedCard?: string
+}
+
+/**
+ * The workspace's sessions, one line each, newest first: the runs still
+ * running or waiting on a person, then a "Settled" divider that folds the
+ * finished ones away, remembered in this browser.
+ *
+ * A row is the ticket number under its source's mark — the tracker's key or
+ * the helpdesk's number, on the Settings › General preference — and the age
+ * at the end. Nothing else: no title, no kind. Those are on the card a row
+ * opens after a moment's hover or focus, beside the sidebar: the title, the
+ * other number with its product's name, the kind and state, the provider
+ * and model, and the workspace. A dot over the tile's corner says a run is
+ * live or blocked, and the row's accessible name says the same in words.
+ * The row itself opens the run.
+ */
+export default function SessionsList({
+  runs,
+  currentRunId,
+  onOpen,
+  now,
+  sources,
+  workspaceName,
+  pinnedCard,
+}: SessionsListProps): JSX.Element | null {
+  const [showAll, setShowAll] = useState(false)
+  const [collapsed, setCollapsed] = useState(readSettledCollapsed)
+  const [card, setCard] = useState<string | null>(pinnedCard ?? null)
+  const show = useSyncExternalStore(
+    subscribeSessionsShow,
+    sessionsShow,
+    () => 'tracker' as SessionsShow,
+  )
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const rows = useRef(new Map<string, HTMLButtonElement>())
+  const anchor = useRef<HTMLElement | null>(null)
+  const cardEl = useRef<HTMLDivElement | null>(null)
+  const id = useId()
+  const cardId = `${id}-card`
+  const settledId = `${id}-settled`
+
+  const pinned = pinnedCard !== undefined
+  useAnchor(card !== null && !pinned, anchor, cardEl, { beside: true })
+
+  const disarm = useCallback(() => {
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = null
+    if (!pinned) setCard(null)
+  }, [pinned])
+
+  useEffect(() => disarm, [disarm])
+
+  function arm(runId: string): void {
+    if (pinned) return
+    if (timer.current) clearTimeout(timer.current)
+    timer.current = setTimeout(() => {
+      anchor.current = rows.current.get(runId) ?? null
+      setCard(runId)
+    }, CARD_DELAY_MS)
+  }
+
+  function toggleSettled(): void {
+    const next = !collapsed
+    setCollapsed(next)
+    writeSettledCollapsed(next)
+  }
+
+  if (runs.length === 0) return null
+  const at = now ?? Date.now()
+  const { live, settled } = splitRuns(runs)
+  const settledShown = showAll ? settled : settled.slice(0, SHOWN_LIMIT)
+  const hidden = settled.length - settledShown.length
+  const open = card ? runs.find((run) => run.runId === card) : undefined
+
+  function renderRow(run: RunSummary): JSX.Element {
+    const shown = shownNumber(run, show, sources)
+    const running = run.status === 'preparing' || run.status === 'running'
+    const blocked = run.status === 'blocked'
+    const word = running || blocked ? `, ${stateWord(run.status)}` : ''
+    const name = `${shown.text}, ${run.kind}${word}`
+    const age = shortAge(run.updatedAt || run.startedAt, at)
+    const isOpen = card === run.runId
+    return (
+      <button
+        key={run.runId}
+        ref={(el) => {
+          if (el) rows.current.set(run.runId, el)
+          else rows.current.delete(run.runId)
+        }}
+        type="button"
+        className="sd-session-row"
+        aria-current={run.runId === currentRunId ? 'page' : undefined}
+        aria-label={name}
+        aria-describedby={isOpen ? cardId : undefined}
+        onClick={() => onOpen(run.runId)}
+        onMouseEnter={() => arm(run.runId)}
+        onMouseLeave={disarm}
+        onFocus={() => arm(run.runId)}
+        onBlur={disarm}
+        onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
+          if (e.key === 'Escape' && isOpen) {
+            e.preventDefault()
+            disarm()
+          }
+        }}
+      >
+        <span className="sd-session-row__tile">
+          <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
+          {running || blocked ? (
+            <span
+              className="sd-session-row__dot"
+              data-live={running ? 'true' : undefined}
+              data-blocked={blocked ? 'true' : undefined}
+              aria-hidden="true"
+            />
+          ) : null}
+        </span>
+        <span className="sd-session-row__number" dir="ltr">
+          {shown.text}
+        </span>
+        <span className="sd-session-row__age" dir="ltr">
+          {age}
+        </span>
+      </button>
+    )
+  }
+
+  function renderCard(run: RunSummary): JSX.Element {
+    const shown = shownNumber(run, show, sources)
+    // The other number with its product's name; a run with one number names
+    // that one, so the card always says where the ticket lives.
+    const otherRole: SessionsShow = shown.role === 'tracker' ? 'helpdesk' : 'tracker'
+    const hasOther = shown.other !== ''
+    const numberRole = hasOther ? otherRole : shown.role
+    const numberSource = sources?.[numberRole]
+    const numberText = hasOther ? shown.other : withSource(shown.text, shown.source)
+    return (
+      <div
+        id={cardId}
+        ref={cardEl}
+        className="sd-session-card"
+        role="tooltip"
+        data-static={pinned ? 'true' : undefined}
+      >
+        <p className="sd-session-card__title" dir="auto">
+          {run.title || shown.text}
+        </p>
+        <ul className="sd-session-card__rows">
+          <li className="sd-session-card__row">
+            <SourceMark adapter={numberSource?.adapter ?? numberRole} name={numberSource?.name} size="xs" />
+            <span className="sd-session-card__mono" dir="ltr">
+              {numberText}
+            </span>
+          </li>
+          <li className="sd-session-card__row">
+            <KindChip kind={run.kind} />
+            <span>{stateWord(run.status)}</span>
+          </li>
+          <li className="sd-session-card__row">
+            <ProviderMark provider={run.provider} size="sm" />
+            <span className="sd-session-card__mono" dir="ltr">
+              {run.model || 'model unknown'}
+            </span>
+          </li>
+          {workspaceName ? (
+            <li className="sd-session-card__row">
+              <FolderIcon />
+              <span>{workspaceName}</span>
+            </li>
+          ) : null}
+        </ul>
+      </div>
+    )
+  }
+
+  return (
+    <nav className="sd-sidebar__sessions" aria-label="Sessions">
+      {live.map(renderRow)}
+      {settled.length > 0 ? (
+        <button
+          type="button"
+          className="sd-sessions__settled"
+          aria-expanded={!collapsed}
+          aria-controls={settledId}
+          onClick={toggleSettled}
+        >
+          <span>Settled</span>
+          <span className="sd-sessions__rule" aria-hidden="true" />
+          <Chevron />
+        </button>
+      ) : null}
+      {settled.length > 0 && !collapsed ? (
+        <div id={settledId} className="sd-sessions__settled-rows">
+          {settledShown.map(renderRow)}
+          {hidden > 0 ? (
+            <button type="button" className="sd-sessions__more" onClick={() => setShowAll(true)}>
+              Show {hidden} more
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+      {open ? renderCard(open) : null}
+    </nav>
+  )
+}

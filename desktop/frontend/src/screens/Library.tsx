@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import type { RunSummary, SourcesSummary } from '../api/types'
+import SessionsList from '../components/shell/SessionsList'
 import Badge from '../ui/badge'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
@@ -97,6 +99,73 @@ const SOURCES_SHOWN = [
   'hubspot',
   'front',
   'gorgias',
+]
+
+/** The sessions-list specimen's workspace: a private exec tracker and Zoho Desk. */
+const SESSION_SOURCES: SourcesSummary = {
+  tracker: { adapter: 'exec', name: 'Janus', host: 'janus.example.com' },
+  helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+}
+
+/** Four sessions: one live, one blocked, two settled; ages read against the real clock. */
+const SESSIONS_SHOWN: RunSummary[] = [
+  {
+    runId: 's1',
+    key: 'OMNI-2815',
+    helpdeskKey: '25312',
+    title: 'Statement export times out past page 3',
+    kind: 'triage',
+    status: 'running',
+    provider: 'claude',
+    model: 'claude-sonnet-5',
+    startedAt: new Date(Date.now() - 4 * 60_000).toISOString(),
+    updatedAt: new Date(Date.now() - 60_000).toISOString(),
+    reason: '',
+    usage: { turns: 3, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    notes: [],
+  },
+  {
+    runId: 's2',
+    key: 'OMNI-2790',
+    helpdeskKey: '',
+    kind: 'fix',
+    status: 'blocked',
+    provider: 'codex',
+    model: 'gpt-5.6-luna',
+    startedAt: new Date(Date.now() - 2 * 3_600_000).toISOString(),
+    updatedAt: new Date(Date.now() - 40 * 60_000).toISOString(),
+    reason: '',
+    usage: { turns: 8, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    notes: [],
+  },
+  {
+    runId: 's3',
+    key: 'OMNI-2761',
+    helpdeskKey: '25188',
+    kind: 'rca',
+    status: 'completed',
+    provider: 'claude',
+    model: 'claude-opus-5',
+    startedAt: new Date(Date.now() - 19 * 3_600_000).toISOString(),
+    updatedAt: new Date(Date.now() - 19 * 3_600_000).toISOString(),
+    reason: '',
+    usage: { turns: 12, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    notes: [],
+  },
+  {
+    runId: 's4',
+    key: 'OMNI-2702',
+    helpdeskKey: '',
+    kind: 'triage',
+    status: 'failed',
+    provider: 'qwen',
+    model: '',
+    startedAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    updatedAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+    reason: '',
+    usage: { turns: 1, inputTokens: 0, outputTokens: 0, costUsd: 0 },
+    notes: [],
+  },
 ]
 
 /** lucide `inbox` for the item-row specimens. */
@@ -778,6 +847,18 @@ export default function Library(): JSX.Element {
                   <SidebarNavItem label="اللوحة" current count={2} onSelect={() => {}} />
                   <SidebarNavItem label="السجل" onSelect={() => {}} />
                 </nav>
+              </div>
+            </State>
+            <State label="Sessions list, a live run and the Settled fold, with the hover card open">
+              <div className="sd-sidebar lib-sidebar-sessions">
+                <SessionsList
+                  runs={SESSIONS_SHOWN}
+                  sources={SESSION_SOURCES}
+                  workspaceName="omni"
+                  currentRunId="s2"
+                  pinnedCard="s1"
+                  onOpen={() => {}}
+                />
               </div>
             </State>
           </div>
