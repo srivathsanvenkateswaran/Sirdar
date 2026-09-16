@@ -36,7 +36,11 @@ session's.
   trailing side `__who`, which never shrinks: `__key`
   (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`), the
   assignee's avatar, and the provider mark at `sm`. The key is left out of the
-  foot when it is already the title.
+  foot when it is already the title. Which number it is — the tracker's key
+  or the helpdesk's `#25312` — is the caller's choice (`runKey`), made on
+  Settings › General's "Sessions show"; `keyTitle` puts the other number,
+  with its product's name, in the number's tooltip (on the title when the
+  number is the title).
 - `span.sd-avatar` — the assignee, as a 22px circle of their initials:
   `--sd-sunk` fill, 11px at weight 600 in `--sd-ink-2`, `dir="ltr"`, the whole
   name in `title`. One letter for a one-word name, two when the name has two
@@ -112,6 +116,11 @@ Contrast: title `--sd-ink` **17.44:1** on the sheet, key `--sd-ink-3`
 hover border transitions.
 
 ## Changelog
+
+### 2026-09-16 (picker-sources)
+`keyTitle`: the foot's number carries the ticket's other number, with its
+product's name, as a tooltip. The board hands the card whichever number the
+"Sessions show" preference asks for and the other one here.
 
 ### 2026-09-15 (responsive)
 The foot is `flex-wrap: nowrap` and the cut moves inside the glyph: `__state`

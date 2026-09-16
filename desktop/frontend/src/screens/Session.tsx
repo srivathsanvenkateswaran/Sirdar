@@ -8,8 +8,14 @@ import {
   type JSX,
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
-import type { FixStart, NoteKind, RunDiff, Transport } from '../api/types'
+import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../api/types'
 import { askedQuestion, elapsed } from '../lib/events'
+import {
+  sessionsShow,
+  shownNumber,
+  subscribeSessionsShow,
+  type SessionsShow,
+} from '../lib/sessionsShow'
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
@@ -27,6 +33,7 @@ import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
 import ProviderMark from '../ui/provider-mark'
 import { AssignedTo } from '../ui/run-card/Avatar'
+import SourceMark from '../ui/source-mark'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import '../components/run/run.css'
 
@@ -95,13 +102,21 @@ export default function Session(props: {
   title?: string
   /** The workspace's notes directory, so a filed note is named as the vault names it. */
   notesDir?: string
+  /** The workspace's tracker and helpdesk, for the mark beside the number. */
+  sources?: SourcesSummary
   onBack: () => void
   /** Opens the change review for this run. */
   onOpenReview: () => void
   /** Reruns the fix with the deviation accepted; the shell owns the job. */
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
 }): JSX.Element {
-  const { transport, workspaceId, runId, title, notesDir, onBack, onOpenReview, onStartFix } = props
+  const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } =
+    props
+  const show = useSyncExternalStore(
+    subscribeSessionsShow,
+    sessionsShow,
+    () => 'tracker' as SessionsShow,
+  )
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(
     transport,
     workspaceId,
@@ -394,10 +409,23 @@ export default function Session(props: {
     }
   }
 
+  const shown = shownNumber(detail, show, sources)
+
   return (
     <div className="session">
       <header className="session-topbar">
-        <h1 className="session-key">{detail.key}</h1>
+        {/* The number under its product's mark, on the "Sessions show"
+            preference; the other number is the tooltip. The mark sits
+            beside the heading rather than in it, so the heading's name
+            stays the number alone. */}
+        <SourceMark
+          adapter={shown.source?.adapter ?? shown.role}
+          name={shown.source?.name}
+          size="sm"
+        />
+        <h1 className="session-key" title={shown.other || undefined}>
+          {shown.text}
+        </h1>
         <KindChip kind={detail.kind} />
         <StatusBadge
           status={detail.status as SdStatus}

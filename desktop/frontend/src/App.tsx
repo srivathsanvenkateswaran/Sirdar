@@ -233,6 +233,7 @@ function Shell(): JSX.Element {
           runId={runId}
           title={title}
           notesDir={currentWorkspace?.notesDir}
+          sources={state.sourcesByWorkspace[workspaceId]}
           onBack={() => navigate({ name: 'board' })}
           onOpenReview={() => navigate({ name: 'review', runId })}
           onStartFix={startFix}
@@ -293,6 +294,7 @@ function Shell(): JSX.Element {
           provider={currentWorkspace?.provider}
           tickets={tickets}
           runs={runs}
+          sources={state.sourcesByWorkspace[workspaceId]}
           queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
           loading={state.loading}
           inbound={state.inbound}

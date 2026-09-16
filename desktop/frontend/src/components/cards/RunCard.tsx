@@ -1,6 +1,12 @@
-import { useEffect, useState } from 'react'
-import type { RunSummary } from '../../api/types'
+import { useEffect, useState, useSyncExternalStore } from 'react'
+import type { RunSummary, SourcesSummary } from '../../api/types'
 import { elapsedSince } from '../../lib/format'
+import {
+  sessionsShow,
+  shownNumber,
+  subscribeSessionsShow,
+  type SessionsShow,
+} from '../../lib/sessionsShow'
 import SdRunCard from '../../ui/run-card'
 import type { GlyphState } from '../../ui/state-glyph'
 
@@ -16,20 +22,31 @@ const LIVE = new Set(['preparing', 'running'])
  * asked. Any other state gets no clock. The card is handed a string and lays
  * it out.
  *
+ * Which number the foot shows — the tracker's key or the helpdesk's — follows
+ * Settings › General's "Sessions show", with the other number in its tooltip;
+ * a run with no helpdesk number shows its key either way.
+ *
  * A key whose RCA is written is `done` on the board; the CLI reports the run
  * itself as `completed`, so the lane says which word the card gets.
  */
 export default function RunCard(props: {
   run: RunSummary
   title?: string
+  /** The workspace's tracker and helpdesk, for the number's tooltip. */
+  sources?: SourcesSummary
   /** The board's word for a completed RCA, in the Done lane. */
   done?: boolean
   onOpen: (runId: string) => void
 }): JSX.Element {
-  const { run, title, done = false, onOpen } = props
+  const { run, title, sources, done = false, onOpen } = props
   const live = LIVE.has(run.status)
   const blocked = run.status === 'blocked'
   const [now, setNow] = useState(() => Date.now())
+  const show = useSyncExternalStore(
+    subscribeSessionsShow,
+    sessionsShow,
+    () => 'tracker' as SessionsShow,
+  )
 
   useEffect(() => {
     if (!live && !blocked) return
@@ -44,10 +61,12 @@ export default function RunCard(props: {
       : ''
 
   const status: GlyphState = done && run.status === 'completed' ? 'done' : (run.status as GlyphState)
+  const shown = shownNumber(run, show, sources)
 
   return (
     <SdRunCard
-      runKey={run.key}
+      runKey={shown.text}
+      keyTitle={shown.other || undefined}
       kind={run.kind}
       status={status}
       title={title}

@@ -2,6 +2,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
 import type { InboundDelivery } from '../store/appStore'
 import { createFakeTransport, run, ticket, type FakeTransport } from '../store/fakeTransport'
 import Board, { buildColumns, updatedAgo, type BoardProps } from './Board'
@@ -9,6 +10,8 @@ import Board, { buildColumns, updatedAgo, type BoardProps } from './Board'
 afterEach(() => {
   cleanup()
   vi.useRealTimers()
+  localStorage.clear()
+  resetSessionsShow()
 })
 
 const TICKETS = [
@@ -101,6 +104,40 @@ describe('Board', () => {
     // Done is the board's word for a completed RCA; the CLI's is completed.
     expect(within(lane(container, 'done')).getByText('done')).toBeInTheDocument()
     expect(within(lane(container, 'triaged')).getByText('completed')).toBeInTheDocument()
+  })
+
+  it('shows the helpdesk number on that preference, with the key in the tooltip, and the key where a run has none', async () => {
+    setSessionsShow('helpdesk')
+    const sources = {
+      tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+      helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+    }
+    const runs = [
+      run({ runId: 'r1', key: 'OMNI-1', helpdeskKey: '25312', status: 'running', title: 'Login loop' }),
+      run({ runId: 'r2', key: 'OMNI-2', status: 'completed', title: 'Invoice total' }),
+    ]
+    const tickets = [
+      ticket({
+        key: 'OMNI-9',
+        helpdeskRef: '25401',
+        title: 'Statement export times out',
+        assignee: 'sri',
+        url: 'https://acme.atlassian.net/browse/OMNI-9',
+      }),
+    ]
+    const { container } = mount({ runs, sources }, createFakeTransport({ tickets }))
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    const live = within(lane(container, 'gathering')).getByRole('button', { name: /#25312/ })
+    expect(live.querySelector('.sd-run-card__key')).toHaveTextContent('#25312')
+    expect(live.querySelector('.sd-run-card__key')).toHaveAttribute('title', 'Jira OMNI-1')
+    // No helpdesk number: the key, with nothing to point at.
+    const done = within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })
+    expect(done.querySelector('.sd-run-card__key')).toHaveTextContent('OMNI-2')
+    expect(done.querySelector('.sd-run-card__key')).not.toHaveAttribute('title')
+    // A queued ticket follows the same preference through its helpdeskRef.
+    const queued = within(lane(container, 'queue')).getByRole('link', { name: /#25401/ })
+    expect(queued.querySelector('.sd-run-card__key')).toHaveAttribute('title', 'Jira OMNI-9')
   })
 
   it('draws the queued ticket as a link to the tracker, with Triage a button of its own', async () => {

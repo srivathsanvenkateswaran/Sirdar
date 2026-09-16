@@ -6,8 +6,17 @@ import Avatar from './Avatar'
 import './RunCard.css'
 
 export interface RunCardProps {
-  /** The tracker's key, in the ledger face at the foot. */
+  /**
+   * The ticket number, in the ledger face at the foot: the tracker's key, or
+   * the helpdesk's number when the reader prefers it (`#25312`).
+   */
   runKey: string
+  /**
+   * The other number the ticket has, with its product's name ("Zoho Desk
+   * #25312"), as the tooltip on the number shown. Absent when there is only
+   * one.
+   */
+  keyTitle?: string
   /** What the run is: triage, rca, fix. */
   kind: string
   /** The CLI's state, or `done` for a key whose RCA is written. */
@@ -74,6 +83,7 @@ const CLOCKED: GlyphState[] = ['preparing', 'running', 'blocked']
  */
 export default function RunCard({
   runKey,
+  keyTitle,
   kind,
   status,
   title,
@@ -95,7 +105,7 @@ export default function RunCard({
 
   const body = (
     <>
-      <span className="sd-run-card__title" dir="auto">
+      <span className="sd-run-card__title" dir="auto" title={title ? undefined : keyTitle}>
         {heading}
       </span>
 
@@ -109,7 +119,7 @@ export default function RunCard({
         </span>
         <span className="sd-run-card__who">
           {title && (
-            <span className="sd-run-card__key" dir="ltr">
+            <span className="sd-run-card__key" dir="ltr" title={keyTitle}>
               {runKey}
             </span>
           )}
