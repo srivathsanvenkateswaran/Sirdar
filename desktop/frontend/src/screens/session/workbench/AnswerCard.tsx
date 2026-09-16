@@ -3,6 +3,7 @@ import { AnswerFields } from '../../../components/run/AnswerCard'
 import { fieldLabel, isBlank } from '../../../lib/events'
 import type { FixReport } from '../../../lib/review'
 import Button from '../../../ui/button'
+import { Prose as Inline } from '../AnswerCard'
 import Document, { type OutlineItem } from './Document'
 
 /**
@@ -27,7 +28,8 @@ export interface AnswerCardProps {
   /** The final event's text, for Raw JSON and for a run that answered in prose. */
   text: string
   report?: FixReport
-  onRef?: (file: string) => void
+  /** A `file:line` reference or a file the reader clicked, as written. */
+  onRef?: (ref: string) => void
 }
 
 function asRecord(v: unknown): Record<string, unknown> | undefined {
@@ -40,46 +42,26 @@ function list(v: unknown): unknown[] {
   return Array.isArray(v) ? v : []
 }
 
-const REF = /\b([\w./-]+\.\w{1,6}:\d+(?:-\d+)?)\b/g
-
-/** Prose with `file:line` references and backticked spans drawn as code. */
-export function Prose({ text, onRef }: { text: string; onRef?: (file: string) => void }): JSX.Element {
-  const parts: ReactNode[] = []
-  let key = 0
-  for (const para of text.split(/\n{2,}/)) {
-    const nodes: ReactNode[] = []
-    // Backticks first, then references inside what is left.
-    const ticks = para.split(/(`[^`]+`)/)
-    for (const piece of ticks) {
-      if (piece.startsWith('`') && piece.endsWith('`') && piece.length > 1) {
-        nodes.push(<code key={key++}>{piece.slice(1, -1)}</code>)
-        continue
-      }
-      let last = 0
-      for (const m of piece.matchAll(REF)) {
-        const at = m.index ?? 0
-        if (at > last) nodes.push(piece.slice(last, at))
-        const ref = m[1]
-        nodes.push(
-          onRef ? (
-            <button key={key++} type="button" className="wb-refbtn" onClick={() => onRef(ref.split(':')[0])} title={`Find ${ref.split(':')[0]} in the console`}>
-              <code>{ref}</code>
-            </button>
-          ) : (
-            <code key={key++}>{ref}</code>
-          ),
-        )
-        last = at + m[0].length
-      }
-      if (last < piece.length) nodes.push(piece.slice(last))
-    }
-    parts.push(
-      <p key={key++} className="wb-prose" dir="auto">
-        {nodes}
-      </p>,
-    )
-  }
-  return <>{parts}</>
+/**
+ * Paragraphs of prose, each with its `file:line` references live and its
+ * backticked spans as code — the Conversation layout's `Prose` does the
+ * inline work; this splits the paragraphs and gives each the page's measure.
+ * `onRef` gets the reference as written (`ledger.go:27-34`).
+ */
+export function Prose({ text, onRef }: { text: string; onRef?: (ref: string) => void }): JSX.Element {
+  return (
+    <>
+      {text
+        .split(/\n{2,}/)
+        .map((p) => p.trim())
+        .filter(Boolean)
+        .map((para, i) => (
+          <p key={i} className="wb-prose" dir="auto">
+            <Inline text={para} onRef={onRef} />
+          </p>
+        ))}
+    </>
+  )
 }
 
 function Section({ id, title, aside, children }: { id: string; title: string; aside?: string; children: ReactNode }): JSX.Element {
@@ -138,7 +120,7 @@ interface Built {
   sections: { item: OutlineItem; body: ReactNode }[]
 }
 
-function buildTriage(a: Record<string, unknown>, onRef?: (file: string) => void): Built {
+function buildTriage(a: Record<string, unknown>, onRef?: (ref: string) => void): Built {
   const ticket = asRecord(a.ticket) ?? {}
   const root = asRecord(a.rootCause) ?? {}
   const fix = asRecord(a.proposedFix) ?? {}
@@ -168,7 +150,7 @@ function buildTriage(a: Record<string, unknown>, onRef?: (file: string) => void)
           {refs.length > 0 ? (
             <div className="wb-refs" aria-label="Code references">
               {refs.map((r) => (
-                <button key={r} type="button" className="wb-ref" onClick={() => onRef?.(r.split(':')[0])} title={`Find ${r.split(':')[0]} in the console`}>
+                <button key={r} type="button" className="wb-ref" onClick={() => onRef?.(r)} title={`Find ${r.split(':')[0]} in the console`}>
                   {r}
                 </button>
               ))}
@@ -345,7 +327,7 @@ function buildTriage(a: Record<string, unknown>, onRef?: (file: string) => void)
   return { title: str(a.title) || 'Answer', facts, sections }
 }
 
-function buildFix(r: FixReport, onRef?: (file: string) => void): Built {
+function buildFix(r: FixReport, onRef?: (ref: string) => void): Built {
   const [subject, ...body] = r.summary.split('\n')
   const sections: Built['sections'] = []
   if (body.join('\n').trim()) {

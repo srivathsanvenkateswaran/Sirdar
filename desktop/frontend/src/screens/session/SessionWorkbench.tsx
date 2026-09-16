@@ -12,16 +12,14 @@ import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../
 import type { ComposerMode } from '../../components/run/Composer'
 import { LIVE, TERMINAL, useRunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
-import { parseAnswer } from '../../lib/events'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
-import { checksFromEvents, fixReport } from '../../lib/review'
 import { sessionsShow, shownNumber, subscribeSessionsShow, type SessionsShow } from '../../lib/sessionsShow'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { stateWord } from '../../ui/status-badge'
 import ActivityRail from './workbench/ActivityRail'
 import AnswerCard from './workbench/AnswerCard'
-import type { BundleDoc } from './workbench/bundle'
+import type { Bundle } from './workbench/bundle'
 import BundleView from './workbench/BundleView'
 import ChangesView from './workbench/ChangesView'
 import ComposerCard from './workbench/ComposerCard'
@@ -42,6 +40,7 @@ import {
 } from './workbench/model'
 import NoteDocument from './workbench/NoteDocument'
 import RunHeader from './workbench/RunHeader'
+import { useSessionModel } from './model'
 import './session-workbench.css'
 
 /**
@@ -143,7 +142,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   const [permissions, setPermissions] = useState<Permissions | undefined>()
   const [noteCount, setNoteCount] = useState<number | null>(null)
   const [diffFiles, setDiffFiles] = useState<number | null>(null)
-  const [bundle, setBundle] = useState<BundleDoc | null>(null)
+  const [bundle, setBundle] = useState<Bundle | null>(null)
   const searchRef = useRef<HTMLInputElement | null>(null)
 
   const status = detail?.status ?? ''
@@ -211,24 +210,28 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   }, [])
 
   // ---- model --------------------------------------------------------------
+  // The shared reading of the run — calls with their paths shortened, the
+  // policy's word, the answer, the report, the checks — and the console's
+  // own rows built on it.
+  const session = useSessionModel(events, detail)
   const runEvents = useMemo(() => events.map((e) => e.event), [events])
   const rows = useMemo<ConsoleRow[]>(() => {
-    const built = buildRows(events, { startedAt: detail?.startedAt, kind: detail?.kind, permissions })
+    const built = buildRows(events, { startedAt: detail?.startedAt, kind: detail?.kind, permissions, calls: session.calls })
     const closing = detail ? closingRow(detail, notesDir) : undefined
     if (!closing) return built
     // The run ended at updatedAt; a review filed after that follows it.
     const at = built.findIndex((r) => Number.isFinite(closing.atMs) && r.atMs > closing.atMs)
     return at === -1 ? [...built, closing] : [...built.slice(0, at), closing, ...built.slice(at)]
-  }, [events, detail, permissions, notesDir])
+  }, [events, detail, permissions, notesDir, session.calls])
   const rail = useMemo(() => railItems(events, status), [events, status])
   const counts = useMemo(() => consoleCounts(rows), [rows])
   const answerText = useMemo(() => {
     for (let i = runEvents.length - 1; i >= 0; i -= 1) if (runEvents[i].kind === 'final') return runEvents[i].payload?.text ?? ''
     return ''
   }, [runEvents])
-  const answer = useMemo(() => (isFix ? undefined : parseAnswer(answerText)), [answerText, isFix])
-  const report = useMemo(() => (isFix ? fixReport(runEvents) : undefined), [runEvents, isFix])
-  const checks = useMemo(() => checksFromEvents(runEvents), [runEvents])
+  const answer = isFix ? undefined : session.answer
+  const report = isFix ? session.report : undefined
+  const checks = session.checks
   const question = useMemo(() => (detail ? pendingQuestion(detail, events) : undefined), [detail, events])
   const dropped = useMemo(
     () =>
@@ -258,8 +261,8 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
   const shownTab: Tab = tab ?? (isFix ? 'diff' : answer ? 'answer' : 'note')
   // state.json records the model only when the config names one; the
-  // provider names it on every assistant line.
-  const model = detail?.model || modelOf(events)
+  // provider names it on its init line and on every assistant line.
+  const model = detail?.model || session.start?.model || modelOf(events)
   const following = follow ?? live
 
   // ---- actions ------------------------------------------------------------
@@ -382,8 +385,8 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   }, [])
 
   /** A file:line chip: search the console for the calls that read the file. */
-  const findInConsole = useCallback((file: string) => {
-    const name = file.split(/[\\/]/).pop() ?? file
+  const findInConsole = useCallback((ref: string) => {
+    const name = ref.split(':')[0].split(/[\\/]/).pop() ?? ref
     setQuery(name)
     setCollapsedState(false)
     setFilter('all')
@@ -391,7 +394,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
   const onDiffLoaded = useCallback((diff: RunDiff | null) => setDiffFiles(diff ? diff.files.length : null), [])
   const onNoteLoaded = useCallback((n: number) => setNoteCount(n), [])
-  const onBundleLoaded = useCallback((doc: BundleDoc | null) => setBundle(doc), [])
+  const onBundleLoaded = useCallback((doc: Bundle | null) => setBundle(doc), [])
 
   // ---- render -------------------------------------------------------------
   if (loadError || !detail) {

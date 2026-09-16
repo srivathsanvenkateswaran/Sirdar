@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { parseBundlePrompt, translations } from './bundle'
+import { buildSessionModel } from '../model'
+import { translations } from './bundle'
 import {
   BLOCKED_FIX_RUN,
   FIX_RUN,
   TRIAGE_ANSWER,
-  TRIAGE_PROMPT,
   TRIAGE_RUN,
   fixEvents,
   indexed,
@@ -31,7 +31,8 @@ const PERMS = { bash: ['git log*', 'git show*', 'rg *', 'ls *'], fixBash: ['git 
 
 describe('the console rows', () => {
   const events = indexed(triageEvents())
-  const rows = buildRows(events, { startedAt: TRIAGE_RUN.startedAt, kind: 'triage', permissions: PERMS })
+  const calls = buildSessionModel(events, TRIAGE_RUN).calls
+  const rows = buildRows(events, { startedAt: TRIAGE_RUN.startedAt, kind: 'triage', permissions: PERMS, calls })
 
   it('folds the system lines into one session row and leaves the deltas out', () => {
     expect(rows[0]).toMatchObject({ kind: 'sys', tool: 'session' })
@@ -120,10 +121,12 @@ describe('the console rows', () => {
   })
 
   it('reads a fix run: writes take the write kind, a failing test says so in its summary', () => {
-    const fix = buildRows(indexed(fixEvents()), { startedAt: FIX_RUN.startedAt, kind: 'fix', permissions: PERMS })
+    const fixed = indexed(fixEvents())
+    const fix = buildRows(fixed, { startedAt: FIX_RUN.startedAt, kind: 'fix', permissions: PERMS, calls: buildSessionModel(fixed, FIX_RUN).calls })
     const edit = fix.find((r) => r.kind === 'write')!
     expect(edit.tool).toBe('Edit')
-    expect(edit.summary).toBe('ledger_test.go')
+    // The file, and the lines the replacement adds: five for one.
+    expect(edit.summary).toBe('ledger_test.go · +4')
     expect(edit.rule).toBe('fix worktree')
     const test = fix.find((r) => r.test)!
     expect(test.summary).toBe('go test ./...  →  exit 1 · --- FAIL: TestApplyMovementReturnAddsQuantityOnce (0.00s)')
@@ -210,16 +213,16 @@ describe('the small helpers', () => {
 
 describe('the output shapes', () => {
   it('reads rg output as file:line:match', () => {
-    const shape = shapeOutput('a.go:3:\tfoo\nb.go:12:\tbar\n')
+    const shape = shapeOutput('Bash', 'rg -n foo', 'a.go:3:\tfoo\nb.go:12:\tbar\n')
     expect(shape.kind).toBe('grep')
     if (shape.kind === 'grep') expect(shape.rows[1]).toEqual({ file: 'b.go', line: '12', text: '\tbar' })
   })
 
   it('reads numbered lines, JSON, tables and test output', () => {
-    expect(shapeOutput('     1\tpackage x\n     2\t\n     3\tfunc f() {}').kind).toBe('lines')
-    expect(shapeOutput('{"a": 1}').kind).toBe('json')
-    expect(shapeOutput('a | b\n1 | 2\n3 | 4').kind).toBe('table')
-    const test = shapeOutput('--- FAIL: TestX (0.00s)\n    x_test.go:8: boom\nok', { test: true })
+    expect(shapeOutput('Read', '', '     1\tpackage x\n     2\t\n     3\tfunc f() {}').kind).toBe('lines')
+    expect(shapeOutput('mcp__zoho__get_ticket', '', '{"a": 1}').kind).toBe('json')
+    expect(shapeOutput('Bash', 'psql -c "select 1"', 'a | b\n1 | 2\n3 | 4').kind).toBe('table')
+    const test = shapeOutput('Bash', 'go test ./...', '--- FAIL: TestX (0.00s)\n    x_test.go:8: boom\nok')
     expect(test.kind).toBe('test')
     if (test.kind === 'test') expect(test.lines.map((l) => l.failed)).toEqual([true, true, false])
   })
@@ -233,22 +236,6 @@ describe('the output shapes', () => {
 })
 
 describe('the bundle read off the prompt', () => {
-  it('lifts the ticket, the attachments, the thread and the playbooks', () => {
-    const doc = parseBundlePrompt(TRIAGE_PROMPT)
-    expect(doc.ticket).toMatchObject({
-      key: 'SBX-1',
-      priority: 'normal',
-      helpdeskUrl: 'https://sandbox.local/desk/88341',
-      customer: 'متجر الفهد للأدوات المنزلية',
-      customerId: 'SBX-CUST-1',
-    })
-    expect(doc.files).toEqual([])
-    expect(doc.thread).toHaveLength(4)
-    expect(doc.thread[1]).toMatchObject({ at: '2026-09-12T10:05:00+03:00', role: 'agent', who: 'Layla (L1)' })
-    expect(doc.thread[0].text).toMatch(/^السلام عليكم/)
-    expect(doc.playbooks).toEqual(['00-environment', '10-helpdesk', '50-code'])
-  })
-
   it('lifts the translated quotes out of the complaint in order', () => {
     expect(translations(TRIAGE_ANSWER.complaint)).toHaveLength(2)
     expect(translations(TRIAGE_ANSWER.complaint)[1]).toMatch(/^The return was last Tuesday/)

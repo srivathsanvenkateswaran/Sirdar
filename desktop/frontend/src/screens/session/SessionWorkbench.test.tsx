@@ -192,7 +192,7 @@ describe('SessionWorkbench', () => {
       const send = within(bar).getByRole('button', { name: /Send/ })
       expect(send).toBeDisabled()
       // The one filled control is the bar's, and the sidebar knows it.
-      expect(screen.getByTestId('published')).toHaveTextContent('Send inline')
+      await waitFor(() => expect(screen.getByTestId('published')).toHaveTextContent('Send inline'))
     })
 
     it('steers the run from the command bar, notes the words in the log and follows live', async () => {

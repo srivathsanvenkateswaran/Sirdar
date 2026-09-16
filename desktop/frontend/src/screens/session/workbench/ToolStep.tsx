@@ -1,5 +1,5 @@
 import { useMemo, useState, type JSX } from 'react'
-import { inputJSON, outputText } from '../../../lib/events'
+import { inputJSON, inputSummary, outputText } from '../../../lib/events'
 import { bytesLabel, byteLength, callIdOf, lineCount, type ConsoleRow } from './model'
 import { shapeLabel, shapeOutput, tokenizeJSON, type OutputShape } from './shapes'
 
@@ -121,7 +121,8 @@ export default function ToolStep({ row, turnLabel, live = false, onOpenInTools }
   const started = call?.started.event
   const input = started ? inputJSON(started) : ''
   const out = outputText(call?.finished?.event)
-  const shape = useMemo(() => shapeOutput(out, { test: row.test }), [out, row.test])
+  const command = started ? inputSummary(started) : ''
+  const shape = useMemo(() => shapeOutput(row.tool, command, out), [row.tool, command, out])
   const id = call ? callIdOf(call) : ''
 
   const meta: { k: string; v: string }[] = [

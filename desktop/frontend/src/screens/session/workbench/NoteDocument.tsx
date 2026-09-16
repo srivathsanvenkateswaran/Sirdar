@@ -6,6 +6,7 @@ import { reasonOf } from '../../../lib/format'
 import { noteName } from '../../../lib/review'
 import { noteDir, stripRTLBlocks, subscribePreferRTL } from '../../../lib/rtl'
 import Button from '../../../ui/button'
+import { chipsOf } from '../NoteDocument'
 import Document, { type OutlineItem } from './Document'
 
 /**
@@ -142,7 +143,7 @@ export default function NoteDocument({
       (notes ?? []).map((note) => {
         const { fields, body } = splitFrontmatter(note.text)
         const { title, sections } = noteSections(stripRTLBlocks(body))
-        return { kind: note.kind, fields, title, sections, path: notePathFor(note.kind, notePaths) }
+        return { kind: note.kind, chips: chipsOf(fields), title, sections, path: notePathFor(note.kind, notePaths) }
       }),
     [notes, notePaths],
   )
@@ -188,11 +189,18 @@ export default function NoteDocument({
               {note.title}
             </h2>
           ) : null}
-          {note.fields.length > 0 || note.path ? (
+          {note.chips.length > 0 || note.path ? (
             <div className="wb-facts">
-              {note.fields.map((f) => (
-                <span key={f.key}>
-                  {f.key} <b dir="auto">{f.value}</b>
+              {note.chips.map((c, i) => (
+                <span key={`${c.key}-${i}`}>
+                  {c.key}{' '}
+                  {c.url ? (
+                    <a href={c.url} target="_blank" rel="noreferrer" dir="auto">
+                      {c.value}
+                    </a>
+                  ) : (
+                    <b dir="auto">{c.value}</b>
+                  )}
                 </span>
               ))}
               {note.path ? (

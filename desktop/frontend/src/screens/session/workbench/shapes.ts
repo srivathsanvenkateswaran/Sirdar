@@ -1,9 +1,14 @@
 import { detectTable, type TextTable } from '../../../lib/events'
+import { shapeOutput as shapeBase } from '../shape'
 
 /**
  * A tool's output read into the shape it has, so the expanded call can draw
- * a table where there is one rather than a wall of text. Nothing is cut: the
- * row is the summary, the pane is the whole thing.
+ * a table where there is one rather than a wall of text. The Conversation
+ * layout's `shape.ts` does the reading — rg hits, numbered lines, a test
+ * run's verdict lines — and this adds the two shapes the Workbench's pane
+ * also draws: a JSON document with its keys coloured, and a pipe or tab
+ * table. Nothing is cut: the row is the summary, the pane is the whole
+ * thing.
  */
 export type OutputShape =
   /** `file:line:match` — what rg and grep -n print. */
@@ -17,10 +22,6 @@ export type OutputShape =
   /** A test runner's output: mono, with the failing lines flagged. */
   | { kind: 'test'; lines: { text: string; failed: boolean }[] }
   | { kind: 'text'; text: string }
-
-const GREP_LINE = /^([^:\s][^:]*?):(\d+):(.*)$/
-const NUMBERED_LINE = /^\s*(\d+)(?:\t|→| {2,})(.*)$/
-const FAILED_LINE = /^(?:---\s*FAIL|FAIL\b|Exit code [1-9]|panic:|.*\berror\b.*:\s|\s+\S+\.go:\d+:)/i
 
 function nonEmpty(text: string): string[] {
   return text
@@ -50,37 +51,22 @@ export function shapeLabel(shape: OutputShape): string {
 }
 
 /**
- * Reads the output's shape. The command decides first — a test run is a
- * test run whatever it printed — then the text: grep hits, numbered lines,
- * a table, JSON, and plain text as the last resort.
+ * Reads the output's shape. `tool` and `command` say what produced it — an
+ * rg result and a file read look alike to a regex and differently to a
+ * reader — and the shared shaper judges those first; JSON and a table are
+ * tried on what it left as text.
  */
-export function shapeOutput(text: string, opts: { test?: boolean } = {}): OutputShape {
-  const lines = nonEmpty(text)
-  if (opts.test) {
-    return { kind: 'test', lines: lines.map((l) => ({ text: l, failed: FAILED_LINE.test(l) })) }
-  }
-  if (lines.length === 0) return { kind: 'text', text }
-
-  const grep = lines.map((l) => GREP_LINE.exec(l))
-  if (lines.length >= 2 && grep.filter(Boolean).length >= lines.length * 0.8) {
-    return {
-      kind: 'grep',
-      rows: lines.map((l, i) => {
-        const m = grep[i]
-        return m ? { file: m[1], line: m[2], text: m[3] } : { file: '', line: '', text: l }
-      }),
-    }
-  }
-
-  const numbered = lines.map((l) => NUMBERED_LINE.exec(l))
-  if (lines.length >= 2 && numbered.filter(Boolean).length >= lines.length * 0.9) {
-    return {
-      kind: 'lines',
-      rows: lines.map((l, i) => {
-        const m = numbered[i]
-        return m ? { n: m[1], text: m[2] } : { n: '', text: l }
-      }),
-    }
+export function shapeOutput(tool: string, command: string, text: string): OutputShape {
+  const base = shapeBase(tool, command, text)
+  switch (base.kind) {
+    case 'matches':
+      return { kind: 'grep', rows: base.rows.map((r) => ({ file: r.file, line: String(r.line), text: r.text })) }
+    case 'lines':
+      return { kind: 'lines', rows: base.rows.map((r) => ({ n: String(r.n), text: r.text })) }
+    case 'test':
+      return { kind: 'test', lines: base.lines.map((l) => ({ text: l.text, failed: l.tone === 'fail' })) }
+    case 'text':
+      break
   }
 
   const trimmed = text.trim()

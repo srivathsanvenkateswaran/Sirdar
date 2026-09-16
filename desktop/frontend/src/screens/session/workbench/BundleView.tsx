@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type JSX } from 'react'
 import type { Transport } from '../../../api/types'
 import { reasonOf } from '../../../lib/format'
-import { idFromURL, parseBundlePrompt, translations, type BundleDoc } from './bundle'
+import { fact, idFromURL, otherFacts, parseBundle, translations, type Bundle } from './bundle'
 import Document, { type OutlineItem } from './Document'
 
 /**
@@ -23,8 +23,8 @@ export interface BundleViewProps {
   helpdeskKey?: string
   /** The answer's translated complaint, matched to the customer's messages in order. */
   complaint?: string
-  /** Called with the number of thread messages, for the tab's count. */
-  onLoaded?: (doc: BundleDoc | null) => void
+  /** Called with the bundle once the prompt is read, for the tab's count. */
+  onLoaded?: (doc: Bundle | null) => void
 }
 
 function DL({ rows }: { rows: { k: string; v: string; mono?: boolean; wrap?: boolean }[] }): JSX.Element {
@@ -67,26 +67,29 @@ export default function BundleView({ transport, workspaceId, runId, bundleDir, h
     }
   }, [transport, workspaceId, runId])
 
-  const doc = useMemo(() => (prompt ? parseBundlePrompt(prompt) : null), [prompt])
+  const doc = useMemo(() => (prompt ? parseBundle(prompt) : null), [prompt])
+  const key = doc ? fact(doc, 'Key') : ''
+  const trackerUrl = doc ? fact(doc, 'Tracker URL') : ''
+  const helpdeskUrl = doc ? fact(doc, 'Helpdesk URL') : ''
   useEffect(() => {
     if (prompt !== null) onLoaded?.(doc)
   }, [prompt, doc, onLoaded])
 
   const translated = useMemo(() => translations(complaint), [complaint])
-  const helpdeskId = helpdeskKey || (doc ? idFromURL(doc.ticket.helpdeskUrl) : '')
+  const helpdeskId = helpdeskKey || idFromURL(helpdeskUrl)
 
   const outline = useMemo<OutlineItem[]>(() => {
     if (!doc) return []
     const out: OutlineItem[] = [
-      { id: 'tracker', title: 'Tracker', n: doc.ticket.key || undefined },
+      { id: 'tracker', title: 'Tracker', n: key || undefined },
       { id: 'helpdesk', title: 'Helpdesk', n: helpdeskId || undefined },
       { id: 'thread', title: 'Thread', n: String(doc.thread.length) },
       { id: 'attachments', title: 'Attachments', n: String(doc.files.length) },
       { id: 'playbooks', title: 'Playbooks', n: String(doc.playbooks.length) },
     ]
-    for (const p of doc.playbooks) out.push({ id: `pb-${p}`, title: p, sub: true })
+    for (const p of doc.playbooks) out.push({ id: `pb-${p.name}`, title: p.name, sub: true })
     return out
-  }, [doc, helpdeskId])
+  }, [doc, helpdeskId, key])
 
   if (prompt === null) {
     return (
@@ -113,14 +116,16 @@ export default function BundleView({ transport, workspaceId, runId, bundleDir, h
           </div>
           <DL
             rows={[
-              { k: 'key', v: doc.ticket.key, mono: true },
-              { k: 'title', v: doc.ticket.title, wrap: true },
-              { k: 'priority', v: doc.ticket.priority },
-              { k: 'customer', v: doc.ticket.customer },
-              { k: 'customer id', v: doc.ticket.customerId, mono: true },
-              { k: 'url', v: doc.ticket.trackerUrl, mono: true },
-              ...doc.ticket.other.map((o) => ({ k: o.key.toLowerCase(), v: o.value, wrap: true })),
-              { k: 'bundle', v: doc.ticket.bundleDir || bundleDir, mono: true },
+              { k: 'key', v: key, mono: true },
+              { k: 'title', v: fact(doc, 'Title'), wrap: true },
+              { k: 'priority', v: fact(doc, 'Priority') },
+              { k: 'customer', v: fact(doc, 'Customer') },
+              { k: 'customer id', v: fact(doc, 'Customer ID'), mono: true },
+              { k: 'url', v: trackerUrl, mono: true },
+              ...otherFacts(doc, ['Key', 'Title', 'Priority', 'Customer', 'Customer ID', 'Tracker URL', 'Helpdesk URL', 'Bundle directory']).map(
+                (o) => ({ k: o.key.toLowerCase(), v: o.value, wrap: true }),
+              ),
+              { k: 'bundle', v: fact(doc, 'Bundle directory') || bundleDir, mono: true },
             ]}
           />
         </section>
@@ -128,11 +133,11 @@ export default function BundleView({ transport, workspaceId, runId, bundleDir, h
           <div className="wb-sec-h">
             Helpdesk <span className="wb-mono">prompt.md · Ticket</span>
           </div>
-          {doc.ticket.helpdeskUrl || helpdeskId ? (
+          {helpdeskUrl || helpdeskId ? (
             <DL
               rows={[
                 { k: 'id', v: helpdeskId, mono: true },
-                { k: 'url', v: doc.ticket.helpdeskUrl, mono: true },
+                { k: 'url', v: helpdeskUrl, mono: true },
                 { k: 'messages', v: String(doc.thread.length) },
               ]}
             />
@@ -157,7 +162,7 @@ export default function BundleView({ transport, workspaceId, runId, bundleDir, h
           return (
             <div key={i} className="wb-msg">
               <div className="wb-msg__meta">
-                <b dir="auto">{m.who}</b>
+                <b dir="auto">{m.author}</b>
                 {m.role}
                 <br />
                 {m.at.replace('T', ' ').replace(/:\d\d(?=[+-Z]|$)/, '')}
@@ -208,8 +213,8 @@ export default function BundleView({ transport, workspaceId, runId, bundleDir, h
         ) : (
           <ul className="wb-list wb-list--files">
             {doc.playbooks.map((p) => (
-              <li key={p} className="wb-mono" data-sec={`pb-${p}`}>
-                {p}
+              <li key={p.name} className="wb-mono" data-sec={`pb-${p.name}`}>
+                {p.name}
               </li>
             ))}
           </ul>

@@ -19,7 +19,6 @@ import {
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
-import { sessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
 import { readStoredFlag, writeStoredFlag } from '../lib/storedFlag'
 import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
 import Age from '../components/Age'
@@ -40,6 +39,8 @@ import ProviderMark from '../ui/provider-mark'
 import { AssignedTo } from '../ui/run-card/Avatar'
 import SourceMark from '../ui/source-mark'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
+import { sessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
+import SessionConversation from './session/SessionConversation'
 import SessionWorkbench from './session/SessionWorkbench'
 import '../components/run/run.css'
 
@@ -133,20 +134,23 @@ export interface SessionProps {
 }
 
 /**
- * Which layout the session is drawn in. The `sirdar.sessionLayout`
- * preference chooses between the Conversation (this file, today), the
- * Document and the Workbench. The session-blocks round turns this into the
- * dispatcher proper — `useSessionModel` and a layout per branch; until it
- * lands, the Workbench is reached from here and the Document falls back to
- * the Conversation.
+ * The session, in the layout the reader chose (`lib/sessionLayout`, the
+ * `sirdar.sessionLayout` preference). Conversation — the transcript as a
+ * chat with an inspector beside it — is the default and lives in
+ * `./session/SessionConversation`. Workbench — the documents over a
+ * structured console — is `./session/SessionWorkbench`. The Document layout
+ * is being built on its own branch; until it lands it falls through to the
+ * ledger transcript below, which is the screen as it stood before the
+ * layouts were designed.
  */
 export default function Session(props: SessionProps): JSX.Element {
   const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
+  if (layout === 'conversation') return <SessionConversation {...props} />
   if (layout === 'workbench') return <SessionWorkbench {...props} />
-  return <SessionConversation {...props} />
+  return <SessionLedger {...props} />
 }
 
-function SessionConversation(props: SessionProps): JSX.Element {
+function SessionLedger(props: SessionProps): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } =
     props
   const show = useSyncExternalStore(

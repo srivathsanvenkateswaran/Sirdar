@@ -1,14 +1,13 @@
 /**
- * Which of the three Session layouts the window draws: the Conversation
- * (A), the Document (B) or the Workbench (C). Chosen in Settings › General
- * and by the switcher in the session header; a preference of this person
- * and this browser, like the theme, so it lives in localStorage and never
- * in the config file.
+ * Which of the three Session layouts the window draws: Conversation (the
+ * transcript as a chat with an inspector beside it), Document (the note in
+ * the centre with the path beside it) or Workbench. Conversation is the
+ * default.
  *
- * The default is the Conversation, as decided after the mock review. This
- * file is the Workbench branch's copy of a preference the session-blocks
- * branch (session-b) defines with the same key; when the two meet, one copy
- * stays.
+ * It is a preference of this person and this browser, like the theme: it
+ * says nothing about the workspace, so it lives in localStorage under
+ * `sirdar.sessionLayout` and never in the config file. Settings › General
+ * and the switcher in the session header both write it.
  */
 
 export type SessionLayout = 'conversation' | 'document' | 'workbench'
@@ -25,7 +24,7 @@ function isLayout(value: unknown): value is SessionLayout {
   return value === 'conversation' || value === 'document' || value === 'workbench'
 }
 
-/** localStorage is absent in some tests and can throw in a locked-down webview. */
+/** localStorage is absent in tests and can throw in a locked-down webview. */
 function read(): SessionLayout {
   try {
     const stored = globalThis.localStorage?.getItem(SESSION_LAYOUT_KEY)
@@ -37,6 +36,7 @@ function read(): SessionLayout {
 
 let current = read()
 
+/** The layout this window draws sessions in. */
 export function sessionLayout(): SessionLayout {
   return current
 }
@@ -52,6 +52,7 @@ export function setSessionLayout(value: SessionLayout): void {
   for (const watcher of [...watchers]) watcher()
 }
 
+/** Notifies on every change; the return value unsubscribes. */
 export function subscribeSessionLayout(listener: () => void): () => void {
   watchers.add(listener)
   return () => {
@@ -59,7 +60,7 @@ export function subscribeSessionLayout(listener: () => void): () => void {
   }
 }
 
-/** Re-reads storage, so one test cannot leak into the next. */
+/** Re-reads storage and drops the cached value, so one test cannot leak into the next. */
 export function resetSessionLayout(): void {
   current = read()
   for (const watcher of [...watchers]) watcher()

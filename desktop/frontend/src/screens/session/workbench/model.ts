@@ -15,6 +15,7 @@ import {
 } from '../../../lib/events'
 import { duration, parseTime, usd } from '../../../lib/format'
 import { isTestCommand, noteName } from '../../../lib/review'
+import type { StepCall } from '../model'
 
 /**
  * The Workbench's reading of a run: `events.jsonl` as a structured log (one
@@ -377,6 +378,13 @@ export interface BuildOptions {
   startedAt: string | undefined
   kind?: string
   permissions?: Permissions
+  /**
+   * The calls as the shared session model read them (`useSessionModel` in
+   * `../model`): paths shortened against the run's root, the policy's word,
+   * an Edit's line counts, exit codes. A row is built from its call here
+   * when one is given; the events alone otherwise.
+   */
+  calls?: StepCall[]
 }
 
 /**
@@ -394,6 +402,8 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
   )
 
   const at = (t: string) => ({ at: offsetTenths(t, start), atMs: parseTime(t) })
+  const stepOf = new Map<number, StepCall>()
+  for (const c of opts.calls ?? []) stepOf.set(c.index, c)
 
   for (const item of conversation(events, true)) {
     if (item.kind === 'fold') {
@@ -431,18 +441,20 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
 
     if (item.kind === 'call') {
       const { call } = item
+      const step = stepOf.get(call.started.index)
       const started = call.started.event
-      const tool = toolLabel(str(started.payload?.tool)) || 'tool'
-      const decision = str(call.permission?.event.payload?.decision)
-      const reason = str(call.permission?.event.payload?.text)
+      const tool = step?.tool ?? (toolLabel(str(started.payload?.tool)) || 'tool')
+      const decision = step ? (step.decision === 'denied' ? 'deny' : 'allow') : str(call.permission?.event.payload?.decision)
+      const reason = step?.reason ?? str(call.permission?.event.payload?.text)
       const denied = decision === 'deny'
-      const command = inputSummary(started)
-      const description = toolDescription(started)
-      const out = outputText(call.finished?.event)
-      const ms = callMs(call)
+      const rawCommand = inputSummary(started)
+      const command = step?.summary ?? rawCommand
+      const description = step?.description || toolDescription(started)
+      const out = step?.output ?? outputText(call.finished?.event)
+      const ms = step ? step.tookMs : callMs(call)
       const isShell = SHELL_TOOLS.test(str(started.payload?.tool))
-      const test = isShell && isTestCommand(command)
-      const failed = !denied && outputFailed(call.finished?.event)
+      const test = isShell && isTestCommand(rawCommand)
+      const failed = step ? step.failed : !denied && outputFailed(call.finished?.event)
 
       let kind: RowKind = 'tool'
       if (denied) kind = 'deny'
@@ -457,17 +469,21 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
         output = `${inputJSON(started).length.toLocaleString('en-US')} ch`
       } else if (kind === 'write') {
         const args = asRecord(toolInput(started))
-        const path = str(args?.file_path) || str(args?.path) || command
-        summary = path.split(/[\\/]/).pop() || path
+        const path = step?.edit?.file || str(args?.file_path) || str(args?.path) || command
+        const file = path.split(/[\\/]/).pop() || path
+        const delta = step?.edit
+          ? [step.edit.added > 0 ? `+${step.edit.added}` : '', step.edit.removed > 0 ? `−${step.edit.removed}` : ''].filter(Boolean).join(' ')
+          : ''
+        summary = delta ? `${file} · ${delta}` : file
       } else if (test && out) {
         const lines = out.split('\n').map((l) => l.trim())
         const fail =
           lines.find((l) => /^(?:---\s*)?FAIL\b/.test(l)) ??
           lines.find((l) => /^Exit code [1-9]/.test(l))
         const ok = out.split('\n').find((l) => /^ok\s/.test(l.trim()))
-        const verdict = /Exit code (\d+)/.exec(out)
+        const exit = step?.exitCode ?? Number(/Exit code (\d+)/.exec(out)?.[1] ?? NaN)
         summary = `${command}  →  ${
-          verdict && verdict[1] !== '0' ? `exit ${verdict[1]} · ` : ''
+          Number.isFinite(exit) && exit !== 0 ? `exit ${exit} · ` : ''
         }${flat(fail ?? ok ?? lines.find(Boolean) ?? '', 120)}`
       }
 
@@ -484,7 +500,7 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
         output: output || undefined,
         outputBytes: out ? byteLength(out) : undefined,
         decision: decision || (call.finished || kind === 'final' ? 'allow' : ''),
-        rule: ruleFor(str(started.payload?.tool), command, decision, reason, opts.kind, opts.permissions),
+        rule: ruleFor(str(started.payload?.tool), rawCommand, decision, reason, opts.kind, opts.permissions),
         reason: denied ? reason : undefined,
         call,
         test: test || undefined,
