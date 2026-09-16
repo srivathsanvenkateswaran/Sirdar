@@ -19,6 +19,59 @@
 
 @import './styles/tokens.css';
 
+/*
+ * The four families the tokens name, served from the bundle.
+ *
+ * The desktop app should not fetch a font from anyone: it draws the same
+ * with the network off, and its first paint does not wait on fonts.gstatic.
+ * These are Google Fonts' variable latin builds of Figtree, Inter, JetBrains
+ * Mono and Newsreader, one file per face, under `src/fonts/` with each
+ * family's Open Font License beside it (`OFL-*.txt`). `font-display: swap`
+ * draws the system fallback first and swaps the face in when it has loaded;
+ * from the bundle that is the same frame. The landing page still links the
+ * families from Google Fonts, which is why this block is here and not in
+ * `styles/tokens.css`: the site's copy of that file is byte-identical.
+ */
+@font-face {
+  font-family: 'Figtree';
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url('./fonts/figtree-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url('./fonts/inter-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'JetBrains Mono';
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url('./fonts/jetbrains-mono-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: normal;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./fonts/newsreader-latin.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Newsreader';
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url('./fonts/newsreader-italic-latin.woff2') format('woff2');
+}
+
 * {
   box-sizing: border-box;
 }
