@@ -11,6 +11,24 @@ import "os/exec"
 // cmd.Start or cmd.Run.
 func Setup(cmd *exec.Cmd) { setup(cmd) }
 
+// Interrupt asks cmd to stop the polite way, so a CLI that writes a
+// summary line on its way out gets to write it instead of dying
+// mid-sentence. It is SIGINT on Unix and a Ctrl+Break console event on
+// Windows, which Go's runtime delivers to a Go child as os.Interrupt and
+// the C runtime as a console control event — the same thing a person
+// pressing Ctrl-C in front of the CLI would send it.
+//
+// It is the first half of a two-step stop: the caller schedules Kill as
+// the escalation for a child that does not take the hint. An error means
+// nothing was delivered and the escalation is the only path left; see
+// procgroup_windows.go, where the one common cause is a process that owns
+// no console.
+//
+// Windows needs cmd to have been through Setup for this to work at all,
+// because a console control event can only be addressed to a process
+// group. Call Setup before Start, as its own documentation says.
+func Interrupt(cmd *exec.Cmd) error { return interrupt(cmd) }
+
 // Kill takes down cmd and everything it started: the process group on
 // Unix, the parent-pid tree through `taskkill /T` on Windows, which has no
 // process group to address. Either way it falls back to killing just

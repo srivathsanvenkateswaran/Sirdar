@@ -11,6 +11,21 @@ func setup(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 }
 
+// interrupt sends SIGINT to the process this program started, and to that
+// process only. It is deliberately narrower than kill, which takes the
+// whole group: SIGINT is a request, and the process that was asked is the
+// one that knows which of its own children to pass it on to and which to
+// leave alone. Signalling the group would also mean signalling a pid that
+// may not lead one — the callers that never went through setup run inside
+// this program's own group, and -pid would then name someone else's
+// group, or nothing at all.
+func interrupt(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	return cmd.Process.Signal(syscall.SIGINT)
+}
+
 func kill(cmd *exec.Cmd) error {
 	if cmd.Process == nil {
 		return nil

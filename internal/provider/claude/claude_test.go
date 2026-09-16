@@ -13,15 +13,69 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
-// TestMain doubles as the fake `claude` binary: when SIRDAR_FAKE_CLAUDE names
-// a script, the test binary replays that script instead of running tests.
+// TestMain doubles as every stand-in this package needs for the real
+// `claude` binary. Two of them are chosen by the name the process was
+// started under — that is testbin.Dispatch, which has to come first,
+// because a process started under one of those names is that fake and not
+// a test run — and the scripted session CLI is chosen by
+// SIRDAR_FAKE_CLAUDE naming a script.
+//
+// The doctor stand-ins go through testbin rather than being `#!/bin/sh`
+// files because Windows has neither a shebang nor an extensionless
+// executable: exec.LookPath there refuses such a file outright, so a shell
+// stub failed the doctor tests for a reason that had nothing to do with
+// doctor. What is executable on every platform is this test binary,
+// hardlinked into place under the name the fake should have.
 func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{
+		"claude-ok":  fakeDoctorCurrent,
+		"claude-old": fakeDoctorOld,
+	})
 	if script := os.Getenv("SIRDAR_FAKE_CLAUDE"); script != "" {
 		os.Exit(fakeCLI(script))
 	}
 	os.Exit(m.Run())
+}
+
+// fakeDoctorCurrent is a `claude` new enough to answer both of Doctor's
+// questions: the version on --version, a login line on `auth status`. It
+// is the Go form of the shell stub this test used to write, dispatching on
+// the same first argument.
+func fakeDoctorCurrent() int {
+	switch firstArg() {
+	case "--version":
+		fmt.Println("2.1.267 (Claude Code)")
+	case "auth":
+		fmt.Println("Logged in as tester")
+	}
+	return 0
+}
+
+// fakeDoctorOld is a `claude` from before `auth status` existed: it still
+// reports a version, and refuses the subcommand on stderr with a non-zero
+// status, which is what Doctor reads to tell an old CLI from a login that
+// is genuinely broken.
+func fakeDoctorOld() int {
+	switch firstArg() {
+	case "--version":
+		fmt.Println("1.0.0")
+	case "auth":
+		fmt.Fprintln(os.Stderr, "unknown command: auth")
+		return 1
+	}
+	return 0
+}
+
+// firstArg is the subcommand a doctor fake was called with, or "" when it
+// was called with none.
+func firstArg() string {
+	if args := testbin.Args(); len(args) > 0 {
+		return args[0]
+	}
+	return ""
 }
 
 // fakeCLI replays a JSONL script on stdout. Directive lines drive the fake:
@@ -39,12 +93,18 @@ func fakeCLI(script string) int {
 		os.Exit(0)
 	}()
 
-	f, err := os.Open(script)
+	// The script is read whole and the handle released before a line of it
+	// is replayed. Blocking part-way through is the point of the $wait
+	// directive, and a fake blocked with the file still open is a fake
+	// still holding it when the test ends — which on Windows makes
+	// t.TempDir's RemoveAll fail with "the process cannot access the file
+	// because it is being used by another process" and fails the test
+	// however well its assertions went.
+	body, err := os.ReadFile(script)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake claude:", err)
 		return 2
 	}
-	defer f.Close()
 
 	fromSirdar := make(chan string, 64)
 	go func() {
@@ -58,7 +118,7 @@ func fakeCLI(script string) int {
 		}
 	}()
 
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(strings.NewReader(string(body)))
 	sc.Buffer(make([]byte, 0, 64*1024), 16<<20)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -562,10 +622,7 @@ func TestUnsupportedControlRequestDenied(t *testing.T) {
 
 func TestDoctor(t *testing.T) {
 	dir := t.TempDir()
-	ok := filepath.Join(dir, "claude-ok")
-	if err := os.WriteFile(ok, []byte("#!/bin/sh\ncase \"$1\" in\n--version) echo '2.1.267 (Claude Code)';;\nauth) echo 'Logged in as tester';;\nesac\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	ok := testbin.Install(t, dir, "claude-ok", "claude-ok")
 	checks := New().Doctor(context.Background(), ok)
 	if len(checks) != 2 {
 		t.Fatalf("checks %+v", checks)
@@ -577,10 +634,7 @@ func TestDoctor(t *testing.T) {
 		t.Fatalf("auth check %+v", checks[1])
 	}
 
-	old := filepath.Join(dir, "claude-old")
-	if err := os.WriteFile(old, []byte("#!/bin/sh\ncase \"$1\" in\n--version) echo '1.0.0';;\nauth) echo 'unknown command: auth' >&2; exit 1;;\nesac\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
+	old := testbin.Install(t, dir, "claude-old", "claude-old")
 	checks = New().Doctor(context.Background(), old)
 	if !checks[1].OK || checks[1].Detail != "auth status not supported by this version" {
 		t.Fatalf("old auth check %+v", checks[1])

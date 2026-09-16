@@ -15,16 +15,81 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
-// TestMain doubles as the fake `cursor-agent` binary: when
-// SIRDAR_FAKE_CURSOR names a script, the test binary replays that script
-// instead of running tests.
+// TestMain doubles as both stand-ins this package needs for the real
+// `cursor-agent` binary. The doctor stub is chosen by the name the process
+// was started under — that is testbin.Dispatch, which has to come first,
+// because a process started under that name is the stub and not a test
+// run — and the scripted session CLI is chosen by SIRDAR_FAKE_CURSOR
+// naming a script.
+//
+// The doctor stub goes through testbin rather than being a `#!/bin/sh`
+// file because Windows has neither a shebang nor an extensionless
+// executable: exec.LookPath there refuses such a file outright, which is
+// what failed every doctor test on that platform before any of doctor's
+// own behaviour was reached.
 func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{"cursor-agent": fakeDoctorStub})
 	if script := os.Getenv("SIRDAR_FAKE_CURSOR"); script != "" {
 		os.Exit(fakeCLI(script))
 	}
 	os.Exit(m.Run())
+}
+
+// stubAnswersSuffix names the file a stub reads its answers from,
+// installed beside the stub itself by writeStub.
+const stubAnswersSuffix = ".answers.json"
+
+// fakeDoctorStub answers Doctor's subcommands from the table writeStub
+// installed next to it, keyed by the first argument, and exits 9 for
+// anything the table does not name — the `*) exit 9` of the shell stub it
+// replaces, which is what gives the doctor tests a failing row to assert
+// on.
+//
+// The answers travel in a file rather than in the environment because two
+// stubs can be alive in one test binary at once, and a variable would let
+// either answer for the other.
+func fakeDoctorStub() int {
+	answers, err := stubAnswers()
+	if err != nil {
+		return testbin.Fail("fake cursor-agent: %v", err)
+	}
+	if len(testbin.Args()) == 0 {
+		return 9
+	}
+	out, ok := answers[testbin.Args()[0]]
+	if !ok {
+		return 9
+	}
+	fmt.Println(out)
+	return 0
+}
+
+// stubAnswers reads the table installed beside this executable. Both the
+// name the process was started under and the executable's own path are
+// tried, for the same reason testbin.Dispatch consults both: their answers
+// for a hard link differ between operating systems.
+func stubAnswers() (map[string]string, error) {
+	paths := []string{os.Args[0]}
+	if self, err := os.Executable(); err == nil {
+		paths = append(paths, self)
+	}
+	var last error
+	for _, p := range paths {
+		body, err := os.ReadFile(p + stubAnswersSuffix)
+		if err != nil {
+			last = err
+			continue
+		}
+		var answers map[string]string
+		if err := json.Unmarshal(body, &answers); err != nil {
+			return nil, err
+		}
+		return answers, nil
+	}
+	return nil, last
 }
 
 // fakeCLI replays a JSONL script on stdout. Directive lines drive the fake:
@@ -61,14 +126,20 @@ func fakeCLI(script string) int {
 		}
 	}
 
-	f, err := os.Open(script)
+	// The script is read whole and the handle released before a line of it
+	// is replayed. Blocking part-way through is the point of the $block
+	// directive, and a fake blocked with the file still open is a fake
+	// still holding it when the test ends — which on Windows makes
+	// t.TempDir's RemoveAll fail with "the process cannot access the file
+	// because it is being used by another process" and fails the test
+	// however well its assertions went.
+	body, err := os.ReadFile(script)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "fake cursor:", err)
 		return 2
 	}
-	defer f.Close()
 
-	sc := bufio.NewScanner(f)
+	sc := bufio.NewScanner(strings.NewReader(string(body)))
 	sc.Buffer(make([]byte, 0, 64*1024), 16<<20)
 	for sc.Scan() {
 		line := strings.TrimSpace(sc.Text())
@@ -726,36 +797,37 @@ func TestDoctorWithConfigSaysWorkspaceOnlyMCPCannotBeHonoured(t *testing.T) {
 // writeScript puts a fake-CLI script in a temp file and returns its path.
 func writeScript(t *testing.T, body string) string {
 	t.Helper()
-	path := t.TempDir() + "/script.jsonl"
+	path := filepath.Join(t.TempDir(), "script.jsonl")
 	if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
 		t.Fatalf("write script: %v", err)
 	}
 	return path
 }
 
-// writeStub builds a shell script that answers Doctor's subcommands, keyed
-// by the first argument.
+// writeStub installs a `cursor-agent` that answers Doctor's subcommands
+// from the table, keyed by the first argument. The stub is a copy of this
+// test binary running fakeDoctorStub — see TestMain for why it is not a
+// shell script — with the table written beside it.
+//
+// The path is built with filepath.Join rather than by concatenating a "/":
+// the separator that produced "…\001/cursor-agent" reached exec.LookPath
+// as written, and while Windows accepts a mixed separator in a path it
+// opens, the failure it reported named that spelling and cost a while to
+// read.
 func writeStub(t *testing.T, answers map[string]string) string {
 	t.Helper()
-	var b strings.Builder
-	b.WriteString("#!/bin/sh\ncase \"$1\" in\n")
-	for arg, out := range answers {
-		fmt.Fprintf(&b, "  %s) printf '%%s\\n' %s ;;\n", arg, shellQuote(out))
+	path := testbin.Install(t, t.TempDir(), "cursor-agent", "cursor-agent")
+	body, err := json.Marshal(answers)
+	if err != nil {
+		t.Fatalf("marshal stub answers: %v", err)
 	}
-	b.WriteString("  *) exit 9 ;;\nesac\n")
-
-	path := t.TempDir() + "/cursor-agent"
-	if err := os.WriteFile(path, []byte(b.String()), 0o700); err != nil {
-		t.Fatalf("write stub: %v", err)
+	if err := os.WriteFile(path+stubAnswersSuffix, body, 0o600); err != nil {
+		t.Fatalf("write stub answers: %v", err)
 	}
 	if _, err := exec.LookPath(path); err != nil {
 		t.Fatalf("stub not executable: %v", err)
 	}
 	return path
-}
-
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 // --- read-only breaches ------------------------------------------------

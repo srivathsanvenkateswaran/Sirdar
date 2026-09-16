@@ -847,18 +847,23 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 				}
 			})
 		}
-		if runtime.GOOS == "windows" {
-			// Signal(os.Interrupt) is not implemented on Windows and
-			// always errors there, which otherwise left Wait unable to
-			// tell a cancelled run from an ordinary exit (see Wait's use
-			// of runCtx below). There is no polite path on this
-			// platform, so skip straight to the group kill once the
-			// grace period elapses.
-			scheduleGroupKill()
+		// The polite stop first: Qwen Code writes its result line on the
+		// way out. procgroup.Interrupt is SIGINT on Unix and a Ctrl+Break
+		// console event to the child's own process group on Windows,
+		// which Go's runtime hands the child as os.Interrupt.
+		err := procgroup.Interrupt(cmd)
+		if err != nil && runtime.GOOS == "windows" {
+			// The one common reason it fails there is a Sirdar that owns
+			// no console to send the event through, and then this
+			// platform has no polite path at all. Take the group now
+			// rather than leaving Wait blocked for the whole grace
+			// period waiting out a signal that was never delivered.
+			// Wait still reports the run as cancelled: it reads runCtx
+			// rather than the error from here, which is platform-
+			// dependent (see Wait below).
+			_ = procgroup.Kill(cmd)
 			return nil
 		}
-		// SIGINT first: Qwen Code writes its result line on the way out.
-		err := cmd.Process.Signal(os.Interrupt)
 		scheduleGroupKill()
 		return err
 	}
