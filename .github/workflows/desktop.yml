@@ -3,7 +3,13 @@ name: desktop
 on:
   push:
     branches: [desktop, main]
-    paths: ['desktop/**', 'internal/app/**', 'internal/httpapi/**']
+    paths:
+      - 'desktop/**'
+      - 'internal/app/**'
+      - 'internal/httpapi/**'
+      # Decides what the Linux artifact and the release zip contain, so a
+      # change to it has to be built to be checked.
+      - 'scripts/package-linux.sh'
 
 permissions:
   contents: read
@@ -42,6 +48,14 @@ jobs:
 
       - name: Install wails CLI
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
+
+      # ci.yml's ubuntu `test` job skips ./desktop because it has no cgo
+      # and no WebKitGTK; this job has both, so it is the only place the
+      # bridge's tests run on Linux at all. (They also run on the Windows
+      # job in ci.yml, and nowhere on macOS.)
+      - name: Test the bridge (Linux)
+        if: runner.os == 'Linux'
+        run: go test -tags webkit2_41 ./desktop/
 
       - name: Build (Linux)
         if: runner.os == 'Linux'

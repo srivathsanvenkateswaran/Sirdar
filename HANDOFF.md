@@ -439,8 +439,9 @@ to. What is green: `GOOS=linux go vet ./...` on amd64 and arm64, and `GOOS=linux
 all 44 packages that have tests — every test binary compiles, none has been executed. Both of
 those cross-compile with cgo off, so they say nothing about the half of the desktop app that is
 C. Left for a Linux machine, or for the `test` and `desktop` CI jobs, to answer: whether
-`go test ./...` passes (the ubuntu `test` job covers the pure-Go packages and is green, so this
-is really only open for `./desktop`); whether the GTK window actually draws, picks up the
+`go test ./...` passes (the ubuntu `test` job covers the pure-Go packages and is green, and the
+`desktop` workflow's ubuntu entry now runs `./desktop` too, so this closes as soon as that
+workflow next runs); whether the GTK window actually draws, picks up the
 embedded icon, and groups under the launcher entry via the `sirdar` WM_CLASS; whether
 `install.sh` puts the entry somewhere GNOME and KDE both index, and whether the icon resolves
 from the hicolor theme without a logout; whether `secret-tool` finds a secret stored the way
