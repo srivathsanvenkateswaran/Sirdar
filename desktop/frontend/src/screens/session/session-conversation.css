@@ -1,0 +1,1710 @@
+/*
+ * Session, layout A — Conversation first. The transcript is a chat: the
+ * person's words as bubbles at the inline end, the model's prose as plain
+ * blocks at the inline start, and everything the agent did to the machine
+ * between them as a stack of one-line tool cards that expand in place. The
+ * answer is a rich card at the end, and the pane beside it is an inspector.
+ *
+ * Sizes are the mock's (docs/design/2026-09-16-session/A, A-session.css):
+ * a 64px topbar, a 500px inspector at 1470, a 640px flow, 16px for what
+ * the person and the model say, 13px mono at 36px a row for the log, 22px
+ * for the answer's title. Every value is a token; nothing here declares a
+ * colour, and `src/styles.library.test.ts` checks it.
+ */
+
+.sc {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+  color: var(--sd-ink);
+  background: var(--sd-sheet);
+}
+
+.sc-i {
+  inline-size: 14px;
+  block-size: 14px;
+  flex: 0 0 auto;
+}
+
+.sc-mono {
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  unicode-bidi: isolate;
+}
+
+/* A text button in the accent: As text, Copy, Open in Tools, N more. */
+.sc-link {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sd-accent);
+  cursor: pointer;
+}
+
+.sc-link:hover {
+  text-decoration: underline;
+}
+
+/* ------------------------------------------------------------------ topbar */
+
+.sc-topbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sd-space-3);
+  min-block-size: 64px;
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-5);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.sc-topbar > * {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.sc-key {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  unicode-bidi: isolate;
+}
+
+.sc-title {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: var(--sd-text-body);
+  color: var(--sd-ink-2);
+}
+
+.sc-stats {
+  display: flex;
+  align-items: center;
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+.sc-stat {
+  padding-inline: 14px;
+  border-inline-start: 1px solid var(--sd-rule);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sc-stat:first-child {
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.sc-stat b {
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+
+.sc-provider {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sc-provider__name {
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  color: var(--sd-ink-2);
+}
+
+.sc-provider__model {
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+.sc-loading,
+.sc-failed,
+.sc-failed-line {
+  margin: 0;
+  padding-block: var(--sd-space-5);
+  padding-inline: var(--sd-space-6);
+  color: var(--sd-ink-3);
+}
+
+.sc-failed,
+.sc-failed-line {
+  color: var(--sd-st-failed);
+}
+
+.sc-failed-line {
+  padding-block: var(--sd-space-2);
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: var(--sd-text-meta);
+}
+
+/* -------------------------------------------------------------------- body */
+
+/* The mock's 500 inspector at 1470, giving way to 34% of the window and
+   never under 360, so the flow keeps its measure on a MacBook. */
+.sc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) clamp(360px, 34vw, 500px);
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
+  min-block-size: 0;
+}
+
+.sc-body[data-pane='collapsed'] {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+.sc-left {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+  border-inline-end: 1px solid var(--sd-rule);
+}
+
+.sc-right {
+  display: flex;
+  flex-direction: column;
+  min-inline-size: 0;
+  min-block-size: 0;
+}
+
+/* ------------------------------------------------------------------ stream */
+
+.sc-stream {
+  position: relative;
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  padding-block: 20px var(--sd-space-5);
+  padding-inline: var(--sd-space-6) 40px;
+}
+
+.sc-flow {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  max-inline-size: 640px;
+}
+
+.sc-empty-flow {
+  margin: 0;
+  color: var(--sd-ink-3);
+}
+
+.sc-jump {
+  position: absolute;
+  inset-inline-end: 40px;
+  inset-block-end: 120px;
+  padding-block: var(--sd-space-1);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-surface);
+  color: var(--sd-ink-2);
+  font: inherit;
+  font-size: var(--sd-text-ledger);
+  cursor: pointer;
+}
+
+.sc-jump:hover {
+  border-color: var(--sd-accent);
+  color: var(--sd-accent);
+}
+
+/* A quiet line across the flow: the run starting, the run finishing. */
+.sc-sys {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+  white-space: nowrap;
+}
+
+.sc-sys::before,
+.sc-sys::after {
+  content: '';
+  flex: 1;
+  border-block-start: 1px solid var(--sd-rule);
+}
+
+.sc-sys > span {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-sys b {
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+
+.sc-sys--error {
+  color: var(--sd-st-failed);
+}
+
+/* The person. */
+.sc-you {
+  align-self: flex-end;
+  max-inline-size: 86%;
+  padding-block: 12px;
+  padding-inline: 16px;
+  border-start-start-radius: 14px;
+  border-start-end-radius: 14px;
+  border-end-end-radius: 4px;
+  border-end-start-radius: 14px;
+  background: var(--sd-nav-active);
+  font-size: 16px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sc-you__meta {
+  display: flex;
+  gap: var(--sd-space-2);
+  margin-block-end: 4px;
+  font-family: var(--sd-font-mono);
+  font-size: 12px;
+  color: var(--sd-ink-3);
+  white-space: nowrap;
+}
+
+/* The model: prose beside its mark. */
+.sc-agent {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: var(--sd-space-3);
+  align-items: start;
+}
+
+.sc-agent__say {
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.sc-agent__say > :first-child {
+  margin-block-start: 0;
+}
+
+.sc-agent__say > :last-child {
+  margin-block-end: 0;
+}
+
+/* A stamp with no card: thinking, writing the answer. */
+.sc-think {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  padding-inline-start: 34px;
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+.sc-think .sc-i {
+  inline-size: 13px;
+  block-size: 13px;
+}
+
+/* ------------------------------------------------------------- tool cards */
+
+.sc-tcs {
+  margin-inline-start: 34px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 10px;
+  background: var(--sd-surface);
+  overflow: hidden;
+}
+
+.sc-tcs__head {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-block-size: 30px;
+  padding-inline: 12px;
+  background: var(--sd-card-row);
+  border-block-end: 1px solid var(--sd-rule-faint);
+  font-family: var(--sd-font-mono);
+  font-size: 12px;
+  color: var(--sd-ink-3);
+}
+
+.sc-tc-wrap + .sc-tc-wrap {
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.sc-tc-wrap[data-on='true'] > .sc-tc {
+  background: var(--sd-highlight);
+}
+
+/* The line is the button that opens the card. */
+.sc-tc {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-block: 0;
+  padding-inline: 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sc-tc:hover {
+  background: var(--sd-card-row);
+}
+
+.sc-tc > .sc-i {
+  inline-size: 15px;
+  block-size: 15px;
+  color: var(--sd-ink-3);
+}
+
+.sc-tc__tn {
+  flex: 0 0 auto;
+  min-inline-size: 38px;
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sd-ink-2);
+}
+
+.sc-tc-wrap[data-denied='true'] .sc-tc__tn {
+  color: var(--sd-st-blocked);
+}
+
+.sc-tc__td {
+  flex: 1 1 58%;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--sd-ink);
+}
+
+.sc-tc__ts {
+  flex: 1 1 42%;
+  min-inline-size: 60px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+.sc-tc__tr {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sc-chev {
+  color: var(--sd-ink-3);
+  transition: transform var(--sd-dur-1) ease;
+}
+
+.sc-tc[aria-expanded='true'] .sc-chev {
+  transform: rotate(90deg);
+}
+
+/* The policy's reason under a denied line. */
+.sc-tc-why {
+  padding-block: 0 10px;
+  padding-inline: 37px 12px;
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--sd-st-blocked);
+  overflow-wrap: anywhere;
+}
+
+/* Stamps: a word in a tint, never the tint alone. */
+.sc-stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding-inline: 7px;
+  border-radius: 5px;
+  background: var(--sd-sunk);
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 20px;
+  white-space: nowrap;
+}
+
+.sc-stamp[data-t='deny'],
+.sc-stamp[data-t='wait'] {
+  background: color-mix(in srgb, var(--sd-st-blocked) 14%, transparent);
+  color: var(--sd-st-blocked);
+}
+
+.sc-stamp[data-t='allow'] {
+  background: color-mix(in srgb, var(--sd-st-triaged) 12%, transparent);
+  color: var(--sd-st-triaged);
+}
+
+.sc-stamp[data-t='fail'] {
+  background: color-mix(in srgb, var(--sd-st-failed) 12%, transparent);
+  color: var(--sd-st-failed);
+}
+
+.sc-stamp[data-t='ok'] {
+  background: color-mix(in srgb, var(--sd-st-done) 12%, transparent);
+  color: var(--sd-st-done);
+}
+
+.sc-stamp[data-t='live'] {
+  background: color-mix(in srgb, var(--sd-st-live) 12%, transparent);
+  color: var(--sd-st-live);
+}
+
+/* An expanded card. */
+.sc-tc-x {
+  border-block-start: 1px solid var(--sd-rule);
+}
+
+.sc-tc-x__sec {
+  padding-block: 10px 12px;
+  padding-inline: 14px;
+}
+
+.sc-tc-x__sec + .sc-tc-x__sec {
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.sc-tc-x__lab {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: var(--sd-space-2);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+}
+
+.sc-tc-x__lab .sc-mono {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sc-tc-x__acts {
+  display: flex;
+  gap: var(--sd-space-3);
+  margin-inline-start: auto;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sc-tc-x__none {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+}
+
+.sc-kv {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 0;
+  font-size: 13.5px;
+}
+
+.sc-kv__row {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.sc-kv dt {
+  color: var(--sd-ink-3);
+}
+
+.sc-kv dd {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-ink);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sc-kv dd.sc-kv__say {
+  font-family: var(--sd-font-ui);
+  font-size: 14px;
+}
+
+/* The output, in a region of at most 262px that scrolls on its own. */
+.sc-oscroll {
+  max-block-size: 262px;
+  overflow: auto;
+  border: 1px solid var(--sd-rule-faint);
+  border-radius: 6px;
+}
+
+.sc-ot {
+  inline-size: 100%;
+  border-collapse: collapse;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-ot th {
+  position: sticky;
+  inset-block-start: 0;
+  padding-block: 6px;
+  padding-inline: 10px;
+  background: var(--sd-sunk);
+  font-weight: 500;
+  color: var(--sd-ink-3);
+  text-align: start;
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.sc-ot td {
+  padding-block: 4px;
+  padding-inline: 10px;
+  border-block-start: 1px solid var(--sd-rule-faint);
+  color: var(--sd-ink-2);
+  vertical-align: top;
+  white-space: pre;
+}
+
+.sc-ot tbody tr:first-child td {
+  border-block-start: 0;
+}
+
+.sc-ot__f {
+  color: var(--sd-ink);
+  white-space: nowrap;
+}
+
+.sc-ot__n {
+  text-align: end;
+  color: var(--sd-ink-3);
+}
+
+/* The match cell truncates rather than wrapping, so a 17-row table stays 17 rows tall. */
+.sc-ot__t {
+  max-inline-size: 0;
+  inline-size: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-ot--lines .sc-ot__t {
+  white-space: pre;
+  tab-size: 4;
+}
+
+.sc-code {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: 12px;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--sd-ink-2);
+  white-space: pre;
+  tab-size: 4;
+  overflow: auto;
+}
+
+.sc-code__fail {
+  color: var(--sd-st-failed);
+}
+
+.sc-code__ok {
+  color: var(--sd-st-done);
+}
+
+/* ------------------------------------------------- the agent's question */
+
+.sc-ask {
+  margin-inline-start: 34px;
+  padding-block: 16px 18px;
+  padding-inline: 20px;
+  border: 1px solid color-mix(in srgb, var(--sd-st-blocked) 35%, transparent);
+  border-inline-start: 4px solid var(--sd-st-blocked);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--sd-st-blocked) 7%, transparent);
+}
+
+.sc-ask__h {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--sd-st-blocked);
+}
+
+.sc-ask__at {
+  margin-inline-start: auto;
+  font-family: var(--sd-font-mono);
+  font-weight: 400;
+  color: var(--sd-ink-3);
+}
+
+.sc-ask__q {
+  margin-block: var(--sd-space-2) 0;
+  font-size: 17px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.sc-ask__cmd {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  margin-block-start: 10px;
+  padding-block: 10px;
+  padding-inline: 14px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 8px;
+  background: var(--sd-surface);
+  font-family: var(--sd-font-mono);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.sc-ask__d {
+  margin-inline-start: auto;
+  font-family: var(--sd-font-ui);
+  font-size: 13.5px;
+  color: var(--sd-ink-3);
+  white-space: nowrap;
+}
+
+.sc-ask__why {
+  margin-block: 10px 0;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: var(--sd-ink-2);
+}
+
+.sc-ask__hint {
+  margin-block: 14px 0;
+  font-size: 13px;
+  color: var(--sd-ink-3);
+}
+
+/* ------------------------------------------------------------ the answer */
+
+.sc-ans {
+  margin-inline-start: 34px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 14px;
+  background: var(--sd-surface);
+  overflow: hidden;
+}
+
+.sc-ans__head {
+  padding-block: 18px 16px;
+  padding-inline: var(--sd-space-5);
+}
+
+.sc-ans__kicker {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+}
+
+.sc-ans__kicker .sc-i {
+  inline-size: 13px;
+  block-size: 13px;
+}
+
+.sc-ans__title {
+  margin-block: var(--sd-space-2) 0;
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+
+.sc-ans__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sd-space-2);
+  margin-block-start: var(--sd-space-3);
+}
+
+.sc-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 26px;
+  padding-inline: 10px;
+  border-radius: 6px;
+  background: var(--sd-sunk);
+  font-size: 13px;
+  color: var(--sd-ink-2);
+  white-space: nowrap;
+}
+
+.sc-tag b {
+  font-weight: 600;
+  color: var(--sd-ink);
+}
+
+.sc-tag[data-tone='done'] {
+  background: color-mix(in srgb, var(--sd-st-done) 12%, transparent);
+  color: var(--sd-st-done);
+}
+
+.sc-tag[data-tone='triaged'] {
+  background: color-mix(in srgb, var(--sd-st-triaged) 12%, transparent);
+  color: var(--sd-st-triaged);
+}
+
+.sc-tag[data-tone='blocked'] {
+  background: color-mix(in srgb, var(--sd-st-blocked) 13%, transparent);
+  color: var(--sd-st-blocked);
+}
+
+.sc-tag[data-tone='failed'] {
+  background: color-mix(in srgb, var(--sd-st-failed) 12%, transparent);
+  color: var(--sd-st-failed);
+}
+
+.sc-tag[data-tone] b {
+  color: inherit;
+}
+
+.sc-ans__sec {
+  padding-block: 14px 16px;
+  padding-inline: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.sc-ans__sec h3 {
+  margin-block: 0 var(--sd-space-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+}
+
+.sc-ans__h3-note {
+  margin-inline-start: var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sc-ans__sec p {
+  margin: 0;
+  font-size: 15.5px;
+  line-height: 1.6;
+}
+
+.sc-ans__sec p + p {
+  margin-block-start: var(--sd-space-2);
+}
+
+.sc-ans__sec code,
+.sc-agent__say code,
+.sc-doc__body code {
+  font-family: var(--sd-font-mono);
+  font-size: 0.88em;
+  padding-inline: 4px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--sd-ink) 6%, transparent);
+}
+
+/* A file:line reference: mono, in the accent, a button when it can be followed. */
+.sc-ref {
+  padding: 0;
+  border: 0;
+  background: none;
+  font-family: var(--sd-font-mono);
+  font-size: 0.9em;
+  color: var(--sd-accent);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+button.sc-ref:hover {
+  text-decoration: underline;
+}
+
+code.sc-ref {
+  cursor: text;
+}
+
+.sc-ans__more {
+  margin-block-start: 6px;
+  font-size: 13.5px;
+  text-align: start;
+}
+
+.sc-ans__list {
+  margin: 0;
+  padding-inline-start: 22px;
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.sc-ans__list li + li {
+  margin-block-start: 6px;
+}
+
+.sc-ev {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sc-ev li {
+  display: grid;
+  grid-template-columns: 156px minmax(0, 1fr);
+  gap: var(--sd-space-3);
+  font-size: 14.5px;
+  line-height: 1.5;
+}
+
+.sc-ev__ref {
+  padding-block-start: 2px;
+  font-family: var(--sd-font-mono);
+  font-size: 13px;
+  color: var(--sd-accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-ev__ref .sc-ref {
+  font-size: 13px;
+}
+
+.sc-ev__src {
+  display: block;
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-draft {
+  padding-block: 14px;
+  padding-inline: 16px;
+  border-radius: 10px;
+  background: var(--sd-card-row);
+  font-size: 16px;
+  line-height: 1.9;
+  unicode-bidi: plaintext;
+}
+
+.sc-ans__raw {
+  padding-block: var(--sd-space-2);
+  padding-inline: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-rule-faint);
+}
+
+.sc-ans__raw > summary {
+  cursor: pointer;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+}
+
+.sc-ans__raw > .sc-code {
+  max-block-size: 320px;
+  margin-block-start: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-faint);
+  border-radius: 6px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.sc-ans__empty {
+  color: var(--sd-ink-3);
+}
+
+.sc-ans__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-5);
+  border-block-start: 1px solid var(--sd-rule-faint);
+  background: var(--sd-card-row);
+  font-size: 14px;
+  color: var(--sd-ink-2);
+}
+
+.sc-ans__foot .sc-mono {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+  color: var(--sd-ink);
+}
+
+.sc-ans__foot-act {
+  margin-inline-start: auto;
+  flex: 0 0 auto;
+}
+
+/* The answer a later one superseded: one row. */
+.sc-ans--prev {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  inline-size: calc(100% - 34px);
+  min-block-size: 44px;
+  padding-block: 0;
+  padding-inline: 20px;
+  font: inherit;
+  font-size: 14px;
+  color: var(--sd-ink-2);
+  text-align: start;
+  cursor: pointer;
+}
+
+.sc-ans--prev:disabled {
+  cursor: default;
+}
+
+.sc-ans--prev .sc-mono {
+  color: var(--sd-ink-3);
+}
+
+.sc-ans--prev .sc-chev {
+  margin-inline-start: auto;
+}
+
+/* ---------------------------------------------------------------- composer */
+
+.sc-composer {
+  flex: 0 0 auto;
+  margin-block: 14px 20px;
+  margin-inline: var(--sd-space-6) 40px;
+}
+
+.sc-composer .composer-text {
+  min-block-size: 52px;
+  font-size: 16px;
+}
+
+/* --------------------------------------------------------------- inspector */
+
+.sc-pane-head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sd-space-3);
+  padding-inline: var(--sd-space-5) var(--sd-space-3);
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.sc-pane-head > .sd-panel-toggle {
+  margin-inline-start: auto;
+}
+
+.sc-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 28px;
+  min-inline-size: 0;
+}
+
+.sc-tab {
+  padding-block: 14px 12px;
+  padding-inline: 0;
+  margin-block-end: -1px;
+  border: 0;
+  border-block-end: 2px solid transparent;
+  background: transparent;
+  color: var(--sd-ink-2);
+  font: inherit;
+  font-size: var(--sd-text-body);
+  cursor: pointer;
+}
+
+.sc-tab:hover {
+  color: var(--sd-ink);
+}
+
+.sc-tab[aria-selected='true'] {
+  border-block-end-color: var(--sd-ink);
+  color: var(--sd-ink);
+  font-weight: 500;
+}
+
+.sc-tab__n {
+  margin-inline-start: 6px;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  font-weight: 400;
+  color: var(--sd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.sc-panel {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-block-size: 0;
+}
+
+/* The scrolling pane every tab but Changes sits in. */
+.sc-pane {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  padding-block: 20px var(--sd-space-6);
+  padding-inline: var(--sd-space-5);
+}
+
+.sc-pane--tools {
+  padding-inline: 12px;
+}
+
+.sc-pane-empty {
+  padding-block: var(--sd-space-4);
+  color: var(--sd-ink-3);
+}
+
+.sc-pane-error {
+  color: var(--sd-st-failed);
+}
+
+/* The folded rail. */
+.sc-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sd-space-1);
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding-block: 10px;
+}
+
+.sc-rail__tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  cursor: pointer;
+}
+
+.sc-rail__tab > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sc-rail__tab:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+/* ------------------------------------------------------- note as a document */
+
+.sc-fm {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-block-end: var(--sd-space-3);
+}
+
+.sc-fm__k {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 26px;
+  padding-inline: 9px;
+  border-radius: 6px;
+  background: var(--sd-sunk);
+  font-size: 12.5px;
+  color: var(--sd-ink);
+  white-space: nowrap;
+}
+
+.sc-fm__k i {
+  font-style: normal;
+  color: var(--sd-ink-3);
+}
+
+.sc-fm__k[data-tag='true'] {
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+}
+
+.sc-fm__k a {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.sc-fm__k a:hover {
+  color: var(--sd-accent);
+}
+
+.sc-fm__k .sc-i {
+  inline-size: 11px;
+  block-size: 11px;
+  color: var(--sd-ink-3);
+}
+
+.sc-doc__open {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  margin-block-end: var(--sd-space-3);
+  unicode-bidi: isolate;
+}
+
+.sc-doc__name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+}
+
+.sc-doc__failure {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-st-failed);
+}
+
+.sc-doc__kind {
+  margin-block: var(--sd-space-4) var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+}
+
+.sc-doc__body {
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--sd-ink);
+}
+
+.sc-doc__body h1 {
+  margin-block: 18px 6px;
+  font-family: var(--sd-font-display);
+  font-size: 27px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.sc-doc__body h1:first-child {
+  margin-block-start: 6px;
+}
+
+.sc-doc__body h2,
+.sc-doc__body h3 {
+  margin-block: var(--sd-space-5) var(--sd-space-2);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+}
+
+.sc-doc__body p {
+  margin-block: 0 10px;
+}
+
+/* An Arabic paragraph asks for more leading than a Latin one at the same size. */
+.sc-doc__body p[dir='auto']:lang(ar),
+.sc-doc__body [dir='auto'] {
+  unicode-bidi: plaintext;
+}
+
+.sc-doc__body blockquote {
+  margin-block: 0 10px;
+  margin-inline: 0;
+  padding-inline-start: 14px;
+  border-inline-start: 3px solid var(--sd-rule-strong);
+  color: var(--sd-ink-2);
+}
+
+.sc-doc__body ol,
+.sc-doc__body ul {
+  margin-block: 0 10px;
+  padding-inline-start: 22px;
+}
+
+.sc-doc__body li {
+  margin-block-end: 6px;
+}
+
+.sc-doc__body a {
+  color: var(--sd-accent);
+}
+
+.sc-doc__body pre {
+  padding-block: 9px;
+  padding-inline: 11px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 6px;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  overflow-x: auto;
+}
+
+.sc-doc__body pre code {
+  padding: 0;
+  background: transparent;
+}
+
+/* ------------------------------------------------------------------ bundle */
+
+.sc-tk {
+  padding-block: 18px;
+  padding-inline: 20px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 12px;
+  background: var(--sd-surface);
+}
+
+.sc-tk + .sc-tk,
+.sc-tk + .sc-grp,
+.sc-grp + .sc-grp {
+  margin-block-start: 14px;
+}
+
+.sc-tk__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.sc-tk__key {
+  font-family: var(--sd-font-mono);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.sc-tk__chip {
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-2);
+}
+
+.sc-tk__ext {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: auto;
+  font-size: 13px;
+  color: var(--sd-accent);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.sc-tk__ext .sc-i {
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+.sc-tk__title {
+  margin-block: 6px;
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+/* Two columns that cannot be pushed apart: a long path in one cell
+   ellipsises inside it rather than widening the card past its pane. */
+.sc-kvg {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px 16px;
+  margin-block-start: 14px;
+  font-size: 13.5px;
+}
+
+.sc-kvg > div {
+  min-inline-size: 0;
+}
+
+.sc-kvg__k {
+  font-size: 12px;
+  color: var(--sd-ink-3);
+}
+
+.sc-kvg__v {
+  margin-block-start: 1px;
+  color: var(--sd-ink);
+  overflow-wrap: anywhere;
+}
+
+.sc-kvg__v.sc-mono {
+  font-size: 13px;
+}
+
+.sc-kvg__path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sc-grp {
+  margin-block-start: 20px;
+}
+
+.sc-grp__h {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-end: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+}
+
+.sc-grp__n {
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.sc-th {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* The thread's bubbles: each in its own direction, the customer at the
+   start, the agent at the end. */
+.sc-bub {
+  align-self: flex-start;
+  max-inline-size: 90%;
+  padding-block: 10px 12px;
+  padding-inline: 14px;
+  border-radius: 12px;
+  background: var(--sd-card-row);
+  font-size: 15.5px;
+  line-height: 1.85;
+  unicode-bidi: plaintext;
+}
+
+.sc-bub[data-role='agent'] {
+  align-self: flex-end;
+  background: var(--sd-nav-active);
+}
+
+.sc-bub__who {
+  display: flex;
+  gap: var(--sd-space-2);
+  margin-block-end: 2px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--sd-ink-3);
+}
+
+.sc-empty {
+  padding-block: 14px;
+  padding-inline: 16px;
+  border: 1px dashed var(--sd-rule-strong);
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--sd-ink-3);
+}
+
+.sc-files {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+}
+
+.sc-files li {
+  padding-block: 3px;
+  border-block-end: 1px solid var(--sd-rule);
+  overflow-wrap: anywhere;
+}
+
+.sc-pb {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.sc-pb__k {
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 28px;
+  padding-inline: 10px;
+  border: 1px solid var(--sd-rule);
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-2);
+  cursor: pointer;
+}
+
+.sc-pb__k[data-on='true'] {
+  border-color: transparent;
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+}
+
+.sc-pbx {
+  margin-block-start: 10px;
+  padding-block: 12px;
+  padding-inline: 14px;
+  border-radius: 8px;
+  background: var(--sd-card-row);
+  font-size: 14px;
+  line-height: 1.55;
+  color: var(--sd-ink-2);
+}
+
+.sc-bundle__path {
+  margin-block-start: 20px;
+  color: var(--sd-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- tools table */
+
+.sc-ttsum {
+  display: flex;
+  gap: var(--sd-space-3);
+  padding-block: var(--sd-space-3) var(--sd-space-2);
+  padding-inline: 4px;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+  white-space: nowrap;
+}
+
+.sc-ttsum b {
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+
+.sc-ttsum [data-tone='blocked'],
+.sc-ttsum [data-tone='blocked'] b {
+  color: var(--sd-st-blocked);
+}
+
+.sc-ttsum__out {
+  margin-inline-start: auto;
+}
+
+.sc-tt {
+  inline-size: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+}
+
+.sc-tt th {
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 36px;
+  padding-inline: 5px;
+  background: var(--sd-sheet);
+  border-block-end: 1px solid var(--sd-rule);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sd-ink-3);
+  text-align: start;
+  white-space: nowrap;
+}
+
+.sc-tt th[data-sort='true'] {
+  color: var(--sd-ink);
+}
+
+.sc-tt th[data-align='end'],
+.sc-tt__r {
+  text-align: end;
+}
+
+.sc-tt th:nth-child(1) {
+  inline-size: 26px;
+}
+
+.sc-tt th:nth-child(2) {
+  inline-size: 54px;
+}
+
+.sc-tt th:nth-child(3) {
+  inline-size: 60px;
+}
+
+.sc-tt th:nth-child(5) {
+  inline-size: 78px;
+}
+
+.sc-tt th:nth-child(6) {
+  inline-size: 56px;
+}
+
+.sc-tt th:nth-child(7) {
+  inline-size: 100px;
+}
+
+.sc-tt__sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+.sc-tt__sort .sc-i {
+  inline-size: 11px;
+  block-size: 11px;
+}
+
+.sc-tt td {
+  block-size: 40px;
+  padding-inline: 5px;
+  border-block-end: 1px solid var(--sd-rule-faint);
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-2);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sc-tt tbody tr[tabindex] {
+  cursor: pointer;
+}
+
+.sc-tt tbody tr[tabindex]:hover td {
+  background: var(--sd-card-row);
+}
+
+.sc-tt__n {
+  color: var(--sd-ink-3);
+}
+
+.sc-tt__tool {
+  font-weight: 600;
+  color: var(--sd-ink);
+}
+
+.sc-tt tr[data-on='true'] td {
+  background: var(--sd-highlight);
+}
+
+.sc-tt tr[data-deny='true'] td {
+  color: var(--sd-st-blocked);
+}
+
+.sc-tt .sc-stamp {
+  line-height: 18px;
+}
+
+/* --------------------------------------------------------------- narrower */
+
+/* Compact (under 1200): the topbar tightens and RunHeader folds the
+   provider and the turns into the figures' title. */
+@media (max-width: 1199px) {
+  .sc-topbar {
+    gap: var(--sd-space-2);
+    padding-inline: var(--sd-space-4);
+  }
+
+  .sc-stream {
+    padding-inline: var(--sd-space-5);
+  }
+
+  .sc-composer {
+    margin-inline: var(--sd-space-5);
+  }
+}
+
+/* Under 1100 the panes stack, transcript first, and the inspector takes 45vh. */
+@media (max-width: 1099px) {
+  .sc-body {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 45vh;
+  }
+
+  .sc-body[data-pane='collapsed'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 36px;
+  }
+
+  .sc-left {
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--sd-rule);
+  }
+
+  .sc-rail {
+    flex-direction: row;
+    padding-block: 0;
+    padding-inline: 10px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sc-chev {
+    transition-duration: 1ms;
+  }
+}

@@ -39,6 +39,8 @@ import ProviderMark from '../ui/provider-mark'
 import { AssignedTo } from '../ui/run-card/Avatar'
 import SourceMark from '../ui/source-mark'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
+import { sessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
+import SessionConversation from './session/SessionConversation'
 import '../components/run/run.css'
 
 /**
@@ -113,7 +115,7 @@ export function statsTitle(detail: {
   ].join(' · ')
 }
 
-export default function Session(props: {
+export interface SessionProps {
   transport: Transport
   workspaceId: string
   runId: string
@@ -128,7 +130,24 @@ export default function Session(props: {
   onOpenReview: () => void
   /** Reruns the fix with the deviation accepted; the shell owns the job. */
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
-}): JSX.Element {
+}
+
+/**
+ * The session, in the layout the reader chose (`lib/sessionLayout`, the
+ * `sirdar.sessionLayout` preference). Conversation — the transcript as a
+ * chat with an inspector beside it — is the default and lives in
+ * `./session/SessionConversation`. The Document and Workbench layouts are
+ * being built on their own branches; until they land, both fall through to
+ * the ledger transcript below, which is the screen as it stood before the
+ * layouts were designed.
+ */
+export default function Session(props: SessionProps): JSX.Element {
+  const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
+  if (layout === 'conversation') return <SessionConversation {...props} />
+  return <SessionLedger {...props} />
+}
+
+function SessionLedger(props: SessionProps): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } =
     props
   const show = useSyncExternalStore(

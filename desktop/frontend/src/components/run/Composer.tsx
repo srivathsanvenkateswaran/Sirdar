@@ -27,6 +27,12 @@ export interface ComposerProps {
   kind?: RunKind
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
+  /** Takes focus on mount: a blocked run's composer is already waiting to be typed into. */
+  autoFocus?: boolean
+  /** The layout's own words for the empty box, in place of the defaults. */
+  placeholder?: string
+  /** Draw the send's word beside its arrow while the run is blocked. */
+  wideWhenAnswering?: boolean
 }
 
 /**
@@ -54,6 +60,9 @@ export default function Composer({
   model,
   kind,
   sentCount,
+  autoFocus = false,
+  placeholder: ownPlaceholder,
+  wideWhenAnswering = false,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -76,13 +85,14 @@ export default function Composer({
           : 'Type the instruction first'
         : `${label} (⌘↵)`
   const placeholder =
-    mode.kind === 'answer'
-      ? mode.question
-        ? 'Answer the question'
-        : 'Anything the agent should know before it goes on (optional)'
-      : mode.kind === 'steer'
-        ? 'What should the agent do next?'
-        : mode.reason
+    mode.kind === 'disabled'
+      ? mode.reason
+      : ownPlaceholder ??
+        (mode.kind === 'answer'
+          ? mode.question
+            ? 'Answer the question'
+            : 'Anything the agent should know before it goes on (optional)'
+          : 'What should the agent do next?')
 
   return (
     <div className="session-composer" data-mode={mode.kind}>
@@ -93,6 +103,7 @@ export default function Composer({
         onChange={setText}
         placeholder={placeholder}
         disabled={mode.kind === 'disabled'}
+        autoFocus={autoFocus && mode.kind !== 'disabled'}
         error={error}
         chips={
           <>
@@ -134,6 +145,7 @@ export default function Composer({
           disabled,
           title,
           onClick: () => onSend(trimmed),
+          wide: wideWhenAnswering && mode.kind === 'answer',
         }}
       />
     </div>
