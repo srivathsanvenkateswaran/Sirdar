@@ -4,6 +4,7 @@ import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { BELOW_COMPACT, useMediaQuery } from '../../lib/useMediaQuery'
 import type { Screen } from '../../store/appStore'
+import BrandMark from '../../ui/brand-mark'
 import Button from '../../ui/button'
 import PanelToggle from '../../ui/panel-toggle'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
@@ -159,6 +160,9 @@ function Sidebar(props: {
   return (
     <div className="sd-sidebar" data-collapsed={rail ? 'true' : undefined}>
       <div className="sd-sidebar__brand">
+        {/* The mark is decoration here: the word beside it already says the
+            product, and a second accessible name would read it twice. */}
+        <BrandMark decorative />
         <span className="brand">Sirdar</span>
         <WorkspaceSwitcher
           workspaces={workspaces}

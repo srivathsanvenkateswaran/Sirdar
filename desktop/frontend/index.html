@@ -5,6 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sirdar</title>
     <!--
+      The mark chosen on 2026-09-16, copied from
+      docs/design/2026-09-16-logo/final/sirdar-mark-light.svg. Vite copies
+      public/ into dist/ verbatim, and internal/httpapi embeds that dist, so
+      the same file is the favicon in the Wails window and in `sirdar serve`.
+    -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <!--
       The four families the tokens name are served from the bundle: the
       @font-face block at the top of src/styles.css points at src/fonts/. The
       app fetches nothing from Google Fonts, so it draws the same offline and
