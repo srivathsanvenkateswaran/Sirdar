@@ -81,6 +81,12 @@ is simply there.
 
 ## Changelog
 
+### 2026-09-16 (held to the window)
+`.sd-dialog` is capped at `calc(92vh - 16px)` and its body scrolls. The window
+itself is `overflow: hidden` from this round on, so a dialog taller than the
+window would otherwise have lost its actions below the fold with no way to
+reach them.
+
 ### 2026-09-15 (inert)
 The rest of the window is `inert` while the dialog is open, through the
 exported `inertOutside` helper the Modal sheet shares. Before this a pointer

@@ -23,10 +23,18 @@
   box-sizing: border-box;
 }
 
+/*
+ * The window never scrolls. The app is a fixed frame the size of the window
+ * and every screen scrolls inside its sheet — one scroll container per
+ * screen, `min-block-size: 0` all the way down the flex chain. A popover is
+ * pinned to the viewport by `lib/anchor.ts` rather than hung under its
+ * trigger, so nothing it does can grow the page either.
+ */
 html,
 body,
 #root {
   block-size: 100%;
+  overflow: hidden;
 }
 
 body {

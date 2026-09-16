@@ -22,6 +22,9 @@
   width: 100%;
   max-width: 420px;
   padding: var(--sd-space-4);
+  /* No taller than the window less the scrim's inset: the body scrolls, the
+     window never does. */
+  max-block-size: calc(92vh - var(--sd-space-4));
   border: 1px solid var(--sd-rule-strong);
   border-radius: var(--sd-radius-md);
   background: var(--sd-surface);
@@ -42,6 +45,8 @@
   display: grid;
   gap: var(--sd-space-3);
   min-width: 0;
+  min-block-size: 0;
+  overflow-y: auto;
 }
 
 .sd-dialog__actions {
