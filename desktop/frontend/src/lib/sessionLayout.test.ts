@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_SESSION_LAYOUT,
   SESSION_LAYOUT_KEY,
+  SESSION_LAYOUT_OPTIONS,
   resetSessionLayout,
   sessionLayout,
   setSessionLayout,
@@ -14,9 +15,10 @@ describe('the session layout preference', () => {
     resetSessionLayout()
   })
 
-  it('is Conversation until chosen otherwise', () => {
+  it('is Conversation until chosen otherwise, and the options list it first', () => {
     expect(DEFAULT_SESSION_LAYOUT).toBe('conversation')
     expect(sessionLayout()).toBe('conversation')
+    expect(SESSION_LAYOUT_OPTIONS.map((o) => o.id)).toEqual(['conversation', 'document', 'workbench'])
   })
 
   it('remembers the choice under sirdar.sessionLayout and tells its watchers', () => {

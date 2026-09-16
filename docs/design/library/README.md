@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All thirty-six are built. Each row links the spec in this folder, which is a
+All thirty-eight are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -235,6 +235,20 @@ the icon until then.
 | # | Component | Surfaces | Status | Code | Spec |
 |---|---|---|---|---|---|
 | 36 | Brand mark | app | built | `src/ui/brand-mark/` | [brand-mark/SPEC.md](brand-mark/SPEC.md) |
+
+### The session round
+
+Added on 2026-09-16 with the three Session directions in `../2026-09-16-session/`,
+all three of which the app now draws as selectable layouts. These two are the
+pieces every layout shares that are primitives rather than session blocks: the
+blocks themselves (RunHeader, ToolStep, TurnGroup, NoteDocument, AnswerCard,
+BundleView, ToolsTable, ChangesView, the composer strip) live in
+`desktop/frontend/src/components/session/` and are documented there.
+
+| # | Component | Surfaces | Status | Code | Spec |
+|---|---|---|---|---|---|
+| 37 | Marker | app | built | `src/ui/marker/` | [marker/SPEC.md](marker/SPEC.md) |
+| 38 | Drawer | app | built | `src/ui/drawer/` | [drawer/SPEC.md](drawer/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee

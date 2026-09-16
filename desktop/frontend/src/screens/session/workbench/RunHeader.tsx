@@ -4,6 +4,7 @@ import { useNow } from '../../../lib/useNow'
 import Button from '../../../ui/button'
 import ProviderMark from '../../../ui/provider-mark'
 import StatusBadge, { type SdStatus } from '../../../ui/status-badge'
+import { SessionLayoutSwitcher } from '../../../components/session/RunHeader'
 import { PersonIcon } from './icons'
 import { gauges, type Gauge as GaugeModel } from './model'
 
@@ -110,6 +111,7 @@ export default function RunHeader({
           </span>
         </>
       ) : null}
+      <SessionLayoutSwitcher />
       {onCancel ? (
         <Button variant="ghost" size="sm" onClick={onCancel} disabled={cancelDisabled} title={cancelTitle}>
           Cancel

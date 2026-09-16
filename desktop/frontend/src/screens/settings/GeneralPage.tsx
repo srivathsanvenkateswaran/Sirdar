@@ -8,6 +8,7 @@ import {
   type SessionsShow,
 } from '../../lib/sessionsShow'
 import {
+  SESSION_LAYOUT_OPTIONS,
   sessionLayout,
   setSessionLayout,
   subscribeSessionLayout,
@@ -32,13 +33,6 @@ const THEME_OPTIONS: { id: Theme; label: string }[] = [
 const SESSIONS_SHOW_OPTIONS: { id: SessionsShow; label: string }[] = [
   { id: 'tracker', label: 'Tracker number' },
   { id: 'helpdesk', label: 'Helpdesk number' },
-]
-
-/** Conversation first: it is the default the mock review settled on. */
-const LAYOUT_OPTIONS: { id: SessionLayout; label: string }[] = [
-  { id: 'conversation', label: 'Conversation' },
-  { id: 'document', label: 'Document' },
-  { id: 'workbench', label: 'Workbench' },
 ]
 
 const LAYOUT_WORDS: Record<SessionLayout, string> = {
@@ -237,11 +231,11 @@ export default function GeneralPage({
         <SettingRow
           label="Session layout"
           value={LAYOUT_WORDS[layout]}
-          help="How a session window is laid out. Conversation is the default; Document renders the answer as a page and, until its round lands, falls back to Conversation; Workbench shows the documents over a structured console. Remembered in this browser."
+          help="How a session window is laid out. Conversation is the default; Document renders the note or the change as the page with the path beside it; Workbench shows the documents over a structured console. The switcher in a session's header changes the same setting. Remembered in this browser."
           control={
             <SegmentedControl
               label="Session layout"
-              options={LAYOUT_OPTIONS}
+              options={SESSION_LAYOUT_OPTIONS}
               value={layout}
               onChange={(id) => setSessionLayout(id as SessionLayout)}
             />

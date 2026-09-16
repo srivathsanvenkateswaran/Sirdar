@@ -40,6 +40,10 @@ the parser, exported as `parsePatch`, and its hunk numbering is the service's:
   and the new one otherwise) and the code (`.sd-diff__code`, `white-space:
   pre`, tab-size 4), which opens with the mark git prints: `+`, `−`, or a
   space.
+- `.sd-diff__extra` — what a screen adds to a hunk's bar (`hunkExtra`) or a
+  file's head (`fileExtra`): the session puts the hunk's change marker (C2)
+  and a "dropped by you" stamp there. Sits before the actions, at the
+  inline end, and takes no more than it needs.
 - `p.sd-diff__stub` — the one paragraph the view shows instead of lines: the
   Split stub, the empty change, or the truncation notice under the files.
 
@@ -103,6 +107,13 @@ light and **6.22:1** dark; the hunk header is `--sd-ink-3` on `--sd-sunk`,
 give.
 
 ## Changelog
+
+### 2026-09-16
+`hunkExtra` and `fileExtra` render props, drawn in `.sd-diff__extra` before
+the actions, so the session's Changes document can put its C markers and the
+review's "dropped by you" stamp on the hunks without a second diff. The
+session hides `.sd-diff__filehead` and draws its own file head with the
+counts and markers above the view.
 
 ### 2026-09-15
 Added, with the parser, for the Change review screen and the session's

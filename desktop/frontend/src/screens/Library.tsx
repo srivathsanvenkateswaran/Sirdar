@@ -8,6 +8,7 @@ import Button from '../ui/button'
 import Card from '../ui/card'
 import DataTable, { type DataColumn } from '../ui/data-table'
 import Dialog from '../ui/dialog'
+import Drawer from '../ui/drawer'
 import EventRow, { EVENT_GLYPHS, type EventVariant } from '../ui/event-row'
 import GroupLabel from '../ui/group-label'
 import Heatmap from '../ui/heatmap'
@@ -15,6 +16,7 @@ import HeroBand from '../ui/hero-band'
 import ItemRow from '../ui/item-row'
 import KanbanColumn, { type LaneId } from '../ui/kanban-column'
 import KindChip from '../ui/kind-chip'
+import Marker from '../ui/marker'
 import ModalSheet from '../ui/modal-sheet'
 import ModelPicker, { type ModelChoicePair } from '../ui/model-picker'
 import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
@@ -253,6 +255,10 @@ export default function Library(): JSX.Element {
   const [search, setSearch] = useState('')
   const [well, setWell] = useState('')
   const [toggled, setToggled] = useState(true)
+  // Closed at rest: an open drawer is a dialog, and the gallery keeps none
+  // open until a reader drives one.
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [hotMarker, setHotMarker] = useState('E1')
   const [paneOpen, setPaneOpen] = useState(true)
   const [choice, setChoice] = useState<ModelChoicePair>({ provider: '', model: '' })
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
@@ -1457,6 +1463,55 @@ export default function Library(): JSX.Element {
                 <BrandMark decorative />
                 <span className="brand">سردار</span>
               </span>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="marker"
+          name="Marker"
+          note="The evidence chip, E1…En on a claim and on the call that produced it and C1…Cn on a hunk and on the edit that wrote it, where clicking one lights its twin."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="Drive it: the hot one is the twin in view">
+              <span className="lib-lockup">
+                {['E1', 'E2', 'E3'].map((id) => (
+                  <Marker key={id} id={id} hot={hotMarker === id} onClick={setHotMarker} title={`Evidence ${id}`} />
+                ))}
+              </span>
+            </State>
+            <State label="A change marker">
+              <Marker id="C2" onClick={() => {}} title="ledger.go @@ -25,13 +25,8 @@" />
+            </State>
+            <State label="Labelling only, no twin">
+              <Marker id="E6" />
+            </State>
+            <State label="Beside a reference in prose">
+              <span className="lib-ref">
+                ledger.go:33 <Marker id="E1" size="sm" />
+              </span>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="drawer"
+          name="Drawer"
+          note="A panel over one column with the rest of the window untouched, which is how the session opens Bundle and Tools; Escape closes it and focus goes back to the opener."
+        >
+          <div className="lib-row">
+            <State label="Drive it">
+              <div className="lib-drawer-stage">
+                <div className="lib-drawer-under">
+                  <Button variant="pale" size="sm" onClick={() => setDrawerOpen((v) => !v)}>
+                    {drawerOpen ? 'Close the drawer' : 'Open the drawer'}
+                  </Button>
+                  <p>The column the drawer covers. The document beside it stays live.</p>
+                </div>
+                <Drawer open={drawerOpen} title="Tools" meta="15 calls · 2 denied · 14.7 kB out" onClose={() => setDrawerOpen(false)}>
+                  <p className="lib-drawer-body">Every call with its time, decision, duration and output size.</p>
+                </Drawer>
+              </div>
             </State>
           </div>
         </Section>

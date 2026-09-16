@@ -41,6 +41,8 @@ import {
 import NoteDocument from './workbench/NoteDocument'
 import RunHeader from './workbench/RunHeader'
 import { useSessionModel } from './model'
+import { evidenceOf } from '../../components/session/model'
+import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
 import './session-workbench.css'
 
 /**
@@ -230,6 +232,11 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     return ''
   }, [runEvents])
   const answer = isFix ? undefined : session.answer
+  // E1…En off the answer's evidence, on the calls that produced each item.
+  const markers = useMemo(
+    () => deriveEvidenceMarkers(evidenceOf(answer), rows.filter((r) => r.call).map((r) => stepLikeOf(r.index, r.call!.started.event))),
+    [answer, rows],
+  )
   const report = isFix ? session.report : undefined
   const checks = session.checks
   const question = useMemo(() => (detail ? pendingQuestion(detail, events) : undefined), [detail, events])
@@ -556,6 +563,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
           <Console
             rows={rows}
+            markers={markers}
             countsLabel={countsLabel(counts)}
             usage={detail.usage}
             filter={filter}

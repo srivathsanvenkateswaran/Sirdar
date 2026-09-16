@@ -4,7 +4,7 @@ import { parseAnswer } from '../../lib/events'
 import type { FixReport } from '../../lib/review'
 import { noteName } from '../../lib/review'
 import Button from '../../ui/button'
-import { AnswerFields } from '../../components/run/AnswerCard'
+import { AnswerFields } from '../../components/session/AnswerCard'
 import { BracesIcon, ChevronIcon, NoteIcon } from './icons'
 
 /*

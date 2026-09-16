@@ -17,6 +17,8 @@ import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/r
 import { LIVE, TERMINAL, useRunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { askedQuestion, notePathFor } from '../../lib/events'
+import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
+import { evidenceOf } from '../../components/session/model'
 import { reasonOf, tokens, usd } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
@@ -112,6 +114,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const model = useSessionModel(events, detail)
+  // E1…En off the answer's evidence, on the calls that produced each item:
+  // the same derivation the Document layout draws its markers from.
+  const markers = useMemo(
+    () => deriveEvidenceMarkers(evidenceOf(model.answer), model.calls.map((c) => stepLikeOf(c.index, c.call.started.event))),
+    [model.answer, model.calls],
+  )
 
   const [tab, setTab] = useState<Tab | null>(null)
   const [paneOpen, setPaneOpen] = useState(() => !readStoredFlag(PANE_COLLAPSED_KEY))
@@ -729,7 +737,16 @@ export default function SessionConversation(props: SessionConversationProps): JS
               ) : null}
               {shownTab === 'tools' ? (
                 <div className="sc-pane sc-pane--tools">
-                  <ToolsTable calls={model.calls} highlighted={highlighted} onLocate={locate} />
+                  <ToolsTable
+                    calls={model.calls}
+                    highlighted={highlighted}
+                    onLocate={locate}
+                    markers={markers}
+                    onMarker={(id) => {
+                      const step = model.calls.find((c) => markers.find((m) => m.id === id)?.steps.includes(c.index))
+                      if (step) locate(step)
+                    }}
+                  />
                 </div>
               ) : null}
             </div>

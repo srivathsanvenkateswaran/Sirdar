@@ -1,4 +1,6 @@
 import { useMemo, useState, type JSX, type ReactNode } from 'react'
+import { markersForStep, type Marker as MarkerModel } from '../../../lib/evidence'
+import Marker from '../../../ui/marker'
 import { duration } from '../../../lib/format'
 import { bytesLabel, type ConsoleRow } from './model'
 
@@ -22,6 +24,8 @@ export interface ToolsTableProps {
   onToggle: (id: string) => void
   /** Draws the expanded body under a row. */
   renderExpanded: (row: ConsoleRow) => ReactNode
+  /** The evidence markers (E1…En) off the answer, drawn beside the decision of the call that produced each. */
+  markers?: MarkerModel[]
 }
 
 type SortKey = 'i' | 'at' | 'tool' | 'in' | 'dur' | 'out' | 'dec'
@@ -81,7 +85,7 @@ export function toolTotals(rows: ConsoleRow[], all: ConsoleRow[], startedMs: num
   return { cells, model: parts.length > 0 ? `on the model · ${parts.join(' · ')}` : '' }
 }
 
-export default function ToolsTable({ rows, all, startedMs, expanded, onToggle, renderExpanded }: ToolsTableProps): JSX.Element {
+export default function ToolsTable({ rows, all, startedMs, expanded, onToggle, renderExpanded, markers = [] }: ToolsTableProps): JSX.Element {
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'i', dir: 'asc' })
   const totals = useMemo(() => toolTotals(rows, all, startedMs), [rows, all, startedMs])
 
@@ -150,6 +154,9 @@ export default function ToolsTable({ rows, all, startedMs, expanded, onToggle, r
               <span className="wb-ttab__dec" role="cell" title={row.reason}>
                 <b>{row.decision || '—'}</b>
                 {row.rule ? ` · ${row.rule}` : ''}
+                {markersForStep(row.index, markers).map((m) => (
+                  <Marker key={m.id} id={m.id} title={m.query} />
+                ))}
               </span>
             </button>
             {expanded.has(row.id) ? renderExpanded(row) : null}

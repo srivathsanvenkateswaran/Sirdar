@@ -47,6 +47,8 @@ export interface ConsoleProps {
   turnOf: (row: ConsoleRow) => string | undefined
   /** Reports which rail cells have rows in view. */
   onVisibleTurns?: (keys: Set<string>) => void
+  /** The evidence markers off the answer, for the Tools table's decision cells. */
+  markers?: import('../../../lib/evidence').Marker[]
 }
 
 const TOOL_KINDS = new Set(['tool', 'deny', 'write', 'final'])
@@ -54,6 +56,7 @@ const TOOL_KINDS = new Set(['tool', 'deny', 'write', 'final'])
 export default function Console(props: ConsoleProps): JSX.Element {
   const {
     rows,
+    markers,
     countsLabel,
     usage,
     filter,
@@ -256,6 +259,7 @@ export default function Console(props: ConsoleProps): JSX.Element {
               expanded={expanded}
               onToggle={onToggleRow}
               renderExpanded={(row) => <ToolStep row={row} turnLabel={turnLabelOf(row)} live={live} />}
+              markers={markers}
             />
           ) : (
             <>

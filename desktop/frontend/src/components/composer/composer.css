@@ -122,6 +122,48 @@
   block-size: 18px;
 }
 
+/* ---------- the strip variant ---------- */
+
+/*
+ * Under a document (the session's Document layout): a 14px corner on the
+ * strong rule, one line of 16px text at 26px until typed into, and the bar
+ * at 6/12/12/14 with a labelled primary at its end rather than the arrow.
+ */
+.composer[data-variant='strip'] {
+  border-color: var(--sd-rule-strong);
+  border-radius: 14px;
+  background: var(--sd-surface);
+}
+
+.composer[data-variant='strip'] .composer-text {
+  min-block-size: 26px;
+  padding-block: 12px 6px;
+  padding-inline: 18px;
+  border-radius: 14px 14px 0 0;
+  field-sizing: content;
+  max-block-size: 40vh;
+}
+
+.composer[data-variant='strip'] .composer-bar {
+  padding-block: 6px 12px;
+  padding-inline: 14px 12px;
+}
+
+.composer[data-variant='strip'] .composer-bar__chips {
+  flex: 0 1 auto;
+  gap: 8px;
+}
+
+.composer[data-variant='strip'] .composer-bar__chips > * + * {
+  margin-inline-start: 0;
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.composer[data-variant='strip'] .composer-send > .sd-button {
+  min-height: var(--sd-control-h);
+}
+
 /* Wide: the word beside the arrow, still round-ended, still 36 tall. */
 .composer-send[data-wide='true'] > .sd-button {
   min-height: 36px;

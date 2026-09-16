@@ -1,5 +1,5 @@
 import { useMemo, useState, type JSX, type ReactNode } from 'react'
-import { AnswerFields } from '../../../components/run/AnswerCard'
+import { AnswerFields } from '../../../components/session/AnswerCard'
 import { fieldLabel, isBlank } from '../../../lib/events'
 import type { FixReport } from '../../../lib/review'
 import Button from '../../../ui/button'

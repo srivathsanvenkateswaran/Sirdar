@@ -40,7 +40,7 @@ function css(component: string): string {
 }
 
 describe('the component library', () => {
-  it('holds the thirty-six components the library README lists', () => {
+  it('holds the thirty-eight components the library README lists', () => {
     expect(COMPONENTS).toEqual([
       'ambient',
       'badge',
@@ -51,6 +51,7 @@ describe('the component library', () => {
       'data-table',
       'dialog',
       'diff-view',
+      'drawer',
       'event-row',
       'group-label',
       'heatmap',
@@ -58,6 +59,7 @@ describe('the component library', () => {
       'item-row',
       'kanban-column',
       'kind-chip',
+      'marker',
       'modal-sheet',
       'model-picker',
       'note-pane',

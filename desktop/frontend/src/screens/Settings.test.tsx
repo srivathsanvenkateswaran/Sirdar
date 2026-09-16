@@ -205,8 +205,10 @@ describe('General', () => {
     expect(screen.getByText('Dark', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
   })
 
-  it('switches the session layout, and remembers it', () => {
+  it('switches the session layout, listing Conversation first as the default, and remembers it', () => {
     open()
+    const group = screen.getByRole('radiogroup', { name: 'Session layout' })
+    expect(within(group).getAllByRole('radio').map((o) => o.textContent)).toEqual(['Conversation', 'Document', 'Workbench'])
     expect(screen.getByRole('radio', { name: 'Conversation' })).toBeChecked()
     fireEvent.click(screen.getByRole('radio', { name: 'Workbench' }))
     expect(sessionLayout()).toBe('workbench')
