@@ -1,0 +1,1085 @@
+/*
+ * Sirdar docs: Material for MkDocs restyled through the design tokens.
+ *
+ * tokens.css (loaded first, a byte-identical copy of the app's file) is the
+ * only place a colour, radius, duration or family is declared. This file
+ * assigns Material's --md-* variables from those names and restates the
+ * structure: one slim bar, a nav tree scoped to the active tab, a reading
+ * column of about 820px with the page contents beside it, code with a
+ * language label and a copy button, left-ruled callouts, a plain footer.
+ *
+ * Material's root font size is 20px from 1220px up (its rem), so .05rem is a
+ * hairline, .8rem is 16px and 2.4rem is the 48px bar.
+ */
+
+/* Faces ------------------------------------------------------------------
+   Self-hosted under docs/fonts, the same variable latin builds the desktop
+   app bundles, each with its Open Font License beside it. Figtree draws the
+   UI, the nav and the body; JetBrains Mono the code; the Newsreader italic is
+   only the second clause of the home page's headline, so only that face
+   ships. Every stack in tokens.css still falls through to a system face. */
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 300 900;
+  font-display: swap;
+  src: url("../fonts/figtree-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 100 800;
+  font-display: swap;
+  src: url("../fonts/jetbrains-mono-latin.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Newsreader";
+  font-style: italic;
+  font-weight: 200 800;
+  font-display: swap;
+  src: url("../fonts/newsreader-italic-latin.woff2") format("woff2");
+}
+
+/* Material's variables, from the tokens ------------------------------------ */
+
+:root,
+[data-md-color-scheme="default"],
+[data-md-color-primary="indigo"],
+[data-md-color-accent="indigo"] {
+  --md-text-font: Figtree;
+  --md-code-font: "JetBrains Mono";
+
+  --md-primary-fg-color: var(--sd-band-deep);
+  --md-primary-fg-color--light: var(--sd-band-deep);
+  --md-primary-fg-color--dark: var(--sd-band-ink);
+  --md-primary-bg-color: var(--sd-band-fg);
+  --md-primary-bg-color--light: color-mix(in srgb, var(--sd-band-fg) 72%, transparent);
+
+  --md-accent-fg-color: var(--sd-accent);
+  --md-accent-fg-color--transparent: var(--sd-accent-soft);
+  --md-accent-bg-color: var(--sd-accent-ink);
+  --md-accent-bg-color--light: var(--sd-accent-ink);
+
+  --md-default-bg-color: var(--sd-paper);
+  --md-default-bg-color--light: color-mix(in srgb, var(--sd-paper) 70%, transparent);
+  --md-default-bg-color--lighter: color-mix(in srgb, var(--sd-paper) 30%, transparent);
+  --md-default-bg-color--lightest: color-mix(in srgb, var(--sd-paper) 12%, transparent);
+  --md-default-fg-color: var(--sd-ink);
+  --md-default-fg-color--light: var(--sd-ink-2);
+  --md-default-fg-color--lighter: var(--sd-ink-3);
+  --md-default-fg-color--lightest: var(--sd-rule-strong);
+
+  --md-code-bg-color: var(--sd-sunk);
+  --md-code-fg-color: var(--sd-ink);
+  /* Syntax hues, kept to the ramp the app already means something by:
+     keywords in the accent, strings in the triaged teal, numbers in the
+     blocked amber, comments in the third ink. */
+  --md-code-hl-color: var(--sd-highlight);
+  --md-code-hl-color--light: color-mix(in srgb, var(--sd-highlight) 60%, transparent);
+  --md-code-hl-number-color: var(--sd-st-blocked);
+  --md-code-hl-special-color: var(--sd-st-failed);
+  --md-code-hl-function-color: var(--sd-ink);
+  --md-code-hl-constant-color: var(--sd-accent);
+  --md-code-hl-keyword-color: var(--sd-accent);
+  --md-code-hl-string-color: var(--sd-st-triaged);
+  --md-code-hl-name-color: var(--sd-ink);
+  --md-code-hl-operator-color: var(--sd-ink-2);
+  --md-code-hl-punctuation-color: var(--sd-ink-2);
+  --md-code-hl-comment-color: var(--sd-ink-3);
+  --md-code-hl-generic-color: var(--sd-ink-2);
+  --md-code-hl-variable-color: var(--sd-ink);
+
+  --md-typeset-color: var(--sd-ink);
+  --md-typeset-a-color: var(--sd-accent);
+  --md-typeset-mark-color: var(--sd-highlight);
+  --md-typeset-del-color: color-mix(in srgb, var(--sd-st-failed) 18%, transparent);
+  --md-typeset-ins-color: color-mix(in srgb, var(--sd-st-done) 18%, transparent);
+  --md-typeset-kbd-color: var(--sd-surface);
+  --md-typeset-kbd-accent-color: var(--sd-surface);
+  --md-typeset-kbd-border-color: var(--sd-rule-strong);
+  --md-typeset-table-color: var(--sd-rule);
+  --md-typeset-table-color--light: var(--sd-sunk);
+
+  --md-admonition-fg-color: var(--sd-ink);
+  --md-admonition-bg-color: var(--sd-surface);
+
+  --md-footer-bg-color: transparent;
+  --md-footer-bg-color--dark: transparent;
+  --md-footer-fg-color: var(--sd-ink);
+  --md-footer-fg-color--light: var(--sd-ink-2);
+  --md-footer-fg-color--lighter: var(--sd-ink-3);
+
+  --md-shadow-z1: none;
+  --md-shadow-z2: var(--sd-shadow-soft);
+  --md-shadow-z3: var(--sd-shadow-soft);
+}
+
+/* Root size and measure ------------------------------------------------------
+   Material steps the root up to 22px and 24px on wide screens; the reading
+   column is set by width here, not by scaling the type. */
+
+@media screen and (min-width: 100em) {
+  html { font-size: 125%; }
+}
+@media screen and (min-width: 125em) {
+  html { font-size: 125%; }
+}
+
+body,
+input {
+  font-family: var(--sd-font-ui);
+  font-synthesis-weight: none;
+}
+
+.md-grid { max-width: 68rem; }
+
+:focus-visible {
+  outline: 2px solid var(--sd-accent);
+  outline-offset: 2px;
+}
+
+/* The bar --------------------------------------------------------------------
+   Deep band colour, paper ink, one row: mark and name, section tabs, search,
+   GitHub. */
+
+.md-header,
+.md-header--shadow {
+  background: var(--sd-band-deep);
+  color: var(--sd-band-fg);
+  box-shadow: none;
+}
+.md-header :focus-visible { outline-color: var(--sd-band-fg); }
+
+.md-header__inner {
+  gap: .1rem;
+  padding: 0 .6rem;
+}
+
+.md-header__title { display: none; }
+
+.md-header__button.sd-lockup {
+  display: flex;
+  align-items: center;
+  gap: .35rem;
+  margin: .2rem .5rem .2rem 0;
+  padding: .3rem .1rem;
+  color: inherit;
+  text-decoration: none;
+}
+.md-header__button.sd-lockup img {
+  display: block;
+  width: 1.3rem;
+  height: 1.3rem;
+  margin: -.1rem 0;
+}
+.sd-lockup__word {
+  font-family: var(--sd-font-ui);
+  font-size: .85rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  line-height: 1;
+}
+
+/* Tabs, inside the bar rather than under it. */
+.md-header .md-tabs {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  background: transparent;
+  color: inherit;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.md-header .md-tabs::-webkit-scrollbar { display: none; }
+.md-header .md-tabs > .md-grid {
+  max-width: none;
+  margin: 0;
+}
+.md-tabs__list {
+  margin: 0;
+  padding: 0;
+}
+.md-tabs__item {
+  height: 2.4rem;
+  padding: 0 .1rem;
+}
+.md-tabs__link {
+  display: flex;
+  align-items: center;
+  height: 100%;
+  margin: 0;
+  padding: .1rem .5rem 0;
+  font-family: var(--sd-font-ui);
+  font-size: .7rem;
+  font-weight: 500;
+  line-height: 1;
+  opacity: .78;
+  border-bottom: .1rem solid transparent;
+  transition: opacity var(--sd-dur-1) ease, border-color var(--sd-dur-1) ease;
+}
+.md-tabs__link:hover,
+.md-tabs__link:focus { opacity: 1; }
+.md-tabs__item--active .md-tabs__link {
+  opacity: 1;
+  border-bottom-color: currentColor;
+}
+
+/* Search: a pill in the bar; a surface sheet once open. */
+.md-search__form {
+  background: color-mix(in srgb, var(--sd-band-fg) 12%, transparent);
+  border-radius: var(--sd-radius-pill);
+}
+.md-search__form:hover {
+  background: color-mix(in srgb, var(--sd-band-fg) 18%, transparent);
+}
+.md-search__input {
+  font-family: var(--sd-font-ui);
+  font-size: .7rem;
+}
+.md-search__input::placeholder {
+  color: var(--md-primary-bg-color--light);
+}
+[data-md-toggle="search"]:checked ~ .md-header .md-search__form {
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  border-radius: var(--sd-radius-md) var(--sd-radius-md) 0 0;
+  box-shadow: var(--sd-shadow-soft);
+}
+.md-search__output {
+  border-radius: 0 0 var(--sd-radius-md) var(--sd-radius-md);
+  box-shadow: var(--sd-shadow-soft);
+}
+.md-search__scrollwrap { background: var(--sd-surface); }
+.md-search-result__meta {
+  background: var(--sd-sunk);
+  color: var(--sd-ink-3);
+  font-size: .6rem;
+}
+.md-search-result__article { border-color: var(--sd-rule); }
+.md-search-result .md-typeset h1 {
+  font-size: .8rem;
+  margin: 0 0 .2rem;
+}
+
+/* GitHub: the mark and the word, no star count. */
+.md-header__source {
+  width: auto;
+  max-width: none;
+  margin-inline: .3rem 0;
+}
+.md-source {
+  display: flex;
+  align-items: center;
+  gap: .3rem;
+  font-family: var(--sd-font-ui);
+  font-size: .7rem;
+  font-weight: 500;
+  line-height: 1;
+}
+.md-source__icon {
+  width: auto;
+  height: auto;
+}
+.md-source__icon svg {
+  display: block;
+  width: 1rem;
+  height: 1rem;
+  margin: 0;
+}
+.md-source__repository {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  overflow: visible;
+}
+.md-source__facts { display: none; }
+
+/* Layout ---------------------------------------------------------------- */
+
+.md-main__inner { margin-top: 1.4rem; }
+
+@media screen and (min-width: 60em) {
+  /* Material moves the sidebars down under a two-row header; this bar is one row. */
+  .md-header--lifted ~ .md-container .md-sidebar { top: 2.4rem; }
+  .md-header--lifted ~ .md-container .md-typeset :target { --md-scroll-margin: 3.6rem; }
+  .md-sidebar--secondary { width: 11rem; }
+}
+@media screen and (min-width: 76.25em) {
+  .md-sidebar--primary { width: 13.5rem; }
+}
+
+.md-content__inner {
+  padding-top: .8rem;
+  margin-bottom: 2.4rem;
+}
+
+/* Navigation tree ----------------------------------------------------------
+   Figtree at 14px, sections divided by hairlines, the current page in the
+   highlight with a rule on its leading edge. Material's lifted mode already
+   scopes the tree to the active tab; the sticky section label is set as a
+   small caption the way Android labels its book. */
+
+.md-nav {
+  font-family: var(--sd-font-ui);
+  font-size: .7rem;
+  line-height: 1.35;
+}
+
+@media screen and (min-width: 76.25em) {
+  .md-nav--primary .md-nav__link {
+    margin-top: .1rem;
+    padding: .3rem .5rem;
+    border-radius: var(--sd-radius-sm);
+    color: var(--sd-ink-2);
+    transition: color var(--sd-dur-1) ease, background var(--sd-dur-1) ease;
+  }
+  .md-nav--primary .md-nav__link:hover,
+  .md-nav--primary .md-nav__link:focus {
+    color: var(--sd-ink);
+    background: var(--sd-nav-hover);
+  }
+  .md-nav--primary .md-nav__item .md-nav__link--active,
+  .md-nav--primary .md-nav__item .md-nav__link--active code {
+    color: var(--sd-highlight-ink);
+  }
+  .md-nav--primary .md-nav__item .md-nav__link--active {
+    background: var(--sd-highlight);
+    box-shadow: inset .1rem 0 0 var(--sd-accent);
+    border-radius: 0 var(--sd-radius-sm) var(--sd-radius-sm) 0;
+  }
+  .md-nav--primary .md-nav__container > .md-nav__link {
+    margin-top: 0;
+  }
+
+  /* Level-2 groups (navigation.sections). */
+  .md-nav__item--section {
+    margin: .9rem 0 0;
+    padding-top: .7rem;
+    border-top: .05rem solid var(--sd-rule);
+  }
+  .md-nav__item--section > .md-nav__link,
+  .md-nav__item--section > .md-nav__link[for] {
+    padding: 0 .5rem .3rem;
+    font-weight: 600;
+    color: var(--sd-ink);
+    background: none;
+  }
+
+  /* The active tab's label, sticky at the top of the tree. */
+  .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__link {
+    margin: 0 0 .3rem;
+    padding: .3rem .5rem .6rem;
+    border-bottom: .05rem solid var(--sd-rule);
+    border-radius: 0;
+    background: var(--sd-paper);
+    box-shadow: 0 0 .4rem .4rem var(--sd-paper);
+    font-size: .6rem;
+    font-weight: 600;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+    color: var(--sd-ink-3);
+  }
+  .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__container .md-nav__link {
+    margin: 0;
+    padding: 0;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
+    color: inherit;
+    background: none;
+    box-shadow: none;
+    border-radius: 0;
+  }
+  .md-nav--lifted > .md-nav__list > .md-nav__item--active > .md-nav__container .md-nav__link:hover {
+    color: var(--sd-ink);
+  }
+}
+
+/* Page contents, on the right, with a rule the current heading moves along. */
+.md-nav--secondary .md-nav__title {
+  padding: 0 0 .5rem .8rem;
+  font-size: .65rem;
+  font-weight: 600;
+  color: var(--sd-ink);
+  background: var(--sd-paper);
+  box-shadow: none;
+}
+.md-nav--secondary .md-nav__item { padding: 0; }
+.md-nav--secondary > .md-nav__list {
+  border-inline-start: .05rem solid var(--sd-rule);
+}
+.md-nav--secondary .md-nav .md-nav__list { border: 0; }
+.md-nav--secondary .md-nav__link {
+  margin: 0 0 0 -.05rem;
+  padding: .22rem 0 .22rem .75rem;
+  border-inline-start: .1rem solid transparent;
+  font-size: .65rem;
+  line-height: 1.4;
+  color: var(--sd-ink-3);
+  transition: color var(--sd-dur-1) ease, border-color var(--sd-dur-1) ease;
+}
+.md-nav--secondary .md-nav .md-nav__link { padding-left: 1.35rem; }
+.md-nav--secondary .md-nav__link:hover,
+.md-nav--secondary .md-nav__link:focus { color: var(--sd-ink); }
+.md-nav--secondary .md-nav__link--active,
+.md-nav--secondary .md-nav__link--active code {
+  color: var(--sd-ink);
+}
+.md-nav--secondary .md-nav__link--active {
+  border-inline-start-color: var(--sd-accent);
+}
+
+/* Prose ------------------------------------------------------------------ */
+
+.md-typeset {
+  font-size: .8rem;
+  line-height: 1.65;
+}
+
+.md-typeset h1 {
+  margin: 0 0 .5rem;
+  font-family: var(--sd-font-ui);
+  font-size: clamp(1.7rem, 5.5vw, 2.2rem);
+  font-weight: 600;
+  line-height: 1.12;
+  letter-spacing: -.02em;
+  color: var(--sd-ink);
+  text-wrap: balance;
+}
+/* The lede: the first paragraph after the H1, set larger and in the second ink. */
+.md-typeset h1 + p {
+  margin: 0 0 2rem;
+  max-width: 62ch;
+  font-size: 1rem;
+  line-height: 1.5;
+  color: var(--sd-ink-2);
+}
+.md-typeset h1 + p code { font-size: .8em; }
+
+.md-typeset h2 {
+  margin: 2.4em 0 .7em;
+  font-family: var(--sd-font-ui);
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.25;
+  letter-spacing: -.015em;
+  color: var(--sd-ink);
+}
+.md-typeset h3 {
+  margin: 2em 0 .6em;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.01em;
+}
+.md-typeset h4 {
+  margin: 1.6em 0 .5em;
+  font-size: .85rem;
+  font-weight: 600;
+}
+.md-typeset h5,
+.md-typeset h6 {
+  font-size: .75rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--sd-ink-2);
+}
+.md-typeset .headerlink { color: var(--sd-ink-3); }
+
+.md-typeset a {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--sd-accent) 35%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: text-decoration-color var(--sd-dur-1) ease;
+}
+.md-typeset a:hover,
+.md-typeset a:focus {
+  color: var(--sd-accent);
+  text-decoration-color: currentColor;
+}
+
+.md-typeset code,
+.md-typeset kbd {
+  font-family: var(--sd-font-mono);
+  font-feature-settings: "tnum" 1;
+}
+.md-typeset code {
+  padding: .05em .35em;
+  font-size: .85em;
+  background: var(--sd-sunk);
+  border: .05rem solid var(--sd-rule);
+  border-radius: var(--sd-radius-xs);
+  color: var(--sd-ink);
+}
+.md-typeset a code { color: inherit; }
+.md-typeset kbd {
+  border-radius: var(--sd-radius-xs);
+  box-shadow: 0 .05rem 0 .05rem var(--sd-rule-strong), 0 .1rem 0 var(--sd-rule-strong);
+}
+
+.md-typeset blockquote {
+  padding-inline-start: .8rem;
+  border-inline-start: .15rem solid var(--sd-rule-strong);
+  color: var(--sd-ink-2);
+}
+.md-typeset hr { border-bottom: .05rem solid var(--sd-rule); }
+.md-typeset mark { border-radius: var(--sd-radius-xs); }
+
+/* Tables: a ledger, hairlines between rows. */
+.md-typeset table:not([class]) {
+  font-size: .68rem;
+  line-height: 1.5;
+  background: var(--sd-surface);
+  border: .05rem solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-xs);
+}
+.md-typeset table:not([class]) th {
+  padding: .7em 1em;
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  color: var(--sd-ink-2);
+  background: var(--sd-sunk);
+  border-bottom: .05rem solid var(--sd-rule-strong);
+  min-width: 0;
+}
+/* A key/value table written with an empty header row has no header to show. */
+.md-typeset table:not([class]) thead:not(:has(th:not(:empty))) { display: none; }
+.md-typeset table:not([class]) td {
+  padding: .7em 1em;
+  border-top: .05rem solid var(--sd-rule);
+}
+.md-typeset table:not([class]) tbody tr:hover {
+  background: var(--sd-nav-hover);
+  box-shadow: none;
+}
+
+/* Code blocks: sunk ground, a language label, the copy button ---------------- */
+
+.md-typeset .highlight {
+  position: relative;
+  margin: 1.2em 0;
+}
+.md-typeset .highlight pre,
+.md-typeset pre {
+  margin: 0;
+  background: var(--sd-sunk);
+  border: .05rem solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+}
+.md-typeset pre > code {
+  padding: .9rem 2.6rem .9rem 1rem;
+  font-size: .68rem;
+  line-height: 1.6;
+  background: transparent;
+  border: 0;
+  border-radius: inherit;
+}
+.md-typeset .highlight[data-lang]::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: .55rem;
+  inset-inline-start: 1rem;
+  z-index: 1;
+  font-family: var(--sd-font-ui);
+  font-size: .55rem;
+  font-weight: 500;
+  line-height: 1;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+  pointer-events: none;
+}
+.md-typeset .highlight[data-lang] pre > code { padding-top: 1.6rem; }
+.md-typeset .highlight span.filename {
+  background: var(--sd-surface);
+  border: .05rem solid var(--sd-rule-strong);
+  border-bottom: 0;
+  border-radius: var(--sd-radius-md) var(--sd-radius-md) 0 0;
+  font-family: var(--sd-font-mono);
+  font-size: .6rem;
+  color: var(--sd-ink-2);
+}
+.md-typeset .highlight span.filename + pre {
+  border-radius: 0 0 var(--sd-radius-md) var(--sd-radius-md);
+}
+
+.md-clipboard {
+  top: .45rem;
+  right: .5rem;
+  width: 1.3rem;
+  height: 1.3rem;
+  color: var(--sd-ink-3);
+  background: var(--sd-surface);
+  border: .05rem solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-xs);
+  transition: color var(--sd-dur-1) ease, border-color var(--sd-dur-1) ease;
+}
+.md-clipboard::after {
+  width: .8rem;
+  height: .8rem;
+  margin: .2rem auto 0;
+}
+.md-clipboard:hover,
+.md-clipboard:focus {
+  color: var(--sd-ink);
+  border-color: var(--sd-ink);
+}
+.md-typeset .md-code__content .md-clipboard { top: .45rem; }
+
+/* Line highlights and annotations keep the highlight tint. */
+.md-typeset .highlight .hll { background: var(--sd-highlight); }
+
+/* Callouts: left-ruled panels ------------------------------------------------
+   Note in the accent, Key point in the triaged teal, Caution in the blocked
+   amber, Danger in the failed red; the rest carry the third ink. The title
+   row keeps Material's icon, coloured with the rule. */
+
+.md-typeset .admonition,
+.md-typeset details {
+  --sd-callout: var(--sd-ink-3);
+  margin: 1.6em 0;
+  padding: .55rem .9rem .1rem 1rem;
+  font-size: .72rem;
+  line-height: 1.55;
+  color: var(--sd-ink);
+  background: color-mix(in srgb, var(--sd-callout) 6%, var(--sd-surface));
+  border: 0;
+  border-inline-start: .15rem solid var(--sd-callout);
+  border-radius: 0 var(--sd-radius-sm) var(--sd-radius-sm) 0;
+  box-shadow: none;
+}
+.md-typeset .admonition > .admonition-title,
+.md-typeset details > summary {
+  margin: 0 0 .15rem;
+  padding: 0 0 0 1.35rem;
+  font-weight: 600;
+  color: var(--sd-ink);
+  background: transparent;
+}
+.md-typeset .admonition > .admonition-title::before,
+.md-typeset details > summary::before {
+  top: .1em;
+  left: 0;
+  width: .95rem;
+  height: .95rem;
+  background-color: var(--sd-callout);
+}
+.md-typeset details > summary::after { top: .3em; }
+.md-typeset .admonition > :last-child,
+.md-typeset details > :last-child { margin-bottom: .55rem; }
+
+.md-typeset .admonition.note,
+.md-typeset details.note,
+.md-typeset .admonition.info,
+.md-typeset details.info,
+.md-typeset .admonition.abstract,
+.md-typeset details.abstract,
+.md-typeset .admonition.todo,
+.md-typeset details.todo {
+  --sd-callout: var(--sd-accent);
+  border-color: var(--sd-callout);
+}
+.md-typeset .admonition.tip,
+.md-typeset details.tip,
+.md-typeset .admonition.hint,
+.md-typeset details.hint,
+.md-typeset .admonition.important,
+.md-typeset details.important,
+.md-typeset .admonition.success,
+.md-typeset details.success,
+.md-typeset .admonition.check,
+.md-typeset details.check,
+.md-typeset .admonition.done,
+.md-typeset details.done,
+.md-typeset .admonition.key-point,
+.md-typeset details.key-point {
+  --sd-callout: var(--sd-st-triaged);
+  border-color: var(--sd-callout);
+}
+.md-typeset .admonition.warning,
+.md-typeset details.warning,
+.md-typeset .admonition.caution,
+.md-typeset details.caution,
+.md-typeset .admonition.attention,
+.md-typeset details.attention {
+  --sd-callout: var(--sd-st-blocked);
+  border-color: var(--sd-callout);
+}
+.md-typeset .admonition.danger,
+.md-typeset details.danger,
+.md-typeset .admonition.error,
+.md-typeset details.error,
+.md-typeset .admonition.failure,
+.md-typeset details.failure,
+.md-typeset .admonition.fail,
+.md-typeset details.fail,
+.md-typeset .admonition.missing,
+.md-typeset details.missing,
+.md-typeset .admonition.bug,
+.md-typeset details.bug {
+  --sd-callout: var(--sd-st-failed);
+  border-color: var(--sd-callout);
+}
+/* `!!! key-point "Key point"`: a star, the way the reference site marks one. */
+:root {
+  --md-admonition-icon--key-point: url('data:image/svg+xml;charset=utf-8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="m12 2 2.9 6.6 7.1.7-5.4 4.8 1.6 7L12 17.4 5.8 21.1l1.6-7L2 9.3l7.1-.7z"/></svg>');
+}
+.md-typeset .admonition.key-point > .admonition-title::before,
+.md-typeset details.key-point > summary::before {
+  -webkit-mask-image: var(--md-admonition-icon--key-point);
+  mask-image: var(--md-admonition-icon--key-point);
+}
+
+/* Content tabs (platform variants) -------------------------------------------- */
+
+.md-typeset .tabbed-set { margin: 1.2em 0; }
+.md-typeset .tabbed-labels {
+  box-shadow: 0 -.05rem var(--sd-rule) inset;
+}
+.md-typeset .tabbed-labels > label {
+  padding: .55em 1em .5em;
+  font-size: .68rem;
+  font-weight: 500;
+  color: var(--sd-ink-3);
+  border-bottom-width: .1rem;
+}
+.md-typeset .tabbed-labels > label:hover { color: var(--sd-ink); }
+/* content.tabs.link wraps each label in an anchor; it is a tab, not a link. */
+.md-typeset .tabbed-labels > label > a {
+  color: inherit;
+  text-decoration: none;
+}
+.md-typeset .tabbed-content { padding-top: .2rem; }
+
+/* Footer: previous/next, then one plain line ------------------------------- */
+
+.md-footer {
+  background: transparent;
+  color: var(--sd-ink);
+}
+.md-footer__inner {
+  padding: .6rem .8rem;
+  border-top: .05rem solid var(--sd-rule);
+}
+.md-footer__link {
+  align-items: center;
+  gap: .1rem;
+  margin: .5rem 0;
+  color: var(--sd-ink);
+  opacity: 1;
+}
+.md-footer__link:hover { opacity: 1; }
+.md-footer__link:hover .md-ellipsis { text-decoration: underline; text-underline-offset: 3px; }
+.md-footer__title {
+  display: flex;
+  flex-direction: column;
+  gap: .1rem;
+  margin: 0;
+  padding: 0 .4rem;
+  font-family: var(--sd-font-ui);
+  font-size: .8rem;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.md-footer__link--next .md-footer__title { align-items: flex-end; }
+.md-footer__direction {
+  position: static;
+  margin: 0;
+  font-size: .58rem;
+  font-weight: 500;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--sd-ink-3);
+  opacity: 1;
+}
+.md-footer__button {
+  margin: 0;
+  padding: .3rem;
+  color: var(--sd-ink-3);
+}
+
+.md-footer-meta {
+  background: transparent;
+  border-top: .05rem solid var(--sd-rule);
+}
+.md-footer-meta__inner { padding: .7rem .8rem 1.8rem; }
+.md-copyright {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .2rem .5rem;
+  width: auto;
+  margin: 0;
+  padding: 0;
+  font-family: var(--sd-font-ui);
+  font-size: .65rem;
+  line-height: 1.6;
+  color: var(--sd-ink-3);
+}
+.md-copyright a {
+  color: var(--sd-ink-2);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--sd-ink-2) 40%, transparent);
+  text-underline-offset: 3px;
+}
+.md-copyright a:hover { color: var(--sd-ink); text-decoration-color: currentColor; }
+
+/* Back to top */
+.md-top {
+  top: 3.2rem;
+  padding: .35rem .8rem;
+  font-family: var(--sd-font-ui);
+  font-size: .65rem;
+  font-weight: 500;
+  color: var(--sd-ink-2);
+  background: var(--sd-surface);
+  border: .05rem solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  box-shadow: var(--sd-shadow-soft);
+}
+.md-top:hover {
+  color: var(--sd-ink);
+  background: var(--sd-surface);
+}
+
+/* Drawer (narrow) */
+.md-nav--primary .md-nav__title[for="__drawer"] {
+  font-family: var(--sd-font-ui);
+  font-weight: 600;
+}
+.md-nav--primary .md-nav__title .md-logo img { height: 1.6rem; width: 1.6rem; }
+
+/* The home page ------------------------------------------------------------
+   One band at the top, the deep colour with the corner radius the landing
+   page's bands carry, then cards under short headings. */
+
+.md-typeset .sd-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2rem;
+  align-items: center;
+  margin: .2rem 0 2.2rem;
+  padding: 2.8rem 3rem 2.6rem;
+  background: var(--sd-band-deep);
+  color: var(--sd-band-fg);
+  border-radius: var(--sd-radius-band);
+}
+.md-typeset .sd-hero :focus-visible { outline-color: var(--sd-band-fg); }
+.md-typeset .sd-hero h1 {
+  margin: 0 0 .9rem;
+  font-size: clamp(2rem, 4.4vw, 3.1rem);
+  font-weight: 500;
+  line-height: 1.06;
+  letter-spacing: -.025em;
+  color: inherit;
+}
+.md-typeset .sd-hero h1 em {
+  font-family: var(--sd-font-display);
+  font-style: italic;
+  font-weight: 400;
+  letter-spacing: -.01em;
+}
+.md-typeset .sd-hero h1 + p {
+  margin: 0 0 1.4rem;
+  max-width: 58ch;
+  font-size: .9rem;
+  line-height: 1.55;
+  color: color-mix(in srgb, var(--sd-band-fg) 82%, transparent);
+}
+.md-typeset .sd-hero__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .8rem;
+}
+.md-typeset .sd-hero__actions > p { margin: 0; }
+.md-typeset .sd-hero__actions .highlight {
+  flex: 1 1 22rem;
+  min-width: 0;
+  margin: 0;
+}
+.md-typeset .sd-hero__actions .highlight::before { display: none; }
+.md-typeset .sd-hero__actions .highlight pre {
+  background: color-mix(in srgb, var(--sd-band-fg) 10%, transparent);
+  border-color: color-mix(in srgb, var(--sd-band-fg) 30%, transparent);
+  border-radius: var(--sd-radius-sm);
+}
+.md-typeset .sd-hero__actions .highlight pre > code {
+  padding: .6rem 2.4rem .6rem .8rem;
+  font-size: .6rem;
+  color: var(--sd-band-fg);
+  white-space: nowrap;
+  overflow-x: auto;
+}
+.md-typeset .sd-hero__actions .highlight code span { color: inherit; }
+.md-typeset .sd-hero__actions .md-clipboard {
+  top: .35rem;
+  color: color-mix(in srgb, var(--sd-band-fg) 72%, transparent);
+  background: transparent;
+  border-color: color-mix(in srgb, var(--sd-band-fg) 30%, transparent);
+}
+.md-typeset .sd-hero__actions .md-clipboard:hover,
+.md-typeset .sd-hero__actions .md-clipboard:focus {
+  color: var(--sd-band-fg);
+  border-color: var(--sd-band-fg);
+}
+/* Markdown wraps the raw <img> in a paragraph, so the paragraph is the grid cell. */
+.md-typeset .sd-hero > p:has(> .sd-hero__mark) { margin: 0; }
+.md-typeset .sd-hero__mark {
+  display: block;
+  width: 9rem;
+  height: 9rem;
+  margin: 0;
+}
+
+/* The one control that can change something wears the hard shadow, as on the
+   landing page and in the app. */
+.md-typeset .sd-btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 2.2rem;
+  padding: 0 1.3rem;
+  font-family: var(--sd-font-ui);
+  font-size: .8rem;
+  font-weight: 500;
+  color: var(--sd-highlight-ink);
+  background: var(--sd-highlight);
+  border: .05rem solid var(--sd-ink);
+  border-radius: var(--sd-radius-sm);
+  box-shadow: var(--sd-shadow-hard);
+  text-decoration: none;
+  transition: transform var(--sd-dur-1) var(--sd-ease), box-shadow var(--sd-dur-1) var(--sd-ease);
+}
+.md-typeset .sd-btn:hover,
+.md-typeset .sd-btn:focus {
+  color: var(--sd-highlight-ink);
+  text-decoration: none;
+}
+.md-typeset .sd-btn:active {
+  transform: translate(1px, 1px);
+  box-shadow: var(--sd-shadow-hard-pressed);
+}
+
+/* Cards: title, one sentence, an arrow. Surface on paper with the strong
+   rule, the same box the landing page draws around a provider. */
+.md-typeset .sd-cards > ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(13.5rem, 1fr));
+  gap: .7rem;
+  margin: 0 0 2.2rem;
+  padding: 0;
+  list-style: none;
+}
+.md-typeset .sd-cards > ul > li {
+  position: relative;
+  margin: 0;
+  padding: .85rem 2.2rem .9rem 1rem;
+  background: var(--sd-surface);
+  border: .05rem solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  transition: border-color var(--sd-dur-1) ease;
+}
+.md-typeset .sd-cards > ul > li:hover,
+.md-typeset .sd-cards > ul > li:focus-within {
+  border-color: var(--sd-ink);
+}
+.md-typeset .sd-cards > ul > li > p {
+  margin: 0;
+  font-size: .7rem;
+  line-height: 1.5;
+  color: var(--sd-ink-2);
+}
+.md-typeset .sd-cards > ul > li > p:first-child {
+  margin-bottom: .25rem;
+  font-size: .85rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.01em;
+}
+.md-typeset .sd-cards > ul > li > p:first-child a {
+  color: var(--sd-ink);
+  text-decoration: none;
+}
+.md-typeset .sd-cards > ul > li > p:first-child a:focus-visible { outline: none; }
+.md-typeset .sd-cards > ul > li > p:first-child a::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+.md-typeset .sd-cards > ul > li::after {
+  content: "\2192";
+  position: absolute;
+  top: .75rem;
+  inset-inline-end: .85rem;
+  font-family: var(--sd-font-ui);
+  font-size: .9rem;
+  line-height: 1;
+  color: var(--sd-ink-3);
+  transition: transform var(--sd-dur-1) var(--sd-ease), color var(--sd-dur-1) ease;
+}
+.md-typeset .sd-cards > ul > li:hover::after {
+  transform: translateX(3px);
+  color: var(--sd-ink);
+}
+.md-typeset .sd-cards code {
+  padding: 0 .2em;
+  background: transparent;
+  border: 0;
+  color: var(--sd-ink);
+}
+
+/* Section headings above card groups, on the home and the tab indexes. */
+.md-typeset .sd-cards + h2,
+.md-typeset h2:has(+ .sd-cards),
+.md-typeset h2:has(+ p + .sd-cards) {
+  margin: 0 0 .7rem;
+  font-size: 1.1rem;
+}
+.md-typeset h2 + .sd-cards,
+.md-typeset .sd-cards + h2 { margin-top: 0; }
+.md-typeset h1 + p + h2 { margin-top: 0; }
+.md-typeset h2:has(+ .sd-cards) + .sd-cards > ul,
+.md-typeset .sd-cards > ul { margin-bottom: 2.2rem; }
+
+.md-typeset .sd-origin {
+  max-width: 64ch;
+  margin: .5rem 0 0;
+  padding-top: 1.2rem;
+  border-top: .05rem solid var(--sd-rule);
+  font-size: .72rem;
+  line-height: 1.6;
+  color: var(--sd-ink-3);
+}
+
+@media screen and (max-width: 60em) {
+  .md-typeset .sd-hero {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 1.2rem;
+    padding: 1.8rem 1.3rem 1.6rem;
+  }
+  /* The mark is decoration; at phone width the copy has the band to itself. */
+  .md-typeset .sd-hero > p:has(> .sd-hero__mark) { display: none; }
+  .md-typeset .sd-hero__actions .highlight {
+    flex-basis: 100%;
+    max-width: none;
+  }
+}
+
+/* Motion -------------------------------------------------------------------- */
+
+@media (prefers-reduced-motion: reduce) {
+  .md-tabs__link,
+  .md-nav__link,
+  .md-clipboard,
+  .md-typeset .sd-btn,
+  .md-typeset .sd-cards > ul > li,
+  .md-typeset .sd-cards > ul > li::after {
+    transition-duration: 1ms;
+  }
+}

@@ -9,7 +9,7 @@ declared.** Three consumers read it and none of them redeclares anything:
 |---|---|
 | Desktop app | `@import './styles/tokens.css'` at the top of `styles.css`, which keeps the shell rules and drops its own `:root` block |
 | Landing site | copied into the site build by a `make tokens` step that runs `cp`, plus a CI check that the copy is byte-identical to the source |
-| Docs site | `docs/stylesheets/tokens.css`, same copy step, imported ahead of `extra.css` so Material for MkDocs' own `--md-*` variables can be assigned from Sirdar tokens |
+| Docs site | `docs/stylesheets/tokens.css`, same copy step, imported ahead of `sirdar.css` so Material for MkDocs' own `--md-*` variables can be assigned from Sirdar tokens |
 
 The copy is a copy, not a fork. If the three ever disagree, the desktop file is right and
 the other two are stale. That is the same rule Tatak states at the top of its
@@ -231,7 +231,7 @@ That removes both `@media (prefers-color-scheme: dark)` blocks from `panels.css`
 
 ### Docs site
 
-`docs/stylesheets/extra.css` assigns Material's variables from Sirdar's, rather than
+`docs/stylesheets/sirdar.css` assigns Material's variables from Sirdar's, rather than
 restating hexes:
 
 | Material | Sirdar |
