@@ -1,7 +1,7 @@
 import { act, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GAP, MARGIN, place, useAnchor } from './anchor'
+import { GAP, MARGIN, place, placeBeside, useAnchor } from './anchor'
 
 const VIEW = { width: 1470, height: 900 }
 const POP = { width: 480, height: 420 }
@@ -58,6 +58,38 @@ describe('place', () => {
       align: 'end',
     })
     expect(rtlEnd.left).toBe(600)
+  })
+})
+
+describe('placeBeside', () => {
+  const CARD = { width: 320, height: 160 }
+  const ROW = { top: 400, left: 16, width: 216, height: 40 }
+
+  it('opens at the trailing edge of the row, tops lined up', () => {
+    const at = placeBeside(ROW, CARD, VIEW)
+    expect(at.side).toBe('end')
+    expect(at.left).toBe(16 + 216 + GAP)
+    expect(at.top).toBe(400)
+    expect(at.maxHeight).toBe(900 - 2 * MARGIN)
+  })
+
+  it('goes to the leading side when the trailing has no room, and clamps when neither has', () => {
+    const at = placeBeside({ ...ROW, left: 1300 }, CARD, VIEW)
+    expect(at.side).toBe('start')
+    expect(at.left).toBe(1300 - GAP - 320)
+    const narrow = placeBeside(ROW, CARD, { width: 400, height: 900 })
+    expect(narrow.left).toBe(400 - MARGIN - 320)
+  })
+
+  it('holds the card inside the viewport for a row near the bottom', () => {
+    const at = placeBeside({ ...ROW, top: 860 }, CARD, VIEW)
+    expect(at.top).toBe(900 - MARGIN - 160)
+  })
+
+  it('reads the trailing edge as the left one in an Arabic pane', () => {
+    const at = placeBeside({ ...ROW, left: 1200 }, CARD, VIEW, { dir: 'rtl' })
+    expect(at.side).toBe('end')
+    expect(at.left).toBe(1200 - GAP - 320)
   })
 })
 

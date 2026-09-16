@@ -3,6 +3,7 @@ import type {
   HookOutcome,
   Quota,
   RunSummary,
+  SourcesSummary,
   Ticket,
   Transport,
   Workspace,
@@ -82,6 +83,13 @@ export interface AppState {
   screen: Screen
   runsByWorkspace: Record<string, RunSummary[]>
   ticketsByWorkspace: Record<string, Ticket[]>
+  /**
+   * The tracker and helpdesk each workspace reads, from its config summary,
+   * so a ticket number can be drawn under its own product's mark. Absent
+   * until the summary has been read, and for a workspace whose config
+   * cannot be loaded (Settings says why).
+   */
+  sourcesByWorkspace: Record<string, SourcesSummary>
   /** Workspaces whose tracker cannot list a queue (the API answers 501). */
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
@@ -267,6 +275,7 @@ export function createAppStore(transport: Transport): AppStore {
     screen: { name: 'board' },
     runsByWorkspace: {},
     ticketsByWorkspace: {},
+    sourcesByWorkspace: {},
     queueUnsupported: {},
     quota: [],
     toasts: [],
@@ -344,9 +353,26 @@ export function createAppStore(transport: Transport): AppStore {
     }
   }
 
+  /**
+   * The sources block of the config summary. A summary that cannot be read
+   * is not reported here: the lists fall back to bare numbers, and Settings
+   * is where the reason is shown.
+   */
+  async function loadSources(workspaceId: string): Promise<void> {
+    try {
+      const summary = await transport.configSummary(workspaceId)
+      if (disposed) return
+      set({
+        sourcesByWorkspace: { ...state.sourcesByWorkspace, [workspaceId]: summary.sources ?? {} },
+      })
+    } catch {
+      // Left absent on purpose.
+    }
+  }
+
   async function loadWorkspace(workspaceId: string): Promise<void> {
     if (!workspaceId) return
-    await Promise.all([loadRuns(workspaceId), loadQueue(workspaceId)])
+    await Promise.all([loadRuns(workspaceId), loadQueue(workspaceId), loadSources(workspaceId)])
   }
 
   /**

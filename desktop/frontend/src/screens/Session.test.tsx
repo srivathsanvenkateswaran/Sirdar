@@ -5,6 +5,7 @@ import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/pri
 import { resetRunJobs, setRunJob } from '../lib/jobs'
 import { stubMatchMedia } from '../lib/mediaStub'
 import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
 import { BELOW_STANDARD } from '../lib/useMediaQuery'
 import { createFakeTransport, diff, type FakeTransport } from '../store/fakeTransport'
 import Session, { statsTitle } from './Session'
@@ -169,6 +170,7 @@ describe('Session', () => {
     vi.useRealTimers()
     localStorage.clear()
     resetPreferRTL()
+    resetSessionsShow()
   })
 
   it('backfills the event log and draws the topbar', async () => {
@@ -186,6 +188,25 @@ describe('Session', () => {
     expect(screen.getByText('claude-haiku-4-5', { selector: '.session-provider-model' })).toBeInTheDocument()
     expect(screen.getByText('turns')).toBeInTheDocument()
     expect(f.transport.events).toHaveBeenCalledWith('ws1', RUN.runId, 0)
+  })
+
+  it('heads the topbar with the number under its source mark, on the Sessions show preference', async () => {
+    const sources = {
+      tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+      helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+    }
+    const f = fake({ detail: { ...RUN, helpdeskKey: '25312' } })
+    const { unmount } = renderSession(f, { sources })
+    const heading = await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(heading).toHaveAttribute('title', 'Zoho Desk #25312')
+    expect(heading.previousElementSibling).toHaveAttribute('aria-label', 'Jira')
+    unmount()
+
+    setSessionsShow('helpdesk')
+    renderSession(fake({ detail: { ...RUN, helpdeskKey: '25312' } }), { sources })
+    const number = await screen.findByRole('heading', { name: '#25312' })
+    expect(number).toHaveAttribute('title', 'Jira OMNI-2510')
+    expect(number.previousElementSibling).toHaveAttribute('aria-label', 'Zoho Desk')
   })
 
   describe('the topbar under 1200', () => {

@@ -35,7 +35,8 @@ export interface Placement {
   left: number
   /** The room on the side chosen: what the popover's max-height should be. */
   maxHeight: number
-  side: 'below' | 'above'
+  /** Below or above the trigger; or, for `placeBeside`, at its trailing (`end`) or leading (`start`) edge. */
+  side: 'below' | 'above' | 'end' | 'start'
 }
 
 export interface PlaceOptions {
@@ -81,6 +82,42 @@ export function place(
   return { top, left, maxHeight: room, side }
 }
 
+/**
+ * Beside the trigger rather than under it: the hover card a sidebar row
+ * opens into the sheet. The popover's leading edge sits `gap` past the
+ * trigger's trailing edge (read in `dir`), its top lined up with the
+ * trigger's; when that side has no room it goes to the leading side instead.
+ * The top is then held inside the viewport, so a card for the last row does
+ * not run off the bottom, and `maxHeight` is the viewport less the margins.
+ */
+export function placeBeside(
+  trigger: Box,
+  popover: Size,
+  viewport: Size,
+  { gap = GAP, margin = MARGIN, dir = 'ltr' }: Pick<PlaceOptions, 'gap' | 'margin' | 'dir'> = {},
+): Placement {
+  const rightOf = trigger.left + trigger.width + gap
+  const leftOf = trigger.left - gap - popover.width
+  const fitsRight = rightOf + popover.width <= viewport.width - margin
+  const fitsLeft = leftOf >= margin
+  // The trailing side first; the leading side when the trailing has no room
+  // and the leading has; else the trailing side clamped, since a card that
+  // covers its own row is still worse than one held to the margin.
+  const trailingIsRight = dir !== 'rtl'
+  const wantRight = trailingIsRight ? fitsRight || !fitsLeft : !fitsLeft && fitsRight
+  let left = wantRight ? rightOf : leftOf
+  left = Math.min(left, viewport.width - margin - popover.width)
+  left = Math.max(left, margin)
+  const side: Placement['side'] = wantRight === trailingIsRight ? 'end' : 'start'
+
+  const maxHeight = Math.max(0, viewport.height - 2 * margin)
+  const height = Math.min(popover.height, maxHeight)
+  let top = trigger.top
+  top = Math.min(top, viewport.height - margin - height)
+  top = Math.max(top, margin)
+  return { top, left, maxHeight, side }
+}
+
 /** The reading direction an element is laid out in. */
 function directionOf(node: HTMLElement): 'ltr' | 'rtl' {
   const computed = typeof getComputedStyle === 'function' ? getComputedStyle(node).direction : ''
@@ -102,9 +139,12 @@ export function useAnchor(
   open: boolean,
   trigger: RefObject<HTMLElement | null>,
   popover: RefObject<HTMLElement | null>,
-  options: Pick<PlaceOptions, 'align' | 'gap' | 'margin'> = {},
+  options: Pick<PlaceOptions, 'align' | 'gap' | 'margin'> & {
+    /** Beside the trigger (`placeBeside`) instead of under it. */
+    beside?: boolean
+  } = {},
 ): void {
-  const { align, gap, margin } = options
+  const { align, gap, margin, beside = false } = options
   useLayoutEffect(() => {
     if (!open) return
     function apply(): void {
@@ -113,12 +153,11 @@ export function useAnchor(
       if (!chip || !pop) return
       pop.style.position = 'fixed'
       pop.style.maxHeight = ''
-      const at = place(
-        chip.getBoundingClientRect(),
-        pop.getBoundingClientRect(),
-        { width: window.innerWidth, height: window.innerHeight },
-        { align, gap, margin, dir: directionOf(chip) },
-      )
+      const view = { width: window.innerWidth, height: window.innerHeight }
+      const opts = { align, gap, margin, dir: directionOf(chip) }
+      const at = beside
+        ? placeBeside(chip.getBoundingClientRect(), pop.getBoundingClientRect(), view, opts)
+        : place(chip.getBoundingClientRect(), pop.getBoundingClientRect(), view, opts)
       pop.style.top = `${at.top}px`
       pop.style.left = `${at.left}px`
       pop.style.maxHeight = `${at.maxHeight}px`
@@ -132,5 +171,5 @@ export function useAnchor(
       window.removeEventListener('resize', apply)
       document.removeEventListener('scroll', apply, true)
     }
-  }, [open, trigger, popover, align, gap, margin])
+  }, [open, trigger, popover, align, gap, margin, beside])
 }

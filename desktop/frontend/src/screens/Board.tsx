@@ -1,7 +1,13 @@
-import { useEffect, useId, useMemo, useState } from 'react'
-import type { HookOutcome, RunSummary, Ticket, Transport } from '../api/types'
+import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react'
+import type { HookOutcome, RunSummary, SourcesSummary, Ticket, Transport } from '../api/types'
 import RunCard from '../components/cards/RunCard'
 import { reasonOf, relativeTime } from '../lib/format'
+import {
+  sessionsShow,
+  shownNumber,
+  subscribeSessionsShow,
+  type SessionsShow,
+} from '../lib/sessionsShow'
 import type { InboundDelivery } from '../store/appStore'
 import Button from '../ui/button'
 import GroupLabel from '../ui/group-label'
@@ -276,6 +282,8 @@ export interface BoardProps {
    */
   tickets: Ticket[]
   runs: RunSummary[]
+  /** The workspace's tracker and helpdesk, named in each card's number tooltip. */
+  sources?: SourcesSummary
   queueUnsupported: boolean
   loading: boolean
   inbound?: InboundDelivery[]
@@ -301,6 +309,7 @@ export default function Board(props: BoardProps): JSX.Element {
     provider = '',
     tickets,
     runs,
+    sources,
     queueUnsupported,
     loading,
     inbound,
@@ -313,6 +322,14 @@ export default function Board(props: BoardProps): JSX.Element {
   const [owner, setOwner] = useState<Owner>('all')
   const [kind, setKind] = useState<KindFilter>('all')
   const filtersId = useId()
+  const show = useSyncExternalStore(
+    subscribeSessionsShow,
+    sessionsShow,
+    () => 'tracker' as SessionsShow,
+  )
+  /** A queued ticket's number on the same preference the run cards follow. */
+  const queuedNumber = (ticket: Ticket) =>
+    shownNumber({ key: ticket.key, helpdeskKey: ticket.helpdeskRef }, show, sources)
 
   // The Queue lane: the keys the tracker lists for the reader's own account,
   // asked for once per workspace. Null until it answers, which is what tells
@@ -500,7 +517,8 @@ export default function Board(props: BoardProps): JSX.Element {
                       // that spends the provider is a button of its own.
                       <div key={`t:${card.key}`} className="board-ticket">
                         <SdRunCard
-                          runKey={card.key}
+                          runKey={queuedNumber(card.ticket).text}
+                          keyTitle={queuedNumber(card.ticket).other || undefined}
                           kind="triage"
                           status="queued"
                           title={card.title || undefined}
@@ -522,6 +540,7 @@ export default function Board(props: BoardProps): JSX.Element {
                       <RunCard
                         key={card.run.runId}
                         run={card.run}
+                        sources={sources}
                         title={card.title || undefined}
                         done={column.id === 'done'}
                         onOpen={onOpenRun}

@@ -215,12 +215,14 @@ export function isSelf(assignee: string): boolean {
  * run whose bundle and note have gone reads, so a test that wants the card's
  * titled shape passes one in. The assignee is the reader's own, since the
  * sample workspace is the reader's; a test about somebody else's run passes
- * `assignee` and `mine` in.
+ * `assignee` and `mine` in. The helpdesk key is empty too, the way a
+ * tracker-only ticket reads; a test about the number preference passes one.
  */
 export function run(over: Partial<RunSummary> = {}): RunSummary {
   return {
     runId: 'r1',
     key: 'OMNI-1',
+    helpdeskKey: '',
     title: '',
     kind: 'triage',
     status: 'completed',
@@ -302,6 +304,10 @@ export function configSummary(over: Partial<ConfigSummary> = {}): ConfigSummary 
       cooldown: '10m0s',
       match: { assignee: 'me' },
       sources: [{ name: 'jira', auth: 'secret', credential: 'keychain' }],
+    },
+    sources: {
+      tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+      helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
     },
     ...over,
   }

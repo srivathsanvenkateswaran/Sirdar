@@ -74,6 +74,7 @@ const SECTIONS = [
   'Heatmap',
   'Badge',
   'Provider mark',
+  'Source mark',
   'Banner',
   'Group label',
   'Item row',

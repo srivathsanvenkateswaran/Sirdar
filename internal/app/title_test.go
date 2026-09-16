@@ -41,6 +41,27 @@ func TestSummaryAtReadsTheTrackerTitle(t *testing.T) {
 	}
 }
 
+func TestSummaryAtCarriesTheHelpdeskKey(t *testing.T) {
+	// The helpdesk record's own id first.
+	dir := fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","HelpdeskRef":"25311"},"Helpdesk":{"ID":" 25312 "}}`)
+	if got := SummaryAt(dir, store.State{RunID: "r", Key: "OMNI-1"}).HelpdeskKey; got != "25312" {
+		t.Fatalf("HelpdeskKey = %q, want the helpdesk id", got)
+	}
+	// Else the reference the tracker carried.
+	dir = fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1","HelpdeskRef":"25311"}}`)
+	if got := SummaryAt(dir, store.State{RunID: "r", Key: "OMNI-1"}).HelpdeskKey; got != "25311" {
+		t.Fatalf("HelpdeskKey = %q, want the tracker's reference", got)
+	}
+	// A tracker-only ticket has none, and so does a run with no bundle.
+	dir = fakeRunDir(t, `{"Tracker":{"Key":"OMNI-1"}}`)
+	if got := SummaryAt(dir, store.State{RunID: "r", Key: "OMNI-1"}).HelpdeskKey; got != "" {
+		t.Fatalf("HelpdeskKey = %q, want empty", got)
+	}
+	if got := SummaryAt(fakeRunDir(t, ""), store.State{RunID: "r", Key: "OMNI-1"}).HelpdeskKey; got != "" {
+		t.Fatalf("HelpdeskKey = %q on no bundle, want empty", got)
+	}
+}
+
 func TestSummaryAtFallsBackToTheHelpdeskSubject(t *testing.T) {
 	dir := fakeRunDir(t, `{"Tracker":null,"Helpdesk":{"ID":"h1","Subject":"Export hangs at page 3"}}`)
 	got := SummaryAt(dir, store.State{RunID: "20260910T090000Z-aaaa", Key: "OMNI-1"})

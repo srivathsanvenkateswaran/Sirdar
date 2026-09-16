@@ -1,0 +1,275 @@
+/*
+ * The sidebar's sessions list: one line per session, newest first, the live
+ * and blocked runs above a "Settled" divider that folds the rest away. A row
+ * is a 16px source tile, the ticket number in the ledger face and the age at
+ * the end, at 36 tall. Everything a row does not say is on the card it opens
+ * beside the sidebar after a moment's hover.
+ *
+ * Every value comes from `styles/tokens.css`. The list's container,
+ * `.sd-sidebar__sessions`, is in sidebar.css with the rest of the shell's
+ * layout: it is the sidebar's one scroll region.
+ */
+
+/* ---------- a row ---------- */
+
+.sd-session-row {
+  position: relative;
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  inline-size: 100%;
+  min-block-size: 36px;
+  padding-block: 0;
+  padding-inline: 12px 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  cursor: pointer;
+  transition: background-color var(--sd-dur-1) ease;
+}
+
+.sd-session-row:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sd-session-row[aria-current='page'] {
+  background: var(--sd-nav-active);
+  color: var(--sd-ink);
+}
+
+/* The tile, with room at its corner for the dot. */
+.sd-session-row__tile {
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+/* The dot says live or waiting on a person, and nothing else: the word for
+   either is in the row's accessible name. It sits over the tile's trailing
+   top corner, ringed in the shell colour so it reads against the mark. */
+.sd-session-row__dot {
+  position: absolute;
+  inset-block-start: -3px;
+  inset-inline-end: -3px;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-accent);
+  box-shadow: 0 0 0 2px var(--sd-shell);
+}
+
+.sd-session-row__dot[data-blocked='true'] {
+  background: var(--sd-st-blocked);
+}
+
+/* OMNI-2815 or #25312: the ledger face at 14px, one line, ellipsised. */
+.sd-session-row__number {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: inherit;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-meta);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  unicode-bidi: isolate;
+}
+
+/* 18h, 5d: the third ink at the row's end. */
+.sd-session-row__age {
+  flex: 0 0 auto;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------- the Settled divider ---------- */
+
+/* A small label in the third ink, a hairline to the end, and a chevron that
+   turns when the settled rows are folded away. */
+.sd-sessions__settled {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: 28px;
+  margin-block-start: var(--sd-space-2);
+  padding-block: 0;
+  padding-inline: 12px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-align: start;
+  cursor: pointer;
+}
+
+.sd-sessions__settled:hover {
+  color: var(--sd-ink-2);
+}
+
+.sd-sessions__rule {
+  flex: 1 1 auto;
+  block-size: 1px;
+  background: var(--sd-rule);
+}
+
+.sd-sessions__chevron {
+  flex: 0 0 auto;
+  inline-size: 12px;
+  block-size: 12px;
+  transition: transform var(--sd-dur-1) ease;
+}
+
+.sd-sessions__settled[aria-expanded='false'] .sd-sessions__chevron {
+  transform: rotate(-90deg);
+}
+
+/* In an Arabic pane the folded chevron points the other way, into the text. */
+[dir='rtl'] .sd-sessions__settled[aria-expanded='false'] .sd-sessions__chevron {
+  transform: rotate(90deg);
+}
+
+.sd-sessions__settled-rows {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Show N more: words, drawn as a row. */
+.sd-sessions__more {
+  flex: 0 0 auto;
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding-block: 0;
+  padding-inline: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  text-align: start;
+  cursor: pointer;
+}
+
+.sd-sessions__more:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+/* ---------- the hover card ---------- */
+
+/* Pinned to the viewport beside its row by lib/anchor, on the dialog's
+   surface. It is a tooltip: nothing in it is a control, and the pointer
+   passes through it to whatever is behind. */
+.sd-session-card {
+  position: fixed;
+  z-index: 25;
+  inline-size: 280px;
+  padding-block: 12px;
+  padding-inline: 14px;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+  text-align: start;
+  pointer-events: none;
+}
+
+/* The gallery's specimen: in the flow under the list, as wide as the list. */
+.sd-session-card[data-static='true'] {
+  position: static;
+  inline-size: auto;
+  margin-block-start: var(--sd-space-2);
+  pointer-events: auto;
+}
+
+.sd-session-card__title {
+  margin: 0;
+  margin-block-end: var(--sd-space-2);
+  color: var(--sd-ink);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.sd-session-card__rows {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.sd-session-card__row {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  min-inline-size: 0;
+  color: var(--sd-ink-2);
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.sd-session-card__row > span:last-child {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sd-session-card__mono {
+  font-family: var(--sd-font-mono);
+  unicode-bidi: isolate;
+}
+
+/* The card's marks are 16px tiles, matching the rows'. */
+.sd-session-card__row > .sd-mark {
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: var(--sd-radius-xs);
+}
+
+.sd-session-card__row > .sd-mark > svg {
+  inline-size: 10px;
+  block-size: 10px;
+}
+
+.sd-session-card__row > .sd-mark .sd-mark__initials {
+  font-size: 7px;
+}
+
+.sd-session-card__icon {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 16px;
+  color: var(--sd-ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-session-row,
+  .sd-sessions__chevron {
+    transition-duration: 1ms;
+  }
+}

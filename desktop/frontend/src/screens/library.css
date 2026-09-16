@@ -201,6 +201,15 @@
   inline-size: var(--sd-sidebar-w);
 }
 
+/* The sessions-list specimen stands on its own, so the list's top hairline
+   and margin, drawn for a list under the nav, are not wanted here. */
+.lib-sidebar-sessions .sd-sidebar__sessions {
+  margin-block-start: 0;
+  padding-block-start: 0;
+  border-block-start: 0;
+  overflow: visible;
+}
+
 @media (max-width: 720px) {
   .lib__bar,
   .lib-section {

@@ -60,21 +60,27 @@ type Budget struct {
 // Both are facts about the ticket rather than the run, which is why a card
 // can show an avatar and the board can filter by owner without asking the
 // tracker anything.
+//
+// HelpdeskKey is the helpdesk's own number for the same ticket, read off the
+// bundle: the helpdesk record's id, else the reference the tracker record
+// carried. Empty when the run has neither, and a screen then shows Key
+// under the tracker's mark whichever number the reader prefers.
 type RunSummary struct {
-	RunID     string   `json:"runId"`
-	Key       string   `json:"key"`
-	Title     string   `json:"title"`
-	Kind      string   `json:"kind"`
-	Status    string   `json:"status"`
-	Provider  string   `json:"provider"`
-	Model     string   `json:"model"`
-	StartedAt string   `json:"startedAt"`
-	UpdatedAt string   `json:"updatedAt"`
-	Reason    string   `json:"reason"`
-	Assignee  string   `json:"assignee"`
-	Mine      bool     `json:"mine"`
-	Usage     Usage    `json:"usage"`
-	Notes     []string `json:"notes"`
+	RunID       string   `json:"runId"`
+	Key         string   `json:"key"`
+	HelpdeskKey string   `json:"helpdeskKey"`
+	Title       string   `json:"title"`
+	Kind        string   `json:"kind"`
+	Status      string   `json:"status"`
+	Provider    string   `json:"provider"`
+	Model       string   `json:"model"`
+	StartedAt   string   `json:"startedAt"`
+	UpdatedAt   string   `json:"updatedAt"`
+	Reason      string   `json:"reason"`
+	Assignee    string   `json:"assignee"`
+	Mine        bool     `json:"mine"`
+	Usage       Usage    `json:"usage"`
+	Notes       []string `json:"notes"`
 }
 
 // RunDetail is a run's full view: the summary plus the paths and limits the
@@ -420,6 +426,7 @@ func SummaryFor(dir string, s store.State, self string) RunSummary {
 	out := SummaryOf(s)
 	b := bundleAt(dir)
 	out.Title = titleOf(b, s.Notes)
+	out.HelpdeskKey = helpdeskKeyOf(b)
 	out.Assignee = assigneeOf(b)
 	out.Mine = SameAssignee(out.Assignee, self)
 	return out
@@ -438,6 +445,24 @@ func bundleAt(dir string) *ticket.Bundle {
 		return nil
 	}
 	return &b
+}
+
+// helpdeskKeyOf is the helpdesk's number for a bundle's ticket: the helpdesk
+// record's own id when the run fetched one, else the reference the tracker
+// record carried, else "". A run gathered from a tracker alone has none.
+func helpdeskKeyOf(b *ticket.Bundle) string {
+	if b == nil {
+		return ""
+	}
+	if b.Helpdesk != nil {
+		if id := strings.TrimSpace(b.Helpdesk.ID); id != "" {
+			return id
+		}
+	}
+	if b.Tracker != nil {
+		return strings.TrimSpace(b.Tracker.HelpdeskRef)
+	}
+	return ""
 }
 
 // assigneeOf is who a bundle says its ticket belongs to: the tracker's

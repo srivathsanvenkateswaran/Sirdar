@@ -19,9 +19,10 @@ badges, and a star per row for favourites.
 
 The lists it draws from live in `src/lib/models.ts`: a curated list per
 provider with "CLI default" first, then the names the research observed on
-the wire, then "Other…" for free text. Nothing in a list is guessed; a
-provider whose names were never seen offers free text with a hint saying
-where a name would come from.
+the wire. Nothing in a list is guessed. The search field is also the
+free-text entry: text that answers no row is offered back as one row, "Use
+“…” as the model id", and a provider whose names were never seen carries a
+hint saying where an id would come from.
 
 ## Anatomy
 
@@ -44,10 +45,12 @@ where a name would come from.
   `top`, `left`, `max-height` and `data-side`). 480 wide or the window less
   16, about 420 tall: the dialog's surface (`--sd-surface`,
   `--sd-rule-strong`, `--sd-radius-md`, `--sd-shadow-soft`).
-- `.sd-model-picker__search` — the 44-tall field across the top: a magnifier
-  and `input.sd-model-picker__search-input[type=search]` labelled "Search
+- `.sd-model-picker__search` — the 44-tall row across the top, on `--sd-sheet`
+  with a `--sd-rule` hairline under it: a magnifier and
+  `input.sd-model-picker__search-input[type=search]` labelled "Search
   models" (visually hidden). Focused on open. Filters by model label, model
-  id, the provider's config name or the vendor's name, across every provider.
+  id, the provider's config name or the vendor's name, across every
+  provider; and is where a model id nobody listed is typed.
 - `.sd-model-picker__body` — the rail and the list, side by side, 376 tall at
   most; the list is what scrolls.
 - `.sd-model-picker__rail[role="tablist"]` — 48 wide, one
@@ -66,11 +69,13 @@ where a name would come from.
   row adds `· last used <id>` when a run has said), `.sd-model-picker__check`
   on the selected row, and `kbd.sd-model-picker__kbd` reading ⌘1 … ⌘9 on the
   first nine rows in display order (`aria-keyshortcuts="Meta+n"`).
-- `.sd-model-picker__row--other` — the last row, "Other…", under a hairline:
-  `input.sd-model-picker__input` labelled "Other model" (visually hidden) and
-  `.sd-model-picker__hint` naming where a model id for this provider was
-  observed. Checked when the pair names an id no list has.
-- `.sd-model-picker__none` — "No model matches “…”." when a search finds nothing.
+- `.sd-model-picker__row--use` — the one row a search that answers nothing
+  offers: "Use “<typed>” as the model id", the typed id in the ledger face,
+  no star and no key, with `.sd-model-picker__hint` under it naming where a
+  model id for this provider was observed. Enter in the search, or on the
+  row, takes it.
+- `.sd-model-picker__hint--foot` — the same hint at the list's foot for a
+  provider whose list is "CLI default" alone, before anything is typed.
 
 ## States
 
@@ -79,29 +84,29 @@ where a name would come from.
 | rest | Chip in `--sd-ink-2`, value at weight 500, chevron in `--sd-ink-3`. |
 | hover | Chip to `--sd-nav-hover` and `--sd-ink`. Row to `--sd-nav-hover`; its star appears. Rail tab to `--sd-nav-hover`, full opacity. |
 | active / pressed | n/a. The popover opening is the feedback. |
-| focus-visible | The shell's ring on the chip, each tab, each row, each star and the box. The search field carries a 2px accent underline on its row instead of a ring inside the corners. |
+| focus-visible | The shell's ring on the chip, each tab, each row, each star and the search input itself (`outline-offset: 0`, inside its row). No underline: the row is a hairline, not a control. |
 | open | `aria-expanded="true"`, chip drawn as hovered. Focus is in the search field. |
 | selected | Rail tab: `aria-selected`, the accent rail, full opacity. Row: `aria-selected`, `--sd-card-row` fill and the check together, never the fill alone. |
 | favourite | The star is filled in `--sd-accent` and stays visible; the row floats under "Favourites" and takes the first shortcuts. Kept in `localStorage` under `sirdar.modelFavourites.<provider>`. |
-| searching | The heading reads "Matches"; rows from every provider that answer the query, each naming its provider in its meta; "No model matches" when none. Enter picks the first match. |
+| searching | The heading reads "Matches"; rows from every provider that answer the query, each naming its provider in its meta. Enter picks the first match. When nothing answers, the one row is "Use “<typed>” as the model id", and Enter takes it. |
 | nothing chosen | The chip reads `CLI default`; the CLI default row's meta and the chip's name say what the last run on that provider used. |
 | workspace model | An override of neither provider nor model shows the workspace's configured model by its label, or the id itself when the list has no label for it (`sonnet` stays `sonnet`; the CLI takes the alias). |
-| free text | Any id the list lacks checks "Other…" and fills the box. The choice is the trimmed text. |
+| free text | An id the list lacks is typed in the search and taken from the "Use …" row, trimmed, on the provider the rail has. The chip then reads the id itself, and no row in the list is selected. |
 | disabled | The chip at `opacity: .45`; nothing opens. |
 | read-only | `readOnly` names the reason: the chip is a disabled button with that reason as its `title` and in its accessible name, at full opacity — a fact, not a control. |
 | no provider | The value reads "not set" and no mark is drawn; the popover still opens so one can be chosen. |
 | no room below | The popover opens above the chip (`data-side="above"`), or stays below held to the room when that is more; the list scrolls inside. The window never scrolls. |
 | loading | n/a. The lists are static. |
 | error | n/a. A wrong id is the provider's to refuse when the run starts. |
-| empty | n/a. Every list has "CLI default" and "Other…". |
+| empty | n/a. Every list has "CLI default", and a search that finds nothing offers the typed text instead of an empty list. |
 | RTL | The popover lines its leading edge up with the trigger's leading (right) edge; the rail is on the inline start, its accent rail on the leading edge; the check and the shortcut key swap sides with the page. The chip's value, each row's meta and the box stay `dir="ltr"`, because a model id is Latin. |
 
 ## Tokens used
 
-- `--sd-surface`, `--sd-sheet` — the popover and the box
-- `--sd-rule`, `--sd-rule-strong` — the search row, the rail, the keys, the box, the popover
+- `--sd-surface`, `--sd-sheet` — the popover and the search row
+- `--sd-rule`, `--sd-rule-strong` — the search row's hairline, the rail, the keys, the popover
 - `--sd-card-row`, `--sd-nav-hover` — selected and hovered rows and tabs; the chip while open
-- `--sd-accent` — the selected tab's rail, the filled star, the search underline
+- `--sd-accent` — the selected tab's rail, the filled star
 - `--sd-ink`, `--sd-ink-2`, `--sd-ink-3` — words
 - `--sd-radius-xs`, `--sd-radius-sm`, `--sd-radius-md`, `--sd-radius-pill` — keys, chip and rows, popover, the accent rail
 - `--sd-shadow-soft` — the popover
@@ -141,13 +146,13 @@ rail is a vertical `tablist` with roving tabindex: ArrowUp / ArrowDown move
 the provider and wrap, Home and End jump; each tab's name is the vendor's.
 The list is a single-select `listbox`: ArrowDown from the search steps into
 it, ArrowUp / ArrowDown move focus, ArrowUp from the first row returns to the
-search, Home and End jump, Enter or Space picks the focused row (on Other…
-it steps into the box), `f` stars it. ⌘1 … ⌘9 (Ctrl on a keyboard without a
+search, Home and End jump, Enter or Space picks the focused row (on the "Use
+…" row it takes the typed id), `f` stars it. ⌘1 … ⌘9 (Ctrl on a keyboard without a
 command key) pick the first nine rows in display order while the popover is
 open; each row states its key with `aria-keyshortcuts`. Escape closes. Tab
 is not trapped. The star is a button with `aria-pressed` and a name that
-says what pressing it does. The search field and the box have visually
-hidden labels, "Search models" and "Other model". The read-only chip is a
+says what pressing it does. The search field has a visually hidden label,
+"Search models", and wears the shell's ring. The read-only chip is a
 disabled button whose accessible name carries the reason. Contrast: the meta
 is `--sd-ink-3` on `--sd-surface`, **5.25:1** light and **5.26:1** dark; the
 selected row is `--sd-ink` on `--sd-card-row`, **15.70:1** light and
@@ -155,6 +160,14 @@ selected row is `--sd-ink` on `--sd-card-row`, **15.70:1** light and
 `--sd-dur-1`, 1ms under reduced motion.
 
 ## Changelog
+
+### 2026-09-16 (picker tidy)
+The "Other…" row and its box are gone: the search field is the free-text
+entry, and text that answers no row is offered back as "Use “…” as the model
+id", with the alias hint under it (and at the list's foot for a provider
+with no curated names). The search row lost its 2px accent underline; it
+sits on the sheet over a `--sd-rule` hairline, and the input alone takes the
+shell's ring. "No model matches" went with the box.
 
 ### 2026-09-16 (T3 shape)
 The popover is pinned to the viewport by `lib/anchor` rather than hung under

@@ -93,6 +93,8 @@
 
 /* ---------- search ---------- */
 
+/* The field sits on the sheet, a plain hairline under it; the input alone
+   wears the shell's focus ring, like every other field. */
 .sd-model-picker__search {
   display: flex;
   flex: 0 0 auto;
@@ -101,6 +103,7 @@
   min-block-size: 44px;
   padding-inline: var(--sd-space-3);
   border-block-end: 1px solid var(--sd-rule);
+  background: var(--sd-sheet);
 }
 
 .sd-model-picker__search-icon {
@@ -113,8 +116,11 @@
 .sd-model-picker__search-input {
   flex: 1;
   min-inline-size: 0;
-  padding: 0;
+  min-block-size: 28px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-1);
   border: 0;
+  border-radius: var(--sd-radius-xs);
   background: transparent;
   color: var(--sd-ink);
   font: inherit;
@@ -130,13 +136,9 @@
   appearance: none;
 }
 
-/* The field wears no ring of its own; the row above the list is the field. */
+/* The ring sits inside the row rather than on the popover's edge. */
 .sd-model-picker__search-input:focus-visible {
-  outline: none;
-}
-
-.sd-model-picker__search:has(.sd-model-picker__search-input:focus-visible) {
-  box-shadow: inset 0 -2px 0 0 var(--sd-accent);
+  outline-offset: 0;
 }
 
 /* ---------- the body: rail and list ---------- */
@@ -349,45 +351,36 @@
   text-align: center;
 }
 
-.sd-model-picker__none {
-  margin: 0;
-  padding-block: var(--sd-space-3);
-  padding-inline: var(--sd-space-2);
-  color: var(--sd-ink-3);
-  font-size: var(--sd-text-meta);
-}
-
 /* ---------- the free-text row ---------- */
 
-.sd-model-picker__row--other {
-  margin-block-start: var(--sd-space-1);
+/* "Use “…” as the model id": the one row a search that matches nothing
+   offers, with no star and no key, the typed id in the ledger face. */
+.sd-model-picker__row--use {
   padding-inline-start: 36px;
-  border-block-start: 1px solid var(--sd-rule);
-  border-radius: 0;
-  cursor: text;
 }
 
-.sd-model-picker__input {
-  min-block-size: 32px;
-  inline-size: 100%;
-  padding-block: 0;
-  padding-inline: var(--sd-space-2);
-  border: 1px solid var(--sd-rule-strong);
-  border-radius: var(--sd-radius-sm);
-  background: var(--sd-sheet);
-  color: var(--sd-ink);
+.sd-model-picker__row--use .sd-model-picker__label {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.sd-model-picker__row--use .sd-model-picker__label > span {
   font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-meta);
-}
-
-.sd-model-picker__input::placeholder {
-  color: var(--sd-ink-3);
+  unicode-bidi: isolate;
 }
 
 .sd-model-picker__hint {
   color: var(--sd-ink-3);
   font-size: var(--sd-text-micro);
   line-height: 1.4;
+}
+
+/* The same hint at the list's foot for a provider with no curated names,
+   before anything is typed. */
+.sd-model-picker__hint--foot {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: 36px var(--sd-space-2);
 }
 
 @media (prefers-reduced-motion: reduce) {

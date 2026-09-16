@@ -169,7 +169,7 @@ describe('ModelPicker', () => {
       // Icons only: the tab's text is the mark's accessible name, nothing more.
       expect(tabs[1].querySelector('.sd-mark')).not.toBeNull()
 
-      expect(labels()).toEqual(['CLI default', 'Fable 5.1', 'Opus 5', 'Sonnet 5', 'Haiku 4.5', 'Other…'])
+      expect(labels()).toEqual(['CLI default', 'Fable 5.1', 'Opus 5', 'Sonnet 5', 'Haiku 4.5'])
       const rows = within(list()).getAllByRole('option')
       // Each row says its provider under the label; CLI default says what it was last time.
       expect(rows[0].querySelector('.sd-model-picker__meta')).toHaveTextContent(
@@ -185,9 +185,10 @@ describe('ModelPicker', () => {
         '⌘5',
       ])
       expect(rows[1]).toHaveAttribute('aria-keyshortcuts', 'Meta+2')
-      expect(rows[5].querySelector('kbd')).toBeNull()
       expect(within(list()).getByRole('option', { selected: true })).toHaveTextContent('CLI default')
-      expect(within(popover()).getByRole('textbox', { name: 'Other model' })).toBeInTheDocument()
+      // No Other… row and no box: the search field is the free-text entry.
+      expect(within(popover()).queryByRole('textbox')).toBeNull()
+      expect(within(list()).queryByText(/Other/)).toBeNull()
     })
 
     it('picks a row with a click, closes, and returns focus to the chip', () => {
@@ -208,7 +209,7 @@ describe('ModelPicker', () => {
       fireEvent.click(chip())
       fireEvent.click(within(rail()).getByRole('tab', { name: 'Codex' }))
       expect(onChange).toHaveBeenLastCalledWith({ provider: 'codex', model: '' })
-      expect(labels()).toEqual(['CLI default', 'gpt-5.6-luna', 'Other…'])
+      expect(labels()).toEqual(['CLI default', 'gpt-5.6-luna'])
       expect(chip()).toHaveTextContent('CLI default')
       expect(within(chip()).getByRole('img', { name: 'Codex' })).toBeInTheDocument()
     })
@@ -230,7 +231,7 @@ describe('ModelPicker', () => {
       render(<Harness />)
       fireEvent.click(chip())
       fireEvent.change(search(), { target: { value: 'gpt' } })
-      expect(labels()).toEqual(['gpt-5.6-luna', 'Other…'])
+      expect(labels()).toEqual(['gpt-5.6-luna'])
       expect(within(list()).getByText('Matches')).toBeInTheDocument()
       fireEvent.keyDown(search(), { key: 'ArrowDown' })
       expect(within(list()).getByRole('option', { name: /gpt-5.6-luna/ })).toHaveFocus()
@@ -240,14 +241,47 @@ describe('ModelPicker', () => {
       expect(screen.queryByRole('dialog')).toBeNull()
     })
 
-    it('says so when nothing matches, and Enter in the search picks the first match', () => {
-      render(<Harness />)
+    it('offers the typed text as the model id when nothing matches, and Enter in the search picks the first match', () => {
+      const onChange = vi.fn()
+      render(<Harness onChange={onChange} />)
       fireEvent.click(chip())
-      fireEvent.change(search(), { target: { value: 'zzz' } })
-      expect(within(list()).getByText('No model matches “zzz”.')).toBeInTheDocument()
+      fireEvent.change(search(), { target: { value: ' claude-next ' } })
+      const use = within(list()).getByRole('option', { name: /^Use “claude-next” as the model id/ })
+      expect(use).toHaveAttribute('aria-selected', 'false')
+      expect(use.querySelector('kbd')).toBeNull()
+      // The alias hint moves under the row.
+      expect(use.querySelector('.sd-model-picker__hint')).toHaveTextContent(/opus|sonnet|haiku/i)
+      // Enter takes it, trimmed, on the provider the rail has, and closes.
+      fireEvent.keyDown(search(), { key: 'Enter' })
+      expect(onChange).toHaveBeenLastCalledWith({ provider: '', model: 'claude-next' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+      expect(chip()).toHaveTextContent('claude-next')
+      expect(chip()).toHaveFocus()
+
+      fireEvent.click(chip())
       fireEvent.change(search(), { target: { value: 'haiku' } })
+      expect(within(list()).queryByRole('option', { name: /Use “/ })).toBeNull()
       fireEvent.keyDown(search(), { key: 'Enter' })
       expect(screen.getByTestId('pair')).toHaveTextContent('(default) / claude-haiku-4-5-20251001')
+    })
+
+    it('picks the typed id from its row by click or by Enter on the row', () => {
+      const onChange = vi.fn()
+      render(<Harness start={{ provider: 'codex', model: '' }} onChange={onChange} />)
+      fireEvent.click(chip())
+      fireEvent.change(search(), { target: { value: 'o5-preview' } })
+      fireEvent.keyDown(search(), { key: 'ArrowDown' })
+      const use = within(list()).getByRole('option', { name: /Use “o5-preview”/ })
+      expect(use).toHaveFocus()
+      fireEvent.keyDown(list(), { key: 'Enter' })
+      expect(onChange).toHaveBeenLastCalledWith({ provider: 'codex', model: 'o5-preview' })
+      expect(screen.queryByRole('dialog')).toBeNull()
+
+      fireEvent.click(chip())
+      fireEvent.change(search(), { target: { value: 'o6' } })
+      fireEvent.click(within(list()).getByRole('option', { name: /Use “o6”/ }))
+      expect(onChange).toHaveBeenLastCalledWith({ provider: 'codex', model: 'o6' })
+      expect(chip()).toHaveTextContent('o6')
     })
 
     it('walks the list with the arrows, Home and End, and ArrowUp from the top returns to the search', () => {
@@ -259,10 +293,7 @@ describe('ModelPicker', () => {
       fireEvent.keyDown(list(), { key: 'ArrowDown' })
       expect(within(list()).getByRole('option', { name: /Opus 5/ })).toHaveFocus()
       fireEvent.keyDown(list(), { key: 'End' })
-      expect(within(list()).getByRole('option', { name: /Other/ })).toHaveFocus()
-      // Enter on Other… steps into its box.
-      fireEvent.keyDown(list(), { key: 'Enter' })
-      expect(within(popover()).getByRole('textbox', { name: 'Other model' })).toHaveFocus()
+      expect(within(list()).getByRole('option', { name: /Haiku 4.5/ })).toHaveFocus()
       fireEvent.keyDown(list(), { key: 'Home' })
       expect(within(list()).getByRole('option', { name: /CLI default/ })).toHaveFocus()
       fireEvent.keyDown(list(), { key: 'ArrowUp' })
@@ -295,7 +326,7 @@ describe('ModelPicker', () => {
       expect(popover()).toBeInTheDocument()
       expect(screen.getByTestId('pair')).toHaveTextContent('(default) / (cli)')
       expect(within(list()).getByText('Favourites')).toBeInTheDocument()
-      expect(labels()).toEqual(['Sonnet 5', 'CLI default', 'Fable 5.1', 'Opus 5', 'Haiku 4.5', 'Other…'])
+      expect(labels()).toEqual(['Sonnet 5', 'CLI default', 'Fable 5.1', 'Opus 5', 'Haiku 4.5'])
       // The favourite takes ⌘1 with it.
       expect(within(list()).getByRole('option', { name: /Sonnet 5/ }).querySelector('kbd')).toHaveTextContent('⌘1')
       expect(readFavourites('claude')).toEqual(['claude-sonnet-5'])
@@ -324,29 +355,25 @@ describe('ModelPicker', () => {
       expect(labels()[0]).toBe('Fable 5.1')
     })
 
-    it('takes a free-text model, trimmed, and Enter in the box closes', () => {
-      const onChange = vi.fn()
-      render(<Harness onChange={onChange} />)
-      fireEvent.click(chip())
-      fireEvent.click(within(list()).getByRole('option', { name: /Other/ }))
-      const box = within(popover()).getByRole('textbox', { name: 'Other model' })
-      expect(box).toHaveFocus()
-      fireEvent.change(box, { target: { value: ' opus ' } })
-      expect(onChange).toHaveBeenLastCalledWith({ provider: '', model: 'opus' })
-      expect(within(list()).getByRole('option', { selected: true })).toHaveTextContent('Other…')
+    it('reads a free-text id on the chip with nothing selected in the list', () => {
+      render(<Harness start={{ provider: '', model: 'opus' }} />)
       expect(chip()).toHaveTextContent('opus')
-      fireEvent.keyDown(box, { key: 'Enter' })
-      expect(screen.queryByRole('dialog')).toBeNull()
-      expect(chip()).toHaveFocus()
+      fireEvent.click(chip())
+      expect(within(list()).queryByRole('option', { selected: true })).toBeNull()
     })
 
-    it('shows the hint for a provider that takes free text only', () => {
+    it('shows the hint for a provider that takes free text only, before anything is typed', () => {
       render(<Harness start={{ provider: 'qwen', model: '' }} />)
       fireEvent.click(chip())
-      expect(labels()).toEqual(['CLI default', 'Other…'])
+      expect(labels()).toEqual(['CLI default'])
       expect(
         within(popover()).getByText('The name OPENAI_MODEL or QWEN_MODEL carries, e.g. qwen3-coder.'),
-      ).toBeInTheDocument()
+      ).toHaveClass('sd-model-picker__hint--foot')
+      // Typed, the hint moves under the Use row.
+      fireEvent.change(search(), { target: { value: 'qwen3-coder' } })
+      const use = within(list()).getByRole('option', { name: /Use “qwen3-coder”/ })
+      expect(use.querySelector('.sd-model-picker__hint')).toHaveTextContent('QWEN_MODEL')
+      expect(within(popover()).queryByText(/QWEN_MODEL/, { selector: '.sd-model-picker__hint--foot' })).toBeNull()
     })
 
     it('closes on Escape and on a click outside, keeping the choice', () => {

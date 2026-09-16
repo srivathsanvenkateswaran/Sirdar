@@ -35,6 +35,18 @@ describe('RunCard', () => {
     )
   })
 
+  it('carries the other number as the tooltip on the one shown', () => {
+    const { container, rerender } = render(
+      <RunCard {...BASE} runKey="#25312" keyTitle="Jira OMNI-2510" status="completed" title="Login loop" />,
+    )
+    expect(container.querySelector('.sd-run-card__key')).toHaveAttribute('title', 'Jira OMNI-2510')
+    expect(container.querySelector('.sd-run-card__title')).not.toHaveAttribute('title')
+    // With no title the number is the title, and the tooltip moves with it.
+    rerender(<RunCard {...BASE} runKey="#25312" keyTitle="Jira OMNI-2510" status="queued" />)
+    expect(container.querySelector('.sd-run-card__title')).toHaveAttribute('title', 'Jira OMNI-2510')
+    expect(screen.getByRole('button', { name: '#25312, queued' })).toBeInTheDocument()
+  })
+
   it('shows the key once, as the title, when the tracker has no title', () => {
     const { container } = render(<RunCard {...BASE} status="queued" />)
     expect(screen.getByRole('button', { name: 'OMNI-2510, queued' })).toBeInTheDocument()
