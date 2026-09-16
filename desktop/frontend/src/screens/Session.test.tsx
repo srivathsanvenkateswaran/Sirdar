@@ -5,6 +5,7 @@ import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/pri
 import { resetRunJobs, setRunJob } from '../lib/jobs'
 import { stubMatchMedia } from '../lib/mediaStub'
 import { resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { resetSessionLayout, setSessionLayout } from '../lib/sessionLayout'
 import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
 import { BELOW_STANDARD } from '../lib/useMediaQuery'
 import { createFakeTransport, diff, type FakeTransport } from '../store/fakeTransport'
@@ -158,6 +159,36 @@ function badge(): HTMLElement {
   return screen.getByRole('heading', { name: RUN.key }).parentElement!.querySelector('.sd-badge')!
 }
 
+/*
+ * The Session dispatches on the layout preference. Conversation, the
+ * default, is `screens/session/SessionConversation` and has its own suite;
+ * what follows here is the ledger transcript the other layouts fall back to
+ * until they land, so each suite pins the preference to it first.
+ */
+describe('the layout dispatch', () => {
+  afterEach(() => {
+    localStorage.clear()
+    resetSessionLayout()
+  })
+
+  it('draws the Conversation layout by default', async () => {
+    const f = fake({ detail: { ...RUN, status: 'completed' } })
+    const { container } = renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(container.querySelector('.sc[data-layout="conversation"]')).not.toBeNull()
+    expect(container.querySelector('.session-body')).toBeNull()
+  })
+
+  it('draws the ledger transcript when another layout is chosen and has not landed', async () => {
+    setSessionLayout('document')
+    const f = fake({ detail: { ...RUN, status: 'completed' } })
+    const { container } = renderSession(f)
+    await screen.findByRole('heading', { name: 'OMNI-2510' })
+    expect(container.querySelector('.session-body')).not.toBeNull()
+    expect(container.querySelector('[data-layout="conversation"]')).toBeNull()
+  })
+})
+
 describe('Session', () => {
   // The run-to-job pairing is module state the shell fills in; reset it so one
   // test's answer does not enable another's Cancel button.
@@ -165,12 +196,14 @@ describe('Session', () => {
     resetRunJobs()
     localStorage.clear()
     resetPreferRTL()
+    setSessionLayout('document')
   })
   afterEach(() => {
     vi.useRealTimers()
     localStorage.clear()
     resetPreferRTL()
     resetSessionsShow()
+    resetSessionLayout()
   })
 
   it('backfills the event log and draws the topbar', async () => {
@@ -912,9 +945,11 @@ describe('the artefacts pane', () => {
   beforeEach(() => {
     resetRunJobs()
     localStorage.clear()
+    setSessionLayout('document')
   })
   afterEach(() => {
     localStorage.clear()
+    resetSessionLayout()
   })
 
   it('folds to a rail of its tab glyphs on Hide panel, and any glyph brings it back open on that tab', async () => {

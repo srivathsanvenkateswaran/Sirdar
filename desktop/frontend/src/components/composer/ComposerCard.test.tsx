@@ -88,4 +88,15 @@ describe('ComposerCard', () => {
     expect(screen.getByRole('alert')).toHaveTextContent('OMNI-9 is busy')
     expect(screen.getByText('The run is still working.')).toHaveClass('composer-reason')
   })
+
+  // A blocked run's send is the screen's primary action, and the word is
+  // what the reader looks for; `wide` draws it beside the arrow.
+  it('draws the send wide, with its word visible, when asked', () => {
+    render(<Harness send={{ label: 'Answer', wide: true }} />)
+    const button = screen.getByRole('button', { name: 'Answer' })
+    expect(button).not.toHaveAttribute('data-icon-only')
+    expect(button.querySelector('.sd-button__label')).toHaveTextContent('Answer')
+    expect(button.closest('.composer-send')).toHaveAttribute('data-wide', 'true')
+    expect(button.querySelector('svg')).not.toBeNull()
+  })
 })
