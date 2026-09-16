@@ -40,7 +40,7 @@ function css(component: string): string {
 }
 
 describe('the component library', () => {
-  it('holds the thirty-eight components the library README lists', () => {
+  it('holds the thirty-nine components the library README lists', () => {
     expect(COMPONENTS).toEqual([
       'ambient',
       'badge',
@@ -48,6 +48,7 @@ describe('the component library', () => {
       'brand-mark',
       'button',
       'card',
+      'context-menu',
       'data-table',
       'dialog',
       'diff-view',

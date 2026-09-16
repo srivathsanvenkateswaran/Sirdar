@@ -29,6 +29,20 @@ type ConfigSummary struct {
 	// Sources names the tracker and the helpdesk the workspace reads, so a
 	// ticket number can be drawn under its own product's mark.
 	Sources SourcesSummary `json:"sources"`
+	// Me is who the workspace thinks the reader is, and which rule said
+	// so. It is an identity, not a credential: the same address a ticket
+	// already carries.
+	Me MeSummary `json:"me"`
+}
+
+// MeSummary is the reader's identity as the Settings "You" row shows it:
+// the address, every other spelling the config named, and which of the four
+// rules in config.Config.Self answered — "me", "webhooks", "sources",
+// "git", or "" for a workspace that can name nobody.
+type MeSummary struct {
+	Email  string   `json:"email"`
+	Names  []string `json:"names"`
+	Source string   `json:"source"`
 }
 
 // GeneralSummary is the top of the config file as the General page shows
@@ -187,7 +201,20 @@ func SummariseConfigWith(cfg *config.Config, hints SourceHints) ConfigSummary {
 		MCP:         MCPSummary{WorkspaceOnly: cfg.WorkspaceOnlyMCP()},
 		Notify:      summariseNotify(cfg.Notify),
 		Webhooks:    summariseWebhooks(&cfg.Webhooks),
+		Me:          summariseMe(cfg),
 	}
+}
+
+// summariseMe reports the resolved identity, names included, so the page can
+// say both who you are and how Sirdar worked that out. Names is always a
+// list on the wire, never null, so the UI need not test for it.
+func summariseMe(cfg *config.Config) MeSummary {
+	id := cfg.Self()
+	names := id.Names
+	if names == nil {
+		names = []string{}
+	}
+	return MeSummary{Email: id.Email, Names: names, Source: id.Source}
 }
 
 func summariseGeneral(cfg *config.Config) GeneralSummary {

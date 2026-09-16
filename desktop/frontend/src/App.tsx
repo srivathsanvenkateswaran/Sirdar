@@ -1,6 +1,7 @@
-import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import type { RunSummary, Ticket } from './api/types'
-import Sidebar from './components/shell/Sidebar'
+import Sidebar, { type SessionActions } from './components/shell/Sidebar'
+import { parseBundle } from './lib/bundle'
 import { PrimaryActionProvider } from './components/shell/primaryAction'
 import { PAGE_ENTER_CLASS, PAGE_ENTER_ONCE_MS } from './ui/motion'
 import Toasts from './ui/toast'
@@ -33,6 +34,7 @@ const NO_TICKETS: Ticket[] = []
 const selectRuns = (s: AppState): RunSummary[] | undefined => s.runsByWorkspace[s.currentWorkspaceId]
 const selectTickets = (s: AppState): Ticket[] | undefined => s.ticketsByWorkspace[s.currentWorkspaceId]
 const selectSources = (s: AppState) => s.sourcesByWorkspace[s.currentWorkspaceId]
+const selectMe = (s: AppState) => s.meByWorkspace[s.currentWorkspaceId]
 const selectQueueUnsupported = (s: AppState): boolean => Boolean(s.queueUnsupported[s.currentWorkspaceId])
 const selectWorkspace = (s: AppState) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)
 
@@ -148,6 +150,31 @@ const ConnectedSidebar = memo(function ConnectedSidebar({
     () => store.navigate({ name: 'settings', page: 'general' }),
     [store],
   )
+  // What a session row's menu can reach. The desktop-only openers are
+  // offered only when the transport has them, so a browser gets no item
+  // it cannot honour. The ticket's pages come off the prompt the run was
+  // given, which is the one place the service records both URLs.
+  const sessionActions = useMemo<SessionActions>(() => {
+    const { transport } = store.getState()
+    const ws = () => store.getState().currentWorkspaceId
+    const actions: SessionActions = {
+      onDelete: (runId) => store.deleteRun(runId),
+      onOpenSettings: () => store.navigate({ name: 'settings', page: 'general' }),
+      onToast: (text, tone) => store.toast(text, tone),
+      loadLinks: async (runId) => {
+        const { ticket } = parseBundle(await transport.prompt(ws(), runId))
+        return { trackerUrl: ticket['Tracker URL'] || undefined, helpdeskUrl: ticket['Helpdesk URL'] || undefined }
+      },
+    }
+    if (transport.openNote) {
+      actions.onOpenNote = (runId, path) => void transport.openNote!(ws(), runId, path)
+    }
+    if (transport.openRunDir) {
+      actions.onOpenRunDir = (runId) => void transport.openRunDir!(ws(), runId)
+    }
+    return actions
+  }, [store])
+  const onSearchNotes = useCallback((q: string) => store.search(q), [store])
   return (
     <Sidebar
       workspaces={workspaces}
@@ -157,6 +184,8 @@ const ConnectedSidebar = memo(function ConnectedSidebar({
       runs={runs ?? NO_RUNS}
       sources={sources}
       inboundCount={inboundCount}
+      sessionActions={sessionActions}
+      onSearchNotes={onSearchNotes}
       onSelectWorkspace={onSelectWorkspace}
       onAddWorkspace={onAddWorkspace}
       onNavigate={onNavigate}
@@ -183,6 +212,7 @@ function Shell(): JSX.Element {
   const runsOrNone = useAppState(selectRuns)
   const ticketsOrNone = useAppState(selectTickets)
   const sources = useAppState(selectSources)
+  const me = useAppState(selectMe)
   const queueUnsupported = useAppState(selectQueueUnsupported)
   const inbound = useAppState((s) => s.inbound)
   const quota = useAppState((s) => s.quota)
@@ -381,6 +411,7 @@ function Shell(): JSX.Element {
           tickets={tickets}
           runs={runs}
           sources={sources}
+          me={me}
           queueUnsupported={queueUnsupported}
           loading={loading}
           inbound={inbound}

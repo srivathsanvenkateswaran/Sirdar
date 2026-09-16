@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import type { RunSummary, SourcesSummary } from '../api/types'
+import type { Anchorable } from '../lib/anchor'
 import SessionsList from '../components/shell/SessionsList'
+import ContextMenu, { type MenuEntry } from '../ui/context-menu'
 import Badge from '../ui/badge'
 import Banner from '../ui/banner'
 import BrandMark from '../ui/brand-mark'
@@ -106,6 +108,70 @@ const SOURCES_SHOWN = [
 ]
 
 /** The sessions-list specimen's workspace: a private exec tracker and Zoho Desk. */
+/** The inline specimens hang from nothing. */
+const NO_ANCHOR: { current: Anchorable | null } = { current: null }
+
+const noop = (): void => {}
+
+/** The session menu as the sidebar builds it for a completed run with a note. */
+const MENU_ITEMS: MenuEntry[] = [
+  { id: 'pin', label: 'Pin', onSelect: noop },
+  { id: 'settle', label: 'Un-settle', onSelect: noop },
+  {
+    kind: 'submenu',
+    id: 'snooze',
+    label: 'Snooze',
+    items: [
+      { id: 'hour', label: '1 hour', onSelect: noop },
+      { id: 'tomorrow', label: 'Until tomorrow 9:00', onSelect: noop },
+      { id: 'week', label: 'Next week', onSelect: noop },
+      { id: 'pick', label: 'Pick a time…', onSelect: noop },
+    ],
+  },
+  { id: 'rename', label: 'Rename', onSelect: noop },
+  { id: 'unread', label: 'Mark unread', onSelect: noop },
+  { kind: 'separator', id: 's1' },
+  {
+    kind: 'submenu',
+    id: 'copy',
+    label: 'Copy',
+    items: [
+      { id: 'key', label: 'Ticket key', detail: 'OMNI-2815', onSelect: noop },
+      { id: 'hd', label: 'Helpdesk number', detail: '#25312', onSelect: noop },
+      { id: 'run', label: 'Run id', detail: '20260916T0905Z-a1b2', onSelect: noop },
+    ],
+  },
+  {
+    kind: 'submenu',
+    id: 'open',
+    label: 'Open',
+    items: [
+      { id: 'tracker', label: 'In Janus', onSelect: noop },
+      { id: 'note', label: 'The note file', onSelect: noop },
+      { id: 'folder', label: 'The run folder', disabled: true, onSelect: noop },
+    ],
+  },
+  { id: 'settings', label: 'Workspace settings', onSelect: noop },
+  { kind: 'separator', id: 's2' },
+  { id: 'archive', label: 'Archive', onSelect: noop },
+  { id: 'delete', label: 'Delete…', tone: 'danger', onSelect: noop },
+]
+
+const MENU_ITEMS_AR: MenuEntry[] = [
+  { id: 'pin', label: 'تثبيت', onSelect: noop },
+  { id: 'settle', label: 'إلغاء التسوية', onSelect: noop },
+  {
+    kind: 'submenu',
+    id: 'snooze',
+    label: 'غفوة',
+    items: [{ id: 'hour', label: 'ساعة واحدة', onSelect: noop }],
+  },
+  { id: 'rename', label: 'إعادة التسمية', detail: 'F2', onSelect: noop },
+  { kind: 'separator', id: 's1' },
+  { id: 'archive', label: 'أرشفة', onSelect: noop },
+  { id: 'delete', label: 'حذف…', tone: 'danger', onSelect: noop },
+]
+
 const SESSION_SOURCES: SourcesSummary = {
   tracker: { adapter: 'exec', name: 'Janus', host: 'janus.example.com' },
   helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
@@ -260,6 +326,8 @@ export default function Library(): JSX.Element {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [hotMarker, setHotMarker] = useState('E1')
   const [paneOpen, setPaneOpen] = useState(true)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuButton = useRef<HTMLSpanElement | null>(null)
   const [choice, setChoice] = useState<ModelChoicePair>({ provider: '', model: '' })
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
     columnId: 'key',
@@ -1512,6 +1580,49 @@ export default function Library(): JSX.Element {
                   <p className="lib-drawer-body">Every call with its time, decision, duration and output size.</p>
                 </Drawer>
               </div>
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="context-menu"
+          name="Context menu"
+          note="The actions on one session row; the arrows walk it, a letter jumps, Escape hands focus back."
+        >
+          <div className="lib-col lib-col--sidebar">
+            <State label="Drive it">
+              <span ref={menuButton} className="lib-menu-opener">
+                <Button variant="pale" size="sm" onClick={() => setMenuOpen(true)}>
+                  Session menu
+                </Button>
+              </span>
+              <ContextMenu
+                open={menuOpen}
+                anchor={menuButton}
+                items={MENU_ITEMS}
+                label="Session menu for OMNI-2815"
+                onClose={() => setMenuOpen(false)}
+              />
+            </State>
+            <State label="Every kind of row, inline">
+              <ContextMenu
+                open
+                inline
+                anchor={NO_ANCHOR}
+                items={MENU_ITEMS}
+                label="Session menu specimen"
+                onClose={() => {}}
+              />
+            </State>
+            <State label="Arabic">
+              <ContextMenu
+                open
+                inline
+                anchor={NO_ANCHOR}
+                items={MENU_ITEMS_AR}
+                label="قائمة الجلسة"
+                onClose={() => {}}
+              />
             </State>
           </div>
         </Section>

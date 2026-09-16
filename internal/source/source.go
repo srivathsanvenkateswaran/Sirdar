@@ -97,6 +97,38 @@ type Transitioner interface {
 	Transitions(ctx context.Context, key string) ([]Transition, error)
 }
 
+// SelfAssignee is the value ListFilter.Assignee takes to mean "whoever
+// this workspace's credentials belong to".
+const SelfAssignee = "me"
+
+// resolvesSelf names the built-in adapters that resolve SelfAssignee
+// against their own credentials: Jira with currentUser(), Linear against
+// the token's own user, Azure DevOps with @Me, Rally with the logged-in
+// user's _ref, ServiceNow with gs.getUserID(). Each one knows which account
+// it is authenticated as, which no caller of theirs does.
+var resolvesSelf = map[string]bool{
+	"jira":       true,
+	"linear":     true,
+	"azdo":       true,
+	"rally":      true,
+	"servicenow": true,
+}
+
+// ResolvesSelf reports whether the adapter named turns an Assignee of "me"
+// into its own account by itself.
+//
+// It is false for `exec`, and it has to be: an external adapter is handed
+// the filter verbatim over stdio, and the protocol says an assignee it
+// cannot resolve must be an error rather than an empty list. So a caller
+// asking one of those for "my tickets" writes out the address instead of
+// hoping the other side knows who "me" is.
+func ResolvesSelf(adapter string) bool { return resolvesSelf[strings.TrimSpace(adapter)] }
+
+// IsSelf reports whether an assignee filter is the literal "me".
+func IsSelf(assignee string) bool {
+	return strings.EqualFold(strings.TrimSpace(assignee), SelfAssignee)
+}
+
 // InProgress reports whether a status name means work had started, folding
 // case and dropping the separators trackers disagree about: "In Progress",
 // "in_progress" and "inprogress" are one status.

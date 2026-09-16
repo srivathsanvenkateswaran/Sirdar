@@ -125,6 +125,14 @@ export interface MCPCallResult {
   server: string; tool: string; verdict: MCPVerdict; reason: string;
   result?: string; truncated?: boolean; isError?: boolean; error?: string; tookMs: number
 }
+/**
+ * One place the sidebar's "Search notes" query was found: the run, which of
+ * its files (`answer` is the agent's result.json, `note` a note), and a
+ * line's worth of text around the first match, cut at 160 characters with an
+ * ellipsis at each edge that was trimmed. `GET /api/workspaces/{id}/search?q=`
+ * answers at most 50, newest run first.
+ */
+export interface SearchHit { runId: string; key: string; kind: string; status: string; source: 'answer'|'note'; path: string; excerpt: string }
 export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
@@ -199,8 +207,19 @@ export interface RetroReport {
 export interface ConfigSummary {
   general: GeneralSummary; budget: BudgetSummary; permissions: PermissionsSummary;
   notes: NotesSummary; mcp: MCPSummary; notify: NotifySummary; webhooks: WebhooksSummary;
-  sources: SourcesSummary
+  sources: SourcesSummary; me: MeSummary
 }
+/**
+ * Who the workspace thinks the reader is, and which rule said so. `email` is
+ * the one address, `names` every other spelling the config named (display
+ * names and usernames together), and `source` names the rule: 'me' for the
+ * config's own `me:` block, 'webhooks' for `webhooks.match.assignee`,
+ * 'sources' for the tracker or helpdesk account email, 'git' for the
+ * repository's own committer. An empty `source` is a workspace that can name
+ * nobody, and then no run is anyone's.
+ */
+export type IdentitySource = ''|'me'|'webhooks'|'sources'|'git'
+export interface MeSummary { email: string; names: string[]; source: IdentitySource }
 /**
  * The tracker and the helpdesk the workspace reads, so a ticket number can be
  * drawn under its own product's mark. A role the workspace has not configured
@@ -236,6 +255,8 @@ export type HookOutcome = 'started'|'skipped'|'filtered'|'ignored'|'rejected';
 export type AppEvent =
   | { kind: 'run.updated'; workspaceId: string; run: RunSummary }
   | { kind: 'run.event'; workspaceId: string; runId: string; index: number; event: RunEvent }
+  /** A run directory `deleteRun` took off disk; every window drops the row. */
+  | { kind: 'run.removed'; workspaceId: string; runId: string }
   | { kind: 'quota.updated'; quota: Quota }
   | { kind: 'job.finished'; jobId: string; workspaceId: string; outcomes: { key: string; status: RunState; runId: string }[] }
   | { kind: 'hook.received'; source: string; key?: string; outcome: HookOutcome }
@@ -257,6 +278,14 @@ export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;
   queue(ws: string, f?: { assignee?: string; status?: string; limit?: number }): Promise<Ticket[]>;
   runs(ws: string, key?: string): Promise<RunSummary[]>; run(ws: string, runId: string): Promise<RunDetail>;
+  /**
+   * Removes a run's directory under .sirdar/runs. The register row and any
+   * filed note stay. A live run is refused (409); `run.removed` follows on
+   * the stream.
+   */
+  deleteRun(ws: string, runId: string): Promise<void>;
+  /** The sidebar's "Search notes": a case-folded substring over every run's answer JSON and notes. */
+  search(ws: string, q: string): Promise<SearchHit[]>;
   events(ws: string, runId: string, after: number): Promise<{ events: RunEvent[]; next: number }>;
   note(ws: string, runId: string, kind: NoteKind): Promise<string>; prompt(ws: string, runId: string): Promise<string>;
   startTriage(ws: string, keys: string[], o?: TriageStart): Promise<{ jobId: string }>;
@@ -305,4 +334,10 @@ export interface Transport {
    * the path instead.
    */
   openNote?(ws: string, runId: string, path: string): Promise<void>;
+  /**
+   * Reveals a run's directory under .sirdar/runs in the desktop's file
+   * manager. Only the Wails transport implements it; the sessions menu
+   * leaves the item out in a browser.
+   */
+  openRunDir?(ws: string, runId: string): Promise<void>;
 }

@@ -50,7 +50,7 @@ function mountOnce(ui: () => JSX.Element): () => HTMLElement {
   }
 }
 
-/** The thirty-seven components, in build order, as the sections name them. */
+/** The thirty-eight components, in build order, as the sections name them. */
 const SECTIONS = [
   'Button',
   'Pill nav',
@@ -89,6 +89,7 @@ const SECTIONS = [
   'Brand mark',
   'Marker',
   'Drawer',
+  'Context menu',
 ]
 
 /**
@@ -122,7 +123,7 @@ describe('the asset library', () => {
     mountOnce(() => <Library />)
 
     describe.each(FRAMES)('painted %s', (_, theme, dir) => {
-      it('renders every one of the thirty-seven sections, each with a specimen', () => {
+      it('renders every one of the thirty-eight sections, each with a specimen', () => {
         paint(theme, dir)
         expect(frame()).toHaveAttribute('data-theme', theme)
         expect(frame()).toHaveAttribute('dir', dir)

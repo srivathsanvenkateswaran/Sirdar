@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { getRunJob, resetRunJobs } from '../lib/jobs'
 import { createAppStore, INBOUND_LIMIT, isQueueUnsupported, type AppStore } from './appStore'
-import { createFakeTransport, run, ticket, workspace } from './fakeTransport'
+import { createFakeTransport, run, searchHit, ticket, workspace } from './fakeTransport'
 
 let store: AppStore | null = null
 
@@ -534,6 +534,74 @@ describe('createAppStore', () => {
     const { inbound } = store.getState()
     expect(inbound).toHaveLength(INBOUND_LIMIT)
     expect(inbound[0]?.key).toBe(`OMNI-${INBOUND_LIMIT + 4}`)
+  })
+
+  it('deleteRun asks the transport, drops the row, toasts, and leaves a run screen for the board', async () => {
+    const transport = createFakeTransport({
+      runs: [run({ runId: 'r1', key: 'OMNI-1' }), run({ runId: 'r2', key: 'OMNI-2', kind: 'fix' })],
+    })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    store.navigate({ name: 'run', runId: 'r2' })
+
+    await store.deleteRun('r2')
+
+    expect(transport.calls.deleteRun).toEqual([{ ws: 'ws1', runId: 'r2' }])
+    const state = store.getState()
+    expect(state.runsByWorkspace.ws1?.map((r) => r.runId)).toEqual(['r1'])
+    expect(state.screen).toEqual({ name: 'board' })
+    expect(state.toasts.at(-1)?.text).toBe('Deleted the fix run for OMNI-2.')
+    expect(state.toasts.at(-1)?.tone).toBe('info')
+  })
+
+  it('a refused delete toasts the reason, rethrows, and keeps the row', async () => {
+    const transport = createFakeTransport({
+      runs: [run({ runId: 'r1', key: 'OMNI-1', status: 'running' })],
+    })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await expect(store.deleteRun('r1')).rejects.toThrow(/live/)
+    expect(store.getState().runsByWorkspace.ws1).toHaveLength(1)
+    expect(store.getState().toasts.at(-1)?.text).toMatch(/^Could not delete the run\. .*live/)
+    expect(store.getState().toasts.at(-1)?.tone).toBe('error')
+  })
+
+  it('run.removed from another window drops the row too, and is harmless for a row already gone', async () => {
+    const transport = createFakeTransport({
+      runs: [run({ runId: 'r1', key: 'OMNI-1' }), run({ runId: 'r2', key: 'OMNI-2' })],
+    })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+    store.navigate({ name: 'review', runId: 'r1' })
+
+    transport.emit({ kind: 'run.removed', workspaceId: 'ws1', runId: 'r1' })
+    expect(store.getState().runsByWorkspace.ws1?.map((r) => r.runId)).toEqual(['r2'])
+    expect(store.getState().screen).toEqual({ name: 'board' })
+
+    const before = store.getState()
+    transport.emit({ kind: 'run.removed', workspaceId: 'ws1', runId: 'r1' })
+    expect(store.getState()).toBe(before)
+    // Another workspace's removal moves nothing here.
+    transport.emit({ kind: 'run.removed', workspaceId: 'ws9', runId: 'r2' })
+    expect(store.getState().runsByWorkspace.ws1).toHaveLength(1)
+  })
+
+  it('search goes to the current workspace and answers nothing for a blank query without asking', async () => {
+    const transport = createFakeTransport({ hits: [searchHit()] })
+    store = createAppStore(transport)
+    await store.init()
+    await settle()
+
+    await expect(store.search('EXPORT')).resolves.toHaveLength(1)
+    await expect(store.search('   ')).resolves.toEqual([])
+    expect(transport.calls.search).toEqual([{ ws: 'ws1', q: 'EXPORT' }])
+
+    transport.failSearch(new Error('500 Internal Server Error'))
+    await expect(store.search('x')).rejects.toThrow('500')
   })
 })
 

@@ -59,6 +59,74 @@
   padding-block-start: var(--sd-space-4);
 }
 
+/* ---------- the search ---------- */
+
+/*
+ * The search well under the brand row, the width of the sidebar: the
+ * library's 40-tall sunk field, held to 36 here so it sits at the rows'
+ * own height. Typing filters the sessions list as it goes; the Notes
+ * toggle at its end sends the text to the service instead. Not drawn in
+ * the rail, where ⌘K unfolds the sidebar first.
+ */
+.sd-sidebar__search {
+  flex: 0 0 auto;
+  padding-block-start: var(--sd-space-3);
+}
+
+.sd-sidebar__search .sd-search[data-variant='well'] {
+  inline-size: 100%;
+  min-block-size: 36px;
+  font-size: var(--sd-text-meta);
+}
+
+.sd-sidebar__search .sd-search[data-variant='well'] .sd-search__icon > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-sidebar__search .sd-search__aside {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+}
+
+/* Notes: a small pill that fills when the mode is on. */
+.sd-sidebar__search-mode {
+  min-block-size: 22px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-pill);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sd-sidebar__search-mode:hover {
+  color: var(--sd-ink);
+}
+
+.sd-sidebar__search-mode[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--sd-badge-bg);
+  color: var(--sd-badge-ink);
+}
+
+.sd-sidebar__kbd {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+}
+
+/* The hint goes once the field is in use; the toggle stays. */
+.sd-sidebar__search .sd-search:focus-within .sd-sidebar__kbd {
+  display: none;
+}
+
 /* ---------- sessions ---------- */
 
 /*
@@ -271,6 +339,7 @@
    its gap plus the 28 toggle is the whole 56px rail with nothing left over. */
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand,
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .sd-brand-mark,
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__search,
 .sd-sidebar[data-collapsed='true'] .switcher {
   display: none;
 }
@@ -310,7 +379,8 @@
     inline-size: auto;
   }
 
-  .sd-sidebar__sessions {
+  .sd-sidebar__sessions,
+  .sd-sidebar__search {
     display: none;
   }
 

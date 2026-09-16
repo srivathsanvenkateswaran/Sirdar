@@ -5,8 +5,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
 import { FILTER_DEBOUNCE_MS } from '../lib/useDebounced'
 import type { InboundDelivery } from '../store/appStore'
+import type { MeSummary } from '../api/types'
 import { createFakeTransport, run, ticket, type FakeTransport } from '../store/fakeTransport'
-import Board, { buildColumns, updatedAgo, type BoardProps } from './Board'
+import Board, { buildColumns, NO_IDENTITY, updatedAgo, type BoardProps } from './Board'
+
+/** Who the sample workspace says the reader is. */
+const ME: MeSummary = { email: 'sri@acme.com', names: ['Sri Venkateswaran', 'sri'], source: 'me' }
 
 afterEach(() => {
   cleanup()
@@ -75,6 +79,7 @@ function mount(
       provider="claude"
       tickets={TICKETS}
       runs={RUNS}
+      me={ME}
       queueUnsupported={false}
       loading={false}
       inbound={[]}
@@ -84,6 +89,18 @@ function mount(
     />,
   )
   return { ...view, onOpenRun, onTriage, transport }
+}
+
+/** Opens the filters row and the assignee menu, and hands back its listbox. */
+function openAssignees(): HTMLElement {
+  fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
+  fireEvent.click(screen.getByRole('button', { name: /^Assignee/ }))
+  return screen.getByRole('listbox', { name: 'Assignee' })
+}
+
+/** The assignee trigger's words, without the label in front of them. */
+function triggerWords(): string {
+  return screen.getByRole('button', { name: /^Assignee/ }).textContent?.trim() ?? ''
 }
 
 describe('Board', () => {
@@ -348,14 +365,38 @@ describe('Board', () => {
     expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
   })
 
-  it('narrows to the reader’s own runs for Mine without asking the tracker again', async () => {
+  it('builds the assignee menu from the runs and the queue, Me first and counted', async () => {
+    mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    const list = openAssignees()
+    const rows = within(list).getAllByRole('option')
+    expect(rows.map((r) => r.querySelector('.board-assignee__name')?.textContent)).toEqual([
+      'Me',
+      'rana@acme.com',
+      'someone-else',
+    ])
+    // Three of the five runs are the reader's; the other two are one each.
+    expect(rows.map((r) => r.querySelector('.board-assignee__count')?.textContent)).toEqual([
+      '3 runs',
+      '1 run',
+      '1 run',
+    ])
+    // The avatar is the initials of the name the row stands for.
+    expect(rows[0].querySelector('.sd-avatar')?.textContent).toBe('S')
+    // Under nine people the menu has no search field to get in the way.
+    expect(within(list.parentElement as HTMLElement).queryByLabelText('Find a person')).toBeNull()
+  })
+
+  it('narrows to the reader’s own runs for Me without asking the tracker again', async () => {
     const { container, transport } = mount()
     await screen.findByRole('region', { name: 'Queue (1)' })
     expect(transport.calls.queue).toHaveLength(1)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+    const list = openAssignees()
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
 
+    expect(triggerWords()).toBe('Me')
     expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
     expect(within(lane(container, 'done')).getByRole('button', { name: /OMNI-4/ })).toBeInTheDocument()
     expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
@@ -363,17 +404,78 @@ describe('Board', () => {
     expect(within(lane(container, 'triaged')).queryByRole('button', { name: /OMNI-2/ })).toBeNull()
     expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
     expect(status(container)).toMatch(/^3 of 5 runs · 1 live/)
+    // A lane the filter emptied says whose work is missing from it.
+    expect(within(lane(container, 'triaged')).getByText('No runs assigned to sri@acme.com.')).toBeInTheDocument()
     expect(transport.calls.queue).toHaveLength(1)
 
-    // All puts the other two back, and the count line stops counting.
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'All' }))
+    // Unpicking puts the other two back, and the count line stops counting.
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
+    expect(triggerWords()).toBe('Anyone')
     expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
     expect(status(container)).toMatch(/^5 runs · 1 live/)
     expect(transport.calls.queue).toHaveLength(1)
   })
 
-  it('keeps every run visible under Mine while the queue is still answering', async () => {
+  it('picks several people at once and says so on the trigger', async () => {
+    const { container } = mount()
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    const list = openAssignees()
+    fireEvent.click(within(list).getByRole('option', { name: /rana@acme\.com/ }))
+    expect(triggerWords()).toBe('rana@acme.com')
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'gathering')).queryByRole('button', { name: /OMNI-1/ })).toBeNull()
+    expect(status(container)).toMatch(/^1 of 5 runs/)
+
+    fireEvent.click(within(list).getByRole('option', { name: /someone-else/ }))
+    expect(triggerWords()).toBe('rana@acme.com, someone-else')
+    expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
+    expect(status(container)).toMatch(/^2 of 5 runs/)
+
+    // Three picked is two names and a count of the rest.
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
+    expect(triggerWords()).toBe('Me, rana@acme.com +1')
+    expect(status(container)).toMatch(/^5 of 5 runs/)
+  })
+
+  it('refuses Me and says why when the workspace can name nobody', async () => {
+    const nobody: MeSummary = { email: '', names: [], source: '' }
+    const { container } = mount({ me: nobody })
+    await screen.findByRole('region', { name: 'Queue (1)' })
+
+    const list = openAssignees()
+    const me = within(list).getByRole('option', { name: /^Me/ })
+    expect(me).toHaveAttribute('aria-disabled', 'true')
+    expect(me).toHaveAttribute('title', NO_IDENTITY)
+    fireEvent.click(me)
+    expect(me).toHaveAttribute('aria-selected', 'false')
+    expect(status(container)).toMatch(/^5 runs/)
+
+    expect(screen.getByText(NO_IDENTITY, { selector: '.board-filters__note' })).toBeInTheDocument()
+    expect(
+      within(lane(container, 'queue')).getByText(/assigned to you · set who you are in Settings/),
+    ).toBeInTheDocument()
+  })
+
+  it('grows a search field once there are more than eight people', async () => {
+    const crowd = Array.from({ length: 9 }, (_, i) =>
+      run({ runId: `x${i}`, key: `OMNI-${100 + i}`, assignee: `person-${i}`, mine: false }),
+    )
+    mount({ runs: crowd })
+    // None of these nine runs is on a queued key, so both of the reader's
+    // tickets are still waiting in the lane.
+    await screen.findByRole('region', { name: 'Queue (2)' })
+
+    const list = openAssignees()
+    const field = screen.getByLabelText('Find a person')
+    fireEvent.change(field, { target: { value: 'person-3' } })
+    expect(within(list).getAllByRole('option')).toHaveLength(1)
+    fireEvent.change(field, { target: { value: 'nobody here' } })
+    expect(screen.getByText(/Nobody here matches/)).toBeInTheDocument()
+  })
+
+  it('keeps every run visible under Me while the queue is still answering', async () => {
     let release = (): void => {}
     const transport = createFakeTransport({ tickets: TICKETS })
     const answer = transport.queue
@@ -385,10 +487,10 @@ describe('Board', () => {
     }
     const { container } = mount({}, transport)
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+    const list = openAssignees()
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
 
-    // The runs already say whose they are, so Mine answers at once and the
+    // The runs already say whose they are, so Me answers at once and the
     // slow queue only holds up the lane it fills.
     expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
     expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
@@ -400,17 +502,26 @@ describe('Board', () => {
     )
   })
 
-  it('narrows nothing under Mine when the service says nothing about ownership', async () => {
-    const older = RUNS.map(({ assignee: _assignee, mine: _mine, ...rest }) => rest)
+  it('narrows nothing under Me when the service says nothing about ownership', async () => {
+    // The cards still name a person; what the service never decided is
+    // whether that person is the reader.
+    const older = RUNS.map(({ mine: _mine, ...rest }) => rest)
     const { container } = mount({ runs: older })
     await screen.findByRole('region', { name: 'Queue (1)' })
 
-    fireEvent.click(screen.getByRole('button', { name: 'Filters' }))
-    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Show' })).getByRole('radio', { name: 'Mine' }))
+    const list = openAssignees()
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
 
     expect(within(lane(container, 'blocked')).getByRole('button', { name: /OMNI-3/ })).toBeInTheDocument()
     expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
-    expect(screen.getByText(/names nobody, so no run can be called yours/)).toBeInTheDocument()
+    expect(screen.getByText(/records no owner on a run/)).toBeInTheDocument()
+
+    // A name still narrows, because the card carries the spelling whatever
+    // the service says about ownership.
+    fireEvent.click(within(list).getByRole('option', { name: /^Me/ }))
+    fireEvent.click(within(list).getByRole('option', { name: /rana@acme\.com/ }))
+    expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
+    expect(within(lane(container, 'blocked')).queryByRole('button', { name: /OMNI-3/ })).toBeNull()
   })
 
   it('lists the day’s deliveries with the outcome coloured and the reason in the meta line', () => {

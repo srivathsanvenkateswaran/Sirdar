@@ -1,8 +1,10 @@
 import type {
   AppEvent,
   HookOutcome,
+  MeSummary,
   Quota,
   RunSummary,
+  SearchHit,
   SourcesSummary,
   Ticket,
   Transport,
@@ -90,6 +92,13 @@ export interface AppState {
    * cannot be loaded (Settings says why).
    */
   sourcesByWorkspace: Record<string, SourcesSummary>
+  /**
+   * Who each workspace thinks the reader is, from the same config summary.
+   * Absent until it has been read; present with an empty `source` for a
+   * workspace that can name nobody, which is what the board's assignee menu
+   * disables Me on.
+   */
+  meByWorkspace: Record<string, MeSummary>
   /** Workspaces whose tracker cannot list a queue (the API answers 501). */
   queueUnsupported: Record<string, boolean>
   quota: Quota[]
@@ -186,6 +195,14 @@ export interface AppStore {
   startEval(keys?: string[], opts?: EvalOptions): Promise<void>
   /** Stops a job this window started, by id. */
   cancelJob(jobId: string): Promise<void>
+  /**
+   * Removes a run's directory in the current workspace and drops its row.
+   * A refusal — a live run, an id the service no longer has — toasts and
+   * rejects, so the dialog that asked can say why.
+   */
+  deleteRun(runId: string): Promise<void>
+  /** The sidebar's "Search notes" over the current workspace. Rejections are the caller's to show. */
+  search(q: string): Promise<SearchHit[]>
   refresh(): Promise<void>
   toast(text: string, tone?: Toast['tone']): void
   dismissToast(id: number): void
@@ -252,6 +269,11 @@ export function upsertRun(runs: RunSummary[], run: RunSummary): RunSummary[] {
   return next
 }
 
+/** The list without `runId`; the same list when it was not there. */
+export function withoutRun(runs: RunSummary[], runId: string): RunSummary[] {
+  return runs.some((r) => r.runId === runId) ? runs.filter((r) => r.runId !== runId) : runs
+}
+
 /** One quota reading per provider; the newest observation wins. */
 export function upsertQuota(quota: Quota[], entry: Quota): Quota[] {
   const index = quota.findIndex((q) => q.provider === entry.provider)
@@ -276,6 +298,7 @@ export function createAppStore(transport: Transport): AppStore {
     runsByWorkspace: {},
     ticketsByWorkspace: {},
     sourcesByWorkspace: {},
+    meByWorkspace: {},
     queueUnsupported: {},
     quota: [],
     toasts: [],
@@ -354,9 +377,11 @@ export function createAppStore(transport: Transport): AppStore {
   }
 
   /**
-   * The sources block of the config summary. A summary that cannot be read
-   * is not reported here: the lists fall back to bare numbers, and Settings
-   * is where the reason is shown.
+   * The two things every screen reads off the config summary: which products
+   * the workspace's numbers belong to, and who the reader is. A summary that
+   * cannot be read is not reported here — the lists fall back to bare
+   * numbers, the board's Me option stays disabled, and Settings is where the
+   * reason is shown.
    */
   async function loadSources(workspaceId: string): Promise<void> {
     try {
@@ -364,6 +389,10 @@ export function createAppStore(transport: Transport): AppStore {
       if (disposed) return
       set({
         sourcesByWorkspace: { ...state.sourcesByWorkspace, [workspaceId]: summary.sources ?? {} },
+        meByWorkspace: {
+          ...state.meByWorkspace,
+          [workspaceId]: summary.me ?? { email: '', names: [], source: '' },
+        },
       })
     } catch {
       // Left absent on purpose.
@@ -436,6 +465,32 @@ export function createAppStore(transport: Transport): AppStore {
     clearJob(jobId)
   }
 
+  /**
+   * Takes a run off the list, and sends a window that was reading it back
+   * to the board: a run screen for a directory that is gone has nothing to
+   * load. Both `deleteRun` and the `run.removed` event land here, so the
+   * second of the two is a no-op.
+   */
+  function dropRun(workspaceId: string, runId: string): void {
+    const existing = state.runsByWorkspace[workspaceId]
+    const patch: Partial<AppState> = {}
+    if (existing) {
+      const next = withoutRun(existing, runId)
+      if (next !== existing) {
+        patch.runsByWorkspace = { ...state.runsByWorkspace, [workspaceId]: next }
+      }
+    }
+    const { screen } = state
+    if (
+      workspaceId === state.currentWorkspaceId &&
+      (screen.name === 'run' || screen.name === 'review') &&
+      screen.runId === runId
+    ) {
+      patch.screen = { name: 'board' }
+    }
+    if (Object.keys(patch).length > 0) set(patch)
+  }
+
   function apply(event: AppEvent): void {
     if (disposed) return
     switch (event.kind) {
@@ -448,6 +503,10 @@ export function createAppStore(transport: Transport): AppStore {
             [event.workspaceId]: upsertRun(existing, event.run),
           },
         })
+        return
+      }
+      case 'run.removed': {
+        dropRun(event.workspaceId, event.runId)
         return
       }
       case 'quota.updated': {
@@ -682,6 +741,27 @@ export function createAppStore(transport: Transport): AppStore {
         if (!disposed) toast(`Could not cancel the job. ${errorText(err)}`, 'error')
         throw err
       }
+    },
+
+    async deleteRun(runId) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId || !runId) return
+      const run = (state.runsByWorkspace[workspaceId] ?? []).find((r) => r.runId === runId)
+      try {
+        await transport.deleteRun(workspaceId, runId)
+        if (disposed) return
+        dropRun(workspaceId, runId)
+        toast(run ? `Deleted the ${run.kind} run for ${run.key}.` : 'Run deleted.')
+      } catch (err) {
+        if (!disposed) toast(`Could not delete the run. ${errorText(err)}`, 'error')
+        throw err
+      }
+    },
+
+    search(q) {
+      const workspaceId = state.currentWorkspaceId
+      if (!workspaceId || !q.trim()) return Promise.resolve([])
+      return transport.search(workspaceId, q)
     },
 
     async refresh() {

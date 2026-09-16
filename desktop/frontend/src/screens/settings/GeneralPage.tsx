@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
-import type { ConfigSummary, Transport, Workspace } from '../../api/types'
+import type { ConfigSummary, MeSummary, Transport, Workspace } from '../../api/types'
 import { reasonOf } from '../../lib/format'
 import {
   sessionsShow,
@@ -15,6 +15,7 @@ import {
   type SessionLayout,
 } from '../../lib/sessionLayout'
 import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
+import Avatar from '../../ui/run-card/Avatar'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
 import { levelOf, MARKS, OpenConfig, type DoctorState, type Loaded } from './shared'
@@ -39,6 +40,36 @@ const LAYOUT_WORDS: Record<SessionLayout, string> = {
   conversation: 'Conversation: the transcript beside the run\u2019s artefacts',
   document: 'Document: the answer as the page, the path beside it',
   workbench: 'Workbench: documents over a structured console',
+}
+
+/**
+ * Where an identity was read from, in the words the doctor row uses. The
+ * empty source is a workspace that can name nobody, and gets no phrase: the
+ * row says what to add instead.
+ */
+const IDENTITY_SOURCE: Record<MeSummary['source'], string> = {
+  '': '',
+  me: 'from the me block in config.yaml',
+  webhooks: 'from webhooks.match.assignee',
+  sources: 'from the source account email',
+  git: 'from git config',
+}
+
+/** Who you are in one line: the address, else the first name. */
+export function identityLine(me?: MeSummary): string {
+  if (!me) return ''
+  if (me.email) return me.email
+  return me.names[0] ?? ''
+}
+
+/**
+ * The spellings under the identity, without repeating the one already shown:
+ * "Srivathsan V, sriv". Empty when the config named no others.
+ */
+export function otherSpellings(me?: MeSummary): string {
+  if (!me) return ''
+  const shown = identityLine(me)
+  return me.names.filter((n) => n !== shown).join(', ')
 }
 
 /** "Notes in en, customer replies in the ticket's language". */
@@ -144,6 +175,9 @@ export default function GeneralPage({
   }
 
   const general = summary.status === 'done' ? summary.data.general : null
+  const me = summary.status === 'done' ? summary.data.me : undefined
+  const who = identityLine(me)
+  const others = otherSpellings(me)
   const configPath = general?.configPath
   const open = (setting: string) => (
     <OpenConfig
@@ -164,6 +198,30 @@ export default function GeneralPage({
           <p className="form-error">{summary.message}</p>
         ) : (
           <>
+            <SettingRow
+              label="You"
+              value={
+                who ? (
+                  <span className="settings-you">
+                    <Avatar name={who} />
+                    <span className="settings-you__who" dir="auto">
+                      {who}
+                    </span>
+                    <span className="settings-you__from">{IDENTITY_SOURCE[me?.source ?? '']}</span>
+                  </span>
+                ) : summary.status === 'done' ? (
+                  'Nobody. Add a me block with your email to config.yaml.'
+                ) : undefined
+              }
+              help={
+                who
+                  ? others
+                    ? `Also known as ${others}. This is who the Mine filter, the assignee menu and the queue lane match against.`
+                    : 'This is who the Mine filter, the assignee menu and the queue lane match against.'
+                  : 'Without it no run can be called yours and the queue lane cannot ask the tracker for your tickets.'
+              }
+              control={open('You')}
+            />
             <SettingRow
               label="Workspace name"
               value={general?.workspace ?? ws?.name ?? 'Reading config.yaml…'}

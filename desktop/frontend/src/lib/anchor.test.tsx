@@ -1,7 +1,7 @@
 import { act, render } from '@testing-library/react'
 import { useRef } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { GAP, MARGIN, place, placeBeside, useAnchor } from './anchor'
+import { GAP, MARGIN, place, placeBeside, pointAnchor, useAnchor } from './anchor'
 
 const VIEW = { width: 1470, height: 900 }
 const POP = { width: 480, height: 420 }
@@ -142,6 +142,30 @@ describe('useAnchor', () => {
     })
     expect(pop).toHaveAttribute('data-side', 'above')
     expect(rects).toHaveBeenCalled()
+  })
+
+  it('hangs a popover from a point, for a menu opened under the pointer', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1470)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue(
+      rect({ top: 0, left: 0, width: 220, height: 300 }),
+    )
+    function AtPoint(): JSX.Element {
+      const pop = useRef<HTMLDivElement | null>(null)
+      const at = useRef(pointAnchor(640, 410))
+      useAnchor(true, at, pop)
+      return (
+        <div ref={pop} data-testid="pop">
+          menu
+        </div>
+      )
+    }
+    const { getByTestId } = render(<AtPoint />)
+    const pop = getByTestId('pop')
+    expect(pop.style.position).toBe('fixed')
+    expect(pop.style.top).toBe(`${410 + GAP}px`)
+    expect(pop.style.left).toBe('640px')
+    expect(pop).toHaveAttribute('data-side', 'below')
   })
 
   it('does nothing while closed', () => {

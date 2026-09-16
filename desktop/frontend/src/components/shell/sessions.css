@@ -1,9 +1,11 @@
 /*
  * The sidebar's sessions list: one line per session, newest first, the live
- * and blocked runs above a "Settled" divider that folds the rest away. A row
- * is a 16px source tile, the ticket number in the ledger face and the age at
- * the end, at 36 tall. Everything a row does not say is on the card it opens
- * beside the sidebar after a moment's hover.
+ * and blocked runs above a "Settled" divider that folds the rest away, a
+ * Pinned group above them and Snoozed and Archived folded below when there
+ * are any. A row is a 16px source tile, the ticket number (or the local
+ * name) in the ledger face and the age at the end, at 36 tall, with the dots
+ * that open its menu shown on hover. Everything a row does not say is on the
+ * card it opens beside the sidebar after a moment's hover.
  *
  * Every value comes from `styles/tokens.css`. The list's container,
  * `.sd-sidebar__sessions`, is in sidebar.css with the rest of the shell's
@@ -12,35 +14,50 @@
 
 /* ---------- a row ---------- */
 
+/* The row is a pair: the button that opens the run, and the dots at its
+   end that open the menu. A button cannot hold a button, so the pair is a
+   div, and the fill and radius are the div's. */
 .sd-session-row {
   position: relative;
   display: flex;
   flex: 0 0 auto;
+  align-items: stretch;
+  inline-size: 100%;
+  min-block-size: 36px;
+  border-radius: 10px;
+  color: var(--sd-ink-2);
+  transition: background-color var(--sd-dur-1) ease;
+}
+
+.sd-session-row:hover,
+.sd-session-row:focus-within,
+.sd-session-row[data-menu='true'] {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sd-session-row[data-current='true'] {
+  background: var(--sd-nav-active);
+  color: var(--sd-ink);
+}
+
+.sd-session-row__open {
+  display: flex;
+  flex: 1 1 auto;
   align-items: center;
   gap: 10px;
-  inline-size: 100%;
+  min-inline-size: 0;
   min-block-size: 36px;
   padding-block: 0;
   padding-inline: 12px 14px;
   border: 0;
   border-radius: 10px;
   background: transparent;
-  color: var(--sd-ink-2);
+  color: inherit;
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-meta);
   text-align: start;
   cursor: pointer;
-  transition: background-color var(--sd-dur-1) ease;
-}
-
-.sd-session-row:hover {
-  background: var(--sd-nav-hover);
-  color: var(--sd-ink);
-}
-
-.sd-session-row[aria-current='page'] {
-  background: var(--sd-nav-active);
-  color: var(--sd-ink);
 }
 
 /* The tile, with room at its corner for the dot. */
@@ -68,9 +85,19 @@
   background: var(--sd-st-blocked);
 }
 
-/* OMNI-2815 or #25312: the ledger face at 14px, one line, ellipsised. */
-.sd-session-row__number {
+/* The number and, while a query is up, the line under it that says what matched. */
+.sd-session-row__text {
+  display: flex;
   flex: 1 1 auto;
+  flex-direction: column;
+  gap: 1px;
+  min-inline-size: 0;
+  padding-block: 4px;
+}
+
+/* OMNI-2815 or #25312: the ledger face at 14px, one line, ellipsised. A
+   local name is drawn in the UI face instead, since it is words. */
+.sd-session-row__number {
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -83,6 +110,44 @@
   unicode-bidi: isolate;
 }
 
+.sd-session-row__number[dir='auto'] {
+  font-family: var(--sd-font-ui);
+}
+
+/* A finished run this person has not opened: the number carries weight. */
+.sd-session-row[data-unread='true'] .sd-session-row__number {
+  color: var(--sd-ink);
+  font-weight: 600;
+}
+
+/* The matched field, or a search hit's excerpt: one line in the third ink. */
+.sd-session-row__match {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  line-height: 1.3;
+}
+
+/* The match, on the highlight fill the badge uses. */
+.sd-session-row__mark {
+  border-radius: 2px;
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+}
+
+/* Unread: a 6px dot before the age, ringed like the live dot. */
+.sd-session-row__unread {
+  flex: 0 0 auto;
+  inline-size: 6px;
+  block-size: 6px;
+  border-radius: var(--sd-radius-pill);
+  background: var(--sd-accent);
+}
+
 /* 18h, 5d: the third ink at the row's end. */
 .sd-session-row__age {
   flex: 0 0 auto;
@@ -92,10 +157,78 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* ---------- the Settled divider ---------- */
+/* The dots: a 24px square at the row's end, drawn only while the pointer or
+   focus is on the row or its menu is up. Not a tab stop; the context-menu
+   key on the row is the keyboard's way in. */
+.sd-session-row__more {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  align-self: center;
+  inline-size: 24px;
+  block-size: 24px;
+  margin-inline-end: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sd-radius-xs);
+  background: transparent;
+  color: var(--sd-ink-3);
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity var(--sd-dur-1) ease;
+}
+
+.sd-session-row:hover .sd-session-row__more,
+.sd-session-row:focus-within .sd-session-row__more,
+.sd-session-row__more[aria-expanded='true'] {
+  opacity: 1;
+}
+
+.sd-session-row__more:hover,
+.sd-session-row__more[aria-expanded='true'] {
+  background: var(--sd-nav-active);
+  color: var(--sd-ink);
+}
+
+.sd-session-row__more > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+/* Renaming: the field sits where the number was, in the same face. */
+.sd-session-row[data-editing='true'] {
+  align-items: center;
+  gap: 10px;
+  padding-inline: 12px 14px;
+  background: var(--sd-nav-hover);
+}
+
+.sd-session-row__rename {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  min-block-size: 26px;
+  padding-block: 0;
+  padding-inline: var(--sd-space-1);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-meta);
+}
+
+.sd-session-row__rename::placeholder {
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  opacity: 1;
+}
+
+/* ---------- the group heads ---------- */
 
 /* A small label in the third ink, a hairline to the end, and a chevron that
-   turns when the settled rows are folded away. */
+   turns when the group's rows are folded away. The Pinned head is the same
+   line with a pin instead, and nothing to press. */
 .sd-sessions__settled {
   display: flex;
   flex: 0 0 auto;
@@ -121,6 +254,15 @@
 
 .sd-sessions__settled:hover {
   color: var(--sd-ink-2);
+}
+
+.sd-sessions__settled[data-static='true'] {
+  margin-block-start: 0;
+  cursor: default;
+}
+
+.sd-sessions__settled[data-static='true']:hover {
+  color: var(--sd-ink-3);
 }
 
 .sd-sessions__rule {
@@ -174,12 +316,58 @@
   color: var(--sd-ink);
 }
 
+/* No sessions match "x", Searching notes…: prose where the rows would be. */
+.sd-sessions__empty {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: 12px 14px;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+
+/* ---------- the dialogs ---------- */
+
+.sd-sessions__when {
+  inline-size: 100%;
+  min-block-size: var(--sd-control-h);
+  padding-inline: var(--sd-space-3);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-body);
+}
+
+.sd-sessions__dialog-note {
+  margin: 0;
+  margin-block-start: var(--sd-space-2);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
+/* The reason a delete or a snooze was refused, under the question. */
+.sd-sessions__dialog-error {
+  margin: 0;
+  margin-block-start: var(--sd-space-2);
+  color: var(--sd-st-failed);
+  font-size: var(--sd-text-meta);
+}
+
 /* ---------- in the rail ---------- */
 
 /* The sidebar at 56px (sidebar.css `data-collapsed`): a row is its 16px
-   tile in a 36px square, the number and the age gone to the hover card;
-   the Settled divider is its chevron; Show N more is "+N". */
-.sd-sidebar[data-collapsed='true'] .sd-session-row,
+   tile in a 36px square, the number, the age, the dots and the match gone
+   to the hover card; the group heads are their chevrons; Show N more is
+   "+N". */
+.sd-sidebar[data-collapsed='true'] .sd-session-row {
+  inline-size: 36px;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-session-row__open,
 .sd-sidebar[data-collapsed='true'] .sd-sessions__settled,
 .sd-sidebar[data-collapsed='true'] .sd-sessions__more {
   justify-content: center;
@@ -187,8 +375,11 @@
   padding-inline: 0;
 }
 
-.sd-sidebar[data-collapsed='true'] .sd-session-row__number,
+.sd-sidebar[data-collapsed='true'] .sd-session-row__text,
 .sd-sidebar[data-collapsed='true'] .sd-session-row__age,
+.sd-sidebar[data-collapsed='true'] .sd-session-row__unread,
+.sd-sidebar[data-collapsed='true'] .sd-session-row__more,
+.sd-sidebar[data-collapsed='true'] .sd-sessions__empty,
 .sd-sidebar[data-collapsed='true'] .sd-sessions__settled > span {
   display: none;
 }
@@ -232,6 +423,16 @@
   color: var(--sd-ink);
   font-size: 15px;
   font-weight: 500;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+/* The real title under a local name. */
+.sd-session-card__subtitle {
+  margin: 0;
+  margin-block: calc(-1 * var(--sd-space-1)) var(--sd-space-2);
+  color: var(--sd-ink-2);
+  font-size: 13px;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -291,6 +492,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .sd-session-row,
+  .sd-session-row__more,
   .sd-sessions__chevron {
     transition-duration: 1ms;
   }

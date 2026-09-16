@@ -190,6 +190,32 @@ func TestConfigSummarySpellsOutTheDefaultStates(t *testing.T) {
 	}
 }
 
+func TestConfigSummaryCarriesTheReadersIdentity(t *testing.T) {
+	cfg := &config.Config{}
+	cfg.Me = config.MeConfig{
+		Email:   "srivathsan.v@silq.net",
+		Names:   []string{"Srivathsan V"},
+		Aliases: []string{"sriv"},
+	}
+	got := SummariseConfig(cfg).Me
+	if got.Email != "srivathsan.v@silq.net" || got.Source != config.IdentityFromMe {
+		t.Fatalf("me %+v", got)
+	}
+	if strings.Join(got.Names, ",") != "Srivathsan V,sriv" {
+		t.Fatalf("names %v", got.Names)
+	}
+
+	// A workspace that can name nobody says so with an empty source, and
+	// still sends a list the frontend can map over.
+	none := SummariseConfig(&config.Config{}).Me
+	if none.Email != "" || none.Source != "" {
+		t.Fatalf("nobody: %+v", none)
+	}
+	if none.Names == nil {
+		t.Fatal("a nil name list reached the summary")
+	}
+}
+
 func TestConfigSummaryNeedsAKnownWorkspace(t *testing.T) {
 	svc := newService(t, newWorkspace(t), stubBuilder(nil, nil, nil))
 	if _, err := svc.ConfigSummary("nosuch"); err == nil {

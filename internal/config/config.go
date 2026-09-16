@@ -584,7 +584,17 @@ type Config struct {
 	Webhooks WebhooksConfig `yaml:"webhooks"`
 	Notify   *NotifyConfig  `yaml:"notify,omitempty"`
 
+	// Me is who the person running Sirdar is: the address, the display
+	// names a tracker or helpdesk may show them as, and the usernames.
+	// It is what the Mine filter, the queue lane and `assignee: me`
+	// resolve against before anything else. See Config.Self.
+	Me MeConfig `yaml:"me,omitempty"`
+
 	Root string `yaml:"-"` // workspace root (directory containing .sirdar), set by Load
+	// git caches the one `git config` read Self falls back to, so a
+	// board that lists runs every couple of seconds does not spawn a
+	// process for each. Set by decode; nil on a Config built by hand.
+	git *gitCache `yaml:"-"`
 }
 
 // Load reads <root>/.sirdar/config.yaml, applies defaults, and validates the result.
@@ -633,6 +643,7 @@ func decode(root string) (*Config, error) {
 	}
 
 	c.Root = root
+	c.git = &gitCache{}
 	applyDefaults(&c)
 	return &c, nil
 }
@@ -782,6 +793,9 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("config: concurrency: must be >= 1, got %d", c.Concurrency)
 	}
 	if err := validateLanguage(&c.Language); err != nil {
+		return err
+	}
+	if err := validateMe(&c.Me); err != nil {
 		return err
 	}
 	if err := validateFetch(c.Permissions.Fetch); err != nil {

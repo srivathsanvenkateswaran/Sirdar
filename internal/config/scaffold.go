@@ -8,6 +8,19 @@ const DefaultConfigYAML = `workspace: <name>
 provider: claude            # claude | codex | openai | acp | qwen | cursor (agy is disabled)
 model: ""                   # provider default when empty
 billing: subscription       # subscription | api (api keeps ANTHROPIC_API_KEY in the agent's environment)
+# Who you are. Every system writes your name differently — a tracker stores
+# an address, a helpdesk a display name, a git commit a third thing — and
+# this is the list that ties them together. It decides which runs the board
+# calls yours, what the Queue lane asks the tracker for, and what
+# "assignee: me" resolves to. Without it Sirdar reads the repository's own
+# "git config user.email"/"user.name", which is right often enough to be
+# worth trying and wrong often enough to be worth writing down.
+# me:
+#   email: you@example.com   # your one address
+#   names:                   # display names a tracker or helpdesk may show
+#     - Your Name
+#   aliases:                 # usernames, if they differ from the address
+#     - yourname
 # provider: openai runs Sirdar's own agent loop against any OpenAI-compatible
 # Chat Completions endpoint: an aggregator, a vendor, or a server on this
 # machine. Sirdar owns the read-only tools and connects the workspace's MCP

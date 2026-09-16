@@ -13,6 +13,9 @@ rather than being silently ignored.
 | `provider` | string | `claude` | Which agent drives runs: `claude`, `codex`, `qwen`, `cursor` (the Cursor Agent CLI), `openai` (Sirdar's own loop), or `acp` (any Agent Client Protocol agent). `agy` (Google's Antigravity CLI) is **disabled** — config load and `--provider agy` both refuse it, see [`provider: agy`](#provider-agy) |
 | `model` | string | `""` (provider default) | Model name passed to the provider; empty uses the provider's own default |
 | `billing` | string | `subscription` | `subscription` strips `ANTHROPIC_API_KEY` from the agent's environment so it uses your CLI login; `api` leaves it in place so usage is billed to the key |
+| `me.email` | string, optional | unset | Your address. See [Who you are](#who-you-are) |
+| `me.names` | list of strings, optional | unset | Display names a tracker or helpdesk may show you as, e.g. `Srivathsan V` |
+| `me.aliases` | list of strings, optional | unset | Usernames you are known by, where they differ from the address |
 | `sources.tracker` | object, optional | unset | The tracker adapter; see Sources below |
 | `sources.helpdesk` | object, optional | unset | The helpdesk adapter; see Sources below |
 | `sources.*.adapter` | string | none (required) | `exec` (external adapter process), `zohodesk`/`zendesk`/`freshdesk`/`helpscout`/`intercom`/`hubspot`/`front`/`gorgias` (built in), or, for `sources.tracker`, one of `jira`, `linear`, `azdo`, `rally` (built in) |
@@ -144,6 +147,50 @@ naming the offending key. Budget values must all be greater than zero. A configu
 adapter-specific fields are required only for that adapter; `sources.tracker` and
 `sources.helpdesk` are each optional, but a source config with no `adapter` set is an error.
 
+## Who you are
+
+Sirdar has to know which of a workspace's tickets are yours. The Mine filter on the board, the
+Queue lane, the assignee menu and `webhooks.match.assignee: me` all ask the same question, and a
+workspace that cannot answer it shows every run as nobody's.
+
+The `me` block is the answer written down:
+
+```yaml
+me:
+  email: srivathsan.v@silq.net
+  names:
+    - Srivathsan V
+  aliases:
+    - sriv
+```
+
+`email` is one address. `names` are the display names a tracker or helpdesk writes you as —
+they rarely agree with each other, and none of them is the address. `aliases` are usernames.
+All three are optional; a block with names alone is a valid answer for a tracker that stores no
+addresses.
+
+**Where the answer comes from.** The first of these that names anybody wins, and the doctor row
+and the Settings "You" row both say which one it was:
+
+1. `me` — the block above.
+2. `webhooks.match.assignee` — the address written out there, or `me` there resolved against
+   `sources.tracker.email`/`sources.helpdesk.email`, which is exactly what the hook filter uses.
+3. The account email on `sources.tracker` or `sources.helpdesk`, for a workspace with no match
+   block at all.
+4. `git config user.email` and `user.name`, read in the workspace repository. It is read once
+   per configuration load, and Sirdar only ever reads it — it never writes a git identity.
+
+Nothing after that: a workspace whose sources authenticate with a token that names nobody
+(a Linear API key, an Azure DevOps PAT), in a directory that is not a git repository, has no
+identity, and every run is then somebody else's rather than everybody's.
+
+**How a spelling is matched.** Case never matters, and neither does stray space: both sides are
+trimmed and their internal runs of space collapsed first. Two addresses must agree in full, so
+`sri@acme.com` is not `sri@other.com`. A bare name matches the address it is the local part of,
+so a tracker that names accounts `sri` agrees with a config that knows `sri@acme.com`. Between
+bare spellings, dots and underscores read as spaces: `srivathsan.v` is `Srivathsan V`, which is
+how one address's local part and another system's display name turn out to be one person.
+
 ## Inbound webhook triggers
 
 The `webhooks` block configures the endpoints `sirdar serve` exposes at
@@ -229,7 +276,12 @@ tools at all); the Codex `mcp servers` row when the session would see none; the
 `claude environment` row under `billing: api` with a custom `ANTHROPIC_BASE_URL`, where
 `budget.maxUsd` cannot be trusted; and the qwen `workspace settings` row when a session that
 keeps folder trust for MCP would load the repository's own `.qwen/settings.json` or
-`.qwen/agents`.
+`.qwen/agents`; and the `identity` row when nothing says who you are, since runs still start and
+only the Mine filter and the queue lane stop working (see [Who you are](#who-you-are)).
+
+The `identity` row reads `you are <address or name> (from me: / webhooks.match.assignee / the
+source account email / git config)`, so the report says not only who Sirdar thinks you are but
+which of the four rules answered.
 
 The desktop Settings screen reads the same list and marks the rows the same way. On the wire
 each check carries `level` (`"ok"`, `"warn"`, `"fail"`) alongside the older `ok` boolean, which

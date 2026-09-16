@@ -1,12 +1,14 @@
-import { memo, useCallback, useEffect, useState, useSyncExternalStore } from 'react'
-import type { Quota, RunSummary, SourcesSummary, Workspace } from '../../api/types'
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { Quota, RunSummary, SearchHit, SourcesSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
+import { useDebounced } from '../../lib/useDebounced'
 import { BELOW_COMPACT, useMediaQuery } from '../../lib/useMediaQuery'
 import type { Screen } from '../../store/appStore'
 import BrandMark from '../../ui/brand-mark'
 import Button from '../../ui/button'
 import PanelToggle from '../../ui/panel-toggle'
+import SearchBar from '../../ui/search-bar'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
 import SidebarNavItem from '../../ui/sidebar-nav-item'
 import QuotaMeter from '../QuotaMeter'
@@ -21,11 +23,15 @@ import {
   SwitcherIcon,
 } from './icons'
 import { usePrimaryAction } from './primaryAction'
-import SessionsList, { recentRuns } from './SessionsList'
+import SessionsList, { recentRuns, type SearchMode, type SessionActions } from './SessionsList'
 import WorkspaceSwitcher from './WorkspaceSwitcher'
 import './sidebar.css'
 
 export { CARD_CLOSE_MS, CARD_OPEN_MS, SHOWN_LIMIT, recentRuns, shortAge, splitRuns } from './SessionsList'
+export type { SessionActions } from './SessionsList'
+
+/** How long the notes search waits after a keystroke before it asks the service. */
+export const NOTES_SEARCH_DEBOUNCE_MS = 250
 
 type NavName = 'sessions' | 'board' | 'register' | 'eval' | 'library' | 'settings'
 
@@ -93,6 +99,10 @@ function Sidebar(props: {
   now?: number
   /** Inbound deliveries waiting to be read, badged on the Board row. */
   inboundCount?: number
+  /** What a session row's menu can reach: delete, open, copy links, settings. */
+  sessionActions?: SessionActions
+  /** The "Search notes" mode's question to the service. Without it the toggle is not offered. */
+  onSearchNotes?: (q: string) => Promise<SearchHit[]>
   onSelectWorkspace: (id: string) => void
   onAddWorkspace: () => void
   onNavigate: (screen: Screen) => void
@@ -106,6 +116,8 @@ function Sidebar(props: {
     sources,
     now,
     inboundCount = 0,
+    sessionActions,
+    onSearchNotes,
     onSelectWorkspace,
     onAddWorkspace,
     onNavigate,
@@ -137,6 +149,81 @@ function Sidebar(props: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [auto, folded])
+
+  // The search: the field's text filters the list as it is typed; in the
+  // notes mode the text, once still for a beat, goes to the service.
+  const [query, setQuery] = useState('')
+  const [mode, setMode] = useState<SearchMode>('sessions')
+  const [hits, setHits] = useState<SearchHit[]>([])
+  const [hitsState, setHitsState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [hitsError, setHitsError] = useState('')
+  const searchInput = useRef<HTMLInputElement | null>(null)
+  const askedNotes = useDebounced(mode === 'notes' ? query.trim() : '', NOTES_SEARCH_DEBOUNCE_MS)
+  const searchSeq = useRef(0)
+
+  useEffect(() => {
+    if (mode !== 'notes' || !onSearchNotes || !askedNotes) {
+      setHits([])
+      setHitsState('idle')
+      return
+    }
+    const seq = (searchSeq.current += 1)
+    setHitsState('loading')
+    void onSearchNotes(askedNotes).then(
+      (got) => {
+        if (searchSeq.current !== seq) return
+        setHits(got)
+        setHitsState('idle')
+      },
+      (err: unknown) => {
+        if (searchSeq.current !== seq) return
+        setHitsError(err instanceof Error ? err.message : String(err))
+        setHitsState('error')
+      },
+    )
+  }, [mode, askedNotes, onSearchNotes, currentWorkspaceId])
+
+  // ⌘K puts the cursor in the search field, from anywhere in the window.
+  // In the rail the field is not drawn: a fold this person made is undone
+  // first; a fold the width made is not, and the chord does nothing.
+  const focusSearch = useCallback(() => {
+    const el = searchInput.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [])
+  const wantFocus = useRef(false)
+  useEffect(() => {
+    if (wantFocus.current && !rail) {
+      wantFocus.current = false
+      focusSearch()
+    }
+  }, [rail, focusSearch])
+  useEffect(() => {
+    function onKey(e: KeyboardEvent): void {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      if (e.key !== 'k' && e.key !== 'K') return
+      if (auto) return
+      e.preventDefault()
+      if (folded) {
+        wantFocus.current = true
+        setFolded(false)
+        writeStoredFlag(SIDEBAR_COLLAPSED_KEY, false)
+        return
+      }
+      focusSearch()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [auto, folded, focusSearch])
+
+  function onSearchKey(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key !== 'Escape') return
+    e.preventDefault()
+    e.stopPropagation()
+    if (query) setQuery('')
+    else e.currentTarget.blur()
+  }
 
   const openRun = useCallback((runId: string) => onNavigate({ name: 'run', runId }), [onNavigate])
 
@@ -182,6 +269,38 @@ function Sidebar(props: {
         />
       </div>
 
+      {runs.length > 0 ? (
+        <div className="sd-sidebar__search">
+          <SearchBar
+            variant="well"
+            label={mode === 'notes' ? 'Search notes' : 'Search sessions'}
+            placeholder={mode === 'notes' ? 'Search notes' : 'Search sessions'}
+            value={query}
+            onChange={setQuery}
+            inputRef={searchInput}
+            onKeyDown={onSearchKey}
+            aside={
+              <>
+                {onSearchNotes ? (
+                  <button
+                    type="button"
+                    className="sd-sidebar__search-mode"
+                    aria-pressed={mode === 'notes'}
+                    title={mode === 'notes' ? 'Back to filtering the sessions' : 'Search inside the notes and answers'}
+                    onClick={() => setMode((m) => (m === 'notes' ? 'sessions' : 'notes'))}
+                  >
+                    Notes
+                  </button>
+                ) : null}
+                <kbd className="sd-sidebar__kbd" aria-hidden="true">
+                  ⌘K
+                </kbd>
+              </>
+            }
+          />
+        </div>
+      ) : null}
+
       <nav className="sd-sidebar__nav" aria-label="Screens">
         {rows.map((row) => (
           <SidebarNavItem
@@ -202,9 +321,16 @@ function Sidebar(props: {
         now={now}
         sources={sources}
         workspaceName={workspaceName}
+        workspaceId={currentWorkspaceId}
         currentRunId={currentRunId}
         rail={rail}
         onOpen={openRun}
+        actions={sessionActions}
+        query={query}
+        mode={mode}
+        hits={hits}
+        hitsState={hitsState}
+        hitsError={hitsError}
       />
 
       <SidebarFooterCard

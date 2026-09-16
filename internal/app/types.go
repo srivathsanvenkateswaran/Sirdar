@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
@@ -422,21 +423,21 @@ func SummaryOf(s store.State) RunSummary {
 // title and the assignee its bundle recorded. Nobody is the reader, so Mine
 // stays false; SummaryFor is the one that knows.
 func SummaryAt(dir string, s store.State) RunSummary {
-	return SummaryFor(dir, s, "")
+	return SummaryFor(dir, s, config.Identity{})
 }
 
 // SummaryFor is SummaryAt told who the workspace itself is, so the summary
-// can say whether the run is the reader's own. A self of "" leaves Mine
-// false for every run: a workspace whose credentials name nobody has no
-// "me" to match against, and guessing would put the whole board behind the
-// Mine filter.
-func SummaryFor(dir string, s store.State, self string) RunSummary {
+// can say whether the run is the reader's own. An empty identity leaves
+// Mine false for every run: a workspace that can name nobody has no "me"
+// to match against, and guessing would put the whole board behind the Mine
+// filter.
+func SummaryFor(dir string, s store.State, self config.Identity) RunSummary {
 	out := SummaryOf(s)
 	b := bundleAt(dir)
 	out.Title = titleOf(b, s.Notes)
 	out.HelpdeskKey = helpdeskKeyOf(b)
 	out.Assignee = assigneeOf(b)
-	out.Mine = SameAssignee(out.Assignee, self)
+	out.Mine = self.Matches(out.Assignee)
 	return out
 }
 
@@ -553,7 +554,7 @@ func DetailOf(root string, s store.State) RunDetail {
 
 // DetailFor is DetailOf told who the workspace itself is, for a caller that
 // has already loaded the configuration.
-func DetailFor(root string, s store.State, self string) RunDetail {
+func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 	dir := runDir(root, s.Key, s.RunID)
 	warnings := s.Warnings
 	if warnings == nil {
