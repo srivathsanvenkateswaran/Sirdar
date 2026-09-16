@@ -9,4 +9,10 @@
 {"type":"control_request","request_id":"r2","request":{"subtype":"can_use_tool","tool_name":"Bash","input":{"command":"git log -1"},"tool_use_id":"t2"}}
 {"$wait":"control_response"}
 {"type":"user","message":{"role":"user","content":[{"tool_use_id":"t2","type":"tool_result","content":"abc123","is_error":false}]}}
+{"type":"stream_event","session_id":"sess-1","event":{"type":"message_start","message":{"id":"msg-1","role":"assistant"}}}
+{"type":"stream_event","session_id":"sess-1","event":{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}}
+{"type":"stream_event","session_id":"sess-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"The return "}}}
+{"type":"stream_event","session_id":"sess-1","event":{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"is counted twice."}}}
+{"type":"stream_event","session_id":"sess-1","event":{"type":"content_block_stop","index":0}}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"The return is counted twice."}]}}
 {"type":"result","subtype":"success","is_error":false,"num_turns":3,"session_id":"sess-1","result":"{\"greeting\":\"hi\",\"n\":7}","structured_output":{"greeting":"hi","n":7},"total_cost_usd":0.07,"usage":{"input_tokens":18,"output_tokens":516}}

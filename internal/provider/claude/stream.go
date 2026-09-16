@@ -41,6 +41,20 @@ type streamLine struct {
 		IsUsingOverage bool    `json:"isUsingOverage"`
 	} `json:"rate_limit_info"`
 
+	// Event is the partial-message envelope on a `stream_event` line,
+	// which --include-partial-messages turns on. Only its text deltas are
+	// read; everything else it carries — the thinking deltas, the
+	// tool-input deltas, the block and message boundaries — stays an
+	// informational line.
+	Event struct {
+		Type  string `json:"type"`
+		Index int    `json:"index"`
+		Delta struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+		} `json:"delta"`
+	} `json:"event"`
+
 	// result line
 	Result           string          `json:"result"`
 	StructuredOutput json.RawMessage `json:"structured_output"`
@@ -122,6 +136,8 @@ func decode(raw []byte) []provider.Event {
 			ev.ResetsAt = time.Unix(info.ResetsAt, 0)
 		}
 		return []provider.Event{ev}
+	case "stream_event":
+		return streamEvents(l, raw)
 	case "result":
 		usage := newEvent(provider.EvUsage, raw)
 		usage.Turns = l.NumTurns
@@ -140,7 +156,7 @@ func decode(raw []byte) []provider.Event {
 		}
 		return []provider.Event{usage, final}
 	default:
-		// system/* (init, status, hooks), stream_event and anything new.
+		// system/* (init, status, hooks) and anything new.
 		ev := newEvent(provider.EvSystem, raw)
 		ev.Text = l.Subtype
 		if ev.Text == "" {
@@ -222,12 +238,50 @@ func assistantEvents(l streamLine, raw []byte) []provider.Event {
 			if b.Text == "" {
 				continue
 			}
+			// The finished block, which stands in for the deltas that
+			// streamed it rather than following them: see
+			// provider.Event.Replace. Sirdar always runs the CLI with
+			// --include-partial-messages, so every word here has already
+			// been seen once; a reader that ignores Replace and appends
+			// would print the message twice.
 			ev := newEvent(provider.EvAssistantText, raw)
 			ev.Text = b.Text
+			ev.Replace = true
 			events = append(events, ev)
 		}
 	}
 	return events
+}
+
+// streamEvents reads a `stream_event` line, the partial-message envelope
+// --include-partial-messages turns on.
+//
+// A text delta is the model's prose arriving as it is written, and it
+// becomes an EvAssistantText carrying that fragment. It is not also kept as
+// an informational line: the same words reach the transcript twice already
+// (once per delta, once in the turn's `assistant` line), and a third copy
+// under a kind nothing renders is noise — on a real run these lines are
+// most of events.jsonl.
+//
+// Every other stream event stays informational, tool-input deltas included:
+// those are the only account of what a tool call was being handed while it
+// was being written, and nothing else republishes them.
+func streamEvents(l streamLine, raw []byte) []provider.Event {
+	if l.Event.Type == "content_block_delta" && l.Event.Delta.Type == "text_delta" {
+		if l.Event.Delta.Text == "" {
+			return nil
+		}
+		ev := newEvent(provider.EvAssistantText, raw)
+		ev.Text = l.Event.Delta.Text
+		ev.Delta = true
+		return []provider.Event{ev}
+	}
+	ev := newEvent(provider.EvSystem, raw)
+	ev.Text = l.Type
+	if l.Subtype != "" {
+		ev.Text = l.Subtype
+	}
+	return []provider.Event{ev}
 }
 
 func userEvents(l streamLine, raw []byte) []provider.Event {
