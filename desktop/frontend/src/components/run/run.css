@@ -135,6 +135,10 @@
 .session-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr) clamp(360px, 38vw, 480px);
+  /* One row that can shrink. An `auto` row grows with the taller pane and
+     nothing under it ever scrolls; `minmax(0, 1fr)` is what lets each pane
+     hand its overflow to its own scroll container. */
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-block-size: 0;
 }
@@ -652,6 +656,17 @@ section:first-child > .turn-rule {
   overflow: auto;
   padding-block: var(--sd-space-4) var(--sd-space-6);
   padding-inline: var(--sd-space-5);
+}
+
+/* The note pane: the library's article carries its own padding and measure,
+   so the scroll container around it adds none of its own. */
+.pane--note {
+  padding: 0;
+}
+
+.pane--note > .pane-empty {
+  padding-block: var(--sd-space-4);
+  padding-inline: var(--sd-space-4);
 }
 
 .pane-empty {

@@ -83,34 +83,51 @@ export default function NoteView({
     }
   }, [transport, workspaceId, runId, wanted, reload])
 
-  if (notes === null) return <div className="pane-empty">Loading note…</div>
-  if (notes.length === 0) return <div className="pane-empty">{error}</div>
+  // The pane is the scroll container: the library's note article sets a
+  // measure and a face but never a height, and a note is longer than the
+  // window as a rule.
+  if (notes === null) {
+    return (
+      <div className="pane pane--note">
+        <div className="pane-empty">Loading note…</div>
+      </div>
+    )
+  }
+  if (notes.length === 0) {
+    return (
+      <div className="pane pane--note">
+        <div className="pane-empty">{error}</div>
+      </div>
+    )
+  }
 
   return (
-    <NotePane dir={dir}>
-      {notes.map((note) => {
-        const { fields, body } = splitFrontmatter(note.text)
-        return (
-          <section key={note.kind} className="pane-section">
-            {notes.length > 1 ? <div className="pane-label">{note.kind}</div> : null}
-            {fields.length > 0 ? (
-              <table className="fm">
-                <tbody>
-                  {fields.map((f) => (
-                    <tr key={f.key}>
-                      <td>{f.key}</td>
-                      <td dir="auto">{f.value}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-            <div className="md" dir={dir} data-testid="note-markdown">
-              <ReactMarkdown>{stripRTLBlocks(body)}</ReactMarkdown>
-            </div>
-          </section>
-        )
-      })}
-    </NotePane>
+    <div className="pane pane--note" data-testid="note-pane">
+      <NotePane dir={dir}>
+        {notes.map((note) => {
+          const { fields, body } = splitFrontmatter(note.text)
+          return (
+            <section key={note.kind} className="pane-section">
+              {notes.length > 1 ? <div className="pane-label">{note.kind}</div> : null}
+              {fields.length > 0 ? (
+                <table className="fm">
+                  <tbody>
+                    {fields.map((f) => (
+                      <tr key={f.key}>
+                        <td>{f.key}</td>
+                        <td dir="auto">{f.value}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : null}
+              <div className="md" dir={dir} data-testid="note-markdown">
+                <ReactMarkdown>{stripRTLBlocks(body)}</ReactMarkdown>
+              </div>
+            </section>
+          )
+        })}
+      </NotePane>
+    </div>
   )
 }

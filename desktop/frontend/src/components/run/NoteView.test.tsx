@@ -87,6 +87,18 @@ afterEach(() => {
 })
 
 describe('NoteView', () => {
+  it('sits inside the pane that scrolls, whatever state it is in', async () => {
+    const { container } = render(
+      <NoteView transport={fakeTransport(NOTE)} workspaceId="ws1" runId="r1" kinds={['triage']} />,
+    )
+    // Loading: the placeholder is already inside the scroll container.
+    expect(container.querySelector('.pane.pane--note')).toBeInTheDocument()
+    await screen.findByText('Export fails for large orders')
+    const pane = screen.getByTestId('note-pane')
+    expect(pane).toHaveClass('pane')
+    expect(pane.querySelector('.sd-note')).toBeInTheDocument()
+  })
+
   it('lets the browser resolve each block by marking the note dir="auto"', async () => {
     renderNote()
     await waitFor(() => expect(screen.getByTestId('note-markdown')).toBeInTheDocument())
