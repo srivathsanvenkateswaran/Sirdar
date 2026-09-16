@@ -391,6 +391,20 @@ describe('the sessions list', () => {
       fireEvent.click(row)
       noCard()
       expect(onOpen).toHaveBeenCalledWith('r1')
+      leaveRow(row)
+
+      // A quick click, before the card has opened: the pending card is
+      // cancelled too, so nothing pops over the run the click opened.
+      hoverRow(row)
+      act(() => {
+        vi.advanceTimersByTime(50)
+      })
+      fireEvent.pointerDown(row)
+      fireEvent.click(row)
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      noCard()
     })
 
     it('carries the row\'s own number as well as the other when the sidebar is the rail', () => {

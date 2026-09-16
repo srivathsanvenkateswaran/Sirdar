@@ -15,6 +15,11 @@ export interface HoverCard {
   blurRow: (id: string) => void
   enterCard: () => void
   leaveCard: () => void
+  /**
+   * A press on a row: the card goes, and a card still on its way is
+   * cancelled, so a quick click does not get a card over the run it opened.
+   */
+  pressRow: () => void
   /** Escape, a scroll, a click anywhere: the card goes and stays gone until the next intent. */
   close: () => void
 }
@@ -189,5 +194,5 @@ export function useHoverCard(): HoverCard {
     [],
   )
 
-  return { open, enterRow, leaveRow, focusRow, blurRow, enterCard, leaveCard, close }
+  return { open, enterRow, leaveRow, focusRow, blurRow, enterCard, leaveCard, pressRow: close, close }
 }

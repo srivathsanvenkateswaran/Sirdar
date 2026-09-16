@@ -241,6 +241,7 @@ export default function SessionsList({
         onClick={() => onOpen(run.runId)}
         onPointerEnter={pinned ? undefined : () => hover.enterRow(run.runId)}
         onPointerLeave={pinned ? undefined : () => hover.leaveRow(run.runId)}
+        onPointerDown={pinned ? undefined : hover.pressRow}
         onFocus={pinned ? undefined : () => hover.focusRow(run.runId)}
         onBlur={pinned ? undefined : () => hover.blurRow(run.runId)}
       >
