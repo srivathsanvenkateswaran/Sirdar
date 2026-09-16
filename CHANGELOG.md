@@ -388,6 +388,23 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `src/ui/brand-mark/`, whose test reads the master SVGs so the app cannot end up wearing a
   logo nothing else does. `desktop/build/windows/icon.ico` was the Wails default and is deleted;
   `wails build` makes one from `appicon.png` when it is absent.
+- Windows is a platform the desktop app actually runs on, not just one goreleaser
+  emits a binary for. `make desktop-windows` cross-compiles `Sirdar.exe` from macOS or
+  Linux (Wails v2 needs no cgo for that target) and `make dist-desktop` zips it beside
+  the host build. Four platform assumptions were fixed behind it: the per-platform
+  file/URL opener is now one package, `internal/osopen`, shared by `sirdar serve --open`
+  and the desktop bridge's OpenConfig and OpenNote; Sirdar's own `bash` tool ran
+  everything through `/bin/sh`, which Windows does not have, and now goes through
+  `cmd /C` with the four environment variables without which cmd.exe cannot start;
+  `internal/procgroup` killed only the immediate child on Windows and now takes the
+  subtree down with `taskkill /T`, the closest that platform gets to signalling a
+  process group; and a workspace-only Codex session falls back to a directory junction
+  or a hard link where Windows refuses `os.Symlink`, which it does for any account
+  without Developer Mode. CI gained `windows` and `macos` jobs — build, vet, test, and
+  on Windows a native `wails build` whose `.exe` is uploaded on every push. Every
+  keyboard shortcut already answered to Ctrl as well as ⌘; the labels still draw ⌘ on
+  every platform. `docs/release.md` has a Windows section (WebView2, SmartScreen, the
+  Credential Manager) and README a platform table.
 - The app knows who you are. A workspace that configured neither
   `webhooks.match.assignee` nor a source account email could name nobody, so every run was
   somebody else's and the board's Mine filter read "0 of 24 runs". A new top-level `me:` block

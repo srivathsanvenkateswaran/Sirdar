@@ -223,7 +223,11 @@ func workspace(t *testing.T) string {
 		t.Fatalf("write secret.txt: %v", err)
 	}
 	if err := os.Symlink(outside, filepath.Join(dir, "escape")); err != nil {
-		t.Fatalf("symlink: %v", err)
+		// Creating one needs Developer Mode or an elevated process on
+		// Windows, and an ordinary account has neither. Everything else
+		// this workspace is for still holds; the one assertion that reads
+		// through the link looks for the link before making it.
+		t.Logf("no symlink in the test workspace: %v", err)
 	}
 	return dir
 }
@@ -810,18 +814,22 @@ func TestGuardsHoldAgainstAMisbehavingAgent(t *testing.T) {
 		}
 	}
 
-	// The read through the symlink is refused as out of workspace.
-	escape := ""
-	for _, line := range res.StderrTail {
-		if strings.Contains(line, "fs/read_text_file: ") {
-			escape = line
+	// The read through the symlink is refused as out of workspace. Checked
+	// only where the workspace builder could make the link at all; see
+	// workspace().
+	if _, err := os.Lstat(filepath.Join(cwd, "escape")); err == nil {
+		escape := ""
+		for _, line := range res.StderrTail {
+			if strings.Contains(line, "fs/read_text_file: ") {
+				escape = line
+			}
 		}
-	}
-	if !strings.Contains(escape, "read outside the workspace") {
-		t.Errorf("symlinked read answer = %s, want a refusal", escape)
-	}
-	if content, err := os.ReadFile(filepath.Join(cwd, "escape", "secret.txt")); err != nil || string(content) != "private key" {
-		t.Fatalf("the symlink under test does not lead to the file it is meant to: %v", err)
+		if !strings.Contains(escape, "read outside the workspace") {
+			t.Errorf("symlinked read answer = %s, want a refusal", escape)
+		}
+		if content, err := os.ReadFile(filepath.Join(cwd, "escape", "secret.txt")); err != nil || string(content) != "private key" {
+			t.Fatalf("the symlink under test does not lead to the file it is meant to: %v", err)
+		}
 	}
 
 	// The unannounced write cannot be prevented, so it ends the run: a

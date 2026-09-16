@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -30,7 +31,7 @@ var bashSchema = json.RawMessage(`{
   "type": "object",
   "additionalProperties": false,
   "properties": {
-    "command": {"type": "string", "description": "Shell command to run with sh -c in the workspace root. It must match one of the workspace's allow-listed command patterns or it is refused."}
+    "command": {"type": "string", "description": "Shell command to run in the workspace root, through sh -c (cmd /C on Windows). It must match one of the workspace's allow-listed command patterns or it is refused."}
   },
   "required": ["command"]
 }`)
@@ -73,7 +74,8 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 	runCtx, cancel := context.WithTimeout(ctx, bashTimeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
+	shell, flag := shellFor(runtime.GOOS)
+	cmd := exec.CommandContext(runCtx, shell, flag, command)
 	cmd.Dir = root
 	cmd.Env = execEnv()
 	// The command runs in a process group of its own so a timeout can kill
@@ -104,6 +106,23 @@ func (o Options) bash(ctx context.Context, args json.RawMessage) (string, error)
 		return out, fmt.Errorf("bash: %v", runErr)
 	}
 	return out, nil
+}
+
+// shellFor names the command interpreter this platform runs an allow-listed
+// command through: `sh -c` everywhere Sirdar has a POSIX shell, `cmd /C` on
+// Windows, which has no /bin/sh at all. It takes the platform as an argument
+// so both branches are testable from either kind of machine.
+//
+// The allow-list is matched against the command text before it gets here
+// (Options.allowed), on the same splitter the permission policy uses, so a
+// command that hides a second one behind a pipe or a `&&` is already
+// refused whichever interpreter would have run it. What changes across
+// platforms is only whether the one allowed command can be started.
+func shellFor(goos string) (shell, flag string) {
+	if goos == "windows" {
+		return "cmd", "/C"
+	}
+	return "sh", "-c"
 }
 
 // killGrace is how long a timed-out command's process group has to die
@@ -143,9 +162,20 @@ func (o Options) allowed(command string) bool {
 // execEnv is the minimal environment child processes get: enough to find
 // binaries and behave predictably, without handing the model the parent's
 // credentials or tokens.
+//
+// Windows needs more of the environment than a Unix child does before
+// anything runs at all: cmd.exe resolves itself through COMSPEC, the C
+// runtime and every Win32 API load their DLLs relative to SystemRoot, and
+// PATHEXT is what makes `git` find git.exe rather than a file literally
+// named "git". Passing HOME alone there produces a shell that cannot start.
+// None of those four carry a credential.
 func execEnv() []string {
 	env := []string{"PATH=" + pathOrDefault()}
-	for _, name := range []string{"HOME", "LANG"} {
+	names := []string{"HOME", "LANG"}
+	if runtime.GOOS == "windows" {
+		names = []string{"USERPROFILE", "HOMEDRIVE", "HOMEPATH", "SystemRoot", "windir", "COMSPEC", "PATHEXT", "TEMP", "TMP"}
+	}
+	for _, name := range names {
 		if v := os.Getenv(name); v != "" {
 			env = append(env, name+"="+v)
 		}
@@ -156,6 +186,16 @@ func execEnv() []string {
 func pathOrDefault() string {
 	if p := os.Getenv("PATH"); p != "" {
 		return p
+	}
+	if runtime.GOOS == "windows" {
+		// No PATH at all is close to unrecoverable on Windows, but the
+		// system directories are where cmd.exe and the shipped tools live,
+		// so this at least lets a command start.
+		root := os.Getenv("SystemRoot")
+		if root == "" {
+			root = `C:\Windows`
+		}
+		return root + `\system32;` + root
 	}
 	return "/usr/local/bin:/usr/bin:/bin"
 }

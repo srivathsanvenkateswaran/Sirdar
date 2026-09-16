@@ -1,4 +1,4 @@
-.PHONY: build test vet ui desktop desktop-dev install serve release-snapshot dist-desktop version tokens check-tokens site
+.PHONY: build test vet ui desktop desktop-windows desktop-dev install serve release-snapshot dist-desktop dist-desktop-windows version tokens check-tokens site
 
 # `wails` is installed with `go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`,
 # which puts it in $(go env GOPATH)/bin. Override WAILS if it is not on PATH.
@@ -31,6 +31,14 @@ ui:
 desktop:
 	cd desktop && $(WAILS) build -ldflags "-X main.version=$(VERSION)"
 
+# The Windows app, cross-compiled from whatever machine you are on. Wails v2
+# builds windows/amd64 with CGO off, so a macOS or Linux box produces a real
+# Sirdar.exe; only running it needs Windows. The output lands beside the
+# host build in desktop/build/bin, which is why dist-desktop keeps the two
+# apart by name.
+desktop-windows:
+	cd desktop && $(WAILS) build -platform windows/amd64 -ldflags "-X main.version=$(VERSION)"
+
 desktop-dev:
 	cd desktop && $(WAILS) dev
 
@@ -52,9 +60,19 @@ install: desktop
 	rm -rf /Applications/Sirdar.app
 	cp -R desktop/build/bin/Sirdar.app /Applications/Sirdar.app
 
+# Two zips, named the way the release workflow's desktop job names its
+# uploads: this machine's own app, and the cross-compiled Windows one. The
+# host zip excludes Sirdar.exe because both builds land in the same
+# build/bin and a leftover .exe would otherwise ride along inside the
+# macOS or Linux archive.
 dist-desktop: desktop
 	mkdir -p dist
-	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" .
+	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" . -x 'Sirdar.exe'
+	$(MAKE) dist-desktop-windows
+
+dist-desktop-windows: desktop-windows
+	mkdir -p dist
+	cd desktop/build/bin && zip "../../../dist/sirdar-desktop_$(VERSION)_windows_amd64.zip" Sirdar.exe
 
 # Design tokens. desktop/frontend/src/styles/tokens.css is the source; the
 # landing site and the docs site each read a byte-identical copy of it. Run

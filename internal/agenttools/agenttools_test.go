@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"testing"
@@ -62,7 +63,10 @@ func TestResolveRejectsPathsOutsideRoot(t *testing.T) {
 	writeFile(t, filepath.Join(root, "inside.txt"), "fine\n")
 
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
-		t.Fatal(err)
+		// Creating one needs Developer Mode or an elevated process on
+		// Windows, and an ordinary account has neither. Without the link
+		// there is no escape to reject.
+		t.Skipf("symlinks unavailable: %v", err)
 	}
 
 	o := Options{Root: root}.normalized()
@@ -318,7 +322,37 @@ func TestGlobDoubleStar(t *testing.T) {
 
 // --- bash ---------------------------------------------------------------
 
+// requirePOSIXShell skips a test that runs a real command through the shell
+// and reads what a POSIX tool printed. The bash tool itself works on
+// Windows — it goes through `cmd /C` there, see shellFor — but `ls`, `env`,
+// `sleep`, `cat` and `rg` are not what a Windows box has, and the
+// allow-list behaviour these tests pin is platform-independent anyway. It
+// is checked on the Unix runners; TestShellFor covers the branch itself.
+func requirePOSIXShell(t *testing.T) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("needs a POSIX shell and coreutils; the allow-list logic is covered on the Unix runners")
+	}
+}
+
+// TestShellFor pins the interpreter each platform runs an allow-listed
+// command through, from either kind of machine.
+func TestShellFor(t *testing.T) {
+	for _, c := range []struct{ goos, shell, flag string }{
+		{"darwin", "sh", "-c"},
+		{"linux", "sh", "-c"},
+		{"freebsd", "sh", "-c"},
+		{"windows", "cmd", "/C"},
+	} {
+		shell, flag := shellFor(c.goos)
+		if shell != c.shell || flag != c.flag {
+			t.Errorf("shellFor(%q) = %q %q, want %q %q", c.goos, shell, flag, c.shell, c.flag)
+		}
+	}
+}
+
 func TestBashAllowListAndDenial(t *testing.T) {
+	requirePOSIXShell(t)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "here.txt"), "x\n")
 	tools := ReadOnlySet(Options{Root: root, BashAllow: []string{"echo *", "ls", "false"}})
@@ -350,6 +384,7 @@ func TestBashAllowListAndDenial(t *testing.T) {
 }
 
 func TestBashTimeout(t *testing.T) {
+	requirePOSIXShell(t)
 	root := t.TempDir()
 	saved := bashTimeout
 	bashTimeout = 100 * time.Millisecond
@@ -367,6 +402,7 @@ func TestBashTimeout(t *testing.T) {
 }
 
 func TestBashEnvironmentIsMinimal(t *testing.T) {
+	requirePOSIXShell(t)
 	t.Setenv("SIRDAR_SECRET_TOKEN", "must-not-leak")
 	root := t.TempDir()
 	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"env"}}), "bash")
@@ -383,6 +419,7 @@ func TestBashEnvironmentIsMinimal(t *testing.T) {
 // a trailing wildcard opens: "echo *" would otherwise match the whole of
 // "echo hi; rm -rf /", because the wildcard spans the semicolon.
 func TestBashDeniesASecondCommandBehindAnOperator(t *testing.T) {
+	requirePOSIXShell(t)
 	root := t.TempDir()
 	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"echo *", "head*"}}), "bash")
 
@@ -411,6 +448,7 @@ func TestBashDeniesASecondCommandBehindAnOperator(t *testing.T) {
 // approves cat, not every file on the machine. It is a heuristic and the
 // package doc says so; these are the cases it is meant to catch.
 func TestBashStaysInTheWorkspace(t *testing.T) {
+	requirePOSIXShell(t)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "go.mod"), "module demo\n")
 	writeFile(t, filepath.Join(root, "sub", "inner.txt"), "inner\n")
@@ -443,6 +481,7 @@ func TestBashStaysInTheWorkspace(t *testing.T) {
 // cannot see: `cat *` says nothing about the file a redirection would
 // write, and `cat x > ~/.zshrc` is not the command the pattern approved.
 func TestBashDeniesRedirection(t *testing.T) {
+	requirePOSIXShell(t)
 	root := t.TempDir()
 	writeFile(t, filepath.Join(root, "go.mod"), "module demo\n")
 	bash := toolByName(t, ReadOnlySet(Options{Root: root, BashAllow: []string{"cat *", "git log*", "rg *"}}), "bash")

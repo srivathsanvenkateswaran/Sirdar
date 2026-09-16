@@ -11,10 +11,11 @@ import "os/exec"
 // cmd.Start or cmd.Run.
 func Setup(cmd *exec.Cmd) { setup(cmd) }
 
-// Kill sends the strongest available signal to cmd's whole process group,
-// falling back to killing just cmd.Process when the group cannot be
-// reached (already gone, or the platform has no addressable process
-// groups — see procgroup_windows.go).
+// Kill takes down cmd and everything it started: the process group on
+// Unix, the parent-pid tree through `taskkill /T` on Windows, which has no
+// process group to address. Either way it falls back to killing just
+// cmd.Process when the subtree cannot be reached — see
+// procgroup_windows.go for what that costs there.
 func Kill(cmd *exec.Cmd) error { return kill(cmd) }
 
 // Alive reports whether pid names a running process, independent of

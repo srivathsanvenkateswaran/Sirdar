@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -204,15 +205,17 @@ args = ["serve", "--quiet"]
 
 	// The directory holds a copy of the operator's login, so it is theirs
 	// to read and nobody else's.
-	if st, err := os.Stat(home.dir); err != nil {
-		t.Fatalf("stat home: %v", err)
-	} else if st.Mode().Perm() != 0o700 {
-		t.Errorf("generated home mode = %v, want 0700", st.Mode().Perm())
-	}
-	if st, err := os.Stat(filepath.Join(home.dir, "config.toml")); err != nil {
-		t.Fatalf("stat config.toml: %v", err)
-	} else if st.Mode().Perm() != 0o600 {
-		t.Errorf("generated config.toml mode = %v, want 0600", st.Mode().Perm())
+	if unixModes() {
+		if st, err := os.Stat(home.dir); err != nil {
+			t.Fatalf("stat home: %v", err)
+		} else if st.Mode().Perm() != 0o700 {
+			t.Errorf("generated home mode = %v, want 0700", st.Mode().Perm())
+		}
+		if st, err := os.Stat(filepath.Join(home.dir, "config.toml")); err != nil {
+			t.Fatalf("stat config.toml: %v", err)
+		} else if st.Mode().Perm() != 0o600 {
+			t.Errorf("generated config.toml mode = %v, want 0600", st.Mode().Perm())
+		}
 	}
 
 	// The login is copied, not linked: a refresh in a triage run must not
@@ -620,10 +623,12 @@ func TestAuthRefreshIsWrittenBack(t *testing.T) {
 	if string(b) != refreshed {
 		t.Errorf("operator's auth.json = %s, want the refreshed token", b)
 	}
-	if st, err := os.Stat(filepath.Join(real, "auth.json")); err != nil {
-		t.Fatal(err)
-	} else if st.Mode().Perm() != 0o600 {
-		t.Errorf("auth.json mode after write-back = %v, want 0600", st.Mode().Perm())
+	if unixModes() {
+		if st, err := os.Stat(filepath.Join(real, "auth.json")); err != nil {
+			t.Fatal(err)
+		} else if st.Mode().Perm() != 0o600 {
+			t.Errorf("auth.json mode after write-back = %v, want 0600", st.Mode().Perm())
+		}
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "written back") {
 		t.Errorf("warnings = %v, want one saying the refresh was written back", warnings)
@@ -940,3 +945,11 @@ func TestSessionWritesBackARefreshedLogin(t *testing.T) {
 		t.Errorf("the write-back happened without saying so; tail=%v", res.StderrTail)
 	}
 }
+
+// unixModes reports whether the file mode bits this package sets mean
+// anything on the machine running the tests. On Windows os.Stat synthesises
+// 0666 or 0444 from the read-only attribute and the ACL that does govern
+// the file is invisible to Go, so asserting 0700 or 0600 there would be
+// asserting something nothing enforces. The confinement it stands for is
+// checked on the Unix runners.
+func unixModes() bool { return runtime.GOOS != "windows" }
