@@ -12,6 +12,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -294,8 +295,21 @@ func TestBasicSession(t *testing.T) {
 	if n := len(kinds(events, provider.EvToolFinished)); n != 3 {
 		t.Fatalf("tool finished %d", n)
 	}
-	if texts := kinds(events, provider.EvAssistantText); len(texts) != 3 {
-		t.Fatalf("assistant texts %d", len(texts))
+	// The model's prose, one event per text block, in the words the CLI
+	// reported them. Qwen Code reports a message once — Sirdar passes it
+	// no partial-message flag — so nothing is a delta and nothing
+	// replaces anything: the reader concatenates the blocks as they come.
+	texts := kinds(events, provider.EvAssistantText)
+	var said []string
+	for _, ev := range texts {
+		said = append(said, ev.Text)
+		if ev.Delta || ev.Replace {
+			t.Errorf("qwen reports a message once; %q was marked delta=%v replace=%v", ev.Text, ev.Delta, ev.Replace)
+		}
+	}
+	want := []string{"Looking at the repository history.", "Now writing a file.", "Done."}
+	if !slices.Equal(said, want) {
+		t.Fatalf("assistant texts %q, want %q", said, want)
 	}
 
 	final := kinds(events, provider.EvFinal)

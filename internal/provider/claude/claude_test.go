@@ -1104,3 +1104,60 @@ func TestInitLineReportsModel(t *testing.T) {
 		t.Fatalf("models reported %q, want exactly one %q", reported, "m")
 	}
 }
+
+// TestAssistantProseReachesTheTranscript: the model's words are the one
+// thing a reader of a run wants most, and until this test they were the one
+// thing a Claude run did not report. The CLI says them twice — a
+// stream_event text delta per fragment, then the whole block on the turn's
+// assistant line — so the deltas arrive marked Delta and the finished block
+// marked Replace, and the block's text is the deltas concatenated rather
+// than a second copy to append.
+func TestAssistantProseReachesTheTranscript(t *testing.T) {
+	s, err := New().Start(context.Background(), fakeSpec(t, "testdata/script-basic.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var text []provider.Event
+	var systems []string
+	for ev := range s.Events() {
+		switch ev.Kind {
+		case provider.EvAssistantText:
+			text = append(text, ev)
+		case provider.EvSystem:
+			systems = append(systems, ev.Text)
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(text) != 3 {
+		t.Fatalf("assistant text events %+v, want two deltas and the finished block", text)
+	}
+	if text[0].Text != "The return " || !text[0].Delta || text[0].Replace {
+		t.Errorf("first delta %+v", text[0])
+	}
+	if text[1].Text != "is counted twice." || !text[1].Delta {
+		t.Errorf("second delta %+v", text[1])
+	}
+	if text[2].Text != "The return is counted twice." || !text[2].Replace || text[2].Delta {
+		t.Errorf("finished block %+v", text[2])
+	}
+	if text[0].Text+text[1].Text != text[2].Text {
+		t.Errorf("the deltas do not spell the finished block: %q + %q vs %q", text[0].Text, text[1].Text, text[2].Text)
+	}
+	// The delta lines are not also kept as informational lines; the block
+	// boundaries around them still are.
+	if n := count(systems, "stream_event"); n != 3 {
+		t.Errorf("stream_event system lines %d, want the three that carry no text: %v", n, systems)
+	}
+}
+
+func count(list []string, want string) int {
+	n := 0
+	for _, s := range list {
+		if s == want {
+			n++
+		}
+	}
+	return n
+}

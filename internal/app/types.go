@@ -139,6 +139,14 @@ type EventPayload struct {
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
 
+	// Delta and Replace are carried by an `assistant_text` event alone:
+	// a delta is one fragment of a message the provider is still
+	// streaming, and a replace is the finished message, which stands in
+	// for the fragments rather than following them. Neither is set by a
+	// provider that reports a message once.
+	Delta   bool `json:"delta,omitempty"`
+	Replace bool `json:"replace,omitempty"`
+
 	// Model is carried by the `system` event a provider's init line
 	// became: the model that answered, as the provider reported it.
 	Model string `json:"model,omitempty"`
