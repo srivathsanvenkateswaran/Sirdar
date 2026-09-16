@@ -64,15 +64,19 @@ install: desktop
 # uploads: this machine's own app, and the cross-compiled Windows one. The
 # host zip excludes Sirdar.exe because both builds land in the same
 # build/bin and a leftover .exe would otherwise ride along inside the
-# macOS or Linux archive.
+# macOS or Linux archive. The workflow spells the architecture the way
+# GitHub's runner.arch does, lower-cased (x64, arm64), not the way Go does
+# (amd64), so the name maps amd64 to x64 to stay identical.
+DESKTOP_ARCH := $(if $(filter amd64,$(GOARCH)),x64,$(GOARCH))
+
 dist-desktop: desktop
 	mkdir -p dist
-	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(GOARCH).zip" . -x 'Sirdar.exe'
+	cd desktop/build/bin && zip -r "../../../dist/sirdar-desktop_$(VERSION)_$(GOOS)_$(DESKTOP_ARCH).zip" . -x 'Sirdar.exe'
 	$(MAKE) dist-desktop-windows
 
 dist-desktop-windows: desktop-windows
 	mkdir -p dist
-	cd desktop/build/bin && zip "../../../dist/sirdar-desktop_$(VERSION)_windows_amd64.zip" Sirdar.exe
+	cd desktop/build/bin && zip "../../../dist/sirdar-desktop_$(VERSION)_windows_x64.zip" Sirdar.exe
 
 # Design tokens. desktop/frontend/src/styles/tokens.css is the source; the
 # landing site and the docs site each read a byte-identical copy of it. Run

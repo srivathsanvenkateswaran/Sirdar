@@ -54,6 +54,14 @@ jobs:
   # Builds the Wails desktop shell on all three platforms, zips each OS's
   # build/bin output, and uploads the zips onto the same draft release the
   # goreleaser job opened. Unsigned: see the Gatekeeper note in docs/release.md.
+  #
+  # macos-latest is Apple silicon, so it alone would leave Intel Macs with no
+  # build; macos-15-intel adds darwin_x64. The zip step lower-cases runner.arch
+  # (ARM64 -> arm64, X64 -> x64), so the four names this job uploads are
+  #   sirdar-desktop_<tag>_darwin_arm64.zip   sirdar-desktop_<tag>_darwin_x64.zip
+  #   sirdar-desktop_<tag>_windows_x64.zip    sirdar-desktop_<tag>_linux_x64.zip
+  # and site/download.js resolves exactly those. Renaming one here means
+  # changing it there too.
   desktop:
     needs: goreleaser
     name: desktop (${{ matrix.os }})
@@ -61,7 +69,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, windows-latest, ubuntu-latest]
+        os: [macos-latest, macos-15-intel, windows-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v4
 
