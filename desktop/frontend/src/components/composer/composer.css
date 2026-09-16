@@ -164,6 +164,14 @@
   min-height: var(--sd-control-h);
 }
 
+/* Wide: the word beside the arrow, still round-ended, still 36 tall. */
+.composer-send[data-wide='true'] > .sd-button {
+  min-height: 36px;
+  padding-inline: 18px 16px;
+  border-radius: var(--sd-radius-pill);
+  gap: var(--sd-space-2);
+}
+
 /* ---------- a chip ---------- */
 
 .composer-chip-menu {

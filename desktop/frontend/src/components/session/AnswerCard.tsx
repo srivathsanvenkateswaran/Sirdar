@@ -68,7 +68,7 @@ function Scalar({ value, handlers }: { value: string | number | boolean; handler
  * is prose, a URL a link, a list a list, an object one more level of rows,
  * and past two levels the value is JSON. Blank fields are left out.
  */
-export function AnswerFields({ data, depth = 0, handlers }: { data: Record<string, unknown>; depth?: number; handlers: MarkerHandlers }): JSX.Element | null {
+export function AnswerFields({ data, depth = 0, handlers = {} }: { data: Record<string, unknown>; depth?: number; handlers?: MarkerHandlers }): JSX.Element | null {
   const entries = Object.entries(data).filter(([, v]) => !isBlank(v))
   if (entries.length === 0) return null
   return (

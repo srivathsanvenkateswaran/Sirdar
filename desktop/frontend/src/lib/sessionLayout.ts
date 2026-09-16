@@ -1,23 +1,25 @@
 /**
- * Which of the three Session layouts the window draws.
+ * Which of the three Session layouts the window draws: Conversation (the
+ * transcript as a chat with an inspector beside it), Document (the note in
+ * the centre with the path beside it) or Workbench (documents over a
+ * console). Conversation is the default.
  *
- * The 2026-09-16 review kept all three directions and made the choice a
- * preference: Conversation (A, the transcript as a chat with an inspector),
- * Document (B, the note as the window with the path beside it) and Workbench
- * (C, an IDE: documents over a console). It is a preference of this person
- * and this browser, like the theme, so it lives in localStorage and never in
- * the config file. Every choice is stored, so a stored one always wins over
- * the default.
+ * It is a preference of this person and this browser, like the theme: it
+ * says nothing about the workspace, so it lives in localStorage under
+ * `sirdar.sessionLayout` and never in the config file. Settings › General
+ * and the switcher in the session header both write it. Every choice is
+ * stored, so a stored one always wins over the default.
  */
 
 export type SessionLayout = 'conversation' | 'document' | 'workbench'
 
 export const SESSION_LAYOUTS: readonly SessionLayout[] = ['conversation', 'document', 'workbench']
 
-/** What the window opens on when nothing has been chosen. */
 export const DEFAULT_SESSION_LAYOUT: SessionLayout = 'conversation'
 
-/** The layouts in the order the Settings row lists them: the default first. */
+export const SESSION_LAYOUT_KEY = 'sirdar.sessionLayout'
+
+/** The layouts in the order the Settings row and the header switcher list them: the default first. */
 export const SESSION_LAYOUT_OPTIONS: { id: SessionLayout; label: string; note: string }[] = [
   {
     id: 'conversation',
@@ -36,8 +38,6 @@ export const SESSION_LAYOUT_OPTIONS: { id: SessionLayout; label: string; note: s
   },
 ]
 
-const KEY = 'sirdar.sessionLayout'
-
 const watchers = new Set<() => void>()
 
 export function isSessionLayout(value: unknown): value is SessionLayout {
@@ -47,7 +47,7 @@ export function isSessionLayout(value: unknown): value is SessionLayout {
 /** localStorage is absent in tests and can throw in a locked-down webview. */
 function read(): SessionLayout {
   try {
-    const stored = globalThis.localStorage?.getItem(KEY)
+    const stored = globalThis.localStorage?.getItem(SESSION_LAYOUT_KEY)
     return isSessionLayout(stored) ? stored : DEFAULT_SESSION_LAYOUT
   } catch {
     return DEFAULT_SESSION_LAYOUT
@@ -65,7 +65,7 @@ export function setSessionLayout(value: SessionLayout): void {
   if (current === value) return
   current = value
   try {
-    globalThis.localStorage?.setItem(KEY, value)
+    globalThis.localStorage?.setItem(SESSION_LAYOUT_KEY, value)
   } catch {
     // A preference that cannot be remembered still holds this session.
   }

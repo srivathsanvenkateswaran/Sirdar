@@ -12,6 +12,12 @@ export interface ComposerSend {
   /** Why it is off, or the shortcut when it is on. */
   title?: string
   onClick: () => void
+  /**
+   * Draw the word beside the arrow rather than the arrow alone: a blocked
+   * run's composer reads "Answer" in full, because that send is the
+   * screen's primary action and the word is what the reader is looking for.
+   */
+  wide?: boolean
 }
 
 export interface ComposerCardProps {
@@ -142,7 +148,7 @@ export default function ComposerCard({
         <div className="composer-bar__chips">{chips}</div>
         {aside ? <span className="composer-reason">{aside}</span> : null}
         {trailing}
-        <span className="composer-send">
+        <span className="composer-send" data-wide={send.wide ? 'true' : undefined}>
           {strip ? (
             <Button
               type="submit"
@@ -159,7 +165,7 @@ export default function ComposerCard({
             <Button
               type="submit"
               variant="primary"
-              iconOnly
+              iconOnly={!send.wide}
               icon={<ArrowUpIcon />}
               busy={send.busy}
               disabled={send.disabled && !send.busy}

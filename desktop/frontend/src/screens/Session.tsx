@@ -11,7 +11,9 @@ import { sessionsShow, subscribeSessionsShow, type SessionsShow } from '../lib/s
 import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
 import { stateWord } from '../ui/status-badge'
 import type { SessionLayoutProps } from './session/layoutProps'
+import SessionConversation from './session/SessionConversation'
 import SessionDocument from './session/SessionDocument'
+import '../components/run/run.css'
 import '../components/session/session.css'
 
 export { badgeDetail, statsTitle } from '../components/session/RunHeader'
@@ -34,13 +36,14 @@ function isTyping(target: EventTarget | null): boolean {
 }
 
 /**
- * The layouts, by the preference's name. Conversation (A) and Workbench (C)
- * are placeholders that render the Document layout until their own agents
- * land; the switcher and the Settings row already name all three so a
- * choice made now is kept when those layouts arrive.
+ * The layouts that draw from the shared model, by the preference's name.
+ * Document is layout B. Workbench (C) is a placeholder that renders the
+ * Document layout until its own agent lands; the switcher and the Settings
+ * row already name it so a choice made now is kept when it arrives.
+ * Conversation (A) is `./session/SessionConversation`, which owns its own
+ * feed and actions, and is dispatched to before any of this runs.
  */
-const LAYOUTS: Record<SessionLayout, (props: SessionLayoutProps) => JSX.Element> = {
-  conversation: SessionDocument,
+const LAYOUTS: Record<Exclude<SessionLayout, 'conversation'>, (props: SessionLayoutProps) => JSX.Element> = {
   document: SessionDocument,
   workbench: SessionDocument,
 }
@@ -73,9 +76,15 @@ export interface SessionProps {
  * screen's one filled control; the sidebar's New session steps down.
  */
 export default function Session(props: SessionProps): JSX.Element {
-  const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
-  const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
+  if (layout === 'conversation') return <SessionConversation {...props} />
+  return <SessionShared {...props} layout={layout} />
+}
+
+/** The Document and Workbench layouts: one feed, one model, one set of actions, the chosen layout drawing them. */
+function SessionShared(props: SessionProps & { layout: Exclude<SessionLayout, 'conversation'> }): JSX.Element {
+  const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix, layout } = props
+  const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const data = useSessionModel(transport, workspaceId, runId, detail, events, finished)
   const [pending, setPending] = useState<SessionLayoutProps['pending']>('')
