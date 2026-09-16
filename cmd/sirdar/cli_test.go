@@ -13,17 +13,34 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/prompt"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
 // fileAdapter is the example file-backed source adapter, built once by
-// TestMain; testdataDir is this package's testdata as an absolute path,
-// captured before any test changes directory.
+// TestMain; fakeClaude, fakeClaudeRCA and fakeMCP are the stand-ins for
+// the provider CLI and for an MCP server, installed once by TestMain;
+// testdataDir is this package's testdata as an absolute path, captured
+// before any test changes directory.
+//
+// The three stand-ins used to be shell scripts in testdata. They are Go
+// functions in internal/testbin now, because Windows cannot execute a
+// #!/bin/sh file and every end-to-end test here — triage, rca, serve,
+// runs diff, mcp — depends on running one.
 var (
-	fileAdapter string
-	testdataDir string
+	fileAdapter   string
+	fakeClaude    string
+	fakeClaudeRCA string
+	fakeMCP       string
+	testdataDir   string
 )
 
 func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{
+		"fakeclaude":     testbin.FakeClaude,
+		"fakeclaude-rca": testbin.FakeClaudeRCA,
+		"fakemcp":        testbin.FakeMCP,
+	})
+
 	tmp, err := os.MkdirTemp("", "sirdar-cli")
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "cli test:", err)
@@ -34,10 +51,15 @@ func TestMain(m *testing.M) {
 		fmt.Fprintln(os.Stderr, "cli test:", err)
 		os.Exit(1)
 	}
-	fileAdapter = filepath.Join(tmp, "file-adapter")
+	fileAdapter = filepath.Join(tmp, "file-adapter"+testbin.Ext)
 	build := exec.Command("go", "build", "-o", fileAdapter, "../../examples/adapters/file")
 	if out, err := build.CombinedOutput(); err != nil {
 		fmt.Fprintf(os.Stderr, "cli test: build file adapter: %v\n%s", err, out)
+		os.RemoveAll(tmp)
+		os.Exit(1)
+	}
+	if err := installFakes(tmp); err != nil {
+		fmt.Fprintln(os.Stderr, "cli test:", err)
 		os.RemoveAll(tmp)
 		os.Exit(1)
 	}
@@ -45,6 +67,31 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 	os.RemoveAll(tmp)
 	os.Exit(code)
+}
+
+// installFakes puts the three stand-ins in dir. It is TestMain's, not a
+// test's, so every test sees the same paths and none of them pays for the
+// copy.
+func installFakes(dir string) error {
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	for _, f := range []struct {
+		into *string
+		name string
+	}{
+		{&fakeClaude, "fakeclaude"},
+		{&fakeClaudeRCA, "fakeclaude-rca"},
+		{&fakeMCP, "fakemcp"},
+	} {
+		path := filepath.Join(dir, f.name+testbin.Ext)
+		if err := testbin.LinkOrCopy(self, path); err != nil {
+			return fmt.Errorf("install %s: %w", f.name, err)
+		}
+		*f.into = path
+	}
+	return nil
 }
 
 // TestFakeDocumentsValidate proves the canned documents the fake provider
@@ -70,7 +117,7 @@ func TestFakeDocumentsValidate(t *testing.T) {
 }
 
 func TestTriageThenRCA(t *testing.T) {
-	root, notes := newWorkspace(t, "fakeclaude.sh")
+	root, notes := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "triage-doc.json"))
 
@@ -83,7 +130,7 @@ func TestTriageThenRCA(t *testing.T) {
 	}
 	triageNote := onlyMatch(t, notes, "OMNI-1 *.md")
 
-	writeConfig(t, root, notes, "fakeclaude-rca.sh")
+	writeConfig(t, root, notes, fakeClaudeRCA)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "rca-doc.json"))
 
 	out, errb = mustRun(t, 0, "rca", "OMNI-1", "--resolution", "fixed by PR 501")
@@ -162,7 +209,7 @@ func TestTriageThenRCA(t *testing.T) {
 }
 
 func TestTriageDryRun(t *testing.T) {
-	root, notes := newWorkspace(t, "fakeclaude.sh")
+	root, notes := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 
 	mustRun(t, 0, "triage", "--dry-run", "OMNI-1")
@@ -300,8 +347,8 @@ func runGit(t *testing.T, dir string, args ...string) string {
 }
 
 func TestDoctorReportsBrokenWorkspace(t *testing.T) {
-	root, notes := newWorkspace(t, "fakeclaude.sh")
-	writeConfigWith(t, root, notes, filepath.Join(testdataDir, "fakeclaude.sh"), "/nonexistent/adapter")
+	root, notes := newWorkspace(t, fakeClaude)
+	writeConfigWith(t, root, notes, fakeClaude, filepath.Join(t.TempDir(), "nonexistent-adapter"))
 	chdir(t, root)
 
 	out, errb := runCLI(t, "doctor")
@@ -321,7 +368,7 @@ func TestAgyIsDisabledFromTheCommandLine(t *testing.T) {
 	const refusal = "provider agy is disabled: Google's Antigravity terms do not allow driving " +
 		"the CLI from another program; choose claude, codex, openai, acp, qwen or cursor"
 
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 
 	// The override is refused before any ticket is fetched, on a
@@ -445,7 +492,7 @@ func TestUsageErrors(t *testing.T) {
 }
 
 func TestRCAResolutionFromFile(t *testing.T) {
-	root, notes := newWorkspace(t, "fakeclaude.sh")
+	root, notes := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "triage-doc.json"))
 	mustRun(t, 0, "triage", "OMNI-1")
@@ -454,7 +501,7 @@ func TestRCAResolutionFromFile(t *testing.T) {
 	if err := os.WriteFile(resolution, []byte("Ran the remediation SQL after approval.\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	writeConfig(t, root, notes, "fakeclaude-rca.sh")
+	writeConfig(t, root, notes, fakeClaudeRCA)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "rca-doc.json"))
 	mustRun(t, 0, "rca", "OMNI-1", "--resolution", "@"+resolution)
 
@@ -475,25 +522,25 @@ func TestRCAResolutionFromFile(t *testing.T) {
 }
 
 // newWorkspace builds a workspace whose tracker and helpdesk are both the
-// example file adapter and whose provider is one of the fake scripts in
-// testdata. It returns the workspace root and its notes directory.
-func newWorkspace(t *testing.T, script string) (root, notes string) {
+// example file adapter and whose provider is one of the installed fake
+// CLIs. It returns the workspace root and its notes directory.
+func newWorkspace(t *testing.T, cli string) (root, notes string) {
 	t.Helper()
 	root = t.TempDir()
 	notes = filepath.Join(t.TempDir(), "notes")
-	writeConfig(t, root, notes, script)
+	writeConfig(t, root, notes, cli)
 	if err := prompt.ScaffoldPlaybooks(filepath.Join(root, ".sirdar", "playbooks")); err != nil {
 		t.Fatal(err)
 	}
 	return root, notes
 }
 
-func writeConfig(t *testing.T, root, notes, script string) {
+func writeConfig(t *testing.T, root, notes, cli string) {
 	t.Helper()
-	writeConfigWith(t, root, notes, filepath.Join(testdataDir, script), fileAdapter)
+	writeConfigWith(t, root, notes, cli, fileAdapter)
 }
 
-func writeConfigWith(t *testing.T, root, notes, script, adapter string) {
+func writeConfigWith(t *testing.T, root, notes, cli, adapter string) {
 	t.Helper()
 	command := adapter + " -file " + filepath.Join(testdataDir, "tickets.json")
 	body := fmt.Sprintf(`workspace: sirdar-test
@@ -511,7 +558,7 @@ playbooks: .sirdar/playbooks
 providers:
   claude:
     path: %s
-`, command, command, notes, script)
+`, command, command, notes, cli)
 
 	if err := os.MkdirAll(filepath.Join(root, ".sirdar"), 0o755); err != nil {
 		t.Fatal(err)
@@ -600,7 +647,7 @@ func TestGoldenAddRetroFlagCombinations(t *testing.T) {
 // all three, and a golden set with nothing to replay names the file it was
 // looking for rather than printing an empty table.
 func TestEvalRetroFlags(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 
 	var out, errb bytes.Buffer

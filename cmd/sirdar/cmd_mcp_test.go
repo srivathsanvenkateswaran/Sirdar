@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,7 +13,7 @@ import (
 // secret so the output can be checked for it.
 func mcpWorkspace(t *testing.T, mcpJSON string) string {
 	t.Helper()
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(mcpJSON), 0o644); err != nil {
 		t.Fatal(err)
 	}
@@ -21,24 +22,25 @@ func mcpWorkspace(t *testing.T, mcpJSON string) string {
 	return root
 }
 
-// fakeMCPCommand is the stdio server fixture, as an absolute path.
+// fakeMCPCommand is the stdio server stand-in, as a JSON string literal:
+// the path it quotes is a Windows path half the time, and a raw
+// "C:\Users\..." inside a JSON document is a string of invalid escapes.
 func fakeMCPCommand(t *testing.T) string {
 	t.Helper()
-	p := filepath.Join(testdataDir, "..", "..", "..", "internal", "mcpclient", "testdata", "fakemcp.sh")
-	abs, err := filepath.Abs(p)
+	if _, err := os.Stat(fakeMCP); err != nil {
+		t.Fatal(err)
+	}
+	quoted, err := json.Marshal(fakeMCP)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := os.Stat(abs); err != nil {
-		t.Fatal(err)
-	}
-	return abs
+	return string(quoted)
 }
 
 func oneServerJSON(t *testing.T) string {
 	t.Helper()
-	return `{"mcpServers":{"fake":{"command":"` + fakeMCPCommand(t) +
-		`","env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}},` +
+	return `{"mcpServers":{"fake":{"command":` + fakeMCPCommand(t) +
+		`,"env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}},` +
 		`"remote":{"type":"http","url":"https://mcp.example/v1","headers":{"Authorization":"Bearer $SIRDAR_TEST_MCP_TOKEN"}}}}`
 }
 
@@ -60,8 +62,8 @@ func TestMCPListNamesEveryServerAndNoValue(t *testing.T) {
 }
 
 func TestMCPListConnectCountsTools(t *testing.T) {
-	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":"`+fakeMCPCommand(t)+
-		`","env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`)
+	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":`+fakeMCPCommand(t)+
+		`,"env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`)
 
 	stdout, _ := mustRun(t, 0, "mcp", "list", "--connect")
 	if !strings.Contains(stdout, "4 tool(s) in") {
@@ -73,7 +75,7 @@ func TestMCPListConnectCountsTools(t *testing.T) {
 }
 
 func TestMCPToolsPrintsTheVerdictARunWouldGet(t *testing.T) {
-	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":"`+fakeMCPCommand(t)+`"}}}`)
+	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":`+fakeMCPCommand(t)+`}}}`)
 
 	stdout, _ := mustRun(t, 0, "mcp", "tools", "fake")
 	want := []string{
@@ -90,8 +92,8 @@ func TestMCPToolsPrintsTheVerdictARunWouldGet(t *testing.T) {
 }
 
 func TestMCPCallRunsAnAllowedToolAndRefusesADeniedOne(t *testing.T) {
-	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":"`+fakeMCPCommand(t)+
-		`","env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`)
+	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":`+fakeMCPCommand(t)+
+		`,"env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`)
 
 	stdout, _ := mustRun(t, 0, "mcp", "call", "fake", "list_rows", "--args", `{"table":"orders"}`)
 	if !strings.Contains(stdout, "rows of orders") {
@@ -117,7 +119,7 @@ func TestMCPCallRunsAnAllowedToolAndRefusesADeniedOne(t *testing.T) {
 }
 
 func TestMCPCallRejectsArgumentsThatAreNotAJSONObject(t *testing.T) {
-	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":"`+fakeMCPCommand(t)+`"}}}`)
+	mcpWorkspace(t, `{"mcpServers":{"fake":{"command":`+fakeMCPCommand(t)+`}}}`)
 
 	_, stderr := mustRun(t, 2, "mcp", "call", "fake", "list_rows", "--args", "not json")
 	if !strings.Contains(stderr, "--args must be a JSON object") {
@@ -126,7 +128,7 @@ func TestMCPCallRejectsArgumentsThatAreNotAJSONObject(t *testing.T) {
 }
 
 func TestMCPOnAWorkspaceWithNoServersSaysSo(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	chdir(t, root)
 
 	stdout, _ := mustRun(t, 0, "mcp", "list")

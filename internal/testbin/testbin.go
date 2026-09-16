@@ -94,7 +94,7 @@ func Install(t testing.TB, dir, as, fake string) string {
 		t.Fatalf("testbin: %v", err)
 	}
 	path := filepath.Join(dir, as+Ext)
-	if err := link(self, path); err != nil {
+	if err := LinkOrCopy(self, path); err != nil {
 		t.Fatalf("testbin: install %s: %v", path, err)
 	}
 	if as != fake {
@@ -105,10 +105,11 @@ func Install(t testing.TB, dir, as, fake string) string {
 	return path
 }
 
-// link hardlinks src to dst, falling back to a copy. A hard link across
-// volumes, or on a filesystem that has no links, is the ordinary failure
-// here and is not worth reporting.
-func link(src, dst string) error {
+// LinkOrCopy hardlinks src to dst, falling back to a copy. A hard link
+// across volumes, or on a filesystem that has no links, is the ordinary
+// failure here and is not worth reporting. It is exported for a TestMain,
+// which has no *testing.T to fail.
+func LinkOrCopy(src, dst string) error {
 	if err := os.Remove(dst); err != nil && !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
