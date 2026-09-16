@@ -193,10 +193,13 @@ export const TRIAGE_ANSWER = {
   openQuestions: ['Does any other service still emit the "item scanned back in" event?', 'How many past returns need their stock rebuilt?'],
 }
 
+/** The answer after the steer: the same document, with the partial-return question settled in its body. */
 export const PARTIAL_ANSWER = {
   ...TRIAGE_ANSWER,
-  title:
-    'Partial returns are affected too: this module has no separate partial-return path, so returning fewer units than were sold is an ordinary Return movement with a smaller Quantity.',
+  rootCause: {
+    ...TRIAGE_ANSWER.rootCause,
+    hypothesis: `${TRIAGE_ANSWER.rootCause.hypothesis} Partial returns are affected too: this module has no separate partial-return path, so returning fewer units than were sold is an ordinary Return movement with a smaller Quantity.`,
+  },
 }
 
 function finalEvent(seconds: number, answer: unknown, turns: number, costUsd: number): RunEvent {

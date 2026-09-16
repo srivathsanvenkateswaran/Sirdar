@@ -214,7 +214,10 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   const rows = useMemo<ConsoleRow[]>(() => {
     const built = buildRows(events, { startedAt: detail?.startedAt, kind: detail?.kind, permissions })
     const closing = detail ? closingRow(detail, notesDir) : undefined
-    return closing ? [...built, closing] : built
+    if (!closing) return built
+    // The run ended at updatedAt; a review filed after that follows it.
+    const at = built.findIndex((r) => Number.isFinite(closing.atMs) && r.atMs > closing.atMs)
+    return at === -1 ? [...built, closing] : [...built.slice(0, at), closing, ...built.slice(at)]
   }, [events, detail, permissions, notesDir])
   const rail = useMemo(() => railItems(events, status), [events, status])
   const counts = useMemo(() => consoleCounts(rows, events.length), [rows, events.length])
