@@ -73,6 +73,13 @@ describe('each screen scrolls inside the sheet', () => {
 })
 
 describe('what floats over the sheet', () => {
+  it('the page enter does not keep a transform once it ends, so fixed popovers stay pinned to the window', () => {
+    const css = sheet('ui/motion/motion.css')
+    const page = rule(css, '.sd-motion-page')
+    expect(page).toMatch(/animation:.*backwards/)
+    expect(page).not.toMatch(/animation:.*\b(both|forwards)\b/)
+  })
+
   it('the dialog is held to the window and scrolls its body', () => {
     const css = sheet('ui/dialog/Dialog.css')
     expect(rule(css, '.sd-dialog')).toMatch(/max-block-size: calc\(92vh/)

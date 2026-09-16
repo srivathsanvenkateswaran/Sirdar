@@ -188,7 +188,7 @@
   content: '';
   position: absolute;
   inset-block: 8px;
-  inset-inline-start: -4px;
+  inset-inline-start: -3px;
   inline-size: 2px;
   border-radius: var(--sd-radius-pill);
   background: var(--sd-accent);
