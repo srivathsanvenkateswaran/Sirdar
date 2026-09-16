@@ -136,6 +136,11 @@ export interface SessionsListProps {
   /** Named on the card. */
   workspaceName?: string
   /**
+   * The sidebar is the 56px rail: a row is its tile alone, so the card
+   * carries the row's own number as well as the other one.
+   */
+  rail?: boolean
+  /**
    * The run whose card is drawn open, in the flow under the list rather than
    * pinned beside its row — for the gallery, which has no pointer to rest.
    */
@@ -169,6 +174,7 @@ export default function SessionsList({
   now,
   sources,
   workspaceName,
+  rail = false,
   pinnedCard,
 }: SessionsListProps): JSX.Element | null {
   const [showAll, setShowAll] = useState(false)
@@ -262,12 +268,13 @@ export default function SessionsList({
   function renderCard(run: RunSummary): JSX.Element {
     const shown = shownNumber(run, show, sources)
     // The other number with its product's name; a run with one number names
-    // that one, so the card always says where the ticket lives.
+    // that one, so the card always says where the ticket lives. In the rail
+    // the row shows no number at all, so the card carries the row's own too.
     const otherRole: SessionsShow = shown.role === 'tracker' ? 'helpdesk' : 'tracker'
     const hasOther = shown.other !== ''
-    const numberRole = hasOther ? otherRole : shown.role
-    const numberSource = sources?.[numberRole]
-    const numberText = hasOther ? shown.other : withSource(shown.text, shown.source)
+    const numbers: { role: SessionsShow; text: string }[] = []
+    if (rail || !hasOther) numbers.push({ role: shown.role, text: withSource(shown.text, shown.source) })
+    if (hasOther) numbers.push({ role: otherRole, text: shown.other })
     return (
       <div
         id={cardId}
@@ -282,12 +289,18 @@ export default function SessionsList({
           {run.title || shown.text}
         </p>
         <ul className="sd-session-card__rows">
-          <li className="sd-session-card__row">
-            <SourceMark adapter={numberSource?.adapter ?? numberRole} name={numberSource?.name} size="xs" />
-            <span className="sd-session-card__mono" dir="ltr">
-              {numberText}
-            </span>
-          </li>
+          {numbers.map((number) => (
+            <li key={number.role} className="sd-session-card__row">
+              <SourceMark
+                adapter={sources?.[number.role]?.adapter ?? number.role}
+                name={sources?.[number.role]?.name}
+                size="xs"
+              />
+              <span className="sd-session-card__mono" dir="ltr">
+                {number.text}
+              </span>
+            </li>
+          ))}
           <li className="sd-session-card__row">
             <KindChip kind={run.kind} />
             <span>{stateWord(run.status)}</span>
@@ -330,8 +343,13 @@ export default function SessionsList({
           <div id={settledId} className="sd-sessions__settled-rows">
             {settledShown.map(renderRow)}
             {hidden > 0 ? (
-              <button type="button" className="sd-sessions__more" onClick={() => setShowAll(true)}>
-                Show {hidden} more
+              <button
+                type="button"
+                className="sd-sessions__more"
+                aria-label={rail ? `Show ${hidden} more` : undefined}
+                onClick={() => setShowAll(true)}
+              >
+                {rail ? `+${hidden}` : `Show ${hidden} more`}
               </button>
             ) : null}
           </div>

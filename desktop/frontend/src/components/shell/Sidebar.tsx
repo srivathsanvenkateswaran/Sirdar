@@ -1,9 +1,11 @@
-import { useSyncExternalStore } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import type { Quota, RunSummary, SourcesSummary, Workspace } from '../../api/types'
 import { showLibrary, subscribeShowLibrary } from '../../lib/library'
+import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { BELOW_COMPACT, useMediaQuery } from '../../lib/useMediaQuery'
 import type { Screen } from '../../store/appStore'
 import Button from '../../ui/button'
+import PanelToggle from '../../ui/panel-toggle'
 import SidebarFooterCard from '../../ui/sidebar-footer-card'
 import SidebarNavItem from '../../ui/sidebar-nav-item'
 import QuotaMeter from '../QuotaMeter'
@@ -39,6 +41,13 @@ const ROWS: { name: NavName; label: string; icon: JSX.Element }[] = [
  * the narrow band of `styles/tokens.css`, where the sheet needs every pixel.
  */
 export const RAIL_AT = BELOW_COMPACT
+
+/**
+ * The reader's own fold: the sidebar as the 56px rail at any width, on the
+ * head's toggle or ⌘B, remembered in this browser. The automatic rail under
+ * 1024 applies regardless.
+ */
+export const SIDEBAR_COLLAPSED_KEY = 'sirdar.sidebarCollapsed'
 
 /** The nav row a screen belongs to. A run is reached from Sessions, a review from its run. */
 function rowOf(screen: Screen): NavName {
@@ -101,7 +110,31 @@ export default function Sidebar(props: {
   } = props
   const library = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const primary = usePrimaryAction()
-  const rail = useMediaQuery(RAIL_AT)
+  const auto = useMediaQuery(RAIL_AT)
+  const [folded, setFolded] = useState(() => readStoredFlag(SIDEBAR_COLLAPSED_KEY))
+  const rail = auto || folded
+
+  function toggleFold(): void {
+    const next = !folded
+    setFolded(next)
+    writeStoredFlag(SIDEBAR_COLLAPSED_KEY, next)
+  }
+
+  // ⌘B, from anywhere in the window. Not while the width has already made
+  // the choice: a chord that appears to do nothing is worse than none.
+  useEffect(() => {
+    if (auto) return
+    function onKey(e: KeyboardEvent): void {
+      if (!(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      if (e.key !== 'b' && e.key !== 'B') return
+      e.preventDefault()
+      const next = !folded
+      setFolded(next)
+      writeStoredFlag(SIDEBAR_COLLAPSED_KEY, next)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [auto, folded])
 
   const current = rowOf(screen)
   const rows = library ? ROWS : ROWS.filter((row) => row.name !== 'library')
@@ -130,6 +163,16 @@ export default function Sidebar(props: {
           onSelect={onSelectWorkspace}
           onAdd={onAddWorkspace}
         />
+        <PanelToggle
+          side="start"
+          open={!rail}
+          hideLabel="Hide sidebar"
+          showLabel="Show sidebar"
+          shortcut="⌘B"
+          disabled={auto}
+          disabledReason="The sidebar is a rail at this width"
+          onToggle={toggleFold}
+        />
       </div>
 
       <nav className="sd-sidebar__nav" aria-label="Screens">
@@ -153,6 +196,7 @@ export default function Sidebar(props: {
         sources={sources}
         workspaceName={workspaceName}
         currentRunId={currentRunId}
+        rail={rail}
         onOpen={(runId) => onNavigate({ name: 'run', runId })}
       />
 

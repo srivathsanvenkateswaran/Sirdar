@@ -164,6 +164,17 @@ describe('the sessions list', () => {
     expect(within(list()).queryByRole('button', { name: /Show/ })).toBeNull()
   })
 
+  it('says +N for the hidden settled rows in the rail, still named Show N more', () => {
+    const many = Array.from({ length: 11 }, (_, i) =>
+      run({ runId: `r${i}`, key: `OMNI-${i}`, updatedAt: new Date(NOW - i * 3_600_000).toISOString() }),
+    )
+    mount({ runs: many, rail: true })
+    const more = within(list()).getByRole('button', { name: 'Show 3 more' })
+    expect(more).toHaveTextContent('+3')
+    fireEvent.click(more)
+    expect(within(list()).getAllByRole('button', { name: /OMNI-/ })).toHaveLength(11)
+  })
+
   it('marks the open run and opens another on click', () => {
     const { onOpen } = mount({ currentRunId: 'r2' })
     expect(within(list()).getByRole('button', { name: /OMNI-2,/ })).toHaveAttribute('aria-current', 'page')
@@ -380,6 +391,19 @@ describe('the sessions list', () => {
       fireEvent.click(row)
       noCard()
       expect(onOpen).toHaveBeenCalledWith('r1')
+    })
+
+    it('carries the row\'s own number as well as the other when the sidebar is the rail', () => {
+      vi.useFakeTimers()
+      mount({ rail: true })
+      hoverRow(rows()[0])
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      const lines = [...card().querySelectorAll<HTMLElement>('.sd-session-card__row')]
+      expect(lines[0]).toHaveTextContent('Janus OMNI-2815')
+      expect(lines[1]).toHaveTextContent('Zoho Desk #25312')
+      expect(lines[2]).toHaveTextContent(`triage${STATE_WORDS.running}`)
     })
 
     it('is drawn open in the flow for the gallery', () => {
