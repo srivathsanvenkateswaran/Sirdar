@@ -1,0 +1,65 @@
+# Publishes the landing page at the Pages root and the MkDocs site under /docs/,
+# through the Pages artifact API rather than a gh-pages branch.
+#
+# The repository's Pages source has to be "GitHub Actions" (Settings › Pages ›
+# Source) for the deployed artifact to be served; until the owner switches it,
+# this workflow builds and uploads but nothing changes at the URL.
+
+name: site
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'mkdocs.yml'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one halfway.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - run: pip install -r docs/requirements.txt
+
+      # The landing page reads a copy of the app's token file. A stale copy is
+      # a design bug that would ship silently, so fail here instead.
+      - name: Tokens copies match the source
+        run: ./scripts/check-tokens.sh
+
+      - name: Put the landing page at the root
+        run: |
+          mkdir -p public
+          cp -R site/. public/
+
+      - name: Build the docs into public/docs
+        run: mkdocs build --strict --site-dir public/docs
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: public
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
