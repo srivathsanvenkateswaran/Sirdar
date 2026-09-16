@@ -149,4 +149,44 @@ describe('useAnchor', () => {
     render(<Harness open={false} />)
     expect(rects).not.toHaveBeenCalled()
   })
+
+  it('re-measures when `track` changes while it stays open, so a popover can follow a swapped trigger', () => {
+    vi.spyOn(window, 'innerWidth', 'get').mockReturnValue(1470)
+    vi.spyOn(window, 'innerHeight', 'get').mockReturnValue(900)
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (this: HTMLElement) {
+      if (this.tagName !== 'BUTTON') return rect({ top: 0, left: 0, width: 280, height: 120 })
+      return this.textContent === 'first'
+        ? rect({ top: 100, left: 16, width: 200, height: 36 })
+        : rect({ top: 140, left: 16, width: 200, height: 36 })
+    })
+
+    function Rows({ on }: { on: 'first' | 'second' }): JSX.Element {
+      const pop = useRef<HTMLDivElement | null>(null)
+      // One trigger ref that points at whichever row is current; refs attach
+      // before the layout effect measures, so the callbacks set it.
+      const trigger = useRef<HTMLElement | null>(null)
+      useAnchor(true, trigger, pop, { beside: true, track: on })
+      const point = (row: 'first' | 'second') => (el: HTMLButtonElement | null) => {
+        if (row === on) trigger.current = el
+      }
+      return (
+        <>
+          <button ref={point('first')} type="button">
+            first
+          </button>
+          <button ref={point('second')} type="button">
+            second
+          </button>
+          <div ref={pop} data-testid="pop">
+            popover
+          </div>
+        </>
+      )
+    }
+
+    const { getByTestId, rerender } = render(<Rows on="first" />)
+    expect(getByTestId('pop').style.top).toBe('100px')
+    rerender(<Rows on="second" />)
+    expect(getByTestId('pop').style.top).toBe('140px')
+  })
 })
