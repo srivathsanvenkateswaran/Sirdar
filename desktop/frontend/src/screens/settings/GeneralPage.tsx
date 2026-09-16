@@ -7,6 +7,13 @@ import {
   subscribeSessionsShow,
   type SessionsShow,
 } from '../../lib/sessionsShow'
+import {
+  SESSION_LAYOUT_OPTIONS,
+  sessionLayout,
+  setSessionLayout,
+  subscribeSessionLayout,
+  type SessionLayout,
+} from '../../lib/sessionLayout'
 import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
@@ -67,6 +74,11 @@ export default function GeneralPage({
     subscribeSessionsShow,
     sessionsShow,
     () => 'tracker' as SessionsShow,
+  )
+  const layout = useSyncExternalStore(
+    subscribeSessionLayout,
+    sessionLayout,
+    () => 'conversation' as SessionLayout,
   )
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
@@ -207,6 +219,22 @@ export default function GeneralPage({
               options={SESSIONS_SHOW_OPTIONS}
               value={show}
               onChange={(id) => setSessionsShow(id as SessionsShow)}
+            />
+          }
+        />
+        <SettingRow
+          label="Session layout"
+          value={SESSION_LAYOUT_OPTIONS.find((o) => o.id === layout)?.label ?? layout}
+          help={
+            SESSION_LAYOUT_OPTIONS.find((o) => o.id === layout)?.note +
+            ' The switcher in a session\'s header changes the same setting. Remembered in this browser.'
+          }
+          control={
+            <SegmentedControl
+              label="Session layout"
+              options={SESSION_LAYOUT_OPTIONS}
+              value={layout}
+              onChange={(id) => setSessionLayout(id as SessionLayout)}
             />
           }
         />

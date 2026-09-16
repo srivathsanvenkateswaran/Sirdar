@@ -6,6 +6,7 @@ import type { Check, Transport } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import { resetShowLibrary, showLibrary } from '../lib/library'
 import { prefersRTL, resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { resetSessionLayout, sessionLayout } from '../lib/sessionLayout'
 import { resetSessionsShow, sessionsShow } from '../lib/sessionsShow'
 import { resetTheme, theme } from '../lib/theme'
 import {
@@ -39,6 +40,7 @@ afterEach(() => {
   resetShowLibrary()
   resetTheme()
   resetSessionsShow()
+  resetSessionLayout()
 })
 
 /** A transport over the fake, with whatever a case wants overridden. */
@@ -212,6 +214,18 @@ describe('General', () => {
     expect(
       screen.getByText('The helpdesk number', { selector: '.sd-setting-row__value' }),
     ).toBeInTheDocument()
+  })
+
+  it('switches the session layout, listing Conversation first as the default, and remembers it', () => {
+    open()
+    const group = screen.getByRole('radiogroup', { name: 'Session layout' })
+    const options = within(group).getAllByRole('radio')
+    expect(options.map((o) => o.textContent)).toEqual(['Conversation', 'Document', 'Workbench'])
+    expect(options[0]).toBeChecked()
+    fireEvent.click(within(group).getByRole('radio', { name: 'Document' }))
+    expect(sessionLayout()).toBe('document')
+    expect(localStorage.getItem('sirdar.sessionLayout')).toBe('document')
+    expect(screen.getByText('Document', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
   })
 
   it('runs doctor and lists the rows with the CLI\'s own marks', async () => {
