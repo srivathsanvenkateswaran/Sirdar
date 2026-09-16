@@ -619,15 +619,98 @@ h1 em { font-style: italic; }
 
 /* Download --------------------------------------------------------------- */
 
-.dl {
+/* Under the hero button: the chip note and the Intel alternative. Hidden in
+   the markup; download.js shows it for a macOS visitor. */
+.dl-primary {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sd-space-2);
+  min-width: 0;
+}
+.dl-alt {
+  font-size: 0.875rem;
+  color: var(--sd-ink-3);
+}
+.dl-alt a { color: var(--sd-ink-2); }
+
+/* One card per platform. Static order macOS, Windows, Linux; download.js
+   moves the visitor's platform to the front and reveals its tag. */
+.plats {
   display: grid;
-  gap: var(--sd-space-5);
+  gap: var(--sd-space-4);
   margin-block-start: var(--sd-space-7);
 }
 
-@media (min-width: 820px) {
-  .dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+@media (min-width: 900px) {
+  .plats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+
+.plat {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding: var(--sd-space-5);
+  background: var(--sd-surface);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-lg);
+}
+.plat[data-detected] { border-color: var(--sd-ink); }
+
+.plat-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3);
+}
+.plat-head h3 {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: var(--sd-ink);
+}
+.plat-tag {
+  padding: 2px var(--sd-space-2);
+  font-family: var(--sd-font-mono);
+  font-size: 0.75rem;
+  color: var(--sd-badge-ink);
+  background: var(--sd-badge-bg);
+  border-radius: var(--sd-radius-xs);
+}
+
+.plat-req {
+  flex: 1;
+  margin-block-start: var(--sd-space-3);
+  font-size: 0.9375rem;
+  color: var(--sd-ink-2);
+}
+.plat-req a { color: inherit; text-decoration: underline; }
+
+.plat-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sd-space-3) var(--sd-space-4);
+  margin-block-start: var(--sd-space-5);
+}
+.plat-alt {
+  font-size: 0.9375rem;
+  color: var(--sd-ink-2);
+}
+.plat-alt:hover { color: var(--sd-ink); }
+
+.dl-note { margin-block-start: var(--sd-space-5); }
+
+/* The outlined button: the band's, and any second action. Same box as .btn,
+   no fill, no hard shadow: the one filled control on the page is the hero's. */
+.btn--ghost {
+  background: var(--sd-surface);
+  color: var(--sd-ink);
+  border-color: var(--sd-rule-strong);
+  box-shadow: none;
+  transition: color var(--sd-dur-1) ease, border-color var(--sd-dur-1) ease;
+}
+.btn--ghost:hover { border-color: var(--sd-accent); color: var(--sd-accent); }
+.btn--ghost:active, [dir="rtl"] .btn--ghost:active { transform: none; box-shadow: none; }
 
 .dl-col {
   min-width: 0;
@@ -648,6 +731,7 @@ h1 em { font-style: italic; }
 .dl-col p code { color: var(--sd-ink); overflow-wrap: anywhere; }
 .dl-col .copyline { margin-block-start: var(--sd-space-4); }
 .dl-col a { color: inherit; text-decoration: underline; }
+.dl-col--cli { margin-block-start: var(--sd-space-6); }
 
 /* Footer ---------------------------------------------------------------- */
 
@@ -727,6 +811,7 @@ h1 em { font-style: italic; }
   .navwrap { padding-inline: var(--sd-space-4); }
   .marquee-track { padding-inline: var(--sd-space-4); }
   .dl-col { padding: var(--sd-space-5); }
+  .plat { padding: var(--sd-space-4); }
 }
 
 /* Reduced motion --------------------------------------------------------

@@ -51,7 +51,16 @@
           coding agent you already pay for.</p>
 
         <div class="actions">
-          <a class="btn" href="#download">Download</a>
+          <!-- Static: "Download", to the releases page, which is right with JS off and
+               when the API cannot be reached. download.js names the visitor's OS in the
+               label and, once a release exists, points the button at that OS's zip. -->
+          <div class="dl-primary">
+            <a class="btn" id="dl-hero" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Download</a>
+            <p class="dl-alt" id="dl-hero-alt" hidden>Apple silicon.
+              <a href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_x64">Intel Mac</a>
+              <span aria-hidden="true">&middot;</span>
+              <a href="#download">All platforms</a></p>
+          </div>
           <div class="copyline">
             <code id="gocmd" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
             <button class="copybtn" type="button" data-copy="#gocmd" aria-label="Copy the install command"><span data-copy-label>Copy</span></button>
@@ -302,44 +311,84 @@
   <section class="section" id="download" aria-labelledby="dl-h">
     <div class="wide">
       <h2 id="dl-h" class="h-mid">Download.</h2>
-      <p class="lede">Both come from the same GitHub release. Every release opens as a draft
-        and a person publishes it.</p>
+      <p class="lede">The desktop app and the CLI come from the same GitHub release. Every
+        release opens as a draft and a person publishes it.</p>
 
-      <div class="dl">
-        <div class="dl-col">
-          <h3>The desktop app</h3>
-          <p>macOS and Windows. <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>:
-            unzip it and run the app inside.</p>
-          <p>On Windows the app needs Microsoft's WebView2 runtime. Windows 11 and current
-            Windows 10 ship it; a machine without it opens a window and draws nothing, and the
-            <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Evergreen Bootstrapper</a>
-            puts it right.</p>
-          <p>The builds are unsigned. macOS asks you to right-click the app and choose Open the
-            first time; SmartScreen asks for More info, then Run anyway.</p>
-        </div>
-        <div class="dl-col">
-          <h3>The CLI</h3>
-          <p>macOS, Linux and Windows, amd64 and arm64.
-            <code dir="ltr">sirdar_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code>
-            (<code dir="ltr">.zip</code> on Windows), with <code dir="ltr">checksums.txt</code>
-            beside them and deb and rpm packages for Linux. Put <code dir="ltr">sirdar</code>
-            on your <code dir="ltr">PATH</code>.</p>
-          <p>Or from source, any commit, released or not:</p>
-          <div class="copyline">
-            <code id="gocmd2" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
-            <button class="copybtn" type="button" data-copy="#gocmd2" aria-label="Copy the go install command"><span data-copy-label>Copy</span></button>
+      <!-- Static order: macOS, Windows, Linux. download.js moves the visitor's platform
+           to the front and, once a release exists, points each button at its zip. With
+           JS off every button opens the releases page, which is the right answer today.
+           The asset suffixes here are the four the release workflow's desktop job
+           uploads (.github/workflows/release.yml); never add one it does not build. -->
+      <ul class="plats" id="plats" aria-label="The desktop app, by platform">
+        <li class="plat" data-os="mac">
+          <div class="plat-head">
+            <h3>macOS</h3>
+            <span class="plat-tag" hidden>Your platform</span>
           </div>
+          <p class="plat-req">macOS 12 or later, Apple silicon or Intel. The build is unsigned:
+            right-click the app and choose Open the first time.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_arm64">Download for macOS</a>
+            <a class="plat-alt" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="darwin_x64">Intel Mac</a>
+          </div>
+        </li>
+        <li class="plat" data-os="windows">
+          <div class="plat-head">
+            <h3>Windows</h3>
+            <span class="plat-tag" hidden>Your platform</span>
+          </div>
+          <p class="plat-req">Windows 10 or 11, x64, with Microsoft's WebView2 runtime. Windows 11
+            and current Windows 10 ship it; on a machine without it the app opens a window and
+            draws nothing, and the
+            <a href="https://developer.microsoft.com/microsoft-edge/webview2/">Evergreen Bootstrapper</a>
+            puts it right. The build is unsigned: SmartScreen asks for More info, then Run
+            anyway.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="windows_x64">Download for Windows</a>
+          </div>
+        </li>
+        <li class="plat" data-os="linux">
+          <div class="plat-head">
+            <h3>Linux</h3>
+            <span class="plat-tag" hidden>Your platform</span>
+          </div>
+          <p class="plat-req">x64, with libwebkit2gtk-4.1 and libgtk-3 installed. Unzip it and run
+            the binary inside.</p>
+          <div class="plat-actions">
+            <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases" data-dl-asset="linux_x64">Download for Linux</a>
+          </div>
+        </li>
+      </ul>
+
+      <p class="fineprint dl-note" data-dl-when="none">The buttons open the releases page: no
+        release has been published yet, so it is empty until the first one is. Once one exists,
+        each links straight to its zip,
+        <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>.</p>
+      <p class="fineprint dl-note" data-dl-when="some" hidden>Each button links to the zip in
+        <span data-dl-tag>the latest release</span>,
+        <code dir="ltr">sirdar-desktop_&lt;tag&gt;_&lt;os&gt;_&lt;arch&gt;.zip</code>. Unzip it
+        and run the app inside.</p>
+
+      <div class="dl-col dl-col--cli">
+        <h3>The CLI</h3>
+        <p>macOS, Linux and Windows, amd64 and arm64.
+          <code dir="ltr">sirdar_&lt;version&gt;_&lt;os&gt;_&lt;arch&gt;.tar.gz</code>
+          (<code dir="ltr">.zip</code> on Windows), with <code dir="ltr">checksums.txt</code>
+          beside them and deb and rpm packages for Linux. Put <code dir="ltr">sirdar</code>
+          on your <code dir="ltr">PATH</code>.</p>
+        <p>Or from source, any commit, released or not:</p>
+        <div class="copyline">
+          <code id="gocmd2" dir="ltr">go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest</code>
+          <button class="copybtn" type="button" data-copy="#gocmd2" aria-label="Copy the go install command"><span data-copy-label>Copy</span></button>
         </div>
       </div>
 
       <div class="actions actions--row">
-        <a class="btn" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">Releases on GitHub</a>
+        <a class="btn btn--ghost" href="https://github.com/srivathsanvenkateswaran/Sirdar/releases">All releases on GitHub</a>
         <a class="navlink" href="https://srivathsanvenkateswaran.github.io/Sirdar/docs/release/">How a release is cut</a>
       </div>
-      <p class="fineprint">No release has been published yet, so the releases page is empty
-        until the first one is; <code dir="ltr">go install</code> works today. A Homebrew tap
-        is planned and not live, which is why there is no <code dir="ltr">brew</code> line
-        here.</p>
+      <p class="fineprint"><code dir="ltr">go install</code> works today. A Homebrew tap is
+        planned and not live, which is why there is no <code dir="ltr">brew</code> line here.</p>
     </div>
   </section>
 
@@ -395,5 +444,6 @@
 </footer>
 
 <script src="hero.js" defer></script>
+<script src="download.js" defer></script>
 </body>
 </html>
