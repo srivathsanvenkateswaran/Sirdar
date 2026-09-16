@@ -1,7 +1,26 @@
-import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react'
-import type { HookOutcome, RunSummary, SourcesSummary, Ticket, Transport } from '../api/types'
+import { useEffect, useId, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import type {
+  HookOutcome,
+  MeSummary,
+  RunSummary,
+  SourcesSummary,
+  Ticket,
+  Transport,
+} from '../api/types'
 import Age from '../components/Age'
 import RunCard from '../components/cards/RunCard'
+import { useAnchor } from '../lib/anchor'
+import {
+  assigneeOptions,
+  foldName,
+  identityOf,
+  matchingOptions,
+  ME,
+  SEARCH_FROM,
+  selectedNames,
+  triggerLabel,
+  type AssigneeOption,
+} from '../lib/assignees'
 import { reasonOf, relativeTime } from '../lib/format'
 import { FILTER_DEBOUNCE_MS, useDebounced } from '../lib/useDebounced'
 import {
@@ -16,6 +35,7 @@ import GroupLabel from '../ui/group-label'
 import ItemRow, { type ItemTone } from '../ui/item-row'
 import KanbanColumn from '../ui/kanban-column'
 import PageHead from '../ui/page-head'
+import Avatar from '../ui/run-card/Avatar'
 import SdRunCard from '../ui/run-card'
 import SearchBar from '../ui/search-bar'
 import SegmentedControl from '../ui/segmented-control'
@@ -51,14 +71,12 @@ const COLUMNS: { id: ColumnId; name: string; empty: string }[] = [
 
 const LIVE = new Set<RunSummary['status']>(['preparing', 'running'])
 
-/** Who a card belongs to, and what it is. The two quick filters. */
-type Owner = 'all' | 'mine'
+/** What a card is. Who it belongs to is the assignee menu's question. */
 type KindFilter = 'all' | 'triage' | 'rca' | 'fix'
 
-const OWNER_OPTIONS = [
-  { id: 'mine', label: 'Mine' },
-  { id: 'all', label: 'All' },
-]
+/** Why Me cannot be picked, when the workspace can name nobody. */
+export const NO_IDENTITY =
+  'Sirdar does not know who you are. Settings › General says what to add.'
 
 const KIND_OPTIONS = [
   { id: 'all', label: 'All' },
@@ -250,6 +268,193 @@ function HeadsetIcon(): JSX.Element {
   )
 }
 
+function CheckIcon(): JSX.Element {
+  return (
+    <svg
+      className="board-assignee__check"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="m5 12 5 5 9-10" />
+    </svg>
+  )
+}
+
+function SearchIcon(): JSX.Element {
+  return (
+    <svg
+      className="board-assignee__search-icon"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </svg>
+  )
+}
+
+/**
+ * Who the board is showing work for.
+ *
+ * The trigger is the mock's `.sel` — a bordered field reading "Anyone" until
+ * somebody is picked — and it opens a listbox pinned to the viewport by
+ * `lib/anchor`, the same way the model picker's popover is. Me is the first
+ * row and stays first; it is disabled, with the reason, for a workspace that
+ * cannot say who the reader is, since a filter nobody matches would empty
+ * the board with no way to tell that from having no work. Picking is
+ * multi-select and applies as it is made: the check on a row is the state,
+ * and the menu stays open so a second person can be added.
+ */
+function AssigneeMenu({
+  options,
+  selected,
+  identity,
+  onChange,
+}: {
+  options: AssigneeOption[]
+  selected: Set<string>
+  /** Who the reader is; '' disables Me. */
+  identity: string
+  onChange: (next: Set<string>) => void
+}): JSX.Element {
+  const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  const root = useRef<HTMLDivElement | null>(null)
+  const popover = useRef<HTMLDivElement | null>(null)
+  const search = useRef<HTMLInputElement | null>(null)
+  const labelId = useId()
+
+  useAnchor(open, root, popover)
+
+  useEffect(() => {
+    if (!open) return
+    function onDown(event: globalThis.MouseEvent): void {
+      const target = event.target as Node
+      if (root.current?.contains(target) || popover.current?.contains(target)) return
+      setOpen(false)
+      setQuery('')
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  useEffect(() => {
+    if (open && options.length > SEARCH_FROM) search.current?.focus()
+  }, [open, options.length])
+
+  function toggle(option: AssigneeOption): void {
+    const next = new Set(selected)
+    if (next.has(option.id)) next.delete(option.id)
+    else next.add(option.id)
+    onChange(next)
+  }
+
+  const rows = matchingOptions(options, query)
+  const label = triggerLabel(selected, options)
+
+  return (
+    <div className="board-assignee" ref={root}>
+      <span className="board-assignee__label" id={labelId}>
+        Assignee
+      </span>
+      <button
+        type="button"
+        className="board-assignee__trigger"
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-labelledby={`${labelId} ${labelId}-value`}
+        onClick={() => {
+          setOpen((was) => !was)
+          setQuery('')
+        }}
+      >
+        <span id={`${labelId}-value`} className="board-assignee__value">
+          {label}
+        </span>
+        <ChevronIcon open={open} />
+      </button>
+
+      {open && (
+        <div
+          className="board-assignee__popover"
+          ref={popover}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.stopPropagation()
+              setOpen(false)
+              setQuery('')
+            }
+          }}
+        >
+          {options.length > SEARCH_FROM && (
+            <div className="board-assignee__search">
+              <SearchIcon />
+              <input
+                ref={search}
+                type="search"
+                className="board-assignee__search-input"
+                placeholder="Find a person"
+                aria-label="Find a person"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
+            </div>
+          )}
+          <div className="board-assignee__list" role="listbox" aria-multiselectable="true" aria-label="Assignee">
+            {rows.length === 0 ? (
+              <p className="board-assignee__empty">Nobody here matches “{query.trim()}”.</p>
+            ) : (
+              rows.map((option) => {
+                const isMe = option.id === ME
+                const disabled = isMe && identity === ''
+                const on = selected.has(option.id)
+                return (
+                  <button
+                    key={option.id}
+                    type="button"
+                    role="option"
+                    aria-selected={on}
+                    aria-disabled={disabled || undefined}
+                    className="board-assignee__row"
+                    data-me={isMe ? 'true' : undefined}
+                    title={disabled ? NO_IDENTITY : option.who || undefined}
+                    onClick={() => {
+                      if (!disabled) toggle(option)
+                    }}
+                  >
+                    <span className="board-assignee__mark">
+                      {option.who ? <Avatar name={option.who} /> : null}
+                    </span>
+                    <span className="board-assignee__name" dir="auto">
+                      {option.label}
+                    </span>
+                    <span className="board-assignee__count">
+                      {disabled ? NO_IDENTITY : `${option.runs} ${option.runs === 1 ? 'run' : 'runs'}`}
+                    </span>
+                    {on && <CheckIcon />}
+                  </button>
+                )
+              })
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** lucide `ticket`: a delivery that went no further than the ticket it named. */
 function TicketIcon(): JSX.Element {
   return (
@@ -286,6 +491,12 @@ export interface BoardProps {
   runs: RunSummary[]
   /** The workspace's tracker and helpdesk, named in each card's number tooltip. */
   sources?: SourcesSummary
+  /**
+   * Who the workspace thinks the reader is, from its config summary. Absent
+   * until the summary has been read, and empty for a workspace that can name
+   * nobody — which is what disables Me on the assignee menu.
+   */
+  me?: MeSummary
   queueUnsupported: boolean
   loading: boolean
   inbound?: InboundDelivery[]
@@ -301,8 +512,8 @@ export interface BoardProps {
  * The lanes read the store's runs; the one thing the screen asks the transport
  * for itself is the Queue lane, which is the tracker's answer to "what is
  * assigned to me" rather than every ticket in the project. Everything past
- * Queue is a run, and a run already says whose ticket it is, so the Mine quick
- * filter costs nothing.
+ * Queue is a run, and a run already says whose ticket it is, so the assignee
+ * menu is built and applied without a second call to the tracker.
  */
 export default function Board(props: BoardProps): JSX.Element {
   const {
@@ -312,6 +523,7 @@ export default function Board(props: BoardProps): JSX.Element {
     tickets,
     runs,
     sources,
+    me,
     queueUnsupported,
     loading,
     inbound,
@@ -323,7 +535,8 @@ export default function Board(props: BoardProps): JSX.Element {
   // The field shows every keystroke; the lanes narrow once the typist pauses.
   const applied = useDebounced(filter, FILTER_DEBOUNCE_MS)
   const [filtersOpen, setFiltersOpen] = useState(false)
-  const [owner, setOwner] = useState<Owner>('all')
+  /** Whose work to show. Empty is anyone's, which is how the board opens. */
+  const [assignees, setAssignees] = useState<Set<string>>(() => new Set())
   const [kind, setKind] = useState<KindFilter>('all')
   const filtersId = useId()
   const show = useSyncExternalStore(
@@ -373,20 +586,36 @@ export default function Board(props: BoardProps): JSX.Element {
   // it reads in minutes — so the tick re-draws a few words and not the board.
   const agePeriod = Date.now() - latest < 60_000 ? 1000 : 15_000
 
-  // Mine costs no call: a run carries whether its ticket is the reader's, and
-  // every ticket in the Queue lane was asked for by that name. A service that
-  // predates the field says nothing about ownership for any run, and then the
-  // filter narrows nothing rather than emptying the board.
+  // Filtering by a person costs no call: a run carries whether its ticket is
+  // the reader's, and every ticket in the Queue lane was asked for by that
+  // name. A service that predates the field says nothing about ownership for
+  // any run, and then Me narrows nothing rather than emptying the board.
   const mineKeys = useMemo(() => new Set((queued ?? []).map((t) => t.key)), [queued])
   const ownershipKnown = useMemo(() => runs.some((r) => r.mine !== undefined), [runs])
   const isMine = (card: BoardCard): boolean =>
     card.kind === 'run' ? !ownershipKnown || card.run.mine === true : mineKeys.has(card.key)
 
+  const identity = identityOf(me)
+  const options = useMemo(
+    () => assigneeOptions(runs, queued ?? [], mineKeys, me),
+    [runs, queued, mineKeys, me],
+  )
+
+  /** The spelling a card is drawn under, folded to the menu's row ids. */
+  const ownerOf = (card: BoardCard): string =>
+    foldName(card.kind === 'run' ? (card.run.assignee ?? '') : card.ticket.assignee)
+
+  const byAssignee = (card: BoardCard): boolean => {
+    if (assignees.size === 0) return true
+    if (assignees.has(ME) && isMine(card)) return true
+    return assignees.has(ownerOf(card)) && !isMine(card)
+  }
+
   const keep = (card: BoardCard): boolean =>
-    matches(card, applied) && ofKind(card, kind) && (owner !== 'mine' || isMine(card))
+    matches(card, applied) && ofKind(card, kind) && byAssignee(card)
 
   const deliveries = inbound ?? []
-  const filtering = applied !== '' || kind !== 'all' || owner === 'mine'
+  const filtering = applied !== '' || kind !== 'all' || assignees.size > 0
   const shownRuns = columns.reduce(
     (total, column) => total + column.cards.filter((c) => c.kind === 'run' && keep(c)).length,
     0,
@@ -464,11 +693,11 @@ export default function Board(props: BoardProps): JSX.Element {
 
       {filtersOpen && (
         <div id={filtersId} className="board-filters">
-          <SegmentedControl
-            label="Show"
-            options={OWNER_OPTIONS}
-            value={owner}
-            onChange={(id) => setOwner(id as Owner)}
+          <AssigneeMenu
+            options={options}
+            selected={assignees}
+            identity={identity}
+            onChange={setAssignees}
           />
           <SegmentedControl
             label="Kind"
@@ -476,10 +705,11 @@ export default function Board(props: BoardProps): JSX.Element {
             value={kind}
             onChange={(id) => setKind(id as KindFilter)}
           />
-          {!ownershipKnown && runs.length > 0 ? (
+          {identity === '' ? (
+            <p className="board-filters__note">{NO_IDENTITY}</p>
+          ) : !ownershipKnown && runs.length > 0 ? (
             <p className="board-filters__note">
-              This workspace's account names nobody, so no run can be called yours and every run is
-              shown.
+              This service records no owner on a run, so every run is shown whoever is picked.
             </p>
           ) : null}
         </div>
@@ -499,7 +729,9 @@ export default function Board(props: BoardProps): JSX.Element {
                   : filtering
                     ? applied
                       ? `Nothing here matches “${applied}”.`
-                      : 'Nothing here matches the filters.'
+                      : assignees.size > 0 && kind === 'all'
+                        ? `No runs assigned to ${selectedNames(assignees, options)}.`
+                        : 'Nothing here matches the filters.'
                     : column.empty
 
           return (
@@ -508,7 +740,13 @@ export default function Board(props: BoardProps): JSX.Element {
               lane={column.id}
               title={column.name}
               count={cards.length}
-              note={queue && !queueUnsupported ? 'assigned to you' : undefined}
+              note={
+                queue && !queueUnsupported
+                  ? identity
+                    ? 'assigned to you'
+                    : 'assigned to you · set who you are in Settings'
+                  : undefined
+              }
               empty={emptyText}
             >
               {cards.length === 0
