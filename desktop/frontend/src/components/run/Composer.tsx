@@ -1,5 +1,8 @@
-import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
-import Button from '../../ui/button'
+import { useEffect, useState } from 'react'
+import type { RunKind } from '../../api/types'
+import ChipMenu from '../composer/ChipMenu'
+import ComposerCard from '../composer/ComposerCard'
+import { ACCESS, MODES, accessOf } from '../composer/modes'
 import ModelPicker from '../../ui/model-picker'
 
 /** What the composer's one button does right now. */
@@ -20,6 +23,8 @@ export interface ComposerProps {
   onSend: (text: string) => void
   provider: string
   model: string
+  /** The run's kind: the Mode chip's word, and what decides the Access chip's. */
+  kind?: RunKind
   /** Clears the text once a send succeeded. Bump it. */
   sentCount: number
 }
@@ -27,12 +32,14 @@ export interface ComposerProps {
 /**
  * The bottom of the transcript: where the operator talks back.
  *
- * One box, one button, and the button's word is the run's state — Answer
- * while the agent is waiting on a question, Steer once the run has finished,
- * and disabled with the reason while it is working or when the provider
- * refuses to be steered. The button is this screen's one filled control and
- * it stays beside the text it sends; the sidebar's New session steps down
- * while it is on screen.
+ * The same card New session draws, with the bar's chips turned into facts:
+ * Model is the run's provider and model and cannot change, since a steer
+ * resumes the session it has; Mode is the run's kind; Access is the posture
+ * that kind ran with. The round send button's word is the run's state —
+ * Answer while the agent is waiting on a question, Steer once the run has
+ * finished, and off with the reason while it is working or when the
+ * provider refuses to be steered. The button is this screen's one filled
+ * control; the sidebar's New session steps down while it is on screen.
  *
  * Cmd or Ctrl with Enter sends, so a person typing does not have to reach
  * for the mouse; Enter alone is a new line, because an answer to an agent's
@@ -45,11 +52,10 @@ export default function Composer({
   onSend,
   provider,
   model,
+  kind,
   sentCount,
 }: ComposerProps) {
   const [text, setText] = useState('')
-  const id = useId()
-  const box = useRef<HTMLTextAreaElement | null>(null)
 
   // A send that went through empties the box; one that failed keeps the
   // words so they can be sent again.
@@ -58,7 +64,7 @@ export default function Composer({
   }, [sentCount])
 
   const trimmed = text.trim()
-  const label = mode.kind === 'answer' ? 'Answer' : mode.kind === 'steer' ? 'Steer' : 'Steer'
+  const label = mode.kind === 'answer' ? 'Answer' : 'Steer'
   const needsText = mode.kind === 'steer' || (mode.kind === 'answer' && mode.question !== '')
   const disabled = mode.kind === 'disabled' || (needsText && trimmed === '')
   const title =
@@ -68,7 +74,7 @@ export default function Composer({
         ? mode.kind === 'answer'
           ? 'Type the answer first'
           : 'Type the instruction first'
-        : undefined
+        : `${label} (⌘↵)`
   const placeholder =
     mode.kind === 'answer'
       ? mode.question
@@ -78,69 +84,58 @@ export default function Composer({
         ? 'What should the agent do next?'
         : mode.reason
 
-  function send(): void {
-    if (disabled || busy) return
-    onSend(trimmed)
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLTextAreaElement>): void {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      send()
-    }
-  }
-
   return (
-    <form
-      className="composer"
-      aria-label={label}
-      data-mode={mode.kind}
-      onSubmit={(e) => {
-        e.preventDefault()
-        send()
-      }}
-    >
-      <label htmlFor={id} className="visually-hidden">
-        {label}
-      </label>
-      <textarea
-        id={id}
-        ref={box}
-        className="composer-text"
+    <div className="session-composer" data-mode={mode.kind}>
+      <ComposerCard
+        name={label}
+        label={label}
         value={text}
+        onChange={setText}
         placeholder={placeholder}
         disabled={mode.kind === 'disabled'}
-        rows={3}
-        dir="auto"
-        onChange={(e) => setText(e.target.value)}
-        onKeyDown={onKeyDown}
+        error={error}
+        chips={
+          <>
+            {/* A steer or an answer continues the run this session has, on the
+                model it has, so the chip states the pair and cannot change it. */}
+            <ModelPicker
+              provider={provider}
+              model={model}
+              unknownAs="model unknown"
+              readOnly="A steer resumes the same session, so the provider and model cannot change here"
+            />
+            {kind ? (
+              <>
+                <ChipMenu
+                  label="Mode"
+                  value={kind}
+                  items={MODES}
+                  readOnly="The run's kind does not change; start another session for a different one"
+                />
+                <ChipMenu
+                  label="Access"
+                  value={accessOf(kind)}
+                  items={ACCESS}
+                  readOnly={
+                    kind === 'fix'
+                      ? 'This run writes in its linked worktree'
+                      : 'This run reads the workspace and writes nothing'
+                  }
+                />
+              </>
+            ) : null}
+          </>
+        }
+        aside={mode.kind === 'disabled' ? mode.reason : undefined}
+        send={{
+          label,
+          busyLabel: mode.kind === 'answer' ? 'Answering…' : 'Steering…',
+          busy,
+          disabled,
+          title,
+          onClick: () => onSend(trimmed),
+        }}
       />
-      {error ? (
-        <p className="composer-error" role="alert">
-          {error}
-        </p>
-      ) : null}
-      <div className="composer-bar">
-        {/* A steer or an answer continues the run this session has, on the
-            model it has, so the chip states the pair and cannot change it. */}
-        <ModelPicker
-          provider={provider}
-          model={model}
-          unknownAs="model unknown"
-          readOnly="A steer resumes the same session, so the provider and model cannot change here"
-        />
-        {mode.kind === 'disabled' ? <span className="composer-reason">{mode.reason}</span> : null}
-        <Button
-          type="submit"
-          variant="primary"
-          shortcut="⌘↵"
-          busy={busy}
-          disabled={disabled}
-          title={title}
-        >
-          {busy ? (mode.kind === 'answer' ? 'Answering…' : 'Steering…') : label}
-        </Button>
-      </div>
-    </form>
+    </div>
   )
 }

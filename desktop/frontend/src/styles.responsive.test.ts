@@ -76,6 +76,7 @@ describe('the breakpoints', () => {
       'components/shell/shell.css',
       'components/shell/sidebar.css',
       'components/run/run.css',
+      'components/composer/composer.css',
       'screens/board.css',
       'screens/eval.css',
       'screens/library.css',
@@ -104,10 +105,10 @@ describe('the breakpoints', () => {
 describe('the sidebar', () => {
   const css = sheet('components/shell/sidebar.css')
 
-  it('is a 56px rail when collapsed, and the recent list scrolls before the footer card moves', () => {
+  it('is a 56px rail when collapsed, and the sessions list scrolls before the footer card moves', () => {
     expect(rule(css, ".sd-sidebar[data-collapsed='true']")).toContain('flex-basis: 56px')
-    expect(rule(css, '.sd-sidebar__recent')).toContain('overflow-y: auto')
-    expect(rule(css, '.sd-sidebar__recent')).toContain('min-block-size: 0')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('overflow-y: auto')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('min-block-size: 0')
     expect(rule(css, '.sd-sidebar__nav')).toContain('flex: 0 0 auto')
   })
 
@@ -210,8 +211,10 @@ describe('the session', () => {
   })
 
   it('never lets the composer shrink below 96px', () => {
-    expect(rule(css, '.composer-text')).toContain('min-block-size: 96px')
-    expect(rule(css, '.composer')).toContain('flex: 0 0 auto')
+    const composer = sheet('components/composer/composer.css')
+    expect(rule(composer, '.composer-text')).toContain('min-block-size: 96px')
+    expect(rule(composer, '.composer')).toContain('flex: 0 0 auto')
+    expect(rule(css, '.session-composer')).toContain('flex: 0 0 auto')
   })
 })
 
@@ -280,13 +283,10 @@ describe('new session', () => {
     expect(rule(css, '.new-session__col')).toContain('inline-size: min(880px, calc(100% - 48px))')
   })
 
-  it('wraps the control row to two lines below 1200 with Start still at the right', () => {
-    expect(rule(css, ".new-session__controls > .sd-button[data-variant='primary']")).toContain(
-      'margin-inline-start: auto',
-    )
-    const compact = atMost(css, BANDS.compact)
-    expect(rule(compact, '.new-session__controls::before')).toContain('flex-basis: 100%')
-    expect(rule(compact, '.new-session__controls > .new-session__chip')).toContain('order: 3')
+  it('lets the composer bar wrap its chips with the send still at the right', () => {
+    const composer = sheet('components/composer/composer.css')
+    expect(rule(composer, '.composer-bar__chips')).toContain('flex-wrap: wrap')
+    expect(rule(composer, '.composer-send')).toContain('margin-inline-start: auto')
   })
 })
 

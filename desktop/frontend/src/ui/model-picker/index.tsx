@@ -1,8 +1,19 @@
-import { useCallback, useEffect, useId, useRef, useState, type KeyboardEvent } from 'react'
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type ReactNode,
+} from 'react'
+import { useAnchor } from '../../lib/anchor'
 import {
   CLI_DEFAULT,
   describeModel,
   hintFor,
+  modelLabel,
   modelsFor,
   PICKABLE_PROVIDERS,
   type ModelChoice,
@@ -23,14 +34,14 @@ export interface ModelPickerProps {
   provider: string
   /** The override so far; '' is the CLI default. */
   model: string
-  /** The workspace's configured provider, marked "workspace default" in the list. */
+  /** The workspace's configured provider, marked "workspace default" in the rail. */
   defaultProvider?: string
   /** The workspace's configured model, shown while no override names one. */
   defaultModel?: string
   /**
-   * What the newest run on the provider reported, appended to the chip as
-   * "last used …" when nothing names a model — so a reader learns what
-   * "CLI default" turned out to be last time.
+   * What the newest run on the provider reported: named under the CLI
+   * default row and in the chip's title when nothing names a model, so a
+   * reader learns what "CLI default" turned out to be last time.
    */
   lastUsed?: string
   /** Called on every change; the choice is applied as it is made. */
@@ -47,10 +58,6 @@ export interface ModelPickerProps {
   disabled?: boolean
 }
 
-/** The "Other…" row, which is the free-text input. */
-const OTHER = 'other'
-type ModelRow = ModelChoice | typeof OTHER
-
 /**
  * The effective pair: an override wins outright, and a provider override
  * with no model is that provider's CLI default rather than the workspace's
@@ -66,20 +73,128 @@ export function effectivePair(
   return { provider: defaultProvider, model: model || defaultModel }
 }
 
-function CheckIcon(): JSX.Element {
+/** One row of the list: a curated model on a provider. */
+export interface ModelRow extends ModelChoice {
+  provider: string
+}
+
+/** The shortcut the first nine rows get, ⌘1 … ⌘9. */
+export const SHORTCUT_ROWS = 9
+
+const FAVOURITES_KEY = 'sirdar.modelFavourites.'
+
+/** localStorage is absent in some tests and can throw in a locked-down webview. */
+export function readFavourites(provider: string): string[] {
+  try {
+    const raw = globalThis.localStorage?.getItem(FAVOURITES_KEY + provider)
+    const parsed: unknown = raw ? JSON.parse(raw) : []
+    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string') : []
+  } catch {
+    return []
+  }
+}
+
+function writeFavourites(provider: string, ids: string[]): void {
+  try {
+    globalThis.localStorage?.setItem(FAVOURITES_KEY + provider, JSON.stringify(ids))
+  } catch {
+    // A favourite that cannot be remembered still holds for this session.
+  }
+}
+
+/**
+ * Whether a row answers a search: by its label, its id, the provider's
+ * config name or the vendor's name, case folded.
+ */
+export function matchesQuery(row: ModelRow, query: string): boolean {
+  const q = query.trim().toLowerCase()
+  if (!q) return true
+  return [row.label, row.id, row.provider, providerName(row.provider)].some((s) =>
+    s.toLowerCase().includes(q),
+  )
+}
+
+/**
+ * The rows the list shows, in order: the favourites first, then the rest.
+ * With no query, the chosen provider's own list; with one, every pickable
+ * provider's curated rows that answer it, so a reader who types "gpt" finds
+ * Codex's model without walking the rail first.
+ */
+export function listRows(
+  provider: string,
+  query: string,
+  favourites: (provider: string) => string[],
+): { favourites: ModelRow[]; rest: ModelRow[] } {
+  const providers = query.trim() ? PICKABLE_PROVIDERS : [provider]
+  const all: ModelRow[] = []
+  for (const p of providers) {
+    for (const m of modelsFor(p)) all.push({ ...m, provider: p })
+  }
+  const shown = all.filter((row) => matchesQuery(row, query))
+  const starred = new Map(providers.map((p) => [p, new Set(favourites(p))] as const))
+  return {
+    favourites: shown.filter((row) => starred.get(row.provider)?.has(row.id)),
+    rest: shown.filter((row) => !starred.get(row.provider)?.has(row.id)),
+  }
+}
+
+function Icon({ children, className }: { children: ReactNode; className?: string }): JSX.Element {
   return (
     <svg
-      className="sd-model-picker__check"
+      className={className}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
-      strokeWidth="2"
+      strokeWidth="1.8"
       strokeLinecap="round"
       strokeLinejoin="round"
       aria-hidden="true"
       focusable="false"
     >
+      {children}
+    </svg>
+  )
+}
+
+function ChevronIcon(): JSX.Element {
+  return (
+    <Icon className="sd-model-chip__chevron">
+      <path d="m6 9 6 6 6-6" />
+    </Icon>
+  )
+}
+
+function SearchIcon(): JSX.Element {
+  return (
+    <Icon className="sd-model-picker__search-icon">
+      <circle cx="11" cy="11" r="7" />
+      <path d="m20 20-3.5-3.5" />
+    </Icon>
+  )
+}
+
+function CheckIcon(): JSX.Element {
+  return (
+    <Icon className="sd-model-picker__check">
       <path d="m5 12 5 5 9-10" />
+    </Icon>
+  )
+}
+
+/** lucide `star`; filled when the row is a favourite. */
+function StarIcon({ filled }: { filled: boolean }): JSX.Element {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill={filled ? 'currentColor' : 'none'}
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <path d="M12 3.5l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17.5l-5.4 2.9 1-6.1L3.2 10l6.1-.9z" />
     </svg>
   )
 }
@@ -88,17 +203,16 @@ function CheckIcon(): JSX.Element {
  * Which provider and model a session will run on, and the popover that
  * changes it.
  *
- * The chip states the pair the way the mocks write it — the mark, then
- * "claude · Sonnet 5" in the ledger face — and opens a popover with the
- * providers down the left, the chosen provider's models on the right, a
- * free-text row for a name the list does not have, and Done. Every choice
- * applies as it is made, so the chip is always the truth; Done, Escape and
- * a click outside all close, and focus goes back to the chip.
- *
- * The two lists are single-select listboxes: one tab stop each, the arrows
- * move the selection with focus, Home and End jump. Enter on a model, or in
- * the free-text row, is Done. Enter on a provider moves to its models, since
- * the model is still to be chosen.
+ * The chip is the mark, the model's curated label and a chevron; its
+ * accessible name and title carry the whole pair, "Model: claude · Sonnet
+ * 5". It opens a 480-wide popover pinned to the viewport beside it
+ * (`lib/anchor`): a search field across the top, a 48px rail of provider
+ * marks down the left, and the list — the favourites under their own
+ * heading, then CLI default, the curated ids, and Other… with its free-text
+ * box. The first nine rows carry ⌘1…⌘9 and answer to them while the popover
+ * is open; a star on each row keeps a favourite in localStorage, per
+ * provider. Every choice applies as it is made, so the chip is always the
+ * truth; picking a row closes and hands focus back to the chip.
  */
 export default function ModelPicker({
   provider,
@@ -113,17 +227,20 @@ export default function ModelPicker({
   disabled = false,
 }: ModelPickerProps): JSX.Element {
   const [open, setOpen] = useState(false)
+  const [query, setQuery] = useState('')
+  /** Bumped when a star is toggled, so the list re-reads the favourites. */
+  const [starred, setStarred] = useState(0)
+  // The wrapper is the anchor: the popover is fixed, so it adds nothing to
+  // the wrapper's box, which is the trigger's own.
   const root = useRef<HTMLSpanElement | null>(null)
-  const providerList = useRef<HTMLDivElement | null>(null)
-  const modelList = useRef<HTMLDivElement | null>(null)
+  const popover = useRef<HTMLDivElement | null>(null)
+  const search = useRef<HTMLInputElement | null>(null)
+  const list = useRef<HTMLDivElement | null>(null)
   const input = useRef<HTMLInputElement | null>(null)
   const id = useId()
 
   const pair = effectivePair(provider, model, defaultProvider, defaultModel)
-  const models = modelsFor(pair.provider)
-  const curated = models.some((m) => m.id === pair.model)
-  /** The row that is checked in the model list. */
-  const checked = curated ? pair.model : OTHER
+  const curated = modelsFor(pair.provider).some((m) => m.id === pair.model)
   const [text, setText] = useState(curated ? '' : pair.model)
 
   // A choice made elsewhere — the workspace changing under the chip — is
@@ -133,28 +250,45 @@ export default function ModelPicker({
   }, [curated, pair.model])
 
   const value = describeModel(pair.provider, pair.model, lastUsed, unknownAs)
+  const label = !pair.provider
+    ? 'not set'
+    : pair.model
+      ? modelLabel(pair.provider, pair.model)
+      : (unknownAs ?? CLI_DEFAULT.label)
+
+  useAnchor(open, root, popover)
 
   const close = useCallback(() => {
     setOpen(false)
+    setQuery('')
     root.current?.querySelector<HTMLElement>('[aria-haspopup]')?.focus()
   }, [])
 
-  // The chosen provider takes focus when the popover opens, so the arrows
-  // work at once; the trigger gets it back when it closes.
+  // The search field takes focus when the popover opens, so typing filters
+  // at once; the chip gets it back when it closes.
   useEffect(() => {
-    if (!open) return
-    const chosen = providerList.current?.querySelector<HTMLElement>('[aria-selected="true"]')
-    ;(chosen ?? providerList.current)?.focus()
+    if (open) search.current?.focus()
   }, [open])
 
   useEffect(() => {
     if (!open) return
     function onDown(event: globalThis.MouseEvent): void {
-      if (root.current && !root.current.contains(event.target as Node)) setOpen(false)
+      const target = event.target as Node
+      if (root.current?.contains(target) || popover.current?.contains(target)) return
+      setOpen(false)
+      setQuery('')
     }
     document.addEventListener('mousedown', onDown)
     return () => document.removeEventListener('mousedown', onDown)
   }, [open])
+
+  const { favourites, rest } = useMemo(
+    () => listRows(pair.provider, query, readFavourites),
+    // `starred` and `open` carry no value of their own: each re-reads the
+    // favourites out of storage, after a star or on opening.
+    [pair.provider, query, starred, open],
+  )
+  const rows = [...favourites, ...rest]
 
   function emit(next: ModelChoicePair): void {
     // The workspace's own provider is the absence of an override.
@@ -170,13 +304,10 @@ export default function ModelPicker({
     emit({ provider: next, model: '' })
   }
 
-  function pickModel(row: ModelRow): void {
-    if (row === OTHER) {
-      input.current?.focus()
-      return
-    }
+  function pickRow(row: ModelRow): void {
     setText('')
-    emit({ provider: pair.provider, model: row.id })
+    emit({ provider: row.provider, model: row.id })
+    close()
   }
 
   function typeModel(raw: string): void {
@@ -184,71 +315,104 @@ export default function ModelPicker({
     emit({ provider: pair.provider, model: raw.trim() })
   }
 
-  /**
-   * The listbox pattern: the arrows move focus and the selection together
-   * from the row that has focus, Home and End jump, and a run past either
-   * end wraps. `fallback` is the selected row, for a list nothing in has
-   * focus yet.
-   */
-  function walk<T>(
-    event: KeyboardEvent<HTMLDivElement>,
-    items: T[],
-    fallback: number,
-    pick: (item: T) => void,
-  ): void {
-    const options = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')]
-    const focused = options.indexOf(document.activeElement as HTMLElement)
-    const at = focused >= 0 ? focused : fallback
+  function toggleFavourite(row: ModelRow): void {
+    const have = readFavourites(row.provider)
+    const next = have.includes(row.id) ? have.filter((x) => x !== row.id) : [...have, row.id]
+    writeFavourites(row.provider, next)
+    setStarred((n) => n + 1)
+  }
+
+  function isSelected(row: ModelRow): boolean {
+    return row.provider === pair.provider && row.id === pair.model
+  }
+
+  const onOther = pair.provider !== '' && !curated
+
+  function options(): HTMLElement[] {
+    return [...(list.current?.querySelectorAll<HTMLElement>('[role="option"]') ?? [])]
+  }
+
+  function focusOption(index: number): void {
+    const all = options()
+    if (all.length === 0) return
+    all[((index % all.length) + all.length) % all.length]?.focus()
+  }
+
+  /** The listbox pattern: the arrows move focus, Home and End jump, Enter picks, f stars. */
+  function onListKey(event: KeyboardEvent<HTMLDivElement>): void {
+    const all = options()
+    const at = all.indexOf(document.activeElement as HTMLElement)
+    switch (event.key) {
+      case 'ArrowDown':
+        event.preventDefault()
+        focusOption(at + 1)
+        return
+      case 'ArrowUp':
+        event.preventDefault()
+        if (at <= 0) search.current?.focus()
+        else focusOption(at - 1)
+        return
+      case 'Home':
+        event.preventDefault()
+        focusOption(0)
+        return
+      case 'End':
+        event.preventDefault()
+        focusOption(all.length - 1)
+        return
+      case 'Enter':
+      case ' ': {
+        if (at < 0) return
+        event.preventDefault()
+        if (at < rows.length) pickRow(rows[at])
+        else input.current?.focus()
+        return
+      }
+      case 'f':
+      case 'F':
+        if (at >= 0 && at < rows.length && !event.metaKey && !event.ctrlKey) {
+          event.preventDefault()
+          toggleFavourite(rows[at])
+        }
+        return
+      default:
+    }
+  }
+
+  function onRailKey(event: KeyboardEvent<HTMLDivElement>): void {
+    const providers: string[] = [...PICKABLE_PROVIDERS]
+    const at = providers.indexOf(pair.provider)
     let to = -1
     switch (event.key) {
       case 'ArrowDown':
-        to = (at + 1) % items.length
+        to = (at + 1) % providers.length
         break
       case 'ArrowUp':
-        to = (at - 1 + items.length) % items.length
+        to = (at - 1 + providers.length) % providers.length
         break
       case 'Home':
         to = 0
         break
       case 'End':
-        to = items.length - 1
+        to = providers.length - 1
         break
       default:
         return
     }
     event.preventDefault()
-    pick(items[to])
-    options[to]?.focus()
+    pickProvider(providers[to])
+    const tabs = event.currentTarget.querySelectorAll<HTMLElement>('[role="tab"]')
+    tabs[to]?.focus()
   }
 
-  function onProviderKey(event: KeyboardEvent<HTMLDivElement>): void {
-    if (event.key === 'Enter') {
+  function onSearchKey(event: KeyboardEvent<HTMLInputElement>): void {
+    if (event.key === 'ArrowDown') {
       event.preventDefault()
-      const chosen = modelList.current?.querySelector<HTMLElement>('[aria-selected="true"]')
-      ;(chosen ?? modelList.current)?.focus()
-      return
-    }
-    const providers: string[] = [...PICKABLE_PROVIDERS]
-    walk(event, providers, providers.indexOf(pair.provider), pickProvider)
-  }
-
-  function onModelKey(event: KeyboardEvent<HTMLDivElement>): void {
-    const rows: ModelRow[] = [...models, OTHER]
-    if (event.key === 'Enter') {
+      focusOption(0)
+    } else if (event.key === 'Enter' && rows.length > 0) {
       event.preventDefault()
-      // Enter on Other… steps into the box; on a model it is Done.
-      const options = [...event.currentTarget.querySelectorAll<HTMLElement>('[role="option"]')]
-      const focused = options.indexOf(document.activeElement as HTMLElement)
-      const onOther = focused >= 0 ? rows[focused] === OTHER : checked === OTHER
-      if (onOther) input.current?.focus()
-      else close()
-      return
+      pickRow(rows[0])
     }
-    const at = rows.findIndex((r) => (r === OTHER ? checked === OTHER : r.id === checked))
-    // Arrowing onto Other… lands on the row; the box is a step further in.
-    walk(event, rows, at, (row) => {
-      if (row !== OTHER) pickModel(row)
-    })
   }
 
   function onPopoverKey(event: KeyboardEvent<HTMLDivElement>): void {
@@ -256,20 +420,74 @@ export default function ModelPicker({
       event.preventDefault()
       event.stopPropagation()
       close()
+      return
+    }
+    // ⌘1 … ⌘9 (Ctrl on a keyboard without a command key) pick a row outright.
+    if ((event.metaKey || event.ctrlKey) && /^[1-9]$/.test(event.key)) {
+      const row = rows[Number(event.key) - 1]
+      if (row) {
+        event.preventDefault()
+        pickRow(row)
+      }
     }
   }
 
+  const popoverId = `${id}-popover`
+
   const chipBody = (
     <>
-      <span className="sd-model-chip__label">Model</span>
       {pair.provider ? <ProviderMark provider={pair.provider} size="sm" /> : null}
       <span className="sd-model-chip__value" dir="ltr">
-        {value}
+        {label}
       </span>
     </>
   )
 
-  const popoverId = `${id}-popover`
+  function renderRow(row: ModelRow, index: number): JSX.Element {
+    const selected = isSelected(row)
+    const starred = favourites.includes(row)
+    const shortcut = index < SHORTCUT_ROWS ? `⌘${index + 1}` : ''
+    const note = row.id === '' && row.provider === pair.provider && lastUsed ? `last used ${lastUsed}` : ''
+    return (
+      <div
+        key={`${row.provider}/${row.id || CLI_DEFAULT.label}`}
+        role="option"
+        className="sd-model-picker__row"
+        aria-selected={selected}
+        aria-keyshortcuts={shortcut ? `Meta+${index + 1}` : undefined}
+        tabIndex={-1}
+        onClick={() => pickRow(row)}
+      >
+        <button
+          type="button"
+          className="sd-model-picker__star"
+          aria-label={`${starred ? 'Unfavourite' : 'Favourite'} ${row.label}`}
+          aria-pressed={starred}
+          tabIndex={-1}
+          onClick={(event) => {
+            event.stopPropagation()
+            toggleFavourite(row)
+          }}
+        >
+          <StarIcon filled={starred} />
+        </button>
+        <span className="sd-model-picker__text">
+          <span className="sd-model-picker__label">{row.label}</span>
+          <span className="sd-model-picker__meta" dir="ltr">
+            <ProviderMark provider={row.provider} size="sm" />
+            <span>{row.provider}</span>
+            {note ? <span className="sd-model-picker__note">· {note}</span> : null}
+          </span>
+        </span>
+        {selected ? <CheckIcon /> : null}
+        {shortcut ? (
+          <kbd className="sd-model-picker__kbd" aria-hidden="true">
+            {shortcut}
+          </kbd>
+        ) : null}
+      </div>
+    )
+  }
 
   return (
     <span className="sd-model-picker" ref={root}>
@@ -303,133 +521,138 @@ export default function ModelPicker({
           aria-haspopup="dialog"
           aria-expanded={open}
           aria-controls={open ? popoverId : undefined}
-          title="Choose the provider and model"
+          aria-label={`Model ${value}`}
+          title={`Model: ${value}`}
           onClick={() => setOpen((was) => !was)}
         >
           {chipBody}
+          <ChevronIcon />
         </button>
       )}
 
       {open ? (
         <div
           id={popoverId}
+          ref={popover}
           className="sd-model-picker__popover"
           role="dialog"
           aria-label="Provider and model"
           onKeyDown={onPopoverKey}
         >
-          <div className="sd-model-picker__columns">
-            <div className="sd-model-picker__col">
-              <span className="sd-model-picker__heading" id={`${id}-providers`}>
-                Provider
-              </span>
-              <div
-                ref={providerList}
-                className="sd-model-picker__list"
-                role="listbox"
-                aria-labelledby={`${id}-providers`}
-                tabIndex={-1}
-                onKeyDown={onProviderKey}
-              >
-                {PICKABLE_PROVIDERS.map((p) => {
-                  const selected = p === pair.provider
-                  return (
-                    <div
-                      key={p}
-                      role="option"
-                      className="sd-model-picker__option"
-                      aria-selected={selected}
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => pickProvider(p)}
-                    >
-                      <ProviderMark provider={p} size="sm" label={providerName(p)} />
-                      <span className="sd-model-picker__name">{p}</span>
-                      {p === defaultProvider ? (
-                        <span className="sd-model-picker__tag">workspace default</span>
-                      ) : null}
-                      {selected ? <CheckIcon /> : null}
-                    </div>
-                  )
-                })}
-              </div>
+          <div className="sd-model-picker__search">
+            <SearchIcon />
+            <label className="visually-hidden" htmlFor={`${id}-search`}>
+              Search models
+            </label>
+            <input
+              ref={search}
+              id={`${id}-search`}
+              className="sd-model-picker__search-input"
+              type="search"
+              value={query}
+              placeholder="Search models"
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setQuery(e.target.value)}
+              onKeyDown={onSearchKey}
+            />
+          </div>
+
+          <div className="sd-model-picker__body">
+            <div
+              className="sd-model-picker__rail"
+              role="tablist"
+              aria-label="Provider"
+              aria-orientation="vertical"
+              onKeyDown={onRailKey}
+            >
+              {PICKABLE_PROVIDERS.map((p) => {
+                const selected = p === pair.provider
+                const name = providerName(p)
+                const isDefault = p === defaultProvider
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    role="tab"
+                    className="sd-model-picker__provider"
+                    aria-selected={selected}
+                    aria-label={isDefault ? `${name}, workspace default` : name}
+                    title={isDefault ? `${name} · workspace default` : name}
+                    tabIndex={selected ? 0 : -1}
+                    onClick={() => pickProvider(p)}
+                  >
+                    <ProviderMark provider={p} size="sm" label={name} />
+                  </button>
+                )
+              })}
             </div>
 
-            <div className="sd-model-picker__col">
-              <span className="sd-model-picker__heading" id={`${id}-models`}>
-                Model
-              </span>
-              <div
-                ref={modelList}
-                className="sd-model-picker__list"
-                role="listbox"
-                aria-labelledby={`${id}-models`}
-                tabIndex={-1}
-                onKeyDown={onModelKey}
-              >
-                {models.map((m) => {
-                  const selected = checked === m.id
-                  return (
-                    <div
-                      key={m.id || CLI_DEFAULT.label}
-                      role="option"
-                      className="sd-model-picker__option"
-                      aria-selected={selected}
-                      tabIndex={selected ? 0 : -1}
-                      onClick={() => {
-                        pickModel(m)
-                        close()
-                      }}
-                    >
-                      <span className="sd-model-picker__name">
-                        {m.label}
-                        {m.note ? <span className="sd-model-picker__note">{m.note}</span> : null}
-                      </span>
-                      {selected ? <CheckIcon /> : null}
-                    </div>
-                  )
-                })}
-                <div
-                  role="option"
-                  className="sd-model-picker__option"
-                  aria-selected={checked === OTHER}
-                  tabIndex={checked === OTHER ? 0 : -1}
-                  onClick={() => pickModel(OTHER)}
-                >
-                  <span className="sd-model-picker__name">Other…</span>
-                  {checked === OTHER ? <CheckIcon /> : null}
+            <div
+              ref={list}
+              className="sd-model-picker__list"
+              role="listbox"
+              aria-label="Model"
+              onKeyDown={onListKey}
+            >
+              {favourites.length > 0 ? (
+                <div role="group" aria-labelledby={`${id}-favourites`}>
+                  <span className="sd-model-picker__heading" id={`${id}-favourites`}>
+                    Favourites
+                  </span>
+                  {favourites.map((row, i) => renderRow(row, i))}
                 </div>
-              </div>
-              <div className="sd-model-picker__other">
-                <label className="visually-hidden" htmlFor={`${id}-other`}>
-                  Other model
-                </label>
-                <input
-                  ref={input}
-                  id={`${id}-other`}
-                  className="sd-model-picker__input"
-                  value={text}
-                  placeholder="Type a model id"
-                  autoComplete="off"
-                  spellCheck={false}
-                  dir="ltr"
-                  onChange={(e) => typeModel(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault()
-                      close()
-                    }
-                  }}
-                />
-                {hintFor(pair.provider) ? (
-                  <p className="sd-model-picker__hint">{hintFor(pair.provider)}</p>
+              ) : null}
+              <div role="group" aria-labelledby={`${id}-models`}>
+                <span className="sd-model-picker__heading" id={`${id}-models`}>
+                  {query.trim() ? 'Matches' : 'Models'}
+                </span>
+                {rest.map((row, i) => renderRow(row, favourites.length + i))}
+                {rows.length === 0 ? (
+                  <p className="sd-model-picker__none">No model matches “{query.trim()}”.</p>
                 ) : null}
               </div>
+              <div
+                role="option"
+                className="sd-model-picker__row sd-model-picker__row--other"
+                aria-selected={onOther}
+                tabIndex={-1}
+                onClick={() => input.current?.focus()}
+              >
+                <span className="sd-model-picker__text">
+                  <span className="sd-model-picker__label">Other…</span>
+                  <label className="visually-hidden" htmlFor={`${id}-other`}>
+                    Other model
+                  </label>
+                  <input
+                    ref={input}
+                    id={`${id}-other`}
+                    className="sd-model-picker__input"
+                    value={text}
+                    placeholder={`Type a model id for ${pair.provider || 'the provider'}`}
+                    autoComplete="off"
+                    spellCheck={false}
+                    dir="ltr"
+                    onChange={(e) => typeModel(e.target.value)}
+                    onKeyDown={(e) => {
+                      // The row's own keys must not walk the list.
+                      e.stopPropagation()
+                      if (e.key === 'Escape') {
+                        e.preventDefault()
+                        close()
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault()
+                        close()
+                      }
+                    }}
+                  />
+                  {hintFor(pair.provider) ? (
+                    <span className="sd-model-picker__hint">{hintFor(pair.provider)}</span>
+                  ) : null}
+                </span>
+                {onOther ? <CheckIcon /> : null}
+              </div>
             </div>
-          </div>
-          <div className="sd-model-picker__foot">
-            <Button variant="pale" size="sm" onClick={close}>
-              Done
-            </Button>
           </div>
         </div>
       ) : null}

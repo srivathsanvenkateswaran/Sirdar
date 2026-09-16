@@ -1,14 +1,10 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type KeyboardEvent,
-  type SVGProps,
-} from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type SVGProps } from 'react'
 import type { RunSummary, Ticket, Transport, Workspace } from '../api/types'
+import ChipMenu, { type ChipMenuItem } from '../components/composer/ChipMenu'
+import ComposerCard from '../components/composer/ComposerCard'
+import { ACCESS, MODES, accessOf, type SessionMode } from '../components/composer/modes'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import WorkspaceSwitcher from '../components/shell/WorkspaceSwitcher'
 import { parseTime, reasonOf, relativeTime } from '../lib/format'
 import { getRunJob, subscribeRunJobs } from '../lib/jobs'
 import { isQueueUnsupported } from '../store/appStore'
@@ -16,12 +12,9 @@ import Button from '../ui/button'
 import GroupLabel from '../ui/group-label'
 import ItemRow, { type ItemTone } from '../ui/item-row'
 import ModelPicker from '../ui/model-picker'
-import SearchBar from '../ui/search-bar'
-import SegmentedControl from '../ui/segmented-control'
 import './new-session.css'
 
-/** What a session does to a ticket, in the order the control lists them. */
-export type SessionMode = 'triage' | 'rca' | 'fix'
+export type { SessionMode } from '../components/composer/modes'
 
 /** The one-off overrides a start accepts; empty means the workspace's own. */
 export interface StartOverrides {
@@ -29,12 +22,6 @@ export interface StartOverrides {
   model?: string
   dryRun?: boolean
 }
-
-const MODES: { id: SessionMode; label: string }[] = [
-  { id: 'triage', label: 'Triage' },
-  { id: 'rca', label: 'RCA' },
-  { id: 'fix', label: 'Fix' },
-]
 
 /** How many of the tickets that landed are listed. */
 export const LANDED_LIMIT = 5
@@ -189,31 +176,41 @@ function HelpdeskIcon(): JSX.Element {
 }
 
 /**
- * Where every piece of work starts: a ticket key or URL, a mode, and Start.
+ * Where every piece of work starts: a ticket key or URL, a mode, and the
+ * send button.
  *
- * The bar takes a key or a tracker URL and the segmented control says what
- * to do with it. Triage always can; RCA and Fix start from a triage note, so
- * they are off — with the reason under the controls — until the key has
- * one. Start calls the mode's start through the store, then waits for the
- * run the job produces and opens it: the store pairs the first `run.updated`
- * for the key with the job id in `lib/jobs`, and this screen watches that
- * pairing rather than guessing from the key alone, which would open an
- * older run for the same ticket.
+ * The headline asks what to look at and names the workspace; the name is
+ * the workspace switcher, so a reader in the wrong repository changes it
+ * without leaving the sentence. Under it is one composer card: a textarea
+ * for a key, a tracker URL or a description, and a bar of three chips —
+ * Model (the picker), Mode (Triage, RCA or Fix) and Access (what the mode
+ * does to the tree; it explains and does not change) — with the round send
+ * button at the end. The button is the screen's one filled control and is
+ * off until the text holds a key: the transport carries no free-text
+ * instruction on a start, so a description alone is told a key is needed.
+ *
+ * Triage always can start; RCA and Fix start from a triage note, so their
+ * menu items are off, with the reason, until the key has one. Send calls the
+ * mode's start through the store, then waits for the run the job produces
+ * and opens it: the store pairs the first `run.updated` for the key with
+ * the job id in `lib/jobs`, and this screen watches that pairing rather
+ * than guessing from the key alone, which would open an older run for the
+ * same ticket.
  *
  * "Landed today" is the tracker's queue for the reader — `queue()` with
  * `assignee: me`, newest first, five at most — each row with a Triage button
- * that starts a triage the same way. The Playbook chip says which playbook
- * the session will get and is not a control; the Model chip says which
- * provider and model, and opens the picker that changes them. With no model
- * in the config the chip says "CLI default" and, when a run on that provider
- * has reported what that turned out to be, "last used <model>" after it.
- * Dry run, the one override left, lives under More options.
+ * that starts a triage the same way. Dry run, the one override left, lives
+ * under More options.
  */
 export default function NewSession(props: {
   transport: Transport
   workspaceId: string
-  /** The current workspace, for the model chip and the provider default. */
+  /** The current workspace, for the headline, the model chip and the provider default. */
   workspace?: Workspace
+  /** Every workspace, for the switcher the headline opens. */
+  workspaces?: Workspace[]
+  onSelectWorkspace?: (id: string) => void
+  onAddWorkspace?: () => void
   /** The workspace's runs, live from the store: what RCA and Fix are gated on. */
   runs: RunSummary[]
   /**
@@ -223,7 +220,17 @@ export default function NewSession(props: {
   onStart: (mode: SessionMode, key: string, overrides: StartOverrides) => Promise<string>
   onOpenRun: (runId: string) => void
 }): JSX.Element {
-  const { transport, workspaceId, workspace, runs, onStart, onOpenRun } = props
+  const {
+    transport,
+    workspaceId,
+    workspace,
+    workspaces = workspace ? [workspace] : [],
+    onSelectWorkspace = () => {},
+    onAddWorkspace = () => {},
+    runs,
+    onStart,
+    onOpenRun,
+  } = props
   const [text, setText] = useState('')
   const [mode, setMode] = useState<SessionMode>('triage')
   const [provider, setProvider] = useState('')
@@ -247,7 +254,6 @@ export default function NewSession(props: {
   const key = useMemo(() => extractKey(text), [text])
   const triaged = key ? hasTriageNote(runs, key) : true
   const busy = starting !== '' || awaiting !== ''
-  const newest = useMemo(() => newestRun(runs), [runs])
 
   // --- what landed --------------------------------------------------------
 
@@ -340,17 +346,16 @@ export default function NewSession(props: {
     return subscribeRunJobs(check)
   }, [awaiting, runs])
 
-  // --- what Start can do ------------------------------------------------
+  // --- what the send button can do ---------------------------------------
 
   const needsNote = key !== null && !triaged
   const noteReason = key ? `Needs a triage note for ${key} first` : ''
-  const disabledModes = needsNote ? { rca: noteReason, fix: noteReason } : undefined
   const canStart = key !== null && !(needsNote && mode !== 'triage') && !busy
 
   const reason = error
     ? error
     : text.trim() && key === null
-      ? 'Enter a ticket key like OMNI-2510, or a tracker URL that ends in one.'
+      ? 'A ticket key is needed to start — one like OMNI-2510, or a tracker URL that ends in one.'
       : needsNote
         ? `RCA and Fix need a triage note for ${key} first. Start a triage.`
         : ''
@@ -369,80 +374,83 @@ export default function NewSession(props: {
     placement: 'screen',
   })
 
-  function onKeyDown(e: KeyboardEvent<HTMLElement>): void {
-    if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-      e.preventDefault()
-      start()
-    }
-  }
-
   // What "CLI default" was last time, for the chip: the newest run on the
   // provider the session will use, whether that is the override or the
   // workspace's own.
   const chipProvider = provider || workspace?.provider || ''
   const lastUsed = useMemo(() => lastUsedModel(runs, chipProvider), [runs, chipProvider])
 
+  const modeItems: ChipMenuItem[] = MODES.map((m) => ({
+    ...m,
+    disabled: needsNote && m.id !== 'triage' ? noteReason : undefined,
+  }))
+  const access = accessOf(mode)
+
+  const sendTitle = !canStart && !busy
+    ? key === null
+      ? 'Paste a ticket key or URL first'
+      : needsNote
+        ? noteReason
+        : undefined
+    : 'Start (⌘↵)'
+
   return (
-    <section className="new-session" aria-label="New session" onKeyDown={onKeyDown}>
+    <section className="new-session" aria-label="New session">
       <div className="new-session__col">
-        <h1 className="new-session__title">Start with a ticket</h1>
+        <h1 className="new-session__title">
+          What should we look at in{' '}
+          <WorkspaceSwitcher
+            variant="inline"
+            workspaces={workspaces}
+            currentId={workspace?.id ?? workspaceId}
+            onSelect={onSelectWorkspace}
+            onAdd={onAddWorkspace}
+          />
+          ?
+        </h1>
 
         <div className="new-session__start">
-          <SearchBar
-            label="Ticket key or URL"
+          <ComposerCard
+            name="Start"
+            label="Ticket key, URL or what to look at"
             value={text}
-            placeholder="Paste a ticket key or URL"
-            autoFocus
             onChange={setText}
-            onSubmit={start}
-            aside={
-              newest ? (
-                <button
-                  type="button"
-                  className="new-session__recent"
-                  onClick={() => onOpenRun(newest.runId)}
-                >
-                  Recent sessions
-                </button>
-              ) : undefined
+            placeholder="Paste a ticket key or URL, or describe what to look at"
+            autoFocus
+            disabled={busy}
+            chips={
+              <>
+                <ModelPicker
+                  provider={provider}
+                  model={model}
+                  defaultProvider={workspace?.provider}
+                  defaultModel={workspace?.model}
+                  lastUsed={lastUsed}
+                  disabled={busy}
+                  onChange={(choice) => {
+                    setProvider(choice.provider)
+                    setModel(choice.model)
+                  }}
+                />
+                <ChipMenu
+                  label="Mode"
+                  value={mode}
+                  items={modeItems}
+                  disabled={busy}
+                  onSelect={(id) => setMode(id as SessionMode)}
+                />
+                <ChipMenu label="Access" value={access} items={ACCESS} disabled={busy} />
+              </>
             }
+            send={{
+              label: 'Start',
+              busyLabel: 'Starting…',
+              busy,
+              disabled: !canStart,
+              title: sendTitle,
+              onClick: start,
+            }}
           />
-
-          <div className="new-session__controls">
-            <SegmentedControl
-              label="Mode"
-              options={MODES}
-              value={mode}
-              onChange={(id) => setMode(id as SessionMode)}
-              disabledOptions={disabledModes}
-            />
-            <span className="new-session__chip">
-              Playbook <span className="mono">auto</span>
-            </span>
-            <ModelPicker
-              provider={provider}
-              model={model}
-              defaultProvider={workspace?.provider}
-              defaultModel={workspace?.model}
-              lastUsed={lastUsed}
-              disabled={busy}
-              onChange={(choice) => {
-                setProvider(choice.provider)
-                setModel(choice.model)
-              }}
-            />
-            {/* The screen's one filled button: the sidebar's New session
-                steps down while this is up. */}
-            <Button
-              variant="primary"
-              shortcut="⌘↵"
-              busy={busy}
-              disabled={!canStart && !busy}
-              onClick={start}
-            >
-              {busy ? 'Starting…' : 'Start'}
-            </Button>
-          </div>
 
           {reason && (
             <p className="new-session__reason" data-tone={error ? 'error' : undefined} role="status">

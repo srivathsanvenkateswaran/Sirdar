@@ -1,15 +1,17 @@
 /*
  * New session, on the sheet.
  *
- * The search bar, the segmented control, the group label and the item rows
- * are the library's; this file is the frame the mock draws around them: a
- * column no wider than 880 sitting in the middle of the sheet, the row of
- * controls with Start pushed to its end, and the Playbook chip. The Model
- * chip beside it is the library's model picker, drawn to the same measure.
+ * The composer card and its chips are `components/composer`; the group
+ * label and the item rows are the library's. This file is the frame drawn
+ * around them: a column no wider than 880 sitting in the middle of the
+ * sheet, the headline over the card, the reason line and the disclosure
+ * under it, and the Landed today list. The screen is the sheet's one scroll
+ * container: it scrolls, the window never does.
  *
- * `docs/design/2026-09-15-screens/SessionEmpty.html` — `.centre`, `.col`,
- * `.start`, `.controls`, `.chip`, `.landed` — is where every measure below
- * was read from. No shadow, no gradient, no colour of its own.
+ * The 880 column, the 32 gap and the landed list are
+ * `docs/design/2026-09-15-screens/SessionEmpty.html`'s `.centre`, `.col`
+ * and `.landed`; the card replaced the mock's search bar and control row
+ * in the 2026-09-16 T3 round. No shadow, no gradient, no colour of its own.
  */
 
 .new-session {
@@ -23,12 +25,15 @@
   overflow-y: auto;
 }
 
-/* The mock's 880 column, or the sheet less 24 a side, whichever is less. */
+/* The mock's 880 column, or the sheet less 24 a side, whichever is less. A
+   column taller than the sheet sits at the top rather than being centred
+   off it: `margin: auto` on the child is what makes centring give way. */
 .new-session__col {
   display: flex;
   flex-direction: column;
   gap: var(--sd-space-6);
   inline-size: min(880px, calc(100% - 48px));
+  margin-block: auto;
 }
 
 .new-session__title {
@@ -43,59 +48,13 @@
 .new-session__start {
   display: flex;
   flex-direction: column;
-  gap: var(--sd-space-4);
+  gap: var(--sd-space-3);
 }
 
-/* The link at the bar's inline end, drawn as words rather than a box. */
-.new-session__recent {
-  margin: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  color: inherit;
-  font: inherit;
-  cursor: pointer;
-}
-
-.new-session__recent:hover {
-  color: var(--sd-accent);
-}
-
-.new-session__controls {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--sd-space-4);
-}
-
-.new-session__controls > .sd-button[data-variant='primary'] {
-  margin-inline-start: auto;
-}
-
-/* A chip: 32 tall, hairline border at pill radius, the label in the second
-   ink and the value in the ledger face. It states a fact; it is not a control. */
-.new-session__chip {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--sd-space-2);
-  min-block-size: 32px;
-  padding-inline: var(--sd-space-3);
-  border: 1px solid var(--sd-rule);
-  border-radius: var(--sd-radius-pill);
-  color: var(--sd-ink-2);
-  font-size: var(--sd-text-ledger);
-  white-space: nowrap;
-}
-
-.new-session__chip .mono {
-  font-family: var(--sd-font-mono);
-  font-variant-numeric: tabular-nums;
-  color: var(--sd-ink-3);
-}
-
-/* Why Start is off, or why RCA and Fix are: one line under the controls. */
+/* Why the send is off, or why RCA and Fix are: one line under the card. */
 .new-session__reason {
   margin: 0;
+  padding-inline: var(--sd-space-1);
   font-size: var(--sd-text-meta);
   line-height: 1.4;
   color: var(--sd-ink-2);
@@ -105,8 +64,9 @@
   color: var(--sd-st-failed);
 }
 
-/* The disclosure holding the dry-run override; provider and model moved to the chip. */
+/* The disclosure holding the dry-run override, small, under the card. */
 .new-session__more {
+  padding-inline: var(--sd-space-1);
   font-size: var(--sd-text-meta);
   color: var(--sd-ink-2);
 }
@@ -146,36 +106,14 @@
   color: var(--sd-ink-3);
 }
 
-/*
- * Compact (under 1200): the control row is two lines. The mode control and
- * Start keep the first, Start still at the right; the chips take the
- * second. The break is a full-width pseudo item ordered between them.
- */
-@media (max-width: 1199px) {
-  .new-session__controls > .sd-segmented {
-    order: 0;
-  }
-
-  .new-session__controls > .sd-button[data-variant='primary'] {
-    order: 1;
-  }
-
-  .new-session__controls::before {
-    content: '';
-    order: 2;
-    flex-basis: 100%;
-    block-size: 0;
-  }
-
-  .new-session__controls > .new-session__chip {
-    order: 3;
-  }
-}
-
 @media (max-width: 720px) {
   .new-session {
     align-items: flex-start;
     padding-block: var(--sd-space-5);
     padding-inline: var(--sd-space-4);
+  }
+
+  .new-session__col {
+    margin-block: 0;
   }
 }

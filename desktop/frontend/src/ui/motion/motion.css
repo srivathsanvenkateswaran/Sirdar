@@ -30,9 +30,16 @@
   }
 }
 
-/* The sheet's content on every navigation: rises 8px and fades over 320ms. */
+/*
+ * The sheet's content on every navigation: rises 8px and fades over 320ms.
+ * The fill is `backwards`, never `both`: an animation of `transform` that
+ * keeps filling forwards leaves the element with an identity transform, and
+ * a transformed ancestor is the containing block for `position: fixed` — the
+ * popovers `lib/anchor` pins to the viewport would be pinned to the sheet
+ * instead, offset by the sidebar.
+ */
 .sd-motion-page {
-  animation: sd-page-enter var(--sd-dur-page) var(--sd-ease) both;
+  animation: sd-page-enter var(--sd-dur-page) var(--sd-ease) backwards;
 }
 
 /* The settings modal: scales from 0.98 and fades over 300ms. */

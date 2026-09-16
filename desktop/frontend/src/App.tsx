@@ -211,6 +211,9 @@ function Shell(): JSX.Element {
           transport={state.transport}
           workspaceId={workspaceId}
           workspace={currentWorkspace}
+          workspaces={state.workspaces}
+          onSelectWorkspace={(id) => store.setWorkspace(id)}
+          onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}
           runs={runs}
           onStart={startSession}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}

@@ -88,6 +88,13 @@ stop, as described above, and the page loses nothing.
 
 ## Changelog
 
+### 2026-09-16 (page enter fills backwards)
+`.sd-motion-page` in `motion.css` fills `backwards`, not `both`. A transform
+animation that keeps filling forwards leaves the sheet's page with an identity
+transform, which makes it the containing block for every `position: fixed`
+popover inside it — the model picker was drawn offset by the sidebar's width.
+Nothing visible about the entrance changes.
+
 ### 2026-09-15
 Added. New components. `--sd-dur-ring` and `--sd-dur-marquee` are added to
 `styles/tokens.css`: `00-design-language.md` section 7 fixes both durations,

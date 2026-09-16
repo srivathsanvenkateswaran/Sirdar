@@ -9,7 +9,7 @@
  * anywhere in this file.
  *
  * The measures are the 2026-09-15 mocks': 248 wide, 20px top padding and 16
- * at the sides and foot, 44-tall rows, a Recent sessions list under a
+ * at the sides and foot, 44-tall rows, the sessions by day under a
  * hairline, and the footer card pinned to the bottom.
  */
 
@@ -46,18 +46,19 @@
   padding-block-start: var(--sd-space-4);
 }
 
-/* ---------- recent sessions ---------- */
+/* ---------- sessions ---------- */
 
 /*
- * The one part of the sidebar that gives way on a short window: the list
- * shrinks and scrolls before the footer card, and the New session button in
- * it, is pushed off the bottom.
+ * The sidebar's one scroll region: the list takes what is left between the
+ * nav and the footer card and scrolls inside it, so the footer card, and
+ * the New session button in it, is never pushed off the bottom and the
+ * window never scrolls.
  */
-.sd-sidebar__recent {
+.sd-sidebar__sessions {
   display: flex;
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--sd-space-3);
   min-block-size: 0;
   margin-block-start: 20px;
   padding-block-start: var(--sd-space-4);
@@ -65,27 +66,34 @@
   overflow-y: auto;
 }
 
-.sd-sidebar__recent-label,
-.sd-recent-row {
+.sd-sidebar__day {
+  display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  gap: 2px;
 }
 
-.sd-sidebar__recent-label {
+/* Today, Yesterday, the date: the group head in the third ink. */
+.sd-sidebar__day-label {
   margin: 0;
-  padding-block: 0 6px;
+  padding-block: 0 4px;
   padding-inline: 14px;
   color: var(--sd-ink-3);
-  font-size: var(--sd-text-ledger);
+  font-size: var(--sd-text-micro);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
-.sd-recent-row {
+.sd-session-row {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: 10px;
   inline-size: 100%;
-  min-block-size: 36px;
-  padding-block: 0;
-  padding-inline: 14px;
+  min-block-size: 40px;
+  padding-block: 4px;
+  padding-inline: 12px 14px;
   border: 0;
   border-radius: 10px;
   background: transparent;
@@ -97,18 +105,66 @@
   transition: background-color var(--sd-dur-1) ease;
 }
 
-.sd-recent-row:hover {
+.sd-session-row:hover {
   background: var(--sd-nav-hover);
 }
 
-.sd-recent-row[aria-current='page'] {
+.sd-session-row[aria-current='page'] {
   background: var(--sd-nav-active);
   color: var(--sd-ink);
 }
 
+/* The row's mark is a 14px tile, not the library's 22. */
+.sd-session-row > .sd-mark {
+  inline-size: 14px;
+  block-size: 14px;
+  border-radius: 4px;
+}
+
+.sd-session-row > .sd-mark > svg {
+  inline-size: 9px;
+  block-size: 9px;
+}
+
+.sd-session-row > .sd-mark .sd-mark__initials {
+  font-size: 7px;
+}
+
+.sd-session-row__body {
+  display: grid;
+  flex: 1 1 auto;
+  gap: 1px;
+  min-inline-size: 0;
+}
+
+/* The title, or the key when there is none; one line, ellipsised. */
+.sd-session-row__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink);
+  font-size: var(--sd-text-meta);
+  line-height: 1.3;
+}
+
+.sd-session-row__key {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  line-height: 1.3;
+  unicode-bidi: isolate;
+}
+
+.sd-session-row__kind {
+  font-family: var(--sd-font-ui);
+}
+
 /* The dot says live or waiting on a person, and nothing else. The word for
    either is in the row's accessible name. */
-.sd-recent-row__dot {
+.sd-session-row__dot {
   flex: 0 0 auto;
   inline-size: 7px;
   block-size: 7px;
@@ -116,27 +172,43 @@
   background: var(--sd-rule-strong);
 }
 
-.sd-recent-row__dot[data-live='true'] {
+.sd-session-row__dot[data-live='true'] {
   background: var(--sd-accent);
 }
 
-.sd-recent-row__dot[data-blocked='true'] {
+.sd-session-row__dot[data-blocked='true'] {
   background: var(--sd-st-blocked);
 }
 
-.sd-recent-row__key {
-  color: var(--sd-ink);
-  font-family: var(--sd-font-mono);
-  font-size: var(--sd-text-ledger);
-  font-weight: 600;
-  unicode-bidi: isolate;
-}
-
-.sd-recent-row__kind {
-  margin-inline-start: auto;
+/* 18h, 5d: the ledger face at the row's end. */
+.sd-session-row__age {
+  flex: 0 0 auto;
   color: var(--sd-ink-3);
   font-family: var(--sd-font-mono);
   font-size: var(--sd-text-micro);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Show N more: words, drawn as a row. */
+.sd-sidebar__more {
+  flex: 0 0 auto;
+  inline-size: 100%;
+  min-block-size: 32px;
+  padding-block: 0;
+  padding-inline: 14px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-ui);
+  font-size: var(--sd-text-micro);
+  text-align: start;
+  cursor: pointer;
+}
+
+.sd-sidebar__more:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
 }
 
 /* ---------- plan usage ---------- */
@@ -202,16 +274,16 @@
   white-space: nowrap;
 }
 
+/* Pinned to the viewport by lib/anchor, which writes top, left and the
+   max-height; the list scrolls inside, the window never does. */
 .switcher-list {
-  position: absolute;
-  inset-block-start: calc(100% + var(--sd-space-1));
-  inset-inline-start: 0;
+  position: fixed;
   z-index: 20;
   margin: 0;
   padding: var(--sd-space-1);
   min-inline-size: 200px;
   max-inline-size: 320px;
-  max-block-size: 40vh;
+  min-block-size: 0;
   overflow-y: auto;
   list-style: none;
   border: 1px solid var(--sd-rule-strong);
@@ -265,6 +337,33 @@
   font-size: var(--sd-text-meta);
 }
 
+/*
+ * The inline trigger: the workspace's name as a word in New session's
+ * headline, underlined in dots in the third ink so it reads as the one word
+ * in the sentence that can be changed. Type is inherited from the headline.
+ */
+.switcher[data-variant='inline'] {
+  display: inline;
+}
+
+.switcher-word {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline dotted var(--sd-ink-3);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.14em;
+  cursor: pointer;
+}
+
+.switcher-word:hover,
+.switcher-word[aria-expanded='true'] {
+  text-decoration-color: var(--sd-accent);
+}
+
 /* ---------- the collapsed rail ---------- */
 
 /*
@@ -295,7 +394,7 @@
 }
 
 .sd-sidebar[data-collapsed='true'] .switcher,
-.sd-sidebar[data-collapsed='true'] .sd-sidebar__recent {
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__sessions {
   display: none;
 }
 
@@ -322,7 +421,7 @@
     inline-size: auto;
   }
 
-  .sd-sidebar__recent {
+  .sd-sidebar__sessions {
     display: none;
   }
 
@@ -345,7 +444,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .switcher-trigger,
-  .sd-recent-row {
+  .sd-session-row {
     transition-duration: 1ms;
   }
 }
