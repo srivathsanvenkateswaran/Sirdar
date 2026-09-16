@@ -9,7 +9,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent,
 } from 'react'
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../api/types'
-import { askedQuestion, elapsed } from '../lib/events'
+import { askedQuestion, elapsed, notePathFor } from '../lib/events'
 import {
   sessionsShow,
   shownNumber,
@@ -180,7 +180,9 @@ export default function Session(props: {
     return ['triage']
   }, [detail?.kind])
 
-  const notePath = detail?.notes?.[0] ?? ''
+  // The filed copy, when the run made one: the banner names the note as
+  // the vault does, not as the run directory does.
+  const notePath = notePathFor(noteKinds[0], detail?.notes)
   const isFix = detail?.kind === 'fix'
   const shownTab: Tab = tab ?? (isFix ? 'changes' : 'note')
 

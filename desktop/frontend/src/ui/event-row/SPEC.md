@@ -70,6 +70,16 @@ nothing moves.
 
 ## Changelog
 
+### 2026-09-16 (transcript)
+The component is unchanged; what the app puts inside it moved. A tool call
+is now one row whose content is a button (`.call` in `components/run/run.css`)
+that opens to the call's input and output — the disclosure-inside-a-row case
+the focus-visible state above already allows for. The `text` and `final`
+families left the ledger: the model's prose is a message block and the run's
+answer a card, both laid out on the same 4rem gutter beside the rows rather
+than as rows. `text` and `final` stay as variants for the rows the app still
+draws from them (a fold's opened lines).
+
 ### 2026-09-15 (restyle)
 Gained a ninth variant, `callout`, for the two lines that mean the run is
 waiting on a person — the agent asked a question, and the provider rate-limited
