@@ -26,6 +26,7 @@ import SegmentedControl from '../ui/segmented-control'
 import SettingRow, { SettingCard } from '../ui/setting-row'
 import SidebarFooterCard from '../ui/sidebar-footer-card'
 import SidebarNavItem from '../ui/sidebar-nav-item'
+import SourceMark from '../ui/source-mark'
 import StatCard from '../ui/stat-card'
 import StateGlyph, { type GlyphState } from '../ui/state-glyph'
 import StatusBadge, { PriorityBadge, STATE_WORDS, type SdStatus } from '../ui/status-badge'
@@ -79,6 +80,23 @@ const PROVIDERS_SHOWN = [
   'opencode',
   'kimi',
   'acp',
+]
+
+/** The thirteen built-in source adapters, trackers first, as the config names them. */
+const SOURCES_SHOWN = [
+  'jira',
+  'linear',
+  'azdo',
+  'rally',
+  'servicenow',
+  'zohodesk',
+  'zendesk',
+  'freshdesk',
+  'helpscout',
+  'intercom',
+  'hubspot',
+  'front',
+  'gorgias',
 ]
 
 /** lucide `inbox` for the item-row specimens. */
@@ -922,6 +940,29 @@ export default function Library(): JSX.Element {
             </State>
             <State label="Large, on the Providers page">
               <ProviderMark provider="qwen" size="lg" />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="source-mark"
+          name="Source mark"
+          note="The trackers' and helpdesks' own marks, white on the brand colour; a source with no public mark, and every private exec adapter, gets its initials on the ink."
+        >
+          <div className="lib-row lib-row--tight">
+            {SOURCES_SHOWN.map((adapter) => (
+              <State key={adapter} label={adapter}>
+                <SourceMark adapter={adapter} />
+              </State>
+            ))}
+            <State label="exec, named Janus">
+              <SourceMark adapter="exec" name="Janus" />
+            </State>
+            <State label="16px, in a sessions row">
+              <SourceMark adapter="zohodesk" size="xs" />
+            </State>
+            <State label="Large">
+              <SourceMark adapter="jira" size="lg" />
             </State>
           </div>
         </Section>
