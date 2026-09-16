@@ -122,7 +122,8 @@ function elidePath(token: string): string {
  * `./...` dropped, and the whole thing held to about forty characters.
  */
 export function shortCommand(command: string, max = 44): string {
-  const parts = segments(command).map((segment) => {
+  const all = segments(command)
+  const parts = all.map((segment) => {
     // A token may carry a quoted part inside it: `--format='%h %ad'` is one.
     const tokens = segment.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) ?? []
     const out: string[] = []
@@ -133,7 +134,8 @@ export function shortCommand(command: string, max = 44): string {
         continue
       }
       if (/^--(?:type|date)=/.test(t)) continue
-      if (t === './...') continue
+      // `./...` says nothing once three commands sit on one line; alone it stays.
+      if (t === './...' && all.length > 1) continue
       if (/^--format=/.test(t)) {
         out.push('--format=…')
         continue

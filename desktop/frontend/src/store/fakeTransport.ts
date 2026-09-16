@@ -20,6 +20,7 @@ import type {
   Usage,
   Workspace,
 } from '../api/types'
+import type { SessionFixture } from './fakeSession'
 
 /** Calls the fake recorded, so a test can assert what the UI asked for. */
 export interface TransportCalls {
@@ -331,11 +332,28 @@ export function createFakeTransport(seed: {
   mcpTools?: Record<string, MCPToolList>
   /** What `register()` answers: the rows the workspace's register.jsonl holds. */
   register?: RegisterRow[]
+  /**
+   * Whole runs by run id — the detail, the log, the note, the prompt and
+   * the change — for the session screen: `run`, `events`, `note`, `prompt`
+   * and `runDiff` answer from the fixture when asked for one of these ids.
+   * `store/fakeSession.ts` builds them.
+   */
+  sessions?: Record<string, SessionFixture>
 } = {}): FakeTransport {
   let runList = seed.runs ?? []
   let ticketList = seed.tickets ?? []
   let queueError: Error | null = null
   let currentDiff: RunDiff | null = seed.diff === undefined ? diff() : seed.diff
+  /** A fixture run's change, edited in place by `dropHunk` like the shared one. */
+  const sessionDiffs = new Map<string, RunDiff | null>(
+    Object.entries(seed.sessions ?? {}).map(([runId, f]) => [runId, f.diff]),
+  )
+  const diffFor = (runId: string): RunDiff | null =>
+    sessionDiffs.has(runId) ? (sessionDiffs.get(runId) as RunDiff | null) : currentDiff
+  const setDiffFor = (runId: string, next: RunDiff) => {
+    if (sessionDiffs.has(runId)) sessionDiffs.set(runId, next)
+    else currentDiff = next
+  }
   let dropSeq = 0
   const handlers = new Set<(e: AppEvent) => void>()
   const calls: TransportCalls = {
@@ -390,18 +408,33 @@ export function createFakeTransport(seed: {
       calls.runs.push(ws)
       return runList
     },
-    run: async (_ws, runId) =>
-      ({
+    run: async (_ws, runId) => {
+      const fixture = seed.sessions?.[runId]
+      if (fixture) return fixture.detail
+      return {
         ...run({ runId }),
         promptPath: '',
         bundleDir: '',
         warnings: [],
         handle: '',
         budget: { maxTurns: 20, maxMinutes: 20, maxUsd: 2 },
-      }) as RunDetail,
-    events: async () => ({ events: [] as RunEvent[], next: 0 }),
-    note: async () => '',
-    prompt: async () => '',
+      } as RunDetail
+    },
+    events: async (_ws, runId) => {
+      const fixture = seed.sessions?.[runId]
+      if (fixture) return { events: fixture.events, next: fixture.events.length }
+      return { events: [] as RunEvent[], next: 0 }
+    },
+    note: async (_ws, runId, kind) => {
+      const fixture = seed.sessions?.[runId]
+      if (!fixture) return ''
+      // A note the run did not write, or a kind it does not have, is the
+      // service's not-found — the ordinary answer for a fix run.
+      const mismatch = (kind === 'rca' || kind === 'resolution') && fixture.detail.kind !== 'rca'
+      if (!fixture.note || mismatch) throw new Error(`not_found: no ${kind || 'note'} for ${runId}`)
+      return fixture.note
+    },
+    prompt: async (_ws, runId) => seed.sessions?.[runId]?.prompt ?? '',
     startTriage: async (ws, keys, opts) => {
       calls.startTriage.push({ ws, keys, opts })
       return { jobId: `job-${calls.startTriage.length}` }
@@ -434,30 +467,33 @@ export function createFakeTransport(seed: {
     },
     runDiff: async (ws, runId) => {
       calls.runDiff.push({ ws, runId })
-      if (!currentDiff) throw new Error('not_found: the run has no change to show')
-      return currentDiff
+      const current = diffFor(runId)
+      if (!current) throw new Error('not_found: the run has no change to show')
+      return current
     },
     dropHunk: async (ws, runId, req) => {
       calls.dropHunk.push({ ws, runId, req })
-      if (!currentDiff) throw new Error('not_found: the run has no change to show')
-      if (req.etag !== currentDiff.etag) {
+      const current = diffFor(runId)
+      if (!current) throw new Error('not_found: the run has no change to show')
+      if (req.etag !== current.etag) {
         throw new Error('conflict: the diff has changed since it was read; read it again')
       }
-      if (currentDiff.pushed || !currentDiff.worktreePresent) {
+      if (current.pushed || !current.worktreePresent) {
         throw new Error('conflict: the change can no longer be edited')
       }
       // The hunk is gone: the file loses its lines and the etag moves, so a
       // second drop with the old etag is refused the way the service refuses it.
       dropSeq += 1
-      currentDiff = {
-        ...currentDiff,
-        files: currentDiff.files.map((f) =>
+      const next: RunDiff = {
+        ...current,
+        files: current.files.map((f) =>
           f.path === req.path ? { ...f, additions: Math.max(0, f.additions - 3) } : f,
         ),
-        patch: currentDiff.patch.replace(/@@[^\n]*\n(?:[^@][^\n]*\n)*/, ''),
+        patch: current.patch.replace(/@@[^\n]*\n(?:[^@][^\n]*\n)*/, ''),
         etag: `etag-${dropSeq + 1}`,
       }
-      return currentDiff
+      setDiffFor(runId, next)
+      return next
     },
     mcpServers: async (ws, connect) => {
       calls.mcpServers.push({ ws, connect: Boolean(connect) })
