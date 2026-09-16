@@ -33,6 +33,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 )
 
 // Ext is the extension an executable needs on this platform.
@@ -102,7 +103,46 @@ func Install(t testing.TB, dir, as, fake string) string {
 			t.Fatalf("testbin: %v", err)
 		}
 	}
+	t.Cleanup(func() { retire(path) })
 	return path
+}
+
+// retire gets the installed copy out of the caller's directory at the end
+// of the test.
+//
+// Windows refuses to delete a running executable — the image is mapped and
+// the delete comes back "Access is denied" — and a fake outliving the test
+// by a moment is normal: a probe the test stopped talking to, a stand-in
+// deliberately sleeping out a timeout, a child still winding down after
+// its parent read the last line it wanted. t.TempDir's own RemoveAll then
+// fails and marks a passing test failed, which is what the first Windows
+// run of this package reported: every assertion green, every test red on
+// "TempDir RemoveAll cleanup: ... Access is denied".
+//
+// So: try to delete, giving a process that is on its way out a moment to
+// finish, and when that fails, rename the file out of the directory
+// instead. Windows locks a running image against deletion but not against
+// a rename, so the caller's directory ends up empty either way and
+// whatever is left behind is one hard link in the system temp directory.
+func retire(path string) {
+	os.Remove(path + nameSuffix)
+	for i := 0; ; i++ {
+		if err := os.Remove(path); err == nil || errors.Is(err, os.ErrNotExist) {
+			return
+		}
+		if i == 4 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	spent, err := os.CreateTemp("", "sirdar-testbin-*"+Ext)
+	if err != nil {
+		return
+	}
+	name := spent.Name()
+	spent.Close()
+	os.Remove(name)
+	os.Rename(path, name)
 }
 
 // LinkOrCopy hardlinks src to dst, falling back to a copy. A hard link
