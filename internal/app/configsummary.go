@@ -26,6 +26,9 @@ type ConfigSummary struct {
 	MCP         MCPSummary         `json:"mcp"`
 	Notify      NotifySummary      `json:"notify"`
 	Webhooks    WebhooksSummary    `json:"webhooks"`
+	// Sources names the tracker and the helpdesk the workspace reads, so a
+	// ticket number can be drawn under its own product's mark.
+	Sources SourcesSummary `json:"sources"`
 }
 
 // GeneralSummary is the top of the config file as the General page shows
@@ -159,17 +162,24 @@ type WebhookSourceSummary struct {
 // ConfigSummary reports the workspace's notify and webhooks configuration
 // with every credential reduced to its scheme.
 func (s *Service) ConfigSummary(wsID string) (ConfigSummary, error) {
-	_, cfg, err := s.load(wsID)
+	ws, cfg, err := s.load(wsID)
 	if err != nil {
 		return ConfigSummary{}, err
 	}
-	return SummariseConfig(cfg), nil
+	return SummariseConfigWith(cfg, sourceHintsIn(ws.Root)), nil
 }
 
 // SummariseConfig builds the summary from a loaded configuration. It is
 // exported so the redaction can be tested against a config built by hand.
 func SummariseConfig(cfg *config.Config) ConfigSummary {
+	return SummariseConfigWith(cfg, SourceHints{})
+}
+
+// SummariseConfigWith is SummariseConfig told what the run directories
+// know: the ticket URLs an exec adapter's host and name are read from.
+func SummariseConfigWith(cfg *config.Config, hints SourceHints) ConfigSummary {
 	return ConfigSummary{
+		Sources:     summariseSources(cfg, hints),
 		General:     summariseGeneral(cfg),
 		Budget:      summariseBudget(cfg),
 		Permissions: summarisePermissions(cfg),
