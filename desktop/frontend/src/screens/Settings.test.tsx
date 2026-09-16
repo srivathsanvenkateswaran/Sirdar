@@ -205,6 +205,19 @@ describe('General', () => {
     expect(screen.getByText('Dark', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
   })
 
+  it('switches the session layout, listing Conversation first as the default, and remembers it', () => {
+    open()
+    const group = screen.getByRole('radiogroup', { name: 'Session layout' })
+    expect(within(group).getAllByRole('radio').map((o) => o.textContent)).toEqual(['Conversation', 'Document', 'Workbench'])
+    expect(screen.getByRole('radio', { name: 'Conversation' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Workbench' }))
+    expect(sessionLayout()).toBe('workbench')
+    expect(localStorage.getItem('sirdar.sessionLayout')).toBe('workbench')
+    expect(
+      screen.getByText(/^Workbench: documents over a structured console/, { selector: '.sd-setting-row__value' }),
+    ).toBeInTheDocument()
+  })
+
   it('switches which ticket number the sessions show, and remembers it', () => {
     open()
     expect(screen.getByRole('radio', { name: 'Tracker number' })).toBeChecked()
@@ -214,18 +227,6 @@ describe('General', () => {
     expect(
       screen.getByText('The helpdesk number', { selector: '.sd-setting-row__value' }),
     ).toBeInTheDocument()
-  })
-
-  it('switches the session layout, listing Conversation first as the default, and remembers it', () => {
-    open()
-    const group = screen.getByRole('radiogroup', { name: 'Session layout' })
-    const options = within(group).getAllByRole('radio')
-    expect(options.map((o) => o.textContent)).toEqual(['Conversation', 'Document', 'Workbench'])
-    expect(options[0]).toBeChecked()
-    fireEvent.click(within(group).getByRole('radio', { name: 'Document' }))
-    expect(sessionLayout()).toBe('document')
-    expect(localStorage.getItem('sirdar.sessionLayout')).toBe('document')
-    expect(screen.getByText('Document', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
   })
 
   it('runs doctor and lists the rows with the CLI\'s own marks', async () => {

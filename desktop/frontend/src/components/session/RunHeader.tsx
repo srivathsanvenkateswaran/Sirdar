@@ -1,8 +1,8 @@
-import type { ReactNode } from 'react'
+import { useSyncExternalStore, type ReactNode } from 'react'
 import type { RunDetail, SourcesSummary } from '../../api/types'
 import { elapsed } from '../../lib/events'
 import { costOrUnknown } from '../../lib/format'
-import { SESSION_LAYOUT_OPTIONS, type SessionLayout } from '../../lib/sessionLayout'
+import { SESSION_LAYOUT_OPTIONS, sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../../lib/sessionLayout'
 import { shownNumber, type SessionsShow } from '../../lib/sessionsShow'
 import Age from '../Age'
 import Button from '../../ui/button'
@@ -66,6 +66,17 @@ export function LayoutSwitcher({
       ))}
     </div>
   )
+}
+
+/**
+ * The switcher wired to the preference itself, for a header that does not
+ * plumb the layout through its props: the Conversation and Workbench
+ * headers drop this in and the Document header passes `LayoutSwitcher` the
+ * value the dispatcher already holds.
+ */
+export function SessionLayoutSwitcher(): JSX.Element {
+  const value = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
+  return <LayoutSwitcher value={value} onChange={setSessionLayout} />
 }
 
 export interface RunHeaderProps {

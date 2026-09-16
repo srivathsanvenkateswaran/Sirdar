@@ -11,6 +11,7 @@ import ProviderMark from '../../ui/provider-mark'
 import { AssignedTo } from '../../ui/run-card/Avatar'
 import SourceMark from '../../ui/source-mark'
 import StatusBadge, { type SdStatus } from '../../ui/status-badge'
+import { SessionLayoutSwitcher } from '../../components/session/RunHeader'
 
 /**
  * The compact run header: key under its source's mark, kind, state, the
@@ -99,6 +100,7 @@ export default function RunHeader({
           <b>{costOrUnknown(detail.usage?.costUsd, live)}</b>
         </span>
       </div>
+      <SessionLayoutSwitcher />
       {terminal || !onCancel ? null : (
         <Button variant="ghost" onClick={onCancel} disabled={cancelDisabled} title={cancelTitle}>
           Cancel

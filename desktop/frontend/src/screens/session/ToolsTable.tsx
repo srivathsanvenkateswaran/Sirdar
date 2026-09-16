@@ -1,4 +1,6 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, type MouseEvent } from 'react'
+import { markersForStep, type Marker as MarkerModel } from '../../lib/evidence'
+import Marker from '../../ui/marker'
 import { SortIcon } from './icons'
 import type { Decision, StepCall } from './model'
 import { formatBytes, formatMs } from './shape'
@@ -41,9 +43,13 @@ export interface ToolsTableProps {
   /** The call tinted as the transcript's twin, by its event index. */
   highlighted?: number
   onLocate?: (step: StepCall) => void
+  /** The evidence markers (E1…En) derived from the answer, so the table says which call produced which item. */
+  markers?: MarkerModel[]
+  hotMarker?: string
+  onMarker?: (id: string, event: MouseEvent<HTMLElement>) => void
 }
 
-export default function ToolsTable({ calls, highlighted, onLocate }: ToolsTableProps): JSX.Element {
+export default function ToolsTable({ calls, highlighted, onLocate, markers, hotMarker, onMarker }: ToolsTableProps): JSX.Element {
   const [sort, setSort] = useState<{ key: SortKey; desc: boolean }>({ key: 'n', desc: false })
 
   const rows = useMemo(() => {
@@ -101,6 +107,7 @@ export default function ToolsTable({ calls, highlighted, onLocate }: ToolsTableP
             {head('tool', 'tool')}
             <th scope="col">input</th>
             <th scope="col">decision</th>
+            {markers ? <th scope="col">cites</th> : null}
             {head('took', 'took', 'end')}
             {head('out', 'output', 'end')}
           </tr>
@@ -134,6 +141,13 @@ export default function ToolsTable({ calls, highlighted, onLocate }: ToolsTableP
                 <td>
                   <Stamp tone={word.tone}>{word.text}</Stamp>
                 </td>
+                {markers ? (
+                  <td className="sc-tt__cites">
+                    {markersForStep(c.index, markers).map((m) => (
+                      <Marker key={m.id} id={m.id} hot={m.id === hotMarker} onClick={onMarker} title={m.query} />
+                    ))}
+                  </td>
+                ) : null}
                 <td className="sc-tt__r">{c.tookMs !== undefined ? formatMs(c.tookMs) : c.pending ? '—' : ''}</td>
                 <td className="sc-tt__r">{c.size.bytes > 0 ? `${formatBytes(c.size.bytes)} · ${c.size.lines} ln` : c.pending ? '—' : '0 B'}</td>
               </tr>

@@ -60,6 +60,23 @@ export function fileTokens(text: string): string[] {
   return [...new Set(out)]
 }
 
+/**
+ * A tool call as the derivation needs it, off a `tool_started` line: the
+ * path a read or an edit named, the command a shell ran. Every layout can
+ * feed its own call model through this, so the markers agree across them.
+ */
+export function stepLikeOf(index: number, event: { payload?: { tool?: string; raw?: unknown } }): StepLike {
+  const raw = event.payload?.raw as Record<string, unknown> | undefined
+  const message = raw?.message as Record<string, unknown> | undefined
+  const content = Array.isArray(message?.content) ? (message?.content as Record<string, unknown>[]) : []
+  const use = content.find((b) => b?.type === 'tool_use')
+  const input = (use?.input ?? (raw?.request as Record<string, unknown> | undefined)?.input) as Record<string, unknown> | undefined
+  const str = (v: unknown) => (typeof v === 'string' ? v : '')
+  const path = input ? str(input.file_path) || str(input.filePath) || str(input.path) || str(input.notebook_path) : ''
+  const command = input ? str(input.command) || str(input.cmd) : ''
+  return { index, tool: str(event.payload?.tool), path: path || undefined, command: command || undefined }
+}
+
 /** A tool call as the derivation needs it: where it sits, what it did. */
 export interface StepLike {
   index: number

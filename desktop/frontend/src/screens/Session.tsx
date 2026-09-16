@@ -13,6 +13,7 @@ import { stateWord } from '../ui/status-badge'
 import type { SessionLayoutProps } from './session/layoutProps'
 import SessionConversation from './session/SessionConversation'
 import SessionDocument from './session/SessionDocument'
+import SessionWorkbench from './session/SessionWorkbench'
 import '../components/run/run.css'
 import '../components/session/session.css'
 
@@ -35,17 +36,9 @@ function isTyping(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
 }
 
-/**
- * The layouts that draw from the shared model, by the preference's name.
- * Document is layout B. Workbench (C) is a placeholder that renders the
- * Document layout until its own agent lands; the switcher and the Settings
- * row already name it so a choice made now is kept when it arrives.
- * Conversation (A) is `./session/SessionConversation`, which owns its own
- * feed and actions, and is dispatched to before any of this runs.
- */
-const LAYOUTS: Record<Exclude<SessionLayout, 'conversation'>, (props: SessionLayoutProps) => JSX.Element> = {
+/** The layouts that draw from the shared model, by the preference's name. */
+const LAYOUTS: Record<'document', (props: SessionLayoutProps) => JSX.Element> = {
   document: SessionDocument,
-  workbench: SessionDocument,
 }
 
 export interface SessionProps {
@@ -66,23 +59,30 @@ export interface SessionProps {
 }
 
 /**
- * The session, reached at `#/runs/<workspace>/<run>`. This is the
- * dispatcher: it reads the run once and subscribes for what follows
- * (`useRunFeed`), builds the shared model every layout draws from
- * (`useSessionModel`), owns the actions — Answer resumes a blocked run,
- * Steer continues a finished one, Cancel stops the job this window started,
- * Accept publishes a deviated fix — and renders whichever layout the
- * Session layout preference names. The layout's send button is the
- * screen's one filled control; the sidebar's New session steps down.
+
+ * The session, reached at `#/runs/<workspace>/<run>`, in the layout the
+ * reader chose (`lib/sessionLayout`, the `sirdar.sessionLayout` preference).
+ * Conversation — the transcript as a chat with an inspector beside it — is
+ * the default and lives in `./session/SessionConversation`; Workbench — the
+ * documents over a structured console — is `./session/SessionWorkbench`.
+ * Both own their feed and actions. Document — the note as the window with
+ * the path beside it — draws from the shared dispatcher below: it reads the
+ * run once and subscribes for what follows (`useRunFeed`), builds the shared
+ * model (`useSessionModel`), owns the actions — Answer resumes a blocked
+ * run, Steer continues a finished one, Cancel stops the job this window
+ * started, Accept publishes a deviated fix — and hands them to the layout.
+ * The layout's send button is the screen's one filled control; the
+ * sidebar's New session steps down.
  */
 export default function Session(props: SessionProps): JSX.Element {
   const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
   if (layout === 'conversation') return <SessionConversation {...props} />
+  if (layout === 'workbench') return <SessionWorkbench {...props} />
   return <SessionShared {...props} layout={layout} />
 }
 
 /** The Document and Workbench layouts: one feed, one model, one set of actions, the chosen layout drawing them. */
-function SessionShared(props: SessionProps & { layout: Exclude<SessionLayout, 'conversation'> }): JSX.Element {
+function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix, layout } = props
   const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)

@@ -35,6 +35,12 @@ const SESSIONS_SHOW_OPTIONS: { id: SessionsShow; label: string }[] = [
   { id: 'helpdesk', label: 'Helpdesk number' },
 ]
 
+const LAYOUT_WORDS: Record<SessionLayout, string> = {
+  conversation: 'Conversation: the transcript beside the run\u2019s artefacts',
+  document: 'Document: the answer as the page, the path beside it',
+  workbench: 'Workbench: documents over a structured console',
+}
+
 /** "Notes in en, customer replies in the ticket's language". */
 function languageLine(notes: string, customer: string): string {
   const reply = customer === 'auto' ? "the ticket's own language" : customer
@@ -224,11 +230,8 @@ export default function GeneralPage({
         />
         <SettingRow
           label="Session layout"
-          value={SESSION_LAYOUT_OPTIONS.find((o) => o.id === layout)?.label ?? layout}
-          help={
-            SESSION_LAYOUT_OPTIONS.find((o) => o.id === layout)?.note +
-            ' The switcher in a session\'s header changes the same setting. Remembered in this browser.'
-          }
+          value={LAYOUT_WORDS[layout]}
+          help="How a session window is laid out. Conversation is the default; Document renders the note or the change as the page with the path beside it; Workbench shows the documents over a structured console. The switcher in a session's header changes the same setting. Remembered in this browser."
           control={
             <SegmentedControl
               label="Session layout"
