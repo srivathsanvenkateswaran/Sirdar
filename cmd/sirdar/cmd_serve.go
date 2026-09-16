@@ -8,9 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +18,7 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/httpapi"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/httpapi/ui"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/osopen"
 )
 
 func init() { commands["serve"] = cmdServe }
@@ -274,16 +273,6 @@ func browseURL(a net.Addr) string {
 }
 
 // openURL hands the URL to the platform's opener. It does not wait: the
-// browser outlives this process.
-func openURL(url string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	return cmd.Start()
-}
+// browser outlives this process. The per-platform command lives in
+// internal/osopen, which the desktop app's OpenConfig and OpenNote share.
+func openURL(url string) error { return osopen.Open(url) }

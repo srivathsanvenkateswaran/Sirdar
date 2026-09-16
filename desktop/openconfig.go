@@ -2,9 +2,9 @@ package main
 
 import (
 	"fmt"
-	"os/exec"
 	"path/filepath"
-	"runtime"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/osopen"
 )
 
 // OpenConfig opens the workspace's .sirdar/config.yaml in whatever the
@@ -31,17 +31,8 @@ func (b *Bridge) OpenConfig(ws string) error {
 	return fmt.Errorf("workspace %q is not registered", ws)
 }
 
-// openWithDesktop hands a path to the operating system's opener. A test
-// swaps it for a recorder, since the real one launches an editor.
-var openWithDesktop = func(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", path)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", path)
-	default:
-		cmd = exec.Command("xdg-open", path)
-	}
-	return cmd.Start()
-}
+// openWithDesktop hands a path to the operating system's opener, which
+// internal/osopen picks per platform — the same one `sirdar serve --open`
+// uses for the browser. A test swaps this variable for a recorder, since
+// the real one launches an editor on the machine running the tests.
+var openWithDesktop = osopen.Open
