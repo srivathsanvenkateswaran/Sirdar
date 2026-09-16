@@ -327,11 +327,17 @@ func TestFilename(t *testing.T) {
 	}
 }
 
+// The names below keep their "/" on every OS, Windows included. A note
+// name is a link as much as a file: it is written into the frontmatter and
+// into the body as "[[RCA/OMNI-1 …]]", which Obsidian reads with "/"
+// whatever the filesystem uses, and the body-link rewrite matches it
+// against a pattern spelled with "/". The callers that need a real path
+// pass the name to filepath.Join, which puts the platform's separator back.
 func TestFilenameSubdirectoryPattern(t *testing.T) {
 	cases := []struct{ pattern, want string }{
-		{"Triage/{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
-		{"RCA/{key} RCA {slug}.md", filepath.Join("RCA", "OMNI-1 RCA export-fails.md")},
-		{"Resolutions/{key} RES {slug}.md", filepath.Join("Resolutions", "OMNI-1 RES export-fails.md")},
+		{"Triage/{key} {slug}.md", "Triage/OMNI-1 export-fails.md"},
+		{"RCA/{key} RCA {slug}.md", "RCA/OMNI-1 RCA export-fails.md"},
+		{"Resolutions/{key} RES {slug}.md", "Resolutions/OMNI-1 RES export-fails.md"},
 	}
 	for _, c := range cases {
 		got := Filename(c.pattern, "OMNI-1", "export-fails")
@@ -343,10 +349,10 @@ func TestFilenameSubdirectoryPattern(t *testing.T) {
 
 func TestFilenameDropsDotDotAndLeadingSlash(t *testing.T) {
 	cases := []struct{ pattern, want string }{
-		{"/Triage/{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+		{"/Triage/{key} {slug}.md", "Triage/OMNI-1 export-fails.md"},
 		{"../{key} {slug}.md", "OMNI-1 export-fails.md"},
-		{"Triage/../../{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
-		{"Triage//{key} {slug}.md", filepath.Join("Triage", "OMNI-1 export-fails.md")},
+		{"Triage/../../{key} {slug}.md", "Triage/OMNI-1 export-fails.md"},
+		{"Triage//{key} {slug}.md", "Triage/OMNI-1 export-fails.md"},
 	}
 	for _, c := range cases {
 		got := Filename(c.pattern, "OMNI-1", "export-fails")
