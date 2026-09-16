@@ -157,7 +157,9 @@ export default function ChangesView({
 
   const pushLine = diff ? pushCommand(diff.worktree, diff.branch) : ''
   const branch = diff?.branch || detail.fix?.branch || ''
-  const base = diff?.base || detail.fix?.base || ''
+  // The service names the base by its ref or its full sha; a sha reads short.
+  const baseRaw = diff?.base || detail.fix?.base || ''
+  const base = /^[0-9a-f]{40}$/i.test(baseRaw) ? baseRaw.slice(0, 7) : baseRaw
   const commit = (diff?.head && !diff.head.startsWith(branch) ? diff.head : detail.fix?.commit) ?? ''
   const pushed = diff?.pushed ?? detail.fix?.pushed ?? false
 

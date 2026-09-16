@@ -287,27 +287,54 @@ function flat(text: string, max = 200): string {
   return one.length > max ? `${one.slice(0, max - 1)}…` : one
 }
 
-/** The summary a system run prints: `init · cwd … · 5 hooks SessionStart:startup`. */
+function subtypeOf(e: IndexedEvent): string {
+  const raw = asRecord(e.event.payload?.raw)
+  return str(raw?.subtype) || str(raw?.type) || e.event.kind
+}
+
+/**
+ * The housekeeping worth a row: a session starting or resuming, with its
+ * hooks. Stream deltas, status ticks and token counters are the provider
+ * talking to itself; the prose they spell is a row of its own, so they
+ * are left out rather than folded into a "system ×20" the reader cannot
+ * use.
+ */
+function keepSystem(items: IndexedEvent[]): IndexedEvent[] {
+  return items.filter((i) => {
+    const sub = subtypeOf(i)
+    return sub === 'init' || sub.startsWith('hook_') || sub === 'rate_limited' || sub === 'error' || sub === 'compact_boundary'
+  })
+}
+
+/** The summary a system run prints: `init · cwd … · 5 hooks SessionStart:startup`, or `resume · 4 hooks SessionStart:resume`. */
 function systemSummary(items: IndexedEvent[]): string {
-  const subtypes = items.map((i) => str(asRecord(i.event.payload?.raw)?.subtype) || i.event.kind)
-  const hooks = items.filter((i) => str(asRecord(i.event.payload?.raw)?.subtype) === 'hook_started')
-  const hookNames = new Set(hooks.map((i) => str(asRecord(i.event.payload?.raw)?.hook_name)).filter(Boolean))
+  const hooks = items.filter((i) => subtypeOf(i) === 'hook_started')
+  const hookNames = [...new Set(hooks.map((i) => str(asRecord(i.event.payload?.raw)?.hook_name)).filter(Boolean))]
   const parts: string[] = []
-  const init = items.find((i) => str(asRecord(i.event.payload?.raw)?.subtype) === 'init')
-  if (init) {
-    const raw = asRecord(init.event.payload?.raw)
-    const cwd = str(raw?.cwd)
+  const init = items.find((i) => subtypeOf(i) === 'init')
+  const resumed = hookNames.some((n) => /resume/i.test(n))
+  if (resumed) parts.push('resume')
+  else if (init) {
+    const cwd = str(asRecord(init.event.payload?.raw)?.cwd)
     parts.push(cwd ? `init · cwd ${cwd.replace(/^\/Users\/[^/]+/, '~')}` : 'init')
-  } else if (subtypes.some((s) => /resume/.test(s)) || [...hookNames].some((n) => /resume/.test(n))) {
-    parts.push('resume')
   }
-  if (hooks.length > 0) parts.push(`${hooks.length} ${hooks.length === 1 ? 'hook' : 'hooks'} ${[...hookNames].join(', ')}`)
+  if (hooks.length > 0) parts.push(`${hooks.length} ${hooks.length === 1 ? 'hook' : 'hooks'} ${hookNames.join(', ')}`)
   if (parts.length === 0) {
     const counted = new Map<string, number>()
-    for (const s of subtypes) counted.set(s, (counted.get(s) ?? 0) + 1)
+    for (const i of items) counted.set(subtypeOf(i), (counted.get(subtypeOf(i)) ?? 0) + 1)
     return [...counted].map(([k, n]) => (n > 1 ? `${k} ×${n}` : k)).join(' · ')
   }
   return parts.join(' · ')
+}
+
+/** The model the provider named on its first assistant line, for a run whose state.json has none. */
+export function modelOf(events: IndexedEvent[]): string {
+  for (const { event } of events) {
+    const message = asRecord(asRecord(event.payload?.raw)?.message)
+    const model = str(message?.model)
+    if (model) return model
+  }
+  return ''
 }
 
 /** The result line's figures: `turns 14 · $0.72 · api 101.7 s · 44,160 cache write · 157,945 cache read · 7,966 out`. */
@@ -326,6 +353,16 @@ function resultSummary(event: RunEvent): string {
     if (typeof usage.output_tokens === 'number') parts.push(`${n(usage.output_tokens)} out`)
   }
   return parts.join(' · ')
+}
+
+/** What the reviewer did to the commit after the run: `dropped ledger_test.go · hunk 1 in review`. */
+function reviewRow(event: RunEvent): Pick<ConsoleRow, 'kind' | 'tool' | 'summary'> {
+  const action = str(event.payload?.action)
+  return {
+    kind: 'review',
+    tool: 'you',
+    summary: `${action === 'drop' ? 'dropped' : action} ${str(event.payload?.path)} · hunk ${(event.payload?.hunk ?? 0) + 1} in review`,
+  }
 }
 
 /** The title of a structured answer, for the final row and the rail. */
@@ -360,14 +397,20 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
 
   for (const item of conversation(events, true)) {
     if (item.kind === 'fold') {
-      const first = item.items[0]
+      // `lib/events` files a review under `system`; it is the reader's own act.
+      for (const r of item.items.filter((i) => i.event.kind === 'review')) {
+        rows.push({ id: `e${r.index}`, index: r.index, ...at(r.event.t), ...reviewRow(r.event) })
+      }
+      const kept = keepSystem(item.items.filter((i) => i.event.kind !== 'review'))
+      if (kept.length === 0) continue
+      const first = kept[0]
       rows.push({
         id: `e${first.index}`,
         index: first.index,
         kind: 'sys',
         ...at(first.event.t),
         tool: 'session',
-        summary: systemSummary(item.items),
+        summary: systemSummary(kept),
       })
       continue
     }
@@ -454,6 +497,11 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
     const { event } = item.item
     const index = item.index
     const base = { id: `e${index}`, index, ...at(event.t) }
+    if (event.kind === 'system') {
+      if (keepSystem([item.item]).length === 0) continue
+      rows.push({ ...base, kind: 'sys', tool: 'session', summary: systemSummary([item.item]) })
+      continue
+    }
     switch (event.kind) {
       case 'usage': {
         const raw = asRecord(event.payload?.raw)
@@ -494,14 +542,7 @@ export function buildRows(events: IndexedEvent[], opts: BuildOptions): ConsoleRo
         })
         break
       case 'review':
-        rows.push({
-          ...base,
-          kind: 'review',
-          tool: 'you',
-          summary: `${str(event.payload?.action) === 'drop' ? 'dropped' : str(event.payload?.action)} ${str(
-            event.payload?.path,
-          )} · hunk ${(event.payload?.hunk ?? 0) + 1} in review`,
-        })
+        rows.push({ ...base, ...reviewRow(event) })
         break
       case 'question':
         rows.push({ ...base, kind: 'ask', tool: 'AskUserQuestion', summary: flat(str(event.payload?.text), 240) })
@@ -589,9 +630,10 @@ export interface ConsoleCounts {
   reviews: number
 }
 
-export function consoleCounts(rows: ConsoleRow[], events: number): ConsoleCounts {
+/** The header's figures. `events` is the rows the transcript shows: the deltas the provider streams are not things that happened. */
+export function consoleCounts(rows: ConsoleRow[]): ConsoleCounts {
   return {
-    events,
+    events: rows.length,
     calls: rows.filter((r) => r.call).length,
     denied: rows.filter((r) => r.kind === 'deny').length,
     steers: rows.filter((r) => r.kind === 'steer').length,

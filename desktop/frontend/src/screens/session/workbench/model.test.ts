@@ -91,9 +91,9 @@ describe('the console rows', () => {
   })
 
   it('counts what the header prints', () => {
-    const counts = consoleCounts(rows, events.length)
+    const counts = consoleCounts(rows)
     expect(counts).toMatchObject({ calls: 9, denied: 1, steers: 1 })
-    expect(countsLabel(counts)).toBe(`${events.length} events · 9 calls · 1 denied · 1 steer`)
+    expect(countsLabel(counts)).toBe(`${rows.length} events · 9 calls · 1 denied · 1 steer`)
   })
 
   it('filters to the calls, the denials or the prose', () => {

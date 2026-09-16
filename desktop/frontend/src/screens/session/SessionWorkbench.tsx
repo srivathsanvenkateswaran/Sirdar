@@ -33,6 +33,7 @@ import {
   consoleCounts,
   countsLabel,
   isRailCell,
+  modelOf,
   pendingQuestion,
   railItems,
   type ConsoleFilter,
@@ -220,7 +221,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     return at === -1 ? [...built, closing] : [...built.slice(0, at), closing, ...built.slice(at)]
   }, [events, detail, permissions, notesDir])
   const rail = useMemo(() => railItems(events, status), [events, status])
-  const counts = useMemo(() => consoleCounts(rows, events.length), [rows, events.length])
+  const counts = useMemo(() => consoleCounts(rows), [rows])
   const answerText = useMemo(() => {
     for (let i = runEvents.length - 1; i >= 0; i -= 1) if (runEvents[i].kind === 'final') return runEvents[i].payload?.text ?? ''
     return ''
@@ -256,6 +257,9 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   )
 
   const shownTab: Tab = tab ?? (isFix ? 'diff' : answer ? 'answer' : 'note')
+  // state.json records the model only when the config names one; the
+  // provider names it on every assistant line.
+  const model = detail?.model || modelOf(events)
   const following = follow ?? live
 
   // ---- actions ------------------------------------------------------------
@@ -449,7 +453,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     <div className="wb" data-testid="session-workbench">
       <RunHeader
         variant="gauges"
-        detail={detail}
+        detail={{ ...detail, model }}
         keyText={shown.text}
         keyTitle={shown.other}
         title={title}
@@ -587,7 +591,7 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             error={mode.kind === 'disabled' ? '' : actionError}
             onSend={(text) => void send(text)}
             provider={detail.provider}
-            model={detail.model}
+            model={model}
             kind={detail.kind}
             sentCount={sent}
             placeholder={placeholder}

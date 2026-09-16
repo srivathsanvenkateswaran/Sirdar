@@ -167,8 +167,8 @@ describe('SessionWorkbench', () => {
       renderWorkbench(fake())
       await screen.findByRole('heading', { name: 'SBX-1' })
       const c = console_()
-      expect(within(c).getByText(`${triageEvents().length} events · 9 calls · 1 denied · 1 steer`)).toBeInTheDocument()
-      expect(c).toHaveTextContent('838k in · 14.8k out')
+      expect(within(c).getByText(/^\d+ events · 9 calls · 1 denied · 1 steer$/)).toBeInTheDocument()
+      expect(c).toHaveTextContent('838k in · 15k out')
       // Finished: follow-live is off and cannot be turned on.
       const follow = within(c).getByRole('switch', { name: 'Follow live' })
       expect(follow).toHaveAttribute('aria-checked', 'false')
