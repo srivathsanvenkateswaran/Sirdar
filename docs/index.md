@@ -1,38 +1,122 @@
-# Sirdar
+---
+title: Overview
+hide:
+  - navigation
+  - toc
+---
 
-Sirdar is an open-source harness that works a support ticket end to end: it writes the triage,
-implements the fix, and writes the root cause. A ticket lands in a helpdesk or tracker; a coding
-agent you already have a login for (Claude Code, Codex, Copilot, Cursor, Qwen, OpenCode, Kimi, or
-any OpenAI-compatible model) reads it with the code, the logs and the MCP servers your workspace
-grants it, and answers with a triage note: a root-cause hypothesis with cited evidence, a proposed
-fix, and a reply draft in the customer's language.
+<div class="sd-hero" markdown>
+<div class="sd-hero__copy" markdown>
 
-You read the note. If you agree, `sirdar fix` runs a second session on its own branch in a linked
-git worktree, implements that fix while you steer it from the composer, and shows you the diff to
-accept or reject. Once the fix is merged, `sirdar rca` writes the two notes that close the loop: an
-RCA note explaining why the bug happened, and a Resolution note recording exactly what changed.
+# A ticket arrives. *Something reads it first.*
 
-It runs on your own machine, under your own logins. The triage session can only read, the fix
-session can only write inside its worktree, nothing is pushed without you, and Sirdar never posts
-to the tracker or helpdesk.
+Sirdar works a support ticket end to end with the coding agent you already have a login for:
+it writes the triage note, implements the fix on its own branch, and writes the root cause once
+the fix is merged. It runs on your machine, under your logins, and never posts to the tracker.
 
-On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work,
-decides who goes up and when, and answers to the client for the outcome. The name is a tribute
-to the Sherpa people, whose work on the mountain makes every ascent possible and is rarely the
-part that gets photographed.
+<div class="sd-hero__actions" markdown>
 
-## Where to start
+[Get started](getting-started.md){ .sd-btn }
 
-- New to Sirdar: [Getting started](getting-started.md) — install it, run `sirdar init`, and
-  produce your first triage note.
-- Understanding the model: [Concepts](concepts.md) — workspaces, bundles, playbooks, runs, and
-  the read-only guarantees that keep every run safe to leave unattended.
-- Wiring up your workspace: [Configuration](config.md) for every `.sirdar/config.yaml` key, and
-  [Sources](adapters.md) for the trackers and helpdesks Sirdar talks to.
-- Why Sirdar exists at all: the [research](research/02-landscape.md) behind the decision to
-  build it, and the [design spec](superpowers/specs/2026-09-10-sirdar-v0-triage-core-design.md)
-  for what v0 actually does.
+```sh
+go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest
+```
 
-## Status
+</div>
+</div>
 
-v0: command-line triage core; the board is next.
+<img class="sd-hero__mark" src="design/2026-09-16-logo/final/sirdar-mark-dark.svg" alt="" width="180" height="180">
+</div>
+
+## Start here
+
+<div class="sd-cards" markdown>
+
+- [Getting started](getting-started.md)
+
+    Install it, run `sirdar init`, and produce your first triage note.
+
+- [Concepts](concepts.md)
+
+    Workspaces, bundles, playbooks, runs, and the read-only guarantees that keep a run safe to leave unattended.
+
+- [Configuration](config.md)
+
+    Every key in `.sirdar/config.yaml`, with its default and what it changes.
+
+</div>
+
+## Run it
+
+<div class="sd-cards" markdown>
+
+- [Fix flow](fix.md)
+
+    The one command that writes: a second session on its own branch in a linked worktree, and the diff to accept or reject.
+
+- [Steer](steer.md)
+
+    Continue a finished run with an instruction; the transcript grows in place and the note is rendered again.
+
+- [Evaluation](eval.md)
+
+    Replay tickets you triaged by hand and score what the agent produces against what you produced.
+
+- [Webhooks](webhooks.md)
+
+    Let `sirdar serve` triage a ticket the moment the tracker or helpdesk assigns it.
+
+- [Notifications](notifications.md)
+
+    A short digest of every finished run to Slack, Teams, or an HTTP receiver of your own.
+
+- [Credentials](credentials.md)
+
+    Tokens as references (`keychain:`, `file:`, `cmd:`, `env:`), never as literals in the config.
+
+</div>
+
+## Look it up
+
+<div class="sd-cards" markdown>
+
+- [Adapters](adapters.md)
+
+    The trackers and helpdesks Sirdar reads, and the line-delimited JSON protocol for one it does not.
+
+- [Providers](reference/index.md#providers)
+
+    Claude Code, Codex, Qwen Code, Cursor, any ACP agent, or any OpenAI-compatible endpoint, and how each is held read-only.
+
+- [Architecture](architecture.md)
+
+    The packages, the run lifecycle, the three read-only layers, and how the desktop app observes a run.
+
+- [Cutting a release](release.md)
+
+    goreleaser from a tag; every release opens as a draft and a person publishes it.
+
+</div>
+
+## Behind the product
+
+<div class="sd-cards" markdown>
+
+- [Design](design/index.md)
+
+    One language across the landing page, the desktop app, and this site, with the tokens that carry it.
+
+- [Research](research/00-context.md)
+
+    Why Sirdar exists, the landscape it sits in, and the wire formats of every CLI it drives.
+
+- [Specs and plans](superpowers/specs/2026-09-10-sirdar-v0-triage-core-design.md)
+
+    What v0 does, as designed, and the plans that built it.
+
+</div>
+
+<p class="sd-origin">On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns
+the team's work, decides who goes up and when, and answers to the client for the outcome. The
+name is a tribute to the Sherpa people, whose work on the mountain makes every ascent possible
+and is rarely the part that gets photographed.</p>

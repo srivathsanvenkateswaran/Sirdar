@@ -1,0 +1,480 @@
+/*
+ * Sirdar design tokens — the only place a value is declared.
+ *
+ * Three surfaces read this file and none of them redeclares anything: the
+ * desktop app imports it at the top of `styles.css`, the landing site takes a
+ * byte-identical copy, and the docs site assigns Material's `--md-*` variables
+ * from these names. If the three ever disagree, this file is right and the
+ * other two are stale. See `docs/design/01-tokens.md`, which is the contract
+ * this file implements, and `docs/design/00-design-language.md` for why each
+ * value is what it is.
+ *
+ * Every ratio quoted in a comment below was computed, not estimated, and is
+ * asserted in `src/styles.contrast.test.ts`. A token that cannot state its
+ * ratio does not ship.
+ *
+ * The four families the screens round names — Figtree, Inter, JetBrains
+ * Mono, Newsreader — lead each stack. The app serves them from its bundle
+ * (`desktop/frontend/src/fonts/`, declared at the top of `src/styles.css`);
+ * the landing page links them from Google Fonts, the way the reviewed mocks
+ * do. Every stack still falls through to a face the operating system already
+ * has, so a face that has not loaded yet is drawn in the nearest system one.
+ */
+
+:root {
+  /* ---------- ground and surface ---------- */
+  --sd-paper: #FAF7EC;
+  --sd-surface: #FFFDF7;
+  --sd-sunk: #F1EDDF;
+  --sd-band-deep: #1F2B52;
+  --sd-band-ink: #17181C;
+
+  /*
+   * The ink a band carries. `01-tokens.md` states the band's ratio as "paper
+   * on it: 12.83:1 light, 10.48:1 dark" without naming the token that paints
+   * it; in the dark theme the paper value is a near-black and 10.48:1 is the
+   * warm ink instead. Two components already have to agree on this (hero band
+   * and the docs home band), which by section 4's test makes it a token rather
+   * than a component-local constant.
+   */
+  --sd-band-fg: var(--sd-paper);
+
+  /* ---------- app shell ---------- */
+  /*
+   * The desktop app is a window ground with one content sheet on it, not a
+   * page with colour bands. `--sd-paper` keeps the landing page and the docs
+   * site and stops being the app's background; the app's background is
+   * `--sd-shell`. See `docs/design/03-desktop-app.md` sections 3 and 4.
+   */
+  --sd-shell: #F2EEE0; /* --sd-ink-3 on it: 4.60 */
+  --sd-sheet: #FFFDF7; /* 1.14 off the shell; --sd-ink on it: 17.44 */
+  --sd-card-row: #F5F1E4; /* 1.11 off the sheet; ink 15.70 / ink-2 7.37 / ink-3 4.73 */
+  --sd-rule-faint: #EAE6D6; /* the hairline inside a card row: 1.11 on it. Not a text colour. */
+  --sd-scrim: rgba(23, 24, 28, 0.32); /* behind a dialog or the settings modal */
+
+  /* ---------- navigation and the primary action ---------- */
+  /*
+   * No accent anywhere in navigation. In Sirdar the accent means a live run,
+   * and a nav row wearing it competes with the one card on the board that has
+   * earned it.
+   */
+  --sd-nav-hover: #EDE8D8; /* --sd-ink-2 on it: 6.79 */
+  --sd-nav-active: #E7E2D1; /* --sd-ink 13.68, --sd-ink-2 6.42; --sd-ink-3 is 4.12 here and is not allowed on a nav pill */
+  --sd-primary: #17181C; /* the one filled commit button per screen: the ink, inverted per theme */
+  --sd-primary-ink: #FFFDF7; /* 17.44 on the fill */
+  --sd-primary-hover: #2B2D33; /* label on it: 13.53 */
+
+  /* ---------- badge ---------- */
+  /*
+   * A badge carries a fact about the account or the workspace. Run state stays
+   * on --sd-st-* with its word, and anything that could be either is a status
+   * badge. The pair points at the highlight rather than introducing a ninth
+   * near-identical tint; the names exist because a badge and a primary button
+   * are different roles that happen to share a fill today.
+   */
+  --sd-badge-bg: var(--sd-highlight);
+  --sd-badge-ink: var(--sd-highlight-ink); /* 13.86 light, 9.72 dark */
+
+  /* ---------- heatmap ---------- */
+  /*
+   * Five steps of the accent for the runs-per-day grid on the Register. A
+   * sequential ramp, so neighbouring pairs are not held to 3:1; the floor
+   * applies to the text, and the count is carried by each cell's accessible
+   * name, its tooltip and a legend that prints bucket boundaries as numbers.
+   */
+  --sd-heat-0: #EEEADB; /* no runs; 1.18 off the sheet */
+  --sd-heat-1: #CFCBEE; /* 1 */
+  --sd-heat-2: #A7A2DE; /* 2 to 4 */
+  --sd-heat-3: #6E69C4; /* 5 to 9 */
+  --sd-heat-4: var(--sd-accent); /* 10 or more */
+
+  /* ---------- ink ramp ---------- */
+  /* on paper: 16.54 / 7.76 / 4.98. --sd-ink-3 on --sd-sunk is 4.56, the
+     tightest pair the file ships and the reason --sd-sunk is no darker. */
+  --sd-ink: #17181C;
+  --sd-ink-2: #4A4E58;
+  --sd-ink-3: #676B74;
+  --sd-rule: #E3DFD1;
+  --sd-rule-strong: #C9C4B2;
+
+  /* ---------- accent and highlight ---------- */
+  --sd-accent: #3B3AA6; /* 8.36 on paper, 8.82 on surface, 7.65 on sunk */
+  --sd-accent-ink: #FFFDF7; /* 8.82 on the accent fill */
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  --sd-highlight: #E4E0FF;
+  --sd-highlight-ink: #17181C; /* 13.86 on the highlight fill */
+
+  /* ---------- status ---------- */
+  /*
+   * Meaning is fixed by the run state machine in the CLI. Light values are
+   * deepened from the app's originals so they clear 4.5:1 on warm paper.
+   * --sd-st-blocked is the tightest at 4.84 on paper and 4.43 on sunk, which
+   * is why no component in the library paints status text on --sd-sunk.
+   */
+  --sd-st-queue: #63676F;
+  --sd-st-live: var(--sd-accent);
+  --sd-st-blocked: #A15C07;
+  --sd-st-triaged: #0E6F66;
+  --sd-st-done: #17713A;
+  --sd-st-failed: #B02418;
+
+  /* ---------- type ---------- */
+  --sd-font-display: Newsreader, Georgia, "Noto Naskh Arabic", serif;
+  --sd-font-ui: Figtree, Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "IBM Plex Sans Arabic", "Noto Naskh Arabic", "Geeza Pro", "Segoe UI Arabic",
+    system-ui, sans-serif;
+  --sd-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, "SF Mono", Menlo,
+    Consolas, "Liberation Mono", "Noto Sans Arabic", monospace;
+
+  /*
+   * The app column of the type ladder, re-based on 2026-09-15 to the
+   * reference app's register (docs/design/2026-09-15-screens/README.md,
+   * round 2): a 16px UI face, 14px meta, 12px micro. `--sd-text-ledger` is
+   * the mono ledger size — keys, clocks, costs, event rows — which sits a
+   * half-step under the body so a run id does not out-weigh the title beside
+   * it.
+   */
+  --sd-text-display-m: 2rem;
+  --sd-text-title: 1.375rem;
+  --sd-text-body-l: 1.0625rem;
+  --sd-text-body: 1rem;
+  --sd-text-meta: 0.875rem;
+  --sd-text-micro: 0.75rem;
+  --sd-text-ledger: 0.84375rem;
+
+  /* The landing column of the same ladder. */
+  --sd-text-display-xl: 4.5rem;
+  --sd-text-display-l: 3.5rem;
+
+  /* ---------- space ---------- */
+  --sd-space-1: 4px;
+  --sd-space-2: 8px;
+  --sd-space-3: 12px;
+  --sd-space-4: 16px;
+  --sd-space-5: 24px;
+  --sd-space-6: 32px;
+  --sd-space-7: 48px;
+  --sd-space-8: 64px;
+  --sd-space-9: 96px;
+  --sd-space-10: 128px;
+
+  /* ---------- radius ---------- */
+  --sd-radius-xs: 4px;
+  --sd-radius-sm: 8px;
+  --sd-radius-md: 12px;
+  --sd-radius-lg: 20px;
+  --sd-radius-band: 40px;
+  --sd-radius-pill: 999px;
+  /* The content sheet's corner. Larger than a panel's, smaller than a landing
+     card's: the sheet is the one box the whole app sits in. */
+  --sd-radius-sheet: 16px;
+
+  /* ---------- elevation ---------- */
+  /*
+   * Two shadows, and most things get neither. The hard offset is the printed
+   * look and marks the one control on a surface that can change something; it
+   * flips its horizontal offset under [dir="rtl"] at the foot of this file so
+   * the light keeps coming from the leading edge.
+   */
+  --sd-shadow-hard-color: var(--sd-ink);
+  --sd-shadow-hard: 2px 2px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-hard-pressed: 1px 1px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-soft: 0 4px 20px rgba(23, 24, 28, 0.1);
+
+  /* ---------- motion ---------- */
+  --sd-dur-1: 120ms;
+  --sd-dur-2: 200ms;
+  --sd-dur-3: 300ms;
+  --sd-dur-4: 350ms;
+  --sd-ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  /* The two ambient motions. Both are decorative and both have a static pose
+     under prefers-reduced-motion; see src/ui/motion. */
+  --sd-dur-ring: 48s;
+  --sd-dur-marquee: 34s;
+  /* The page enter: the sheet's content rises 8px and fades in on the window's
+     first paint, and only then — a move between screens after that is drawn
+     in place. The settings modal uses --sd-dur-2 behind a --sd-dur-1 scrim.
+     Both freeze under prefers-reduced-motion; see src/ui/motion. */
+  --sd-dur-page: 160ms;
+
+  /* ---------- layout ---------- */
+  --sd-measure-wide: 1200px;
+  --sd-measure-prose: 68ch;
+  --sd-gutter: 12px;
+  /*
+   * The shell's fixed measures, from the reviewed mocks. A control is 40 tall
+   * wherever it is (button, select, search well, segmented track); the sidebar
+   * is 248 wide with 44-tall rows. Two components read each of these, which
+   * is what makes them tokens rather than constants.
+   */
+  --sd-control-h: 40px;
+  --sd-sidebar-w: 248px;
+  --sd-nav-row-h: 44px;
+  /*
+   * The page inset every full-sheet screen draws: 40 above and 48 at the
+   * sides at the wide width (the block-end stays --sd-space-6). The
+   * breakpoints below step it down.
+   */
+  --sd-page-pad-block: 40px;
+  --sd-page-pad-inline: 48px;
+
+  color-scheme: light;
+}
+
+@media (min-width: 768px) {
+  :root {
+    --sd-radius-band: 64px;
+  }
+}
+
+/*
+ * ---------- breakpoints ----------
+ *
+ * The app is designed for a 1440–1470 wide, ~900 tall window and degrades
+ * from there. Four bands, and every stylesheet writes its rules at these
+ * widths and no others:
+ *
+ *   wide      ≥ 1440        sidebar 248, page inset 40/48; six lanes share
+ *                           the row, the register band sits side by side,
+ *                           the review is three columns
+ *   standard  1200 – 1439   sidebar 248, page inset 32/32; review rail 240
+ *                           and pane 320
+ *   compact   1024 – 1199   sidebar 220, page inset 24/24; the session
+ *                           panes stack below 1100, the review pane drops
+ *                           under the diff, eval is one column, the wide
+ *                           tables lose their least-read columns
+ *   narrow    < 1024        the sidebar is a 56px icon rail and layouts
+ *                           stack; the older < 720 rules still apply
+ *
+ * Only the tokens change here. src/styles.responsive.test.ts reads each
+ * sheet and checks its rules sit at the same widths.
+ */
+@media (max-width: 1439px) {
+  :root {
+    --sd-page-pad-block: 32px;
+    --sd-page-pad-inline: 32px;
+  }
+}
+
+@media (max-width: 1199px) {
+  :root {
+    --sd-sidebar-w: 220px;
+    --sd-page-pad-block: 24px;
+    --sd-page-pad-inline: 24px;
+  }
+}
+
+/*
+ * Dark. The two spellings — the system preference and the explicit choice —
+ * must stay in step; each is written out rather than sharing a class, because
+ * a selector list containing an unsupported `:not()` would drop both.
+ */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --sd-paper: #14151A;
+    --sd-surface: #1C1E25;
+    --sd-sunk: #0F1014;
+    --sd-band-deep: #232F58;
+    --sd-band-ink: #0C0D10;
+    --sd-band-fg: var(--sd-ink); /* 10.48 on band-deep, 15.69 on band-ink */
+
+    --sd-shell: #0C0D11;
+    --sd-sheet: #191A20;
+    --sd-card-row: #22242B;
+    /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+       The measured value is the one styles.contrast.test.ts records. */
+    --sd-rule-faint: #24262C;
+    --sd-scrim: rgba(7, 8, 10, 0.56);
+
+    --sd-nav-hover: #1B1D24;
+    --sd-nav-active: #24262E;
+    --sd-primary: #E9E7DF;
+    --sd-primary-ink: #0C0D11;
+    --sd-primary-hover: #D5D2C6;
+
+    --sd-heat-0: #232630;
+    --sd-heat-1: #34315F;
+    --sd-heat-2: #4C4894;
+    --sd-heat-3: #736ECF;
+
+    --sd-ink: #E9E7DF;
+    --sd-ink-2: #A6A9B2;
+    --sd-ink-3: #8C919B;
+    --sd-rule: #2A2D34;
+    --sd-rule-strong: #3D424B;
+
+    --sd-accent: #A6A2FF;
+    --sd-accent-ink: #14151A;
+    --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+    --sd-highlight: #2E2A55;
+    --sd-highlight-ink: #DDD8FF;
+
+    --sd-st-queue: #9298A3;
+    --sd-st-blocked: #E0A14A;
+    --sd-st-triaged: #58C7BA;
+    --sd-st-done: #6EC98A;
+    --sd-st-failed: #F08C8C;
+
+    /* Ink on a dark ground would be invisible, so the hard shadow is drawn in
+       the strong rule instead. */
+    --sd-shadow-hard-color: var(--sd-rule-strong);
+
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --sd-paper: #14151A;
+  --sd-surface: #1C1E25;
+  --sd-sunk: #0F1014;
+  --sd-band-deep: #232F58;
+  --sd-band-ink: #0C0D10;
+  --sd-band-fg: var(--sd-ink);
+
+  --sd-shell: #0C0D11;
+  --sd-sheet: #191A20;
+  --sd-card-row: #22242B;
+  /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+     The measured value is the one styles.contrast.test.ts records. */
+  --sd-rule-faint: #24262C;
+  --sd-scrim: rgba(7, 8, 10, 0.56);
+
+  --sd-nav-hover: #1B1D24;
+  --sd-nav-active: #24262E;
+  --sd-primary: #E9E7DF;
+  --sd-primary-ink: #0C0D11;
+  --sd-primary-hover: #D5D2C6;
+
+  --sd-heat-0: #232630;
+  --sd-heat-1: #34315F;
+  --sd-heat-2: #4C4894;
+  --sd-heat-3: #736ECF;
+
+  --sd-ink: #E9E7DF;
+  --sd-ink-2: #A6A9B2;
+  --sd-ink-3: #8C919B;
+  --sd-rule: #2A2D34;
+  --sd-rule-strong: #3D424B;
+
+  --sd-accent: #A6A2FF;
+  --sd-accent-ink: #14151A;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+  --sd-highlight: #2E2A55;
+  --sd-highlight-ink: #DDD8FF;
+
+  --sd-st-queue: #9298A3;
+  --sd-st-blocked: #E0A14A;
+  --sd-st-triaged: #58C7BA;
+  --sd-st-done: #6EC98A;
+  --sd-st-failed: #F08C8C;
+
+  --sd-shadow-hard-color: var(--sd-rule-strong);
+
+  color-scheme: dark;
+}
+
+/*
+ * The gallery paints a light frame inside a dark window and the other way
+ * round, so both themes also have to be reachable on a subtree rather than
+ * only on :root. These repeat the two blocks above at element scope; they
+ * carry no colour of their own, only the same values one level down.
+ */
+[data-theme="light"] {
+  --sd-paper: #FAF7EC;
+  --sd-surface: #FFFDF7;
+  --sd-sunk: #F1EDDF;
+  --sd-band-deep: #1F2B52;
+  --sd-band-ink: #17181C;
+  --sd-band-fg: var(--sd-paper);
+
+  --sd-shell: #F2EEE0;
+  --sd-sheet: #FFFDF7;
+  --sd-card-row: #F5F1E4;
+  --sd-rule-faint: #EAE6D6;
+  --sd-scrim: rgba(23, 24, 28, 0.32);
+  --sd-nav-hover: #EDE8D8;
+  --sd-nav-active: #E7E2D1;
+  --sd-primary: #17181C;
+  --sd-primary-ink: #FFFDF7;
+  --sd-primary-hover: #2B2D33;
+  --sd-badge-bg: var(--sd-highlight);
+  --sd-badge-ink: var(--sd-highlight-ink);
+  --sd-heat-0: #EEEADB;
+  --sd-heat-1: #CFCBEE;
+  --sd-heat-2: #A7A2DE;
+  --sd-heat-3: #6E69C4;
+  --sd-heat-4: var(--sd-accent);
+  --sd-ink: #17181C;
+  --sd-ink-2: #4A4E58;
+  --sd-ink-3: #676B74;
+  --sd-rule: #E3DFD1;
+  --sd-rule-strong: #C9C4B2;
+  --sd-accent: #3B3AA6;
+  --sd-accent-ink: #FFFDF7;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 10%, transparent);
+  --sd-highlight: #E4E0FF;
+  --sd-highlight-ink: #17181C;
+  --sd-st-queue: #63676F;
+  --sd-st-blocked: #A15C07;
+  --sd-st-triaged: #0E6F66;
+  --sd-st-done: #17713A;
+  --sd-st-failed: #B02418;
+  --sd-shadow-hard-color: var(--sd-ink);
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  --sd-paper: #14151A;
+  --sd-surface: #1C1E25;
+  --sd-sunk: #0F1014;
+  --sd-band-deep: #232F58;
+  --sd-band-ink: #0C0D10;
+  --sd-band-fg: var(--sd-ink);
+
+  --sd-shell: #0C0D11;
+  --sd-sheet: #191A20;
+  --sd-card-row: #22242B;
+  /* 1.02 on the card row, not the 1.12 the tokens doc states for this pair.
+     The measured value is the one styles.contrast.test.ts records. */
+  --sd-rule-faint: #24262C;
+  --sd-scrim: rgba(7, 8, 10, 0.56);
+
+  --sd-nav-hover: #1B1D24;
+  --sd-nav-active: #24262E;
+  --sd-primary: #E9E7DF;
+  --sd-primary-ink: #0C0D11;
+  --sd-primary-hover: #D5D2C6;
+
+  --sd-heat-0: #232630;
+  --sd-heat-1: #34315F;
+  --sd-heat-2: #4C4894;
+  --sd-heat-3: #736ECF;
+  --sd-ink: #E9E7DF;
+  --sd-ink-2: #A6A9B2;
+  --sd-ink-3: #8C919B;
+  --sd-rule: #2A2D34;
+  --sd-rule-strong: #3D424B;
+  --sd-accent: #A6A2FF;
+  --sd-accent-ink: #14151A;
+  --sd-accent-soft: color-mix(in srgb, var(--sd-accent) 16%, transparent);
+  --sd-highlight: #2E2A55;
+  --sd-highlight-ink: #DDD8FF;
+  --sd-st-queue: #9298A3;
+  --sd-st-blocked: #E0A14A;
+  --sd-st-triaged: #58C7BA;
+  --sd-st-done: #6EC98A;
+  --sd-st-failed: #F08C8C;
+  --sd-shadow-hard-color: var(--sd-rule-strong);
+  color-scheme: dark;
+}
+
+/*
+ * The one documented exception to logical properties. A hard offset shadow is
+ * a light source, not a layout box: mirrored, the light would come from the
+ * trailing edge and the button would look as though it had been lit from the
+ * wrong side of the page.
+ */
+[dir="rtl"] {
+  --sd-shadow-hard: -2px 2px 0 0 var(--sd-shadow-hard-color);
+  --sd-shadow-hard-pressed: -1px 1px 0 0 var(--sd-shadow-hard-color);
+}

@@ -2,7 +2,8 @@ site_name: Sirdar
 site_description: An open-source harness that works a support ticket end to end - triage, fix, root cause - with the coding agent you already pay for.
 site_url: https://srivathsanvenkateswaran.github.io/Sirdar/docs/
 repo_url: https://github.com/srivathsanvenkateswaran/Sirdar
-repo_name: srivathsanvenkateswaran/Sirdar
+# Shown beside the GitHub mark in the bar, so it is the label rather than the slug.
+repo_name: GitHub
 edit_uri: edit/main/docs/
 docs_dir: docs
 # site/ holds the landing page, so the docs build goes elsewhere.
@@ -11,40 +12,66 @@ use_directory_urls: true
 # The two design rounds ship an index.html beside a README.md; the html is the
 # artefact and the README its note, and only one of them can be the directory
 # index. Strict mode treats the collision as a warning, so name the losers.
+# overrides/ is the theme's template directory, not a document.
 exclude_docs: |
   design/2026-09-15-screens/README.md
   design/2026-09-16-logo/README.md
+  overrides/
 
 theme:
   name: material
+  custom_dir: docs/overrides
+  language: en
+  logo: design/2026-09-16-logo/final/sirdar-mark-light.svg
+  favicon: design/2026-09-16-logo/final/sirdar-mark-light.svg
+  # Self-hosted under docs/fonts and declared in stylesheets/sirdar.css.
+  font: false
+  # Light only: the design language is light, so there is no toggle.
   palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-night
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      accent: indigo
-      toggle:
-        icon: material/weather-sunny
-        name: Switch to light mode
+    scheme: default
+  icon:
+    repo: fontawesome/brands/github
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
-    - content.code.copy
+    - navigation.indexes
+    - navigation.top
+    - navigation.footer
+    - toc.follow
     - search.suggest
+    - search.highlight
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
 
+extra:
+  generator: false
+
+# tokens.css is a byte-identical copy of desktop/frontend/src/styles/tokens.css
+# (make tokens; scripts/check-tokens.sh). sirdar.css reads it and nothing else
+# declares a colour.
 extra_css:
-  - stylesheets/extra.css
+  - stylesheets/tokens.css
+  - stylesheets/sirdar.css
+
+extra_javascript:
+  - javascripts/sirdar.js
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
+      title: On this page
+      toc_depth: 3
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
   - pymdownx.superfences
   - pymdownx.tabbed:
       alternate_style: true
@@ -55,21 +82,49 @@ validation:
     not_found: info
   links:
     not_found: warn
+    anchors: warn
 
 nav:
-  - Home: index.md
-  - Getting started: getting-started.md
-  - Concepts: concepts.md
-  - Configuration: config.md
-  - Sources: adapters.md
-  - Credentials: credentials.md
-  - Webhooks: webhooks.md
-  - Notifications: notifications.md
-  - Evaluation: eval.md
-  - Fix flow: fix.md
-  - Steer: steer.md
-  - Release: release.md
-  - Architecture: architecture.md
+  - Get started:
+      - index.md
+      - Getting started: getting-started.md
+      - Concepts: concepts.md
+  - Guides:
+      - guides/index.md
+      - Configuration: config.md
+      - Credentials: credentials.md
+      - Fix flow: fix.md
+      - Steer: steer.md
+      - Evaluation: eval.md
+      - Webhooks: webhooks.md
+      - Notifications: notifications.md
+      - Release: release.md
+  - Reference:
+      - reference/index.md
+      - Adapters: adapters.md
+      - Architecture: architecture.md
+      - Providers:
+          - Claude Code: reference/providers/claude.md
+          - Codex: reference/providers/codex.md
+          - Qwen Code: reference/providers/qwen.md
+          - OpenAI-compatible: reference/providers/openai.md
+          - ACP agents: reference/providers/acp.md
+          - Cursor Agent CLI: reference/providers/cursor.md
+          - Antigravity (disabled): reference/providers/agy.md
+  - Design:
+      - design/index.md
+      - Design language: design/00-design-language.md
+      - Tokens: design/01-tokens.md
+      - Landing page: design/02-landing-page.md
+      - Desktop app: design/03-desktop-app.md
+      - Component library: design/library/README.md
+      # The review pages of each round, self-contained HTML copied as-is. They
+      # sit directly under the tab: inside a sub-section, Material would take
+      # the first index.html as that section's index page and hide it.
+      - Screens, 2026-09-15: design/2026-09-15-screens/index.html
+      - Session window, 2026-09-16: design/2026-09-16-session/index.html
+      - Logo, 2026-09-16: design/2026-09-16-logo/index.html
+      - The mark as shipped: design/2026-09-16-logo/final/index.html
   - Research:
       - Overview: research/00-context.md
       - Name collisions: research/01-name-collisions.md
@@ -84,6 +139,7 @@ nav:
       - Antigravity wire formats: research/10-antigravity-wire-formats.md
       - Cursor CLI wire formats: research/11-cursor-wire-formats.md
       - Kimi Code wire formats: research/12-kimi-wire-formats.md
+      - Chat surfaces: research/13-chat-surfaces.md
       - Adapters:
           - Azure DevOps: research/adapters/azure-devops.md
           - Front: research/adapters/front.md
@@ -104,6 +160,7 @@ nav:
           - Desktop design: superpowers/specs/2026-09-10-sirdar-desktop-design.md
           - v0 triage core design: superpowers/specs/2026-09-10-sirdar-v0-triage-core-design.md
           - Steer design: superpowers/specs/2026-09-15-steer-design.md
+          - UI build design: superpowers/specs/2026-09-15-ui-build-design.md
       - Plans:
           - Provider roadmap: superpowers/plans/2026-09-10-provider-roadmap.md
           - v0 triage core: superpowers/plans/2026-09-10-sirdar-v0-triage-core.md
