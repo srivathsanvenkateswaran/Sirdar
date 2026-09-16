@@ -4,13 +4,18 @@
 
 [![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
 
-Sirdar is a read-only harness that turns an engineering-level support ticket into triage, RCA and
-resolution notes, and — once you have read the triage note and agree with it — into one confined
-fix on a branch. It does that by driving a coding-agent CLI you already pay for (Claude Code,
-Codex, Cursor Agent, Qwen Code, GitHub Copilot CLI, and others) inside the codebase the ticket
-belongs to. It runs on your laptop under your own logins, and it never writes to the helpdesk or
-the tracker, in any mode. On a Himalayan expedition the sirdar is the lead Sherpa: the one who
-assigns the team's work and answers to the client for the outcome.
+Sirdar works an engineering-level support ticket end to end: it writes the triage, implements the
+fix, and writes the root-cause analysis. A ticket arrives; Sirdar reads it with its whole customer
+conversation, the code and the logs, and answers with a triage note: the complaint in the customer's
+words and translated, repro steps, a root-cause hypothesis with cited evidence, a proposed fix and a
+reply draft. You read it. If you agree, `sirdar fix` implements that fix on its own branch in a
+linked worktree, with you steering from the composer and reviewing the diff. After the merge,
+`sirdar rca` writes the RCA and the resolution note. It does this by driving the coding-agent CLI
+you already pay for (Claude Code, Codex, Cursor Agent, Qwen Code, GitHub Copilot CLI, and others)
+on your laptop, under your own logins. The triage session is confined to reading, the fix session
+to its worktree, and Sirdar never posts to the helpdesk or the tracker. On a Himalayan expedition
+the sirdar is the lead Sherpa: the one who assigns the team's work and answers to the client for the
+outcome.
 
 ## How it works
 
@@ -64,7 +69,7 @@ to, so a run counts against the plan you already pay for, and it stores and prox
 of yours; where a provider needs an API key instead, the key stays a reference in config
 (`env:`, `keychain:`, `file:`, `cmd:`), never a literal.
 
-| Provider | How it signs in | `sirdar fix` | What makes a run read-only |
+| Provider | How it signs in | `sirdar fix` | How the triage session is kept read-only |
 |---|---|---|---|
 | `claude` | The Claude Code CLI login you already hold; `billing: api` leaves an API key in the environment instead | yes | Every tool call the CLI is not already allowed to make arrives as a permission request and Sirdar's policy answers it; the write tools are refused outright |
 | `codex` | The Codex CLI login you already hold | yes | Codex's own `sandbox: read-only` with `approvalPolicy: untrusted`, so shell, MCP and file-change calls are asked about |
@@ -148,7 +153,7 @@ sirdar serve --open  # the same screens as the app, in your browser on loopback
 
 ## Safety model
 
-- **Read-only by construction.** Sirdar never writes to a helpdesk or a tracker in any mode.
+- **Confined where it must be.** The triage session can only read; the fix session can only write inside its own worktree; Sirdar never posts to a helpdesk or a tracker in any mode.
   `sirdar fix` is the one session allowed to change files, and it writes only to git and GitHub,
   behind a gate a human passes by reading the note.
 - **Permission mediation is per provider, not by convention.** No two providers rest the guarantee

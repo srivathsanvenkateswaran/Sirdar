@@ -1,16 +1,20 @@
 # Sirdar
 
-Sirdar is an open-source harness that turns a support ticket into a root-cause note. A ticket
-lands in a helpdesk or tracker, and a coding agent you already have a login for — Claude Code,
-Codex, or any OpenAI-compatible model — reads it through the MCP servers your workspace grants
-it, works out what's going on, and writes up a triage note for a human to review. It runs on
-your own machine, under your own logins, and it never touches the tracker or helpdesk itself.
+Sirdar is an open-source harness that works a support ticket end to end: it writes the triage,
+implements the fix, and writes the root cause. A ticket lands in a helpdesk or tracker; a coding
+agent you already have a login for (Claude Code, Codex, Copilot, Cursor, Qwen, OpenCode, Kimi, or
+any OpenAI-compatible model) reads it with the code, the logs and the MCP servers your workspace
+grants it, and answers with a triage note: a root-cause hypothesis with cited evidence, a proposed
+fix, and a reply draft in the customer's language.
 
-If you agree with the note's proposed fix, `sirdar fix` runs a second session in a linked git
-worktree that may edit only inside that worktree, and the commit stays there until you review
-and push it. Once the fix is merged, Sirdar writes the two notes that close the loop: an RCA
-note explaining why the bug happened, and a Resolution note recording exactly what changed.
-Nothing is pushed and no pull request is opened without you.
+You read the note. If you agree, `sirdar fix` runs a second session on its own branch in a linked
+git worktree, implements that fix while you steer it from the composer, and shows you the diff to
+accept or reject. Once the fix is merged, `sirdar rca` writes the two notes that close the loop: an
+RCA note explaining why the bug happened, and a Resolution note recording exactly what changed.
+
+It runs on your own machine, under your own logins. The triage session can only read, the fix
+session can only write inside its worktree, nothing is pushed without you, and Sirdar never posts
+to the tracker or helpdesk.
 
 On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work,
 decides who goes up and when, and answers to the client for the outcome. The name is a tribute
