@@ -87,6 +87,18 @@ afterEach(() => {
 })
 
 describe('NoteView', () => {
+  it('sits inside the pane that scrolls, whatever state it is in', async () => {
+    const { container } = render(
+      <NoteView transport={fakeTransport(NOTE)} workspaceId="ws1" runId="r1" kinds={['triage']} />,
+    )
+    // Loading: the placeholder is already inside the scroll container.
+    expect(container.querySelector('.pane.pane--note')).toBeInTheDocument()
+    await screen.findByText('Export fails for large orders')
+    const pane = screen.getByTestId('note-pane')
+    expect(pane).toHaveClass('pane')
+    expect(pane.querySelector('.sd-note')).toBeInTheDocument()
+  })
+
   it('lets the browser resolve each block by marking the note dir="auto"', async () => {
     renderNote()
     await waitFor(() => expect(screen.getByTestId('note-markdown')).toBeInTheDocument())
@@ -146,5 +158,50 @@ describe('NoteView', () => {
       <NoteView transport={failingTransport(new Error('internal: notes dir is not readable'))} workspaceId="ws1" runId="r1" kinds={['triage']} />,
     )
     expect(await screen.findByText('internal: notes dir is not readable')).toBeInTheDocument()
+  })
+
+  describe('opening the file', () => {
+    const NOTES = ['/w/.sirdar/runs/K/r1/note.md', '/vault/Triage/OMNI-2510.md']
+
+    it('offers Open file on the desktop and hands the bridge the filed copy', async () => {
+      const t = fakeTransport(NOTE)
+      const opened: unknown[] = []
+      t.openNote = async (...args) => {
+        opened.push(args)
+      }
+      render(<NoteView transport={t} workspaceId="ws1" runId="r1" kinds={['triage']} notePaths={NOTES} />)
+      const button = await screen.findByRole('button', { name: 'Open file' })
+      expect(screen.getByText('OMNI-2510.md')).toBeInTheDocument()
+      button.click()
+      await waitFor(() => expect(opened).toEqual([['ws1', 'r1', '/vault/Triage/OMNI-2510.md']]))
+    })
+
+    it('copies the path in a browser, where nothing can open a file', async () => {
+      const written: string[] = []
+      Object.defineProperty(navigator, 'clipboard', {
+        configurable: true,
+        value: { writeText: async (s: string) => void written.push(s) },
+      })
+      render(<NoteView transport={fakeTransport(NOTE)} workspaceId="ws1" runId="r1" kinds={['triage']} notePaths={NOTES} />)
+      const button = await screen.findByRole('button', { name: 'Copy path' })
+      expect(screen.queryByRole('button', { name: 'Open file' })).toBeNull()
+      button.click()
+      await waitFor(() => expect(written).toEqual(['/vault/Triage/OMNI-2510.md']))
+      expect(await screen.findByRole('button', { name: 'Copied' })).toBeInTheDocument()
+    })
+
+    it('says why when the desktop could not open it', async () => {
+      const t = fakeTransport(NOTE)
+      t.openNote = () => Promise.reject(new Error('open: no application registered'))
+      render(<NoteView transport={t} workspaceId="ws1" runId="r1" kinds={['triage']} notePaths={NOTES} />)
+      ;(await screen.findByRole('button', { name: 'Open file' })).click()
+      expect(await screen.findByRole('alert')).toHaveTextContent('open: no application registered')
+    })
+
+    it('offers nothing when the run recorded no path for the note', async () => {
+      render(<NoteView transport={fakeTransport(NOTE)} workspaceId="ws1" runId="r1" kinds={['triage']} />)
+      await screen.findByText('Export fails for large orders')
+      expect(screen.queryByRole('button')).toBeNull()
+    })
   })
 })

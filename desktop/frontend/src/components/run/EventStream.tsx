@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
-import { classify, groupTurns, type IndexedEvent, type Turn } from '../../lib/events'
+import { classify, groupTurns, lastCallIndex, type IndexedEvent, type Turn } from '../../lib/events'
 import Toggle from '../../ui/toggle'
 import TurnGroup from './TurnGroup'
 
@@ -44,12 +44,15 @@ export default function EventStream({
   startedAt,
   live,
   head,
+  provider = '',
 }: {
   events: IndexedEvent[]
   startedAt: string | undefined
   live: boolean
   /** Drawn above the scroll and outside it: the banner for the last finished step. */
   head?: ReactNode
+  /** Heads each of the model's messages with its mark and name. */
+  provider?: string
 }) {
   const [showJump, setShowJump] = useState(false)
   const [everything, setEverything] = useState(false)
@@ -61,6 +64,7 @@ export default function EventStream({
     const all = groupTurns(events)
     return everything ? all : quietTurns(all)
   }, [events, everything])
+  const lastCall = useMemo(() => lastCallIndex(events), [events])
 
   const toBottom = useCallback(() => {
     const el = scrollRef.current
@@ -110,7 +114,17 @@ export default function EventStream({
               : 'Nothing but stream events yet. Show everything to see them.'}
           </p>
         ) : (
-          turns.map((turn) => <TurnGroup key={turn.n} turn={turn} startedAt={startedAt} fold />)
+          turns.map((turn) => (
+            <TurnGroup
+              key={turn.n}
+              turn={turn}
+              startedAt={startedAt}
+              fold
+              provider={provider}
+              lastCall={lastCall}
+              live={live}
+            />
+          ))
         )}
       </div>
       {showJump ? (

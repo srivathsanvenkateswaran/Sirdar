@@ -291,4 +291,12 @@ export interface Transport {
    * and Settings copies the path there instead.
    */
   openConfig?(ws: string): Promise<void>;
+  /**
+   * Opens one of a run's notes — a path the run itself recorded in
+   * `notes` — in whatever the desktop associates with Markdown, which on
+   * a machine with a vault is Obsidian. Only the Wails transport
+   * implements it, for the same reason as `openConfig`; a browser copies
+   * the path instead.
+   */
+  openNote?(ws: string, runId: string, path: string): Promise<void>;
 }
