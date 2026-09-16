@@ -6,10 +6,14 @@
  * answer is a rich card at the end, and the pane beside it is an inspector.
  *
  * Sizes are the mock's (docs/design/2026-09-16-session/A, A-session.css):
- * a 64px topbar, a 500px inspector at 1470, a 640px flow, 16px for what
- * the person and the model say, 13px mono at 36px a row for the log, 22px
- * for the answer's title. Every value is a token; nothing here declares a
- * colour, and `src/styles.library.test.ts` checks it.
+ * a 64px topbar, a 500px inspector at 1470, 16px for what the person and
+ * the model say, 13px mono at 36px a row for the log, 22px for the answer's
+ * title. The flow is not the mock's fixed 640: it is `min(100%, 960px)`,
+ * centred in the left column when there is spare width and filling it
+ * below that, and the composer under it takes the same width and left
+ * edge, so the transcript uses the sheet whether the inspector is open or
+ * collapsed. Every value is a token; nothing here declares a colour, and
+ * `src/styles.library.test.ts` checks it.
  */
 
 .sc {
@@ -192,11 +196,14 @@
   padding-inline: var(--sd-space-6) 40px;
 }
 
+/* The column: 960 at most, centred when the region is wider, the region
+   itself when it is not. The composer below wears the same rule. */
 .sc-flow {
   display: flex;
   flex-direction: column;
   gap: 14px;
-  max-inline-size: 640px;
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
 }
 
 .sc-empty-flow {
@@ -1017,10 +1024,17 @@ code.sc-ref {
 
 /* ---------------------------------------------------------------- composer */
 
+/* The stream's inset as padding, so the card inside can centre in the same
+   region the flow does and share its width and left edge. */
 .sc-composer {
   flex: 0 0 auto;
   margin-block: 14px 20px;
-  margin-inline: var(--sd-space-6) 40px;
+  padding-inline: var(--sd-space-6) 40px;
+}
+
+.sc-composer > .session-composer {
+  inline-size: min(100%, 960px);
+  margin-inline: auto;
 }
 
 .sc-composer .composer-text {
@@ -1674,7 +1688,7 @@ code.sc-ref {
   }
 
   .sc-composer {
-    margin-inline: var(--sd-space-5);
+    padding-inline: var(--sd-space-5);
   }
 }
 

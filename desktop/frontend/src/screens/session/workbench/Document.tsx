@@ -18,7 +18,9 @@ export interface OutlineItem {
  *
  * A document is a tree of `<section data-sec="id">`; that attribute is all
  * the rail needs to find them, so every document (answer, note, diff,
- * bundle) renders in here without knowing about the rail.
+ * bundle) renders in here without knowing about the rail. Inside the
+ * scroller the page sits in one column, 960 wide at most and centred when
+ * the area is wider — the rule every layout's document column follows.
  */
 export default function Document({
   outline,
@@ -99,7 +101,7 @@ export default function Document({
         aria-label={label}
         tabIndex={0}
       >
-        {children}
+        <div className="wb-doccol">{children}</div>
       </div>
     </div>
   )
