@@ -1,21 +1,62 @@
-<img src="docs/design/2026-09-16-logo/final/sirdar-mark-light.svg" alt="" width="88" height="88">
+<div align="center">
+
+<img src="docs/design/2026-09-16-logo/final/sirdar-mark-light.svg" alt="Sirdar" width="96" height="96">
 
 # Sirdar
 
-[![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
+**The open-source support harness that works a ticket end to end: triage, fix, root cause.**
 
-Sirdar works an engineering-level support ticket end to end: it writes the triage, implements the
-fix, and writes the root-cause analysis. A ticket arrives; Sirdar reads it with its whole customer
-conversation, the code and the logs, and answers with a triage note: the complaint in the customer's
-words and translated, repro steps, a root-cause hypothesis with cited evidence, a proposed fix and a
-reply draft. You read it. If you agree, `sirdar fix` implements that fix on its own branch in a
-linked worktree, with you steering from the composer and reviewing the diff. After the merge,
-`sirdar rca` writes the RCA and the resolution note. It does this by driving the coding-agent CLI
-you already pay for (Claude Code, Codex, Cursor Agent, Qwen Code, GitHub Copilot CLI, and others)
-on your laptop, under your own logins. The triage session is confined to reading, the fix session
-to its worktree, and Sirdar never posts to the helpdesk or the tracker. On a Himalayan expedition
-the sirdar is the lead Sherpa: the one who assigns the team's work and answers to the client for the
-outcome.
+[![License](https://img.shields.io/badge/license-Apache--2.0-2B2B6B.svg)](LICENSE)
+[![Go](https://img.shields.io/github/go-mod/go-version/srivathsanvenkateswaran/Sirdar?logo=go&logoColor=white)](go.mod)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Windows%20%7C%20Linux-333.svg)](#install)
+[![Desktop](https://img.shields.io/badge/desktop-Wails%20v2-DF0000.svg?logo=go&logoColor=white)](https://wails.io)
+[![Frontend](https://img.shields.io/badge/frontend-React%2019%20%2B%20TypeScript-3178C6.svg?logo=typescript&logoColor=white)](desktop/frontend)
+[![Docs](https://img.shields.io/badge/docs-srivathsanvenkateswaran.github.io%2FSirdar-2B2B6B.svg)](https://srivathsanvenkateswaran.github.io/Sirdar/docs/)
+[![Contributor Covenant](https://img.shields.io/badge/code%20of%20conduct-Contributor%20Covenant%202.1-5E0D73.svg)](CODE_OF_CONDUCT.md)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-2E8B57.svg)](CONTRIBUTING.md)
+
+[Website](https://srivathsanvenkateswaran.github.io/Sirdar/) ·
+[Documentation](https://srivathsanvenkateswaran.github.io/Sirdar/docs/) ·
+[Install](#install) ·
+[Quick start](#quick-start) ·
+[Contributing](CONTRIBUTING.md) ·
+[Changelog](CHANGELOG.md)
+
+<img src="site/shots/session-conversation.png" alt="The Sirdar desktop app: a triage run in the Conversation layout, with the note beside the transcript" width="880">
+
+</div>
+
+## What Sirdar does
+
+A support ticket arrives. Sirdar reads it with its whole customer conversation, the code and the
+logs, and answers with a **triage note**: the complaint in the customer's words and translated,
+repro steps, a root-cause hypothesis with cited evidence, a proposed fix and a reply draft. You
+read it. If you agree, `sirdar fix` **implements that fix** on its own branch in a linked worktree,
+with you steering from the composer and reviewing the diff. After the merge, `sirdar rca` writes
+the **RCA and the resolution note**.
+
+It does this by driving the coding-agent CLI you already pay for — Claude Code, Codex, Cursor
+Agent, Qwen Code, GitHub Copilot CLI and the other Agent Client Protocol agents — on your laptop,
+under your own logins. There is no Sirdar account, no proxy and no stored credential. The triage
+session is confined to reading, the fix session to its worktree, and Sirdar never posts to the
+helpdesk or the tracker.
+
+On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work and
+answers to the client for the outcome.
+
+## Contents
+
+- [How it works](#how-it-works)
+- [What you get](#what-you-get)
+- [Providers](#providers)
+- [Sources](#sources)
+- [Install](#install)
+- [Quick start](#quick-start)
+- [Safety model](#safety-model)
+- [Design](#design)
+- [Project status](#project-status)
+- [Contributing](#contributing)
+- [Licence](#licence)
 
 ## How it works
 
@@ -188,40 +229,46 @@ the UI was built from and the three [Session directions](docs/design/2026-09-16-
 either `index.html`); the [logo round](docs/design/2026-09-16-logo) and its shipped files. Ticket
 SBX-1 in the mocks is a sandbox ticket, and every name, key and server in them is fabricated.
 
-## Status
+## Project status
 
-Pre-release. Everything described above exists and is covered by tests, but how much of it has
-been watched work against a real service varies.
+Pre-release: nothing is tagged yet, and the first release will carry unsigned desktop builds. The
+table says what has been watched work against a real service and what rests on fixtures so far.
 
-Run live: `provider: claude`, through repeated real triage and fix runs, plus `sirdar steer`,
-`sirdar runs diff --drop` and `sirdar mcp list/tools/call` against a real MCP server.
-`provider: acp` on three agents — GitHub Copilot CLI passed triage, rca and fix; OpenCode passed
-triage and fix; Kimi CLI got no model turn at all, its free tier's quota having been spent before
-the first prompt. `provider: qwen` ran against a real OAuth login, and the two bugs those runs
-found are fixed but not yet watched succeed. `provider: agy` ran twice before it was disabled.
+| Area | Verified live | Notes |
+|---|---|---|
+| `provider: claude` | yes | Repeated real triage and fix runs; `steer`, `runs diff --drop`, `mcp list/tools/call` against a real MCP server |
+| `provider: acp` | partly | Copilot CLI passed triage, rca and fix; OpenCode passed triage and fix; Kimi CLI has not had a model turn yet |
+| `provider: codex` | partly | Triage live; fix-mode file-change approval not yet watched fire (the snapshot check is the backstop) |
+| `provider: qwen` | partly | Real OAuth login; two bugs found and fixed, fix not yet watched succeed |
+| `provider: cursor` | fixtures | Built from a capture of seven turns; Sirdar cannot mediate its permissions, and `doctor` says so |
+| `provider: openai`, `notify`, inbound `webhooks` | fixtures | Never against a real model or destination |
+| macOS desktop | yes | Daily use |
+| Windows desktop | CI only | Builds and tests on `windows-latest`; WebView2, Credential Manager and process reaping untested on a real desktop |
+| Linux desktop | CI only | Builds on `ubuntu-latest` with WebKitGTK 4.1 |
 
-Fixtures only, never a real model or a real destination: `provider: openai`, `notify`, and the
-inbound `webhooks`. `provider: cursor` is built from a capture of seven small turns, so a refused
-or rate-limited turn is inferred rather than observed. `permissions.fetch` has been exercised
-against fake CLIs, not a live agent's own fetch request shape. Codex's fix-mode file-change
-approval has not been watched fire; the snapshot check is the backstop if it does not. And
-`sirdar serve`'s same-origin guard is tested with hand-built requests, not a real cross-site page.
-
-Nothing on Windows has been run on Windows. The cross-build produces a real `Sirdar.exe` and the
-`windows` CI job builds and tests on `windows-latest`, but whether WebView2 draws the frontend,
-whether the Credential Manager reader finds a stored secret, and whether `taskkill /T` reaps a
-wrapper's grandchildren stay open until someone sits at a Windows desktop. Shortcut hints are also
-drawn with ⌘ on every platform, though every handler accepts Ctrl. `HANDOFF.md` keeps the long
-version of this list.
+[`HANDOFF.md`](HANDOFF.md) keeps the long version and the open questions.
 
 ## Contributing
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) covers the development loop (`make build`, `test`, `vet`,
-`ui`, `desktop`), the frontend's own checks, the commit conventions, and what a pull request
-needs; [`docs/architecture.md`](docs/architecture.md) maps the packages; and
-[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) applies to everyone taking part. Report a security issue
-the way [`SECURITY.md`](SECURITY.md) describes, not through a public issue.
+Contributions are welcome: adapters for a tracker or helpdesk, a provider for another agent CLI,
+a language, a bug, a doc fix.
+
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) covers the development loop (`make build`, `test`, `vet`,
+  `ui`, `desktop`), the frontend's own checks, the commit conventions and what a pull request needs.
+- [`docs/architecture.md`](docs/architecture.md) maps the packages.
+- [Open an issue](https://github.com/srivathsanvenkateswaran/Sirdar/issues/new/choose) for a bug or
+  an adapter request; the templates ask for what a maintainer needs.
+- Security issues go the way [`SECURITY.md`](SECURITY.md) describes, never through a public issue.
+- Everyone taking part is bound by the [Code of Conduct](CODE_OF_CONDUCT.md).
+
+## Acknowledgements
+
+Built on [Wails](https://wails.io) for the desktop shell, [React](https://react.dev) and
+[Vite](https://vite.dev) for the frontend, [MkDocs](https://www.mkdocs.org) for the documentation
+site, and the [Agent Client Protocol](https://agentclientprotocol.com) for the agents that speak
+it. The provider marks belong to their owners.
 
 ## Licence
 
-Apache License 2.0. See [`LICENSE`](LICENSE).
+Copyright Srivathsan Venkateswaran. Released under the Apache License, Version 2.0; see
+[`LICENSE`](LICENSE).
