@@ -63,7 +63,10 @@ func TestResolveRejectsPathsOutsideRoot(t *testing.T) {
 	writeFile(t, filepath.Join(root, "inside.txt"), "fine\n")
 
 	if err := os.Symlink(outside, filepath.Join(root, "escape")); err != nil {
-		t.Fatal(err)
+		// Creating one needs Developer Mode or an elevated process on
+		// Windows, and an ordinary account has neither. Without the link
+		// there is no escape to reject.
+		t.Skipf("symlinks unavailable: %v", err)
 	}
 
 	o := Options{Root: root}.normalized()

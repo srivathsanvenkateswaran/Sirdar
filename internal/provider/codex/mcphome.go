@@ -4,7 +4,9 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strconv"
 	"strings"
@@ -226,7 +228,7 @@ func (h *scratchHome) inherit(real string) error {
 			h.authCopied = b
 			continue
 		}
-		if err := os.Symlink(filepath.Join(real, name), filepath.Join(h.dir, name)); err != nil {
+		if err := link(filepath.Join(real, name), filepath.Join(h.dir, name), e.IsDir()); err != nil {
 			return fmt.Errorf("link %s: %w", name, err)
 		}
 	}
@@ -625,6 +627,39 @@ func tomlString(s string) string {
 // that does not exist is not an error — an operator who has never logged
 // in has no auth.json — and yields no bytes, which turns the write-back
 // off.
+// link points dst at src without copying what is behind it: the entries
+// under CODEX_HOME that are shared with the operator's real one — sessions,
+// history, state, caches — are the whole reason a generated home is cheap.
+//
+// A symlink is the first choice everywhere. On Windows creating one needs
+// either Developer Mode or an elevated process, and an ordinary account has
+// neither, so the failure is the common case rather than the odd one. The
+// fallbacks there are a directory junction, which any account may create
+// and which the file APIs follow the same way, and a hard link for a file.
+// Both are reparse/alias forms rather than copies, so a session written
+// through one is a session the operator's own `codex` sees.
+func link(src, dst string, isDir bool) error {
+	err := os.Symlink(src, dst)
+	if err == nil || runtime.GOOS != "windows" {
+		return err
+	}
+	if isDir {
+		// mklink is a cmd.exe builtin, not an executable, so it has to be
+		// run through the interpreter. Neither path is attacker-supplied:
+		// src is an entry of the operator's own CODEX_HOME and dst is
+		// inside a directory this process just created with MkdirTemp.
+		out, jerr := exec.Command("cmd", "/C", "mklink", "/J", dst, src).CombinedOutput()
+		if jerr == nil {
+			return nil
+		}
+		return fmt.Errorf("symlink failed (%v) and so did the junction fallback: %v: %s", err, jerr, strings.TrimSpace(string(out)))
+	}
+	if herr := os.Link(src, dst); herr == nil {
+		return nil
+	}
+	return err
+}
+
 func copyFile(src, dst string) ([]byte, error) {
 	b, err := os.ReadFile(src)
 	if err != nil {
