@@ -154,6 +154,26 @@ type Event struct {
 	// and on an agent that reports none.
 	Model string
 
+	// Delta and Replace say how an EvAssistantText joins the text around
+	// it. A provider that streams a message token by token emits each
+	// fragment with Delta set, and the reader grows one block by
+	// concatenating them; the whole block, when it arrives, is emitted
+	// with Replace set and stands in for every fragment that preceded it.
+	//
+	// Both are false on a provider that reports a message once, which is
+	// every provider but Claude Code: those events concatenate the way
+	// they always have, one paragraph per event.
+	//
+	// The pair exists because Claude Code says the same words twice. With
+	// --include-partial-messages on — Sirdar always passes it — the CLI
+	// streams `stream_event` text deltas while the model writes, and then
+	// repeats the finished text in the turn's `assistant` line. Appending
+	// both would print the message twice, and dropping either would lose
+	// the live growth or the authoritative text. So the deltas grow the
+	// block and the final line replaces it.
+	Delta   bool
+	Replace bool
+
 	Final json.RawMessage // structured output, nil if absent
 	Raw   json.RawMessage // original provider line, always set
 }
