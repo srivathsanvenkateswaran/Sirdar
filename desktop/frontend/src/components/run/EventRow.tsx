@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react'
 import type { RunEvent } from '../../api/types'
-import { classify, offsetLabel, truncate } from '../../lib/events'
+import { classify, offsetLabel, outputText, truncate } from '../../lib/events'
 import SdEventRow, { type EventVariant } from '../../ui/event-row'
+import AnswerCard from './AnswerCard'
+import AssistantMessage from './AssistantMessage'
+import CappedBlock from './CappedBlock'
 import ToolCallRow from './ToolCallRow'
 import PermissionRow from './PermissionRow'
 import UsageRow from './UsageRow'
@@ -56,20 +59,48 @@ export function YouBubble({ text, continuation }: { text: string; continuation?:
   )
 }
 
-/** Picks the row for one event. `startedAt` sets the zero of the offset gutter. */
+/**
+ * A tool result that paired with no call — the log lost the start, or a
+ * provider wrote a result the transcript had no call for. It is shown in
+ * full rather than dropped, since it is still what a tool returned.
+ */
+function LoneResult({ event, at }: { event: RunEvent; at: string }) {
+  const text = outputText(event)
+  return (
+    <Row at={at} glyph="‹" variant="tool">
+      <div className="call-body call-body--lone">
+        <div className="call-label">Result</div>
+        {text ? <CappedBlock text={text} label="tool result" table /> : <p className="call-none">The tool returned nothing.</p>}
+      </div>
+    </Row>
+  )
+}
+
+/**
+ * Picks the row for one event. `startedAt` sets the zero of the offset
+ * gutter; `provider` heads a message block. A tool call, its result and
+ * its permission are one row when `TurnGroup` pairs them; what reaches
+ * here on its own is the unpaired remainder.
+ */
 export default function EventRow({
   event,
   startedAt,
+  provider = '',
 }: {
   event: RunEvent
   startedAt: string | undefined
+  provider?: string
 }) {
   const at = offsetLabel(event.t, startedAt)
   const family = classify(event)
 
   switch (family) {
     case 'tool':
-      return <ToolCallRow event={event} at={at} />
+      return event.kind === 'tool_started' ? (
+        <ToolCallRow call={{ started: { index: 0, event } }} startedAt={startedAt} />
+      ) : (
+        <LoneResult event={event} at={at} />
+      )
     case 'permission':
       return <PermissionRow event={event} at={at} />
     case 'usage':
@@ -77,17 +108,9 @@ export default function EventRow({
     case 'you':
       return <YouBubble text={event.payload?.text ?? ''} continuation={event.payload?.continuation} />
     case 'text':
-      return (
-        <Row at={at} glyph="·" variant="text">
-          <div className="ev-text">{event.payload?.text ?? ''}</div>
-        </Row>
-      )
+      return <AssistantMessage text={event.payload?.text ?? ''} provider={provider} at={at} />
     case 'final':
-      return (
-        <Row at={at} glyph="●" variant="final">
-          <div className="ev-note">note produced</div>
-        </Row>
-      )
+      return <AnswerCard event={event} at={at} />
     case 'error':
       return (
         <Row at={at} glyph="!" variant="error">

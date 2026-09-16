@@ -500,6 +500,7 @@ export default function Session(props: {
             events={events}
             startedAt={detail.startedAt}
             live={live}
+            provider={detail.provider}
             head={banner ? <div className="session-banner">{banner}</div> : null}
           />
           <Composer
@@ -571,7 +572,14 @@ export default function Session(props: {
                 promptPath={detail.promptPath}
               />
             ) : null}
-            {shownTab === 'tools' ? <ToolsPane events={events} startedAt={detail.startedAt} /> : null}
+            {shownTab === 'tools' ? (
+              <ToolsPane
+                events={events}
+                startedAt={detail.startedAt}
+                provider={detail.provider}
+                live={live}
+              />
+            ) : null}
           </div>
         </div>
       </div>

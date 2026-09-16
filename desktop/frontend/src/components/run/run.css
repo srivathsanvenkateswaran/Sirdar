@@ -495,6 +495,345 @@ section:first-child > .turn-rule {
 }
 
 /*
+ * A tool call. The compact line is the button: tool, the input in one line,
+ * the decision word, the time it took. It keeps the ledger face and warms
+ * on hover the way the fold does, and takes the shell's ring on focus.
+ */
+.call {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  inline-size: 100%;
+  min-inline-size: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.call:hover .ev-summary {
+  color: var(--sd-ink);
+}
+
+.call-caret {
+  flex: none;
+  inline-size: 1em;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  text-align: center;
+}
+
+.call .ev-summary {
+  flex: 1 1 auto;
+}
+
+/* The policy's word, or the tool's own failure: text, never colour alone. */
+.call-word {
+  flex: none;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+}
+
+.call-word[data-decision='deny'] {
+  color: var(--sd-st-blocked);
+}
+
+.call-word[data-decision='failed'] {
+  color: var(--sd-st-failed);
+}
+
+.call-time {
+  flex: none;
+  margin-inline-start: auto;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The two sections an open call shows: Input, then Output. */
+.call-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin-block: var(--sd-space-1) 6px;
+}
+
+.call-body > .ev-reason {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-st-blocked);
+  overflow-wrap: anywhere;
+}
+
+.call-label {
+  margin-block-end: 2px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  letter-spacing: 0.02em;
+}
+
+.call-block {
+  min-inline-size: 0;
+}
+
+/* The block: the ledger face at 13.5px, wrapping inside the pane. */
+.call-pre {
+  margin: 0;
+  padding-block: var(--sd-space-2);
+  padding-inline: 10px;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-xs);
+  background: color-mix(in srgb, var(--sd-ink) 4%, transparent);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--sd-ink);
+  unicode-bidi: isolate;
+}
+
+.call-more {
+  margin-block-start: var(--sd-space-1);
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-accent);
+  cursor: pointer;
+}
+
+.call-more:hover {
+  text-decoration: underline;
+}
+
+.call-none {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+}
+
+/* A result that reads as a table is drawn as one. */
+.call-table-wrap {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-xs);
+}
+
+.call-table {
+  border-collapse: collapse;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  line-height: 1.4;
+}
+
+.call-table th,
+.call-table td {
+  padding-block: 4px;
+  padding-inline: 10px;
+  border-block-end: 1px solid var(--sd-rule);
+  text-align: start;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.call-table th {
+  font-weight: 600;
+  background: color-mix(in srgb, var(--sd-ink) 4%, transparent);
+}
+
+.call-table tbody tr:last-child td {
+  border-block-end: 0;
+}
+
+/*
+ * What the model said. It sits in the same gutter as the rows, and the
+ * block beside it is headed by the provider's mark and name — the one thing
+ * on this side of the transcript that says who is talking, the way the
+ * "you" bubble does on the other.
+ */
+.msg {
+  display: grid;
+  grid-template-columns: 4rem minmax(0, 1fr);
+  column-gap: var(--sd-space-2);
+  margin-block: var(--sd-space-2) var(--sd-space-3);
+  margin-inline: var(--sd-space-5);
+}
+
+.msg-at {
+  padding-block-start: 3px;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.msg-block {
+  min-inline-size: 0;
+  max-inline-size: 72ch;
+  padding-inline-start: var(--sd-space-2);
+  border-inline-start: 2px solid var(--sd-rule);
+}
+
+.msg-head {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  margin-block-end: var(--sd-space-1);
+}
+
+.msg-who {
+  font-size: var(--sd-text-meta);
+  font-weight: 500;
+  color: var(--sd-ink);
+}
+
+.msg-body {
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.msg-body > :last-child {
+  margin-block-end: 0;
+}
+
+/*
+ * The answer: the final event's JSON as a card. It takes the accent rail a
+ * final row used to carry, and the fields read as label and value.
+ */
+.msg--answer .msg-block {
+  max-inline-size: 78ch;
+  padding-inline-start: 0;
+  border-inline-start: 0;
+}
+
+.answer {
+  padding: var(--sd-space-4);
+  border: 1px solid var(--sd-rule-strong);
+  border-inline-start: 3px solid var(--sd-accent);
+  border-radius: var(--sd-radius-sm);
+  background: var(--sd-surface);
+}
+
+.answer-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sd-space-3);
+  margin-block-end: var(--sd-space-3);
+}
+
+.answer-title {
+  margin: 0;
+  font-size: var(--sd-text-body);
+  font-weight: 600;
+  color: var(--sd-accent);
+}
+
+.answer-meta {
+  margin-inline-start: auto;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+
+.answer-fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sd-space-2);
+  margin: 0;
+}
+
+.answer-fields[data-depth='1'],
+.answer-fields[data-depth='2'] {
+  gap: var(--sd-space-1);
+  padding-block: var(--sd-space-1);
+  padding-inline-start: var(--sd-space-3);
+  border-inline-start: 1px solid var(--sd-rule);
+}
+
+.answer-row {
+  display: grid;
+  grid-template-columns: minmax(8ch, 12ch) minmax(0, 1fr);
+  column-gap: var(--sd-space-3);
+  align-items: baseline;
+}
+
+.answer-row > dt {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  overflow-wrap: anywhere;
+}
+
+.answer-row > dd {
+  margin: 0;
+  min-inline-size: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.answer-list,
+.answer-items {
+  margin: 0;
+  padding-inline-start: 1.2em;
+}
+
+.answer-list li,
+.answer-items li {
+  margin-block-end: 2px;
+}
+
+.answer-json {
+  margin: 0;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.answer-prose > :last-child {
+  margin-block-end: 0;
+}
+
+.answer-empty {
+  margin: 0;
+  color: var(--sd-ink-3);
+}
+
+.answer-raw {
+  margin-block-start: var(--sd-space-3);
+}
+
+.answer-raw > summary {
+  cursor: pointer;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+}
+
+.answer-raw > .call-pre {
+  margin-block-start: var(--sd-space-2);
+}
+
+.answer a,
+.msg-body a {
+  color: var(--sd-accent);
+}
+
+/*
  * The collapsed run of raw stream lines. It reads as one more ledger row
  * rather than a control, so it borrows the summary's type and only warms up
  * on hover.
