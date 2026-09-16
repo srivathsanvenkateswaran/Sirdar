@@ -715,6 +715,14 @@ type eventPayload struct {
 	CostUSD  float64         `json:"costUsd,omitempty"`
 	Raw      json.RawMessage `json:"raw,omitempty"`
 
+	// Delta and Replace are set on an `assistant_text` line alone, and
+	// say how its text joins the text around it: a delta is one fragment
+	// of a message still being written, and a replace is the finished
+	// message standing in for the fragments before it. A provider that
+	// reports a message once sets neither.
+	Delta   bool `json:"delta,omitempty"`
+	Replace bool `json:"replace,omitempty"`
+
 	// Model is set on the `system` line the provider's init reported one
 	// on: the model that answered, which the transcript records whether
 	// or not it was also what the run's state already said.
@@ -734,6 +742,8 @@ func (r *Runner) record(p *prepared, log *store.EventLog, ev provider.Event) {
 		Turns:    ev.Turns,
 		CostUSD:  ev.CostUSD,
 		Model:    ev.Model,
+		Delta:    ev.Delta,
+		Replace:  ev.Replace,
 	}
 	if ev.Raw != nil {
 		payload.Raw = ev.Raw

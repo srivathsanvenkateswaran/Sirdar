@@ -3428,3 +3428,59 @@ func TestPlainTextAnswerOnTheResultLineIsRead(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+// TestAssistantTextIsRecordedWithItsStreamingMarkers: the transcript is
+// read back out of events.jsonl, so whatever the provider said about how a
+// message was streamed has to be written there too. Without the markers a
+// run that streamed its answer reads as a pile of one-word messages
+// followed by the whole thing again.
+func TestAssistantTextIsRecordedWithItsStreamingMarkers(t *testing.T) {
+	cfg := newWorkspace(t)
+	events := []provider.Event{
+		{Kind: provider.EvAssistantText, Text: "The return ", Delta: true},
+		{Kind: provider.EvAssistantText, Text: "is counted twice.", Delta: true},
+		{Kind: provider.EvAssistantText, Text: "The return is counted twice.", Replace: true},
+		finalEvent(triageDoc),
+	}
+	p := &stubProvider{script: replay(events...)}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if outs[0].State.Status != store.StatusCompleted {
+		t.Fatalf("status %q reason %q", outs[0].State.Status, outs[0].State.Reason)
+	}
+
+	type row struct {
+		Kind    string `json:"kind"`
+		Payload struct {
+			Text    string `json:"text"`
+			Delta   bool   `json:"delta"`
+			Replace bool   `json:"replace"`
+		} `json:"payload"`
+	}
+	var said []row
+	for _, line := range eventLogLines(t, runDir(t, cfg, outs[0])) {
+		var r row
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("events.jsonl line %q: %v", line, err)
+		}
+		if r.Kind == "assistant_text" {
+			said = append(said, r)
+		}
+	}
+	if len(said) != 3 {
+		t.Fatalf("assistant_text lines %+v, want three", said)
+	}
+	if said[0].Payload.Text != "The return " || !said[0].Payload.Delta || said[0].Payload.Replace {
+		t.Errorf("first delta %+v", said[0].Payload)
+	}
+	if !said[1].Payload.Delta {
+		t.Errorf("second delta %+v", said[1].Payload)
+	}
+	if said[2].Payload.Text != "The return is counted twice." || !said[2].Payload.Replace || said[2].Payload.Delta {
+		t.Errorf("finished block %+v", said[2].Payload)
+	}
+}
