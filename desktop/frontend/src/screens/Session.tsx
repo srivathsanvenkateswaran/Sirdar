@@ -41,6 +41,7 @@ import SourceMark from '../ui/source-mark'
 import StatusBadge, { stateWord, type SdStatus } from '../ui/status-badge'
 import { sessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
 import SessionConversation from './session/SessionConversation'
+import SessionWorkbench from './session/SessionWorkbench'
 import '../components/run/run.css'
 
 /**
@@ -136,14 +137,16 @@ export interface SessionProps {
  * The session, in the layout the reader chose (`lib/sessionLayout`, the
  * `sirdar.sessionLayout` preference). Conversation — the transcript as a
  * chat with an inspector beside it — is the default and lives in
- * `./session/SessionConversation`. The Document and Workbench layouts are
- * being built on their own branches; until they land, both fall through to
- * the ledger transcript below, which is the screen as it stood before the
+ * `./session/SessionConversation`. Workbench — the documents over a
+ * structured console — is `./session/SessionWorkbench`. The Document layout
+ * is being built on its own branch; until it lands it falls through to the
+ * ledger transcript below, which is the screen as it stood before the
  * layouts were designed.
  */
 export default function Session(props: SessionProps): JSX.Element {
   const layout = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
   if (layout === 'conversation') return <SessionConversation {...props} />
+  if (layout === 'workbench') return <SessionWorkbench {...props} />
   return <SessionLedger {...props} />
 }
 

@@ -7,6 +7,12 @@ import {
   subscribeSessionsShow,
   type SessionsShow,
 } from '../../lib/sessionsShow'
+import {
+  sessionLayout,
+  setSessionLayout,
+  subscribeSessionLayout,
+  type SessionLayout,
+} from '../../lib/sessionLayout'
 import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
@@ -27,6 +33,19 @@ const SESSIONS_SHOW_OPTIONS: { id: SessionsShow; label: string }[] = [
   { id: 'tracker', label: 'Tracker number' },
   { id: 'helpdesk', label: 'Helpdesk number' },
 ]
+
+/** Conversation first: it is the default the mock review settled on. */
+const LAYOUT_OPTIONS: { id: SessionLayout; label: string }[] = [
+  { id: 'conversation', label: 'Conversation' },
+  { id: 'document', label: 'Document' },
+  { id: 'workbench', label: 'Workbench' },
+]
+
+const LAYOUT_WORDS: Record<SessionLayout, string> = {
+  conversation: 'Conversation: the transcript beside the run\u2019s artefacts',
+  document: 'Document: the answer as the page, the path beside it',
+  workbench: 'Workbench: documents over a structured console',
+}
 
 /** "Notes in en, customer replies in the ticket's language". */
 function languageLine(notes: string, customer: string): string {
@@ -67,6 +86,11 @@ export default function GeneralPage({
     subscribeSessionsShow,
     sessionsShow,
     () => 'tracker' as SessionsShow,
+  )
+  const layout = useSyncExternalStore(
+    subscribeSessionLayout,
+    sessionLayout,
+    () => 'conversation' as SessionLayout,
   )
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
@@ -207,6 +231,19 @@ export default function GeneralPage({
               options={SESSIONS_SHOW_OPTIONS}
               value={show}
               onChange={(id) => setSessionsShow(id as SessionsShow)}
+            />
+          }
+        />
+        <SettingRow
+          label="Session layout"
+          value={LAYOUT_WORDS[layout]}
+          help="How a session window is laid out. Conversation is the default; Document renders the answer as a page and, until its round lands, falls back to Conversation; Workbench shows the documents over a structured console. Remembered in this browser."
+          control={
+            <SegmentedControl
+              label="Session layout"
+              options={LAYOUT_OPTIONS}
+              value={layout}
+              onChange={(id) => setSessionLayout(id as SessionLayout)}
             />
           }
         />
