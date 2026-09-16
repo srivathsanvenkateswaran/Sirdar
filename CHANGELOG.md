@@ -367,3 +367,13 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   carried `Model`, which now names the model that wrote the note. A later session on the same
   run — a steer, a resume — asks for `ModelRequested` again, so a workspace that configured an
   alias on purpose keeps getting one.
+- The model's prose reaches the transcript on a Claude run. Claude Code streams a message as
+  `stream_event` text deltas while it is written and repeats the finished block on the turn's
+  `assistant` line, and the adapter reported only the second — so a run that talked while it
+  worked showed tool calls and no words until the turn ended. The deltas are now
+  `assistant_text` events marked `delta`, the finished block is marked `replace`, and
+  `conversation()` grows one message from the deltas and lets the finished block stand in for
+  them rather than printing the answer twice. A text delta is no longer also stored as a
+  `system` line, which is most of what a real run's `events.jsonl` used to be; every other
+  stream event, tool-input deltas included, is kept. qwen, cursor and codex already reported
+  their prose and are unchanged but for tests that now pin the words.
