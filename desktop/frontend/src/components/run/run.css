@@ -182,6 +182,66 @@
     border-inline-end: 0;
     border-block-end: 1px solid var(--sd-rule);
   }
+
+  /* Stacked, the folded rail is a 36px strip along the foot. */
+  .session-body[data-pane='collapsed'] {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 36px;
+  }
+
+  .session-rail {
+    flex-direction: row;
+    padding-block: 0;
+    padding-inline: 10px;
+  }
+}
+
+/*
+ * Folded (Session.tsx `data-pane="collapsed"`): the pane's column is the
+ * 36px rail of its tab glyphs, and the transcript, composer included, takes
+ * the rest. Remembered per screen in localStorage.
+ */
+.session-body[data-pane='collapsed'] {
+  grid-template-columns: minmax(0, 1fr) 36px;
+}
+
+.session-rail {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sd-space-1);
+  min-inline-size: 0;
+  min-block-size: 0;
+  padding-block: 10px;
+}
+
+/* The rail's tab glyphs: the same 28px ghost square as the toggle above them. */
+.session-rail__tab {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  cursor: pointer;
+  transition:
+    color var(--sd-dur-1) ease,
+    background-color var(--sd-dur-1) ease;
+}
+
+.session-rail__tab > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.session-rail__tab:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
 }
 
 /* ------------------------------------------------------------------- tabs */
@@ -194,12 +254,25 @@
   min-block-size: 0;
 }
 
-.session-tabs {
+/* The tab row with the fold control at its end, under one hairline. */
+.session-pane-head {
   display: flex;
   flex: 0 0 auto;
-  gap: var(--sd-space-6);
-  padding-inline: var(--sd-space-5);
+  align-items: center;
+  gap: var(--sd-space-3);
+  padding-inline: var(--sd-space-5) var(--sd-space-3);
   border-block-end: 1px solid var(--sd-rule);
+}
+
+.session-pane-head > .sd-panel-toggle {
+  margin-inline-start: auto;
+}
+
+.session-tabs {
+  display: flex;
+  flex: 1 1 auto;
+  gap: var(--sd-space-6);
+  min-inline-size: 0;
 }
 
 .session-tab {
@@ -1328,4 +1401,10 @@ section:first-child > .turn-rule {
   font-family: var(--sd-font-mono);
   resize: vertical;
   min-block-size: 62px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .session-rail__tab {
+    transition-duration: 1ms;
+  }
 }

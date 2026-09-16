@@ -174,11 +174,35 @@
   color: var(--sd-ink);
 }
 
+/* ---------- in the rail ---------- */
+
+/* The sidebar at 56px (sidebar.css `data-collapsed`): a row is its 16px
+   tile in a 36px square, the number and the age gone to the hover card;
+   the Settled divider is its chevron; Show N more is "+N". */
+.sd-sidebar[data-collapsed='true'] .sd-session-row,
+.sd-sidebar[data-collapsed='true'] .sd-sessions__settled,
+.sd-sidebar[data-collapsed='true'] .sd-sessions__more {
+  justify-content: center;
+  inline-size: 36px;
+  padding-inline: 0;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-session-row__number,
+.sd-sidebar[data-collapsed='true'] .sd-session-row__age,
+.sd-sidebar[data-collapsed='true'] .sd-sessions__settled > span {
+  display: none;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-sessions__more {
+  text-align: center;
+}
+
 /* ---------- the hover card ---------- */
 
 /* Pinned to the viewport beside its row by lib/anchor, on the dialog's
-   surface. It is a tooltip: nothing in it is a control, and the pointer
-   passes through it to whatever is behind. */
+   surface. It is a tooltip — nothing in it is a control — but it takes the
+   pointer, so a reader can move onto it to read a long title and the card
+   holds while they do (useHoverCard). */
 .sd-session-card {
   position: fixed;
   z-index: 25;
@@ -193,7 +217,6 @@
   font-family: var(--sd-font-ui);
   font-size: var(--sd-text-meta);
   text-align: start;
-  pointer-events: none;
 }
 
 /* The gallery's specimen: in the flow under the list, as wide as the list. */
@@ -201,7 +224,6 @@
   position: static;
   inline-size: auto;
   margin-block-start: var(--sd-space-2);
-  pointer-events: auto;
 }
 
 .sd-session-card__title {

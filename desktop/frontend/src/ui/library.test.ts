@@ -40,7 +40,7 @@ function css(component: string): string {
 }
 
 describe('the component library', () => {
-  it('holds the thirty-four components the library README lists', () => {
+  it('holds the thirty-five components the library README lists', () => {
     expect(COMPONENTS).toEqual([
       'ambient',
       'badge',
@@ -61,6 +61,7 @@ describe('the component library', () => {
       'model-picker',
       'note-pane',
       'page-head',
+      'panel-toggle',
       'pill-nav',
       'provider-mark',
       'quota-chip',

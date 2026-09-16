@@ -28,14 +28,22 @@
   background: transparent;
 }
 
-/* The wordmark with the workspace as a badge beside it. */
+/* The wordmark with the workspace as a badge beside it, and the fold
+   control at the end. The mock's row had 10px gaps and 12px at each side;
+   the toggle costs 28, so the gaps go to 8 and the end padding to 0 (the
+   toggle's own box ends flush with the nav rows), which is what keeps an
+   eight-letter workspace name whole. */
 .sd-sidebar__brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: var(--sd-space-2);
   min-block-size: 36px;
   padding-block: 0 var(--sd-space-1);
-  padding-inline: var(--sd-space-3);
+  padding-inline: var(--sd-space-3) 0;
+}
+
+.sd-sidebar__brand > .sd-panel-toggle {
+  margin-inline-start: auto;
 }
 
 .sd-sidebar__nav {
@@ -226,10 +234,15 @@
 /*
  * Under 1024px (the narrow band of styles/tokens.css) the sidebar keeps the
  * icons and drops the labels, which is where a board with six lanes starts
- * needing every pixel of the sheet. The switch is an attribute rather than a
- * media query so the nav item and the footer card, which are library
- * components, do not have to know Sirdar's breakpoint; Sidebar.tsx sets it
- * from the same query.
+ * needing every pixel of the sheet; and at any width the reader can fold it
+ * to the same rail from the head's toggle or ⌘B. The switch is an attribute
+ * rather than a media query so the nav item and the footer card, which are
+ * library components, do not have to know Sirdar's breakpoint; Sidebar.tsx
+ * sets it from the query and the remembered choice together.
+ *
+ * In the rail the head keeps only the toggle — it is how the sidebar comes
+ * back — and the sessions list keeps its tiles (sessions.css), each one's
+ * number on the hover card.
  */
 .sd-sidebar[data-collapsed='true'] {
   flex-basis: 56px;
@@ -245,14 +258,25 @@
   padding-inline: 0;
 }
 
-.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand {
-  overflow: hidden;
-  inline-size: 1.2em;
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand > .sd-panel-toggle {
+  margin-inline-start: 0;
 }
 
-.sd-sidebar[data-collapsed='true'] .switcher,
-.sd-sidebar[data-collapsed='true'] .sd-sidebar__sessions {
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand,
+.sd-sidebar[data-collapsed='true'] .switcher {
   display: none;
+}
+
+.sd-sidebar[data-collapsed='true'] .sd-sidebar__sessions {
+  align-items: center;
+}
+
+/* The footer's one button, as the plus alone: 32 square inside the card's
+   8px padding in the 56px rail. Sidebar.tsx draws it icon-only. */
+.sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__action > .sd-button {
+  inline-size: 32px;
+  min-height: 32px;
+  padding-inline: 0;
 }
 
 /*

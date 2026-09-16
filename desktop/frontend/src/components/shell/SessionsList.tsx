@@ -1,12 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useId,
-  useRef,
-  useState,
-  useSyncExternalStore,
-  type KeyboardEvent,
-} from 'react'
+import { useId, useRef, useState, useSyncExternalStore, type RefObject } from 'react'
 import type { RunSummary, SourcesSummary } from '../../api/types'
 import { useAnchor } from '../../lib/anchor'
 import { parseTime } from '../../lib/format'
@@ -21,13 +13,13 @@ import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
 import SourceMark from '../../ui/source-mark'
 import { stateWord } from '../../ui/status-badge'
+import { useHoverCard } from './useHoverCard'
 import './sessions.css'
+
+export { CARD_CLOSE_MS, CARD_OPEN_MS } from './useHoverCard'
 
 /** How many settled rows the list shows before "Show N more". Live rows all show. */
 export const SHOWN_LIMIT = 8
-
-/** How long a pointer or focus rests on a row before its card opens. */
-export const CARD_DELAY_MS = 300
 
 const SETTLED_KEY = 'sirdar.settledCollapsed'
 
@@ -144,6 +136,11 @@ export interface SessionsListProps {
   /** Named on the card. */
   workspaceName?: string
   /**
+   * The sidebar is the 56px rail: a row is its tile alone, so the card
+   * carries the row's own number as well as the other one.
+   */
+  rail?: boolean
+  /**
    * The run whose card is drawn open, in the flow under the list rather than
    * pinned beside its row — for the gallery, which has no pointer to rest.
    */
@@ -163,6 +160,12 @@ export interface SessionsListProps {
  * and model, and the workspace. A dot over the tile's corner says a run is
  * live or blocked, and the row's accessible name says the same in words.
  * The row itself opens the run.
+ *
+ * There is one card element, drawn after the list as the sidebar's child
+ * rather than inside the scrolling list, and `useHoverCard` says which row
+ * it is for and when: 120ms of rest opens it, the next row takes it over
+ * with no wait, and it stays 150ms after the pointer leaves so the pointer
+ * can reach it.
  */
 export default function SessionsList({
   runs,
@@ -171,43 +174,36 @@ export default function SessionsList({
   now,
   sources,
   workspaceName,
+  rail = false,
   pinnedCard,
 }: SessionsListProps): JSX.Element | null {
   const [showAll, setShowAll] = useState(false)
   const [collapsed, setCollapsed] = useState(readSettledCollapsed)
-  const [card, setCard] = useState<string | null>(pinnedCard ?? null)
   const show = useSyncExternalStore(
     subscribeSessionsShow,
     sessionsShow,
     () => 'tracker' as SessionsShow,
   )
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hover = useHoverCard()
   const rows = useRef(new Map<string, HTMLButtonElement>())
-  const anchor = useRef<HTMLElement | null>(null)
   const cardEl = useRef<HTMLDivElement | null>(null)
   const id = useId()
   const cardId = `${id}-card`
   const settledId = `${id}-settled`
 
   const pinned = pinnedCard !== undefined
-  useAnchor(card !== null && !pinned, anchor, cardEl, { beside: true })
-
-  const disarm = useCallback(() => {
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = null
-    if (!pinned) setCard(null)
-  }, [pinned])
-
-  useEffect(() => disarm, [disarm])
-
-  function arm(runId: string): void {
-    if (pinned) return
-    if (timer.current) clearTimeout(timer.current)
-    timer.current = setTimeout(() => {
-      anchor.current = rows.current.get(runId) ?? null
-      setCard(runId)
-    }, CARD_DELAY_MS)
-  }
+  const card = pinned ? pinnedCard : hover.open
+  // The anchor is whichever row the card is for, read when the card is
+  // measured rather than copied when it opened: a row that is re-drawn
+  // (a run settling moves its row under the divider) is still found.
+  const cardNow = useRef(card)
+  cardNow.current = card
+  const anchor = useRef<RefObject<HTMLElement | null>>({
+    get current() {
+      return cardNow.current ? (rows.current.get(cardNow.current) ?? null) : null
+    },
+  })
+  useAnchor(card !== null && !pinned, anchor.current, cardEl, { beside: true, track: card })
 
   function toggleSettled(): void {
     const next = !collapsed
@@ -243,16 +239,11 @@ export default function SessionsList({
         aria-label={name}
         aria-describedby={isOpen ? cardId : undefined}
         onClick={() => onOpen(run.runId)}
-        onMouseEnter={() => arm(run.runId)}
-        onMouseLeave={disarm}
-        onFocus={() => arm(run.runId)}
-        onBlur={disarm}
-        onKeyDown={(e: KeyboardEvent<HTMLButtonElement>) => {
-          if (e.key === 'Escape' && isOpen) {
-            e.preventDefault()
-            disarm()
-          }
-        }}
+        onPointerEnter={pinned ? undefined : () => hover.enterRow(run.runId)}
+        onPointerLeave={pinned ? undefined : () => hover.leaveRow(run.runId)}
+        onPointerDown={pinned ? undefined : hover.pressRow}
+        onFocus={pinned ? undefined : () => hover.focusRow(run.runId)}
+        onBlur={pinned ? undefined : () => hover.blurRow(run.runId)}
       >
         <span className="sd-session-row__tile">
           <SourceMark adapter={shown.source?.adapter ?? shown.role} name={shown.source?.name} size="xs" />
@@ -278,12 +269,13 @@ export default function SessionsList({
   function renderCard(run: RunSummary): JSX.Element {
     const shown = shownNumber(run, show, sources)
     // The other number with its product's name; a run with one number names
-    // that one, so the card always says where the ticket lives.
+    // that one, so the card always says where the ticket lives. In the rail
+    // the row shows no number at all, so the card carries the row's own too.
     const otherRole: SessionsShow = shown.role === 'tracker' ? 'helpdesk' : 'tracker'
     const hasOther = shown.other !== ''
-    const numberRole = hasOther ? otherRole : shown.role
-    const numberSource = sources?.[numberRole]
-    const numberText = hasOther ? shown.other : withSource(shown.text, shown.source)
+    const numbers: { role: SessionsShow; text: string }[] = []
+    if (rail || !hasOther) numbers.push({ role: shown.role, text: withSource(shown.text, shown.source) })
+    if (hasOther) numbers.push({ role: otherRole, text: shown.other })
     return (
       <div
         id={cardId}
@@ -291,17 +283,25 @@ export default function SessionsList({
         className="sd-session-card"
         role="tooltip"
         data-static={pinned ? 'true' : undefined}
+        onPointerEnter={pinned ? undefined : hover.enterCard}
+        onPointerLeave={pinned ? undefined : hover.leaveCard}
       >
         <p className="sd-session-card__title" dir="auto">
           {run.title || shown.text}
         </p>
         <ul className="sd-session-card__rows">
-          <li className="sd-session-card__row">
-            <SourceMark adapter={numberSource?.adapter ?? numberRole} name={numberSource?.name} size="xs" />
-            <span className="sd-session-card__mono" dir="ltr">
-              {numberText}
-            </span>
-          </li>
+          {numbers.map((number) => (
+            <li key={number.role} className="sd-session-card__row">
+              <SourceMark
+                adapter={sources?.[number.role]?.adapter ?? number.role}
+                name={sources?.[number.role]?.name}
+                size="xs"
+              />
+              <span className="sd-session-card__mono" dir="ltr">
+                {number.text}
+              </span>
+            </li>
+          ))}
           <li className="sd-session-card__row">
             <KindChip kind={run.kind} />
             <span>{stateWord(run.status)}</span>
@@ -324,32 +324,39 @@ export default function SessionsList({
   }
 
   return (
-    <nav className="sd-sidebar__sessions" aria-label="Sessions">
-      {live.map(renderRow)}
-      {settled.length > 0 ? (
-        <button
-          type="button"
-          className="sd-sessions__settled"
-          aria-expanded={!collapsed}
-          aria-controls={settledId}
-          onClick={toggleSettled}
-        >
-          <span>Settled</span>
-          <span className="sd-sessions__rule" aria-hidden="true" />
-          <Chevron />
-        </button>
-      ) : null}
-      {settled.length > 0 && !collapsed ? (
-        <div id={settledId} className="sd-sessions__settled-rows">
-          {settledShown.map(renderRow)}
-          {hidden > 0 ? (
-            <button type="button" className="sd-sessions__more" onClick={() => setShowAll(true)}>
-              Show {hidden} more
-            </button>
-          ) : null}
-        </div>
-      ) : null}
+    <>
+      <nav className="sd-sidebar__sessions" aria-label="Sessions">
+        {live.map(renderRow)}
+        {settled.length > 0 ? (
+          <button
+            type="button"
+            className="sd-sessions__settled"
+            aria-expanded={!collapsed}
+            aria-controls={settledId}
+            onClick={toggleSettled}
+          >
+            <span>Settled</span>
+            <span className="sd-sessions__rule" aria-hidden="true" />
+            <Chevron />
+          </button>
+        ) : null}
+        {settled.length > 0 && !collapsed ? (
+          <div id={settledId} className="sd-sessions__settled-rows">
+            {settledShown.map(renderRow)}
+            {hidden > 0 ? (
+              <button
+                type="button"
+                className="sd-sessions__more"
+                aria-label={rail ? `Show ${hidden} more` : undefined}
+                onClick={() => setShowAll(true)}
+              >
+                {rail ? `+${hidden}` : `Show ${hidden} more`}
+              </button>
+            ) : null}
+          </div>
+        ) : null}
+      </nav>
       {open ? renderCard(open) : null}
-    </nav>
+    </>
   )
 }

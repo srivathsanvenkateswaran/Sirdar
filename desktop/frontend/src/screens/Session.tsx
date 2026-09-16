@@ -19,18 +19,21 @@ import {
 import { costOrUnknown, reasonOf } from '../lib/format'
 import { checksFromEvents, describeTests, latestStep, noteName } from '../lib/review'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
+import { readStoredFlag, writeStoredFlag } from '../lib/storedFlag'
 import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
 import BundleView from '../components/run/BundleView'
 import ChangesPane, { withoutCode } from '../components/run/ChangesPane'
 import Composer, { type ComposerMode } from '../components/run/Composer'
 import EventStream from '../components/run/EventStream'
 import NoteView from '../components/run/NoteView'
+import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../components/run/paneIcons'
 import ToolsPane, { toolCount } from '../components/run/ToolsPane'
 import { LIVE, TERMINAL, useRunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import Banner from '../ui/banner'
 import Button from '../ui/button'
 import KindChip from '../ui/kind-chip'
+import PanelToggle from '../ui/panel-toggle'
 import ProviderMark from '../ui/provider-mark'
 import { AssignedTo } from '../ui/run-card/Avatar'
 import SourceMark from '../ui/source-mark'
@@ -51,6 +54,21 @@ function useRunJob(runId: string): string | undefined {
 }
 
 type Tab = 'changes' | 'note' | 'bundle' | 'tools'
+
+/** The rail's glyph for each tab, when the pane is folded to its icons. */
+const TAB_ICONS: Record<Tab, JSX.Element> = {
+  changes: <ChangesIcon />,
+  note: <NoteIcon />,
+  bundle: <BundleIcon />,
+  tools: <ToolsIcon />,
+}
+
+/**
+ * Whether the artefacts pane is folded away. Remembered per screen, not per
+ * run: a reader who wants the transcript at full width wants it for every
+ * session, and a choice that reset on each run would be no choice.
+ */
+export const PANE_COLLAPSED_KEY = 'sirdar.sessionPaneCollapsed'
 
 /** The reading direction the tabs are laid out in, from the nearest `dir`. */
 function directionOf(node: HTMLElement | null): 'ltr' | 'rtl' {
@@ -123,6 +141,7 @@ export default function Session(props: {
     runId,
   )
   const [tab, setTab] = useState<Tab | null>(null)
+  const [paneOpen, setPaneOpen] = useState(() => !readStoredFlag(PANE_COLLAPSED_KEY))
   const [pending, setPending] = useState('')
   const [actionError, setActionError] = useState('')
   /** Why the provider refused the last steer; the composer stays disabled with it. */
@@ -133,6 +152,7 @@ export default function Session(props: {
   const [now, setNow] = useState(() => Date.now())
   const jobId = useRunJob(runId)
   const tabsId = useId()
+  const paneId = `${tabsId}-pane`
   // Under 1200 the topbar keeps the clock and the cost; the provider, the
   // model and the turn count move into the stats' title.
   const compact = useMediaQuery(BELOW_STANDARD)
@@ -168,6 +188,23 @@ export default function Session(props: {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [onBack])
+
+  const setPane = useCallback((open: boolean) => {
+    setPaneOpen(open)
+    writeStoredFlag(PANE_COLLAPSED_KEY, !open)
+  }, [])
+
+  // ⌘\ folds the pane and brings it back, from anywhere on the screen,
+  // the composer included: a chord is never a character the field wanted.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== '\\' || !(e.metaKey || e.ctrlKey) || e.altKey || e.shiftKey) return
+      e.preventDefault()
+      setPane(!paneOpen)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [paneOpen, setPane])
 
   /*
    * Which notes the Note tab asks for. A fix run has no triage note of its
@@ -496,7 +533,7 @@ export default function Session(props: {
         </p>
       ) : null}
 
-      <div className="session-body">
+      <div className="session-body" data-pane={paneOpen ? undefined : 'collapsed'}>
         <div className="session-left">
           <EventStream
             events={events}
@@ -516,24 +553,36 @@ export default function Session(props: {
             sentCount={sent}
           />
         </div>
-        <div className="session-right">
-          <div className="session-tabs" role="tablist" aria-label="Run artefacts" onKeyDown={onTabKey}>
-            {tabs.map((t, i) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                id={`${tabsId}-tab-${t.id}`}
-                className="session-tab"
-                aria-selected={shownTab === t.id}
-                aria-controls={`${tabsId}-panel`}
-                tabIndex={i === shownIndex ? 0 : -1}
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-                {t.count !== undefined ? <span className="session-tab-n">{t.count}</span> : null}
-              </button>
-            ))}
+        {paneOpen ? (
+        <div className="session-right" id={paneId}>
+          <div className="session-pane-head">
+            <div className="session-tabs" role="tablist" aria-label="Run artefacts" onKeyDown={onTabKey}>
+              {tabs.map((t, i) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  id={`${tabsId}-tab-${t.id}`}
+                  className="session-tab"
+                  aria-selected={shownTab === t.id}
+                  aria-controls={`${tabsId}-panel`}
+                  tabIndex={i === shownIndex ? 0 : -1}
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                  {t.count !== undefined ? <span className="session-tab-n">{t.count}</span> : null}
+                </button>
+              ))}
+            </div>
+            <PanelToggle
+              open
+              side="end"
+              hideLabel="Hide panel"
+              showLabel="Show panel"
+              shortcut="⌘\"
+              controls={paneId}
+              onToggle={() => setPane(false)}
+            />
           </div>
           <div
             className="session-panel"
@@ -585,6 +634,37 @@ export default function Session(props: {
             ) : null}
           </div>
         </div>
+        ) : (
+          /* Folded: a 36px rail of the tab glyphs. Any one of them brings
+             the pane back open on that tab; the toggle brings it back as
+             it was. The transcript and the composer take the width. */
+          <div className="session-rail" aria-label="Run artefacts, folded">
+            <PanelToggle
+              open={false}
+              side="end"
+              hideLabel="Hide panel"
+              showLabel="Show panel"
+              shortcut="⌘\"
+              controls={paneId}
+              onToggle={() => setPane(true)}
+            />
+            {tabs.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className="session-rail__tab"
+                aria-label={t.label}
+                title={t.count !== undefined ? `${t.label} (${t.count})` : t.label}
+                onClick={() => {
+                  setTab(t.id)
+                  setPane(true)
+                }}
+              >
+                {TAB_ICONS[t.id]}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

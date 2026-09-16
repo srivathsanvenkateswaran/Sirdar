@@ -4,7 +4,7 @@ import type { SourcesSummary } from '../../api/types'
 import { resetSessionsShow, setSessionsShow } from '../../lib/sessionsShow'
 import { run } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
-import SessionsList, { CARD_DELAY_MS, SHOWN_LIMIT, shortAge, splitRuns } from './SessionsList'
+import SessionsList, { CARD_CLOSE_MS, CARD_OPEN_MS, SHOWN_LIMIT, shortAge, splitRuns } from './SessionsList'
 
 afterEach(() => {
   localStorage.clear()
@@ -164,6 +164,17 @@ describe('the sessions list', () => {
     expect(within(list()).queryByRole('button', { name: /Show/ })).toBeNull()
   })
 
+  it('says +N for the hidden settled rows in the rail, still named Show N more', () => {
+    const many = Array.from({ length: 11 }, (_, i) =>
+      run({ runId: `r${i}`, key: `OMNI-${i}`, updatedAt: new Date(NOW - i * 3_600_000).toISOString() }),
+    )
+    mount({ runs: many, rail: true })
+    const more = within(list()).getByRole('button', { name: 'Show 3 more' })
+    expect(more).toHaveTextContent('+3')
+    fireEvent.click(more)
+    expect(within(list()).getAllByRole('button', { name: /OMNI-/ })).toHaveLength(11)
+  })
+
   it('marks the open run and opens another on click', () => {
     const { onOpen } = mount({ currentRunId: 'r2' })
     expect(within(list()).getByRole('button', { name: /OMNI-2,/ })).toHaveAttribute('aria-current', 'page')
@@ -178,80 +189,243 @@ describe('the sessions list', () => {
   })
 
   describe('the hover card', () => {
-    it('opens beside a row after a moment, with the title, the other number, the kind and state, the model and the workspace', () => {
+    /** Pointer onto a row, held still. */
+    const hoverRow = (row: HTMLElement) => fireEvent.pointerEnter(row)
+    const leaveRow = (row: HTMLElement) => fireEvent.pointerLeave(row)
+    const card = () => screen.getByRole('tooltip')
+    const noCard = () => expect(screen.queryByRole('tooltip')).toBeNull()
+
+    it('opens beside a row after 120ms of hover, with the title, the other number, the kind and state, the model and the workspace', () => {
       vi.useFakeTimers()
       mount()
       const row = rows()[0]
-      fireEvent.mouseEnter(row)
-      expect(screen.queryByRole('tooltip')).toBeNull()
+      hoverRow(row)
       act(() => {
-        vi.advanceTimersByTime(CARD_DELAY_MS)
+        vi.advanceTimersByTime(CARD_OPEN_MS - 1)
       })
-      const card = screen.getByRole('tooltip')
-      expect(card.style.position).toBe('fixed')
-      expect(row).toHaveAttribute('aria-describedby', card.id)
-      expect(card.querySelector('.sd-session-card__title')).toHaveTextContent('Login loop after reset')
-      const lines = [...card.querySelectorAll<HTMLElement>('.sd-session-card__row')]
+      noCard()
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      expect(card().style.position).toBe('fixed')
+      expect(row).toHaveAttribute('aria-describedby', card().id)
+      expect(card().querySelector('.sd-session-card__title')).toHaveTextContent('Login loop after reset')
+      const lines = [...card().querySelectorAll<HTMLElement>('.sd-session-card__row')]
       expect(lines[0]).toHaveTextContent('Zoho Desk #25312')
       expect(within(lines[0]).getByRole('img', { name: 'Zoho Desk' })).toBeInTheDocument()
       expect(lines[1]).toHaveTextContent(`triage${STATE_WORDS.running}`)
       expect(lines[2]).toHaveTextContent('claude-sonnet-5')
       expect(within(lines[2]).getByRole('img', { name: 'Claude' })).toBeInTheDocument()
       expect(lines[3]).toHaveTextContent('omni')
-
-      // Leaving closes it.
-      fireEvent.mouseLeave(row)
-      expect(screen.queryByRole('tooltip')).toBeNull()
+      // One card, drawn after the list rather than inside its scroll region.
+      expect(card().closest('nav')).toBeNull()
+      expect(screen.getAllByRole('tooltip')).toHaveLength(1)
     })
 
-    it('names the run by its own number and source when it has no other number, and says model unknown', () => {
+    it('is not cancelled by a re-render during the wait', () => {
+      vi.useFakeTimers()
+      const { rerender } = mount()
+      hoverRow(rows()[0])
+      act(() => {
+        vi.advanceTimersByTime(60)
+      })
+      // The store emits: every run object is new, the ages are re-read.
+      rerender(
+        <SessionsList
+          runs={RUNS.map((run) => ({ ...run }))}
+          now={NOW + 1000}
+          sources={SOURCES}
+          workspaceName="omni"
+          onOpen={() => {}}
+        />,
+      )
+      noCard()
+      act(() => {
+        vi.advanceTimersByTime(60)
+      })
+      expect(card()).toBeInTheDocument()
+    })
+
+    it('moves to the next row with no wait while a card is open', () => {
       vi.useFakeTimers()
       mount()
-      const row = rows()[1]
-      fireEvent.focus(row)
+      const [first, second] = rows()
+      hoverRow(first)
       act(() => {
-        vi.advanceTimersByTime(CARD_DELAY_MS)
+        vi.advanceTimersByTime(CARD_OPEN_MS)
       })
-      const card = screen.getByRole('tooltip')
-      expect(card.querySelector('.sd-session-card__title')).toHaveTextContent('OMNI-2')
-      const lines = [...card.querySelectorAll('.sd-session-card__row')]
-      expect(lines[0]).toHaveTextContent('Janus OMNI-2')
-      expect(lines[1]).toHaveTextContent(`fix${STATE_WORDS.blocked}`)
-      // The fake run names a model; a run that has not reported one says so.
-      fireEvent.blur(row)
-      expect(screen.queryByRole('tooltip')).toBeNull()
+      expect(card().querySelector('.sd-session-card__title')).toHaveTextContent('Login loop after reset')
+      leaveRow(first)
+      hoverRow(second)
+      // No timers advanced: the card is already the next row's.
+      expect(card().querySelector('.sd-session-card__title')).toHaveTextContent('OMNI-2')
+      expect(second).toHaveAttribute('aria-describedby', card().id)
+      expect(first).not.toHaveAttribute('aria-describedby')
     })
 
-    it('closes on Escape and does not open when the pointer leaves before the delay', () => {
+    it('closes 150ms after the pointer leaves the row, unless it lands on the card', () => {
       vi.useFakeTimers()
       mount()
       const row = rows()[0]
-      fireEvent.mouseEnter(row)
+      hoverRow(row)
       act(() => {
-        vi.advanceTimersByTime(CARD_DELAY_MS - 50)
+        vi.advanceTimersByTime(CARD_OPEN_MS)
       })
-      fireEvent.mouseLeave(row)
+      leaveRow(row)
+      act(() => {
+        vi.advanceTimersByTime(CARD_CLOSE_MS - 1)
+      })
+      expect(card()).toBeInTheDocument()
+      act(() => {
+        vi.advanceTimersByTime(1)
+      })
+      noCard()
+
+      hoverRow(row)
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      leaveRow(row)
       act(() => {
         vi.advanceTimersByTime(100)
       })
-      expect(screen.queryByRole('tooltip')).toBeNull()
-
-      fireEvent.focus(row)
+      fireEvent.pointerEnter(card())
       act(() => {
-        vi.advanceTimersByTime(CARD_DELAY_MS)
+        vi.advanceTimersByTime(1000)
       })
-      expect(screen.getByRole('tooltip')).toBeInTheDocument()
-      fireEvent.keyDown(row, { key: 'Escape' })
-      expect(screen.queryByRole('tooltip')).toBeNull()
+      expect(card()).toBeInTheDocument()
+      fireEvent.pointerLeave(card())
+      act(() => {
+        vi.advanceTimersByTime(CARD_CLOSE_MS)
+      })
+      noCard()
+    })
+
+    it('does not open when the pointer leaves before the delay', () => {
+      vi.useFakeTimers()
+      mount()
+      const row = rows()[0]
+      hoverRow(row)
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS - 50)
+      })
+      leaveRow(row)
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      noCard()
+    })
+
+    it('opens on keyboard focus too, without focus gating the pointer', () => {
+      vi.useFakeTimers()
+      mount()
+      const [first, second] = rows()
+      // Nothing has focus; the pointer alone opens it.
+      hoverRow(first)
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      expect(document.activeElement).not.toBe(first)
+      expect(card()).toBeInTheDocument()
+      leaveRow(first)
+      act(() => {
+        vi.advanceTimersByTime(CARD_CLOSE_MS)
+      })
+      noCard()
+
+      // Focus alone opens it, and blur closes it.
+      fireEvent.focus(second)
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      expect(card().querySelector('.sd-session-card__title')).toHaveTextContent('OMNI-2')
+      fireEvent.blur(second)
+      act(() => {
+        vi.advanceTimersByTime(CARD_CLOSE_MS)
+      })
+      noCard()
+    })
+
+    it('names the run by its own number and source when it has no other number', () => {
+      vi.useFakeTimers()
+      mount()
+      fireEvent.focus(rows()[1])
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      expect(card().querySelector('.sd-session-card__title')).toHaveTextContent('OMNI-2')
+      const lines = [...card().querySelectorAll('.sd-session-card__row')]
+      expect(lines[0]).toHaveTextContent('Janus OMNI-2')
+      expect(lines[1]).toHaveTextContent(`fix${STATE_WORDS.blocked}`)
+    })
+
+    it('closes on Escape, on a scroll and on a press, and stays closed until the next intent', () => {
+      vi.useFakeTimers()
+      const { onOpen } = mount()
+      const row = rows()[0]
+      const open = () => {
+        hoverRow(row)
+        act(() => {
+          vi.advanceTimersByTime(CARD_OPEN_MS)
+        })
+        expect(card()).toBeInTheDocument()
+      }
+
+      open()
+      fireEvent.keyDown(document.body, { key: 'Escape' })
+      noCard()
+      // The pointer is still on the row; nothing re-opens by itself.
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      noCard()
+      leaveRow(row)
+
+      open()
+      fireEvent.scroll(list())
+      noCard()
+      leaveRow(row)
+
+      open()
+      fireEvent.pointerDown(row)
+      fireEvent.click(row)
+      noCard()
+      expect(onOpen).toHaveBeenCalledWith('r1')
+      leaveRow(row)
+
+      // A quick click, before the card has opened: the pending card is
+      // cancelled too, so nothing pops over the run the click opened.
+      hoverRow(row)
+      act(() => {
+        vi.advanceTimersByTime(50)
+      })
+      fireEvent.pointerDown(row)
+      fireEvent.click(row)
+      act(() => {
+        vi.advanceTimersByTime(1000)
+      })
+      noCard()
+    })
+
+    it('carries the row\'s own number as well as the other when the sidebar is the rail', () => {
+      vi.useFakeTimers()
+      mount({ rail: true })
+      hoverRow(rows()[0])
+      act(() => {
+        vi.advanceTimersByTime(CARD_OPEN_MS)
+      })
+      const lines = [...card().querySelectorAll<HTMLElement>('.sd-session-card__row')]
+      expect(lines[0]).toHaveTextContent('Janus OMNI-2815')
+      expect(lines[1]).toHaveTextContent('Zoho Desk #25312')
+      expect(lines[2]).toHaveTextContent(`triage${STATE_WORDS.running}`)
     })
 
     it('is drawn open in the flow for the gallery', () => {
       mount({ pinnedCard: 'r1' })
-      const card = screen.getByRole('tooltip')
-      expect(card).toHaveAttribute('data-static', 'true')
-      expect(card.style.position).toBe('')
-      fireEvent.mouseLeave(rows()[0])
-      expect(screen.getByRole('tooltip')).toBeInTheDocument()
+      expect(card()).toHaveAttribute('data-static', 'true')
+      expect(card().style.position).toBe('')
+      fireEvent.pointerLeave(rows()[0])
+      expect(card()).toBeInTheDocument()
     })
   })
 })

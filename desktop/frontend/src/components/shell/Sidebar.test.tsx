@@ -6,11 +6,12 @@ import { stubMatchMedia } from '../../lib/mediaStub'
 import { run } from '../../store/fakeTransport'
 import { STATE_WORDS } from '../../ui/status-badge'
 import { PrimaryActionProvider, useProvidePrimaryAction } from './primaryAction'
-import Sidebar, { RAIL_AT } from './Sidebar'
+import Sidebar, { CARD_OPEN_MS, RAIL_AT, SIDEBAR_COLLAPSED_KEY } from './Sidebar'
 
 afterEach(() => {
-  localStorage.removeItem('sirdar.showLibrary')
+  localStorage.clear()
   resetShowLibrary()
+  vi.useRealTimers()
 })
 
 const WS: Workspace[] = [
@@ -82,6 +83,109 @@ describe('the rail under 1024', () => {
 
   it('asks for the narrow band, the one the tokens file names', () => {
     expect(RAIL_AT).toBe('(max-width: 1023px)')
+  })
+
+  it('disables the fold control while the width has made the choice', () => {
+    const media = stubMatchMedia([RAIL_AT])
+    try {
+      setShowLibrary(false)
+      const { container } = mount()
+      const toggle = screen.getByRole('button', { name: 'Show sidebar' })
+      expect(toggle).toBeDisabled()
+      expect(toggle).toHaveAttribute('title', 'The sidebar is a rail at this width')
+      fireEvent.keyDown(window, { key: 'b', metaKey: true })
+      expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBeNull()
+
+      act(() => media.set(RAIL_AT, false))
+      expect(container.querySelector('.sd-sidebar')).not.toHaveAttribute('data-collapsed')
+      expect(screen.getByRole('button', { name: 'Hide sidebar' })).toBeEnabled()
+    } finally {
+      media.restore()
+    }
+  })
+})
+
+describe('the fold', () => {
+  /** A still clock: 2026-09-16 at 10:00 local. */
+  const NOW = new Date(2026, 8, 16, 10, 0, 0).getTime()
+  const runs = [
+    run({
+      runId: 'r1',
+      key: 'OMNI-1',
+      helpdeskKey: '25312',
+      kind: 'triage',
+      status: 'running',
+      title: 'Login loop after reset',
+      updatedAt: new Date(NOW - 55 * 60_000).toISOString(),
+    }),
+  ]
+  const sources = {
+    tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+    helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+  }
+
+  it('folds the sidebar to the rail at any width on Hide sidebar, remembers it, and unfolds on Show sidebar', () => {
+    setShowLibrary(false)
+    const { container, onNavigate } = mount({ runs, sources, now: NOW })
+    const sidebar = container.querySelector('.sd-sidebar')!
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    const toggle = screen.getByRole('button', { name: 'Hide sidebar' })
+    expect(toggle).toHaveAttribute('title', 'Hide sidebar (⌘B)')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    fireEvent.click(toggle)
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+    expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('1')
+    expect(screen.getByRole('button', { name: 'Board' })).toHaveAttribute('title', 'Board')
+    // The sessions stay, as tiles, and still open their runs.
+    const row = screen.getByRole('button', { name: /OMNI-1/ })
+    expect(row.querySelector('.sd-session-row__tile')).not.toBeNull()
+    fireEvent.click(row)
+    expect(onNavigate).toHaveBeenCalledWith({ name: 'run', runId: 'r1' })
+    // New session is the plus alone, still named, still filled.
+    const plus = screen.getByRole('button', { name: 'New session' })
+    expect(plus).toHaveAttribute('data-icon-only', 'true')
+    expect(plus).toHaveAttribute('data-variant', 'primary')
+    expect(plus).toHaveAttribute('title', 'New session')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show sidebar' }))
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    expect(localStorage.getItem(SIDEBAR_COLLAPSED_KEY)).toBe('0')
+    expect(screen.getByRole('button', { name: 'New session' })).not.toHaveAttribute('data-icon-only')
+  })
+
+  it('answers ⌘B, and not a bare b, which is not a chord', () => {
+    setShowLibrary(false)
+    const { container } = mount()
+    const sidebar = container.querySelector('.sd-sidebar')!
+    fireEvent.keyDown(window, { key: 'b' })
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+    fireEvent.keyDown(window, { key: 'b', metaKey: true })
+    expect(sidebar).toHaveAttribute('data-collapsed', 'true')
+    fireEvent.keyDown(window, { key: 'B', ctrlKey: true })
+    expect(sidebar).not.toHaveAttribute('data-collapsed')
+  })
+
+  it('opens folded when the fold was remembered', () => {
+    setShowLibrary(false)
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1')
+    const { container } = mount()
+    expect(container.querySelector('.sd-sidebar')).toHaveAttribute('data-collapsed', 'true')
+    expect(screen.getByRole('button', { name: 'Show sidebar' })).toBeEnabled()
+  })
+
+  it('puts the number a rail tile cannot show on the hover card', () => {
+    vi.useFakeTimers()
+    setShowLibrary(false)
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1')
+    mount({ runs, sources, now: NOW })
+    fireEvent.pointerEnter(screen.getByRole('button', { name: /OMNI-1/ }))
+    act(() => {
+      vi.advanceTimersByTime(CARD_OPEN_MS)
+    })
+    const lines = [...screen.getByRole('tooltip').querySelectorAll('.sd-session-card__row')]
+    expect(lines[0]).toHaveTextContent('Jira OMNI-1')
+    expect(lines[1]).toHaveTextContent('Zoho Desk #25312')
   })
 })
 

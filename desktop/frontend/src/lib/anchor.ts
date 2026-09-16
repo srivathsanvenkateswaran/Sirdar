@@ -142,9 +142,16 @@ export function useAnchor(
   options: Pick<PlaceOptions, 'align' | 'gap' | 'margin'> & {
     /** Beside the trigger (`placeBeside`) instead of under it. */
     beside?: boolean
+    /**
+     * Re-measures when this changes. For a popover that stays open while its
+     * trigger is swapped underneath it — the sessions hover card moving from
+     * one row to the next — `open` never flips, so this is what says the
+     * trigger moved.
+     */
+    track?: unknown
   } = {},
 ): void {
-  const { align, gap, margin, beside = false } = options
+  const { align, gap, margin, beside = false, track } = options
   useLayoutEffect(() => {
     if (!open) return
     function apply(): void {
@@ -171,5 +178,5 @@ export function useAnchor(
       window.removeEventListener('resize', apply)
       document.removeEventListener('scroll', apply, true)
     }
-  }, [open, trigger, popover, align, gap, margin, beside])
+  }, [open, trigger, popover, align, gap, margin, beside, track])
 }
