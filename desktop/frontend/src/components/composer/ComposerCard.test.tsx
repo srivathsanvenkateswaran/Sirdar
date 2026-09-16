@@ -7,10 +7,14 @@ function Harness({
   send,
   error,
   aside,
+  variant,
+  maxRows,
 }: {
   send: Partial<ComposerSend>
   error?: string
   aside?: string
+  variant?: 'card' | 'strip'
+  maxRows?: number
 }): JSX.Element {
   const [text, setText] = useState('')
   return (
@@ -22,6 +26,8 @@ function Harness({
       placeholder="Paste a ticket key"
       error={error}
       aside={aside}
+      variant={variant}
+      maxRows={maxRows}
       chips={
         <>
           <span>Model chip</span>
@@ -98,5 +104,46 @@ describe('ComposerCard', () => {
     expect(button.querySelector('.sd-button__label')).toHaveTextContent('Answer')
     expect(button.closest('.composer-send')).toHaveAttribute('data-wide', 'true')
     expect(button.querySelector('svg')).not.toBeNull()
+  })
+
+  // The box is one line at rest and follows the text a row at a time, so a
+  // chip bar sits directly under a single line and a pasted paragraph is
+  // still all visible — up to eight lines, where it scrolls inside.
+  describe('sizes itself to the text', () => {
+    it('is one row at rest, grows a row per line, and shrinks back', () => {
+      render(<Harness send={{}} />)
+      const box = screen.getByRole('textbox') as HTMLTextAreaElement
+      expect(box.rows).toBe(1)
+      fireEvent.change(box, { target: { value: 'one\ntwo\nthree' } })
+      expect(box.rows).toBe(3)
+      fireEvent.change(box, { target: { value: 'one\ntwo' } })
+      expect(box.rows).toBe(2)
+      fireEvent.change(box, { target: { value: '' } })
+      expect(box.rows).toBe(1)
+    })
+
+    it('stops at eight rows and lets the rest scroll', () => {
+      render(<Harness send={{}} />)
+      const box = screen.getByRole('textbox') as HTMLTextAreaElement
+      fireEvent.change(box, { target: { value: Array.from({ length: 12 }, (_, i) => `line ${i + 1}`).join('\n') } })
+      expect(box.rows).toBe(8)
+    })
+
+    it('takes a smaller cap when the layout asks for one', () => {
+      render(<Harness send={{}} maxRows={4} />)
+      const box = screen.getByRole('textbox') as HTMLTextAreaElement
+      fireEvent.change(box, { target: { value: 'a\nb\nc\nd\ne\nf' } })
+      expect(box.rows).toBe(4)
+    })
+
+    it('behaves the same as the Document strip', () => {
+      render(<Harness send={{}} variant="strip" />)
+      const box = screen.getByRole('textbox') as HTMLTextAreaElement
+      expect(box.rows).toBe(1)
+      fireEvent.change(box, { target: { value: 'yes\nrun it' } })
+      expect(box.rows).toBe(2)
+      fireEvent.change(box, { target: { value: 'yes' } })
+      expect(box.rows).toBe(1)
+    })
   })
 })
