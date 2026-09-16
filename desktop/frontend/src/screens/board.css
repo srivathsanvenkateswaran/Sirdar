@@ -91,6 +91,17 @@
 /* ---------- the lanes ---------- */
 
 /*
+ * A card that has scrolled out of its lane is not laid out or painted until
+ * it is back, and the intrinsic size keeps the lane's scrollbar honest while
+ * it is away. A lane with forty settled runs is then priced by the six on
+ * screen.
+ */
+.board-lanes .sd-lane__body > * {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 120px;
+}
+
+/*
  * The six lanes share the row (`flex: 1 1 0` with a 200px floor, in the
  * Kanban column's own sheet), so at 1440 and up they fit the sheet and the
  * row only scrolls sideways once six times 200 no longer do. When it does

@@ -5,8 +5,9 @@ import './motion.css'
  * The app's motions, and the one switch that turns them off.
  *
  * Four things move: two ambient loops and two entrances. The entrances are
- * the sheet's content on navigation (rises 8px and fades over 320ms) and the
- * settings modal (scales from 0.98 over 300ms behind a 200ms scrim). They are
+ * the sheet's content on the window's first paint (rises 8px and fades over
+ * 160ms; a move between screens after that is drawn in place) and the
+ * settings modal (scales from 0.98 over 200ms behind a 120ms scrim). They are
  * class names, exported below, so a screen and the modal cannot disagree with
  * the stylesheet about what an entrance is; under reduced motion both are
  * simply not drawn, which is the stated answer: a shortened entrance is still
@@ -64,8 +65,15 @@ export function useReducedMotion(): boolean {
   return useSyncExternalStore(subscribeReducedMotion, prefersReducedMotion, () => true)
 }
 
-/** The sheet's content on navigation. Put it on the element that changes with the route. */
+/** The sheet's content on the window's first paint. Put it on the element that changes with the route. */
 export const PAGE_ENTER_CLASS = 'sd-motion-page'
+/**
+ * How long the shell keeps `PAGE_ENTER_CLASS` on the page: past the 160ms
+ * entrance with room to spare, after which the class comes off so the next
+ * screen mounts without it. The fill is `backwards`, so taking the class off
+ * a page that has finished entering changes nothing about how it looks.
+ */
+export const PAGE_ENTER_ONCE_MS = 400
 /** The settings modal's panel. */
 export const MODAL_ENTER_CLASS = 'sd-motion-modal'
 /** The scrim behind the modal. */

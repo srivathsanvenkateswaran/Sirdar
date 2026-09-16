@@ -31,7 +31,10 @@
 }
 
 /*
- * The sheet's content on every navigation: rises 8px and fades over 320ms.
+ * The sheet's content on the window's first paint: rises 8px and fades over
+ * 160ms. The shell puts the class on the page for that first paint only, so a
+ * move between screens after it is drawn in place; a reader who navigates
+ * does not want to watch the same entrance again.
  * The fill is `backwards`, never `both`: an animation of `transform` that
  * keeps filling forwards leaves the element with an identity transform, and
  * a transformed ancestor is the containing block for `position: fixed` — the
@@ -42,14 +45,14 @@
   animation: sd-page-enter var(--sd-dur-page) var(--sd-ease) backwards;
 }
 
-/* The settings modal: scales from 0.98 and fades over 300ms. */
+/* The settings modal: scales from 0.98 and fades over 200ms. */
 .sd-motion-modal {
-  animation: sd-modal-enter var(--sd-dur-3) var(--sd-ease) both;
+  animation: sd-modal-enter var(--sd-dur-2) var(--sd-ease) both;
 }
 
-/* The scrim under it: a 200ms fade. */
+/* The scrim under it: a 120ms fade. */
 .sd-motion-scrim {
-  animation: sd-fade-in var(--sd-dur-2) ease both;
+  animation: sd-fade-in var(--sd-dur-1) ease both;
 }
 
 /* ---------- ambient loops ---------- */

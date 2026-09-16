@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import '@testing-library/jest-dom/vitest'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resetSessionsShow, setSessionsShow } from '../lib/sessionsShow'
+import { FILTER_DEBOUNCE_MS } from '../lib/useDebounced'
 import type { InboundDelivery } from '../store/appStore'
 import { createFakeTransport, run, ticket, type FakeTransport } from '../store/fakeTransport'
 import Board, { buildColumns, updatedAgo, type BoardProps } from './Board'
@@ -242,27 +243,42 @@ describe('Board', () => {
     expect(within(lane(container, 'failed')).getByText('Nothing has failed.')).toBeInTheDocument()
   })
 
-  it('filters by key, title or provider from the well', async () => {
+  it('filters by key, title or provider from the well, a beat after the keystroke', async () => {
     const { container } = mount()
     await screen.findByRole('region', { name: 'Queue (1)' })
     const well = screen.getByRole('searchbox', { name: 'Filter cards' })
+    vi.useFakeTimers()
+    // The field takes the keystroke at once; the lanes narrow once it has held still.
+    const type = (value: string) => {
+      fireEvent.change(well, { target: { value } })
+      expect(well).toHaveValue(value)
+      act(() => {
+        vi.advanceTimersByTime(FILTER_DEBOUNCE_MS)
+      })
+    }
 
     fireEvent.change(well, { target: { value: 'statement' } })
+    expect(within(lane(container, 'gathering')).getByRole('button', { name: /OMNI-1/ })).toBeInTheDocument()
+    act(() => {
+      vi.advanceTimersByTime(FILTER_DEBOUNCE_MS)
+    })
     expect(within(lane(container, 'queue')).getByRole('link', { name: /OMNI-9/ })).toBeInTheDocument()
     expect(within(lane(container, 'gathering')).queryByRole('button', { name: /OMNI-1/ })).toBeNull()
     expect(within(lane(container, 'gathering')).getByText('Nothing here matches “statement”.')).toBeInTheDocument()
 
-    fireEvent.change(well, { target: { value: 'codex' } })
+    type('codex')
     expect(within(lane(container, 'triaged')).getByRole('button', { name: /OMNI-2/ })).toBeInTheDocument()
     expect(within(lane(container, 'failed')).queryByRole('button', { name: /OMNI-5/ })).toBeNull()
 
-    fireEvent.change(well, { target: { value: 'omni-5' } })
+    type('omni-5')
     expect(within(lane(container, 'failed')).getByRole('button', { name: /OMNI-5/ })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Failed (1)' })).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Queue (0)' })).toBeInTheDocument()
 
+    // Clearing is not a beat late: the lanes fill back in with the field.
     fireEvent.keyDown(well, { key: 'Escape' })
     expect(well).toHaveValue('')
+    expect(screen.getByRole('region', { name: 'Queue (1)' })).toBeInTheDocument()
   })
 
   it('opens the quick filters from either control and narrows the lanes by kind', async () => {

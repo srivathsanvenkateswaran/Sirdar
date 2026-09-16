@@ -1,8 +1,8 @@
-import { memo, useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import type { RunSummary, Ticket } from './api/types'
 import Sidebar from './components/shell/Sidebar'
 import { PrimaryActionProvider } from './components/shell/primaryAction'
-import { PAGE_ENTER_CLASS } from './ui/motion'
+import { PAGE_ENTER_CLASS, PAGE_ENTER_ONCE_MS } from './ui/motion'
 import Toasts from './ui/toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
@@ -194,6 +194,15 @@ function Shell(): JSX.Element {
     void store.init()
   }, [store])
 
+  // The page enters once, on the window's first paint. The class comes off
+  // after the entrance has ended, so every screen mounted after that — a
+  // sidebar row, a card, Back — is drawn in place rather than risen into.
+  const [entering, setEntering] = useState(true)
+  useEffect(() => {
+    const id = setTimeout(() => setEntering(false), PAGE_ENTER_ONCE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
   useHashRoute(store, { screen, currentWorkspaceId: workspaceId, workspaces, loading })
   useFirstLaunch(store, loading, workspaceId, runsOrNone, screen)
 
@@ -382,16 +391,16 @@ function Shell(): JSX.Element {
       )
   }
 
-  // The page's key is its address, so every navigation mounts a fresh page
-  // and the enter motion runs again; a settings modal opening over it does
-  // not, because the page underneath has not moved.
+  // The page's key is its address, so every navigation mounts a fresh page;
+  // a settings modal opening over it does not, because the page underneath
+  // has not moved.
   const pageKey = routeHash(shown, workspaceId)
 
   return (
     <div className="app">
       <ConnectedSidebar onNavigate={navigate} />
       <main className="main">
-        <div className={`sd-page ${PAGE_ENTER_CLASS}`} key={pageKey}>
+        <div className={entering ? `sd-page ${PAGE_ENTER_CLASS}` : 'sd-page'} key={pageKey}>
           {workspaces.length === 0 && !loading && shown.name !== 'library' ? (
             <p className="app-empty">
               No workspace yet. Open Settings and add the path to a repository that has a{' '}

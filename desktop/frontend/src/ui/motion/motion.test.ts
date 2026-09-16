@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   MODAL_ENTER_CLASS,
   PAGE_ENTER_CLASS,
+  PAGE_ENTER_ONCE_MS,
   SCRIM_ENTER_CLASS,
   prefersReducedMotion,
   ringAngles,
@@ -101,9 +102,15 @@ describe('the two entrances', () => {
     },
   )
 
-  it('runs the page enter over the 320ms token and the modal over 300ms', () => {
+  it('runs the page enter over the page token, the modal over 200ms and the scrim over 120ms', () => {
     expect(sheet).toMatch(/\.sd-motion-page\s*\{[^}]*var\(--sd-dur-page\)/)
-    expect(sheet).toMatch(/\.sd-motion-modal\s*\{[^}]*var\(--sd-dur-3\)/)
-    expect(sheet).toMatch(/\.sd-motion-scrim\s*\{[^}]*var\(--sd-dur-2\)/)
+    expect(sheet).toMatch(/\.sd-motion-modal\s*\{[^}]*var\(--sd-dur-2\)/)
+    expect(sheet).toMatch(/\.sd-motion-scrim\s*\{[^}]*var\(--sd-dur-1\)/)
+  })
+
+  it('the page token is 160ms, and the shell keeps the class on past it', () => {
+    const tokens = readFileSync(resolve(process.cwd(), 'src', 'styles', 'tokens.css'), 'utf8')
+    expect(tokens).toMatch(/--sd-dur-page:\s*160ms/)
+    expect(PAGE_ENTER_ONCE_MS).toBeGreaterThan(160)
   })
 })
