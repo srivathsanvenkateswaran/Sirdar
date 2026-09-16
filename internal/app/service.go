@@ -473,6 +473,30 @@ func (s *Service) Quota() []Quota { return s.quota.snapshot() }
 
 // --- the queue --------------------------------------------------------
 
+// queueAssignee is the assignee filter as the tracker should receive it.
+//
+// Five built-in adapters resolve "me" against their own credentials —
+// they know which account they authenticated as, and the caller does not,
+// so "me" is the better filter there and is passed through. Every other
+// adapter, `exec` included, is handed the filter verbatim over stdio and
+// has no account of its own to resolve it against, so the board's
+// `assignee: me` is written out as the resolved identity before it goes.
+// With nothing to resolve to, "me" goes as it stands: the adapter may
+// still know, and the protocol has it answer with an error rather than an
+// empty list if it does not.
+func queueAssignee(cfg *config.Config, assignee string) string {
+	if !source.IsSelf(assignee) {
+		return assignee
+	}
+	if cfg.Sources.Tracker != nil && source.ResolvesSelf(cfg.Sources.Tracker.Adapter) {
+		return assignee
+	}
+	if self := SelfOf(cfg); self != "" {
+		return self
+	}
+	return assignee
+}
+
 // Queue lists the workspace's tracker tickets, each decorated with its
 // newest run. It returns ErrUnsupported when the workspace configures no
 // tracker or the adapter cannot list.
@@ -493,7 +517,7 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 	}
 
 	tickets, err := deps.Tracker.List(ctx, source.ListFilter{
-		Assignee: f.Assignee,
+		Assignee: queueAssignee(cfg, f.Assignee),
 		Status:   f.Status,
 		Limit:    f.Limit,
 	})
@@ -505,7 +529,7 @@ func (s *Service) Queue(ctx context.Context, wsID string, f QueueFilter) ([]Tick
 		return nil, err
 	}
 
-	self := SelfOf(cfg)
+	self := IdentityOf(cfg)
 	out := make([]Ticket, 0, len(tickets))
 	for _, t := range tickets {
 		row := Ticket{

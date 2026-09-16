@@ -33,6 +33,7 @@ const NO_TICKETS: Ticket[] = []
 const selectRuns = (s: AppState): RunSummary[] | undefined => s.runsByWorkspace[s.currentWorkspaceId]
 const selectTickets = (s: AppState): Ticket[] | undefined => s.ticketsByWorkspace[s.currentWorkspaceId]
 const selectSources = (s: AppState) => s.sourcesByWorkspace[s.currentWorkspaceId]
+const selectMe = (s: AppState) => s.meByWorkspace[s.currentWorkspaceId]
 const selectQueueUnsupported = (s: AppState): boolean => Boolean(s.queueUnsupported[s.currentWorkspaceId])
 const selectWorkspace = (s: AppState) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)
 
@@ -183,6 +184,7 @@ function Shell(): JSX.Element {
   const runsOrNone = useAppState(selectRuns)
   const ticketsOrNone = useAppState(selectTickets)
   const sources = useAppState(selectSources)
+  const me = useAppState(selectMe)
   const queueUnsupported = useAppState(selectQueueUnsupported)
   const inbound = useAppState((s) => s.inbound)
   const quota = useAppState((s) => s.quota)
@@ -381,6 +383,7 @@ function Shell(): JSX.Element {
           tickets={tickets}
           runs={runs}
           sources={sources}
+          me={me}
           queueUnsupported={queueUnsupported}
           loading={loading}
           inbound={inbound}

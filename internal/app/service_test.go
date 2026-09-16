@@ -208,6 +208,38 @@ func TestQueueDecoratesWithLatestRun(t *testing.T) {
 	}
 }
 
+// TestQueueAssigneeResolvesMeOnlyWhereTheAdapterCannot: Jira and the four
+// other built-ins turn "me" into their own account, and they do it better
+// than Sirdar can; an exec adapter is handed the filter verbatim and has no
+// account of its own, so the address goes instead of the word.
+func TestQueueAssigneeResolvesMeOnlyWhereTheAdapterCannot(t *testing.T) {
+	withMe := func(adapter string) *config.Config {
+		c := &config.Config{}
+		c.Sources.Tracker = &config.SourceConfig{Adapter: adapter}
+		c.Me = config.MeConfig{Email: "srivathsan.v@silq.net"}
+		return c
+	}
+	for _, adapter := range []string{"jira", "linear", "azdo", "rally", "servicenow"} {
+		if got := queueAssignee(withMe(adapter), "me"); got != "me" {
+			t.Errorf("%s: assignee = %q, want it left as me", adapter, got)
+		}
+	}
+	if got := queueAssignee(withMe("exec"), "me"); got != "srivathsan.v@silq.net" {
+		t.Errorf("exec: assignee = %q, want the resolved address", got)
+	}
+	// An assignee written out is never touched, on any adapter.
+	if got := queueAssignee(withMe("exec"), "rana@acme.com"); got != "rana@acme.com" {
+		t.Errorf("written out: assignee = %q", got)
+	}
+	// Nothing to resolve to: the word goes as it stands, and the adapter
+	// answers with an error rather than an empty list if it cannot help.
+	bare := &config.Config{}
+	bare.Sources.Tracker = &config.SourceConfig{Adapter: "exec"}
+	if got := queueAssignee(bare, "me"); got != "me" {
+		t.Errorf("no identity: assignee = %q, want me", got)
+	}
+}
+
 func TestQueueUnsupported(t *testing.T) {
 	root := newWorkspace(t)
 
