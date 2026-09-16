@@ -237,6 +237,23 @@ func TestSessionReadsTheStream(t *testing.T) {
 		}
 	}
 
+	// The model's prose, in the words the CLI reported it. Sirdar never
+	// passes --stream-partial-output, so a message arrives once: no event
+	// is a delta and none replaces another.
+	var said []string
+	for _, ev := range events {
+		if ev.Kind != provider.EvAssistantText {
+			continue
+		}
+		said = append(said, ev.Text)
+		if ev.Delta || ev.Replace {
+			t.Errorf("cursor reports a message once; %q was marked delta=%v replace=%v", ev.Text, ev.Delta, ev.Replace)
+		}
+	}
+	if len(said) != 2 || said[0] != "Looking at the handler." || !strings.Contains(said[1], "null pointer in handler") {
+		t.Errorf("assistant text %q", said)
+	}
+
 	if res.Handle != "f7d05f71-bce0-4e57-a6dd-797936cafb6c" {
 		t.Errorf("handle %q", res.Handle)
 	}

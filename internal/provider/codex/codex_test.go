@@ -360,9 +360,16 @@ func TestBasicSession(t *testing.T) {
 		t.Errorf("tool_finished events = %d, want 1", len(only(t, evs, provider.EvToolFinished)))
 	}
 
+	// The model's prose is the commentary agentMessage; the final_answer
+	// one is the structured answer and belongs to the final event. Codex
+	// streams its deltas as notifications the adapter drops, so the text
+	// arrives once, whole: no event is a delta and none replaces another.
 	texts := only(t, evs, provider.EvAssistantText)
 	if len(texts) != 1 || texts[0].Text != "Reading the repository now." {
 		t.Errorf("assistant_text events = %+v", texts)
+	}
+	if len(texts) == 1 && (texts[0].Delta || texts[0].Replace) {
+		t.Errorf("codex reports a message once; it was marked delta=%v replace=%v", texts[0].Delta, texts[0].Replace)
 	}
 
 	usage := only(t, evs, provider.EvUsage)
