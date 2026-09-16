@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -143,10 +144,13 @@ func TestConversionsCarryTheState(t *testing.T) {
 	if detail.StartedAt != "2026-09-10T09:00:00Z" || detail.UpdatedAt != "" {
 		t.Fatalf("timestamps %q %q", detail.StartedAt, detail.UpdatedAt)
 	}
-	if detail.PromptPath != "/root/.sirdar/runs/OMNI-1/r1/prompt.md" {
+	// Both are filesystem paths DetailOf builds with filepath.Join, so on
+	// Windows they come back separated with backslashes. FromSlash keeps
+	// the expectation spelled the way the run directory reads.
+	if detail.PromptPath != filepath.FromSlash("/root/.sirdar/runs/OMNI-1/r1/prompt.md") {
 		t.Fatalf("promptPath %q", detail.PromptPath)
 	}
-	if detail.BundleDir != "/root/.sirdar/runs/OMNI-1/r1/bundle" {
+	if detail.BundleDir != filepath.FromSlash("/root/.sirdar/runs/OMNI-1/r1/bundle") {
 		t.Fatalf("bundleDir %q", detail.BundleDir)
 	}
 	// Empty slices marshal as [] rather than null, so the UI can iterate.

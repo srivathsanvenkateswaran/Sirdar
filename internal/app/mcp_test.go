@@ -10,20 +10,18 @@ import (
 	"testing"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
-// fakeMCPServer is the stdio server internal/mcpclient keeps for its own
-// tests; one fixture serves every layer that has to drive a real server.
+// fakeMCPServer installs the stdio server stand-in from internal/testbin
+// and returns its path. It used to be a #!/bin/sh script that every layer
+// pointed at by a relative path; a script is not executable on Windows, so
+// the one fixture is a Go function now (testbin.FakeMCP, registered by
+// TestMain) and each caller installs its own copy of this test binary
+// under that name.
 func fakeMCPServer(t *testing.T) string {
 	t.Helper()
-	p, err := filepath.Abs(filepath.Join("..", "mcpclient", "testdata", "fakemcp.sh"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, err := os.Stat(p); err != nil {
-		t.Fatal(err)
-	}
-	return p
+	return testbin.Install(t, t.TempDir(), "fakemcp", "fakemcp")
 }
 
 // mcpWorkspace is a workspace whose .mcp.json declares the fake server
@@ -31,7 +29,15 @@ func fakeMCPServer(t *testing.T) string {
 func mcpWorkspace(t *testing.T, allow ...string) *config.Config {
 	t.Helper()
 	root := newWorkspace(t)
-	body := `{"mcpServers":{"fake":{"command":"` + fakeMCPServer(t) + `","env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`
+	// The command has to be quoted by encoding/json, not by hand: half
+	// the time it is a Windows path, and a raw "C:\Users\..." inside a
+	// JSON document is a string of invalid escapes — "\U" is not one, and
+	// the parser refuses the whole file.
+	command, err := json.Marshal(fakeMCPServer(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := `{"mcpServers":{"fake":{"command":` + string(command) + `,"env":{"FAKE_MCP_TOKEN":"$SIRDAR_TEST_MCP_TOKEN"}}}}`
 	if err := os.WriteFile(filepath.Join(root, ".mcp.json"), []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}

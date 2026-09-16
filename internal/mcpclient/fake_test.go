@@ -6,10 +6,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
 // fakeEnv makes the test binary re-exec itself as an MCP server instead
@@ -19,15 +22,49 @@ import (
 // stops responding, so Close's kill path can be timed.
 const fakeEnv = "SIRDAR_MCP_FAKE"
 
+// fakeMCPBin is testbin.FakeMCP installed as a real executable, for the
+// tests that drive a server named in a .mcp.json rather than started by
+// hand. It replaces testdata/fakemcp.sh, which Windows cannot execute at
+// all, and it is installed once here so every test shares the one copy.
+var fakeMCPBin string
+
 func TestMain(m *testing.M) {
+	// Dispatch first: a process started under one of these names is a
+	// fake, not a test run, and never returns from here. The env-var
+	// switch below stays because startFake picks its variant that way —
+	// the fake this binary is *installed* as is chosen by name, the one
+	// it is *re-exec'd* as by environment.
+	testbin.Dispatch(map[string]func() int{"fakemcp": testbin.FakeMCP})
+
 	switch os.Getenv(fakeEnv) {
 	case "":
-		os.Exit(m.Run())
 	case "hang":
 		runFake(true)
 	default:
 		runFake(false)
 	}
+
+	tmp, err := os.MkdirTemp("", "sirdar-mcpclient")
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mcpclient test:", err)
+		os.Exit(1)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "mcpclient test:", err)
+		os.RemoveAll(tmp)
+		os.Exit(1)
+	}
+	fakeMCPBin = filepath.Join(tmp, "fakemcp"+testbin.Ext)
+	if err := testbin.LinkOrCopy(self, fakeMCPBin); err != nil {
+		fmt.Fprintln(os.Stderr, "mcpclient test: install fakemcp:", err)
+		os.RemoveAll(tmp)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+	os.RemoveAll(tmp)
+	os.Exit(code)
 }
 
 // fake is the server side of the test: a line-oriented JSON-RPC loop

@@ -11,18 +11,17 @@ import (
 	"testing"
 )
 
-// fakeServerRel is the stdio MCP server these tests drive. The same script
-// is what internal/app and cmd/sirdar point at, by a relative path of
-// their own, so one fixture serves every layer.
-const fakeServerRel = "testdata/fakemcp.sh"
-
+// fakeServer is the stdio MCP server these tests drive, installed by
+// TestMain. It used to be testdata/fakemcp.sh, which internal/app and
+// cmd/sirdar pointed at by relative paths of their own; the one fixture is
+// testbin.FakeMCP now, because a #!/bin/sh script is not an executable on
+// Windows and every layer that started one failed there.
 func fakeServer(t *testing.T) string {
 	t.Helper()
-	p, err := filepath.Abs(fakeServerRel)
-	if err != nil {
-		t.Fatal(err)
+	if fakeMCPBin == "" {
+		t.Fatal("TestMain did not install the fake MCP server")
 	}
-	return p
+	return fakeMCPBin
 }
 
 // writeMCP writes a .mcp.json into dir and returns the directory.
@@ -152,7 +151,16 @@ func TestInventoryOnAMissingFileIsEmptyAndOnABrokenOneIsAnError(t *testing.T) {
 
 func TestConnectStdioListsToolsAndRedactsTheToken(t *testing.T) {
 	root := t.TempDir()
-	writeMCP(t, root, `{"mcpServers":{"fake":{"command":"`+fakeServer(t)+`","env":{"FAKE_MCP_TOKEN":"$FAKE_MCP_TOKEN"}}}}`)
+	// encoding/json quotes the command, rather than a pair of literal
+	// double quotes doing it: on Windows the path is "C:\Users\..." and a
+	// raw backslash run inside a JSON document is a string of invalid
+	// escapes — "\U" is not one, and the parse fails before the server is
+	// ever reached.
+	command, err := json.Marshal(fakeServer(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeMCP(t, root, `{"mcpServers":{"fake":{"command":`+string(command)+`,"env":{"FAKE_MCP_TOKEN":"$FAKE_MCP_TOKEN"}}}}`)
 
 	entries, _, err := Inventory(root, []string{"FAKE_MCP_TOKEN=hunter2-token", "PATH=" + os.Getenv("PATH")}, false)
 	if err != nil {

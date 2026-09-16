@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -150,7 +151,12 @@ func TestConfigSummaryCarriesTheReadOnlyPages(t *testing.T) {
 	if got.General.Workspace != "omni" || got.General.Provider != "claude" || got.General.Model != "sonnet" {
 		t.Fatalf("general %+v", got.General)
 	}
-	if got.General.ConfigPath != "/repos/omni/.sirdar/config.yaml" {
+	// The summary's paths are filesystem paths the desktop opens, built
+	// with filepath.Join from cfg.Root, so they come back separated the
+	// way the platform separates them. filepath.FromSlash keeps the
+	// expectation spelled as a path while letting it mean the
+	// backslash-separated one on Windows.
+	if got.General.ConfigPath != filepath.FromSlash("/repos/omni/.sirdar/config.yaml") {
 		t.Fatalf("config path %q", got.General.ConfigPath)
 	}
 	if got.General.NotesLanguage != "en" || got.General.CustomerLanguage != "auto" || !got.General.RTLMarkup {
@@ -159,7 +165,7 @@ func TestConfigSummaryCarriesTheReadOnlyPages(t *testing.T) {
 	if got.Budget.MaxTurns != 20 || got.Budget.MaxUSD != 2.5 || got.Budget.StallMinutes != 0 {
 		t.Fatalf("budget %+v", got.Budget)
 	}
-	if got.Notes.Dir != "/repos/omni/notes" || got.Notes.Templates != "" || got.Notes.Filenames.Triage != "{{key}}-triage.md" {
+	if got.Notes.Dir != filepath.FromSlash("/repos/omni/notes") || got.Notes.Templates != "" || got.Notes.Filenames.Triage != "{{key}}-triage.md" {
 		t.Fatalf("notes %+v", got.Notes)
 	}
 	if !got.MCP.WorkspaceOnly {

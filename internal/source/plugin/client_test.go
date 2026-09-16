@@ -1,8 +1,10 @@
 package plugin
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,11 +12,33 @@ import (
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
+
+// TestMain is also every fake adapter these tests drive. testbin.Dispatch
+// turns this binary into the fake it was started as, which is the only way
+// an adapter fixture exists on every operating system: a #!/bin/sh script
+// is not an executable on Windows — CreateProcess refuses it with "%1 is
+// not a valid Win32 application" — and the stuck adapter below used to be
+// exactly that.
+func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{
+		"stuckadapter": stuckAdapterMain,
+	})
+	os.Exit(m.Run())
+}
+
+// quoted wraps an adapter path for Start, whose splitCommand breaks the
+// command on spaces. A temp directory can contain one, and on Windows
+// routinely sits under a user profile name that does.
+func quoted(path string) string { return `"` + path + `"` }
 
 func buildFileAdapter(t *testing.T) string {
 	t.Helper()
-	bin := filepath.Join(t.TempDir(), "file-adapter")
+	// The ".exe" matters: on Windows an extensionless file is not an
+	// executable at all, and exec refuses to start one with "executable
+	// file not found in %PATH%" even when handed its full path.
+	bin := filepath.Join(t.TempDir(), "file-adapter"+testbin.Ext)
 	cmd := exec.Command("go", "build", "-o", bin, "../../../examples/adapters/file")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("build: %v\n%s", err, out)
@@ -25,7 +49,7 @@ func buildFileAdapter(t *testing.T) string {
 func TestClientRoundTrip(t *testing.T) {
 	bin := buildFileAdapter(t)
 	var stderr bytes.Buffer
-	c, err := Start(context.Background(), bin+` -file "testdata/tickets.json"`, &stderr)
+	c, err := Start(context.Background(), quoted(bin)+` -file "testdata/tickets.json"`, &stderr)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,28 +104,34 @@ func TestClientShutdownTimeout(t *testing.T) {
 	}
 }
 
-// stuckAdapter builds a script that answers exactly one request (describe,
-// always sent first and so always id 1) and then hangs: it never reads or
-// answers anything after that, simulating an adapter wedged mid-request.
+// stuckAdapterMain answers exactly one request (describe, always sent
+// first and so always id 1) and then hangs: it never reads or answers
+// anything after that, simulating an adapter wedged mid-request. It runs
+// in a copy of this test binary that stuckAdapter installs, dispatched by
+// TestMain on the name it was installed under.
+func stuckAdapterMain() int {
+	// Consuming the describe line keeps the client's write from blocking
+	// on a full pipe, and keeps this process from turning that write into
+	// a broken pipe by exiting into it.
+	bufio.NewReader(os.Stdin).ReadString('\n')
+	fmt.Println(`{"id":1,"result":{"name":"stuck","roles":["tracker"],"version":"1"}}`)
+	time.Sleep(60 * time.Second)
+	return 0
+}
+
+// stuckAdapter installs stuckAdapterMain as a real executable and returns
+// the command that starts it.
 func stuckAdapter(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "stuck.sh")
-	script := "#!/bin/sh\n" +
-		"read line\n" +
-		`echo '{"id":1,"result":{"name":"stuck","roles":["tracker"],"version":"1"}}'` + "\n" +
-		"sleep 60\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	return quoted(testbin.Install(t, t.TempDir(), "stuckadapter", "stuckadapter"))
 }
 
 func TestClientCloseUnblocksHangingCall(t *testing.T) {
 	// Reproduces the deadlock this test guards against: call() must not
 	// hold c.mu for the duration of a blocking wait, or Close can never
 	// acquire it to send shutdown and start its kill timer.
-	bin := stuckAdapter(t)
-	c, err := Start(context.Background(), bin, &bytes.Buffer{})
+	command := stuckAdapter(t)
+	c, err := Start(context.Background(), command, &bytes.Buffer{})
 	if err != nil {
 		t.Fatal(err)
 	}
