@@ -80,17 +80,24 @@ export const MAX_ROWS = 8
  * `maxRows` at most. Hard newlines are counted from the value; soft wraps
  * are measured off `scrollHeight` against the computed line height, which
  * is zero where nothing lays out (jsdom), so the count of newlines is the
- * floor. The height comes from `rows`, so the card's chrome never moves on
- * focus — nothing here reads the focus state.
+ * floor. An empty box is measured with its placeholder standing in as the
+ * text, so a prompt that wraps in a narrow column is read whole rather than
+ * cut off — and so every engine sizes it the same, whether or not it counts
+ * the placeholder in `scrollHeight` (Chromium does, WebKit does not). The
+ * height comes from `rows`, so the card's chrome never moves on focus —
+ * nothing here reads the focus state.
  */
 export function fitRows(el: HTMLTextAreaElement, maxRows: number): number {
   const hard = el.value.split('\n').length
   // Measure from one row, or a box that shrank never reports it.
   el.rows = 1
+  const standIn = el.value === '' && el.placeholder !== ''
+  if (standIn) el.value = el.placeholder
   const style = getComputedStyle(el)
   const line = parseFloat(style.lineHeight)
   const pad = (parseFloat(style.paddingBlockStart) || 0) + (parseFloat(style.paddingBlockEnd) || 0)
   const soft = Number.isFinite(line) && line > 0 && el.scrollHeight > 0 ? Math.round((el.scrollHeight - pad) / line) : 0
+  if (standIn) el.value = ''
   const rows = Math.min(maxRows, Math.max(1, hard, soft))
   el.rows = rows
   return rows
