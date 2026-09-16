@@ -96,19 +96,35 @@ which the user showed as the reference.
   carries the same state in words (`OMNI-2815, triage, running`).
 - Current: `aria-current="page"`, `--sd-nav-active`; hover `--sd-nav-hover`.
   The row itself opens the run.
-- `div.sd-session-card[role="tooltip"]` — the hover card, opened after
-  `CARD_DELAY_MS` (300ms) of hover or focus, pinned by `lib/anchor`'s
-  `placeBeside` to the row's trailing edge so it opens into the sheet (the
-  leading side when there is no room), 280 wide on the dialog's surface
-  (`--sd-surface`, `--sd-rule-strong`, `--sd-radius-md`, `--sd-shadow-soft`),
-  `pointer-events: none`. The ticket title at 15px, then rows of icon and
-  text at 13px: the other number under its product's mark with the
-  product's name ("Zoho Desk #25312", or the row's own number when there is
-  only one), the kind chip and the state word, the provider mark and the
-  model id (`model unknown` when none), a folder icon and the workspace.
-  The row carries `aria-describedby` to it while it is open. Leaving the
-  row, blurring it or Escape closes it. In RTL it opens at the row's
-  trailing (left) edge and the folded chevron points into the text.
+- `div.sd-session-card[role="tooltip"]` — the hover card. One element,
+  drawn once after the list as the sidebar's child (not inside the scroll
+  region, not one per row), pinned by `lib/anchor`'s `placeBeside` to the
+  row's trailing edge so it opens into the sheet (the leading side when
+  there is no room), 280 wide on the dialog's surface (`--sd-surface`,
+  `--sd-rule-strong`, `--sd-radius-md`, `--sd-shadow-soft`). The ticket
+  title at 15px, then rows of icon and text at 13px: the other number under
+  its product's mark with the product's name ("Zoho Desk #25312", or the
+  row's own number when there is only one), the kind chip and the state
+  word, the provider mark and the model id (`model unknown` when none), a
+  folder icon and the workspace. The row carries `aria-describedby` to it
+  while it is open. In RTL it opens at the row's trailing (left) edge and
+  the folded chevron points into the text.
+- Its timing is `useHoverCard` (`components/shell/useHoverCard.ts`), on
+  T3 Code's behaviour: the pointer rests `CARD_OPEN_MS` (120ms) on a row
+  before the card opens; while one is open the next row takes it with no
+  wait; it stays `CARD_CLOSE_MS` (150ms) after the pointer has left both
+  the row and the card, so the pointer can cross onto the card and rest
+  there. Escape, any scroll and any press close it and it stays closed
+  until the pointer re-enters a row. Keyboard focus on a row opens it on
+  the same delay and blur closes it, without focus ever gating the pointer;
+  the focus a click gives a row is left to the pointer path. Every timer is
+  a ref keyed by run id, so the store's re-renders never reset one.
+- In the 56px rail (`.sd-sidebar[data-collapsed='true']`, automatic under
+  1024 or the reader's own fold on the head's Panel toggle / ⌘B, remembered
+  as `sirdar.sidebarCollapsed`) a row is its tile alone in a 36px square,
+  the Settled divider is its chevron, "Show N more" reads `+N` (still named
+  "Show N more"), and the card carries the row's own number as a first row
+  — "Jira OMNI-2815" — before the other one.
 - The gallery draws it with `pinnedCard`, which puts the card in the flow
   under the list (`data-static`) instead of beside a row.
 
@@ -125,6 +141,14 @@ pitch, with the sidebar's own inline padding taking the clickable box past the
 moves.
 
 ## Changelog
+
+### 2026-09-16 (hover and panes)
+The hover card is rebuilt on `useHoverCard`: 120ms of intent instead of
+300, an instant swap from row to row, a 150ms grace that lets the pointer
+rest on the card, closed by Escape, scroll or a press; one element drawn
+after the list. The sidebar gains the reader's own fold to the 56px rail
+(Panel toggle in the head, ⌘B), in which the sessions stay as tiles with
+the number on the card.
 
 ### 2026-09-16 (sessions list)
 The sessions list under the nav is rebuilt on T3 Code's sidebar: one flat
