@@ -62,6 +62,14 @@ describe('each screen scrolls inside the sheet', () => {
     expect(declarations, `${selector} in ${path}`).toMatch(/overflow(-y)?: auto/)
     expect(declarations, `${selector} in ${path}`).toContain('min-block-size: 0')
   })
+
+  it('the sidebar scrolls its sessions list, not the window', () => {
+    const css = sheet('components/shell/sidebar.css')
+    expect(rule(css, '.sd-sidebar')).toContain('min-block-size: 0')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('overflow-y: auto')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('min-block-size: 0')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('flex: 1 1 auto')
+  })
 })
 
 describe('what floats over the sheet', () => {

@@ -105,10 +105,10 @@ describe('the breakpoints', () => {
 describe('the sidebar', () => {
   const css = sheet('components/shell/sidebar.css')
 
-  it('is a 56px rail when collapsed, and the recent list scrolls before the footer card moves', () => {
+  it('is a 56px rail when collapsed, and the sessions list scrolls before the footer card moves', () => {
     expect(rule(css, ".sd-sidebar[data-collapsed='true']")).toContain('flex-basis: 56px')
-    expect(rule(css, '.sd-sidebar__recent')).toContain('overflow-y: auto')
-    expect(rule(css, '.sd-sidebar__recent')).toContain('min-block-size: 0')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('overflow-y: auto')
+    expect(rule(css, '.sd-sidebar__sessions')).toContain('min-block-size: 0')
     expect(rule(css, '.sd-sidebar__nav')).toContain('flex: 0 0 auto')
   })
 
