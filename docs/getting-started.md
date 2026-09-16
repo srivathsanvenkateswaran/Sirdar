@@ -135,7 +135,7 @@ since there is no authentication in front of it. The same frontend also ships as
 
 ## Close the loop
 
-Once a human has made and merged the fix, `sirdar rca` produces the RCA note (why it happened)
+Once the fix (yours, or one `sirdar fix` made in a worktree and you reviewed) is merged, `sirdar rca` produces the RCA note (why it happened)
 and a Resolution note draft (what changed) from the merged PR and your own account of what was
 done, and marks the triage note resolved:
 
