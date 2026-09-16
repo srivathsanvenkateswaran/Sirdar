@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All thirty-four are built. Each row links the spec in this folder, which is a
+All thirty-five are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -224,6 +224,7 @@ time (40px controls, 72px setting rows, 48px table rows, 14px heat cells, the
 | 32 | Diff view | app | built | `src/ui/diff-view/` | [diff-view/SPEC.md](diff-view/SPEC.md) |
 | 33 | Model picker | app | built | `src/ui/model-picker/` | [model-picker/SPEC.md](model-picker/SPEC.md) |
 | 34 | Source mark | app | built | `src/ui/source-mark/` | [source-mark/SPEC.md](source-mark/SPEC.md) |
+| 35 | Panel toggle | app | built | `src/ui/panel-toggle/` | [panel-toggle/SPEC.md](panel-toggle/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee

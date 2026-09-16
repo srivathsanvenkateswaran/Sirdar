@@ -19,6 +19,7 @@ import ModelPicker, { type ModelChoicePair } from '../ui/model-picker'
 import { Marquee, MarqueeItem, RingText } from '../ui/ambient'
 import NotePane from '../ui/note-pane'
 import PageHead from '../ui/page-head'
+import PanelToggle from '../ui/panel-toggle'
 import PillNav from '../ui/pill-nav'
 import ProviderMark from '../ui/provider-mark'
 import QuotaChip from '../ui/quota-chip'
@@ -251,6 +252,7 @@ export default function Library(): JSX.Element {
   const [search, setSearch] = useState('')
   const [well, setWell] = useState('')
   const [toggled, setToggled] = useState(true)
+  const [paneOpen, setPaneOpen] = useState(true)
   const [choice, setChoice] = useState<ModelChoicePair>({ provider: '', model: '' })
   const [sort, setSort] = useState<{ columnId: string; direction: 'asc' | 'desc' }>({
     columnId: 'key',
@@ -1271,6 +1273,42 @@ export default function Library(): JSX.Element {
             </State>
             <State label="Disabled, off">
               <Toggle label="Slack" checked={false} disabled onChange={() => {}} />
+            </State>
+          </div>
+        </Section>
+
+        <Section
+          id="panel-toggle"
+          name="Panel toggle"
+          note="The 28px ghost button that folds a pane away and brings it back; the glyph names the edge, the label the action."
+        >
+          <div className="lib-row lib-row--tight">
+            <State label="Drive it">
+              <PanelToggle
+                open={paneOpen}
+                side="end"
+                hideLabel="Hide panel"
+                showLabel="Show panel"
+                shortcut="⌘\"
+                onToggle={() => setPaneOpen((v) => !v)}
+              />
+            </State>
+            <State label="Start edge, open">
+              <PanelToggle open side="start" hideLabel="Hide sidebar" showLabel="Show sidebar" shortcut="⌘B" onToggle={() => {}} />
+            </State>
+            <State label="End edge, hidden">
+              <PanelToggle open={false} side="end" hideLabel="Hide panel" showLabel="Show panel" onToggle={() => {}} />
+            </State>
+            <State label="Disabled">
+              <PanelToggle
+                open={false}
+                side="start"
+                hideLabel="Hide sidebar"
+                showLabel="Show sidebar"
+                disabled
+                disabledReason="The sidebar is a rail at this width"
+                onToggle={() => {}}
+              />
             </State>
           </div>
         </Section>

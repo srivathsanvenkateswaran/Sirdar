@@ -1,0 +1,51 @@
+/*
+ * Panel toggle. A 28px square ghost button holding a 16px panel glyph, the
+ * third ink at rest and the nav hover fill under the pointer. It sits in a
+ * pane's head beside the tabs, or in the sidebar's head beside the wordmark,
+ * and neither place wants a box.
+ */
+
+.sd-panel-toggle {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  cursor: pointer;
+  transition:
+    color var(--sd-dur-1) ease,
+    background-color var(--sd-dur-1) ease;
+}
+
+.sd-panel-toggle > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-panel-toggle:hover:not(:disabled) {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sd-panel-toggle:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The glyph names an edge in the writing direction: in an Arabic pane the
+   start edge is the right one, so the glyph turns over. */
+[dir='rtl'] .sd-panel-toggle > svg {
+  transform: scaleX(-1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-panel-toggle {
+    transition-duration: 1ms;
+  }
+}
