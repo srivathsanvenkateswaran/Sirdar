@@ -1,484 +1,222 @@
+<img src="docs/design/2026-09-16-logo/final/sirdar-mark-light.svg" alt="" width="88" height="88">
+
 # Sirdar
 
 [![ci](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml/badge.svg)](https://github.com/srivathsanvenkateswaran/Sirdar/actions/workflows/ci.yml)
 
-An open-source harness for engineering-level support tickets. A ticket comes in from a helpdesk
-or tracker, a coding agent you already pay for (Claude Code, Codex) — or any OpenAI-compatible
-model — gathers evidence through the MCP servers the workspace grants it, translates the
-conversation, and writes a root-cause note for you to review. If you agree with the note, one
-command implements its proposed fix on a branch and opens the pull request; once the fix is
-merged, Sirdar writes the RCA and Resolution notes that record it. Runs on your machine with
-your logins.
+Sirdar is a read-only harness that turns an engineering-level support ticket into triage, RCA and
+resolution notes, and — once you have read the triage note and agree with it — into one confined
+fix on a branch. It does that by driving a coding-agent CLI you already pay for (Claude Code,
+Codex, Cursor Agent, Qwen Code, GitHub Copilot CLI, and others) inside the codebase the ticket
+belongs to. It runs on your laptop under your own logins, and it never writes to the helpdesk or
+the tracker, in any mode. On a Himalayan expedition the sirdar is the lead Sherpa: the one who
+assigns the team's work and answers to the client for the outcome.
 
-On a Himalayan expedition the sirdar is the lead Sherpa: the one who assigns the team's work,
-decides who goes up and when, and answers to the client for the outcome. The name is a tribute
-to the Sherpa people, whose work on the mountain makes every ascent possible and is rarely the
-part that gets photographed.
+## How it works
 
-Status: v0: the command-line triage core, and the desktop app and web UI over it.
+1. `sirdar init` in the repository the ticket is about. `.sirdar/config.yaml` names the tracker
+   and the helpdesk to read from, where notes are filed, and what a run may do.
+2. `sirdar triage KEY` fetches the ticket and its whole customer conversation, downloads the
+   attachments, and writes them to disk as a bundle under `.sirdar/runs/`.
+3. One agent session runs inside the workspace with that bundle, read-only, with whatever MCP
+   servers the workspace grants it. It answers with a triage note: the complaint translated and
+   verbatim, repro steps, a root-cause hypothesis with cited evidence and a confidence level, a
+   proposed fix, open questions, and a reply draft in the customer's language.
+4. You read the note. If you agree with its proposed fix, `sirdar fix KEY` runs a second session
+   in a linked git worktree, allowed to edit only inside it — implement that fix and nothing else,
+   run the build and tests — then commits, pushes, and opens the pull request.
+5. After the fix is merged, `sirdar rca KEY --pr URL --resolution ...` writes the RCA note (why it
+   happened, and whether the triage hypothesis held) and a Resolution note draft (what changed),
+   leaving anything it cannot source as a visible `<fill: ...>` marker for you.
+
+The hypothesis in a triage note is a starting point for your own investigation, not a verdict.
+Running `sirdar fix` is the approval — there is no separate approval record, which is why the
+command refuses to start unless the note's status is `triaged` or `fix-approved`. If the agent's
+fix departs from the note, the commit is made and nothing is pushed until you accept it.
+
+## What you get
+
+The desktop app is a native window (Wails) over the same core the CLI uses. `sirdar serve --open`
+runs the identical frontend in your browser over a loopback HTTP API instead. Both give you:
+
+- **Session** — the run's transcript as it happens: tool calls with their results, the agent's
+  prose, permission decisions, the question a blocked run is waiting on, and a composer that
+  answers it or steers a finished run. Three layouts draw the same run, switched from the session
+  header or Settings › General: Conversation (the transcript as a chat with an inspector beside
+  it), Document (the note or the change as the window), Workbench (documents in tabs over a
+  console of every call).
+- **Board** — every run as a card in the lane its state puts it in, with the tracker queue and the
+  day's inbound webhook deliveries beside them.
+- **Register** — one row per ticket: triage date, confidence, classification, fix and RCA dates,
+  verdict, severity, resolution, and which notes exist. **Eval** holds the golden set and its
+  reports.
+- **Settings** — a modal over whatever you were on: the workspace's `config.yaml` read back and
+  never written, providers with what `doctor` says about each, MCP servers with Test, and Try a
+  tool, which runs one MCP tool by hand under the workspace's own permissions.
+
+The CLI covers the same ground: `init`, `doctor`, `triage`, `rca`, `fix`, `resume`, `steer`,
+`runs` (including `runs diff --drop`), `register`, `eval`, `golden add`, `mcp`, `serve`.
+
+## Providers
+
+Every provider signs in as itself. Sirdar spawns a CLI you have already installed and logged in
+to, so a run counts against the plan you already pay for, and it stores and proxies no credentials
+of yours; where a provider needs an API key instead, the key stays a reference in config
+(`env:`, `keychain:`, `file:`, `cmd:`), never a literal.
+
+| Provider | How it signs in | `sirdar fix` | What makes a run read-only |
+|---|---|---|---|
+| `claude` | The Claude Code CLI login you already hold; `billing: api` leaves an API key in the environment instead | yes | Every tool call the CLI is not already allowed to make arrives as a permission request and Sirdar's policy answers it; the write tools are refused outright |
+| `codex` | The Codex CLI login you already hold | yes | Codex's own `sandbox: read-only` with `approvalPolicy: untrusted`, so shell, MCP and file-change calls are asked about |
+| `openai` | No CLI at all: an OpenAI-compatible Chat Completions endpoint (OpenRouter, Groq, Together, DeepSeek, Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine) plus a key reference | yes | Sirdar runs the agent loop itself, so the policy decides before every call and each tool re-checks the same rule inside itself |
+| `acp` | The agent's own CLI login — GitHub Copilot CLI, OpenCode, Moonshot's Kimi CLI, Gemini CLI, Goose, and the rest of the Agent Client Protocol ecosystem | yes | The policy answers every `session/request_permission` and `fs/read_text_file`, and the adapter selects the agent's read-only session mode first. A write or command that completes having asked nobody fails the run |
+| `qwen` | Qwen Code's own OAuth login, or a base URL and key you name for any OpenAI-compatible endpoint | yes | `--exclude-tools` for every non-read tool, plus an authenticated, fail-closed loopback `PreToolUse` hook |
+| `cursor` | The login `cursor-agent` already holds | refused | Not mediated: `cursor-agent -p` approves its own tool calls. What holds is Cursor's `--mode ask`/`plan`, an excluded-tool header and `--sandbox enabled`. A completed edit or shell call fails the run |
+| `agy` | Disabled — see below | refused | — |
+
+`provider: agy` drives Google's Antigravity CLI and is **disabled**: Google's Antigravity terms do
+not allow driving the CLI from another program, and an account that does it can be banned. Config
+load and `--provider agy` both refuse it, `sirdar doctor` prints `agy — disabled (Antigravity
+terms)`, and the adapter stays in the tree for reference only.
+
+`permissions.bash`, `permissions.mcp`, `permissions.fetch` and the read scope reach the first five
+rows. On `cursor` there is no call for Sirdar to judge, so `sirdar doctor` carries a warning row
+and every session records the same on its own event log. `docs/config.md` has a section per
+provider; `docs/fix.md` covers the fix flow in full.
+
+## Sources
+
+Thirteen adapters ship in the binary, all on shared HTTP helpers that pin host trust, restrict
+redirects, honour `Retry-After` and cap reads:
+
+| Role | Adapters |
+|---|---|
+| Tracker | Jira (Cloud and Data Center), Linear, Azure DevOps, Rally, ServiceNow |
+| Helpdesk | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, ServiceNow |
+
+ServiceNow appears on both rows because one incident is both records. Anything else — an internal
+tracker, a helpdesk nobody else uses — is `adapter: exec`: a separate executable speaking a small
+line-delimited JSON protocol over stdin and stdout, so a vendor integration and its credentials
+never touch this repository (`docs/adapters.md`).
 
 ## Install
 
-**Homebrew** (macOS/Linux, once the tap and a release exist — see `docs/release.md`):
+Nothing has been tagged or released yet, so there is no download and the Homebrew tap
+(`srivathsanvenkateswaran/homebrew-sirdar`) does not exist. Until the first tag:
 
 ```
-brew tap srivathsanvenkateswaran/sirdar
-brew install sirdar
+go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest   # the CLI
+
+git clone https://github.com/srivathsanvenkateswaran/sirdar && cd sirdar
+make build      # ./sirdar
+make install    # macOS: builds the desktop app into /Applications/Sirdar.app
 ```
 
-**`go install`** (any commit, released or not):
+`make install` needs the Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0`);
+on Linux the desktop app also needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev`, `-tags webkit2_41`).
+Once a release is cut, `.goreleaser.yaml` attaches CLI archives for darwin, linux and windows on
+amd64 and arm64, deb and rpm packages, `checksums.txt`, and a desktop zip per platform, and the
+Homebrew formula pushes to the tap once that repo and its token exist (`docs/release.md`).
 
-```
-go install github.com/srivathsanvenkateswaran/sirdar/cmd/sirdar@latest
-```
-
-**Release archive**: download `sirdar_<version>_<os>_<arch>.tar.gz` (`.zip` on Windows) from
-[Releases](https://github.com/srivathsanvenkateswaran/Sirdar/releases), check it against that
-release's `checksums.txt`, and put `sirdar` on your `PATH`. deb/rpm packages for Linux are
-attached to each release too.
-
-**Desktop app**: download `sirdar-desktop_<tag>_<os>_<arch>.zip` for your platform from the same
-Releases page. It's unsigned — see `docs/release.md` for the Gatekeeper/SmartScreen workaround.
-
-Or build from source:
-
-```
-git clone https://github.com/srivathsanvenkateswaran/sirdar
-cd sirdar
-make build
-```
-
-See `docs/release.md` for how releases are cut.
-
-## The desktop app and `sirdar serve`
-
-One React frontend (`desktop/frontend`) serves two shells. `sirdar serve --open` runs it in your
-browser over a loopback HTTP API with a live event stream; the Wails desktop app under
-`desktop/` runs the same pages over an in-process Go bridge. Either way the screens are:
-
-- **Board** — every run in the workspace as a card in the lane its state puts it in
-  (gathering, triaged, blocked, done, failed), the tracker queue beside them, and the inbound
-  webhook deliveries of the day.
-- **New session** — a ticket key or URL, Triage / RCA / Fix, a one-off provider and model,
-  Start. Opens the session it started.
-- **Session** — the run's transcript as it happens: tool calls with their results, the
-  agent's prose, permission decisions, the question it is blocked on. The composer answers a
-  blocked run (`resume`) or steers a finished one (`steer`). The side pane holds the note, the
-  bundle, the tools it used and, on a fix, the change with a Keep/Drop per hunk.
-- **Change review** — a fix run's diff full width, with the checks, the agent's summary and
-  the resolution note.
-- **Register** and **Eval** — the run ledger, and the golden set with its reports and Run suite.
-- **Settings** — a modal over whatever you were on: the workspace's `config.yaml` read back
-  (never written), providers with what `doctor` says about each, MCP servers with Test, and
-  Try a tool, which runs one MCP tool by hand under the workspace's own permissions.
-
-The two build paths:
-
-```
-make ui        # builds the frontend and stages it for `sirdar serve` (embedded in the binary)
-make desktop   # `wails build` — the desktop app, with the frontend built in
-```
-
-`make ui` runs `npm ci && npm run build` under `desktop/frontend` and copies `dist/` to where
-`internal/httpapi` embeds it, so a `go build` after it ships the UI. `make desktop` needs the
-Wails CLI (`go install github.com/wailsapp/wails/v2/cmd/wails@latest`); `make desktop-dev`
-gives the live-reload shell.
+The desktop builds are unsigned — no Apple notarization, no Windows code-signing certificate. On
+macOS, right-click the app and choose Open, or run
+`xattr -d com.apple.quarantine /path/to/Sirdar.app`. On Windows, unzip
+`sirdar-desktop_<tag>_windows_amd64.zip` and run `Sirdar.exe`: SmartScreen shows "Windows protected
+your PC" the first time, so choose More info → Run anyway, and a file downloaded through a browser
+may also need Properties → Unblock. The app is a window around Microsoft's
+[WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/), preinstalled on
+Windows 11 and current Windows 10; on an image without it the window opens and draws nothing until
+you install the Evergreen Bootstrapper.
 
 ## Quick start
 
 ```
 cd <your codebase>
-sirdar init
+sirdar init          # writes .sirdar/config.yaml, playbooks, and git excludes
 ```
 
-Edit `.sirdar/config.yaml` for the workspace: which tracker and helpdesk to read from, where
-notes go, and how much budget a run gets. See `docs/config.md` for every key.
+Edit `.sirdar/config.yaml` for the workspace — which tracker and helpdesk to read, where notes go,
+what a run may run and fetch, how much budget it gets (`docs/config.md` documents every key) — then:
 
 ```
-sirdar doctor
+sirdar doctor        # provider CLI, each source, the notes directory, the templates
+sirdar triage SBX-1  # one run; --dry-run writes the bundle and prompt without spending a session
+sirdar serve --open  # the same screens as the app, in your browser on loopback
 ```
 
-Checks that the provider CLI is installed and logged in, that the configured sources answer,
-and that the notes directory and templates are usable.
-
-```
-sirdar triage KEY
-```
-
-Fetches the ticket, runs one agent session inside the workspace, and writes a Triage Note.
-Review it before acting on it. The agent's root-cause hypothesis is a starting point, not a
-verdict.
-
-If you agree with the note's Proposed Fix:
-
-```
-sirdar fix KEY
-```
-
-Cuts a branch from a fresh default branch, implements that fix and nothing else, commits, pushes,
-and opens the pull request. Running the command is the approval — read the note first.
-
-Later, once the fix is merged:
-
-```
-sirdar rca KEY --pr URL --resolution @notes.txt
-```
-
-Writes the RCA Note (why it happened) and a Resolution Note draft (what changed), and marks the
-triage note resolved.
-
-## Commands
-
-| Command | Flags | What it does |
-|---|---|---|
-| `sirdar init` | `--templates` write the default note templates to `.sirdar/templates`; `--force` overwrite an existing `.sirdar/config.yaml` | Scaffolds `.sirdar/config.yaml`, `.sirdar/playbooks/`, and git excludes for `.sirdar/runs/` and the register |
-| `sirdar doctor` | none | Checks the provider CLI, each configured source, the notes directory, and the active templates. Each row is `[OK]`, `[!!]` for an advisory warning, or `[XX]` for a failure; exits 1 only on a failure |
-| `sirdar triage KEY [KEY...]` | `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--concurrency N`, `--dry-run`, `--no-notify` | Runs triage for one or more keys and prints a digest; `--dry-run` writes the bundle and prompt without starting the agent |
-| `sirdar rca KEY` | `--pr URL`, `--resolution TEXT\|@FILE`, `--provider claude\|codex\|openai\|acp\|qwen\|cursor`, `--model NAME`, `--no-notify` | Produces the RCA note and the Resolution draft for a resolved ticket |
-| `sirdar fix KEY` | `--dry-run`, `--no-pr`, `--base BRANCH`, `--accept-deviation`, `--provider`, `--model` | Implements an approved triage note's Proposed Fix on a branch, commits, pushes, and opens a pull request. See [Fix flow](#fix-flow) |
-| `sirdar eval [KEY...]` | `--golden DIR`, `--provider`, `--model`, `--concurrency N` | Replays the golden bundles through real triage runs and scores the notes; exits 1 if any note fails its assertions. See `docs/eval.md` |
-| `sirdar golden add KEY` | `--from RUN_ID`, `--golden DIR`, `--force` | Copies a completed run's bundle into the golden set and writes an `expected.json` skeleton; refuses a golden set inside a git work tree unless forced |
-| `sirdar mcp list` | `--connect` start each server, initialize, and count its tools | Lists the MCP servers a run in this workspace would be offered — name, scope, transport, command or URL, and the *names* of the env vars and headers each carries, never their values |
-| `sirdar mcp tools SERVER` | none | Lists every tool on one server with the verdict a run would get for it (`allowed`/`denied`) and the rule that settled it, from the same function the policy calls |
-| `sirdar mcp call SERVER TOOL` | `--args '<json>'` | Runs one tool by hand. A tool the workspace's permissions would refuse is refused here too, with the same reason and exit 2, and its server is never started |
-| `sirdar resume RUN_ID` | none | Continues a blocked or interrupted run |
-| `sirdar steer RUN_ID "instruction"` | none | Gives a finished run a follow-up instruction; the same run continues, its note is re-rendered if the answer changes. See `docs/steer.md` |
-| `sirdar runs [KEY]` | `--json` | Lists runs and their states, optionally filtered to one key |
-| `sirdar register` | `--markdown` print rows in the vault's issue-register table shape | Prints one row per ticket: triage date, confidence, classification, fix date, RCA date, verdict, severity, resolution, and which notes exist. `--markdown` also fills the Title and Company cells from the notes' own titles and frontmatter |
-| `sirdar version` | none | Prints the binary version |
-
-Exit code is non-zero if any run ended in `failed` or `over_budget`.
-
-## Note types
-
-| Note | Answers | Written when |
-|---|---|---|
-| Triage | What we knew on day one: complaint, repro steps, root-cause hypothesis with confidence, proposed fix, open questions | At ticket intake, by `sirdar triage`. Never rewritten once its status leaves `triaged` |
-| RCA | Why it happened: confirmed cause, evidence, blast radius, prevention, and a review of whether the triage hypothesis held | After resolution, by `sirdar rca`, alongside the Resolution note |
-| Resolution | What changed: PR, files, exact production statements, approvals, verification | Same `sirdar rca` run, drafted from the PR and the `--resolution` text; anything the agent cannot source is left as a `<fill: ...>` marker for a human |
-
-## How a run works
-
-A run moves through `preparing → running → completed`, or off to `failed`, `blocked`, or
-`over_budget`. Preparing fetches the ticket and writes the bundle; running streams the agent
-session and watches the turn, time, and USD budgets; a blocked run (the agent asked a question,
-or hit a rate limit) is continued with `sirdar resume RUN_ID`. A session that goes completely
-silent — no tool call, no text, no usage line — for `budget.stallMinutes` (6 by default, `0` to
-turn it off) is cancelled and marked `failed` with `stalled: no activity for 6m`, rather than
-being held to the end of the wall-clock budget. A blocked run is never counted as stalled.
-
-A run that has finished can be steered: `sirdar steer RUN_ID "Now write the RCA from this"`
-(or `POST /api/workspaces/{id}/runs/{runId}/steer` with `{"text": ...}`) sends a follow-up
-instruction to the same run. Claude, Codex, Qwen and the `openai` loop resume the session that
-wrote the note; an ACP agent gets a fresh session primed with the run's own prompt and answer,
-and the transcript says so; `cursor` and `agy` refuse, since neither lets Sirdar judge a tool
-call before it runs. Turns, minutes and cost keep counting against the run's own caps, and a fix
-run is steered in its own worktree with its commit amended. See `docs/steer.md`.
-
-Each run gets its own directory, `.sirdar/runs/<KEY>/<run-id>/`:
-
-```
-bundle/ticket.json        normalised ticket fields
-bundle/thread.md          the conversation, original language, roles, timestamps
-bundle/attachments/       downloaded files
-prompt.md                 exactly what was sent to the agent
-events.jsonl              raw provider events, one per line
-result.json               validated note JSON (absent on failure)
-note.md                   rendered note, also copied to the notes directory
-state.json                run kind, state, provider, model, budgets, timings
-```
-
-`state.json`'s `Model` is the model that answered, not the one that was asked for: providers
-report the id they resolved on their first line (Claude Code's `system`/`init`, Codex's
-`thread/start` result, Qwen's and Cursor's init lines; an ACP agent only when it advertises a
-`model` config option), and a run configured with no model, or with an alias like `sonnet`,
-records what came back. The configured value is kept in `ModelRequested`, and is what a later
-session on the same run asks for again.
-
-An `rca` run's bundle also carries the triage note being reviewed, the `--resolution` text, and,
-when `--pr` is given and `gh` is available, the PR's title, body, and diff.
-
-A triage or rca session runs with permission to read the workspace and to run the `Bash` commands
-listed under `permissions.bash` in config; `Edit`, `Write`, `MultiEdit`, and `NotebookEdit` are
-always denied. Every segment of a compound command has to match a pattern, command substitution
-and redirection are refused outright — bar `2>&1` and `2>/dev/null`, which write nothing — and
-so is an argument that points outside the workspace root — a guard rail rather than a sandbox, described in `docs/config.md`. Sirdar never writes to
-the tracker or the helpdesk, in any mode.
-
-Fetching a URL is judged the same way, by destination rather than by tool name:
-`permissions.fetch` lists the hosts a session may reach — `docs.example.com`, `*.example.com`
-for its subdomains, `http://localhost:3000` for a service you run yourself — and it is empty by
-default, so a workspace that has not said where a run may fetch from fetches nowhere. One list
-covers Claude, qwen, Sirdar's own agent loop and an ACP agent's fetch requests; https is
-required outside a loopback entry, and userinfo, IP literals and private addresses are refused
-whatever the list says. It exists because a triage reads attacker-supplied text all day: without
-it, an instruction hidden in a ticket comment could pick the destination and take the run's
-context with it.
-
-A read is judged the same way, on where it looks rather than on the tool's name. `Read`, `Glob`,
-`Grep` and `LS` — and the same tools under each provider's own names — may open the workspace,
-the run's directory, and the bundle of ticket text and attachments staged inside it; anything
-else is refused with `read outside the workspace: <path>`. Symlinks resolve before the check,
-and `permissions.readAlso` is a list of globs, empty by default, that widens it to a runbook
-directory or a skills tree you want a session to read. It applies wherever Sirdar answers a tool
-call — Claude's permission tool, the qwen hook, an ACP permission request and its
-`fs/read_text_file`, and Sirdar's own agent loop. On Codex a read is a shell command, so
-`permissions.bash` confines it; on `cursor` and `agy` nothing asks, so nothing is confined, and
-both `sirdar doctor` and the run's own event log say so.
-
-`sirdar fix` is the one session that may change files, and only after a human has read the note
-(see below). It swaps `permissions.bash` for `permissions.fixBash` and adds `Edit`, `Write` and
-`MultiEdit`; everything else is refused exactly as before. Being allowed to edit is not being
-allowed to edit anything: every write's path is resolved through symlinks and refused unless it
-lands inside the workspace root, and refused again under any `.git/` directory, the workspace's
-own `.sirdar/`, or the directory this repository sets `core.hooksPath` to — husky, lefthook or
-a checked-in `.githooks/` — which Sirdar reads once when the session starts. Those comparisons
-fold case, so `.GIT/hooks/pre-commit` is refused on macOS's case-insensitive filesystem as
-surely as `.git/hooks/pre-commit` is on Linux. Sirdar's own commit and push both pass
-`--no-verify`, so a hook written during the session is not executed by either.
-
-How much of that a given provider enforces depends on the provider, so the third layer does not
-depend on any of them:
-
-| Provider | What confines the session |
-| --- | --- |
-| `claude`, `openai` | The permission policy judges every editing call, the tools re-check the path themselves, and the snapshot check runs afterwards |
-| `codex` | Codex's own `workspace-write` sandbox confines the session; Sirdar's policy is not consulted, and the snapshot check runs afterwards |
-| `acp` | Whatever the agent implements, plus the snapshot check |
-
-**The snapshot check** is that third layer. Before the session starts, `sirdar fix` takes a
-sha256 of every file under `.sirdar/` (bar its own run records) and under the directory git runs
-this repository's hooks from. The moment the session ends — before the first git command — it
-takes them again. Any difference fails the run and says which files changed: nothing is
-restored, nothing is committed, and nothing is pushed, which is the half that matters, because
-a hook only becomes code the machine runs at the next commit or push.
-
-## Fix flow
-
-`sirdar fix KEY` is the only part of Sirdar that writes anything, and it is gated on a person.
-See `docs/fix.md` for the full flow, the per-provider confinement, and `permissions.fixBash`.
-
-**The gate is the triage note.** The command refuses to start unless the note's frontmatter
-`status` is `triaged` or `fix-approved`. There is no separate approval record: running the
-command *is* the approval, so read the note before you run it. If you have changed your mind
-about a note, change its status and the fix will not run.
-
-What happens, in order:
-
-1. **Preflight.** `git fetch origin`, and the default branch is read from `origin/HEAD`. Under
-   `fix.inPlace` the working tree must also be clean, since that mode commits everything in the
-   tree you are standing in.
-2. **Branch and worktree.** The branch is cut from `origin/<default>` and checked out in a linked
-   worktree at `.sirdar/worktrees/<run-id>`, so your own tree and your uncommitted work are left
-   alone and your HEAD does not move. The worktree is removed once the branch is pushed and kept
-   when the run is blocked or fails, so the commit is there to read. `fix.inPlace: true` runs
-   `git checkout -B fix-<key>-<slug> origin/<default>` in your tree instead. The default branch is
-   never committed to and never force-pushed; neither is anything else.
-3. **One session**, with write permission, standing in the worktree and confined to it, told to
-   implement the note's Proposed Fix and nothing else, to run the workspace's build and tests,
-   and to make no commits of its own. It answers with JSON: summary, files changed, tests run,
-   risks, and `deviationFromNote`.
-4. **Commit.** Everything but `.sirdar/` is staged and committed as `fix: <summary>`, with the
-   note's root cause in the body and **no AI attribution trailer of any kind**.
-5. **Push and PR.** `git push -u origin <branch>`, then `gh pr create` with the title
-   `[KEY] fix: <summary>` and a body carrying the symptom, the root cause, the fix, and the
-   tracker and helpdesk links from the note. Without `gh`, the compare URL and the ready-to-paste
-   title and body are printed instead.
-6. **Record.** The triage note's frontmatter becomes `status: fix-pushed` with `pr:` and
-   `commit:`, in both the run copy and the filed copy, and a `kind: fix` row goes into the
-   register.
-
-**The deviation rule.** If the agent's `deviationFromNote` is non-empty — it found the cause
-elsewhere, the code had moved, the note's fix would have broken something — the commit is made
-and **nothing is pushed**. The deviation is printed prominently, the branch stays local, and the
-command exits 1. Read the diff; if you accept it, rerun with `--accept-deviation`, or push the
-branch yourself. This is the point of the field: a fix that quietly became a different change is
-the failure worth catching, so the agent is asked to declare it and the harness stops on it.
-
-The rerun pushes **the commit you read**. `--accept-deviation` on a key whose fix branch still
-points at the commit the blocked run recorded skips the agent entirely: it pushes that commit
-and opens the pull request for it. If the branch has moved on or is gone, the ordinary flow
-runs from scratch.
-
-`--dry-run` makes the branch and writes the prompt without starting an agent, which is how to
-read exactly what would be sent. `--no-pr` pushes and stops. `--base BRANCH` overrides the
-branch to cut from and target.
-
-## Models
-
-`provider: claude`, `provider: codex` and `provider: qwen` spawn the Claude Code, Codex or Qwen
-Code CLI you already have installed and signed in, so the work
-counts against the plan you already pay for. `provider: openai` spawns nothing: Sirdar runs the agent loop itself against
-any OpenAI-compatible Chat Completions endpoint — OpenRouter, Groq, Together, DeepSeek,
-Moonshot, Zhipu, or Ollama, vLLM and llama.cpp on your own machine — with its own read-only tool
-set and your workspace's MCP servers, and a per-million-token price you set in config for the
-USD budget.
-
-`provider: qwen` sits between the two. Qwen Code is a full agent harness like Claude Code —
-its own tools, its own compaction, its own MCP client — and despite the name it points at any
-OpenAI-compatible endpoint, so one `qwen:` block gets you a vendor model, an aggregator, or a
-server on your own machine without Sirdar owning the loop. What you give up against Claude Code
-is the cost signal: Qwen Code reports no spend, so `budget.maxUsd` never bites and a run is
-bounded by turns and wall-clock time instead.
-
-**`provider: agy` is disabled.** Google's Antigravity terms do not allow driving the CLI from
-another program, and an account that does it can be banned, so config load and `--provider agy`
-both refuse it: `provider agy is disabled: Google's Antigravity terms do not allow driving the
-CLI from another program; choose claude, codex, openai, acp, qwen or cursor`. The adapter is
-kept in the tree for reference, `agy.acknowledgeTerms: true` runs it anyway at your own risk
-(not recommended), and `sirdar doctor` reports `agy — disabled (Antigravity terms)` until it is
-set. The rest of this paragraph describes what the adapter does when it is.
-
-`provider: agy` drives Google's Antigravity CLI against the Google account it is already signed
-in to, so a Google AI Pro or Ultra subscription becomes a triage runtime. It is the one provider
-whose read-only guarantee Sirdar does not impose: the CLI gives a parent process no way to
-mediate a tool call, so every session runs in the CLI's own `--mode plan`, `permissions.bash`,
-`permissions.mcp`, `permissions.fetch` and `permissions.readAlso` are never consulted,
-`mcp.workspaceOnly` cannot be enforced, and `sirdar fix` is refused before it cuts a branch. What Sirdar does instead is
-watch, and fail loudly: a refusal the CLI makes appears as a denied permission, and a write or a
-command that *completes* in a triage session ends the run — the session is killed and the run is
-`failed`, with no note written and no register row added, because both would assert a read-only
-run that did not happen. There is no cost on that wire either, so `budget.maxUsd` never bites.
-Read the `provider: agy` section of `docs/config.md` before choosing it.
-
-`provider: acp` reaches the widest: one Agent Client Protocol client that drives
-any agent speaking it — Gemini CLI, Goose, OpenCode, Qwen Code, Kimi CLI, Crush and about forty
-more, plus Claude Code and Codex through the ACP adapters. Name the agent's launch command in
-the `acp:` block and Sirdar spawns it, hands it the workspace's MCP servers and answers its
-permission requests from the same policy every other provider uses. ACP reports no cost and
-counts a whole prompt turn as one turn, so `budget.maxMinutes` is what actually bounds those
-runs; it also has no schema field, so the note comes back as JSON in the agent's own message
-rather than as structured output. And because an ACP agent is a whole CLI with its own tools and
-its own MCP configuration, the permission policy covers what the agent chooses to ask about —
-`docs/config.md` says where that reaches and where it does not. Moonshot's Kimi Code CLI
-(`command: kimi`, `args: ["acp"]`) is the one agent on that list driven against a real binary;
-`docs/research/12-kimi-wire-formats.md` records what its session modes do and do not guarantee.
-
-`provider: cursor` drives the Cursor Agent CLI against the login `cursor-agent` already holds.
-It is the one provider whose read-only guarantee Sirdar does not enforce itself: `cursor-agent
--p` approves its own tool calls, so the permission policy is never consulted and what holds is
-Cursor's own read-only execution mode (`--mode ask` or `plan`), an excluded tool list sent as a
-request header, and `--sandbox enabled` for shell commands. `sirdar fix` is refused on it, the
-CLI reports no cost and no turn count so `budget.maxMinutes` is the bound that works, and
-`mcp.workspaceOnly` cannot be honoured because Cursor always merges your user-level
-`~/.cursor/mcp.json` in. Read the `provider: cursor` section of `docs/config.md` before
-choosing it.
-
-`provider: claude` also works against an Anthropic-compatible endpoint — Ollama, llama.cpp,
-DeepSeek, GLM, Kimi, OpenRouter — by setting `billing: api` and pointing `ANTHROPIC_BASE_URL` at
-it in the environment; Anthropic documents the gateway variables that make this work but does not
-support routing non-Claude models through them, and reported cost is unreliable there, so see
-`docs/research/providers/spike-anthropic-compatible.md` before relying on `budget.maxUsd`.
-
-See `docs/config.md` for the `openai:`, `qwen:`, `acp:`, `cursor:` and `agy:` blocks,
-`docs/research/09-qwen-wire-formats.md`, `docs/research/10-antigravity-wire-formats.md` and
-`docs/research/11-cursor-wire-formats.md` for the Qwen Code, Antigravity and Cursor captures
-those adapters are built on, and
-`docs/research/providers/acp-agents.md` for the ACP agents and their launch commands, and
-`docs/superpowers/plans/2026-09-10-provider-roadmap.md` for what comes after them.
-
-## Bring your own agent login
-
-Sirdar spawns the `claude`, `codex`, `qwen`, `cursor-agent` or `agy` binary already installed on
-your machine and signed in with your own account; it never stores or proxies your credentials. Usage counts against your
-existing Claude or ChatGPT plan the same way an interactive session would. If you'd rather pay
-per token instead, set `billing: api` in config and put an API key in the provider's environment.
-See `docs/research/03-licensing-byo-subscription.md` for the licensing research behind this.
-
-## Adapters
-
-Sirdar talks to trackers and helpdesks through adapters. Several ship built into the binary:
-
-| Kind | Supported |
-|---|---|
-| Trackers | Jira Cloud, Jira Data Center, Linear, Azure DevOps, Rally, ServiceNow |
-| Helpdesks | Zoho Desk, Zendesk, Freshdesk, Help Scout, Intercom, HubSpot Service Hub, Front, Gorgias, ServiceNow (more planned, see `docs/research/adapters/helpdesks.md`) |
-
-ServiceNow appears on both rows because one incident is both records: configure it under
-`sources.tracker`, `sources.helpdesk`, or leave it under the tracker and let the same client
-serve the conversation.
-
-Anything else — Janus-style trackers, an internal tracker, a different helpdesk — is a separate
-executable speaking a small line-delimited JSON protocol over stdin/stdout, named in config, so
-a vendor integration and its credentials never touch Sirdar's core or this repository. See
-`docs/adapters.md`.
-
-## Inbound triggers
-
-`sirdar serve` can take a webhook from your tracker or helpdesk and start the triage itself, so a
-ticket assigned to you is already triaged by the time you open it. Nine sources are verified —
-Jira (via an Automation rule), Linear, Azure DevOps service hooks, Rally, Zendesk, Freshdesk,
-Intercom, HubSpot, and a generic endpoint you can curl — each with its own signature or shared
-secret, a five-minute replay window where the vendor signs a timestamp, a `match` filter so only
-what is assigned to you starts a run, and a cooldown so an afternoon of editing one ticket does
-not start twelve.
-
-They are off until `webhooks.enabled: true`, and `serve` binds loopback, so exposing them is a
-decision: `--allow-remote` behind a TLS reverse proxy, or a tunnel. `docs/webhooks.md` has the
-per-source setup steps, the URL shape, and the warnings.
-
-## Languages
-
-Arabic is the default customer language in the workspace this was built for; Sirdar keeps the
-original text, writes the engineer's note in English, and drafts customer-facing text in the
-customer's language. A triage note carries the complaint translated and again verbatim, plus a
-short reply draft the engineer can send; an RCA carries a customer summary for the support
-agent to relay. Neither draft may promise a fix, a cause or a date, and Sirdar sends nothing
-itself. Set `language.notes` and `language.customer` in `.sirdar/config.yaml` for a workspace
-that reads a different pair.
-
-## Platforms
-
-| Platform | CLI | Desktop app | Credential store | Notes |
-|---|---|---|---|---|
-| macOS (arm64, amd64) | yes | yes | login Keychain | The platform this is developed on; everything is exercised here first |
-| Linux (arm64, amd64) | yes | yes | freedesktop Secret Service (`secret-tool`) | The desktop app needs WebKitGTK 4.1 (`libwebkit2gtk-4.1-dev`, build with `-tags webkit2_41`) |
-| Windows (amd64) | yes | yes | Credential Manager | Needs the [WebView2 runtime](https://developer.microsoft.com/microsoft-edge/webview2/), preinstalled on Windows 11 and on current Windows 10. See `docs/release.md` |
-
-The desktop app's Windows build cross-compiles from macOS or Linux — `make desktop-windows`
-produces a real `Sirdar.exe` without a Windows machine — and the `windows` CI job builds and
-tests on `windows-latest`. What no cross-build can answer is how the app behaves once it runs:
-the WebView2 host, the native title bar and DPI scaling, and whether the Credential Manager
-reader finds a stored secret. Those are checked on Windows.
-
-Which provider you can drive is a separate question from which platform you are on: each agent
-CLI ships for its own set (Claude Code, Codex and Cursor Agent run on all three; an ACP agent
-runs wherever its own binary does).
-
-## Configuration
-
-See `docs/config.md` for every `.sirdar/config.yaml` key, its default, and what it means,
-including credential references, the `permissions.bash` and `permissions.fixBash` glob syntax,
-the `language` block, and template overrides. `docs/eval.md` covers the golden set and how
-`sirdar eval` scores it; `docs/webhooks.md` covers the `webhooks` block.
-
-A `notify:` block posts a one-message digest of every finished run — key, state, confidence,
-cost and the note's path, never the note's text — to Slack, Microsoft Teams or your own webhook;
-see `docs/notifications.md`.
-
-## Development
-
-```
-make build   # ./sirdar
-make test    # go test ./...
-make vet     # go vet ./...
-make ui      # the frontend, staged for `sirdar serve`
-make desktop # the Wails desktop app
-```
-
-The frontend's own checks run from `desktop/frontend`: `npx tsc --noEmit`, `npx vitest run`,
-and `npm run check-specs`, which fails if a component's `SPEC.md` under `src/ui` and its copy
-under `docs/design/library` have drifted apart.
-
-Provider tests never touch the real CLI: the test binary replays a canned stream-json script and
-is handed to the provider as `SessionSpec.Binary`, so nothing is looked up on `PATH`. The same
-override is available to you in config as `providers.claude.path`, `providers.codex.path`,
-`qwen.path`, `cursor.path` and `agy.path`.
-The tests therefore run offline and deterministically.
-
-Release builds via `.goreleaser.yaml` stamp the version, commit, and date with
-`-X main.version=... -X main.commit=... -X main.date=...`; see `docs/release.md`.
-
-## License
-
-Apache License 2.0. See `LICENSE`.
+`docs/getting-started.md` walks the same path with a worked config.
+
+## Safety model
+
+- **Read-only by construction.** Sirdar never writes to a helpdesk or a tracker in any mode.
+  `sirdar fix` is the one session allowed to change files, and it writes only to git and GitHub,
+  behind a gate a human passes by reading the note.
+- **Permission mediation is per provider, not by convention.** No two providers rest the guarantee
+  on the same mechanism; the table above says what each one's rests on, and `sirdar doctor` warns
+  about `cursor`, the one Sirdar cannot mediate at all.
+- **Allow-lists decide, and they start empty or narrow.** `permissions.bash` (and `fixBash` for a
+  fix session) match every segment of a shell command, refusing command substitution and
+  redirection; `permissions.mcp` matches MCP tool names over a write-verb heuristic;
+  `permissions.fetch` lists the hosts a session may fetch from and is empty by default, so a
+  workspace that has not said otherwise fetches nowhere — which matters because a triage reads
+  attacker-supplied text all day.
+- **Reads are judged on the path, not the tool name.** A session may open the workspace, its own
+  run directory and the bundle staged inside it, symlinks resolved first; anything else is refused
+  with `read outside the workspace: <path>`. `permissions.readAlso` widens it to a runbook or
+  skills directory you name.
+- **No secret is ever written to disk by Sirdar.** Every credential in config is a reference —
+  `env:NAME`, `keychain:SERVICE`, `file:PATH`, `cmd:COMMAND` — resolved at use, and the MCP
+  listings print the names of the env vars and headers a server carries, never their values.
+- **One login, yours.** There is no Sirdar account and no proxy: it spawns the agent CLI already
+  signed in on your machine, and stores no credential of yours anywhere.
+
+A fix session gets a third layer on top of those: Sirdar takes a sha256 of everything under
+`.sirdar/` and under the directory git runs this repository's hooks from before the session starts
+and again the moment it ends, before the first git command. Any difference fails the run and names
+the files — nothing is committed and nothing is pushed.
+
+## Design
+
+The [design language](docs/design/00-design-language.md) and the
+[tokens](docs/design/01-tokens.md) it derives; the [screen mocks](docs/design/2026-09-15-screens)
+the UI was built from and the three [Session directions](docs/design/2026-09-16-session) (open
+either `index.html`); the [logo round](docs/design/2026-09-16-logo) and its shipped files. Ticket
+SBX-1 in the mocks is a sandbox ticket, and every name, key and server in them is fabricated.
+
+## Status
+
+Pre-release. Everything described above exists and is covered by tests, but how much of it has
+been watched work against a real service varies.
+
+Run live: `provider: claude`, through repeated real triage and fix runs, plus `sirdar steer`,
+`sirdar runs diff --drop` and `sirdar mcp list/tools/call` against a real MCP server.
+`provider: acp` on three agents — GitHub Copilot CLI passed triage, rca and fix; OpenCode passed
+triage and fix; Kimi CLI got no model turn at all, its free tier's quota having been spent before
+the first prompt. `provider: qwen` ran against a real OAuth login, and the two bugs those runs
+found are fixed but not yet watched succeed. `provider: agy` ran twice before it was disabled.
+
+Fixtures only, never a real model or a real destination: `provider: openai`, `notify`, and the
+inbound `webhooks`. `provider: cursor` is built from a capture of seven small turns, so a refused
+or rate-limited turn is inferred rather than observed. `permissions.fetch` has been exercised
+against fake CLIs, not a live agent's own fetch request shape. Codex's fix-mode file-change
+approval has not been watched fire; the snapshot check is the backstop if it does not. And
+`sirdar serve`'s same-origin guard is tested with hand-built requests, not a real cross-site page.
+
+Nothing on Windows has been run on Windows. The cross-build produces a real `Sirdar.exe` and the
+`windows` CI job builds and tests on `windows-latest`, but whether WebView2 draws the frontend,
+whether the Credential Manager reader finds a stored secret, and whether `taskkill /T` reaps a
+wrapper's grandchildren stay open until someone sits at a Windows desktop. Shortcut hints are also
+drawn with ⌘ on every platform, though every handler accepts Ctrl. `HANDOFF.md` keeps the long
+version of this list.
+
+## Contributing
+
+[`CONTRIBUTING.md`](CONTRIBUTING.md) covers the development loop (`make build`, `test`, `vet`,
+`ui`, `desktop`), the frontend's own checks, the commit conventions, and what a pull request
+needs; [`docs/architecture.md`](docs/architecture.md) maps the packages; and
+[`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) applies to everyone taking part. Report a security issue
+the way [`SECURITY.md`](SECURITY.md) describes, not through a public issue.
+
+## Licence
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
