@@ -1362,12 +1362,18 @@ code.sc-ref {
   line-height: 1.35;
 }
 
+/* Two columns that cannot be pushed apart: a long path in one cell
+   ellipsises inside it rather than widening the card past its pane. */
 .sc-kvg {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 10px 16px;
   margin-block-start: 14px;
   font-size: 13.5px;
+}
+
+.sc-kvg > div {
+  min-inline-size: 0;
 }
 
 .sc-kvg__k {

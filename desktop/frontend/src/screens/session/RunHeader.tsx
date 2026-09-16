@@ -31,6 +31,12 @@ export interface RunHeaderProps {
   sources?: SourcesSummary
   live: boolean
   terminal: boolean
+  /**
+   * The model the provider's init line named, for a run whose record has
+   * not reported one: the workspace configured no model, so state.json
+   * says '' while the log says which one answered.
+   */
+  fallbackModel?: string
   /** Cancel is offered while the run is live; absent when this window cannot stop it. */
   onCancel?: () => void
   cancelDisabled?: boolean
@@ -43,6 +49,7 @@ export default function RunHeader({
   sources,
   live,
   terminal,
+  fallbackModel = '',
   onCancel,
   cancelDisabled = false,
   cancelTitle,
@@ -50,6 +57,7 @@ export default function RunHeader({
   const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const compact = useMediaQuery(BELOW_STANDARD)
   const shown = shownNumber(detail, show, sources)
+  const modelWord = detail.model || fallbackModel || 'model unknown'
 
   return (
     <header className="sc-topbar">
@@ -63,13 +71,17 @@ export default function RunHeader({
         {title ?? detail.title ?? ''}
       </span>
       <AssignedTo name={detail.assignee ?? ''} />
-      <div className="sc-stats" data-compact={compact ? 'true' : undefined} title={compact ? statsTitle(detail) : undefined}>
+      <div
+        className="sc-stats"
+        data-compact={compact ? 'true' : undefined}
+        title={compact ? statsTitle({ ...detail, model: detail.model || fallbackModel }) : undefined}
+      >
         {compact ? null : (
           <span className="sc-stat sc-provider">
             <ProviderMark provider={detail.provider} size="sm" />
             <span className="sc-provider__name">{detail.provider}</span>
             <span className="sc-provider__model" dir="ltr">
-              {detail.model || 'model unknown'}
+              {modelWord}
             </span>
           </span>
         )}

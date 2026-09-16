@@ -587,6 +587,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         sources={sources}
         live={live}
         terminal={terminal}
+        fallbackModel={model.start?.model}
         onCancel={() => void cancel()}
         cancelDisabled={!jobId || pending !== ''}
         cancelTitle={jobId ? 'Stop the run this window started' : 'Only a run started from this window can be cancelled'}
@@ -645,7 +646,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
               error={mode.kind === 'disabled' ? '' : actionError}
               onSend={(text) => void send(text)}
               provider={detail.provider}
-              model={detail.model}
+              model={detail.model || model.start?.model || ''}
               kind={detail.kind}
               sentCount={sent}
               autoFocus={mode.kind === 'answer'}

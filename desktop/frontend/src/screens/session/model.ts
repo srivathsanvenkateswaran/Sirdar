@@ -283,6 +283,7 @@ export function buildSessionModel(events: IndexedEvent[], detail: RunDetail | nu
   let think: { first: string; tokens: number; index: number } | undefined
   let finals = 0
   let steered = false
+  let starts = 0
   let lastBefore = ''
 
   const closeStack = () => {
@@ -430,6 +431,15 @@ export function buildSessionModel(events: IndexedEvent[], detail: RunDetail | nu
           break
         }
         if (raw?.type === 'system' && raw.subtype === 'init' && start) {
+          // The provider writes an init line per session: the run's own,
+          // and one more each time a steer resumes it.
+          if (starts > 0) {
+            const model = modelName(str(raw.model))
+            items.push({ kind: 'sys', index: row.index, parts: ['Resumed ', { b: clock(event.t, startedAt) }, model ? ` · ${model}` : ''] })
+            starts += 1
+            break
+          }
+          starts += 1
           const words: (string | { b: string })[] = ['Run started ', { b: start.at || '00:00' }]
           if (detail?.provider) words.push(` · ${detail.provider}`)
           if (start.model) words.push(` · ${start.model}`)
