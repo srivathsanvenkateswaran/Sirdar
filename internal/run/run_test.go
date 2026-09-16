@@ -728,7 +728,15 @@ func TestTriageHappyPath(t *testing.T) {
 	if d := spec.Policy.Decide("Read", json.RawMessage(`{"file_path":"/etc/passwd"}`)); d.Allow {
 		t.Fatal("the session could read outside the workspace")
 	}
-	bundleRead := `{"file_path":"` + filepath.Join(dir, "bundle", "thread.md") + `"}`
+	// The path is marshalled rather than pasted between quotes: on
+	// Windows it is a "C:\Users\..." path, and a raw backslash in a JSON
+	// string is an escape, so the policy would refuse the call for not
+	// parsing rather than judge where it looks.
+	bundlePath, err := json.Marshal(filepath.Join(dir, "bundle", "thread.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bundleRead := `{"file_path":` + string(bundlePath) + `}`
 	if d := spec.Policy.Decide("Read", json.RawMessage(bundleRead)); !d.Allow {
 		t.Fatalf("the session could not read its own bundle: %s", d.Message)
 	}
