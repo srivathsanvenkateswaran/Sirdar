@@ -321,6 +321,7 @@ interface BridgeBindings {
   Cancel(jobId: string): Promise<void>
   Version(): Promise<string>
   OpenConfig(ws: string): Promise<void>
+  OpenNote(ws: string, runId: string, path: string): Promise<void>
 }
 
 /** The subset of the Wails runtime the transport uses. */
@@ -442,6 +443,9 @@ export function createWailsTransport(): Transport {
     version: () => bridge().Version(),
     openConfig: async (ws) => {
       await bridge().OpenConfig(ws)
+    },
+    openNote: async (ws, runId, path) => {
+      await bridge().OpenNote(ws, runId, path)
     },
     subscribe: (handler) => {
       const rt = (window as any).runtime as WailsRuntime | undefined

@@ -561,6 +561,7 @@ export default function Session(props: {
                 runId={runId}
                 kinds={noteKinds}
                 reload={finished}
+                notePaths={detail.notes}
               />
             ) : null}
             {shownTab === 'bundle' ? (

@@ -1008,6 +1008,30 @@ section:first-child > .turn-rule {
   padding-inline: var(--sd-space-4);
 }
 
+/* The one control at the top of a note: open the file, or copy its path. */
+.note-open {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-3);
+  margin-block-end: var(--sd-space-4);
+  unicode-bidi: isolate;
+}
+
+.note-open__name {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+  color: var(--sd-ink-3);
+}
+
+.note-open__failure {
+  font-size: var(--sd-text-meta);
+  color: var(--sd-st-failed);
+}
+
 .pane-empty {
   color: var(--sd-ink-3);
 }
