@@ -377,3 +377,14 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   `system` line, which is most of what a real run's `events.jsonl` used to be; every other
   stream event, tool-input deltas included, is kept. qwen, cursor and codex already reported
   their prose and are unchanged but for tests that now pin the words.
+- Sirdar has its own logo. The app shipped the Wails default "W" until now; mark 1 of the six
+  in `docs/design/2026-09-16-logo/` — a blue peak behind a crimson one with a white route to a
+  summit marker, the colours of Nepal's flag, since a sirdar is the head guide of a Himalayan
+  expedition — is now the macOS icon (`desktop/build/appicon.png`, cut from
+  `final/sirdar-tile-light.svg` by `scripts/make-icons.sh`), the favicon in the desktop window,
+  in `sirdar serve` and on the landing page, and a 20px mark before the word in the app's
+  sidebar. The dark variant trades blue for white rather than adding an ink tile, so there are
+  two colour sets and not three. The mark is the library's thirty-sixth component,
+  `src/ui/brand-mark/`, whose test reads the master SVGs so the app cannot end up wearing a
+  logo nothing else does. `desktop/build/windows/icon.ico` was the Wails default and is deleted;
+  `wails build` makes one from `appicon.png` when it is absent.
