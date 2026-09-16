@@ -12,7 +12,7 @@ function frame(): HTMLElement {
 /**
  * Mounts one tree for a whole describe block and hands back its container.
  *
- * Putting the gallery up is the expensive thing in this file — thirty-three
+ * Putting the gallery up is the expensive thing in this file — thirty-five
  * sections of specimens, about half a second on an idle machine and several
  * times that while vitest runs the rest of the suite alongside it — so a
  * render per `it` (eighteen of them) ran the slowest tests past the default
@@ -50,7 +50,7 @@ function mountOnce(ui: () => JSX.Element): () => HTMLElement {
   }
 }
 
-/** The thirty-three components, in build order, as the sections name them. */
+/** The thirty-five components, in build order, as the sections name them. */
 const SECTIONS = [
   'Button',
   'Pill nav',
@@ -86,6 +86,7 @@ const SECTIONS = [
   'Kind chip',
   'State glyph',
   'Model picker',
+  'Brand mark',
 ]
 
 /**
@@ -119,7 +120,7 @@ describe('the asset library', () => {
     mountOnce(() => <Library />)
 
     describe.each(FRAMES)('painted %s', (_, theme, dir) => {
-      it('renders every one of the thirty-three sections, each with a specimen', () => {
+      it('renders every one of the thirty-five sections, each with a specimen', () => {
         paint(theme, dir)
         expect(frame()).toHaveAttribute('data-theme', theme)
         expect(frame()).toHaveAttribute('dir', dir)

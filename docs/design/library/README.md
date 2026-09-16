@@ -168,7 +168,7 @@ list: the switcher is a row inside 17 and the settings panel is 18 and 19 togeth
 
 ## The index
 
-All thirty-five are built. Each row links the spec in this folder, which is a
+All thirty-six are built. Each row links the spec in this folder, which is a
 copy of the one beside the code; `desktop/frontend/scripts/sync-specs.mjs`
 writes the copies and `--check` fails CI when one is stale. The live examples
 are not static pages here but the gallery inside the app, at `#/library`, which
@@ -225,6 +225,16 @@ time (40px controls, 72px setting rows, 48px table rows, 14px heat cells, the
 | 33 | Model picker | app | built | `src/ui/model-picker/` | [model-picker/SPEC.md](model-picker/SPEC.md) |
 | 34 | Source mark | app | built | `src/ui/source-mark/` | [source-mark/SPEC.md](source-mark/SPEC.md) |
 | 35 | Panel toggle | app | built | `src/ui/panel-toggle/` | [panel-toggle/SPEC.md](panel-toggle/SPEC.md) |
+
+### The logo round
+
+Added on 2026-09-16 with the chosen mark in `../2026-09-16-logo/`, which put
+Sirdar's own logo into the app for the first time — the Wails default "W" was
+the icon until then.
+
+| # | Component | Surfaces | Status | Code | Spec |
+|---|---|---|---|---|---|
+| 36 | Brand mark | app | built | `src/ui/brand-mark/` | [brand-mark/SPEC.md](brand-mark/SPEC.md) |
 
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee
