@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Sirdar mark 6: Triangle and sun">
+<!-- Sirdar logo exploration, 2026-09-16. Mark 6, Triangle and sun. Drawn on a 512 grid for a macOS squircle tile; colours are the light-tile set (Nepal crimson #DC143C, Nepal blue #003893). Original vector, no fonts. -->
+<circle cx="340" cy="250" r="76" fill="#003893"/>
+<path d="M64 424 L232 96 L400 424 Z" fill="#DC143C"/>
+</svg>
