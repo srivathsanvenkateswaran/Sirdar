@@ -1,5 +1,6 @@
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { conversation, offsetLabel, type IndexedEvent, type Turn } from '../../lib/events'
+import { probeRender } from '../../lib/renderProbe'
 import SdEventRow from '../../ui/event-row'
 import EventRow from './EventRow'
 import AssistantMessage from './AssistantMessage'
@@ -59,7 +60,7 @@ function StreamFold({
  * by the dozen per turn — behind one row each burst. `lastCall` is the
  * index of the run's last tool call, which opens on its own.
  */
-export default function TurnGroup({
+function TurnGroup({
   turn,
   startedAt,
   fold = false,
@@ -74,6 +75,7 @@ export default function TurnGroup({
   lastCall?: number
   live?: boolean
 }) {
+  probeRender('TurnGroup')
   const items = useMemo(() => conversation(turn.events, fold), [fold, turn.events])
   const began = offsetLabel(turn.events[0]?.event.t, startedAt)
 
@@ -130,3 +132,11 @@ export default function TurnGroup({
     </section>
   )
 }
+
+/**
+ * Memoised on the turn's identity: the stream keeps an unchanged turn's
+ * object across renders (`stableTurns`), so a line landing in turn 9 does not
+ * re-read turns 1 to 8. `lastCall` is -1 for every turn but the one holding
+ * the run's last tool call, which is what keeps it stable here.
+ */
+export default memo(TurnGroup)

@@ -1,7 +1,9 @@
 import { useEffect, useId, useMemo, useState, useSyncExternalStore } from 'react'
 import type { HookOutcome, RunSummary, SourcesSummary, Ticket, Transport } from '../api/types'
+import Age from '../components/Age'
 import RunCard from '../components/cards/RunCard'
 import { reasonOf, relativeTime } from '../lib/format'
+import { FILTER_DEBOUNCE_MS, useDebounced } from '../lib/useDebounced'
 import {
   sessionsShow,
   shownNumber,
@@ -318,6 +320,8 @@ export default function Board(props: BoardProps): JSX.Element {
     onTriage,
   } = props
   const [filter, setFilter] = useState('')
+  // The field shows every keystroke; the lanes narrow once the typist pauses.
+  const applied = useDebounced(filter, FILTER_DEBOUNCE_MS)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [owner, setOwner] = useState<Owner>('all')
   const [kind, setKind] = useState<KindFilter>('all')
@@ -363,16 +367,11 @@ export default function Board(props: BoardProps): JSX.Element {
   const latest = useMemo(() => runs.reduce((max, r) => Math.max(max, stamp(r)), 0), [runs])
   const titles = useMemo(() => new Map(tickets.map((t) => [t.key, t.title])), [tickets])
 
-  // The status line and the landed rows say how long ago; the clock ticks
-  // every second while the newest change is under a minute old, and settles
-  // to a slower beat once the line reads in minutes. Each tick books the next,
-  // so a change to the runs re-times the clock without a second one running.
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    const period = now - latest < 60_000 ? 1000 : 15_000
-    const id = setTimeout(() => setNow(Date.now()), period)
-    return () => clearTimeout(id)
-  }, [latest, now])
+  // The status line and the landed rows say how long ago. Each is an `Age`
+  // that ticks for itself — every second while the newest change is under a
+  // minute old, since the line then reads in seconds, and every fifteen once
+  // it reads in minutes — so the tick re-draws a few words and not the board.
+  const agePeriod = Date.now() - latest < 60_000 ? 1000 : 15_000
 
   // Mine costs no call: a run carries whether its ticket is the reader's, and
   // every ticket in the Queue lane was asked for by that name. A service that
@@ -384,11 +383,10 @@ export default function Board(props: BoardProps): JSX.Element {
     card.kind === 'run' ? !ownershipKnown || card.run.mine === true : mineKeys.has(card.key)
 
   const keep = (card: BoardCard): boolean =>
-    matches(card, filter) && ofKind(card, kind) && (owner !== 'mine' || isMine(card))
+    matches(card, applied) && ofKind(card, kind) && (owner !== 'mine' || isMine(card))
 
-  const ago = updatedAgo(latest, now)
   const deliveries = inbound ?? []
-  const filtering = filter !== '' || kind !== 'all' || owner === 'mine'
+  const filtering = applied !== '' || kind !== 'all' || owner === 'mine'
   const shownRuns = columns.reduce(
     (total, column) => total + column.cards.filter((c) => c.kind === 'run' && keep(c)).length,
     0,
@@ -453,7 +451,12 @@ export default function Board(props: BoardProps): JSX.Element {
                 </>
               )}{' '}
               · <b>{live}</b> live
-              {ago && ` · updated ${ago}`}
+              {latest > 0 && (
+                <>
+                  {' · updated '}
+                  <Age period={agePeriod} format={(now) => updatedAgo(latest, now)} />
+                </>
+              )}
             </>
           )}
         </p>
@@ -494,8 +497,8 @@ export default function Board(props: BoardProps): JSX.Element {
                 : queue && queued === null
                   ? 'Reading the tickets assigned to you…'
                   : filtering
-                    ? filter
-                      ? `Nothing here matches “${filter}”.`
+                    ? applied
+                      ? `Nothing here matches “${applied}”.`
                       : 'Nothing here matches the filters.'
                     : column.empty
 
@@ -596,9 +599,7 @@ export default function Board(props: BoardProps): JSX.Element {
                       </span>
                       {reason && ` · ${reason}`}
                       {' · '}
-                      <time dateTime={d.at} title={d.at}>
-                        {relativeTime(d.at, now)}
-                      </time>
+                      <Age at={d.at} title={d.at} period={15_000} format={(now) => relativeTime(d.at, now)} />
                     </>
                   }
                 />

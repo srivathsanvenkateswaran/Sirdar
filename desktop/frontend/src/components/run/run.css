@@ -356,6 +356,16 @@
   padding-block-end: var(--sd-space-5);
 }
 
+/*
+ * A turn that has scrolled out of view is not laid out or painted until it
+ * is back; the intrinsic size keeps the scrollbar honest meanwhile. A long
+ * run's transcript is then priced by what is on screen, not by its length.
+ */
+.stream-scroll > section {
+  content-visibility: auto;
+  contain-intrinsic-block-size: auto 240px;
+}
+
 .stream-empty {
   margin: 0;
   padding-block: var(--sd-space-5);

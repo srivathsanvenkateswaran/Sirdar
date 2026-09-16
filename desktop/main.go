@@ -13,6 +13,7 @@ import (
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
+	"github.com/wailsapp/wails/v2/pkg/options/linux"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -46,6 +47,14 @@ func run() error {
 		MinHeight: 680,
 		AssetServer: &assetserver.Options{
 			Assets: assets,
+		},
+		// The webview draws on the GPU. On macOS WKWebView always does and Wails
+		// offers no switch for it; on Linux, WebKitGTK's hardware acceleration
+		// is off by default when no Linux options are given, and every scroll
+		// and fade is then rasterised on the CPU. Not frameless: the native
+		// title bar costs nothing here and keeps the window's own compositing.
+		Linux: &linux.Options{
+			WebviewGpuPolicy: linux.WebviewGpuPolicyAlways,
 		},
 		OnStartup: func(ctx context.Context) {
 			svc.Start(ctx)

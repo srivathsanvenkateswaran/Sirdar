@@ -310,6 +310,16 @@ fake alike). What is there now:
   on a hex), logical properties, one filled primary per screen through
   `useProvidePrimaryAction` (Settings publishes its disabled Save so the sidebar's New session
   steps down), status never colour alone, a modal makes the window behind it `inert`.
+- **Budgets** (the `ui-snappy` round, measured with `desktop/frontend/scripts/perf-trace.mjs`
+  against `sirdar serve` in headless Chrome on the MacBook): boot to the board's first card
+  under 400ms cold, sidebar navigation to a painted screen under 80ms, a run with a few thousand
+  event lines open to its first painted turn under 300ms. What keeps them: the shell reads store
+  slices through `useAppState(selector)` and the sidebar and toasts sit on their own subscriptions
+  (`App.renders.test` holds that an emit not touching the runs draws no sessions row); one shared
+  clock in `lib/useNow` ticks only the `components/Age` leaves that print a time; stream frames
+  are coalesced every 16ms in `api/coalesce`; the transcript keeps an unchanged turn's object and
+  `TurnGroup` is memoised (`EventStream.memo.test`); the page enter is 160ms on the first paint
+  only; fonts are served from the bundle.
 
 Next:
 

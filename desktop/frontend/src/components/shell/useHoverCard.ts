@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 /** How long a pointer rests on a row before its card opens: hover intent, not a flicker. */
 export const CARD_OPEN_MS = 120
@@ -194,5 +194,10 @@ export function useHoverCard(): HoverCard {
     [],
   )
 
-  return { open, enterRow, leaveRow, focusRow, blurRow, enterCard, leaveCard, pressRow: close, close }
+  // One object per change of `open`, so a row memoised on it is not re-drawn
+  // by a render of the list that changed nothing about the card.
+  return useMemo(
+    () => ({ open, enterRow, leaveRow, focusRow, blurRow, enterCard, leaveCard, pressRow: close, close }),
+    [open, enterRow, leaveRow, focusRow, blurRow, enterCard, leaveCard, close],
+  )
 }

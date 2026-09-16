@@ -141,8 +141,9 @@ describe('Board', () => {
     expect(document.activeElement).toBe(filter)
 
     fireEvent.change(filter, { target: { value: 'statement' } })
+    // The lanes narrow a beat after the keystroke (lib/useDebounced).
+    await waitFor(() => expect(within(lane(container, 'gathering')).queryByText('OMNI-1')).toBeNull())
     expect(within(lane(container, 'queue')).getByText('OMNI-9')).toBeInTheDocument()
-    expect(within(lane(container, 'gathering')).queryByText('OMNI-1')).toBeNull()
     expect(within(lane(container, 'gathering')).getByText(/Nothing here matches/)).toBeInTheDocument()
   })
 

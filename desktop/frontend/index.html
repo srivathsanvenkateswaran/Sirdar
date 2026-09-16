@@ -12,17 +12,11 @@
     -->
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
     <!--
-      The four families the tokens name, from Google Fonts, the way the
-      landing page and the reviewed mocks load them. The repository has no
-      fonts folder yet; every stack in styles/tokens.css falls through to a
-      system face, so the app still renders offline in the shell's own sans.
+      The four families the tokens name are served from the bundle: the
+      @font-face block at the top of src/styles.css points at src/fonts/. The
+      app fetches nothing from Google Fonts, so it draws the same offline and
+      its first paint waits on no other host.
     -->
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&display=swap"
-    />
   </head>
   <body>
     <div id="root"></div>

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { FLUSH_MS } from './coalesce'
 import { createTransport, createWailsTransport } from './transport'
 import type { MCPCallResult, RunDiff, RunSummary } from './types'
 
@@ -287,7 +288,12 @@ describe('http transport events', () => {
     }
   }
 
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it('reports the stream lost and open again, and stops listening once unsubscribed', () => {
+    vi.useFakeTimers()
     vi.stubGlobal('EventSource', FakeEventSource)
     const handler = vi.fn()
     const off = createTransport().subscribe(handler)
@@ -297,13 +303,20 @@ describe('http transport events', () => {
     source.fire('error')
     source.fire('open')
     source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    // A burst is one task: nothing until the window closes, then all of it in order.
+    expect(handler).not.toHaveBeenCalled()
+    vi.advanceTimersByTime(FLUSH_MS)
     expect(handler.mock.calls.map(([e]) => e.kind)).toEqual(['live', 'live', 'run.updated'])
     expect(handler.mock.calls[0][0]).toEqual({ kind: 'live', state: 'lost' })
     expect(handler.mock.calls[1][0]).toEqual({ kind: 'live', state: 'open' })
 
+    // Unsubscribing hands over what is still queued and closes the source.
+    source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
     off()
+    expect(handler).toHaveBeenCalledTimes(4)
     source.fire('error')
-    expect(handler).toHaveBeenCalledTimes(3)
+    vi.advanceTimersByTime(FLUSH_MS)
+    expect(handler).toHaveBeenCalledTimes(4)
     expect(source.closed).toBe(true)
   })
 })

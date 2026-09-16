@@ -1,3 +1,4 @@
+import { coalesce } from './coalesce'
 import type {
   AppEvent,
   Check,
@@ -219,11 +220,13 @@ export function createHTTPTransport(): Transport {
     quota: () => getJSON<Quota[]>('/quota'),
     subscribe: (handler) => {
       const source = new EventSource(`${API}/events`)
+      // A burst of frames reaches the handler as one task; see api/coalesce.
+      const out = coalesce(handler)
       const listeners: [string, (e: MessageEvent) => void][] = []
       for (const kind of EVENT_KINDS) {
         const listener = (e: MessageEvent) => {
           try {
-            handler({ ...(JSON.parse(e.data) as object), kind } as AppEvent)
+            out.push({ ...(JSON.parse(e.data) as object), kind } as AppEvent)
           } catch {
             // A malformed frame must not tear down the stream.
           }
@@ -235,8 +238,8 @@ export function createHTTPTransport(): Transport {
       // `error` on the way down and `open` on the way back. Nothing sent in
       // between reaches the window, so both are reported: the store says the
       // stream is lost, and resyncs when it is back.
-      const onOpen = () => handler({ kind: 'live', state: 'open' })
-      const onError = () => handler({ kind: 'live', state: 'lost' })
+      const onOpen = () => out.push({ kind: 'live', state: 'open' })
+      const onError = () => out.push({ kind: 'live', state: 'lost' })
       source.addEventListener('open', onOpen)
       source.addEventListener('error', onError)
       return () => {
@@ -246,6 +249,7 @@ export function createHTTPTransport(): Transport {
         source.removeEventListener('open', onOpen)
         source.removeEventListener('error', onError)
         source.close()
+        out.stop()
       }
     },
   }
@@ -450,13 +454,15 @@ export function createWailsTransport(): Transport {
     subscribe: (handler) => {
       const rt = (window as any).runtime as WailsRuntime | undefined
       if (!rt) return () => {}
+      const out = coalesce(handler)
       const off = EVENT_KINDS.map((kind) =>
         rt.EventsOn(kind, (data: unknown) => {
-          handler({ ...((data as object) ?? {}), kind } as AppEvent)
+          out.push({ ...((data as object) ?? {}), kind } as AppEvent)
         }),
       )
       return () => {
         for (const cancel of off) cancel()
+        out.stop()
       }
     },
   }

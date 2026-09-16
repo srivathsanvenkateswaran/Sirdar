@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from 'react'
+import { memo, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import type { RunSummary, Ticket } from './api/types'
 import Sidebar from './components/shell/Sidebar'
 import { PrimaryActionProvider } from './components/shell/primaryAction'
-import { PAGE_ENTER_CLASS } from './ui/motion'
+import { PAGE_ENTER_CLASS, PAGE_ENTER_ONCE_MS } from './ui/motion'
 import Toasts from './ui/toast'
 import Board from './screens/Board'
 import Eval from './screens/Eval'
@@ -24,6 +25,17 @@ import './components/shell/shell.css'
  */
 function reported(): void {}
 
+const NO_RUNS: RunSummary[] = []
+const NO_TICKETS: Ticket[] = []
+
+/* ---------- the slices the shell reads ---------- */
+
+const selectRuns = (s: AppState): RunSummary[] | undefined => s.runsByWorkspace[s.currentWorkspaceId]
+const selectTickets = (s: AppState): Ticket[] | undefined => s.ticketsByWorkspace[s.currentWorkspaceId]
+const selectSources = (s: AppState) => s.sourcesByWorkspace[s.currentWorkspaceId]
+const selectQueueUnsupported = (s: AppState): boolean => Boolean(s.queueUnsupported[s.currentWorkspaceId])
+const selectWorkspace = (s: AppState) => s.workspaces.find((w) => w.id === s.currentWorkspaceId)
+
 /**
  * A window that opened on nothing in particular, in a workspace with no runs
  * yet, opens on New session: there is no board to read and no session to
@@ -31,16 +43,20 @@ function reported(): void {}
  * the address the window opened with, so a reader who then goes to the board
  * is not sent back; a link that names a screen is followed as written.
  */
-function useFirstLaunch(store: AppStore, state: AppState): void {
+function useFirstLaunch(
+  store: AppStore,
+  loading: boolean,
+  currentWorkspaceId: string,
+  runs: RunSummary[] | undefined,
+  screen: Screen,
+): void {
   const fresh = useRef(typeof window !== 'undefined' && window.location.hash === '')
-  const { loading, currentWorkspaceId, runsByWorkspace, screen } = state
   useEffect(() => {
     if (!fresh.current || loading || !currentWorkspaceId) return
-    const runs = runsByWorkspace[currentWorkspaceId]
     if (!runs) return
     fresh.current = false
     if (runs.length === 0 && screen.name === 'board') store.navigate({ name: 'new' })
-  }, [store, loading, currentWorkspaceId, runsByWorkspace, screen])
+  }, [store, loading, currentWorkspaceId, runs, screen])
 }
 
 /**
@@ -59,7 +75,10 @@ function useFirstLaunch(store: AppStore, state: AppState): void {
  * a screen: `#/settings` opens the modal over whatever was behind it, and
  * closing the modal writes the address of the screen it uncovers.
  */
-function useHashRoute(store: AppStore, state: AppState): void {
+function useHashRoute(
+  store: AppStore,
+  state: Pick<AppState, 'screen' | 'currentWorkspaceId' | 'workspaces' | 'loading'>,
+): void {
   const { screen, currentWorkspaceId, workspaces, loading } = state
 
   useEffect(() => {
@@ -104,9 +123,70 @@ function isTyping(target: EventTarget | null): boolean {
   return tag === 'input' || tag === 'textarea' || tag === 'select' || el.isContentEditable
 }
 
+/**
+ * The sidebar on its own subscriptions. It reads what it draws — the
+ * workspaces, the current one's runs and sources, the quota, the screen, and
+ * how many deliveries wait — and nothing else, so the sheet re-rendering for
+ * a toast or a filter does not re-draw the sessions list. Memoised with no
+ * props so the shell above it can render freely.
+ */
+const ConnectedSidebar = memo(function ConnectedSidebar({
+  onNavigate,
+}: {
+  onNavigate: (screen: Screen) => void
+}): JSX.Element {
+  const store = useStore()
+  const workspaces = useAppState((s) => s.workspaces)
+  const currentWorkspaceId = useAppState((s) => s.currentWorkspaceId)
+  const quota = useAppState((s) => s.quota)
+  const screen = useAppState((s) => s.screen)
+  const runs = useAppState(selectRuns)
+  const sources = useAppState(selectSources)
+  const inboundCount = useAppState((s) => s.inbound.length)
+  const onSelectWorkspace = useCallback((id: string) => store.setWorkspace(id), [store])
+  const onAddWorkspace = useCallback(
+    () => store.navigate({ name: 'settings', page: 'general' }),
+    [store],
+  )
+  return (
+    <Sidebar
+      workspaces={workspaces}
+      currentWorkspaceId={currentWorkspaceId}
+      quota={quota}
+      screen={screen}
+      runs={runs ?? NO_RUNS}
+      sources={sources}
+      inboundCount={inboundCount}
+      onSelectWorkspace={onSelectWorkspace}
+      onAddWorkspace={onAddWorkspace}
+      onNavigate={onNavigate}
+    />
+  )
+})
+
+/** The toasts, on their own subscription: a toast landing re-draws the toasts. */
+const ConnectedToasts = memo(function ConnectedToasts(): JSX.Element {
+  const store = useStore()
+  const toasts = useAppState((s) => s.toasts)
+  const dismissToast = useCallback((id: number) => store.dismissToast(id), [store])
+  return <Toasts toasts={toasts} onDismiss={dismissToast} />
+})
+
 function Shell(): JSX.Element {
   const store = useStore()
-  const state = useAppState()
+  const transport = useAppState((s) => s.transport)
+  const screen = useAppState((s) => s.screen)
+  const workspaces = useAppState((s) => s.workspaces)
+  const workspaceId = useAppState((s) => s.currentWorkspaceId)
+  const loading = useAppState((s) => s.loading)
+  const currentWorkspace = useAppState(selectWorkspace)
+  const runsOrNone = useAppState(selectRuns)
+  const ticketsOrNone = useAppState(selectTickets)
+  const sources = useAppState(selectSources)
+  const queueUnsupported = useAppState(selectQueueUnsupported)
+  const inbound = useAppState((s) => s.inbound)
+  const quota = useAppState((s) => s.quota)
+  const keylessJobs = useAppState((s) => s.keylessJobs)
   const libraryOn = useSyncExternalStore(subscribeShowLibrary, showLibrary, () => false)
   const filterRef = useRef<HTMLInputElement | null>(null)
 
@@ -114,12 +194,21 @@ function Shell(): JSX.Element {
     void store.init()
   }, [store])
 
-  useHashRoute(store, state)
-  useFirstLaunch(store, state)
+  // The page enters once, on the window's first paint. The class comes off
+  // after the entrance has ended, so every screen mounted after that — a
+  // sidebar row, a card, Back — is drawn in place rather than risen into.
+  const [entering, setEntering] = useState(true)
+  useEffect(() => {
+    const id = setTimeout(() => setEntering(false), PAGE_ENTER_ONCE_MS)
+    return () => clearTimeout(id)
+  }, [])
+
+  useHashRoute(store, { screen, currentWorkspaceId: workspaceId, workspaces, loading })
+  useFirstLaunch(store, loading, workspaceId, runsOrNone, screen)
 
   useEffect(() => {
-    if (state.screen.name === 'library' && !libraryOn) store.navigate({ name: 'board' })
-  }, [state.screen, libraryOn, store])
+    if (screen.name === 'library' && !libraryOn) store.navigate({ name: 'board' })
+  }, [screen, libraryOn, store])
 
   /*
    * Settings is a modal over the screen it was opened from, not a screen of
@@ -130,18 +219,15 @@ function Shell(): JSX.Element {
    * closing the modal returns to.
    */
   const behind = useRef<Screen>({ name: 'board' })
-  if (state.screen.name !== 'settings') behind.current = state.screen
-  const settingsOpen = state.screen.name === 'settings'
-  const settingsPage = state.screen.name === 'settings' ? state.screen.page : undefined
-  const shown = settingsOpen ? behind.current : state.screen
+  if (screen.name !== 'settings') behind.current = screen
+  const settingsOpen = screen.name === 'settings'
+  const settingsPage = screen.name === 'settings' ? screen.page : undefined
+  const shown = settingsOpen ? behind.current : screen
 
-  const workspaceId = state.currentWorkspaceId
-  const currentWorkspace = state.workspaces.find((w) => w.id === workspaceId)
-  const runs = state.runsByWorkspace[workspaceId] ?? []
-  const tickets = state.ticketsByWorkspace[workspaceId] ?? []
+  const runs = runsOrNone ?? NO_RUNS
+  const tickets = ticketsOrNone ?? NO_TICKETS
 
   const navigate = useCallback((screen: Screen) => store.navigate(screen), [store])
-  const dismissToast = useCallback((id: number) => store.dismissToast(id), [store])
   const closeSettings = useCallback(() => store.navigate(behind.current), [store])
   const selectSettingsPage = useCallback(
     (page: string) => store.navigate({ name: 'settings', page }),
@@ -155,7 +241,7 @@ function Shell(): JSX.Element {
       if (settingsOpen || isTyping(e.target)) return
       if (e.key === 'n') {
         e.preventDefault()
-        if (state.workspaces.length === 0) {
+        if (workspaces.length === 0) {
           store.toast('Add a workspace before starting a run.', 'error')
           return
         }
@@ -169,7 +255,7 @@ function Shell(): JSX.Element {
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [navigate, shown.name, settingsOpen, state.workspaces.length, store])
+  }, [navigate, shown.name, settingsOpen, workspaces.length, store])
 
   // Every start goes through the store, which keeps the job id the session
   // screen's Cancel button needs. A start that fails rejects as well as
@@ -203,15 +289,15 @@ function Shell(): JSX.Element {
   )
   const cancelJob = useCallback((jobId: string) => store.cancelJob(jobId), [store])
 
-  let screen
+  let page
   switch (shown.name) {
     case 'new':
-      screen = (
+      page = (
         <NewSession
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           workspace={currentWorkspace}
-          workspaces={state.workspaces}
+          workspaces={workspaces}
           onSelectWorkspace={(id) => store.setWorkspace(id)}
           onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}
           runs={runs}
@@ -226,14 +312,14 @@ function Shell(): JSX.Element {
       const runId = shown.runId
       const key = runs.find((r) => r.runId === runId)?.key
       const title = key ? tickets.find((t) => t.key === key)?.title : undefined
-      screen = (
+      page = (
         <Session
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           runId={runId}
           title={title}
           notesDir={currentWorkspace?.notesDir}
-          sources={state.sourcesByWorkspace[workspaceId]}
+          sources={sources}
           onBack={() => navigate({ name: 'board' })}
           onOpenReview={() => navigate({ name: 'review', runId })}
           onStartFix={startFix}
@@ -242,9 +328,9 @@ function Shell(): JSX.Element {
       break
     }
     case 'review':
-      screen = (
+      page = (
         <Review
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           runId={shown.runId}
           tickets={tickets}
@@ -257,23 +343,23 @@ function Shell(): JSX.Element {
       )
       break
     case 'register':
-      screen = (
+      page = (
         <Register
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
         />
       )
       break
     case 'eval':
-      screen = (
+      page = (
         <Eval
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           defaultProvider={currentWorkspace?.provider}
           defaultModel={currentWorkspace?.model}
-          quota={state.quota}
-          jobs={state.keylessJobs.filter((j) => j.workspaceId === workspaceId)}
+          quota={quota}
+          jobs={keylessJobs.filter((j) => j.workspaceId === workspaceId)}
           onStartEval={startEval}
           onCancelJob={cancelJob}
         />
@@ -284,20 +370,20 @@ function Shell(): JSX.Element {
       // it can be pasted into a window that has it off. Either way the window
       // shows the board and the address catches up, rather than showing a
       // screen the reader has said they do not want.
-      screen = libraryOn ? <Library /> : null
+      page = libraryOn ? <Library /> : null
       break
     default:
-      screen = (
+      page = (
         <Board
-          transport={state.transport}
+          transport={transport}
           workspaceId={workspaceId}
           provider={currentWorkspace?.provider}
           tickets={tickets}
           runs={runs}
-          sources={state.sourcesByWorkspace[workspaceId]}
-          queueUnsupported={Boolean(state.queueUnsupported[workspaceId])}
-          loading={state.loading}
-          inbound={state.inbound}
+          sources={sources}
+          queueUnsupported={queueUnsupported}
+          loading={loading}
+          inbound={inbound}
           filterRef={filterRef}
           onOpenRun={(runId) => navigate({ name: 'run', runId })}
           onTriage={(keys) => void store.startTriage(keys).catch(reported)}
@@ -305,34 +391,23 @@ function Shell(): JSX.Element {
       )
   }
 
-  // The page's key is its address, so every navigation mounts a fresh page
-  // and the enter motion runs again; a settings modal opening over it does
-  // not, because the page underneath has not moved.
+  // The page's key is its address, so every navigation mounts a fresh page;
+  // a settings modal opening over it does not, because the page underneath
+  // has not moved.
   const pageKey = routeHash(shown, workspaceId)
 
   return (
     <div className="app">
-      <Sidebar
-        workspaces={state.workspaces}
-        currentWorkspaceId={workspaceId}
-        quota={state.quota}
-        screen={state.screen}
-        runs={runs}
-        sources={state.sourcesByWorkspace[workspaceId]}
-        inboundCount={state.inbound?.length ?? 0}
-        onSelectWorkspace={(id) => store.setWorkspace(id)}
-        onAddWorkspace={() => navigate({ name: 'settings', page: 'general' })}
-        onNavigate={navigate}
-      />
+      <ConnectedSidebar onNavigate={navigate} />
       <main className="main">
-        <div className={`sd-page ${PAGE_ENTER_CLASS}`} key={pageKey}>
-          {state.workspaces.length === 0 && !state.loading && shown.name !== 'library' ? (
+        <div className={entering ? `sd-page ${PAGE_ENTER_CLASS}` : 'sd-page'} key={pageKey}>
+          {workspaces.length === 0 && !loading && shown.name !== 'library' ? (
             <p className="app-empty">
               No workspace yet. Open Settings and add the path to a repository that has a{' '}
               <code>.sirdar</code> config.
             </p>
           ) : (
-            screen
+            page
           )}
         </div>
       </main>
@@ -340,13 +415,13 @@ function Shell(): JSX.Element {
         open={settingsOpen}
         page={settingsPage}
         onSelectPage={selectSettingsPage}
-        transport={state.transport}
-        workspaces={state.workspaces}
+        transport={transport}
+        workspaces={workspaces}
         currentWorkspaceId={workspaceId}
         onClose={closeSettings}
         onWorkspacesChanged={() => void store.refresh()}
       />
-      <Toasts toasts={state.toasts} onDismiss={dismissToast} />
+      <ConnectedToasts />
     </div>
   )
 }

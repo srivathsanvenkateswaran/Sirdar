@@ -239,8 +239,9 @@ the icon until then.
 `src/ui/motion/` is not a component. It holds the reduced-motion switch, the
 two ambient keyframes and the RTL reversal that ring text and the marquee
 share, and since 2026-09-15 the app's two entrances as well — the sheet's
-content rising 8px over 320ms on navigation, and the settings modal scaling
-from 0.98 over 300ms behind a 200ms scrim, both frozen under reduced motion.
+content rising 8px over 160ms on the window's first paint (a move between
+screens after that is drawn in place), and the settings modal scaling from
+0.98 over 200ms behind a 120ms scrim, both frozen under reduced motion.
 It is described inside the ambient spec and is skipped by the sync script, the
 same way this folder's `_`-prefixed partials are skipped by the catalogue
 scanner.
