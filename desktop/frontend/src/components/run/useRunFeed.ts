@@ -32,6 +32,32 @@ export function insertByIndex(list: IndexedEvent[], item: IndexedEvent): Indexed
   return [...list.slice(0, lo), item, ...list.slice(lo)]
 }
 
+/**
+ * Many events at once — the backfill, or a coalesced burst — placed with one
+ * copy of the list rather than one per line. Each item is placed by the same
+ * binary search; the in-order case is a push.
+ */
+export function insertManyByIndex(list: IndexedEvent[], items: IndexedEvent[]): IndexedEvent[] {
+  if (items.length === 0) return list
+  const next = list.slice()
+  for (const item of items) {
+    const last = next[next.length - 1]
+    if (!last || item.index > last.index) {
+      next.push(item)
+      continue
+    }
+    let lo = 0
+    let hi = next.length
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1
+      if (next[mid].index < item.index) lo = mid + 1
+      else hi = mid
+    }
+    next.splice(lo, 0, item)
+  }
+  return next
+}
+
 /** True when `update` was written after `detail`; an unreadable stamp on either side counts as yes. */
 function newer(update: RunSummary, detail: RunDetail): boolean {
   const a = parseTime(update.updatedAt)
@@ -95,6 +121,12 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
       seen.current.add(index)
       setEvents((prev) => insertByIndex(prev, { index, event }))
     }
+    const appendMany = (items: IndexedEvent[]) => {
+      const fresh = items.filter((item) => !seen.current.has(item.index))
+      if (fresh.length === 0) return
+      for (const item of fresh) seen.current.add(item.index)
+      setEvents((prev) => insertManyByIndex(prev, fresh))
+    }
 
     const unsubscribe = transport.subscribe((e) => {
       if (cancelled) return
@@ -135,7 +167,7 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
         // backfill from zero would leave the last line sharing no index with
         // the live event that repeats it, and the stream would show it twice.
         const first = Math.max(1, next - backfill.length + 1)
-        backfill.forEach((event, i) => append(first + i, event))
+        appendMany(backfill.map((event, i) => ({ index: first + i, event })))
       })
       .catch((err: unknown) => {
         // A run with no log yet answers with an empty page, not a failure;

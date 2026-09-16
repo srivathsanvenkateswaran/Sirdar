@@ -25,6 +25,39 @@ export function quietTurns(turns: Turn[]): Turn[] {
 }
 
 /**
+ * The same turn from the previous render, when nothing in it has changed:
+ * the same number of events, and the same first and last event objects,
+ * which the feed never replaces once placed. Anything else is the new turn.
+ */
+export function stableTurns(previous: Turn[], next: Turn[]): Turn[] {
+  if (previous.length === 0) return next
+  let changed = previous.length !== next.length
+  const out = next.map((turn, i) => {
+    const before = previous[i]
+    if (
+      before &&
+      before.n === turn.n &&
+      before.events.length === turn.events.length &&
+      before.events[0] === turn.events[0] &&
+      before.events[before.events.length - 1] === turn.events[turn.events.length - 1] &&
+      before.turns === turn.turns &&
+      before.costUsd === turn.costUsd
+    ) {
+      return before
+    }
+    changed = true
+    return turn
+  })
+  return changed ? out : previous
+}
+
+/** Whether the event at `index` falls inside `turn`. */
+function holds(turn: Turn, index: number): boolean {
+  if (index < 0 || turn.events.length === 0) return false
+  return index >= turn.events[0].index && index <= turn.events[turn.events.length - 1].index
+}
+
+/**
  * The transcript. What the agent did and said, in turns: tool calls with
  * their results, its prose, the policy's decisions, its questions, the note
  * landing, and the operator's own words as bubbles among them. "Show
@@ -60,9 +93,15 @@ export default function EventStream({
   const stick = useRef(true)
   const toggleId = useId()
 
+  // A turn that has not changed keeps its object, so the memoised TurnGroup
+  // under it — and the conversation() it computed — is left alone when a
+  // later turn grows. Only the turn an event lands in is re-read.
+  const previous = useRef<Turn[]>([])
   const turns = useMemo(() => {
     const all = groupTurns(events)
-    return everything ? all : quietTurns(all)
+    const next = stableTurns(previous.current, everything ? all : quietTurns(all))
+    previous.current = next
+    return next
   }, [events, everything])
   const lastCall = useMemo(() => lastCallIndex(events), [events])
 
@@ -121,7 +160,7 @@ export default function EventStream({
               startedAt={startedAt}
               fold
               provider={provider}
-              lastCall={lastCall}
+              lastCall={holds(turn, lastCall) ? lastCall : -1}
               live={live}
             />
           ))
