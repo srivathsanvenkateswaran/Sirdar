@@ -1,0 +1,122 @@
+/*
+ * Drawer. A panel over one column: the B session mock's `.drawer`, 432px
+ * wide, pinned to the start edge of the nearest positioned ancestor, the
+ * sheet's fill with a strong rule on its trailing edge, a 52px head and a
+ * body that scrolls on its own. It slides in over --sd-dur-2 and is drawn
+ * in place under reduced motion.
+ */
+
+@keyframes sd-drawer-enter {
+  from {
+    transform: translateX(-12px);
+    opacity: 0;
+  }
+}
+
+.sd-drawer {
+  --sd-drawer-w: 432px;
+
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  inline-size: var(--sd-drawer-w);
+  max-inline-size: 100%;
+  min-block-size: 0;
+  border-inline-end: 1px solid var(--sd-rule-strong);
+  background: var(--sd-sheet);
+  color: var(--sd-ink);
+  animation: sd-drawer-enter var(--sd-dur-2) var(--sd-ease) backwards;
+}
+
+/* The slide comes from the start edge, so in an Arabic pane it comes from the right. */
+[dir='rtl'] .sd-drawer {
+  animation-name: sd-drawer-enter-rtl;
+}
+
+@keyframes sd-drawer-enter-rtl {
+  from {
+    transform: translateX(12px);
+    opacity: 0;
+  }
+}
+
+.sd-drawer__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 10px;
+  min-block-size: 52px;
+  padding-block: 0;
+  padding-inline: 20px 10px;
+  border-block-end: 1px solid var(--sd-rule);
+}
+
+.sd-drawer__title {
+  margin: 0;
+  font-family: var(--sd-font-ui);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sd-ink-2);
+}
+
+.sd-drawer__meta {
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--sd-font-mono);
+  font-size: 12.5px;
+  color: var(--sd-ink-3);
+}
+
+.sd-drawer__close {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  inline-size: 32px;
+  block-size: 32px;
+  margin-inline-start: auto;
+  padding: 0;
+  border: 0;
+  border-radius: var(--sd-radius-sm);
+  background: transparent;
+  color: var(--sd-ink-2);
+  cursor: pointer;
+  transition:
+    color var(--sd-dur-1) ease,
+    background-color var(--sd-dur-1) ease;
+}
+
+.sd-drawer__close > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sd-drawer__close:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sd-drawer__body {
+  flex: 1 1 auto;
+  min-block-size: 0;
+  padding-block: 6px 20px;
+  padding-inline: 20px 16px;
+  overflow-y: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-drawer {
+    animation: none;
+  }
+
+  .sd-drawer__close {
+    transition-duration: 1ms;
+  }
+}

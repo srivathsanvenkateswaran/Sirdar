@@ -1,0 +1,59 @@
+/*
+ * Marker. The evidence chip from the B session mock's `.mk`: 20px tall, at
+ * least 22 wide, the highlight fill with the ink on it, the mono face at
+ * 11.5px. Hot — its twin is in view — it takes the accent with the primary
+ * ink. Every value is a token or a size; no colour is declared here.
+ */
+
+.sd-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-inline-size: 22px;
+  block-size: 20px;
+  margin: 0;
+  padding-block: 0;
+  padding-inline: 5px;
+  border: 0;
+  border-radius: 5px;
+  background: var(--sd-highlight);
+  color: var(--sd-highlight-ink);
+  font-family: var(--sd-font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  vertical-align: middle;
+  transition:
+    background-color var(--sd-dur-1) ease,
+    color var(--sd-dur-1) ease;
+}
+
+button.sd-marker {
+  cursor: pointer;
+}
+
+button.sd-marker:hover {
+  background: var(--sd-heat-2);
+}
+
+.sd-marker[data-hot='true'],
+button.sd-marker[data-hot='true']:hover {
+  background: var(--sd-accent);
+  color: var(--sd-primary-ink);
+}
+
+/* Beside a `file:line` in prose: 16px, a little narrower, lifted to the x-height. */
+.sd-marker[data-size='sm'] {
+  min-inline-size: 18px;
+  block-size: 16px;
+  padding-inline: 4px;
+  font-size: 10.5px;
+  vertical-align: 1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sd-marker {
+    transition-duration: 1ms;
+  }
+}

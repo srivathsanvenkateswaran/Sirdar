@@ -129,6 +129,50 @@
   gap: var(--sd-space-2);
 }
 
+/* A `file:line` in prose with its marker, as the note draws it. */
+.lib-ref {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sd-space-1);
+  padding-inline: 5px;
+  border-radius: var(--sd-radius-xs);
+  background: var(--sd-sunk);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-ledger);
+}
+
+/* The column a drawer covers: positioned, held to a height, clipped, so the
+   specimen slides over something rather than over the gallery. */
+.lib-drawer-stage {
+  position: relative;
+  inline-size: min(720px, 100%);
+  block-size: 260px;
+  overflow: hidden;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-sheet);
+}
+
+.lib-drawer-under {
+  display: grid;
+  gap: var(--sd-space-3);
+  justify-items: start;
+  padding: var(--sd-space-4);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+}
+
+.lib-drawer-under > p {
+  margin: 0;
+}
+
+.lib-drawer-body {
+  margin: 0;
+  padding-block-start: var(--sd-space-3);
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+}
+
 /* A labelled specimen: the mock's `.sp`, label over stage at an 8px gap. */
 .lib-state {
   display: grid;
