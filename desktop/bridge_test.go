@@ -18,6 +18,8 @@ var bridgeMethods = []string{
 	"Queue",
 	"Runs",
 	"Run",
+	"DeleteRun",
+	"Search",
 	"Events",
 	"Note",
 	"Prompt",

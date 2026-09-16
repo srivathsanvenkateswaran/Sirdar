@@ -54,8 +54,13 @@ type fake struct {
 	inventory MCPInventory
 	toolList  MCPToolList
 
+	// Search answers with these, and records the query.
+	hits      []SearchHit
+	gotSearch string
+
 	// Failures to inject.
 	queueUnsupported bool
+	deleteErr        error
 	queueErr         error
 	noteMissing      bool
 	addErr           error
@@ -65,6 +70,7 @@ type fake struct {
 	// What the handlers passed in.
 	gotRoot      string
 	gotRemoved   string
+	gotDeleted   string
 	gotFilter    QueueFilter
 	gotKey       string
 	gotAfter     int
@@ -244,6 +250,29 @@ func (f *fake) Run(wsID, runID string) (RunDetail, error) {
 		return RunDetail{}, err
 	}
 	return f.detailValue(), nil
+}
+
+func (f *fake) DeleteRun(wsID, runID string) error {
+	if err := f.checkRun(wsID, runID); err != nil {
+		return err
+	}
+	if f.deleteErr != nil {
+		return f.deleteErr
+	}
+	f.mu.Lock()
+	f.gotDeleted = runID
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fake) Search(wsID, q string) ([]SearchHit, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return nil, err
+	}
+	f.mu.Lock()
+	f.gotSearch = q
+	f.mu.Unlock()
+	return f.hits, nil
 }
 
 func (f *fake) Events(wsID, runID string, after int) ([]RunEvent, int, error) {

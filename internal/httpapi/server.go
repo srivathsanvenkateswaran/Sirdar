@@ -80,6 +80,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("GET /api/workspaces/{id}/queue", s.queue)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs", s.runs)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}", s.run)
+	s.mux.HandleFunc("DELETE /api/workspaces/{id}/runs/{runId}", s.deleteRun)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/search", s.search)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/events", s.runEvents)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/note", s.note)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}/prompt", s.prompt)
@@ -205,6 +207,35 @@ func (s *server) run(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, d)
+}
+
+// deleteRun removes a run's directory. A live run is a 409 (see
+// classify); the run.removed event on the stream is what tells every other
+// window. Like every mutating route it sits behind the cross-site guard.
+func (s *server) deleteRun(w http.ResponseWriter, r *http.Request) {
+	if err := s.svc.DeleteRun(r.PathValue("id"), r.PathValue("runId")); err != nil {
+		s.fail(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+// search answers the sidebar's "Search notes" mode: a substring, case
+// folded, over every run's answer JSON and note text, capped by the
+// service. A blank query is a 400 rather than an empty list, so a client
+// that forgot the parameter hears about it.
+func (s *server) search(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if strings.TrimSpace(q) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "q is required")
+		return
+	}
+	hits, err := s.svc.Search(r.PathValue("id"), q)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, nonNil(hits))
 }
 
 func (s *server) runEvents(w http.ResponseWriter, r *http.Request) {
