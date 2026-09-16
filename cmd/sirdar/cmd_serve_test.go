@@ -121,7 +121,7 @@ func TestBrowseURL(t *testing.T) {
 // is the one test that puts the HTTP layer, the application service, the
 // watcher and a real Runner together in one process.
 func TestServeEndToEnd(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "triage-doc.json"))
 
 	// The registry lives under the operator's home; give this test its own
@@ -266,7 +266,7 @@ func TestServeEndToEnd(t *testing.T) {
 // no agent, which is the whole of the flow that can be asserted without a
 // model and a remote to push to.
 func TestServeWriteFlowsEndToEnd(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	t.Setenv("SIRDAR_FAKE_DOC", filepath.Join(testdataDir, "triage-doc.json"))
 	initRepo(t, root)
 
@@ -618,7 +618,7 @@ func appendWebhooks(t *testing.T, root, block string) {
 }
 
 func TestServeHooksOffByDefault(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	var errb bytes.Buffer
 	opts, ok := serveHooks(root, app.WorkspaceID(root), false, &errb)
 	if !ok {
@@ -635,7 +635,7 @@ func TestServeHooksOffByDefault(t *testing.T) {
 // An operator who turns the hooks on is told the listener they are on
 // cannot be reached by a hosted tracker, and what to do about it.
 func TestServeHooksWarnsAboutReachability(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	t.Setenv("SIRDAR_TEST_HOOK_SECRET", "s3cret")
 	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
 
@@ -668,7 +668,7 @@ func TestServeHooksWarnsAboutReachability(t *testing.T) {
 // A secret that cannot be resolved stops the command: a hook endpoint that
 // is up but rejects every delivery is worse than one that never started.
 func TestServeHooksStopsOnAnUnresolvableSecret(t *testing.T) {
-	root, _ := newWorkspace(t, "fakeclaude.sh")
+	root, _ := newWorkspace(t, fakeClaude)
 	t.Setenv("SIRDAR_TEST_HOOK_SECRET", "")
 	appendWebhooks(t, root, "\nwebhooks:\n  enabled: true\n  sources:\n    generic:\n      secret: env:SIRDAR_TEST_HOOK_SECRET\n")
 

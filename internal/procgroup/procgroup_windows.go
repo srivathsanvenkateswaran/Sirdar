@@ -17,10 +17,66 @@ import (
 // terminated. x/sys/windows does not expose it as a named constant.
 const stillActive = 259
 
-// Windows has no Unix-style process group reachable by a negative pid, so
-// there is nothing to configure before the child starts. The subtree is
-// dealt with at kill time instead; see kill.
-func setup(cmd *exec.Cmd) {}
+// setup puts the child in a console process group of its own. Windows has
+// no Unix-style process group reachable by a negative pid, so this buys
+// nothing at kill time — the subtree is dealt with by walking parent pids
+// instead; see kill. What it buys is an address for interrupt: a console
+// control event can only be sent to a process group, and the only group
+// this program can name is one it asked for at CreateProcess time, whose
+// id is then the child's own pid. Without the flag the sole addressable
+// group is group 0, every process sharing the console, which includes
+// Sirdar itself.
+//
+// The flag has to be set before the child starts, which is why it lives
+// here rather than in interrupt.
+//
+// It costs the child the console's own Ctrl-C: a process in a group
+// created this way starts with Ctrl-C handling disabled, so an operator
+// pressing Ctrl-C in the terminal running Sirdar no longer reaches it
+// directly. That is the same trade the Unix side already makes — Setpgid
+// takes the child out of the terminal's foreground group, where a
+// terminal-generated SIGINT is delivered — and in both cases the child is
+// stopped through Sirdar's own cancellation path instead, which is
+// Interrupt followed by Kill.
+func setup(cmd *exec.Cmd) {
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
+	}
+	cmd.SysProcAttr.CreationFlags |= windows.CREATE_NEW_PROCESS_GROUP
+}
+
+// interrupt sends the child's process group a Ctrl+Break, the closest
+// thing Windows has to SIGINT. Go's runtime turns CTRL_BREAK_EVENT into
+// os.Interrupt in a Go child, and the C runtime raises SIGBREAK in a
+// native one, so a CLI that installs a handler gets its chance to write a
+// final line before kill takes the tree.
+//
+// CTRL_BREAK rather than CTRL_C because CTRL_C cannot be delivered to a
+// group created with CREATE_NEW_PROCESS_GROUP at all: such a group starts
+// with Ctrl-C handling disabled, and GenerateConsoleCtrlEvent's own
+// documentation says the event is simply not sent. CTRL_BREAK is never
+// disabled and is the event this recipe is built on.
+//
+// Two ways it does not arrive, both reported as an error so the caller
+// escalates to kill rather than waiting out a grace period for a signal
+// that was never delivered:
+//
+//   - The child did not go through setup, so it is not in a group of its
+//     own and there is no id to address that does not also name Sirdar.
+//   - This process owns no console. GenerateConsoleCtrlEvent needs one to
+//     send through, and a Sirdar running as a service, or under a harness
+//     that gave it none, has nothing to send. There is no polite path on
+//     that machine; the escalation is the whole of the stop.
+func interrupt(cmd *exec.Cmd) error {
+	if cmd.Process == nil {
+		return nil
+	}
+	pid := cmd.Process.Pid
+	if pid <= 0 {
+		return syscall.EINVAL
+	}
+	return windows.GenerateConsoleCtrlEvent(windows.CTRL_BREAK_EVENT, uint32(pid))
+}
 
 // kill takes down the child and everything below it. `taskkill /T` walks
 // the parent-pid chain and kills each descendant, which is what the Unix

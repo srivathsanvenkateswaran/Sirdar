@@ -3,6 +3,7 @@ package provider
 import (
 	"encoding/json"
 	"errors"
+	"path"
 	"path/filepath"
 	"strings"
 )
@@ -112,8 +113,17 @@ func (s ReadScope) Resolve(path string) (string, error) {
 	switch {
 	case strings.HasPrefix(raw, "~"):
 		candidate = filepath.Clean(raw)
-	case filepath.IsAbs(raw):
-		candidate = filepath.Clean(raw)
+	case IsRooted(raw):
+		// filepath.Abs, not Clean: a Windows path that is rooted without
+		// being absolute ("\etc\hosts", "/etc/passwd", "D:sub") has to be
+		// resolved against the drive it names before it can be compared
+		// with a root, or it matches nothing and is denied for the wrong
+		// reason.
+		if abs, err := filepath.Abs(raw); err == nil {
+			candidate = abs
+		} else {
+			candidate = filepath.Clean(raw)
+		}
 	default:
 		candidate = filepath.Join(s.Roots[0], raw)
 	}
@@ -158,19 +168,29 @@ func matchReadAlso(pattern, raw, real string) bool {
 	if expanded, ok := expandHome(pattern); ok {
 		patterns = append(patterns, expanded)
 	}
+	// Both sides are compared with "/" separators, on every OS. The
+	// entry is written by hand in config.yaml, where a Windows operator
+	// may reasonably spell a path either way — the documentation's own
+	// examples use "/" — while the path being judged arrives however the
+	// agent wrote it and the resolved form always carries the platform's
+	// own separator. Matching the two spellings literally meant a
+	// readAlso entry on Windows widened nothing whichever way it was
+	// written, since one side or the other always disagreed.
 	for _, p := range patterns {
+		p = filepath.ToSlash(p)
 		for _, target := range []string{raw, real} {
 			if target == "" {
 				continue
 			}
+			target = path.Clean(filepath.ToSlash(target))
 			if strings.ContainsAny(p, "*?") {
 				if MatchGlob(p, target) {
 					return true
 				}
 				continue
 			}
-			clean := filepath.Clean(p)
-			if target == clean || strings.HasPrefix(target, clean+string(filepath.Separator)) {
+			clean := path.Clean(p)
+			if target == clean || strings.HasPrefix(target, clean+"/") {
 				return true
 			}
 		}

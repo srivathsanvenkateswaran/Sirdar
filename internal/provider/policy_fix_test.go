@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -354,7 +355,12 @@ func TestFlagValuesAreCheckedAgainstTheRoot(t *testing.T) {
 	for _, cmd := range []string{
 		"go test -run=TestThing ./...",
 		"go test --coverprofile=cover.out ./...",
-		"go test --coverprofile=" + filepath.Join(root, "cover.out") + " ./...",
+		// Forward slashes on every OS: a command line is not a filesystem
+		// path, and argTokens reads "\" as a shell escape that swallows
+		// the character after it, so filepath.Join's Windows spelling
+		// would reach escapesRoot as "C:Usersrunneradmin...cover.out" and
+		// be refused as a path under no root at all.
+		"go test --coverprofile=" + filepath.ToSlash(filepath.Join(root, "cover.out")) + " ./...",
 		"make -j4",
 	} {
 		if ok, reason := MatchCommand(root, allow, cmd); !ok {
@@ -580,7 +586,14 @@ func TestHooksPathExpandsTilde(t *testing.T) {
 	gitInit(t, root)
 
 	home := t.TempDir()
+	// Both variables, because expandHome asks os.UserHomeDir, which reads
+	// $HOME on Unix and %USERPROFILE% on Windows. Setting HOME alone
+	// changes nothing on Windows: "~" there kept expanding to the real
+	// account's profile directory, so the test compared the machine's
+	// C:\Users\<account>\x against the temporary directory it had just
+	// made.
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 
 	gitRun(t, root, "config", "core.hooksPath", "~/x")
 	want := filepath.Join(home, "x")
@@ -602,19 +615,37 @@ func TestHooksPathExpandsTilde(t *testing.T) {
 // = ~alice/x"), which is not the caller's own home and so is not reached
 // by setting $HOME.
 func TestExpandHomeHandlesTildeUser(t *testing.T) {
-	cur, err := user.Current()
-	if err != nil {
-		t.Skipf("cannot look up the current user: %v", err)
-	}
-	value := "~" + cur.Username + "/sub"
-	got, ok := expandHome(value)
-	if !ok {
-		t.Fatalf("expandHome(%q) did not expand", value)
-	}
-	if want := filepath.Join(cur.HomeDir, "sub"); got != want {
-		t.Errorf("expandHome(%q) = %q, want %q", value, got, want)
-	}
+	t.Run("a named user", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			// "~user" is a POSIX and git path shape, and expandHome
+			// resolves the name through the POSIX user database. Windows
+			// has no spelling for it: an account name there is
+			// "MACHINE\user" — which is exactly what user.Current().Username
+			// hands back — and that backslash is the separator expandHome
+			// normalises to "/" so a Windows operator can write
+			// `~\runbooks\*` in permissions.readAlso. One token cannot
+			// carry both meanings, and git never writes a "~user"
+			// path-type value on Windows, so only the lookup half of this
+			// test is POSIX-only.
+			t.Skip(`"~user" needs a POSIX user database; a Windows account name is "MACHINE\user"`)
+		}
+		cur, err := user.Current()
+		if err != nil {
+			t.Skipf("cannot look up the current user: %v", err)
+		}
+		value := "~" + cur.Username + "/sub"
+		got, ok := expandHome(value)
+		if !ok {
+			t.Fatalf("expandHome(%q) did not expand", value)
+		}
+		if want := filepath.Join(cur.HomeDir, "sub"); got != want {
+			t.Errorf("expandHome(%q) = %q, want %q", value, got, want)
+		}
+	})
 
+	// Neither of these consults the user database, so both run everywhere:
+	// a value with no leading "~" is left alone, and a name nothing can
+	// resolve is reported unexpanded rather than guessed at.
 	if _, ok := expandHome("relative/path"); ok {
 		t.Error("expandHome expanded a value with no leading ~")
 	}

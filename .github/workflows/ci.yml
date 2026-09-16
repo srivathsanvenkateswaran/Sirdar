@@ -1,5 +1,10 @@
 name: ci
-on: [push, pull_request]
+on:
+  push:
+  pull_request:
+  # So a platform round can re-run this on its own branch without an empty
+  # commit: `gh workflow run ci.yml --ref <branch>`.
+  workflow_dispatch:
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -21,9 +26,15 @@ jobs:
   #
   # What these jobs cover that a macOS laptop cannot: the Windows halves of
   # internal/osopen, internal/procgroup (taskkill), internal/agenttools
-  # (cmd /C) and internal/config's Credential Manager reader. Tests that
-  # need a POSIX shell, a symlink or Unix mode bits skip themselves on
-  # Windows and say so in the log.
+  # (cmd /C) and internal/config's Credential Manager reader.
+  #
+  # A test that needs an external program stands one up with
+  # internal/testbin — a hard link to the running test binary, dispatched
+  # by the name it was installed under — rather than a #!/bin/sh script,
+  # so the MCP, serve, runs and transcription paths are exercised here and
+  # not skipped. What still skips itself on Windows, saying so in the log,
+  # is the handful of assertions about facilities the platform does not
+  # have: Unix mode bits, a POSIX user database, symlinks.
   macos:
     runs-on: macos-latest
     steps:
@@ -62,14 +73,21 @@ jobs:
       - name: go test
         run: go test ./...
 
+      # The .exe is the artifact this job exists to produce, and a failing
+      # test is the most likely reason someone wants to download it and
+      # look. Both steps therefore run whatever `go test` did; the job
+      # still fails, because `go test` already failed it.
       - name: Install wails CLI
+        if: always()
         run: go install github.com/wailsapp/wails/v2/cmd/wails@v2.15.0
 
       - name: wails build
+        if: always()
         working-directory: desktop
         run: wails build -platform windows/amd64
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: sirdar-desktop-windows-amd64
           path: desktop/build/bin/Sirdar.exe

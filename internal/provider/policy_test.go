@@ -172,7 +172,14 @@ func TestMatchCommandStaysInTheRoot(t *testing.T) {
 		{"cat internal/run/execute.go", true, ""},
 		{"cat ./go.mod", true, ""},
 		{"cat a/../go.mod", true, ""}, // the ".." resolves back inside
-		{"cat " + filepath.Join(root, "go.mod"), true, ""},
+		// Spelled with forward slashes on every OS. This is a command
+		// line, not a filesystem path: argTokens reads "\" the way a shell
+		// does, as an escape that swallows the character after it, so
+		// filepath.Join's Windows spelling would reach the confinement
+		// check as "C:Usersrunneradmin...go.mod" — a token that no longer
+		// sits under any root and is refused. Windows accepts "/" in a
+		// path, so this is the spelling that survives both.
+		{"cat " + filepath.ToSlash(filepath.Join(root, "go.mod")), true, ""},
 		{"rg -n foo internal/", true, ""},
 
 		{"cat ../../../etc/passwd", false, "climbs out of the workspace root"},

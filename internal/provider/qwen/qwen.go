@@ -832,6 +832,12 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 	// escalation it schedules kills the whole process group.
 	runCtx, cancelRun := context.WithCancel(ctx)
 	reaped := make(chan struct{})
+	// breached is set by abort before it cancels runCtx, so the Cancel
+	// below can tell an ordinary cancellation from the end of a session
+	// that lost its mediator. It is a local the session then carries,
+	// because Cancel has to be in place before the session value that
+	// would otherwise own the flag can be built around cmd.
+	breached := new(atomic.Bool)
 	cmd := exec.CommandContext(runCtx, binary, args(spec, p.endpoint, mcpNames)...)
 	cmd.Cancel = func() error {
 		// Go's own WaitDelay escalation signals the process, not the
@@ -847,18 +853,41 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 				}
 			})
 		}
-		if runtime.GOOS == "windows" {
-			// Signal(os.Interrupt) is not implemented on Windows and
-			// always errors there, which otherwise left Wait unable to
-			// tell a cancelled run from an ordinary exit (see Wait's use
-			// of runCtx below). There is no polite path on this
-			// platform, so skip straight to the group kill once the
-			// grace period elapses.
-			scheduleGroupKill()
+		if breached.Load() {
+			// A breach is never asked politely. The session lost its
+			// mediator, or ran a tool the hook was never asked about, so
+			// what the CLI would do with a chance to finish is exactly
+			// what must not happen: a run that has filed nothing could
+			// still write a result line and file a note off the back of
+			// unmediated work. Take the group and take it now.
+			//
+			// abort kills the group itself as well, and until this
+			// branch existed that kill was all that stopped the
+			// interrupt below from reaching the child — a race abort
+			// won on Unix, where SIGKILL to the group lands at once, and
+			// lost on Windows, where taskkill has a process to start
+			// first. The verdict is stated here rather than left to
+			// whichever call gets there first.
+			_ = procgroup.Kill(cmd)
 			return nil
 		}
-		// SIGINT first: Qwen Code writes its result line on the way out.
-		err := cmd.Process.Signal(os.Interrupt)
+		// The polite stop first: Qwen Code writes its result line on the
+		// way out. procgroup.Interrupt is SIGINT on Unix and a Ctrl+Break
+		// console event to the child's own process group on Windows,
+		// which Go's runtime hands the child as os.Interrupt.
+		err := procgroup.Interrupt(cmd)
+		if err != nil && runtime.GOOS == "windows" {
+			// The one common reason it fails there is a Sirdar that owns
+			// no console to send the event through, and then this
+			// platform has no polite path at all. Take the group now
+			// rather than leaving Wait blocked for the whole grace
+			// period waiting out a signal that was never delivered.
+			// Wait still reports the run as cancelled: it reads runCtx
+			// rather than the error from here, which is platform-
+			// dependent (see Wait below).
+			_ = procgroup.Kill(cmd)
+			return nil
+		}
 		scheduleGroupKill()
 		return err
 	}
@@ -905,6 +934,7 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		hookDone:   make(chan struct{}),
 		done:       make(chan struct{}),
 		reaped:     reaped,
+		breached:   breached,
 	}
 	s.hook = &http.Server{Handler: s.hookMux(), ReadHeaderTimeout: 5 * time.Second}
 	go func() {
@@ -1138,6 +1168,12 @@ type session struct {
 	done     chan struct{} // closed when the process has been reaped
 	reaped   chan struct{} // closed as soon as cmd.Wait has returned
 
+	// breached is set by abort before it cancels runCtx, and read by
+	// cmd.Cancel, which skips the polite interrupt when it is set. It is
+	// a pointer because cmd.Cancel closes over it from before this value
+	// exists; see Start.
+	breached *atomic.Bool
+
 	hookClosing atomic.Bool // set before the hook is shut down on purpose
 
 	emitMu sync.RWMutex // held for reading while an event is sent
@@ -1195,10 +1231,19 @@ func (s *session) removeSettings() {
 	})
 }
 
-// abort stops the child now. SIGINT and the WaitDelay escalation are the
-// polite path; this one is for a session that has lost its mediator, where
-// anything the CLI already spawned has to go too.
+// abort stops the child now. The interrupt and the escalation behind it
+// are the polite path; this one is for a session that has lost its
+// mediator, where anything the CLI already spawned has to go too and
+// nothing gets a chance to finish what it was doing.
+//
+// The breach is marked before runCtx is cancelled, and in that order:
+// cancelling runCtx is what runs cmd.Cancel, and cmd.Cancel reads the flag
+// to decide whether the child is asked to stop or simply killed. Setting
+// it afterwards would leave which of the two happened up to the scheduler.
 func (s *session) abort() {
+	if s.breached != nil {
+		s.breached.Store(true)
+	}
 	s.cancelRun()
 	if s.cmd == nil {
 		return

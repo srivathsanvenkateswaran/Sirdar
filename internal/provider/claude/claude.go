@@ -14,11 +14,13 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/srivathsanvenkateswaran/sirdar/internal/procgroup"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
 
@@ -250,11 +252,30 @@ func (p *Provider) Start(ctx context.Context, spec provider.SessionSpec) (provid
 		binary = defaultBinary
 	}
 	// runCtx is the one cancellation path: Cancel() cancels it, and so does
-	// the caller's ctx. cmd.Cancel turns either into SIGINT, and WaitDelay
-	// escalates to SIGKILL if the process has not exited by then.
+	// the caller's ctx. cmd.Cancel turns either into an interrupt, and
+	// WaitDelay escalates to a kill if the process has not exited by then.
 	runCtx, cancelRun := context.WithCancel(ctx)
 	cmd := exec.CommandContext(runCtx, binary, args(spec)...)
-	cmd.Cancel = func() error { return cmd.Process.Signal(os.Interrupt) }
+	// Its own process group. On Unix that keeps a terminal's Ctrl-C off
+	// the child, which is Sirdar's to stop rather than the terminal's; on
+	// Windows it is what gives the group below an address a console
+	// control event can be sent to. It has to be set before Start.
+	procgroup.Setup(cmd)
+	cmd.Cancel = func() error {
+		// procgroup.Interrupt is SIGINT on Unix and a Ctrl+Break console
+		// event on Windows, so the CLI gets to write its result line on
+		// the way out rather than being killed mid-sentence.
+		err := procgroup.Interrupt(cmd)
+		if err != nil && runtime.GOOS == "windows" {
+			// The one common reason it fails there is a Sirdar that owns
+			// no console to send the event through, and then this
+			// platform has no polite path at all. Kill now rather than
+			// leaving Wait blocked for the whole of interruptGrace
+			// waiting out a signal that was never delivered.
+			return cmd.Process.Kill()
+		}
+		return err
+	}
 	cmd.WaitDelay = interruptGrace
 	cmd.Dir = spec.Cwd
 	env, envNotices := childEnv(spec)

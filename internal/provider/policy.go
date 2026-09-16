@@ -527,7 +527,7 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 			// The shell would expand this to a home directory the
 			// workspace is not inside; the policy only ever sees the "~".
 			return "the path " + quote(arg) + " is outside the workspace root, which is as far as a shell command reaches"
-		case filepath.IsAbs(arg):
+		case IsRooted(arg):
 			if root == "" {
 				continue
 			}
@@ -540,7 +540,14 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 				}
 			}
 		default:
-			if clean := filepath.Clean(arg); clean == ".." || strings.HasPrefix(clean, "../") {
+			// filepath.Separator rather than a literal "/", because
+			// filepath.Clean spells its answer with the separator of the
+			// running OS: on Windows "../../escape.out" comes back as
+			// "..\..\escape.out", which a "../" prefix test reads as an
+			// ordinary in-root file name. That is this rule — the one
+			// check that catches a climb out of the workspace with no
+			// absolute path in sight — failing open on the whole platform.
+			if clean := filepath.Clean(arg); clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
 				return "the path " + quote(arg) + " climbs out of the workspace root, which is as far as a shell command reaches"
 			}
 			if root == "" {
@@ -571,7 +578,7 @@ func escapesRoot(root string, extraReserved []string, segment string) string {
 // comparison silently reports "not reserved".
 func reservedArgument(root string, extraReserved []string, arg string) string {
 	candidate := arg
-	if !filepath.IsAbs(candidate) {
+	if !IsRooted(candidate) {
 		candidate = filepath.Join(root, candidate)
 	}
 	real, err := EvalNearest(candidate)

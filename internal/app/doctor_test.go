@@ -1,9 +1,12 @@
 package app
 
 import (
+	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,30 +16,58 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider/codex"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source/plugin"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 )
 
-// probeAdapter writes a fake exec adapter that answers describe with the
-// roles it is given and answers tracker.get with getCode — the error code
-// the probe is meant to react to. An empty getCode means the adapter
-// answers "not found", which is what a healthy tracker does for a key that
-// cannot exist.
+// probeAdapterMain is the adapter half of the tracker-probe tests: it
+// answers describe with the roles named in its first argument (a
+// comma-separated list) and answers tracker.get with the error code named
+// in its second — the code the probe is meant to react to. "not_found" is
+// what a healthy tracker answers for a key that cannot exist.
+//
+// It runs inside a copy of this test binary, dispatched by TestMain on the
+// name probeAdapter installed it under. The roles and the code travel as
+// arguments rather than environment variables because the thing under test
+// decides what environment the adapter gets.
+func probeAdapterMain() int {
+	args := testbin.Args()
+	if len(args) != 2 {
+		return testbin.Fail("probe adapter: want <roles> <tracker.get code>, got %q", args)
+	}
+	roles, err := json.Marshal(strings.Split(args[0], ","))
+	if err != nil {
+		return testbin.Fail("probe adapter: %v", err)
+	}
+
+	in := bufio.NewScanner(os.Stdin)
+	in.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+	for in.Scan() {
+		var req plugin.Request
+		if err := json.Unmarshal(in.Bytes(), &req); err != nil {
+			continue // tolerate noise, the way a real adapter must
+		}
+		switch req.Method {
+		case "describe":
+			fmt.Printf(`{"id":%d,"result":{"name":"probe","version":"1","roles":%s}}`+"\n", req.ID, roles)
+		case "tracker.get":
+			fmt.Printf(`{"id":%d,"error":{"code":%q,"message":"probe said so"}}`+"\n", req.ID, args[1])
+		case "shutdown":
+			return 0
+		default:
+			fmt.Printf(`{"id":%d,"error":{"code":"unsupported","message":"no"}}`+"\n", req.ID)
+		}
+	}
+	return 0
+}
+
+// probeAdapter installs probeAdapterMain as a real executable and returns
+// the command that starts it with the roles and the tracker.get code it
+// should answer with. The path is quoted because plugin.Start splits its
+// command on spaces and a temp directory can contain one.
 func probeAdapter(t *testing.T, roles, getCode string) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "probe.sh")
-	script := "#!/bin/sh\n" +
-		"while IFS= read -r line; do\n" +
-		`  id=$(printf '%s' "$line" | sed -n 's/.*"id":\([0-9]*\).*/\1/p')` + "\n" +
-		`  case "$line" in` + "\n" +
-		`    *'"describe"'*) printf '{"id":%s,"result":{"name":"probe","version":"1","roles":[%s]}}\n' "$id" '` + roles + `' ;;` + "\n" +
-		`    *'"tracker.get"'*) printf '{"id":%s,"error":{"code":"` + getCode + `","message":"probe said so"}}\n' "$id" ;;` + "\n" +
-		`    *'"shutdown"'*) exit 0 ;;` + "\n" +
-		`    *) printf '{"id":%s,"error":{"code":"unsupported","message":"no"}}\n' "$id" ;;` + "\n" +
-		"  esac\n" +
-		"done\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	return path
+	bin := testbin.Install(t, t.TempDir(), "probeadapter", "probeadapter")
+	return `"` + bin + `" ` + roles + " " + getCode
 }
 
 func startProbeAdapter(t *testing.T, roles, getCode string) (*plugin.Client, plugin.Describe) {
@@ -58,7 +89,7 @@ func startProbeAdapter(t *testing.T, roles, getCode string) (*plugin.Client, plu
 // describe perfectly and fails on the first real fetch.
 func TestTrackerProbeReportsABrokenCredential(t *testing.T) {
 	for _, code := range []string{"auth", "internal"} {
-		c, d := startProbeAdapter(t, `"tracker"`, code)
+		c, d := startProbeAdapter(t, "tracker", code)
 		got := trackerProbe(context.Background(), c, d)
 		if !strings.Contains(got, "tracker.get probe failed with "+code) {
 			t.Errorf("%s: trackerProbe = %q", code, got)
@@ -70,7 +101,7 @@ func TestTrackerProbeReportsABrokenCredential(t *testing.T) {
 }
 
 func TestTrackerProbeStaysQuietOnAHealthyAdapter(t *testing.T) {
-	c, d := startProbeAdapter(t, `"tracker"`, "not_found")
+	c, d := startProbeAdapter(t, "tracker", "not_found")
 	if got := trackerProbe(context.Background(), c, d); got != "" {
 		t.Errorf("trackerProbe = %q, want empty", got)
 	}
@@ -79,7 +110,7 @@ func TestTrackerProbeStaysQuietOnAHealthyAdapter(t *testing.T) {
 // A helpdesk-only adapter has no tracker.get to probe, so the probe must
 // not invent a failure for it.
 func TestTrackerProbeSkipsANonTracker(t *testing.T) {
-	c, d := startProbeAdapter(t, `"helpdesk"`, "auth")
+	c, d := startProbeAdapter(t, "helpdesk", "auth")
 	if got := trackerProbe(context.Background(), c, d); got != "" {
 		t.Errorf("trackerProbe = %q, want empty", got)
 	}
@@ -359,6 +390,11 @@ func TestCodexProviderOffersTheConfigDoctor(t *testing.T) {
 	}
 }
 
+// fakeWhisperMain stands in for a transcription command the doctor row is
+// meant to find. The row never runs it — it only looks it up on PATH — so
+// the fake has nothing to do but succeed.
+func fakeWhisperMain() int { return 0 }
+
 // TestTranscribeCheckReportsWhatWillHappenToAudio covers the three
 // answers the row can give: no transcription configured, a command that
 // cannot be found, and one that can.
@@ -383,11 +419,13 @@ func TestTranscribeCheckReportsWhatWillHappenToAudio(t *testing.T) {
 		t.Error("a missing transcriber is not a reason for doctor to exit non-zero")
 	}
 
-	bin := filepath.Join(t.TempDir(), "fake-whisper")
-	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	cfg.Attachments.Transcribe.Command = bin + " {in}"
+	// A real executable, not a #!/bin/sh file: the row's verdict is
+	// exec.LookPath's, and on Windows LookPath does not consider an
+	// extensionless file executable at all. testbin.Install appends the
+	// ".exe" the platform needs, so bin is the name the config command
+	// carries and the name the row must quote back.
+	bin := testbin.Install(t, t.TempDir(), "fake-whisper", "fake-whisper")
+	cfg.Attachments.Transcribe.Command = `"` + bin + `" {in}`
 	c = transcribeCheck(cfg)
 	if !c.OK || !strings.Contains(c.Detail, bin) {
 		t.Fatalf("configured: %+v", c)

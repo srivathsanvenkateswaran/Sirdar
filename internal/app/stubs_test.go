@@ -12,8 +12,28 @@ import (
 	"github.com/srivathsanvenkateswaran/sirdar/internal/config"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/source"
+	"github.com/srivathsanvenkateswaran/sirdar/internal/testbin"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/ticket"
 )
+
+// TestMain is also every external program this package's tests have to
+// start for real: a source adapter, a transcription command, an MCP
+// server. testbin.Dispatch runs the fake this process was installed as
+// and never returns in that case; an ordinary `go test` run matches
+// nothing and falls through to the tests.
+//
+// The three fakes used to be #!/bin/sh files written into a temp
+// directory. A shell script is not an executable on Windows, so every
+// test that started one failed there for a reason that had nothing to do
+// with what it was testing.
+func TestMain(m *testing.M) {
+	testbin.Dispatch(map[string]func() int{
+		"probeadapter": probeAdapterMain,
+		"fake-whisper": fakeWhisperMain,
+		"fakemcp":      testbin.FakeMCP,
+	})
+	os.Exit(m.Run())
+}
 
 // The workspace, the stub sources and the stub provider below are the
 // shape internal/run's own tests use, copied here so this package can run

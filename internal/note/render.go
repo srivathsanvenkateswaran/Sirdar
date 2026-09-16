@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -253,6 +254,16 @@ func sampleFor(kind Kind) ([]byte, Meta, error) {
 // leading "/" produces) or exactly ".." is dropped rather than passed
 // through, so a pattern can't escape notes.dir or leave an empty path
 // component.
+//
+// The result is always "/"-separated, on every OS. A note name is a link
+// as well as a file: the vault writes it into frontmatter and into the
+// body as "[[RCA/OMNI-1 …]]", and Obsidian reads "/" there whatever the
+// filesystem underneath uses. filepath.Join would hand Windows a
+// backslash, which files the note correctly and then links to nothing —
+// and leaves the body's predicted links unrewritten, because the pattern
+// they are matched against is written with "/" too. The callers that need
+// a real path pass this to filepath.Join, which turns the separators back
+// into the platform's own.
 func Filename(pattern, key, slug string) string {
 	segments := strings.Split(pattern, "/")
 	kept := make([]string, 0, len(segments))
@@ -264,7 +275,7 @@ func Filename(pattern, key, slug string) string {
 		}
 		kept = append(kept, f)
 	}
-	return filepath.Join(kept...)
+	return path.Join(kept...)
 }
 
 var (
