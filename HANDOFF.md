@@ -50,21 +50,32 @@ workspace can start a session with it.
 
 macOS, Linux and Windows, for both the CLI and the desktop app. The CLI has shipped for all
 three since the first goreleaser config; the Windows desktop app is real as of the `windows`
+round, and the Linux one is packaged as an install rather than a loose binary as of the `linux`
 round.
 
 | | macOS | Linux | Windows |
 |---|---|---|---|
 | CLI | native | native | native (amd64, arm64) |
-| Desktop app | `wails build` | `wails build -tags webkit2_41`, needs `libwebkit2gtk-4.1-dev` | `wails build -platform windows/amd64`, cross-compiles from either of the others; needs the WebView2 runtime to **run** |
-| `keychain:` refs | login Keychain (`security`) | Secret Service (`secret-tool`) | Credential Manager (PowerShell `CredRead`) |
-| Opening a file or URL | `open` | `xdg-open` | `rundll32 url.dll,FileProtocolHandler` |
+| Desktop app | `wails build` | `wails build -tags webkit2_41`, cgo against `libgtk-3-dev` + `libwebkit2gtk-4.1-dev`, **Linux host only** — it does not cross-compile | `wails build -platform windows/amd64`, cross-compiles from either of the others; needs the WebView2 runtime to **run** |
+| Desktop release zip | the `.app` | `Sirdar` + `sirdar.desktop` + a 512px icon + `install.sh` into `~/.local`, no sudo | `Sirdar.exe` |
+| User-level state | `~/.sirdar` | `~/.sirdar`, or `$XDG_DATA_HOME/sirdar` when that is set and no `~/.sirdar` exists yet | `%USERPROFILE%\.sirdar` |
+| `keychain:` refs | login Keychain (`security`) | Secret Service (`secret-tool`), else `pass(1)` | Credential Manager (PowerShell `CredRead`) |
+| Opening a file or URL | `open` | `xdg-open` (`xdg-utils`) | `rundll32 url.dll,FileProtocolHandler` |
 | Killing a run's subtree | `SIGKILL` to the process group | same | `taskkill /T /F` on the pid tree |
 | Shell for `permissions.bash` | `sh -c` | `sh -c` | `cmd /C` |
 
 The per-platform opener lives in `internal/osopen` and nowhere else; the shell choice is
-`agenttools.shellFor`; the kill is `internal/procgroup`. Each has its non-host branches
-unit-tested by passing the GOOS in rather than reading `runtime.GOOS`, which is how a macOS
-laptop covers them at all.
+`agenttools.shellFor`; the kill is `internal/procgroup`; the user-state directory is
+`config.UserDir`. Each has its non-host branches unit-tested by passing the GOOS in rather than
+reading `runtime.GOOS`, which is how a macOS laptop covers them at all. `sirdar doctor`'s
+**platform** row reads the same tables back out at the operator, which is where a missing
+`xdg-open` or `secret-tool` gets named as a missing package rather than as a button that does
+nothing.
+
+Linux is the only platform whose desktop app cannot be produced from this repo on a Mac.
+`make desktop-linux` refuses on a non-Linux host and says why; `.github/workflows/desktop.yml`'s
+`ubuntu-latest` entry is the standing build, and `scripts/package-linux.sh` is the one place the
+zip's contents are decided, shared by that workflow, `release.yml` and the make target.
 
 Two things are Windows-shaped rather than merely Windows-ported. `os.Symlink` fails there for
 any account without Developer Mode, so a workspace-only Codex session falls back to a directory
@@ -421,6 +432,28 @@ a real Codex session; whether the WebView2 host draws the frontend, what the nat
 and DPI scaling look like, and whether SmartScreen's warning is the one `docs/release.md`
 describes. The CI job is the standing check for the first of those; the rest need someone at a
 Windows desktop.
+
+Nothing on Linux has been run on Linux either. The `linux` round was done on the same macOS
+machine, and Docker was installed but not running, so there was no Linux container to fall back
+to. What is green: `GOOS=linux go vet ./...` on amd64 and arm64, and `GOOS=linux go test -c` for
+all 44 packages that have tests — every test binary compiles, none has been executed. Both of
+those cross-compile with cgo off, so they say nothing about the half of the desktop app that is
+C. Left for a Linux machine, or for the `test` and `desktop` CI jobs, to answer: whether
+`go test ./...` passes (the ubuntu `test` job covers the pure-Go packages and is green, so this
+is really only open for `./desktop`); whether the GTK window actually draws, picks up the
+embedded icon, and groups under the launcher entry via the `sirdar` WM_CLASS; whether
+`install.sh` puts the entry somewhere GNOME and KDE both index, and whether the icon resolves
+from the hicolor theme without a logout; whether `secret-tool` finds a secret stored the way
+`docs/release.md` says to store one, and whether the `pass(1)` fallback does; whether a
+`$XDG_DATA_HOME` machine gets its registry where `config.UserDir` says it will. The
+`sirdar.desktop` file has not been through `desktop-file-validate`, which is not installable on
+macOS.
+
+One thing that is Linux-shaped rather than merely Linux-ported: goreleaser builds the CLI with
+cgo off, so `user.Lookup` — which `~otheruser` expansion in `permissions.readAlso` goes through
+— reads `/etc/passwd` directly and does not see an LDAP, SSSD or systemd-homed account. Nobody
+has hit it; it is written down here because the symptom (a readAlso pattern that silently
+matches nothing) gives no hint of the cause.
 
 `provider: agy` has now run end to end twice against a real Google account: a probe turn that
 watched a `view_file` succeed and a `write_to_file` be refused by Sirdar's own project rule, and
