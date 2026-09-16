@@ -1,6 +1,12 @@
 import { useEffect, useRef, useState, useSyncExternalStore, type FormEvent } from 'react'
 import type { ConfigSummary, Transport, Workspace } from '../../api/types'
 import { reasonOf } from '../../lib/format'
+import {
+  sessionsShow,
+  setSessionsShow,
+  subscribeSessionsShow,
+  type SessionsShow,
+} from '../../lib/sessionsShow'
 import { setTheme, subscribeTheme, theme, type Theme } from '../../lib/theme'
 import SegmentedControl from '../../ui/segmented-control'
 import SettingRow, { SettingCard } from '../../ui/setting-row'
@@ -14,6 +20,12 @@ const THEME_OPTIONS: { id: Theme; label: string }[] = [
   { id: 'light', label: 'Light' },
   { id: 'system', label: 'System' },
   { id: 'dark', label: 'Dark' },
+]
+
+/** Tracker first: it is the default, and the run's own key is the tracker's. */
+const SESSIONS_SHOW_OPTIONS: { id: SessionsShow; label: string }[] = [
+  { id: 'tracker', label: 'Tracker number' },
+  { id: 'helpdesk', label: 'Helpdesk number' },
 ]
 
 /** "Notes in en, customer replies in the ticket's language". */
@@ -51,6 +63,11 @@ export default function GeneralPage({
   onWorkspacesChanged: () => void
 }): JSX.Element {
   const current = useSyncExternalStore(subscribeTheme, theme, () => 'system' as Theme)
+  const show = useSyncExternalStore(
+    subscribeSessionsShow,
+    sessionsShow,
+    () => 'tracker' as SessionsShow,
+  )
   const [root, setRoot] = useState('')
   const [adding, setAdding] = useState(false)
   const [addError, setAddError] = useState<string | null>(null)
@@ -177,6 +194,19 @@ export default function GeneralPage({
               options={THEME_OPTIONS}
               value={current}
               onChange={(id) => setTheme(id as Theme)}
+            />
+          }
+        />
+        <SettingRow
+          label="Sessions show"
+          value={show === 'helpdesk' ? 'The helpdesk number' : 'The tracker number'}
+          help="Which ticket number the sessions list, the board cards and a session's title carry. A run with no helpdesk number shows its tracker key either way. Remembered in this browser."
+          control={
+            <SegmentedControl
+              label="Sessions show"
+              options={SESSIONS_SHOW_OPTIONS}
+              value={show}
+              onChange={(id) => setSessionsShow(id as SessionsShow)}
             />
           }
         />

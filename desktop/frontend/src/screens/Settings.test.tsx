@@ -6,6 +6,7 @@ import type { Check, Transport } from '../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../components/shell/primaryAction'
 import { resetShowLibrary, showLibrary } from '../lib/library'
 import { prefersRTL, resetPreferRTL, setPreferRTL } from '../lib/rtl'
+import { resetSessionsShow, sessionsShow } from '../lib/sessionsShow'
 import { resetTheme, theme } from '../lib/theme'
 import {
   configSummary,
@@ -37,6 +38,7 @@ afterEach(() => {
   resetPreferRTL()
   resetShowLibrary()
   resetTheme()
+  resetSessionsShow()
 })
 
 /** A transport over the fake, with whatever a case wants overridden. */
@@ -199,6 +201,17 @@ describe('General', () => {
     expect(theme()).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
     expect(screen.getByText('Dark', { selector: '.sd-setting-row__value' })).toBeInTheDocument()
+  })
+
+  it('switches which ticket number the sessions show, and remembers it', () => {
+    open()
+    expect(screen.getByRole('radio', { name: 'Tracker number' })).toBeChecked()
+    fireEvent.click(screen.getByRole('radio', { name: 'Helpdesk number' }))
+    expect(sessionsShow()).toBe('helpdesk')
+    expect(localStorage.getItem('sirdar.sessionsShow')).toBe('helpdesk')
+    expect(
+      screen.getByText('The helpdesk number', { selector: '.sd-setting-row__value' }),
+    ).toBeInTheDocument()
   })
 
   it('runs doctor and lists the rows with the CLI\'s own marks', async () => {
