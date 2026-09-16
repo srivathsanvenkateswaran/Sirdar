@@ -85,19 +85,32 @@ func TestReadDeniesTheWholeCallOnOneOutsidePath(t *testing.T) {
 
 func TestReadAlsoWidensTheScope(t *testing.T) {
 	p, _, _ := readPolicy(t)
-	p.ReadAlso = []string{"~/.claude/skills/*", "/opt/reference"}
+	// The absolute entry names a real directory outside the workspace
+	// rather than a hardcoded "/opt/reference". On Windows a POSIX-looking
+	// absolute path is rooted on the current drive without being absolute,
+	// so ReadScope.Resolve puts the agent's path through filepath.Abs and
+	// judges "D:\opt\reference\runbook.md" while the entry the operator
+	// wrote stays "\opt\reference" — the two never compare equal, and the
+	// entry would cover nothing. A directory that exists on the running
+	// machine is the same test on every OS.
+	outside := t.TempDir()
+	reference := filepath.Join(outside, "reference")
+	p.ReadAlso = []string{"~/.claude/skills/*", reference}
 
 	allowed := []string{
 		`{"file_path":"~/.claude/skills/support-triage/SKILL.md"}`,
-		`{"file_path":"/opt/reference/runbook.md"}`,
-		`{"file_path":"/opt/reference"}`,
+		`{"file_path":` + quoteJSON(filepath.Join(reference, "runbook.md")) + `}`,
+		`{"file_path":` + quoteJSON(reference) + `}`,
 	}
 	for _, input := range allowed {
 		if d := p.Decide("Read", json.RawMessage(input)); !d.Allow {
 			t.Errorf("readAlso did not allow %s: %s", input, d.Message)
 		}
 	}
-	if d := p.Decide("Read", json.RawMessage(`{"file_path":"/opt/other/runbook.md"}`)); d.Allow {
+	// A sibling of the directory the entry names, so it is outside every
+	// root and outside every pattern.
+	elsewhere := quoteJSON(filepath.Join(outside, "other", "runbook.md"))
+	if d := p.Decide("Read", json.RawMessage(`{"file_path":`+elsewhere+`}`)); d.Allow {
 		t.Error("readAlso allowed a path no pattern names")
 	}
 }
