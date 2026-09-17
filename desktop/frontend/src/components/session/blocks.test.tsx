@@ -160,11 +160,12 @@ describe('RunHeader', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
-  it('says blocked · waiting on you and offers Cancel while the run is not over; committed <sha> for a fix', () => {
-    render(<RunHeader detail={blocked.detail} show="tracker" onCancel={() => {}} cancelDisabled />)
+  // Stopping a live run is the composer's Stop; the header never carries it.
+  it('says blocked · waiting on you, and carries no Cancel; committed <sha> for a fix', () => {
+    render(<RunHeader detail={blocked.detail} show="tracker" />)
     expect(screen.getByText('blocked · waiting on you')).toBeInTheDocument()
     expect(screen.getByText(/of 60 turns/)).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
     expect(badgeDetail(fix.detail)).toBe('committed f144936')
   })
 
@@ -382,6 +383,10 @@ describe('ComposerStrip', () => {
     expect(within(strip).getByText('1e0a60c8')).toBeInTheDocument()
     expect(within(strip).getByText('Playbooks')).toBeInTheDocument()
     expect(within(strip).getByText('claude · opus')).toBeInTheDocument()
+    // One row: the resume handle, playbooks, the model, and the mode with
+    // the posture it runs under. No Access chip of its own.
+    expect(within(strip).getByText('Triage · read-only')).toBeInTheDocument()
+    expect(within(strip).queryByText('Access')).toBeNull()
     const box = within(strip).getByRole('textbox', { name: 'Steer' })
     expect(box).toHaveAttribute('placeholder', expect.stringContaining('Your last steer at 02:02'))
     const send = within(strip).getByRole('button', { name: /Steer/ })
@@ -412,10 +417,44 @@ describe('ComposerStrip', () => {
     expect(decisionText('once', undefined, 'note')).toBe('Yes, run it once. note')
   })
 
-  it('is disabled with the reason while the run works', () => {
-    render(<ComposerStrip state={{ kind: 'disabled', reason: 'The run is still working. Wait for it, or cancel it.' }} detail={{ ...triage.detail, status: 'running' }} busy={false} error="" onSend={() => {}} sentCount={0} />)
+  // Said once: the box carries it, the button stops the run, and no
+  // heading or aside repeats the sentence.
+  it('offers Stop while the run works, and says what typing there does exactly once', () => {
+    const onStop = vi.fn()
+    render(
+      <ComposerStrip
+        state={{ kind: 'running' }}
+        detail={{ ...triage.detail, status: 'running' }}
+        busy={false}
+        error=""
+        onSend={() => {}}
+        sentCount={0}
+        onStop={onStop}
+        canStop
+      />,
+    )
+    const strip = screen.getByTestId('composer-strip')
+    expect(strip).toHaveAttribute('data-mode', 'running')
     expect(screen.getByRole('textbox')).toBeDisabled()
-    expect(screen.getByRole('button', { name: /Steer/ })).toBeDisabled()
-    expect(screen.getAllByText('The run is still working. Wait for it, or cancel it.').length).toBeGreaterThan(0)
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Steer the run — it picks this up at its next turn')
+    expect(screen.queryByText(/The run is still working/)).toBeNull()
+    expect(screen.queryByRole('button', { name: /Steer/ })).toBeNull()
+    const stop = screen.getByRole('button', { name: 'Stop the run' })
+    fireEvent.click(stop)
+    expect(onStop).toHaveBeenCalledTimes(1)
+  })
+
+  it('says Waiting for the run to finish when the provider cannot be steered', () => {
+    render(
+      <ComposerStrip
+        state={{ kind: 'running' }}
+        detail={{ ...triage.detail, status: 'running', provider: 'cursor' }}
+        busy={false}
+        error=""
+        onSend={() => {}}
+        sentCount={0}
+      />,
+    )
+    expect(screen.getByRole('textbox')).toHaveAttribute('placeholder', 'Waiting for the run to finish')
   })
 })

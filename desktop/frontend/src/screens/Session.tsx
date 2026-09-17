@@ -202,14 +202,16 @@ function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Elemen
 
   const composer = steerRefusal ? ({ kind: 'disabled', reason: steerRefusal } as const) : data.model.composer
   const sendBusy = pending === 'answer' || pending === 'steer'
+  // The screen's one filled control, whichever it is: the strip's send, or
+  // the Stop that stands in its place while the run works.
   useProvidePrimaryAction(
     detail
       ? {
-          label: composer.kind === 'reply' ? 'Answer' : 'Steer',
+          label: composer.kind === 'reply' ? 'Answer' : composer.kind === 'running' ? 'Stop' : 'Steer',
           onRun: () => {},
-          disabled: composer.kind === 'disabled',
-          busy: sendBusy,
-          shortcut: '↵',
+          disabled: composer.kind === 'disabled' || (composer.kind === 'running' && !jobId),
+          busy: composer.kind === 'running' ? pending === 'cancel' : sendBusy,
+          shortcut: composer.kind === 'running' ? undefined : '↵',
           title: composer.kind === 'disabled' ? composer.reason : undefined,
           placement: 'screen',
         }
