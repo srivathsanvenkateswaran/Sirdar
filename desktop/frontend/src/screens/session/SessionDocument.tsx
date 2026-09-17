@@ -44,7 +44,7 @@ function reveal(el: Element | null | undefined): void {
  * change, with C markers tying each hunk to the edit that wrote it.
  */
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
-  const { transport, workspaceId, detail, data, title, notesDir, sources, show, narrow, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
+  const { transport, workspaceId, detail, data, title, notesDir, sources, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
   // The record's model, else the one the log names, so the header never says "model unknown" for a run that did say.
   const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
@@ -143,18 +143,6 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
   const sendBusy = pending === 'answer' || pending === 'steer'
   const composerState = steerRefusal ? ({ kind: 'disabled', reason: steerRefusal } as const) : model.composer
 
-  const headerAction = isFix
-    ? detail.fix?.branch && changes.diff?.worktree
-      ? null
-      : null
-    : notePath && props.transport.openNote
-      ? (
-          <Button variant="ghost" onClick={() => void props.transport.openNote?.(props.workspaceId, props.runId, notePath)} title={notePath}>
-            Open note <OpenIcon />
-          </Button>
-        )
-      : null
-
   let document: JSX.Element
   if (isFix) {
     document = (
@@ -246,11 +234,10 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         detail={named}
         title={title}
         sources={sources}
-        show={show}
-        narrow={narrow}
         notePath={notePath}
-        action={headerAction}
         switcher={<LayoutSwitcher value={layout} onChange={onLayout} />}
+        transport={props.transport}
+        workspaceId={props.workspaceId}
       />
       {actionError && pending !== 'accept' && model.composer.kind === 'disabled' ? (
         <p className="sn-failed-line" role="alert">

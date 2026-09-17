@@ -32,7 +32,7 @@ import BundleView from './BundleView'
 import { BracesIcon, ThinkIcon } from './icons'
 import { callForRef, useSessionModel, type ChatItem, type StepCall } from './model'
 import NoteDocument from './NoteDocument'
-import RunHeader from './RunHeader'
+import RunHeader from '../../components/session/RunHeader'
 import { clock } from './shape'
 import { ToolStack } from './ToolStep'
 import ToolsTable from './ToolsTable'
@@ -613,8 +613,10 @@ export default function SessionConversation(props: SessionConversationProps): JS
         detail={detail}
         title={title}
         sources={sources}
-        live={live}
+        notePath={notePath}
         fallbackModel={model.start?.model}
+        transport={transport}
+        workspaceId={workspaceId}
       />
 
       <span className="visually-hidden" aria-live="polite">

@@ -103,25 +103,34 @@ describe('SessionWorkbench', () => {
   })
 
   describe('S1 · a completed triage opened fresh', () => {
-    it('draws the header with the state word, the gauges, the model and the assignee', async () => {
+    it('draws the same four-thing header as the other layouts, with the run\'s figures behind the i', async () => {
       renderWorkbench(fake())
       expect(await screen.findByRole('heading', { name: 'SBX-1' })).toBeInTheDocument()
       const head = header()
+      expect(head).toHaveAttribute('data-variant', 'workbench')
       expect(within(head).getByText('triage')).toBeInTheDocument()
       expect(head.querySelector('.sd-badge')).toHaveTextContent('completed')
-      expect(within(head).getByText(TRIAGE_RUN.title!)).toBeInTheDocument()
-      const turns = within(head).getByRole('meter', { name: 'turns' })
-      expect(turns).toHaveAttribute('aria-valuetext', '17 / 60')
-      expect(turns).toHaveAttribute('aria-valuenow', '28')
-      expect(within(head).getByRole('meter', { name: 'minutes' })).toHaveAttribute('aria-valuetext', '3:15 / 20:00')
-      expect(within(head).getByRole('meter', { name: 'cost' })).toHaveAttribute('aria-valuetext', '$1.02 / $5.00')
-      // Finished: the gauges are grey, not the accent.
-      expect(turns).toHaveAttribute('data-live', 'false')
-      expect(within(head).getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-      expect(within(head).getByText('claude-opus-5')).toBeInTheDocument()
-      expect(within(head).getByText('ops@sandbox.local')).toBeInTheDocument()
+      // The row says no more than that: no title, no model, no assignee.
+      expect(within(head).queryByText(TRIAGE_RUN.title!)).toBeNull()
+      expect(within(head).queryByText('claude-opus-5')).toBeNull()
+      expect(within(head).queryByText('ops@sandbox.local')).toBeNull()
+      expect(within(head).queryAllByRole('meter')).toHaveLength(0)
       // Nothing is left to cancel.
       expect(within(head).queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument()
+
+      fireEvent.click(within(head).getByRole('button', { name: 'About this run' }))
+      const about = screen.getByRole('dialog', { name: 'About this run' })
+      expect(within(about).getByText(TRIAGE_RUN.title!)).toBeInTheDocument()
+      const turns = within(about).getByRole('meter', { name: 'turns' })
+      expect(turns).toHaveAttribute('aria-valuetext', '17 of 60')
+      expect(turns).toHaveAttribute('aria-valuenow', '28')
+      expect(within(about).getByRole('meter', { name: 'minutes' })).toHaveAttribute('aria-valuetext', '3:15 of 20:00')
+      expect(within(about).getByRole('meter', { name: 'cost' })).toHaveAttribute('aria-valuetext', '$1.02 of $5.00')
+      // Finished: the bars are grey, not the accent.
+      expect(head).not.toHaveAttribute('data-live')
+      expect(within(about).getByRole('img', { name: 'Claude' })).toBeInTheDocument()
+      expect(within(about).getByText('claude · claude-opus-5')).toBeInTheDocument()
+      expect(within(about).getByText('ops@sandbox.local')).toBeInTheDocument()
     })
 
     it('opens on the Answer document with its outline, facts and evidence', async () => {
@@ -235,10 +244,13 @@ describe('SessionWorkbench', () => {
     it('pins the question with its numbered options, greys the cost gauge and switches the bar to Answer', async () => {
       renderWorkbench(blocked(), BLOCKED_FIX_RUN)
       await screen.findByRole('heading', { name: 'SBX-1' })
-      expect(header().querySelector('.sd-badge')).toHaveTextContent('blocked · waiting on you')
-      const cost = within(header()).getByRole('meter', { name: 'cost · at result' })
-      expect(cost).toHaveAttribute('aria-valuetext', '— / $5.00')
-      expect(cost).toHaveAttribute('data-na', 'true')
+      expect(header().querySelector('.sd-badge')).toHaveTextContent('blocked')
+      expect(within(header()).getByTitle('blocked · waiting on you')).toBeInTheDocument()
+      fireEvent.click(within(header()).getByRole('button', { name: 'About this run' }))
+      const cost = screen.getByRole('meter', { name: 'cost' })
+      expect(cost).toHaveAttribute('aria-valuetext', '— of $5.00')
+      expect(cost.closest('.sn-gauge')).toHaveAttribute('data-na', 'true')
+      fireEvent.keyDown(screen.getByRole('dialog', { name: 'About this run' }), { key: 'Escape' })
       // The rail ends on the question.
       const cells = within(screen.getByRole('navigation', { name: 'Turns' })).getAllByRole('button')
       expect(cells[cells.length - 1]).toHaveTextContent('?')
@@ -287,8 +299,8 @@ describe('SessionWorkbench', () => {
       expect(rowsIn(console_()).length).toBe(before + 1)
       f.emit({ kind: 'run.updated', workspaceId: 'ws1', run: { ...BLOCKED_FIX_RUN, status: 'running', updatedAt: '2026-09-15T12:12:00Z' } })
       expect(header().querySelector('.sd-badge')).toHaveTextContent('running')
-      // Running: the gauges take the accent and follow-live is on.
-      expect(within(header()).getByRole('meter', { name: 'turns' })).toHaveAttribute('data-live', 'true')
+      // Running: the bars take the accent and follow-live is on.
+      expect(header()).toHaveAttribute('data-live', 'true')
       expect(within(console_()).getByRole('switch', { name: 'Follow live' })).toHaveAttribute('aria-checked', 'true')
       // Running: the send is gone and the bar carries the Stop in its place.
       const bar = commandBar()

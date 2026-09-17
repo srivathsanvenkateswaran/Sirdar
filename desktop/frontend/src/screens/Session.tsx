@@ -7,8 +7,6 @@ import { useProvidePrimaryAction } from '../components/shell/primaryAction'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import { reasonOf } from '../lib/format'
 import { sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../lib/sessionLayout'
-import { sessionsShow, subscribeSessionsShow, type SessionsShow } from '../lib/sessionsShow'
-import { BELOW_STANDARD, useMediaQuery } from '../lib/useMediaQuery'
 import { stateWord } from '../ui/status-badge'
 import type { SessionLayoutProps } from './session/layoutProps'
 import SessionConversation from './session/SessionConversation'
@@ -17,7 +15,7 @@ import SessionWorkbench from './session/SessionWorkbench'
 import '../components/run/run.css'
 import '../components/session/session.css'
 
-export { badgeDetail, statsTitle } from '../components/session/RunHeader'
+export { badgeDetail } from '../components/session/RunHeader'
 
 /**
  * Cancel only works for a job this window started. `lib/jobs` holds the run →
@@ -84,7 +82,6 @@ export default function Session(props: SessionProps): JSX.Element {
 /** The Document and Workbench layouts: one feed, one model, one set of actions, the chosen layout drawing them. */
 function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix, layout } = props
-  const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const data = useSessionModel(transport, workspaceId, runId, detail, events, finished)
   const [pending, setPending] = useState<SessionLayoutProps['pending']>('')
@@ -92,7 +89,6 @@ function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Elemen
   const [steerRefusal, setSteerRefusal] = useState('')
   const [sent, setSent] = useState(0)
   const jobId = useRunJob(runId)
-  const narrow = useMediaQuery(BELOW_STANDARD)
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
@@ -241,8 +237,6 @@ function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Elemen
         title={title}
         notesDir={notesDir}
         sources={sources}
-        show={show}
-        narrow={narrow}
         live={live}
         actions={{
           answer: (text, decision) => void answer(text, decision),

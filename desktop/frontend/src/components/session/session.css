@@ -77,15 +77,21 @@
 
 /* ------------------------------------------------------------ run header */
 
+/*
+ * One row, the same in all three layouts: which ticket, what kind of run,
+ * what state it is in, the ticket's number in the other system — and
+ * nothing else. 56px, never wrapped. What a run is about, who has it, what
+ * it ran on and what it has spent are behind the `i` button (`.sn-about`).
+ */
 .sn-head {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--sd-space-4);
-  min-block-size: 72px;
-  padding-block: var(--sd-space-2);
+  gap: var(--sd-space-3);
+  block-size: 56px;
   padding-inline: var(--sd-space-6);
   border-block-end: 1px solid var(--sd-rule);
+  white-space: nowrap;
 }
 
 .sn-head > * {
@@ -95,98 +101,189 @@
 .sn-head__key {
   margin: 0;
   font-family: var(--sd-font-mono);
-  font-size: 18px;
+  font-size: 20px;
   font-weight: 600;
   letter-spacing: 0.01em;
   unicode-bidi: isolate;
 }
 
-.sn-head__title {
-  flex: 1 1 auto;
-  /* Never squeezed to one letter: the figures give way before the title does. */
-  min-inline-size: 12ch;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: var(--sd-text-body);
-  color: var(--sd-ink-2);
+/* The state word, with what it means here as its title. */
+.sn-head__state {
+  display: inline-flex;
+  align-items: center;
 }
 
-.sn-head__stats {
-  display: flex;
+/* The ticket's number in the other system: the identifier is the link. */
+.sn-head__other {
+  display: inline-flex;
   align-items: center;
-  margin-inline-start: auto;
+  gap: 4px;
   font-family: var(--sd-font-mono);
   font-size: 13px;
   color: var(--sd-ink-3);
+  text-decoration: none;
+  unicode-bidi: isolate;
 }
 
-.sn-head__stat {
-  padding-inline: 14px;
-  border-inline-start: 1px solid var(--sd-rule);
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
+a.sn-head__other:hover {
+  color: var(--sd-ink);
+  text-decoration: underline;
 }
 
-.sn-head__stat:first-child {
-  padding-inline-start: 0;
-  border-inline-start: 0;
+.sn-head__other > svg {
+  inline-size: 13px;
+  block-size: 13px;
 }
 
-.sn-head__stat b {
-  font-weight: 500;
-  color: var(--sd-ink-2);
+/* The gap that pushes the switcher and the `i` to the far end. */
+.sn-head__rest {
+  flex: 1 1 auto;
+  min-inline-size: var(--sd-space-4);
 }
 
-.sn-head__provider {
+.sn-head__about {
+  position: relative;
+  display: inline-flex;
+}
+
+.sn-head__info {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  justify-content: center;
+  inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--sd-ink-3);
+  cursor: pointer;
 }
 
-.sn-head__provider-name {
-  font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-meta);
-  font-weight: 500;
+.sn-head__info > svg {
+  inline-size: 16px;
+  block-size: 16px;
+}
+
+.sn-head__info:hover,
+.sn-head__info[aria-expanded='true'] {
+  background: var(--sd-nav-hover);
   color: var(--sd-ink);
 }
 
-.sn-head__model {
+/* The Workbench's register: the ledger face, on the same content and order. */
+.sn-head[data-variant='workbench'] {
   font-family: var(--sd-font-mono);
+}
+
+.sn-head[data-variant='workbench'] .sn-head__key {
+  font-size: 18px;
+}
+
+/* ------------------------------------------------------- about this run */
+
+/*
+ * Everything the row used to repeat, in one popover pinned to the viewport
+ * by lib/anchor: the title, the assignee, the provider and model, when it
+ * started, the three budget bars, and the run id.
+ */
+.sn-about {
+  position: fixed;
+  z-index: 25;
+  inline-size: 320px;
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-4);
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: var(--sd-radius-md);
+  background: var(--sd-surface);
+  box-shadow: var(--sd-shadow-soft);
+  color: var(--sd-ink);
+  font-family: var(--sd-font-ui);
   font-size: 13px;
+  text-align: start;
+  overflow-y: auto;
+}
+
+.sn-about__title {
+  margin: 0 0 var(--sd-space-3);
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
+}
+
+.sn-about__facts {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--sd-space-2) var(--sd-space-3);
+  margin: 0;
+}
+
+.sn-about__facts dt {
   color: var(--sd-ink-3);
 }
 
-/* The gauges variant (C): turns, minutes and cost as small bars against the caps. */
-.sn-head--gauges {
-  min-block-size: 60px;
+.sn-about__facts dd {
+  margin: 0;
+  min-inline-size: 0;
+  color: var(--sd-ink-2);
+  white-space: normal;
+  overflow-wrap: anywhere;
+  unicode-bidi: plaintext;
 }
 
-.sn-gauges {
-  display: flex;
+.sn-about__model {
+  display: inline-flex;
   align-items: center;
-  gap: var(--sd-space-4);
-  margin-inline-start: auto;
+  gap: var(--sd-space-2);
+}
+
+.sn-about__segments {
+  margin: var(--sd-space-1) 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-micro);
+}
+
+.sn-about__segments b {
+  font-family: var(--sd-font-mono);
+  font-weight: 500;
+  color: var(--sd-ink-2);
+}
+
+.sn-about__gauges {
+  display: grid;
+  gap: var(--sd-space-2);
+  margin-block: var(--sd-space-3);
+  padding-block-start: var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule);
 }
 
 .sn-gauge {
   display: grid;
-  grid-template-columns: auto 72px;
-  gap: 2px 8px;
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: 2px var(--sd-space-3);
   align-items: center;
-  font-family: var(--sd-font-mono);
-  font-size: 12px;
   color: var(--sd-ink-3);
   font-variant-numeric: tabular-nums;
 }
 
 .sn-gauge__label {
-  grid-column: 1 / -1;
-  font-family: var(--sd-font-ui);
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  grid-row: 1 / 3;
+}
+
+.sn-gauge__fig {
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  unicode-bidi: isolate;
+}
+
+.sn-gauge__fig b {
+  font-weight: 500;
+  color: var(--sd-ink-2);
 }
 
 .sn-gauge__bar {
@@ -211,6 +308,60 @@
 
 .sn-gauge[data-level='warn'] .sn-gauge__fill {
   background: var(--sd-st-blocked);
+}
+
+.sn-gauge[data-na='true'] .sn-gauge__fig b {
+  color: var(--sd-ink-3);
+}
+
+.sn-about__run {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  padding-block-start: var(--sd-space-3);
+  border-block-start: 1px solid var(--sd-rule);
+}
+
+.sn-about__runid {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  color: var(--sd-ink-3);
+  unicode-bidi: isolate;
+}
+
+.sn-about__act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-block: 4px;
+  padding-inline: var(--sd-space-2);
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-xs);
+  background: transparent;
+  color: var(--sd-ink-2);
+  font-family: inherit;
+  font-size: var(--sd-text-micro);
+  cursor: pointer;
+}
+
+.sn-about__act:hover {
+  background: var(--sd-nav-hover);
+  color: var(--sd-ink);
+}
+
+.sn-about__act > svg {
+  inline-size: 13px;
+  block-size: 13px;
+}
+
+.sn-about__failed {
+  margin: var(--sd-space-2) 0 0;
+  color: var(--sd-st-failed);
+  white-space: normal;
 }
 
 /* The three-icon layout switcher: 28px ghost squares, the chosen one on the nav-active fill. */
@@ -1637,15 +1788,19 @@
   }
 }
 
-/* Compact (under 1200): the header keeps the clock and the cost; the rest goes into a title. */
+/* Compact (under 1200): the row gives up the other system's number first. */
 @media (max-width: 1199px) {
   .sn__win {
     grid-template-columns: 360px minmax(0, 1fr);
   }
 
   .sn-head {
-    gap: var(--sd-space-3);
+    gap: var(--sd-space-2);
     padding-inline: var(--sd-space-5);
+  }
+
+  .sn-head__other {
+    display: none;
   }
 
   .sn-meta,
@@ -1654,8 +1809,19 @@
   }
 }
 
-/* Narrow (under 1024): the path goes under the document at 40% of the height. */
+/* Narrow (under 1024): the path goes under the document at 40% of the height,
+   and the state chip is a dot whose word is its title and its own text,
+   which the reader hears and the pointer reads. */
 @media (max-width: 1023px) {
+  .sn-head__state .sd-badge {
+    inline-size: 10px;
+    block-size: 10px;
+    padding: 0;
+    background: currentColor;
+    font-size: 0;
+    overflow: hidden;
+  }
+
   .sn__win {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 40vh;
@@ -1674,5 +1840,13 @@
   .sn-complaint__ar {
     border-inline-start: 0;
     border-block-start: 1px solid var(--sd-rule);
+  }
+}
+
+/* ----------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: no-preference) {
+  .sn-gauge__fill {
+    transition: inline-size var(--sd-dur-2) var(--sd-ease);
   }
 }
