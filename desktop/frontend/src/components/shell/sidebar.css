@@ -8,9 +8,10 @@
  * colour bands: this is the chrome, that is the work. There is no shadow
  * anywhere in this file.
  *
- * The measures are the 2026-09-15 mocks': 248 wide, 20px top padding and 16
- * at the sides and foot, 44-tall rows, the sessions list under a hairline
- * (its rows are in sessions.css), and the footer card pinned to the bottom.
+ * The measures are the 2026-09-17 density round's: 240 wide, 12px padding on
+ * every side, 30-tall nav rows over 30-tall session rows, the sessions list
+ * under a hairline (its rows are in sessions.css), and the footer card pinned
+ * to the bottom.
  */
 
 .sd-sidebar {
@@ -22,15 +23,15 @@
      sidebar past 300 — which is where the sheet's lanes went. */
   min-inline-size: 0;
   min-block-size: 0;
-  padding-block: 20px var(--sd-space-4);
-  padding-inline: var(--sd-space-4);
+  padding-block: var(--sd-space-3);
+  padding-inline: var(--sd-space-3);
   /* No fill of its own: the sidebar sits directly on the window ground. */
   background: transparent;
 }
 
-/* The wordmark and the fold control at the end. The mock's row had 10px
-   gaps and 12px at each side; the toggle costs 28, so the gaps go to 8 and
-   the end padding to 0 (the toggle's own box ends flush with the nav rows).
+/* The wordmark and the fold control at the end, at the nav rows' own inset.
+   The toggle costs 28, so the gaps are 8 and the end padding 0 (the toggle's
+   own box ends flush with the nav rows).
 
    Since 2026-09-16 the 20px brand mark opens the row. It needs no gap of its
    own: 8 against a 20px mark is the 0.36 ratio the logo round's small lockup
@@ -41,9 +42,9 @@
   display: flex;
   align-items: center;
   gap: var(--sd-space-2);
-  min-block-size: 36px;
+  min-block-size: 32px;
   padding-block: 0 var(--sd-space-1);
-  padding-inline: var(--sd-space-3) 0;
+  padding-inline: 10px 0;
 }
 
 .sd-sidebar__brand > .sd-panel-toggle {
@@ -62,15 +63,15 @@
   flex: 0 0 auto;
   flex-direction: column;
   gap: 2px;
-  padding-block-start: var(--sd-space-4);
+  padding-block-start: var(--sd-space-3);
 }
 
 /* ---------- the search ---------- */
 
 /*
  * The search well is the sessions section's first line, under the nav and
- * above the group heads: the library's 40-tall sunk field, held to 36 here
- * so it sits at the rows' own height. Typing filters the sessions list as
+ * above the group heads: the library's sunk field, held to 30 here so it
+ * sits at the session rows' own height. Typing filters the sessions list as
  * it goes; the Notes toggle at its end sends the text to the service
  * instead. It is stuck to the top of the section's scroll, on the shell's
  * own ground so the rows pass under it and not through it; the section's
@@ -82,19 +83,19 @@
   z-index: 1;
   inset-block-start: 0;
   flex: 0 0 auto;
-  padding-block: var(--sd-space-3) var(--sd-space-2);
+  padding-block: var(--sd-space-2);
   background: var(--sd-shell);
 }
 
 .sd-sidebar__search .sd-search[data-variant='well'] {
   inline-size: 100%;
-  min-block-size: 36px;
+  min-block-size: 30px;
   font-size: var(--sd-text-meta);
 }
 
 .sd-sidebar__search .sd-search[data-variant='well'] .sd-search__icon > svg {
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 14px;
+  block-size: 14px;
 }
 
 .sd-sidebar__search .sd-search__aside {
@@ -154,7 +155,7 @@
   flex-direction: column;
   gap: 2px;
   min-block-size: 0;
-  margin-block-start: 20px;
+  margin-block-start: var(--sd-space-3);
   /* The 12px under the hairline belongs to the search (above), so the
      stuck field covers it. The rail, with no field, puts it back below. */
   padding-block-start: 0;
@@ -184,11 +185,12 @@
 /* ---------- the workspace switcher ---------- */
 
 /*
- * The trigger is the workspace row under the wordmark: a 40-tall control
- * the sidebar's width, flat like every read-only control, with the name in
- * full, the path muted after it in the ledger face, and the chevron pair at
- * the end. The row's side inset is the nav rows' 14, so the name lines up
- * with the labels under it. Its popover opens downward, under the row.
+ * The trigger is the workspace row under the wordmark: a control the
+ * sidebar's width at --sd-control-h, flat like every read-only control, with
+ * the name in full, the path muted after it in the ledger face, and the
+ * chevron pair at the end. The row's side inset is the nav rows' 10, so the
+ * name lines up with the labels under it. Its popover opens downward, under
+ * the row.
  */
 .switcher {
   position: relative;
@@ -202,7 +204,7 @@
   inline-size: 100%;
   min-block-size: var(--sd-control-h);
   padding-block: 0;
-  padding-inline: 14px 10px;
+  padding-inline: 10px 8px;
   border: 1px solid var(--sd-rule-strong);
   border-radius: 10px;
   background: transparent;
@@ -224,8 +226,8 @@
 
 .switcher-trigger > svg {
   flex: 0 0 auto;
-  inline-size: 16px;
-  block-size: 16px;
+  inline-size: 14px;
+  block-size: 14px;
   color: var(--sd-ink-3);
 }
 
@@ -396,11 +398,11 @@
   display: none;
 }
 
-/* The workspace row as the mark alone: a 40 square, centred in the 48 the
+/* The workspace row as the mark alone: a 32 square, centred in the 48 the
    rail's padding leaves, opening the same list. Its name is the button's. */
 .sd-sidebar[data-collapsed='true'] .switcher-trigger {
   justify-content: center;
-  inline-size: 40px;
+  inline-size: 32px;
   margin-inline: auto;
   padding-inline: 0;
 }
@@ -415,11 +417,11 @@
   padding-block-start: var(--sd-space-3);
 }
 
-/* The footer's one button, as the plus alone: 32 square inside the card's
-   8px padding in the 56px rail. Sidebar.tsx draws it icon-only. */
+/* The footer's one button, as the plus alone: a --sd-control-h square inside
+   the card's 8px padding in the 56px rail. Sidebar.tsx draws it icon-only. */
 .sd-sidebar[data-collapsed='true'] .sd-sidebar-foot__action > .sd-button {
-  inline-size: 32px;
-  min-height: 32px;
+  inline-size: var(--sd-control-h);
+  min-height: var(--sd-control-h);
   padding-inline: 0;
 }
 
