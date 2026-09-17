@@ -8,8 +8,10 @@
  * It opens the board, then measures, each several rounds, the median of:
  *   boot     navigation start → the first frame after the lanes hold a card
  *   nav      a sidebar row click → the first frame after the new screen's head is up, and back
- *   run      the address set to a run → the first frame with a turn in the transcript,
- *            and the moment the transcript stops growing
+ *   run      the address set to a run → the first frame with a row in the transcript,
+ *            and the moment the transcript stops growing. `scripts/session-trace.mjs`
+ *            takes the Session window itself further: scrolling, the composer, the
+ *            layout switcher, and a live stream replayed into a running run
  *   hover    the pointer resting on a sessions row → the first frame with its card
  *   type     one keystroke in the board filter → the first frame after the lanes re-filter
  * and, at rest on the board for `--rest` seconds, how many React commits happened and how
@@ -292,28 +294,18 @@ async function clickNav(cdp, label, test) {
   })()`)
 }
 
+/**
+ * The transcript's rows, whichever layout is current: Conversation groups
+ * them under `.sc-flow`, Document lists the path, Workbench the console.
+ */
+const ROWS = '.sc-flow > *, .sn-path__scroll .sn-step, .wb-docarea > *'
+
 async function openRun(cdp) {
   return cdp.eval(`(async () => {
     const t0 = performance.now()
     location.hash = ${JSON.stringify(RUN_HASH)}
-    const first = await __sd.whenPainted(() => document.querySelector('[data-testid="event-stream"] section[aria-label^="turn"]'))
-    const settled = await __sd.whenSettled(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length)
-    return { first: first - t0, settled: settled.at - t0, rows: settled.value }
-  })()`)
-}
-
-/** "Show everything" on the open run: the raw stream lines join the transcript. */
-async function showEverything(cdp) {
-  return cdp.eval(`(async () => {
-    const toggle = document.querySelector('.stream-head [role="switch"]')
-    if (!toggle) throw new Error('no Show everything toggle')
-    const before = document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length
-    const t0 = performance.now()
-    toggle.click()
-    const first = await __sd.whenPainted(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length !== before)
-    const settled = await __sd.whenSettled(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length)
-    toggle.click()
-    await __sd.whenPainted(() => document.querySelectorAll('[data-testid="event-stream"] .sd-event, [data-testid="event-stream"] section').length === before)
+    const first = await __sd.whenPainted(() => document.querySelectorAll(${JSON.stringify(ROWS)}).length > 0)
+    const settled = await __sd.whenSettled(() => document.querySelectorAll(${JSON.stringify(ROWS)}).length)
     return { first: first - t0, settled: settled.at - t0, rows: settled.value }
   })()`)
 }
@@ -491,23 +483,6 @@ async function main() {
     }
     out.run = { first: median(firsts), settled: median(settleds), rows, longest: median(traces.map((t) => t.longest)), taskTotal: median(traces.map((t) => t.taskTotal)), layouts: median(traces.map((t) => t.layouts)) }
     console.log(`run    first turn painted ${ms(out.run.first)}, transcript settled ${ms(out.run.settled)} (${rows} rows); main-thread ${ms(out.run.taskTotal)}, longest task ${ms(out.run.longest)}, layouts ${out.run.layouts}`)
-  }
-
-  // (c2) the same run with every raw line shown.
-  {
-    const firsts = []
-    const settleds = []
-    const traces = []
-    let rows = 0
-    for (let i = 0; i < ROUNDS; i++) {
-      const r = await traced(cdp, () => showEverything(cdp))
-      firsts.push(r.result.first)
-      settleds.push(r.result.settled)
-      rows = r.result.rows
-      traces.push(r.trace)
-    }
-    out.everything = { first: median(firsts), settled: median(settleds), rows, longest: median(traces.map((t) => t.longest)), taskTotal: median(traces.map((t) => t.taskTotal)) }
-    console.log(`all    Show everything → first change painted ${ms(out.everything.first)}, settled ${ms(out.everything.settled)} (${rows} rows); main-thread ${ms(out.everything.taskTotal)}, longest task ${ms(out.everything.longest)}`)
   }
 
   // (d) hover on a sessions row (from the board).
