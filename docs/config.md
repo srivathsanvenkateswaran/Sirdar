@@ -1573,6 +1573,43 @@ real run rather than after.
 
 - `providers.claude.path`: path to the `claude` binary. Empty (the default) looks it up on
   `PATH`.
+- `providers.claude.fallbackModels`: the models a run moves on to, in order, when the login turns
+  out to have no room left for the one it was started with. Empty is the default.
+
+  Claude Code limits some models on their own: the account still works, every other model still
+  answers, and the one the run asked for is refused. It says so as an ordinary assistant message
+  — "You've reached your Fable limit. Switch to another model, or manage usage credits at
+  claude.ai/settings/usage" — which is a sentence and not an error, so a reader that takes it for
+  prose sees a turn that ended without a document. Sirdar names it instead: the claude adapter
+  turns that sentence, and a rejected `rate_limit_event` whose type names a model, into a
+  `model_limit` event, and the run goes `blocked` with reason `model limit: <model>`, keeping the
+  session handle it can be continued from. It is not a rate limit and never parks the other runs:
+  nothing resets at a time the CLI will name, and the answer is a different model rather than a
+  wait.
+
+  With names configured the run answers for itself. The first one it has not already tried starts
+  against the same session handle with a different `--model`, so the transcript the first model
+  built is kept, and `Switched to <model>` goes into `events.jsonl`. A list that runs out leaves
+  the run blocked on the last model refused. With none configured — the default — the run stops
+  and waits, because which model may write a triage note is a judgement about the note rather
+  than about availability, and guessing one would quietly change the answer a workspace gets.
+  `sirdar doctor` prints the list under the claude rows when it is set.
+
+  ```yaml
+  providers:
+    claude:
+      fallbackModels:
+        - claude-opus-5
+        - claude-sonnet-5
+  ```
+
+  Either way the choice is one command or one click: `sirdar resume RUN --model NAME`, or the
+  banner the session screen shows over the composer ("Fable's limit is reached on this login.
+  Continue with:", one button per model the provider lists, the configured fallback first). The
+  run records which model answered which stretch of it, so the register row and the session
+  header name the model that actually finished it. Only `provider: claude` reports a per-model
+  limit: Codex's rate-limit notification is about the account's window rather than one model, and
+  ACP carries no equivalent, so both behave as they did.
 - `providers.codex.path`: path to the `codex` binary. Empty (the default) looks it up on
   `PATH`.
 - `qwen.path`: path to the `qwen` binary. Empty (the default) looks it up on `PATH`. It sits in

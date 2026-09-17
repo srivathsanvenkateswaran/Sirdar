@@ -11,13 +11,17 @@ permission policy to answer.
 | Billing | `billing: subscription` (default) removes `ANTHROPIC_API_KEY` and the gateway variables from the child environment so the run draws on the CLI's own login; `billing: api` leaves them in place and bills per token |
 | Read-only mechanism | `--disallowedTools Write,Edit,MultiEdit,NotebookEdit` on the CLI, plus Sirdar's `PermissionPolicy` answering every `control_request`: `permissions.bash` globs for shell, `permissions.mcp` for MCP tools |
 | MCP servers | The workspace's own `.mcp.json`, gated by `mcp.workspaceOnly` |
-| Rate limits | The CLI's `rate_limit_event` pauses the queue until the window resets |
+| Rate limits | The account's own window — the CLI's `rate_limit_event` — pauses the queue until it resets |
+| Model limits | A model refused on its own, while the account still works, blocks the run for a choice: `model limit: <model>`, no queue pause, and `providers.claude.fallbackModels` or `--model` on resume or steer carries it on |
 | Doctor | A `claude environment` row fails when a gateway variable is set under `billing: subscription`, and names which ones Sirdar is about to strip |
 
 ## In the configuration reference
 
-- [Providers](../../config.md#providers): `providers.claude.path` and the two `billing` modes,
-  including why `ANTHROPIC_BASE_URL` is stripped under a subscription.
+- [Providers](../../config.md#providers): `providers.claude.path`,
+  `providers.claude.fallbackModels` and the two `billing` modes, including why
+  `ANTHROPIC_BASE_URL` is stripped under a subscription.
+- [Steer](../../steer.md#changing-the-model): `--model` on `sirdar resume` and `sirdar steer`,
+  and what the CLI does with a different `--model` on `--resume`.
 - [MCP access](../../config.md#mcp-access): which servers a session sees and which of their
   tools it may call.
 - [Budgets](../../config.md#budgets): the turn, wall-clock and USD caps every run carries.

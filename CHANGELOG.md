@@ -104,6 +104,25 @@ packages, a Homebrew tap, and desktop app zips for all three platforms — see
   when the answer changes; turns, minutes and cost accumulate on the run and the same caps apply
   to the total. A `--local` or deviation-blocked fix run is steered in its own worktree with its
   commit amended, never pushed (`docs/steer.md`).
+- A per-model limit blocks a run for a model choice instead of failing it. Claude Code limits
+  some models on their own and says so as an ordinary assistant message — "You've reached your
+  Fable limit. Switch to another model, or manage usage credits at claude.ai/settings/usage" —
+  which Sirdar read as a turn that ended without an answer: it re-asked the same model three
+  times and then failed the run after one turn. That sentence, and a rejected `rate_limit_event`
+  whose type names a model, are now a `model_limit` event: no revision retry, and the run goes
+  `blocked` with reason `model limit: <model>`, keeping the session handle. It never parks the
+  other runs the way a rate limit does, because nothing resets at a time the CLI will name.
+  `providers.claude.fallbackModels` (a list, empty by default) lets the run answer for itself:
+  the next name it has not tried starts against the same handle with a different `--model` and
+  `Switched to <model>` goes into the transcript. `sirdar resume RUN --model NAME` and
+  `sirdar steer RUN "..." --model NAME`, and `model` on the same two HTTP routes and bridge
+  calls, are the manual way — the Claude CLI honours a different `--model` on `--resume`,
+  verified against it. The desktop session shows a banner over the composer offering one button
+  per model with the configured fallback first, the composer's Model chip now really applies to
+  the next resume or steer, and the board card reads `blocked · model limit`. The run records
+  which model answered which stretch of it, so the register row and the session header name the
+  model that finished it, and `sirdar doctor` prints the fallback list under the claude rows
+  (`docs/config.md`, `docs/steer.md`).
 - `provider: acp` reads session modes the way the agents actually publish them. A mode id may be
   a URL — every one of GitHub Copilot's is a link into the protocol's own documentation, ending
   `#plan`, `#agent` or `#autopilot` — so ids are now matched on their last fragment or path
