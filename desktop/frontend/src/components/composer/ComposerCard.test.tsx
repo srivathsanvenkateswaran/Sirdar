@@ -1,16 +1,18 @@
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
-import ComposerCard, { type ComposerSend } from './ComposerCard'
+import ComposerCard, { type ComposerSend, type ComposerStop } from './ComposerCard'
 
 function Harness({
   send,
+  stop,
   error,
   aside,
   variant,
   maxRows,
 }: {
   send: Partial<ComposerSend>
+  stop?: ComposerStop
   error?: string
   aside?: string
   variant?: 'card' | 'strip'
@@ -36,6 +38,7 @@ function Harness({
         </>
       }
       send={{ label: 'Start', busy: false, disabled: false, onClick: () => {}, ...send }}
+      stop={stop}
     />
   )
 }
@@ -105,6 +108,47 @@ describe('ComposerCard', () => {
     expect(button.querySelector('.sd-button__label')).toHaveTextContent('Answer')
     expect(button.closest('.composer-send')).toHaveAttribute('data-wide', 'true')
     expect(button.querySelector('svg')).not.toBeNull()
+  })
+
+  // While the run works the round button stops it. A send that is off says
+  // nothing a reader can act on, and the reason for it was being printed
+  // twice — in the box and again beside the button.
+  describe('stops the run in place of sending', () => {
+    it('draws Stop in place of the send and calls it', () => {
+      const onStop = vi.fn()
+      const onClick = vi.fn()
+      render(<Harness send={{ onClick }} stop={{ onStop }} />)
+      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+      const button = screen.getByRole('button', { name: 'Stop the run' })
+      expect(button).toHaveAttribute('data-icon-only', 'true')
+      expect(button).toHaveAttribute('title', 'Stop the run')
+      expect(button.closest('.composer-send')).toHaveAttribute('data-stop', 'true')
+      fireEvent.click(button)
+      expect(onStop).toHaveBeenCalledTimes(1)
+      expect(onClick).not.toHaveBeenCalled()
+    })
+
+    it('has no send for Enter or submit to reach', () => {
+      const onClick = vi.fn()
+      render(<Harness send={{ onClick }} stop={{ onStop: () => {} }} />)
+      fireEvent.change(screen.getByRole('textbox'), { target: { value: 'go on' } })
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
+      fireEvent.submit(screen.getByRole('form'))
+      expect(onClick).not.toHaveBeenCalled()
+    })
+
+    it('says why it cannot stop, when it cannot', () => {
+      const onStop = vi.fn()
+      render(
+        <Harness
+          send={{}}
+          stop={{ onStop, disabled: true, title: 'Only a run started from this window can be stopped' }}
+        />,
+      )
+      const button = screen.getByRole('button', { name: 'Stop the run' })
+      expect(button).toBeDisabled()
+      expect(button).toHaveAttribute('title', 'Only a run started from this window can be stopped')
+    })
   })
 
   // The box is one line at rest and follows the text a row at a time, so a
