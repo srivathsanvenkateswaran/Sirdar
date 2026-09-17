@@ -78,15 +78,15 @@ describe('the breakpoints', () => {
     expect(tokens).toMatch(/narrow\s+< 1024/)
   })
 
-  it('step the sidebar 248 → 220 and the page inset 40/48 → 32/32 → 24/24', () => {
-    expect(rule(tokens, ':root')).toContain('--sd-sidebar-w: 248px')
+  it('step the sidebar 240 → 208 and the page inset 40/48 → 32/32 → 24/24', () => {
+    expect(rule(tokens, ':root')).toContain('--sd-sidebar-w: 240px')
     expect(rule(tokens, ':root')).toContain('--sd-page-pad-block: 40px')
     expect(rule(tokens, ':root')).toContain('--sd-page-pad-inline: 48px')
     const standard = atMost(tokens, BANDS.standard)
     expect(standard).toContain('--sd-page-pad-block: 32px')
     expect(standard).toContain('--sd-page-pad-inline: 32px')
     const compact = atMost(tokens, BANDS.compact)
-    expect(compact).toContain('--sd-sidebar-w: 220px')
+    expect(compact).toContain('--sd-sidebar-w: 208px')
     expect(compact).toContain('--sd-page-pad-block: 24px')
     expect(compact).toContain('--sd-page-pad-inline: 24px')
   })
@@ -348,7 +348,7 @@ describe('the register', () => {
    * and 144 below, and leaves the table 498px: its caption, its header and
    * eight whole rows with a ninth part way up.
    */
-  it('adds up to a strip of about 72px and a grid card of about 144px', () => {
+  it('adds up to a strip of about 72px and a grid card of about 142px', () => {
     const stat = sheet('ui/stat-card/StatCard.css')
     const heat = sheet('ui/heatmap/Heatmap.css')
     const compactStat = rule(stat, ".sd-stat[data-size='compact']")
@@ -361,8 +361,8 @@ describe('the register', () => {
       len(decl(compactStat, 'row-gap')) +
       len(decl(rule(stat, '.sd-stat__detail'), 'font-size')) *
         Number(decl(rule(stat, '.sd-stat__detail'), 'line-height'))
-    expect(strip).toBeCloseTo(72.8, 1)
-    expect(strip).toBeGreaterThanOrEqual(72)
+    expect(strip).toBeCloseTo(71.6, 1)
+    expect(strip).toBeGreaterThanOrEqual(64)
     expect(strip).toBeLessThanOrEqual(88)
 
     // The month row, the grid's seven 10px rows and their 2px gaps.
@@ -386,7 +386,7 @@ describe('the register', () => {
       Math.max(title, legend) +
       len(decl(rule(css, '.register-heatcard__head'), 'margin-block-end')) +
       grid
-    expect(card).toBe(144)
+    expect(card).toBe(142.5)
   })
 
   it('scrolls the heatmap inside its card', () => {

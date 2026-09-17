@@ -127,20 +127,30 @@
     Consolas, "Liberation Mono", "Noto Sans Arabic", monospace;
 
   /*
-   * The app column of the type ladder, re-based on 2026-09-15 to the
-   * reference app's register (docs/design/2026-09-15-screens/README.md,
-   * round 2): a 16px UI face, 14px meta, 12px micro. `--sd-text-ledger` is
-   * the mono ledger size — keys, clocks, costs, event rows — which sits a
-   * half-step under the body so a run id does not out-weigh the title beside
-   * it.
+   * The app column of the type ladder, re-based on 2026-09-17 one size class
+   * down (the density round): a 14px UI face, 13px meta, 11px micro. The
+   * whole app reads at this register — a support engineer wants four facts
+   * and the room around them, not a 16px body pushing the fifth off the
+   * screen. `--sd-text-ledger` is the mono ledger size — keys, clocks,
+   * costs, event rows — which sits a half-step under the body so a run id
+   * does not out-weigh the title beside it.
+   *
+   * `--sd-text-head` is the page heading on Board, Register, Eval and
+   * Settings: one step over the title and well under the old 34px serif,
+   * which was the single loudest thing in the window. `--sd-text-display-m`
+   * stays above it for the one figure or headline a screen leads with.
+   *
+   * Nothing here touches the landing or docs Newsreader display sizes, which
+   * are the two tokens below.
    */
-  --sd-text-display-m: 2rem;
-  --sd-text-title: 1.375rem;
-  --sd-text-body-l: 1.0625rem;
-  --sd-text-body: 1rem;
-  --sd-text-meta: 0.875rem;
-  --sd-text-micro: 0.75rem;
-  --sd-text-ledger: 0.84375rem;
+  --sd-text-display-m: 1.625rem;
+  --sd-text-head: 1.375rem;
+  --sd-text-title: 1.125rem;
+  --sd-text-body-l: 0.9375rem;
+  --sd-text-body: 0.875rem;
+  --sd-text-meta: 0.8125rem;
+  --sd-text-micro: 0.6875rem;
+  --sd-text-ledger: 0.78125rem;
 
   /* The landing column of the same ladder. */
   --sd-text-display-xl: 4.5rem;
@@ -202,14 +212,18 @@
   --sd-measure-prose: 68ch;
   --sd-gutter: 12px;
   /*
-   * The shell's fixed measures, from the reviewed mocks. A control is 40 tall
-   * wherever it is (button, select, search well, segmented track); the sidebar
-   * is 248 wide with 44-tall rows. Two components read each of these, which
-   * is what makes them tokens rather than constants.
+   * The shell's fixed measures, at the 2026-09-17 density. A control is 32
+   * tall wherever it is (chip, select, search well, secondary button); the
+   * sidebar is 240 wide with 30-tall nav rows. The two exceptions are named
+   * where they are drawn and nowhere else: the composer's textarea row and
+   * the one primary button a screen carries may stand at 36, because they
+   * are what the hand goes to. Two components read each of these, which is
+   * what makes them tokens rather than constants.
    */
-  --sd-control-h: 40px;
-  --sd-sidebar-w: 248px;
-  --sd-nav-row-h: 44px;
+  --sd-control-h: 32px;
+  --sd-control-h-lg: 36px;
+  --sd-sidebar-w: 240px;
+  --sd-nav-row-h: 30px;
   /*
    * The page inset every full-sheet screen draws: 40 above and 48 at the
    * sides at the wide width (the block-end stays --sd-space-6). The
@@ -258,7 +272,7 @@
 
 @media (max-width: 1199px) {
   :root {
-    --sd-sidebar-w: 220px;
+    --sd-sidebar-w: 208px;
     --sd-page-pad-block: 24px;
     --sd-page-pad-inline: 24px;
   }
