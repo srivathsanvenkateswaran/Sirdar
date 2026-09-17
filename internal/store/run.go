@@ -106,6 +106,15 @@ type State struct {
 	// them; this is the summary a screen listing runs reads.
 	Steers []Steer `json:",omitempty"`
 
+	// Instruction is what the operator typed into the composer alongside
+	// the ticket key when they started the run: "check the tax rounding
+	// first", "the customer says it started after the 3.2 release". It is
+	// put in front of the session as an Operator's request section at the
+	// top of the prompt, and is kept here so a screen can say what this
+	// run was asked to do. Empty on a run started without one, and on
+	// every run from before this field existed.
+	Instruction string `json:",omitempty"`
+
 	// At is the commit a retrospective run stood at. `sirdar triage --at`,
 	// `sirdar rca --at` and `sirdar fix --at` each check that commit out
 	// into a linked worktree and run the session there, so the agent reads

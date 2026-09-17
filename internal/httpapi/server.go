@@ -305,6 +305,7 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 		DryRun       bool     `json:"dryRun"`
 		At           string   `json:"at"`
 		KeepWorktree bool     `json:"keepWorktree"`
+		Instruction  string   `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -319,6 +320,7 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 	id, err := s.svc.StartTriage(r.Context(), r.PathValue("id"), body.Keys, TriageOptions{
 		Provider: body.Provider, Model: body.Model, DryRun: body.DryRun,
 		At: body.At, KeepWorktree: body.KeepWorktree,
+		Instruction: body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)
@@ -336,6 +338,7 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		Model        string `json:"model"`
 		At           string `json:"at"`
 		KeepWorktree bool   `json:"keepWorktree"`
+		Instruction  string `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -351,6 +354,7 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		PRURL: body.PRURL, Resolution: body.Resolution,
 		Provider: body.Provider, Model: body.Model,
 		At: body.At, KeepWorktree: body.KeepWorktree,
+		Instruction: body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)

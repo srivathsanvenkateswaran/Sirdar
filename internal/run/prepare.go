@@ -146,6 +146,10 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 		StartedAt: now,
 		UpdatedAt: now,
 		Eval:      o.Eval,
+		// Trimmed here rather than at the door: every caller — the CLI,
+		// the HTTP route, the Wails bridge — hands over whatever was
+		// typed, and a request of nothing but spaces is no request.
+		Instruction: strings.TrimSpace(o.Instruction),
 	}
 	// The historical checkout, before anything else the run does: a
 	// commit that does not exist, or a repository that refuses the
@@ -189,6 +193,7 @@ func (r *Runner) prepare(ctx context.Context, key string, kind store.Kind, o Opt
 	}
 
 	in := prompt.TriageInput{
+		Instruction:         p.state.Instruction,
 		Bundle:              bundle,
 		BundleDir:           rn.BundleDir(),
 		Playbooks:           playbooks,

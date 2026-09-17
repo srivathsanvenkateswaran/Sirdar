@@ -23,6 +23,11 @@ var FixSchema []byte
 // one (a fix run after an RCA has a confirmed cause to work from, not just a
 // hypothesis).
 type FixInput struct {
+	// Instruction is what the operator asked for in their own words when
+	// they started the fix, put in front of the session ahead of the
+	// ticket. Empty adds no section.
+	Instruction string
+
 	Key        string
 	Branch     string
 	Playbooks  []Playbook
@@ -44,10 +49,15 @@ var fixFieldGuidance = []string{
 func Fix(in FixInput) string {
 	sections := []string{
 		strings.TrimRight(fixPreambleMD, "\n"),
+	}
+	if s := operatorRequestSection(in.Instruction); s != "" {
+		sections = append(sections, s)
+	}
+	sections = append(sections,
 		playbooksSection(in.Playbooks),
 		fixTicketSection(in),
 		triageNoteSection(in.TriageNote),
-	}
+	)
 	if strings.TrimSpace(in.RCANote) != "" {
 		sections = append(sections, "# RCA note\n\n"+fenceBlock("", in.RCANote))
 	}

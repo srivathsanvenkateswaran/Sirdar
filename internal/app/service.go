@@ -579,6 +579,7 @@ func (s *Service) startTriage(ctx context.Context, wsID string, keys []string, o
 			DryRun:       o.DryRun,
 			At:           o.At,
 			KeepWorktree: o.KeepWorktree,
+			Instruction:  o.Instruction,
 		})
 		if err != nil {
 			return s.failed(keys, err)
@@ -595,7 +596,7 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 	return s.start(ctx, wsID, o.Provider, o.Model, func(jctx context.Context, deps runner.Deps) []JobOutcome {
 		r := &runner.Runner{Deps: deps}
 		out, err := r.RCA(jctx, key, runner.RCAOptions{
-			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree},
+			Options:    runner.Options{Model: o.Model, At: o.At, KeepWorktree: o.KeepWorktree, Instruction: o.Instruction},
 			PRURL:      o.PRURL,
 			Resolution: o.Resolution,
 		})

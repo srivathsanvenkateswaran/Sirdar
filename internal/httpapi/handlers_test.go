@@ -294,3 +294,37 @@ func TestTriageAndRCACarryProviderAndModel(t *testing.T) {
 	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/rca",
 		`{"key":"OMNI-1","provider":"gemini"}`), 400, "bad_request")
 }
+
+// TestStartRoutesCarryTheOperatorsRequest pins the one field all three
+// starts now share: the words the operator typed around the ticket key in
+// the composer, which the session reads as its Operator's request section.
+func TestStartRoutesCarryTheOperatorsRequest(t *testing.T) {
+	const asked = "check the tax rounding on the invoice lines first"
+
+	f := newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/triage",
+		`{"keys":["OMNI-2510"],"instruction":"`+asked+`"}`), 202, nil)
+	if f.gotTriage.Instruction != asked {
+		t.Errorf("triage instruction %q, want %q", f.gotTriage.Instruction, asked)
+	}
+
+	f = newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/rca",
+		`{"key":"OMNI-2510","prUrl":"https://github.com/acme/api/pull/9","resolution":"reindexed the ledger","instruction":"`+asked+`"}`), 202, nil)
+	if f.gotRCA.Instruction != asked {
+		t.Errorf("rca instruction %q, want %q", f.gotRCA.Instruction, asked)
+	}
+	if f.gotRCA.PRURL != "https://github.com/acme/api/pull/9" || f.gotRCA.Resolution != "reindexed the ledger" {
+		t.Errorf("rca options %+v", f.gotRCA)
+	}
+
+	f = newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/fix",
+		`{"key":"OMNI-2510","local":true,"instruction":"`+asked+`"}`), 202, nil)
+	if f.gotFix.Instruction != asked {
+		t.Errorf("fix instruction %q, want %q", f.gotFix.Instruction, asked)
+	}
+	if !f.gotFix.Local {
+		t.Errorf("fix options %+v, want local", f.gotFix)
+	}
+}

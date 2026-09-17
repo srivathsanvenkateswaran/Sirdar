@@ -101,6 +101,12 @@ type Options struct {
 	TriageNote  string
 	TriageRunID string
 
+	// Instruction is what the operator asked for in their own words when
+	// they started the fix. It reaches the session as an Operator's
+	// request section at the top of the prompt and is recorded in the
+	// run's state.
+	Instruction string
+
 	// Eval marks the fix as a scored replay rather than a change somebody
 	// asked for. The run is flagged eval in its state and no register row
 	// is appended: the register is the audit index of tickets actually
@@ -295,6 +301,8 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 	}
 
 	text := prompt.Fix(prompt.FixInput{
+		Instruction: o.Instruction,
+
 		Key:        key,
 		Branch:     branch,
 		Playbooks:  loadPlaybooks(cfg.ExpandPath(cfg.Playbooks), stderr),
@@ -304,7 +312,7 @@ func Run(ctx context.Context, deps runner.Deps, key string, o Options) (Result, 
 
 	r := &runner.Runner{Deps: deps}
 	out, err := r.Fix(ctx, key, runner.FixOptions{
-		Options: runner.Options{Model: o.Model, DryRun: o.DryRun, At: res.At, Eval: o.Eval},
+		Options: runner.Options{Model: o.Model, DryRun: o.DryRun, At: res.At, Eval: o.Eval, Instruction: o.Instruction},
 		Prompt:  text,
 		Branch:  branch,
 		Base:    base,

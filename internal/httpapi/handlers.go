@@ -58,6 +58,7 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 		AcceptDeviation bool   `json:"acceptDeviation"`
 		Provider        string `json:"provider"`
 		Model           string `json:"model"`
+		Instruction     string `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -78,6 +79,7 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 		AcceptDeviation: body.AcceptDeviation,
 		Provider:        body.Provider,
 		Model:           body.Model,
+		Instruction:     body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)

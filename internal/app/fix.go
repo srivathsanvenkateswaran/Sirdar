@@ -31,6 +31,7 @@ func (s *Service) StartFix(ctx context.Context, wsID, key string, o FixOptions) 
 			Local:           o.Local,
 			NoPR:            o.NoPR,
 			AcceptDeviation: o.AcceptDeviation,
+			Instruction:     o.Instruction,
 		})
 		if err != nil {
 			// A fix refused before the run directory exists — a dirty
