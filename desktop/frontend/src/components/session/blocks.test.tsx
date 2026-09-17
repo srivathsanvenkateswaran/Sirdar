@@ -1,6 +1,9 @@
-import { fireEvent, render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
+import type { SourcesSummary, Transport } from '../../api/types'
 import type { IndexedEvent } from '../../lib/events'
+import { setSessionsShow } from '../../lib/sessionsShow'
+import { createFakeTransport } from '../../store/fakeTransport'
 import { parseBundle } from '../../lib/bundle'
 import { parseNote } from '../../lib/note'
 import { blockedFixture, fixDiff, fixFixture, triageFixture, type SessionFixture } from '../../store/fakeSession'
@@ -134,46 +137,101 @@ describe('TurnGroup and PathList', () => {
 })
 
 describe('RunHeader', () => {
-  it('draws key, kind, badge with its detail, title, provider and model, clock, turns, cost, and the switcher', () => {
+  const sources: SourcesSummary = {
+    tracker: { adapter: 'jira', name: 'Jira', host: 'acme.atlassian.net' },
+    helpdesk: { adapter: 'zohodesk', name: 'Zoho Desk', host: 'desk.zoho.com' },
+  }
+
+  it('says four things — the key, the kind, the state and the helpdesk number — and no more', () => {
     const onLayout = vi.fn()
     render(
       <RunHeader
         detail={triage.detail}
         title={triage.detail.title}
-        show="tracker"
+        sources={sources}
         notePath={triage.detail.notes[1]}
         switcher={<LayoutSwitcher value="document" onChange={onLayout} />}
       />,
     )
     expect(screen.getByRole('heading', { name: 'SBX-1' })).toBeInTheDocument()
-    expect(screen.getByText('completed · note saved')).toBeInTheDocument()
     expect(screen.getByText('triage')).toBeInTheDocument()
-    expect(screen.getByText('Product 00219 stock shows 1 more than the movement report')).toBeInTheDocument()
-    expect(screen.getByRole('img', { name: 'Claude' })).toBeInTheDocument()
-    expect(screen.getByText('opus')).toBeInTheDocument()
-    expect(screen.getByText('17')).toBeInTheDocument()
-    expect(screen.getByText('$1.02')).toBeInTheDocument()
+    // The state is the word alone; what it means here is the chip's title.
+    expect(screen.getByText('completed')).toBeInTheDocument()
+    expect(screen.queryByText('completed · note saved')).toBeNull()
+    expect(screen.getByTitle('completed · note saved')).toBeInTheDocument()
+    expect(screen.getByText('#88341')).toBeInTheDocument()
+
+    // Nothing else: no ticket title, no assignee, no provider or model, no
+    // duration, turns or cost, no budget bars, no run id.
+    expect(screen.queryByText(triage.detail.title!)).toBeNull()
+    expect(screen.queryByText('ops@sandbox.local')).toBeNull()
+    expect(screen.queryByText('opus')).toBeNull()
+    expect(screen.queryByText('$1.02')).toBeNull()
+    expect(screen.queryByText('17')).toBeNull()
+    expect(screen.queryAllByRole('meter')).toHaveLength(0)
+    expect(screen.queryByText(triage.detail.runId)).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+
     const group = screen.getByRole('radiogroup', { name: 'Session layout' })
     expect(within(group).getByRole('radio', { name: 'Document' })).toBeChecked()
     fireEvent.click(within(group).getByRole('radio', { name: 'Workbench' }))
     expect(onLayout).toHaveBeenCalledWith('workbench')
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
-  // Stopping a live run is the composer's Stop; the header never carries it.
-  it('says blocked · waiting on you, and carries no Cancel; committed <sha> for a fix', () => {
-    render(<RunHeader detail={blocked.detail} show="tracker" />)
-    expect(screen.getByText('blocked · waiting on you')).toBeInTheDocument()
-    expect(screen.getByText(/of 60 turns/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+  it('folds the state detail into the chip title, and keeps the Workbench in its mono register', () => {
+    const { container } = render(<RunHeader detail={blocked.detail} variant="workbench" />)
+    expect(screen.getByText('blocked')).toBeInTheDocument()
+    expect(screen.getByTitle('blocked · waiting on you')).toBeInTheDocument()
+    expect(container.querySelector('.sn-head')).toHaveAttribute('data-variant', 'workbench')
     expect(badgeDetail(fix.detail)).toBe('committed f144936')
   })
 
-  it('the gauges variant draws turns, minutes and cost as meters against the caps', () => {
-    render(<RunHeader detail={triage.detail} show="tracker" variant="gauges" />)
-    expect(screen.getByRole('meter', { name: 'turns' })).toHaveAttribute('aria-valuenow', '28')
-    expect(screen.getByRole('meter', { name: 'cost' })).toHaveAttribute('aria-valuenow', '20')
-    expect(screen.getByText('17 of 60')).toBeInTheDocument()
+  it('opens About this run with the title, the assignee, the model, the clock, the three bars and the run id', async () => {
+    const openRunDir = vi.fn(async () => {})
+    const transport = { openRunDir } as unknown as Transport
+    const writeText = vi.fn(async () => {})
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+
+    render(<RunHeader detail={triage.detail} title={triage.detail.title} transport={transport} workspaceId="ws1" />)
+    fireEvent.click(screen.getByRole('button', { name: 'About this run' }))
+    const about = screen.getByRole('dialog', { name: 'About this run' })
+    expect(within(about).getByText(triage.detail.title!)).toHaveAttribute('dir', 'auto')
+    expect(within(about).getByText('ops@sandbox.local')).toBeInTheDocument()
+    expect(within(about).getByText('claude · opus')).toBeInTheDocument()
+    expect(within(about).getByRole('meter', { name: 'turns' })).toHaveAttribute('aria-valuenow', '28')
+    expect(within(about).getByRole('meter', { name: 'cost' })).toHaveAttribute('aria-valuenow', '20')
+    expect(within(about).getByText('17')).toBeInTheDocument()
+    expect(within(about).getByText('of 60')).toBeInTheDocument()
+    expect(within(about).getByText(triage.detail.runId)).toBeInTheDocument()
+
+    fireEvent.click(within(about).getByRole('button', { name: /Copy/ }))
+    await waitFor(() => expect(writeText).toHaveBeenCalledWith(triage.detail.runId))
+    fireEvent.click(within(about).getByRole('button', { name: 'Open run folder' }))
+    expect(openRunDir).toHaveBeenCalledWith('ws1', triage.detail.runId)
+
+    // Escape closes it and the button takes the focus back.
+    fireEvent.keyDown(about, { key: 'Escape' })
+    expect(screen.queryByRole('dialog', { name: 'About this run' })).toBeNull()
+    expect(screen.getByRole('button', { name: 'About this run' })).toHaveFocus()
+  })
+
+  it("links the helpdesk number to the page the run's prompt names", async () => {
+    const transport = createFakeTransport({ sessions: { [triage.detail.runId]: triage } })
+    render(<RunHeader detail={triage.detail} sources={sources} transport={transport} workspaceId="ws1" />)
+    await waitFor(() =>
+      expect(screen.getByRole('link', { name: /#88341/ })).toHaveAttribute('href', 'https://sandbox.local/desk/88341'),
+    )
+  })
+
+  it('heads the row with the helpdesk number on that preference, and shows the tracker key beside it', () => {
+    setSessionsShow('helpdesk')
+    try {
+      render(<RunHeader detail={triage.detail} sources={sources} />)
+      expect(screen.getByRole('heading', { name: '#88341' })).toBeInTheDocument()
+      expect(screen.getByText('SBX-1')).toBeInTheDocument()
+    } finally {
+      setSessionsShow('tracker')
+    }
   })
 })
 

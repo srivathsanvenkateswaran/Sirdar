@@ -56,6 +56,16 @@ export function CopyIcon(): JSX.Element {
   )
 }
 
+/** lucide `info`: what the header keeps behind a click. */
+export function InfoIcon(): JSX.Element {
+  return (
+    <Icon>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 16v-5M12 8h.01" />
+    </Icon>
+  )
+}
+
 /** lucide `message-circle-question`: the agent's question. */
 export function QuestionIcon(): JSX.Element {
   return (

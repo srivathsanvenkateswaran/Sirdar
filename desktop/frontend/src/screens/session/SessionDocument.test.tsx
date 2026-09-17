@@ -69,7 +69,8 @@ describe('S1 · the completed triage', () => {
   it('opens on the note as the document, the path grouped by turn on the left, Steer under it', async () => {
     mount([triageFixture()], TRIAGE_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('completed · note saved')).toBeInTheDocument()
+    expect(within(doc).getByText('completed')).toBeInTheDocument()
+    expect(within(doc).getByTitle('completed · note saved')).toBeInTheDocument()
     const note = await within(doc).findByTestId('note-document')
     expect(within(note).getByRole('heading', { level: 1 })).toHaveTextContent(/Recording a customer return adds its quantity to stock twice/)
     expect(within(note).getByText(/written by the agent at 03:13 after your steer/)).toBeInTheDocument()
@@ -119,7 +120,8 @@ describe('S2 · the fix run blocked on go test', () => {
   it('shows the amber badge, the waiting step expanded with the policy, and the Reply strip with the decision segment', async () => {
     mount([blockedFixture()], FIX_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('blocked · waiting on you')).toBeInTheDocument()
+    expect(within(doc).getByText('blocked')).toBeInTheDocument()
+    expect(within(doc).getByTitle('blocked · waiting on you')).toBeInTheDocument()
     const path = within(doc).getByRole('log', { name: 'Path' })
     // The open step is re-drawn on its card, so the line is found again each time.
     await waitFor(() =>
@@ -264,7 +266,8 @@ describe('S6 · the fix run\'s change as the document', () => {
   it('shows the green badge with the commit, the strip, the checks, both files with Keep/Drop and C markers, and Push', async () => {
     mount([fixFixture()], FIX_RUN_ID)
     const doc = await opened()
-    expect(within(doc).getByText('completed · committed f144936')).toBeInTheDocument()
+    expect(within(doc).getByText('completed')).toBeInTheDocument()
+    expect(within(doc).getByTitle('completed · committed f144936')).toBeInTheDocument()
     const change = await within(doc).findByTestId('changes-view')
     expect(within(change).getByText('f144936 · not pushed')).toBeInTheDocument()
     expect(within(change).getByText('2 · +15 −11')).toBeInTheDocument()

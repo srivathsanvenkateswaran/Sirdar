@@ -81,7 +81,7 @@ function renderScene(f: Fake, props: Partial<React.ComponentProps<typeof Session
 }
 
 function badge(): HTMLElement {
-  return document.querySelector('.sc-topbar .sd-badge') as HTMLElement
+  return document.querySelector('.sn-head .sd-badge') as HTMLElement
 }
 
 /** The composer's one button, by the word it carries. */
@@ -117,11 +117,21 @@ describe('SessionConversation', () => {
 
       expect(badge()).toHaveTextContent('completed')
       expect(screen.getByText('triage')).toHaveClass('sd-kind')
-      expect(screen.getByText('Product 00219 stock shows 1 more than the movement report')).toHaveClass('sc-title')
-      expect(screen.getByText('claude-opus-5', { selector: '.sc-provider__model' })).toBeInTheDocument()
-      expect(screen.getByText('turns')).toBeInTheDocument()
+      // The header says the run's four things and keeps the rest behind the
+      // `i`: no ticket title, no provider or model, no figures in the row.
+      expect(screen.getByText('#88341')).toBeInTheDocument()
+      expect(screen.queryByText('Product 00219 stock shows 1 more than the movement report')).toBeNull()
+      expect(screen.queryByText('claude-opus-5')).toBeNull()
+      expect(screen.queryByText('turns')).toBeNull()
       // Stopping a run is the composer's Stop; the header has no Cancel, ever.
       expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
+
+      fireEvent.click(screen.getByRole('button', { name: 'About this run' }))
+      const about = screen.getByRole('dialog', { name: 'About this run' })
+      expect(within(about).getByText('Product 00219 stock shows 1 more than the movement report')).toBeInTheDocument()
+      expect(within(about).getByText('claude · claude-opus-5')).toBeInTheDocument()
+      expect(within(about).getByRole('meter', { name: 'turns' })).toBeInTheDocument()
+      fireEvent.keyDown(about, { key: 'Escape' })
 
       const card = await screen.findByTestId('answer-card')
       expect(within(card).getByRole('heading', { level: 2 })).toHaveTextContent(/^Recording a customer return adds its quantity to stock twice/)
@@ -258,7 +268,8 @@ describe('SessionConversation', () => {
       renderScene(f, { runId: FIX_DETAIL.runId })
       await screen.findByRole('heading', { name: 'SBX-1' })
 
-      expect(badge()).toHaveTextContent('blocked · waiting on you')
+      expect(badge()).toHaveTextContent('blocked')
+      expect(screen.getByTitle('blocked · waiting on you')).toBeInTheDocument()
       expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
 
       // The pending call carries the waiting stamp and no result.

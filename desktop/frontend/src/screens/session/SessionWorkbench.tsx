@@ -14,7 +14,6 @@ import { LIVE, useRunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
-import { sessionsShow, shownNumber, subscribeSessionsShow, type SessionsShow } from '../../lib/sessionsShow'
 import { readStoredFlag, writeStoredFlag } from '../../lib/storedFlag'
 import { stateWord } from '../../ui/status-badge'
 import ActivityRail from './workbench/ActivityRail'
@@ -39,7 +38,7 @@ import {
   type Permissions,
 } from './workbench/model'
 import NoteDocument from './workbench/NoteDocument'
-import RunHeader from './workbench/RunHeader'
+import RunHeader from '../../components/session/RunHeader'
 import { useSessionModel } from './model'
 import { evidenceOf } from '../../components/session/model'
 import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
@@ -121,7 +120,6 @@ export interface SessionWorkbenchProps {
 
 export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
-  const show = useSyncExternalStore(subscribeSessionsShow, sessionsShow, () => 'tracker' as SessionsShow)
   const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
   const jobId = useRunJob(runId)
 
@@ -413,7 +411,6 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
     )
   }
 
-  const shown = shownNumber(detail, show, sources)
   const turns = detail.usage?.turns ?? 0
   const placeholder =
     mode.kind === 'answer'
@@ -463,12 +460,13 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
   return (
     <div className="wb" data-testid="session-workbench">
       <RunHeader
-        variant="gauges"
-        detail={{ ...detail, model }}
-        keyText={shown.text}
-        keyTitle={shown.other}
+        variant="workbench"
+        detail={detail}
         title={title}
-        live={live}
+        sources={sources}
+        fallbackModel={model}
+        transport={transport}
+        workspaceId={workspaceId}
       />
       <span className="visually-hidden" aria-live="polite">{`Run ${stateWord(detail.status)}`}</span>
       {/* The bar carries what a send or a stop came back with; this line is

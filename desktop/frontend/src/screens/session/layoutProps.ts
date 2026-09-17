@@ -2,7 +2,6 @@ import type { FixInfo, RunDetail, SourcesSummary, Transport } from '../../api/ty
 import type { Decision } from '../../components/session/ComposerStrip'
 import type { SessionData } from '../../components/session/useSessionModel'
 import type { SessionLayout } from '../../lib/sessionLayout'
-import type { SessionsShow } from '../../lib/sessionsShow'
 
 /**
  * What the dispatcher hands every layout. A layout draws from this and
@@ -23,9 +22,6 @@ export interface SessionLayoutProps {
   /** The workspace's notes directory, so a filed note is named as the vault names it. */
   notesDir?: string
   sources?: SourcesSummary
-  show: SessionsShow
-  /** Under 1200: the header folds its figures into a title. */
-  narrow: boolean
   live: boolean
   actions: {
     /** Answers a blocked run; `decision` is what the strip's segment held. */
