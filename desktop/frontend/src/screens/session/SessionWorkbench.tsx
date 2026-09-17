@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
-import { LIVE, TERMINAL, useRunFeed } from '../../components/run/useRunFeed'
+import { LIVE, useRunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
@@ -149,7 +149,6 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
   const status = detail?.status ?? ''
   const live = LIVE.has(status)
-  const terminal = TERMINAL.has(status)
   const isFix = detail?.kind === 'fix'
 
   useEffect(() => {
@@ -361,21 +360,23 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
       case 'over_budget':
         return { kind: 'disabled', reason: 'Over budget: a run at its cap cannot be steered.' }
       default:
-        return { kind: 'disabled', reason: 'The run is still working. Wait for it, or cancel it.' }
+        return { kind: 'running' }
     }
   }, [detail, question, steerRefusal])
 
   const send = mode.kind === 'answer' ? answerRun : steer
   const sendBusy = pending === 'answer' || pending === 'steer'
 
+  // The screen's one filled control, whichever it is: the bar's send, or
+  // the Stop that stands in its place while the run works.
   useProvidePrimaryAction(
     detail
       ? {
-          label: mode.kind === 'answer' ? 'Answer' : 'Send',
+          label: mode.kind === 'answer' ? 'Answer' : mode.kind === 'running' ? 'Stop' : 'Send',
           onRun: () => {},
-          disabled: mode.kind === 'disabled',
-          busy: sendBusy,
-          shortcut: '↵',
+          disabled: mode.kind === 'disabled' || (mode.kind === 'running' && !jobId),
+          busy: mode.kind === 'running' ? pending === 'cancel' : sendBusy,
+          shortcut: mode.kind === 'running' ? undefined : '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }
@@ -468,12 +469,11 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
         keyTitle={shown.other}
         title={title}
         live={live}
-        onCancel={terminal ? undefined : () => void cancel()}
-        cancelDisabled={!jobId || pending !== ''}
-        cancelTitle={jobId ? 'Stop the run this window started' : 'Only a run started from this window can be cancelled'}
       />
       <span className="visually-hidden" aria-live="polite">{`Run ${stateWord(detail.status)}`}</span>
-      {actionError && mode.kind !== 'answer' && mode.kind !== 'steer' ? (
+      {/* The bar carries what a send or a stop came back with; this line is
+          for the errors no composer is up to hold. */}
+      {actionError && mode.kind === 'disabled' ? (
         <p className="wb-failed-line" role="alert">
           {actionError}
         </p>
@@ -607,6 +607,9 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
             sentCount={sent}
             placeholder={placeholder}
             prefill={prefill}
+            onStop={() => void cancel()}
+            canStop={Boolean(jobId) && pending === ''}
+            stopBusy={pending === 'cancel'}
           />
         </div>
       </div>
