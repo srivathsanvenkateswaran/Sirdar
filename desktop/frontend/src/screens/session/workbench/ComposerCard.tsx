@@ -1,18 +1,28 @@
 import { useEffect, useId, useRef, useState, type JSX, type KeyboardEvent } from 'react'
 import type { RunKind } from '../../../api/types'
 import type { ComposerMode } from '../../../components/run/Composer'
-import { accessOf } from '../../../components/composer/modes'
+import { ACCESS, ACCESS_PHRASE, accessOf, runningPlaceholder } from '../../../components/composer/modes'
 import Button from '../../../ui/button'
 import ProviderMark from '../../../ui/provider-mark'
 import { ChevronDownIcon, LockIcon, PencilIcon } from './icons'
 
+/** Stop: a filled square on the 24 grid, the one glyph that reads as "stop this". */
+function StopIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
+    </svg>
+  )
+}
+
 /**
  * The command bar: the composer as one line at the very bottom of the
  * window — a `›` prompt, a field that grows only as the reader types into
- * it, the model, mode and access as chips, and the screen's one filled
- * button, Send or Answer with its ↵ hint. Blocked, the mode chip says
- * `answer` and the question band above the bar carries the question; the
- * bar itself stays one line.
+ * it, then one row of chips that never wraps (the model, and the mode
+ * carrying the posture it runs under) and the screen's one filled button.
+ * Send or Answer with its ↵ hint once the run has stopped; a round Stop
+ * while it is working. Blocked, the question band above the bar carries the
+ * question; the bar itself stays one line.
  *
  * A local adapter with the shared `ComposerCard`'s name and its `strip`
  * variant's props. Cmd or Ctrl with Enter sends; Enter alone is a new line,
@@ -35,6 +45,12 @@ export interface ComposerStripProps {
   prefill?: { text: string; n: number }
   /** Focused when the reader presses ↵ with nothing typed, or when the run blocks. */
   autoFocus?: boolean
+  /** Stops the run. The bar's round button while the run works. */
+  onStop?: () => void
+  /** Only a run this window started can be stopped; the button says so when it cannot. */
+  canStop?: boolean
+  /** The stop is in flight. */
+  stopBusy?: boolean
 }
 
 export default function ComposerCard({
@@ -49,6 +65,9 @@ export default function ComposerCard({
   placeholder,
   prefill,
   autoFocus = false,
+  onStop,
+  canStop = false,
+  stopBusy = false,
 }: ComposerStripProps): JSX.Element {
   const [text, setText] = useState('')
   const field = useRef<HTMLTextAreaElement | null>(null)
@@ -72,10 +91,11 @@ export default function ComposerCard({
     el.style.blockSize = `${Math.min(el.scrollHeight, 160)}px`
   }, [text])
 
+  const running = mode.kind === 'running'
   const trimmed = text.trim()
   const label = mode.kind === 'answer' ? 'Answer' : 'Send'
   const needsText = mode.kind === 'steer' || (mode.kind === 'answer' && mode.question !== '')
-  const disabled = mode.kind === 'disabled' || (needsText && trimmed === '')
+  const disabled = mode.kind === 'disabled' || running || (needsText && trimmed === '')
   const title =
     mode.kind === 'disabled'
       ? mode.reason
@@ -86,7 +106,8 @@ export default function ComposerCard({
         : `${label} (↵)`
 
   const submit = () => {
-    if (disabled || busy) return
+    // A run that is working has a Stop where its send was.
+    if (running || disabled || busy) return
     onSend(trimmed)
   }
 
@@ -98,6 +119,7 @@ export default function ComposerCard({
   }
 
   const access = kind ? accessOf(kind) : undefined
+  const accessNote = ACCESS.find((a) => a.id === access)?.note
 
   return (
     <form
@@ -121,9 +143,9 @@ export default function ComposerCard({
         className="wb-cmd__text"
         rows={1}
         value={text}
-        placeholder={mode.kind === 'disabled' ? mode.reason : placeholder}
-        disabled={mode.kind === 'disabled'}
-        autoFocus={autoFocus}
+        placeholder={running ? runningPlaceholder(provider) : mode.kind === 'disabled' ? mode.reason : placeholder}
+        disabled={mode.kind === 'disabled' || running}
+        autoFocus={autoFocus && !running}
         dir="auto"
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -140,28 +162,45 @@ export default function ComposerCard({
         </span>
         <ChevronDownIcon />
       </span>
-      <span className="wb-chip" title="How the next message continues the run">
-        <span className="wb-chip__lab">mode</span>
-        <span className="wb-mono">{mode.kind === 'answer' ? 'answer' : 'resume'}</span>
-      </span>
-      {access ? (
-        <span className="wb-chip" title={access === 'worktree' ? 'This run writes in its linked worktree' : 'This run reads the workspace and writes nothing'}>
+      {/* One chip, not two: access is what the mode does to the tree, so
+          it is the mode chip's second word. */}
+      {kind && access ? (
+        <span className="wb-chip" title={accessNote}>
           {access === 'worktree' ? <PencilIcon /> : <LockIcon />}
-          <span className="wb-chip__lab">access</span>
-          <span className="wb-mono">{access}</span>
+          <span className="wb-chip__lab">mode</span>
+          <span className="wb-mono">
+            {kind} · {ACCESS_PHRASE[access]}
+          </span>
         </span>
       ) : null}
-      <Button
-        type="submit"
-        variant="primary"
-        shortcut="↵"
-        busy={busy}
-        disabled={disabled && !busy}
-        title={title}
-        aria-keyshortcuts="Meta+Enter"
-      >
-        {busy ? (mode.kind === 'answer' ? 'Answering…' : 'Sending…') : label}
-      </Button>
+      {running ? (
+        <span className="wb-cmd__stop">
+          <Button
+            type="button"
+            variant="primary"
+            iconOnly
+            icon={<StopIcon />}
+            busy={stopBusy}
+            disabled={!canStop && !stopBusy}
+            title={canStop ? 'Stop the run' : 'Only a run started from this window can be stopped'}
+            onClick={onStop}
+          >
+            Stop the run
+          </Button>
+        </span>
+      ) : (
+        <Button
+          type="submit"
+          variant="primary"
+          shortcut="↵"
+          busy={busy}
+          disabled={disabled && !busy}
+          title={title}
+          aria-keyshortcuts="Meta+Enter"
+        >
+          {busy ? (mode.kind === 'answer' ? 'Answering…' : 'Sending…') : label}
+        </Button>
+      )}
     </form>
   )
 }

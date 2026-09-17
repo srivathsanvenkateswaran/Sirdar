@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail, RunEvent } from '../../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
-import { resetRunJobs } from '../../lib/jobs'
+import { resetRunJobs, setRunJob } from '../../lib/jobs'
 import { createFakeTransport, diff, type FakeTransport } from '../../store/fakeTransport'
 import {
   FIX_DETAIL,
@@ -120,7 +120,7 @@ describe('SessionConversation', () => {
       expect(screen.getByText('Product 00219 stock shows 1 more than the movement report')).toHaveClass('sc-title')
       expect(screen.getByText('claude-opus-5', { selector: '.sc-provider__model' })).toBeInTheDocument()
       expect(screen.getByText('turns')).toBeInTheDocument()
-      // Nothing is left to cancel.
+      // Stopping a run is the composer's Stop; the header has no Cancel, ever.
       expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
 
       const card = await screen.findByTestId('answer-card')
@@ -259,7 +259,7 @@ describe('SessionConversation', () => {
       await screen.findByRole('heading', { name: 'SBX-1' })
 
       expect(badge()).toHaveTextContent('blocked · waiting on you')
-      expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
 
       // The pending call carries the waiting stamp and no result.
       const stream = screen.getByTestId('conversation')
@@ -519,7 +519,7 @@ describe('SessionConversation', () => {
   })
 
   describe('while the run works', () => {
-    it('marks the newest call running, keeps the composer down with the reason, and follows live events', async () => {
+    it('marks the newest call running, offers Stop in the composer, and follows live events', async () => {
       const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running', usage: { turns: 2, inputTokens: 1000, outputTokens: 20, costUsd: 0.05 } }
       const events = triageEvents().slice(0, 12)
       const f = fake({ detail: running, events })
@@ -527,8 +527,15 @@ describe('SessionConversation', () => {
       const stream = await screen.findByTestId('conversation')
 
       expect(badge()).toHaveTextContent('running')
-      expect(screen.getByRole('textbox', { name: 'Steer' })).toBeDisabled()
-      expect(send('Steer')).toHaveAttribute('title', 'The run is still working. Wait for it, or cancel it.')
+      // Said once: the box carries the whole of it, the button is a Stop,
+      // and nothing repeats the sentence beside the button.
+      const box = screen.getByRole('textbox', { name: 'Steer' })
+      expect(box).toBeDisabled()
+      expect(box).toHaveAttribute('placeholder', 'Steer the run — it picks this up at its next turn')
+      expect(send('Stop the run')).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Steer' })).toBeNull()
+      expect(screen.queryByText(/The run is still working/)).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
       expect(screen.queryByTestId('finish-line')).toBeNull()
 
       f.emit({
@@ -546,6 +553,37 @@ describe('SessionConversation', () => {
       expect(within(step).getByText('running')).toBeInTheDocument()
       // Five calls in the backfill, and the live one.
       expect(screen.getByRole('tab', { name: /Tools/ })).toHaveTextContent('Tools6')
+    })
+
+
+    it('stops the run this window started, and says why when it cannot', async () => {
+      const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running' }
+      const f = fake({ detail: running, events: triageEvents().slice(0, 12) })
+      renderScene(f)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+
+      // No job here: the button is drawn, off, with the reason.
+      const off = send('Stop the run')
+      expect(off).toBeDisabled()
+      expect(off).toHaveAttribute('title', 'Only a run started from this window can be stopped')
+
+      act(() => setRunJob(TRIAGE_DETAIL.runId, 'job-1'))
+      const stop = send('Stop the run')
+      expect(stop).toHaveAttribute('title', 'Stop the run')
+      fireEvent.click(stop)
+      await waitFor(() => expect(f.transport.cancel).toHaveBeenCalledWith('job-1'))
+    })
+
+    it('carries one chip row — the model, then the mode with its posture — and no Access chip', async () => {
+      const running: RunDetail = { ...TRIAGE_DETAIL, status: 'running' }
+      const f = fake({ detail: running, events: triageEvents().slice(0, 12) })
+      renderScene(f)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+
+      const chips = screen.getByRole('form').querySelector('.composer-bar__chips') as HTMLElement
+      expect(chips.children).toHaveLength(2)
+      expect(within(chips).getByText('Triage · read-only')).toBeInTheDocument()
+      expect(within(chips).queryByText('Access')).toBeNull()
     })
 
     it('says why a run could not be read', async () => {

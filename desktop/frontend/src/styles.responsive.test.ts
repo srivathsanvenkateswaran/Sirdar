@@ -423,9 +423,13 @@ describe('new session', () => {
     expect(rule(css, '.new-session__col')).toContain('inline-size: min(880px, calc(100% - 48px))')
   })
 
-  it('lets the composer bar wrap its chips with the send still at the right', () => {
+  // One row, never two: a chip too wide for the bar truncates its own
+  // value rather than dropping onto a second line.
+  it('holds the composer bar to one row of chips, with the button still at the end', () => {
     const composer = sheet('components/composer/composer.css')
-    expect(rule(composer, '.composer-bar__chips')).toContain('flex-wrap: wrap')
+    expect(rule(composer, '.composer-bar__chips')).toContain('flex-wrap: nowrap')
+    expect(rule(composer, '.composer-chip')).toContain('min-inline-size: 0')
+    expect(rule(composer, '.composer-chip__value')).toContain('text-overflow: ellipsis')
     expect(rule(composer, '.composer-send')).toContain('margin-inline-start: auto')
   })
 })

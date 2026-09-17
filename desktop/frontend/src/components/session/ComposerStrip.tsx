@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
 import type { RunDetail } from '../../api/types'
+import ChipMenu from '../composer/ChipMenu'
 import ComposerCard from '../composer/ComposerCard'
+import { MODES_WITH_ACCESS, modeChipTitle, runningPlaceholder } from '../composer/modes'
 import ProviderMark from '../../ui/provider-mark'
 import SegmentedControl from '../../ui/segmented-control'
 import { QuestionIcon } from './icons'
@@ -22,6 +24,12 @@ export interface ComposerStripProps {
   playbooks?: number
   /** "Your last steer at 02:02 added …" */
   lastSteer?: { at: string; text: string }
+  /** Stops the run. The strip's round button while the run works. */
+  onStop?: () => void
+  /** Only a run this window started can be stopped; the button says so when it cannot. */
+  canStop?: boolean
+  /** The stop is in flight. */
+  stopBusy?: boolean
 }
 
 /**
@@ -44,10 +52,26 @@ export function decisionText(decision: Decision, rule: string | undefined, note:
  * question, its reason and the suggested rule in the blocked hue, a
  * decision segment (Allow once / Allow the rule this run / Deny) and the
  * one filled button, Answer — and Steer when the run has finished, with
- * the resume handle, the playbook count and the provider as chips. While
- * the run works the box is disabled with the reason.
+ * the resume handle, the playbook count, the provider and the mode with
+ * its posture as one row of chips that never wraps.
+ *
+ * While the run works the box says what typing there does and the button
+ * beside it is a Stop, wired to the same cancel the window header used to
+ * carry.
  */
-export default function ComposerStrip({ state, detail, busy, error, onSend, sentCount, playbooks, lastSteer }: ComposerStripProps): JSX.Element {
+export default function ComposerStrip({
+  state,
+  detail,
+  busy,
+  error,
+  onSend,
+  sentCount,
+  playbooks,
+  lastSteer,
+  onStop,
+  canStop = false,
+  stopBusy = false,
+}: ComposerStripProps): JSX.Element {
   const [text, setText] = useState('')
   const [decision, setDecision] = useState<Decision>('once')
   useEffect(() => {
@@ -55,11 +79,12 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
   }, [sentCount])
 
   const reply = state.kind === 'reply'
-  const mode = reply ? 'reply' : state.kind === 'steer' ? 'steer' : 'off'
+  const running = state.kind === 'running'
+  const mode = reply ? 'reply' : state.kind === 'steer' ? 'steer' : running ? 'running' : 'off'
   const trimmed = text.trim()
   const label = reply ? 'Answer' : 'Steer'
   const needsText = state.kind === 'steer' || (reply && !state.pending)
-  const disabled = state.kind === 'disabled' || (needsText && trimmed === '')
+  const disabled = state.kind === 'disabled' || running || (needsText && trimmed === '')
   const rule = reply ? state.suggestedRule : undefined
   const title =
     state.kind === 'disabled'
@@ -69,8 +94,9 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
           ? 'Type the answer first'
           : 'Type the instruction first'
         : `${label} (↵)`
-  const placeholder =
-    state.kind === 'disabled'
+  const placeholder = running
+    ? runningPlaceholder(detail.provider)
+    : state.kind === 'disabled'
       ? state.reason
       : reply
         ? state.pending
@@ -82,16 +108,20 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
 
   return (
     <div className="sn-strip" data-mode={mode} data-testid="composer-strip">
-      <div className="sn-strip__sh">
-        <span className="sn-label">{reply ? 'Reply' : 'Steer'}</span>
-        <span>
-          {reply
-            ? `Waiting since ${state.since} · the run is paused until you answer`
-            : state.kind === 'steer'
-              ? 'The agent resumes this session with the document and its evidence in context.'
-              : state.reason}
-        </span>
-      </div>
+      {/* While the run works the composer says the whole of it; a heading
+          above it would be the same sentence a second time. */}
+      {running ? null : (
+        <div className="sn-strip__sh">
+          <span className="sn-label">{reply ? 'Reply' : 'Steer'}</span>
+          <span>
+            {reply
+              ? `Waiting since ${state.since} · the run is paused until you answer`
+              : state.kind === 'steer'
+                ? 'The agent resumes this session with the document and its evidence in context.'
+                : state.reason}
+          </span>
+        </div>
+      )}
       {reply ? (
         <div className="sn-q" role="group" aria-label="The agent's question">
           <span className="sn-q__ic">
@@ -128,7 +158,7 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
         value={text}
         onChange={setText}
         placeholder={placeholder}
-        disabled={state.kind === 'disabled'}
+        disabled={state.kind === 'disabled' || running}
         error={error}
         chips={
           <>
@@ -143,12 +173,17 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
               </span>
             ) : null}
             {!reply ? (
-              <span className="sn-chip">
-                <ProviderMark provider={detail.provider} size="sm" />
-                <span className="sn-mono">
-                  {detail.provider} · {detail.model || 'model unknown'}
+              <>
+                <span className="sn-chip">
+                  <ProviderMark provider={detail.provider} size="sm" />
+                  <span className="sn-mono">
+                    {detail.provider} · {detail.model || 'model unknown'}
+                  </span>
                 </span>
-              </span>
+                {/* Access is what the mode does to the tree, so it rides in
+                    the Mode chip rather than taking a chip of its own. */}
+                <ChipMenu label="Mode" value={detail.kind} items={MODES_WITH_ACCESS} readOnly={modeChipTitle(detail.kind)} />
+              </>
             ) : null}
           </>
         }
@@ -175,6 +210,16 @@ export default function ComposerStrip({ state, detail, busy, error, onSend, sent
           title,
           onClick: () => onSend(reply && state.pending ? decisionText(decision, rule, trimmed) : trimmed, reply && state.pending ? decision : undefined),
         }}
+        stop={
+          running && onStop
+            ? {
+                onStop,
+                disabled: !canStop,
+                busy: stopBusy,
+                title: canStop ? 'Stop the run' : 'Only a run started from this window can be stopped',
+              }
+            : undefined
+        }
       />
     </div>
   )

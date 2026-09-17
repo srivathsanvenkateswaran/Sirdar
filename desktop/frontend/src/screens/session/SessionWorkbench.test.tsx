@@ -2,7 +2,7 @@ import { act, fireEvent, render, screen, waitFor, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppEvent, RunDetail, RunEvent } from '../../api/types'
 import { PrimaryActionProvider, usePrimaryAction } from '../../components/shell/primaryAction'
-import { resetRunJobs } from '../../lib/jobs'
+import { resetRunJobs, setRunJob } from '../../lib/jobs'
 import { resetSessionLayout, setSessionLayout } from '../../lib/sessionLayout'
 import { configSummary, createFakeTransport, type FakeTransport } from '../../store/fakeTransport'
 import Session from '../Session'
@@ -187,8 +187,10 @@ describe('SessionWorkbench', () => {
 
       const bar = commandBar()
       expect(within(bar).getByPlaceholderText('Follow up — the run resumes from turn 17 with the note in context')).toBeInTheDocument()
-      expect(within(bar).getByText('resume')).toBeInTheDocument()
-      expect(within(bar).getByText('read-only')).toBeInTheDocument()
+      // One chip row: the model, then the mode with the posture it runs
+      // under. The old `resume` chip only said what the button already says.
+      expect(within(bar).getByText('triage · read-only')).toBeInTheDocument()
+      expect(within(bar).queryByText('access')).toBeNull()
       const send = within(bar).getByRole('button', { name: /Send/ })
       expect(send).toBeDisabled()
       // The one filled control is the bar's, and the sidebar knows it.
@@ -255,8 +257,7 @@ describe('SessionWorkbench', () => {
         '3fold every movement type with l.Stock[m.ProductID] += m.Delta()',
       ])
       const bar = commandBar()
-      expect(within(bar).getByText('answer', { selector: '.wb-mono' })).toBeInTheDocument()
-      expect(within(bar).getByText('worktree')).toBeInTheDocument()
+      expect(within(bar).getByText('fix · writes in worktree')).toBeInTheDocument()
       expect(within(bar).getByRole('button', { name: /Answer/ })).toBeDisabled()
       expect(screen.getByTestId('published')).toHaveTextContent('Answer inline')
     })
@@ -289,7 +290,28 @@ describe('SessionWorkbench', () => {
       // Running: the gauges take the accent and follow-live is on.
       expect(within(header()).getByRole('meter', { name: 'turns' })).toHaveAttribute('data-live', 'true')
       expect(within(console_()).getByRole('switch', { name: 'Follow live' })).toHaveAttribute('aria-checked', 'true')
-      expect(within(commandBar()).getByRole('button', { name: /Send/ })).toBeDisabled()
+      // Running: the send is gone and the bar carries the Stop in its place.
+      const bar = commandBar()
+      expect(within(bar).queryByRole('button', { name: /Send/ })).toBeNull()
+      expect(within(bar).getByRole('button', { name: 'Stop the run' })).toBeInTheDocument()
+      expect(within(bar).getByRole('textbox')).toHaveAttribute('placeholder', 'Steer the run — it picks this up at its next turn')
+      expect(within(header()).queryByRole('button', { name: 'Cancel' })).toBeNull()
+    })
+
+    it("the bar's Stop cancels the job this window started, and says why when there is none", async () => {
+      const running: RunDetail = { ...TRIAGE_RUN, status: 'running' }
+      const f = fake({ detail: running })
+      f.transport.cancel = vi.fn(async () => {})
+      renderWorkbench(f, running)
+      await screen.findByRole('heading', { name: 'SBX-1' })
+
+      const off = within(commandBar()).getByRole('button', { name: 'Stop the run' })
+      expect(off).toBeDisabled()
+      expect(off).toHaveAttribute('title', 'Only a run started from this window can be stopped')
+
+      act(() => setRunJob(running.runId, 'job-7'))
+      fireEvent.click(within(commandBar()).getByRole('button', { name: 'Stop the run' }))
+      await waitFor(() => expect(f.transport.cancel).toHaveBeenCalledWith('job-7'))
     })
   })
 

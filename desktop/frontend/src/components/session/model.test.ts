@@ -222,9 +222,9 @@ describe('the session model, before the run is read', () => {
     expect(model.path).toEqual([])
   })
 
-  it('is disabled while the run works and when it is over budget', () => {
+  it('is running while the run works, and disabled when it is over budget', () => {
     const f = triageFixture({ status: 'running' })
-    expect(buildSessionModel(f.detail, []).composer).toMatchObject({ kind: 'disabled', reason: /still working/ })
+    expect(buildSessionModel(f.detail, []).composer).toEqual({ kind: 'running' })
     expect(buildSessionModel(triageFixture({ status: 'over_budget' }).detail, []).composer).toMatchObject({
       kind: 'disabled',
       reason: /Over budget/,

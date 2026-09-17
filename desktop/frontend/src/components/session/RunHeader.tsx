@@ -5,7 +5,6 @@ import { costOrUnknown } from '../../lib/format'
 import { SESSION_LAYOUT_OPTIONS, sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../../lib/sessionLayout'
 import { shownNumber, type SessionsShow } from '../../lib/sessionsShow'
 import Age from '../Age'
-import Button from '../../ui/button'
 import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
 import { AssignedTo } from '../../ui/run-card/Avatar'
@@ -92,13 +91,8 @@ export interface RunHeaderProps {
   narrow?: boolean
   /** The filed note, for the badge's `note saved`. */
   notePath?: string
-  /** The header's action at the end: Open note, Open worktree, Cancel. */
+  /** The header's action at the end: Open note, Open worktree. Stopping a live run is the composer's Stop. */
   action?: ReactNode
-  /** Cancel, drawn while the run is live and the shell knows its job. */
-  onCancel?: () => void
-  cancelDisabled?: boolean
-  cancelTitle?: string
-  cancelBusy?: boolean
   switcher?: ReactNode
 }
 
@@ -130,7 +124,9 @@ function Gauge({
 /**
  * The run's header: key under its source mark, kind, state badge, the
  * ticket's title, who it is assigned to, then the figures — provider and
- * model, the clock, turns, cost — and one action at the end. The `gauges`
+ * model, the clock, turns, cost — and one action at the end. Stopping a
+ * live run belongs to the composer's Stop, beside the box the reader is
+ * already looking at, not to a text button in the window corner. The `gauges`
  * variant draws turns, minutes and cost as bars against the run's caps in
  * place of the flat figures, which is what the Workbench layout asks for.
  */
@@ -143,10 +139,6 @@ export default function RunHeader({
   narrow = false,
   notePath,
   action,
-  onCancel,
-  cancelDisabled = false,
-  cancelTitle,
-  cancelBusy = false,
   switcher,
 }: RunHeaderProps): JSX.Element {
   const live = LIVE.has(detail.status)
@@ -222,11 +214,6 @@ export default function RunHeader({
       )}
       {switcher}
       {terminal ? action : null}
-      {!terminal && onCancel ? (
-        <Button variant="ghost" onClick={onCancel} disabled={cancelDisabled} busy={cancelBusy} title={cancelTitle}>
-          Cancel
-        </Button>
-      ) : null}
     </header>
   )
 }

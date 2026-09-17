@@ -35,7 +35,8 @@ function reveal(el: Element | null | undefined): void {
  * Layout B, "the note is the work": the deliverable as a document in the
  * centre, the path the agent took as a timeline on the left grouped by turn,
  * Bundle and Tools as drawers over the path, and the strip under the
- * document — Reply when the run is blocked, Steer when it has finished.
+ * document — Reply when the run is blocked, Steer when it has finished,
+ * Stop while it works.
  *
  * The audit is the markers: every evidence item in the document carries
  * E1…En, the same marker sits on the step that produced it, and clicking
@@ -242,10 +243,6 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
         narrow={narrow}
         notePath={notePath}
         action={headerAction}
-        onCancel={actions.cancel}
-        cancelDisabled={!canCancel || pending !== ''}
-        cancelBusy={pending === 'cancel'}
-        cancelTitle={canCancel ? 'Stop the run this window started' : 'Only a run started from this window can be cancelled'}
         switcher={<LayoutSwitcher value={layout} onChange={onLayout} />}
       />
       {actionError && pending !== 'accept' && model.composer.kind === 'disabled' ? (
@@ -335,6 +332,9 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
             sentCount={sent}
             playbooks={playbooks}
             lastSteer={model.lastSteer}
+            onStop={actions.cancel}
+            canStop={canCancel && pending === ''}
+            stopBusy={pending === 'cancel'}
           />
         </main>
       </div>

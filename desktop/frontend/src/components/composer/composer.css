@@ -85,12 +85,18 @@
   padding-inline: var(--sd-space-3);
 }
 
+/*
+ * One row, and one row only. A second line under the chips pushed the bar
+ * out of the T3 register and read as a mistake; a bar too narrow for its
+ * chips truncates their words instead (`.composer-chip__value`).
+ */
 .composer-bar__chips {
   display: flex;
-  flex: 1 1 auto;
-  flex-wrap: wrap;
+  flex: 0 1 auto;
+  flex-wrap: nowrap;
   align-items: center;
   min-inline-size: 0;
+  overflow: hidden;
 }
 
 /* A hairline between chips, never before the first. */
@@ -163,8 +169,35 @@
   border-inline-start: 0;
 }
 
-.composer[data-variant='strip'] .composer-send > .sd-button {
+/* The strip's send is a labelled button; its Stop is the same circle as everywhere else. */
+.composer[data-variant='strip'] .composer-send:not([data-stop='true']) > .sd-button {
   min-height: var(--sd-control-h);
+}
+
+/*
+ * Stop: the same 36px circle the send wears, in the failed hue at a muted
+ * strength rather than the ink fill — it takes something away rather than
+ * committing something, and the reader should be able to tell the two apart
+ * without reading the title. The glyph is the square, so the meaning does
+ * not rest on the colour; the accessible name says "Stop the run".
+ */
+.composer-send[data-stop='true'] > .sd-button {
+  inline-size: 36px;
+  min-height: 36px;
+  padding: 0;
+  border-radius: var(--sd-radius-pill);
+  background: color-mix(in srgb, var(--sd-st-failed) 16%, transparent);
+  color: var(--sd-st-failed);
+}
+
+.composer-send[data-stop='true'] > .sd-button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sd-st-failed) 28%, transparent);
+  color: var(--sd-st-failed);
+}
+
+.composer-send[data-stop='true'] > .sd-button > svg {
+  inline-size: 20px;
+  block-size: 20px;
 }
 
 /* Wide: the word beside the arrow, still round-ended, still 36 tall. */
@@ -179,6 +212,7 @@
 
 .composer-chip-menu {
   display: inline-flex;
+  flex: 0 1 auto;
   min-inline-size: 0;
 }
 
@@ -187,7 +221,9 @@
   align-items: center;
   gap: 6px;
   min-block-size: 32px;
+  min-inline-size: 0;
   max-inline-size: 100%;
+  overflow: hidden;
   margin: 0;
   padding-block: 0;
   padding-inline: var(--sd-space-2);
@@ -219,11 +255,14 @@
   opacity: 0.45;
 }
 
+/* The word never truncates; the value it names does. */
 .composer-chip__label {
+  flex: 0 0 auto;
   color: var(--sd-ink-3);
 }
 
 .composer-chip__value {
+  flex: 0 1 auto;
   min-inline-size: 0;
   overflow: hidden;
   text-overflow: ellipsis;

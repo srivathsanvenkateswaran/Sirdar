@@ -1634,6 +1634,32 @@ button.wb-ttab:hover,
   font-size: 14.5px;
 }
 
+/*
+ * Stop: the same 36px circle the other two layouts draw, in the failed hue
+ * at a muted strength — it takes something away rather than committing
+ * something. The glyph is the square, so the meaning never rests on colour.
+ */
+.wb-cmd__stop {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+.wb-cmd .wb-cmd__stop .sd-button[data-variant='primary'] {
+  inline-size: 36px;
+  min-block-size: 36px;
+  padding: 0;
+  border-radius: var(--sd-radius-pill);
+  background: color-mix(in srgb, var(--sd-st-failed) 16%, transparent);
+  color: var(--sd-st-failed);
+}
+.wb-cmd .wb-cmd__stop .sd-button[data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--sd-st-failed) 28%, transparent);
+  color: var(--sd-st-failed);
+}
+.wb-cmd__stop .sd-button > svg {
+  inline-size: 20px;
+  block-size: 20px;
+}
+
 /* ----------------------------------------------------------------- motion */
 
 @media (prefers-reduced-motion: no-preference) {

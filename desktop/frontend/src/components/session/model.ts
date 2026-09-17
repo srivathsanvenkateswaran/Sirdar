@@ -109,6 +109,11 @@ export type ComposerState =
   /** The run stopped to ask: the question, when it was asked, and the call it is waiting on. */
   | { kind: 'reply'; question: string; since: string; pending?: SessionStep; suggestedRule?: string; reason?: string }
   | { kind: 'steer' }
+  /**
+   * The run is working. The strip's button is a Stop rather than a send
+   * that is off, and the box says what typing there does — once.
+   */
+  | { kind: 'running' }
   | { kind: 'disabled'; reason: string }
 
 export interface SessionCounts {
@@ -616,7 +621,7 @@ export function buildSessionModel(
   } else if (status === 'completed' || status === 'failed') composer = { kind: 'steer' }
   else if (status === 'over_budget')
     composer = { kind: 'disabled', reason: 'Over budget: a run at its cap cannot be steered.' }
-  else composer = { kind: 'disabled', reason: 'The run is still working. Wait for it, or cancel it.' }
+  else composer = { kind: 'running' }
 
   const byTool = new Map<string, { tool: string; n: number; denied: number }>()
   let denied = 0

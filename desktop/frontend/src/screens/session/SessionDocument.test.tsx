@@ -83,6 +83,7 @@ describe('S1 · the completed triage', () => {
     const strip = within(doc).getByTestId('composer-strip')
     expect(strip).toHaveAttribute('data-mode', 'steer')
     expect(screen.getByTestId('published')).toHaveTextContent('Steer')
+    // Stopping a run belongs to the composer; the header never carries it.
     expect(within(doc).queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
@@ -108,7 +109,9 @@ describe('S1 · the completed triage', () => {
     await waitFor(() => expect(transport.calls.steer).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, text: 'Now check the adjustment path too.' }]))
     await waitFor(() => expect(within(doc).getByText('running')).toBeInTheDocument())
     expect(within(doc).getAllByTestId('you-card')).toHaveLength(2)
-    expect(within(doc).getByRole('button', { name: 'Cancel' })).toBeInTheDocument()
+    // The run went running, so the strip's button became the Stop.
+    expect(within(doc).getByRole('button', { name: 'Stop the run' })).toBeInTheDocument()
+    expect(within(doc).queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 })
 
@@ -134,7 +137,7 @@ describe('S2 · the fix run blocked on go test', () => {
     const change = await within(doc).findByTestId('changes-view')
     expect(within(change).getByText('1 · +14 −0')).toBeInTheDocument()
     expect(within(change).getByText(/which needs your answer below/)).toBeInTheDocument()
-    expect(within(doc).getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(within(doc).queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 
   it('answers: the decision goes to resume as words and the answer joins the path', async () => {
@@ -152,11 +155,14 @@ describe('S2 · the fix run blocked on go test', () => {
     expect(await within(doc).findByText('No, do not run it. Run only the ledger package.')).toBeInTheDocument()
   })
 
-  it('Cancel works once the shell knows the job', async () => {
-    setRunJob(FIX_RUN_ID, 'job-9')
-    const { transport } = mount([blockedFixture()], FIX_RUN_ID)
+  it("the composer's Stop cancels once the shell knows the job", async () => {
+    setRunJob(TRIAGE_RUN_ID, 'job-9')
+    const f = triageFixture({ status: 'running', notes: [] })
+    f.events = f.events.slice(0, 40)
+    f.note = ''
+    const { transport } = mount([f], TRIAGE_RUN_ID)
     const doc = await opened()
-    fireEvent.click(within(doc).getByRole('button', { name: 'Cancel' }))
+    fireEvent.click(within(doc).getByRole('button', { name: 'Stop the run' }))
     await waitFor(() => expect(transport.calls.cancel).toEqual(['job-9']))
   })
 })
@@ -289,7 +295,7 @@ describe('S6 · the fix run\'s change as the document', () => {
 })
 
 describe('the live states', () => {
-  it('while running, the badge is running, the document says the note arrives at the end, and the strip is disabled', async () => {
+  it('while running, the badge is running, the document says the note arrives at the end, and the strip offers Stop', async () => {
     const f = triageFixture({ status: 'running', notes: [] })
     f.events = f.events.slice(0, 40)
     f.note = ''
@@ -297,8 +303,14 @@ describe('the live states', () => {
     const doc = await opened()
     expect(within(doc).getByText('running')).toBeInTheDocument()
     expect(await within(doc).findByTestId('document-pending')).toHaveTextContent('The note arrives when the agent finishes')
-    expect(within(doc).getByRole('textbox')).toBeDisabled()
-    expect(screen.getByTestId('published')).toHaveTextContent('Steer disabled')
+    const box = within(doc).getByRole('textbox')
+    expect(box).toBeDisabled()
+    // Said once: the box, and nothing beside the button.
+    expect(box).toHaveAttribute('placeholder', 'Steer the run — it picks this up at its next turn')
+    expect(within(doc).queryByText(/The run is still working/)).toBeNull()
+    expect(within(doc).getByRole('button', { name: 'Stop the run' })).toBeInTheDocument()
+    // No job here, so there is nothing this window can stop.
+    expect(screen.getByTestId('published')).toHaveTextContent('Stop disabled')
   })
 
   it('steps land as they finish over the stream, and the note is read again when the run completes', async () => {

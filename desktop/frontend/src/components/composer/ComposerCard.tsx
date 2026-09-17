@@ -20,6 +20,24 @@ export interface ComposerSend {
   wide?: boolean
 }
 
+/**
+ * What the round button is while the run works: a Stop, not a send that is
+ * off. A disabled send says nothing a reader can act on, and the reason for
+ * it was being printed twice — once in the box and once beside the button.
+ * The Stop is drawn in place of the send, takes the same 36px circle, and
+ * is the screen's one filled control for as long as it is up.
+ */
+export interface ComposerStop {
+  /** Stops the run. The screen's existing cancel action. */
+  onStop: () => void
+  /** Nothing here can stop it — no job this window started — with `title` saying so. */
+  disabled?: boolean
+  busy?: boolean
+  /** The accessible name; "Stop the run" unless a layout has its own word. */
+  label?: string
+  title?: string
+}
+
 export interface ComposerCardProps {
   /** Names the textarea for a screen reader; the placeholder is not a name. */
   label: string
@@ -41,6 +59,11 @@ export interface ComposerCardProps {
   /** Words beside the chips: why nothing can be sent. */
   aside?: ReactNode
   send: ComposerSend
+  /**
+   * Given while the run is working: the round button stops the run instead
+   * of sending, and nothing can be sent until the run settles.
+   */
+  stop?: ComposerStop
   /** What the card is, for the form's name: `Start`, `Answer`, `Steer`. */
   name?: string
   /**
@@ -68,6 +91,19 @@ function ArrowUpIcon(): JSX.Element {
       focusable="false"
     >
       <path d="M12 19V5M5 12l7-7 7 7" />
+    </svg>
+  )
+}
+
+/**
+ * Stop: a filled square on the same 24 grid. A square is the one glyph a
+ * reader already reads as "stop this"; it is filled rather than stroked
+ * because a stroked square is a checkbox.
+ */
+function StopIcon(): JSX.Element {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" aria-hidden="true" focusable="false">
+      <rect x="6" y="6" width="12" height="12" rx="2.5" />
     </svg>
   )
 }
@@ -106,11 +142,14 @@ export function fitRows(el: HTMLTextAreaElement, maxRows: number): number {
 /**
  * The composer: one card holding a textarea and a bottom bar.
  *
- * The bar is the T3 shape on Sirdar's tokens: chips at the inline start —
- * Model, Mode, Access — separated by hairlines, and at the inline end one
- * round 36px send button carrying an arrow. That button is the screen's one
- * filled control, so the screen that draws this card publishes its action
- * with `placement: 'screen'` and the sidebar's New session steps down.
+ * The bar is the T3 shape on Sirdar's tokens: one row of chips at the inline
+ * start — Model, then Mode carrying its posture — separated by hairlines,
+ * and at the inline end one round 36px button. The row never wraps; a chip
+ * too wide for the bar truncates its own word. That button is the screen's
+ * one filled control, so the screen that draws this card publishes its
+ * action with `placement: 'screen'` and the sidebar's New session steps
+ * down. While the run works it is a Stop (`stop`) rather than a send that is
+ * off.
  *
  * Enter sends, the way every chat surface does; Shift with Enter inserts a
  * new line for the answer or instruction that needs more than one, and Cmd
@@ -131,6 +170,7 @@ export default function ComposerCard({
   chips,
   aside,
   send,
+  stop,
   name,
   variant = 'card',
   trailing,
@@ -153,7 +193,9 @@ export default function ComposerCard({
   }, [value, maxRows, disabled, placeholder])
 
   function submit(): void {
-    if (send.disabled || send.busy) return
+    // A run that is working has a Stop where its send was; Enter has
+    // nothing to reach.
+    if (stop || send.disabled || send.busy) return
     send.onClick()
   }
 
@@ -198,8 +240,25 @@ export default function ComposerCard({
         <div className="composer-bar__chips">{chips}</div>
         {aside ? <span className="composer-reason">{aside}</span> : null}
         {trailing}
-        <span className="composer-send" data-wide={send.wide ? 'true' : undefined}>
-          {strip ? (
+        <span
+          className="composer-send"
+          data-stop={stop ? 'true' : undefined}
+          data-wide={!stop && send.wide ? 'true' : undefined}
+        >
+          {stop ? (
+            <Button
+              type="button"
+              variant="primary"
+              iconOnly
+              icon={<StopIcon />}
+              busy={stop.busy}
+              disabled={stop.disabled && !stop.busy}
+              title={stop.title ?? 'Stop the run'}
+              onClick={stop.onStop}
+            >
+              {stop.label ?? 'Stop the run'}
+            </Button>
+          ) : strip ? (
             <Button
               type="submit"
               variant="primary"

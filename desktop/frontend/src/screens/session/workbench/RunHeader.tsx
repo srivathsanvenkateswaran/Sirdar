@@ -1,7 +1,6 @@
 import type { JSX } from 'react'
 import type { RunDetail } from '../../../api/types'
 import { useNow } from '../../../lib/useNow'
-import Button from '../../../ui/button'
 import ProviderMark from '../../../ui/provider-mark'
 import StatusBadge, { type SdStatus } from '../../../ui/status-badge'
 import { SessionLayoutSwitcher } from '../../../components/session/RunHeader'
@@ -16,9 +15,9 @@ import { gauges, type Gauge as GaugeModel } from './model'
  *
  * A local adapter with the shared `RunHeader`'s name and props; when
  * `src/components/session/RunHeader` lands with its `gauges` variant, this
- * file goes and the import moves. The Cancel button is not in the mock: a
- * live run has to be stoppable from somewhere, and the header is where the
- * other layouts put it.
+ * file goes and the import moves. Stopping a live run is the command bar's
+ * Stop, beside the box the reader is already looking at, which is where the
+ * other layouts put it too.
  */
 export interface RunHeaderProps {
   variant: 'gauges'
@@ -31,9 +30,6 @@ export interface RunHeaderProps {
   live: boolean
   /** A still clock for tests; the gauges tick on the shared clock without it. */
   now?: number
-  onCancel?: () => void
-  cancelDisabled?: boolean
-  cancelTitle?: string
 }
 
 function Gauge({ label, value, cap, pct, na, live }: GaugeModel & { live: boolean }): JSX.Element {
@@ -68,9 +64,6 @@ export default function RunHeader({
   title,
   live,
   now,
-  onCancel,
-  cancelDisabled,
-  cancelTitle,
 }: RunHeaderProps): JSX.Element {
   // The minutes gauge is a clock while the run is live or waiting; once the
   // run has ended the figures are state.json's and nothing ticks.
@@ -112,11 +105,6 @@ export default function RunHeader({
         </>
       ) : null}
       <SessionLayoutSwitcher />
-      {onCancel ? (
-        <Button variant="ghost" size="sm" onClick={onCancel} disabled={cancelDisabled} title={cancelTitle}>
-          Cancel
-        </Button>
-      ) : null}
     </header>
   )
 }
