@@ -397,10 +397,12 @@ describe('http transport', () => {
 describe('http transport events', () => {
   class FakeEventSource {
     static last: FakeEventSource | null = null
+    static opened = 0
     listeners = new Map<string, EventListener[]>()
     closed = false
     constructor(public url: string) {
       FakeEventSource.last = this
+      FakeEventSource.opened += 1
     }
     addEventListener(kind: string, listener: EventListener) {
       this.listeners.set(kind, [...(this.listeners.get(kind) ?? []), listener])
@@ -418,6 +420,76 @@ describe('http transport events', () => {
 
   afterEach(() => {
     vi.useRealTimers()
+  })
+
+  /**
+   * Finding #2 of the session performance report: one stream per subscriber
+   * took two of the browser's six connections per host as soon as a session
+   * was open, and a few reloads filled the pool.
+   */
+  it('opens one stream for every subscriber and closes it when the last leaves', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+    FakeEventSource.opened = 0
+    const transport = createTransport()
+
+    const board = vi.fn()
+    const session = vi.fn()
+    const register = vi.fn()
+    const offBoard = transport.subscribe(board)
+    const offSession = transport.subscribe(session)
+    const offRegister = transport.subscribe(register)
+
+    expect(FakeEventSource.opened).toBe(1)
+    const source = FakeEventSource.last as FakeEventSource
+
+    source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    vi.advanceTimersByTime(FLUSH_MS)
+    for (const handler of [board, session, register]) {
+      expect(handler).toHaveBeenCalledTimes(1)
+      expect(handler.mock.calls[0][0].kind).toBe('run.updated')
+    }
+
+    // A screen leaving stops hearing, and the stream stays up for the rest.
+    offSession()
+    source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    vi.advanceTimersByTime(FLUSH_MS)
+    expect(source.closed).toBe(false)
+    expect(session).toHaveBeenCalledTimes(1)
+    expect(board).toHaveBeenCalledTimes(2)
+
+    offRegister()
+    expect(source.closed).toBe(false)
+    offBoard()
+    expect(source.closed).toBe(true)
+
+    // The next subscriber opens a fresh one rather than talking to a
+    // closed stream.
+    const off = transport.subscribe(vi.fn())
+    expect(FakeEventSource.opened).toBe(2)
+    off()
+  })
+
+  /** A handler that throws must not stop the others being called. */
+  it('keeps the stream up when one subscriber throws', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+    const transport = createTransport()
+    const bad = vi.fn(() => {
+      throw new Error('boom')
+    })
+    const good = vi.fn()
+    const offBad = transport.subscribe(bad)
+    const offGood = transport.subscribe(good)
+    const source = FakeEventSource.last as FakeEventSource
+
+    source.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    vi.advanceTimersByTime(FLUSH_MS)
+    expect(bad).toHaveBeenCalledTimes(1)
+    expect(good).toHaveBeenCalledTimes(1)
+    expect(source.closed).toBe(false)
+    offBad()
+    offGood()
   })
 
   it('reports the stream lost and open again, and stops listening once unsubscribed', () => {

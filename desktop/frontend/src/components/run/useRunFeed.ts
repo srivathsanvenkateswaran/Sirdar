@@ -128,12 +128,36 @@ export function useRunFeed(transport: Transport, workspaceId: string, runId: str
       setEvents((prev) => insertManyByIndex(prev, fresh))
     }
 
+    /**
+     * Re-reads the run's log after `from`. The service sends a resync when
+     * it could not keep this window supplied; the index dedupe absorbs
+     * whatever the re-read has in common with what is already here, so the
+     * only new rows are the ones that went missing.
+     */
+    const refill = (from: number) => {
+      transport
+        .events(workspaceId, runId, Math.max(0, from))
+        .then(({ events: page, next }) => {
+          if (cancelled) return
+          const first = Math.max(from + 1, next - page.length + 1)
+          appendMany(page.map((event, i) => ({ index: first + i, event })))
+        })
+        .catch(() => {
+          // The transcript keeps what it has; the next resync, or the run
+          // finishing, asks again.
+        })
+    }
+
     const unsubscribe = transport.subscribe((e) => {
       if (cancelled) return
       if (e.kind === 'run.event') {
         if (e.runId !== runId) return
         if (e.workspaceId && e.workspaceId !== workspaceId) return
         append(e.index, e.event)
+        return
+      }
+      if (e.kind === 'run.resync') {
+        if (e.runId === runId) refill(e.from)
         return
       }
       if (e.kind === 'run.updated' && e.run?.runId === runId) {

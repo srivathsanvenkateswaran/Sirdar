@@ -303,6 +303,13 @@ export type HookOutcome = 'started'|'skipped'|'filtered'|'ignored'|'rejected';
 export type AppEvent =
   | { kind: 'run.updated'; workspaceId: string; run: RunSummary }
   | { kind: 'run.event'; workspaceId: string; runId: string; index: number; event: RunEvent }
+  /**
+   * The service could not keep this reader supplied and some of the run's
+   * lines never reached it. `from` is the last index that can be trusted;
+   * the screen re-reads the run's log after it rather than showing a hole
+   * the index dedupe would never fill.
+   */
+  | { kind: 'run.resync'; runId: string; from: number }
   /** A run directory `deleteRun` took off disk; every window drops the row. */
   | { kind: 'run.removed'; workspaceId: string; runId: string }
   | { kind: 'quota.updated'; quota: Quota }
