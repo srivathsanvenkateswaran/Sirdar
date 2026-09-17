@@ -3,11 +3,54 @@ package claude
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/provider"
 )
+
+// modelLimitRe matches the sentence Claude Code answers with when the
+// login has spent one model's allowance and the rest of the account is
+// still fine: "You've reached your Fable limit. Switch to another model,
+// or manage usage credits at claude.ai/settings/usage". The capture is the
+// model family, which is the only name the message carries — the dated id
+// the run asked for is not in it.
+//
+// It is deliberately anchored on "reached your … limit" rather than on the
+// whole sentence: the second half of the message is advice, and advice is
+// the part of a product's wording that changes.
+var modelLimitRe = regexp.MustCompile(`(?i)reached your ([A-Za-z][\w.-]*) limit`)
+
+// modelFamilies are the names the CLI uses for a model's family, which is
+// what a rate_limit_event's rateLimitType names when the window it refuses
+// belongs to one model rather than to the account. A type naming none of
+// them — the plain five-hour and weekly windows — is the account's own
+// limit and stays an EvRateLimited, because that one does reset at a time
+// the CLI reports and parking the pool until then is right.
+var modelFamilies = []string{"fable", "opus", "sonnet", "haiku"}
+
+// modelLimited reads the model family out of a sentence the CLI wrote, and
+// reports whether the sentence is a per-model refusal at all.
+func modelLimited(text string) (string, bool) {
+	m := modelLimitRe.FindStringSubmatch(text)
+	if m == nil {
+		return "", false
+	}
+	return m[1], true
+}
+
+// limitedFamily reads the model family a rate_limit_event's type names, or
+// "" when it names the account's own window instead.
+func limitedFamily(rateLimitType string) string {
+	lower := strings.ToLower(rateLimitType)
+	for _, family := range modelFamilies {
+		if strings.Contains(lower, family) {
+			return family
+		}
+	}
+	return ""
+}
 
 // statusAllowed is the prefix of every rate_limit_info.status the CLI
 // reports while the window still has room: "allowed" outright, and
@@ -130,6 +173,15 @@ func decode(raw []byte) []provider.Event {
 			ev.Text = rateLimitNote(info.RateLimitType, info.Utilization, info.IsUsingOverage)
 			return []provider.Event{ev}
 		}
+		// A window that belongs to one model is a different fact from a
+		// window that belongs to the account: the run can carry on under
+		// another model right now, and has nothing to wait for.
+		if family := limitedFamily(info.RateLimitType); family != "" {
+			ev := newEvent(provider.EvModelLimit, raw)
+			ev.Model = family
+			ev.Text = rateLimitNote(info.RateLimitType, info.Utilization, info.IsUsingOverage)
+			return []provider.Event{ev}
+		}
 		ev := newEvent(provider.EvRateLimited, raw)
 		ev.Text = info.RateLimitType
 		if info.ResetsAt > 0 {
@@ -140,6 +192,18 @@ func decode(raw []byte) []provider.Event {
 		return streamEvents(l, raw)
 	case "result":
 		usage := newEvent(provider.EvUsage, raw)
+		var limit []provider.Event
+		// The CLI repeats the turn's last message in the result line, so
+		// a session whose only turn was the refusal says it twice. The
+		// event is emitted from here as well as from the assistant line
+		// because a resumed session can carry the refusal in the result
+		// alone; the run layer takes the first and ignores the second.
+		if family, ok := modelLimited(l.Result); ok {
+			ev := newEvent(provider.EvModelLimit, raw)
+			ev.Model = family
+			ev.Text = l.Result
+			limit = []provider.Event{ev}
+		}
 		usage.Turns = l.NumTurns
 		usage.InputTok = l.Usage.Input()
 		usage.OutputTok = l.Usage.OutputTokens
@@ -154,7 +218,7 @@ func decode(raw []byte) []provider.Event {
 		if len(l.StructuredOutput) > 0 && string(l.StructuredOutput) != "null" {
 			final.Final = l.StructuredOutput
 		}
-		return []provider.Event{usage, final}
+		return append(append([]provider.Event{usage}, limit...), final)
 	default:
 		// system/* (init, status, hooks) and anything new.
 		ev := newEvent(provider.EvSystem, raw)
@@ -236,6 +300,17 @@ func assistantEvents(l streamLine, raw []byte) []provider.Event {
 			events = append(events, ev)
 		case "text":
 			if b.Text == "" {
+				continue
+			}
+			// The refusal the CLI writes as prose. It looks exactly like
+			// an answer and is not one, so it leaves here under its own
+			// kind rather than as assistant text a reader would file, or
+			// re-ask the same model for.
+			if family, ok := modelLimited(b.Text); ok {
+				ev := newEvent(provider.EvModelLimit, raw)
+				ev.Model = family
+				ev.Text = b.Text
+				events = append(events, ev)
 				continue
 			}
 			// The finished block, which stands in for the deltas that

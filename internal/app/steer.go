@@ -22,7 +22,7 @@ var ErrSteerRefused = errors.New("app: steer refused")
 // session in the run's worktree, guards the reserved files and amends the
 // commit; every other kind goes straight to the runner. The CLI and the
 // service both come through here, so the two cannot drift.
-func Steer(ctx context.Context, deps runner.Deps, runID, text string) (runner.Outcome, error) {
+func Steer(ctx context.Context, deps runner.Deps, runID, text, model string) (runner.Outcome, error) {
 	if deps.Config == nil {
 		return runner.Outcome{}, fmt.Errorf("app: no workspace configuration")
 	}
@@ -32,9 +32,9 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text string) (runner.Ou
 	}
 	if state.Kind != store.KindFix {
 		r := &runner.Runner{Deps: deps}
-		return r.Steer(ctx, runID, text, runner.SteerOptions{})
+		return r.Steer(ctx, runID, text, runner.SteerOptions{Model: model})
 	}
-	res, err := fix.Steer(ctx, deps, runID, text)
+	res, err := fix.Steer(ctx, deps, runID, text, model)
 	out := runner.Outcome{Key: res.Key, State: res.State, Digest: res.Digest}
 	if err != nil {
 		return out, err
@@ -50,7 +50,7 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text string) (runner.Ou
 // own refusal — cursor, agy — is only known once the job has built its
 // dependencies, and ends the job failed with the reason on the activity
 // pane, the way a refused fix does.
-func (s *Service) Steer(ctx context.Context, wsID, runID, text string) (JobID, error) {
+func (s *Service) Steer(ctx context.Context, wsID, runID, text, model string) (JobID, error) {
 	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return "", err
 	}
@@ -71,7 +71,7 @@ func (s *Service) Steer(ctx context.Context, wsID, runID, text string) (JobID, e
 	}
 	key := state.Key
 	return s.start(ctx, wsID, "", "", func(jctx context.Context, deps runner.Deps) []JobOutcome {
-		out, err := Steer(jctx, deps, runID, text)
+		out, err := Steer(jctx, deps, runID, text, model)
 		if err != nil {
 			s.log(err)
 			if out.State.RunID == "" {

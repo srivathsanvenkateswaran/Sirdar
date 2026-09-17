@@ -45,20 +45,34 @@ export interface ComposerProps {
   canCancel?: boolean
   /** The cancel is in flight. */
   cancelBusy?: boolean
+  /**
+   * The model the next send asks for, when a reader has chosen one that is
+   * not the run's own. Empty means the run's, which is what the chip shows.
+   */
+  pickedModel?: string
+  /**
+   * Given, the Model chip is a control rather than a fact: what it picks is
+   * what the next answer or steer runs under. It is given on a run that has
+   * stopped — blocked or finished — because that is when a model can still
+   * be chosen; a live run's session already has one.
+   */
+  onPickModel?: (model: string) => void
 }
 
 /**
  * The bottom of the transcript: where the operator talks back.
  *
  * The same card New session draws, with the bar's chips turned into facts:
- * Model is the run's provider and model and cannot change, since a steer
- * resumes the session it has; Mode is the run's kind, carrying the posture
- * that kind runs with as its secondary text. Two chips, one row, never
- * wrapping. The round button's word is the run's state — Answer while the
- * agent is waiting on a question, Steer once the run has finished, Stop
- * while it is working, and off with the reason when the provider refuses to
- * be steered. The button is this screen's one filled control; the sidebar's
- * New session steps down while it is on screen.
+ * Model is the run's provider and model. While the run works it is a fact;
+ * on a run that has stopped — blocked or finished — the chip picks what the
+ * next answer or steer runs under, since Claude Code takes a different
+ * --model on --resume. Mode is the run's kind, carrying the posture that
+ * kind runs with as its secondary text. Two chips, one row, never wrapping.
+ * The round button's word is the run's state — Answer while the agent is
+ * waiting on a question, Steer once the run has finished, Stop while it is
+ * working, and off with the reason when the provider refuses to be steered.
+ * The button is this screen's one filled control; the sidebar's New session
+ * steps down while it is on screen.
  *
  * Cmd or Ctrl with Enter sends, so a person typing does not have to reach
  * for the mouse; Enter alone is a new line, because an answer to an agent's
@@ -79,6 +93,8 @@ export default function Composer({
   onCancel,
   canCancel = false,
   cancelBusy = false,
+  pickedModel = '',
+  onPickModel,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -127,13 +143,34 @@ export default function Composer({
         error={error}
         chips={
           <>
-            {/* A steer or an answer continues the run this session has, on the
-                model it has, so the chip states the pair and cannot change it. */}
+            {/* On a run that has stopped the chip is a control: Claude Code
+                takes a different --model on --resume and answers under it, so
+                the next answer or steer can be a different model on the same
+                session. While the run is working there is nothing to choose —
+                its session already has a model — and the chip states the pair
+                instead. */}
             <ModelPicker
               provider={provider}
-              model={model}
+              model={onPickModel ? pickedModel || model : model}
+              defaultProvider={provider}
+              defaultModel={model}
               unknownAs="model unknown"
-              readOnly="A steer resumes the same session, so the provider and model cannot change here"
+              readOnly={
+                onPickModel
+                  ? undefined
+                  : 'A steer resumes the same session, so the provider and model cannot change here'
+              }
+              // A run's provider cannot change on a resume — the session
+              // handle names a session that CLI holds — so a row from
+              // another provider, which only the popover's search can
+              // reach, is not a model this run could ask for.
+              onChange={
+                onPickModel
+                  ? (choice) => {
+                      if (!choice.provider || choice.provider === provider) onPickModel(choice.model)
+                    }
+                  : undefined
+              }
             />
             {/* Access is what the mode does to the tree, so it is the mode
                 chip's second word rather than a chip of its own. */}

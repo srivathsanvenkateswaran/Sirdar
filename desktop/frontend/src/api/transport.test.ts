@@ -426,7 +426,19 @@ describe('wails transport', () => {
       jobId: 'job-7',
       runId: 'r1',
     })
-    expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on')
+    // The model is the fourth argument and empty means "the run's own":
+    // the bridge takes a string, not an absent one, because the Wails
+    // bindings are generated from the Go signature.
+    expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on', '')
+  })
+
+  it('carries a model on a resume and on a steer', async () => {
+    const bridge = stubBridge({ Resume: async () => 'job-8', Steer: async () => 'job-9' })
+    const t = createWailsTransport()
+    await t.resume('ws1', 'r1', '', 'claude-opus-5')
+    await t.steer('ws1', 'r1', 'go on', 'claude-sonnet-5')
+    expect(bridge.Resume).toHaveBeenCalledWith('ws1', 'r1', '', 'claude-opus-5')
+    expect(bridge.Steer).toHaveBeenCalledWith('ws1', 'r1', 'go on', 'claude-sonnet-5')
   })
 
   // The bound methods take every field, absent ones as their zero value,

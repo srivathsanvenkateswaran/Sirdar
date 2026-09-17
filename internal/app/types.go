@@ -107,6 +107,21 @@ type RunDetail struct {
 	// run — the words they typed around the ticket key. Empty on a run
 	// started without one.
 	Instruction string `json:"instruction,omitempty"`
+	// ModelSegments is which model answered which stretch of the run,
+	// oldest first, for a run that changed model partway through — a
+	// per-model limit that moved it on, or a `--model` on resume or
+	// steer. `model` above is the one it is on now. A run that never
+	// changed omits this.
+	ModelSegments []ModelSegmentInfo `json:"modelSegments,omitempty"`
+}
+
+// ModelSegmentInfo is one stretch of a run under one model, for the run
+// detail: when it started, which model, and what moved the run onto it
+// ("model limit: Fable", "resume --model", "steer --model").
+type ModelSegmentInfo struct {
+	At    string `json:"at"`
+	Model string `json:"model"`
+	Why   string `json:"why"`
 }
 
 // SteerInfo is one follow-up instruction on a run, for the run detail.
@@ -613,6 +628,9 @@ func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 	d.Instruction = s.Instruction
 	for _, st := range s.Steers {
 		d.Steers = append(d.Steers, SteerInfo{At: wireTime(st.At), Text: st.Text, Continuation: st.Continuation})
+	}
+	for _, seg := range s.ModelSegments {
+		d.ModelSegments = append(d.ModelSegments, ModelSegmentInfo{At: wireTime(seg.At), Model: seg.Model, Why: seg.Why})
 	}
 	return d
 }

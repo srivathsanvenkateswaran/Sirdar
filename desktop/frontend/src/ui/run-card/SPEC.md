@@ -32,7 +32,10 @@ session's.
   leading side `__state`: the state glyph (`src/ui/state-glyph`) with its
   word in the state's hue and, on a live or blocked run only, the mono
   clock; it is the side that gives way when the card is narrow, and the
-  word is what is cut with an ellipsis — the foot never wraps. On the
+  word is what is cut with an ellipsis — the foot never wraps. `detail`, when
+  given, follows the word after a middot ("blocked · model limit"): it is for
+  the one thing a reader has to act on that the state word alone does not
+  distinguish, and anything longer belongs on the session. On the
   trailing side `__who`, which never shrinks: `__key`
   (mono, `--sd-text-ledger`, 500, `--sd-ink-3`, `dir="ltr"`, `nowrap`), the
   assignee's avatar, and the provider mark at `sm`. The key is left out of the

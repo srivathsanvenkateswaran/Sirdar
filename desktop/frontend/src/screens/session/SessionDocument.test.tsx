@@ -106,7 +106,7 @@ describe('S1 · the completed triage', () => {
     const box = within(doc).getByRole('textbox', { name: 'Steer' })
     fireEvent.change(box, { target: { value: 'Now check the adjustment path too.' } })
     fireEvent.click(within(doc).getByRole('button', { name: /Steer/ }))
-    await waitFor(() => expect(transport.calls.steer).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, text: 'Now check the adjustment path too.' }]))
+    await waitFor(() => expect(transport.calls.steer).toEqual([{ ws: 'ws1', runId: TRIAGE_RUN_ID, text: 'Now check the adjustment path too.', model: '' }]))
     await waitFor(() => expect(within(doc).getByText('running')).toBeInTheDocument())
     expect(within(doc).getAllByTestId('you-card')).toHaveLength(2)
     // The run went running, so the strip's button became the Stop.

@@ -433,6 +433,19 @@ export function askedQuestion(reason: string | undefined): string {
   return match ? reason.slice(match[0].length).trim() : ''
 }
 
+/**
+ * The model a blocked run's reason names, or '' when the run stopped for
+ * something else. `internal/run` writes `model limit: <model>` when the
+ * login has spent one model's allowance while the rest of the account is
+ * still answering, which is a run a reader can carry on right now by
+ * naming another model — unlike a rate limit, which is a clock.
+ */
+export function modelLimited(reason: string | undefined): string {
+  if (!reason) return ''
+  const match = /^model limit:\s*/i.exec(reason)
+  return match ? reason.slice(match[0].length).trim() : ''
+}
+
 /** Last file name of a path, for showing a note or attachment compactly. */
 export function baseName(path: string): string {
   const parts = path.split(/[\\/]/)

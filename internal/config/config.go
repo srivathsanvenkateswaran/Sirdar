@@ -591,6 +591,25 @@ type Config struct {
 	Providers struct {
 		Claude struct {
 			Path string `yaml:"path"`
+
+			// FallbackModels are the models a run moves on to, in order,
+			// when the login turns out to have no room left for the one
+			// it was started with — the per-model limit Claude Code
+			// reports as a sentence rather than as an error
+			// (provider.EvModelLimit).
+			//
+			// Empty, the default, means nobody has said what to fall back
+			// to, so the run stops and waits for a person to choose. That
+			// is the honest default: which model a triage note may be
+			// written by is a judgement about the note, not about
+			// availability, and guessing one would quietly change the
+			// answer a workspace gets.
+			//
+			// A name here is what `--model` takes: a dated id, or an
+			// alias the CLI resolves. A model already tried on the run is
+			// skipped, so a list that repeats the configured model costs
+			// nothing.
+			FallbackModels []string `yaml:"fallbackModels"`
 		} `yaml:"claude"`
 		Codex struct {
 			Path string `yaml:"path"`
@@ -1476,6 +1495,23 @@ func credentialRef(key, ref string) error {
 // (in a test, say) reads as the default rather than as "off".
 func (c *Config) WorkspaceOnlyMCP() bool {
 	return c.MCP.WorkspaceOnly == nil || *c.MCP.WorkspaceOnly
+}
+
+// FallbackModels is providers.claude.fallbackModels with the blanks and
+// the surrounding whitespace taken out, in the order it was written. A nil
+// Config, or one that configured none, reports none — which is what makes
+// a per-model limit stop the run and wait for a person.
+func (c *Config) FallbackModels() []string {
+	if c == nil {
+		return nil
+	}
+	var out []string
+	for _, m := range c.Providers.Claude.FallbackModels {
+		if m = strings.TrimSpace(m); m != "" {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 // defaultStallMinutes is how long a run tolerates complete silence from

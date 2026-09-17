@@ -116,6 +116,23 @@ type execution struct {
 	rateLimited bool
 	resetsAt    time.Time
 
+	// modelLimit is the model the provider says this login has spent, set
+	// when it refuses one model while the rest of the account still
+	// answers (provider.EvModelLimit). It is cleared again the moment a
+	// fallback session starts, so it only names a limit nobody has
+	// answered yet.
+	//
+	// It is kept apart from rateLimited because the two ask for opposite
+	// things: a rate limit is a clock to wait on and parks the whole
+	// pool, and this is a choice to make and parks nothing — every other
+	// run on another model is fine.
+	modelLimit string
+	// limitText is what the provider said, kept for the event log.
+	limitText string
+	// tried is every model this run has asked for, case-folded, so a
+	// fallback list is walked once and a model is never offered twice.
+	tried map[string]bool
+
 	overBudget  string
 	interrupted bool
 	failure     string
@@ -350,6 +367,8 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 
 	ex := &execution{base: p.usageBase, seen: usageMinus(p.state.Usage, p.usageBase)}
 	ex.live.set(sess)
+	ex.tried = map[string]bool{}
+	ex.markTried(p.state.RequestedModel())
 
 	// A steer's instruction goes into the transcript ahead of the session
 	// it started, with who is answering it: the session that wrote the
@@ -481,6 +500,14 @@ func (r *Runner) execute(ctx context.Context, p *prepared, resume string, pl *po
 		return r.finish(ctx, p, store.StatusOverBudget, ex.overBudget, note.DigestRow{})
 	case ex.interrupted:
 		return r.finish(ctx, p, store.StatusBlocked, "interrupted", note.DigestRow{})
+	case ex.modelLimit != "":
+		// Blocked, not failed: the session handle is intact, the run is
+		// one `sirdar resume --model NAME` from carrying on, and nothing
+		// about the workspace or the ticket is wrong. It sits above
+		// ex.failure because a limit is why the turn said nothing, and
+		// the malformed-line or empty-answer reason under it would name
+		// the symptom.
+		return r.finish(ctx, p, store.StatusBlocked, modelLimitReason(ex.modelLimit), note.DigestRow{})
 	case ex.failure != "":
 		return r.finish(ctx, p, store.StatusFailed, ex.failure, note.DigestRow{})
 	case ex.question != "":
@@ -719,7 +746,7 @@ func (r *Runner) consumeSession(ctx context.Context, p *prepared, sess provider.
 			ex.stall.reset()
 			r.record(p, log, ev)
 			r.progress(p, ev)
-			r.handleEvent(ctx, p, sess, pl, ex, ev)
+			r.handleEvent(ctx, p, sess, log, pl, ex, ev)
 		}
 	}
 }
@@ -807,6 +834,11 @@ func (r *Runner) progress(p *prepared, ev provider.Event) {
 		fmt.Fprintf(w, "[%s] blocked agent asked: %s\n", key, firstLine(ev.Text))
 	case provider.EvRateLimited:
 		fmt.Fprintf(w, "[%s] blocked rate limited\n", key)
+	case provider.EvModelLimit:
+		// Nothing here: switchModel prints the line, because only it
+		// knows whether the limit stopped the run or moved it on, and
+		// two lines saying opposite things about the same event is
+		// worse than one printed a moment later.
 	case provider.EvSystem:
 		// A window's utilization is worth a line on a run that costs
 		// real money. It is not a block, and must not read like one.
@@ -852,7 +884,7 @@ func toolDetail(input json.RawMessage) string {
 	return " " + s
 }
 
-func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Session, pl *pool, ex *execution, ev provider.Event) {
+func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, pl *pool, ex *execution, ev provider.Event) {
 	if ev.Kind != provider.EvError {
 		ex.malformed = 0
 	}
@@ -916,6 +948,26 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		// silence as a stall would turn every question into a failure.
 		ex.stall.hold()
 
+	case provider.EvModelLimit:
+		// Only recorded here. What to do about it — walk the fallback
+		// list, or stop and let a person choose — is decided once the
+		// turn has ended, in handleFinal, so the usage and the session
+		// handle this turn produced are not thrown away by reacting to
+		// the sentence mid-stream.
+		//
+		// The first limit is the one kept: a session that reports the
+		// same refusal in its assistant line and again in its result
+		// line is reporting it once.
+		if ex.modelLimit == "" {
+			ex.modelLimit = limitedModel(ev)
+			ex.limitText = firstLine(ev.Text)
+			ex.markTried(p.state.RequestedModel())
+		}
+		// Nobody is coming until a model is chosen, so the silence after
+		// this is the block and not a stall — the same hold a question
+		// puts on, for the same reason: the run keeps its handle.
+		ex.stall.hold()
+
 	case provider.EvError:
 		ex.malformed++
 		if ex.malformed >= maxMalformed {
@@ -953,7 +1005,7 @@ func (r *Runner) handleEvent(ctx context.Context, p *prepared, sess provider.Ses
 		r.noteModel(p, ev)
 
 	case provider.EvFinal:
-		r.handleFinal(ctx, p, sess, ex, ev)
+		r.handleFinal(ctx, p, sess, log, ex, ev)
 	}
 }
 
@@ -1008,7 +1060,7 @@ func (r *Runner) noteModel(p *prepared, ev provider.Event) {
 // maxEmptyTurns): nothing was validated, so it is not the schema retry
 // being spent, and an agent that stops mid-work — the ACP agents do it on
 // a refused tool call — is asked again.
-func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, ex *execution, ev provider.Event) {
+func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, ex *execution, ev provider.Event) {
 	// A session that has already produced a valid note is done. A provider
 	// that emits a second final line — a resumed session replaying its
 	// result, a CLI that repeats itself on the way out — must not file the
@@ -1028,6 +1080,16 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	// a budget that goes over after the note was filed is still only a
 	// warning on a completed run, which is the ordering above.
 	if ex.overBudget != "" {
+		return
+	}
+
+	// A per-model limit is not a wrong answer and must never buy the
+	// revision retry: the retry re-asks the same model, the same model
+	// refuses again, and the run ends failed after three turns of the CLI
+	// repeating a sentence about switching models. What the limit buys
+	// instead is the next model, or a stop.
+	if ex.modelLimit != "" {
+		r.switchModel(ctx, p, sess, log, ex)
 		return
 	}
 
@@ -1231,6 +1293,162 @@ func (r *Runner) handleFinal(ctx context.Context, p *prepared, sess provider.Ses
 	}
 	fmt.Fprintf(r.stderr(), "[%s] schema retry in a resumed session\n", p.state.Key)
 	ex.retrySession = next
+}
+
+// modelLimitReason is the terminal reason of a run stopped by a per-model
+// limit. It is the one string `sirdar resume`, the board card and the
+// session banner all read the model back out of, so it is built and parsed
+// in one place (see ModelLimited).
+func modelLimitReason(model string) string { return modelLimitPrefix + model }
+
+// modelLimitPrefix marks a blocked run's Reason as carrying the model the
+// login has no room for, the way askedPrefix marks one carrying a
+// question.
+const modelLimitPrefix = "model limit: "
+
+// ModelLimited reads the model out of a blocked run's reason, or "" when
+// the run stopped for something else. A screen offering the operator
+// another model asks this rather than matching on the text itself.
+func ModelLimited(reason string) string {
+	model, ok := strings.CutPrefix(reason, modelLimitPrefix)
+	if !ok {
+		return ""
+	}
+	return strings.TrimSpace(model)
+}
+
+// limitedModel is the model an EvModelLimit names: the family the provider
+// wrote, else the first line of what it said, so a reason is never the
+// bare prefix.
+func limitedModel(ev provider.Event) string {
+	if m := strings.TrimSpace(ev.Model); m != "" {
+		return m
+	}
+	if text := firstLine(ev.Text); text != "" {
+		return text
+	}
+	return "unknown model"
+}
+
+// markTried records a model this run has already asked for, so the
+// fallback list never offers it a second time. Comparison is case-folded
+// because `opus` and `Opus` are the same flag value to the CLI.
+func (ex *execution) markTried(model string) {
+	model = strings.ToLower(strings.TrimSpace(model))
+	if model == "" || ex.tried == nil {
+		return
+	}
+	ex.tried[model] = true
+}
+
+// nextModel is the first configured fallback this run has not already
+// asked for, or "" when the list is empty or spent. A spent list is what
+// puts the run in front of a person: there is nothing left that Sirdar was
+// told it may use.
+func (r *Runner) nextModel(ex *execution) string {
+	for _, m := range r.Config.FallbackModels() {
+		if !ex.tried[strings.ToLower(strings.TrimSpace(m))] {
+			return m
+		}
+	}
+	return ""
+}
+
+// switchModel decides what a run does about a per-model limit, once the
+// refusing turn has ended.
+//
+// With a fallback left it starts the next model against the same session
+// handle — Claude Code takes a different --model on --resume and answers
+// under it, so the transcript the first model built is kept — and writes
+// the switch into the run's state and its event log. With none it closes
+// the session down so the process does not sit holding stdin open, and
+// leaves ex.modelLimit set: the outcome switch turns that into a blocked
+// run whose reason names the model, and the handle is on the state for
+// whichever model a person picks next.
+func (r *Runner) switchModel(ctx context.Context, p *prepared, sess provider.Session, log *store.EventLog, ex *execution) {
+	// The refusal is not an answer, so it is not kept as one: writing it
+	// to result.raw.txt would leave a "previous answer" a later steer
+	// would prime a fresh session with.
+	ex.rawFinal = ""
+
+	limited := ex.modelLimit
+	r.recordSystem(p, log, fmt.Sprintf("%s on the %s login (the run asked for %s)",
+		modelLimitReason(limited), r.providerName(), modelName(p.state.RequestedModel())))
+	if ex.limitText != "" {
+		fmt.Fprintf(r.stderr(), "[%s] blocked %s: %s\n", p.state.Key, modelLimitReason(limited), ex.limitText)
+	} else {
+		fmt.Fprintf(r.stderr(), "[%s] blocked %s\n", p.state.Key, modelLimitReason(limited))
+	}
+
+	next := r.nextModel(ex)
+	if next == "" {
+		r.endSession(p, sess)
+		return
+	}
+
+	// Held across Provider.Start for the same reason the schema retry
+	// holds it: starting a process is not a live session going quiet, and
+	// a slow start must not fail a run that is about to carry on. consume
+	// rearms it once the fallback session is live.
+	ex.stall.hold()
+	spec := r.sessionSpec(p, sess.Handle())
+	spec.Model = next
+	if spec.Resume != "" {
+		// The transcript is already there; what the session needs is the
+		// instruction to finish, not the whole prompt again.
+		spec.Prompt = resumeContinue
+	}
+	fresh, err := r.Provider.Start(ctx, spec)
+	if err != nil {
+		ex.failure = fmt.Sprintf("%s, and starting %s instead failed: %v", modelLimitReason(limited), next, err)
+		ex.modelLimit = ""
+		sess.Cancel()
+		return
+	}
+
+	ex.markTried(next)
+	ex.modelLimit, ex.limitText = "", ""
+	r.noteSwitch(p, log, next, modelLimitReason(limited))
+	r.endSession(p, sess)
+	ex.retrySession = fresh
+}
+
+// noteSwitch records that the run is now on another model: a system line
+// in the transcript reading "Switched to <model>", the run's own model
+// fields so every screen and the register row name the model that goes on
+// to finish the run, and a segment saying what moved it.
+func (r *Runner) noteSwitch(p *prepared, log *store.EventLog, model, why string) {
+	line := switchedTo(model)
+	r.recordSystem(p, log, line)
+	fmt.Fprintf(r.stderr(), "[%s] %s\n", p.state.Key, line)
+
+	p.state.Model, p.state.ModelRequested = model, model
+	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: r.now(), Model: model, Why: why})
+	p.state.UpdatedAt = r.now()
+	if err := p.run.WriteState(p.state); err != nil {
+		fmt.Fprintf(r.stderr(), "[%s] state: %v\n", p.state.Key, err)
+	}
+}
+
+// switchedTo is the transcript's words for a model change, the one
+// spelling a reader of events.jsonl and a reader of the session screen
+// both see.
+func switchedTo(model string) string { return "Switched to " + model }
+
+// recordSystem writes one of Sirdar's own sentences into the run's event
+// log and returns it to the progress view's caller to print. It carries no
+// provider line, because no provider wrote it.
+func (r *Runner) recordSystem(p *prepared, log *store.EventLog, text string) {
+	r.record(p, log, provider.Event{Kind: provider.EvSystem, At: r.now(), Text: text})
+}
+
+// modelName is a configured model for a message, with a word for the run
+// that configured none and let the CLI choose.
+func modelName(model string) string {
+	if model = strings.TrimSpace(model); model != "" {
+		return model
+	}
+	return "the CLI's default model"
 }
 
 // endSession brings a session that has given its answer to a close. It

@@ -180,3 +180,25 @@ func TestBridgeWorkspacesOnEmptyRegistry(t *testing.T) {
 		t.Fatal("AddWorkspace on a directory with no Sirdar config: want an error")
 	}
 }
+
+// TestResumeAndSteerTakeAModel: the desktop transport calls these with a
+// model, so a run blocked on a per-model limit can be carried on from the
+// session screen. The arity is asserted here because the Wails bindings
+// are generated from it: a parameter dropped in the bridge is a silently
+// ignored model in the app.
+func TestResumeAndSteerTakeAModel(t *testing.T) {
+	bridge := reflect.TypeOf(&Bridge{})
+	for _, name := range []string{"Resume", "Steer"} {
+		m, ok := bridge.MethodByName(name)
+		if !ok {
+			t.Fatalf("Bridge.%s is missing", name)
+		}
+		// receiver, workspace, run, text/answer, model
+		if got := m.Type.NumIn(); got != 5 {
+			t.Errorf("Bridge.%s takes %d arguments, want the workspace, the run, the text and the model", name, got)
+		}
+		if last := m.Type.In(m.Type.NumIn() - 1); last.Kind() != reflect.String {
+			t.Errorf("Bridge.%s's last argument is %s, want the model as a string", name, last)
+		}
+	}
+}

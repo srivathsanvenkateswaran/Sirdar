@@ -616,3 +616,29 @@ func TestStaticNilFSStillServesAPI(t *testing.T) {
 		t.Fatalf("body %q", body)
 	}
 }
+
+// TestResumeCarriesAModel: a run blocked on a per-model limit is carried
+// on by naming another model, and the route has to pass it through — the
+// banner's buttons send a resume with no answer and a model.
+func TestResumeCarriesAModel(t *testing.T) {
+	f := newFake()
+	var got jobResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/resume", `{"model":"claude-opus-5"}`), 202, &got)
+	if got.JobID != knownJob || f.gotModel != "claude-opus-5" {
+		t.Fatalf("job %q model %q", got.JobID, f.gotModel)
+	}
+	if f.gotAnswer != "" {
+		t.Fatalf("a model-only resume answered %q", f.gotAnswer)
+	}
+}
+
+// A steer can name a model too, which is what the composer's model picker
+// sends when a reader changes it on a finished run.
+func TestSteerCarriesAModel(t *testing.T) {
+	f := newFake()
+	var got steerResponse
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/runs/"+knownRun+"/steer", `{"text":"Again","model":"claude-sonnet-5"}`), 202, &got)
+	if got.JobID != knownJob || f.gotModel != "claude-sonnet-5" || f.gotSteer != "Again" {
+		t.Fatalf("job %q model %q text %q", got.JobID, f.gotModel, f.gotSteer)
+	}
+}

@@ -11,7 +11,8 @@ import (
 func init() { commands["resume"] = cmdResume }
 
 func cmdResume(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("resume", stderr, "usage: sirdar resume RUN_ID")
+	fs := newFlagSet("resume", stderr, "usage: sirdar resume RUN_ID [--model NAME]")
+	model := fs.String("model", "", "continue on this model instead of the run's; the way past a per-model limit")
 	positional, ok := parseFlags(fs, args, 1, 1, stderr)
 	if !ok {
 		return exitUsage
@@ -33,7 +34,7 @@ func cmdResume(args []string, stdout, stderr io.Writer) int {
 	defer stop()
 
 	r := &runner.Runner{Deps: deps}
-	out, err := r.Resume(ctx, runID)
+	out, err := r.Resume(ctx, runID, runner.ResumeOptions{Model: *model})
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1

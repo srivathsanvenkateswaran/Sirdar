@@ -42,8 +42,8 @@ type Service interface {
 	MCPServers(ctx context.Context, wsID string, connect bool) (MCPInventory, error)
 	MCPTools(ctx context.Context, wsID, server string) (MCPToolList, error)
 	MCPCall(ctx context.Context, wsID, server, tool string, args json.RawMessage) (MCPCallResult, error)
-	Resume(ctx context.Context, wsID, runID, answer string) (JobID, error)
-	Steer(ctx context.Context, wsID, runID, text string) (JobID, error)
+	Resume(ctx context.Context, wsID, runID, answer, model string) (JobID, error)
+	Steer(ctx context.Context, wsID, runID, text, model string) (JobID, error)
 	Cancel(jobID JobID) error
 	Register(wsID string) ([]RegisterRow, error)
 	Doctor(ctx context.Context, wsID string) ([]Check, error)

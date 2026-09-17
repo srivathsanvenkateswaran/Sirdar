@@ -47,7 +47,7 @@ func TestSteerContinuesTheSameRun(t *testing.T) {
 		<-release
 		s.emit(finalEvent(steered))
 	}
-	jobID, err := svc.Steer(context.Background(), wsID, runID, "Re-check the pager")
+	jobID, err := svc.Steer(context.Background(), wsID, runID, "Re-check the pager", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,12 +110,12 @@ func TestSteerRefusesSynchronously(t *testing.T) {
 		{"20260915T090000Z-aaaa", "go on", "is running"},
 		{"20260915T090100Z-bbbb", "   ", "instruction is empty"},
 	} {
-		_, err := svc.Steer(context.Background(), wsID, tc.runID, tc.text)
+		_, err := svc.Steer(context.Background(), wsID, tc.runID, tc.text, "")
 		if !errors.Is(err, ErrSteerRefused) || !strings.Contains(err.Error(), tc.want) {
 			t.Errorf("Steer(%s, %q) = %v, want ErrSteerRefused saying %q", tc.runID, tc.text, err, tc.want)
 		}
 	}
-	if _, err := svc.Steer(context.Background(), wsID, "20260915T090200Z-cccc", "go on"); !errors.Is(err, ErrNoSuchRun) {
+	if _, err := svc.Steer(context.Background(), wsID, "20260915T090200Z-cccc", "go on", ""); !errors.Is(err, ErrNoSuchRun) {
 		t.Errorf("Steer on an unknown run: %v", err)
 	}
 	if jobs := svc.Jobs(); len(jobs) != 0 {

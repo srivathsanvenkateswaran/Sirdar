@@ -197,15 +197,15 @@ export function createHTTPTransport(): Transport {
       postJSON<GoldenEntry>(`/workspaces/${encodeURIComponent(ws)}/golden`, o),
     configSummary: (ws) =>
       getJSON<ConfigSummary>(`/workspaces/${encodeURIComponent(ws)}/config/summary`),
-    resume: (ws, runId, answer) =>
+    resume: (ws, runId, answer, model) =>
       postJSON<{ jobId: string }>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/resume`,
-        { answer },
+        { answer, ...(model ? { model } : {}) },
       ),
-    steer: (ws, runId, text) =>
+    steer: (ws, runId, text, model) =>
       postJSON<SteerStarted>(
         `/workspaces/${encodeURIComponent(ws)}/runs/${encodeURIComponent(runId)}/steer`,
-        { text },
+        { text, ...(model ? { model } : {}) },
       ),
     runDiff: (ws, runId) =>
       getJSON<RunDiff>(
@@ -337,8 +337,8 @@ interface BridgeBindings {
   Golden(ws: string): Promise<GoldenEntry[] | null>
   AddGolden(ws: string, key: string, runId: string): Promise<GoldenEntry>
   ConfigSummary(ws: string): Promise<ConfigSummary>
-  Resume(ws: string, runId: string, answer: string): Promise<string>
-  Steer(ws: string, runId: string, text: string): Promise<string>
+  Resume(ws: string, runId: string, answer: string, model: string): Promise<string>
+  Steer(ws: string, runId: string, text: string, model: string): Promise<string>
   RunDiff(ws: string, runId: string): Promise<RunDiff>
   DropHunk(ws: string, runId: string, path: string, hunk: number, etag: string): Promise<RunDiff>
   MCPServers(ws: string, connect: boolean): Promise<MCPInventory>
@@ -442,11 +442,11 @@ export function createWailsTransport(): Transport {
     golden: async (ws) => list(await bridge().Golden(ws)),
     addGolden: (ws, o) => bridge().AddGolden(ws, o.key ?? '', o.runId ?? ''),
     configSummary: (ws) => bridge().ConfigSummary(ws),
-    resume: async (ws, runId, answer) => ({
-      jobId: await bridge().Resume(ws, runId, answer ?? ''),
+    resume: async (ws, runId, answer, model) => ({
+      jobId: await bridge().Resume(ws, runId, answer ?? '', model ?? ''),
     }),
-    steer: async (ws, runId, text) => ({
-      jobId: await bridge().Steer(ws, runId, text),
+    steer: async (ws, runId, text, model) => ({
+      jobId: await bridge().Steer(ws, runId, text, model ?? ''),
       runId,
     }),
     runDiff: async (ws, runId) => {

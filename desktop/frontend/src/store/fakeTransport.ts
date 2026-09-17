@@ -35,7 +35,7 @@ export interface TransportCalls {
   cancel: string[]
   runs: string[]
   queue: string[]
-  steer: { ws: string; runId: string; text: string }[]
+  steer: { ws: string; runId: string; text: string; model: string }[]
   runDiff: { ws: string; runId: string }[]
   dropHunk: { ws: string; runId: string; req: DropHunkRequest }[]
   mcpServers: { ws: string; connect: boolean }[]
@@ -539,8 +539,8 @@ export function createFakeTransport(seed: {
     },
     configSummary: async () => seed.configSummary ?? emptyConfigSummary(),
     resume: async () => ({ jobId: 'job-resume' }),
-    steer: async (ws, runId, text) => {
-      calls.steer.push({ ws, runId, text })
+    steer: async (ws, runId, text, model) => {
+      calls.steer.push({ ws, runId, text, model: model ?? '' })
       if (!text.trim()) throw new Error('steer refused: the instruction is empty')
       return { jobId: `job-steer-${calls.steer.length}`, runId }
     },

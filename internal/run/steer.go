@@ -21,6 +21,14 @@ type SteerOptions struct {
 	// a fix under fix.inPlace used. It is ignored for every other kind: a
 	// triage or rca run finds its own --at worktree.
 	Root string
+
+	// Model overrides the model the continued session asks for, and every
+	// session of this run after it. It is what `sirdar steer RUN "…"
+	// --model NAME` carries, and what the session screen's model picker
+	// sends when a reader changes it on a finished run. Empty leaves the
+	// run on the model it has, which is every steer that does not name
+	// one.
+	Model string
 }
 
 // ErrSteerLive says the run is still going. It is the one refusal the HTTP
@@ -122,6 +130,8 @@ func (r *Runner) Steer(ctx context.Context, runID, text string, o SteerOptions) 
 		}
 		p.promptText = primedPrompt(string(original), string(earlier), text, state.Kind)
 	}
+
+	applyModel(p, o.Model, "steer --model", r.now())
 
 	s := store.Steer{At: r.now(), Text: text, Continuation: string(cont)}
 	p.steer = &s

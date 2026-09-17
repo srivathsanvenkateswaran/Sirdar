@@ -1682,3 +1682,33 @@ func TestTranscribeCommandIsCheckedAtLoad(t *testing.T) {
 		})
 	}
 }
+
+// TestFallbackModelsDecodeAndDefaultToNone: a per-model limit stops a run
+// and waits for a person unless the workspace has said what to fall back
+// to, so the empty list is the default and the configured one is read in
+// the order it was written, blanks dropped.
+func TestFallbackModelsDecodeAndDefaultToNone(t *testing.T) {
+	c, err := Load(writeCfg(t, minimal))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := c.FallbackModels(); len(got) != 0 {
+		t.Fatalf("default fallback models %v, want none", got)
+	}
+
+	c, err = Load(writeCfg(t, minimal+`
+providers:
+  claude:
+    fallbackModels:
+      - claude-opus-5
+      - ""
+      - "  claude-sonnet-5  "
+`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := c.FallbackModels()
+	if len(got) != 2 || got[0] != "claude-opus-5" || got[1] != "claude-sonnet-5" {
+		t.Fatalf("fallback models %q", got)
+	}
+}

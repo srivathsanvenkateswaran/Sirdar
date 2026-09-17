@@ -1215,3 +1215,132 @@ func count(list []string, want string) int {
 	}
 	return n
 }
+
+// TestModelLimitIsNotAnAnswer is the owner's 2026-09-17 finding: a triage
+// on claude-fable-5-1 hit the CLI's per-model limit, the CLI said so as an
+// ordinary assistant message, and Sirdar read that as a turn that ended
+// without an answer and re-asked the same model three times before failing
+// the run. The sentence leaves the adapter under its own kind, carrying
+// the model family the message names, and never as assistant text.
+func TestModelLimitIsNotAnAnswer(t *testing.T) {
+	const message = "You've reached your Fable limit. Switch to another model, " +
+		"or manage usage credits at claude.ai/settings/usage to continue on Fable."
+	script := writeScript(t,
+		`{"type":"system","subtype":"init","session_id":"m1","model":"claude-fable-5-1"}`,
+		`{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"`+message+`"}]}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"m1","result":"`+message+`","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var limits []provider.Event
+	var texts []string
+	for ev := range s.Events() {
+		switch ev.Kind {
+		case provider.EvModelLimit:
+			limits = append(limits, ev)
+		case provider.EvAssistantText:
+			texts = append(texts, ev.Text)
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if len(limits) == 0 {
+		t.Fatal("the limit message was not reported as a model limit")
+	}
+	for _, ev := range limits {
+		if ev.Model != "Fable" {
+			t.Fatalf("model %q, want the family the message names", ev.Model)
+		}
+		if !strings.Contains(ev.Text, "reached your Fable limit") {
+			t.Fatalf("text %q does not carry what the CLI said", ev.Text)
+		}
+		if len(ev.Raw) == 0 {
+			t.Error("a model limit must carry the provider's own line")
+		}
+	}
+	for _, text := range texts {
+		if strings.Contains(text, "reached your Fable limit") {
+			t.Fatalf("the refusal also reached the reader as an answer: %q", text)
+		}
+	}
+}
+
+// A rate_limit_event that refuses work and names a model is that model's
+// limit, not the account's: the run can carry on under another model right
+// now and has no reset to wait for, so it must not park the pool.
+func TestRateLimitEventNamingAModelIsAModelLimit(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"fable_weekly","utilization":1,"resetsAt":1789000000}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"m2","result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits, rate := 0, 0
+	var family string
+	for ev := range s.Events() {
+		switch ev.Kind {
+		case provider.EvModelLimit:
+			limits++
+			family = ev.Model
+		case provider.EvRateLimited:
+			rate++
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if limits != 1 || family != "fable" {
+		t.Fatalf("model limits %d family %q", limits, family)
+	}
+	if rate != 0 {
+		t.Fatalf("a per-model window must not park the pool: %d rate-limited events", rate)
+	}
+}
+
+// The account's own window still is a rate limit: it resets at a time the
+// CLI reports, and waiting for it is right.
+func TestAccountWindowStaysARateLimit(t *testing.T) {
+	script := writeScript(t,
+		`{"type":"rate_limit_event","rate_limit_info":{"status":"rejected","rateLimitType":"seven_day","utilization":1,"resetsAt":1789000000}}`,
+		`{"type":"result","subtype":"success","is_error":false,"num_turns":1,"session_id":"m3","result":"","total_cost_usd":0,"usage":{"input_tokens":0,"output_tokens":0}}`,
+	)
+	s, err := New().Start(context.Background(), fakeSpec(t, script))
+	if err != nil {
+		t.Fatal(err)
+	}
+	limits, rate := 0, 0
+	for ev := range s.Events() {
+		switch ev.Kind {
+		case provider.EvModelLimit:
+			limits++
+		case provider.EvRateLimited:
+			rate++
+		}
+	}
+	if _, err := s.Wait(); err != nil {
+		t.Fatal(err)
+	}
+	if rate != 1 || limits != 0 {
+		t.Fatalf("rate limited %d model limits %d", rate, limits)
+	}
+}
+
+// TestResumeCarriesTheModel is what `sirdar resume RUN --model NAME` rests
+// on: the resumed invocation names both the session and the new model.
+// Verified against the CLI itself on 2026-09-17 — `claude -p --resume <id>
+// --model sonnet` answered under claude-sonnet-5 in the same session id,
+// with the init line, the assistant message and modelUsage all agreeing —
+// so the flag pair is honoured and this asserts Sirdar passes it.
+func TestResumeCarriesTheModel(t *testing.T) {
+	got := args(provider.SessionSpec{Model: "claude-opus-5", Resume: "sess-1", OutputSchema: []byte(`{}`)})
+	for _, want := range []string{"--resume", "sess-1", "--model", "claude-opus-5"} {
+		if !contains(got, want) {
+			t.Fatalf("missing %q in %v", want, got)
+		}
+	}
+}

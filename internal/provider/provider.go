@@ -85,6 +85,27 @@ const (
 	EvUsage         EventKind = "usage"
 	EvRateLimited   EventKind = "rate_limited"
 	EvQuestion      EventKind = "question"
+
+	// EvModelLimit says the login has no room left for one model in
+	// particular, while the rest of it still works. It is not a rate
+	// limit: nothing resets at a time the provider will name, and every
+	// other model on the same account is still answering, so parking the
+	// pool until a reset would wait for something that is not coming.
+	//
+	// It is not an answer either, which is the whole reason it exists.
+	// Claude Code reports the refusal as an ordinary assistant message —
+	// "You've reached your Fable limit. Switch to another model…" — and
+	// a reader that takes that for prose sees a turn that ended without a
+	// document and asks the same model again, three times, before failing
+	// the run. Naming it here is what lets the run layer hold the session
+	// instead, with a handle to continue from once a model is chosen.
+	//
+	// Model is the model family the provider named, as it named it
+	// ("Fable"), and Text is the sentence it said. Only the claude
+	// adapter reports it today: Codex's rate-limit notification is about
+	// the account's window rather than one model, and ACP carries no
+	// equivalent at all, so both stay as they were.
+	EvModelLimit EventKind = "model_limit"
 	EvFinal         EventKind = "final"
 	EvSystem        EventKind = "system" // init, status, anything informational
 	EvError         EventKind = "error"

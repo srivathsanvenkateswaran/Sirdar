@@ -497,3 +497,29 @@ func TestIdentityCheckWarnsWhenNobody(t *testing.T) {
 		}
 	}
 }
+
+// TestFallbackModelsCheckReportsTheListAndOnlyWhenSet: a configured
+// fallback list changes what a run does without anyone asking at the time,
+// so it belongs in the report an operator runs to find out what a run will
+// do. An empty list is the default and adds no row.
+func TestFallbackModelsCheckReportsTheListAndOnlyWhenSet(t *testing.T) {
+	cfg := &config.Config{Provider: "claude"}
+	if _, ok := fallbackModelsCheck(cfg); ok {
+		t.Error("an unconfigured fallback list should add no row")
+	}
+
+	cfg.Providers.Claude.FallbackModels = []string{"claude-opus-5", "  ", "claude-sonnet-5"}
+	check, ok := fallbackModelsCheck(cfg)
+	if !ok {
+		t.Fatal("a configured fallback list should be reported")
+	}
+	if !check.OK {
+		t.Errorf("a fallback list is not a fault: %+v", check)
+	}
+	if !strings.Contains(check.Detail, "claude-opus-5, claude-sonnet-5") {
+		t.Errorf("detail should name the list in order, without the blank: %q", check.Detail)
+	}
+	if !strings.Contains(check.Detail, "in this order") {
+		t.Errorf("detail should say the order matters: %q", check.Detail)
+	}
+}

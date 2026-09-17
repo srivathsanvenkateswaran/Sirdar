@@ -298,9 +298,70 @@ describe('SessionConversation', () => {
       const box = await screen.findByRole('textbox', { name: 'Answer' })
       fireEvent.change(box, { target: { value: 'Allow it once.' } })
       fireEvent.click(send('Answer'))
-      await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Allow it once.'))
+      // The fourth argument is the model the answer runs under, empty
+      // while the reader has picked none: a resume that names no model
+      // leaves the run on the one it has.
+      await waitFor(() => expect(f.transport.resume).toHaveBeenCalledWith('ws1', FIX_DETAIL.runId, 'Allow it once.', ''))
       expect(await screen.findByTestId('you-bubble')).toHaveTextContent('Allow it once.')
       expect(box).toHaveValue('')
+    })
+  })
+
+  describe('S7 — blocked on a per-model limit', () => {
+    const LIMITED: RunDetail = {
+      ...TRIAGE_DETAIL,
+      status: 'blocked',
+      reason: 'model limit: Fable',
+      model: 'claude-fable-5-1',
+    }
+
+    /*
+     * The owner's 2026-09-17 finding, from the reader's side: the CLI has
+     * no room left for Fable, every other model on the login still
+     * answers, and the only thing missing is a choice. One click continues
+     * the run under the model chosen.
+     */
+    it('offers a model above the composer and resumes the run under the one chosen', async () => {
+      const f = fake({ detail: LIMITED })
+      renderScene(f)
+      expect(await screen.findByText(/Fable’s limit is reached on this login/)).toBeInTheDocument()
+
+      const opus = await screen.findByRole('button', { name: 'Opus 5' })
+      fireEvent.click(opus)
+      await waitFor(() =>
+        expect(f.transport.resume).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, '', 'claude-opus-5'),
+      )
+    })
+
+    // A run blocked on a question is a different block, and must not grow
+    // a row of model buttons.
+    it('stays out of the way of a run blocked on a question', async () => {
+      const f = fake({
+        detail: { ...TRIAGE_DETAIL, status: 'blocked', reason: 'agent asked: which environment?' },
+      })
+      renderScene(f)
+      await screen.findByRole('textbox', { name: 'Answer' })
+      expect(screen.queryByText(/limit is reached on this login/)).toBeNull()
+    })
+
+    /*
+     * The composer's Model chip used to be a fact with a tooltip saying it
+     * could not change. It can: Claude Code takes a different --model on
+     * --resume, so on a run that has stopped the chip picks the model the
+     * next steer runs under.
+     */
+    it('sends the model the composer picked on the next steer', async () => {
+      const f = fake({ detail: { ...TRIAGE_DETAIL, status: 'completed' } })
+      renderScene(f)
+      fireEvent.click(await screen.findByRole('button', { name: /^Model / }))
+      fireEvent.click(await screen.findByRole('option', { name: /Opus 5/ }))
+
+      const box = await screen.findByRole('textbox', { name: 'Steer' })
+      fireEvent.change(box, { target: { value: 'Try again' } })
+      fireEvent.click(send('Steer'))
+      await waitFor(() =>
+        expect(f.transport.steer).toHaveBeenCalledWith('ws1', TRIAGE_DETAIL.runId, 'Try again', 'claude-opus-5'),
+      )
     })
   })
 

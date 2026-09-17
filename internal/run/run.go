@@ -360,10 +360,23 @@ func (r *Runner) RCA(ctx context.Context, key string, o RCAOptions) (Outcome, er
 	return r.runOne(ctx, key, store.KindRCA, o.Options, &o, newPool(r.onPause))
 }
 
+// ResumeOptions are the inputs a resume takes beyond the run id.
+type ResumeOptions struct {
+	// Model overrides the model the continued session asks for, and the
+	// model every later session of this run asks for after it. It is what
+	// `sirdar resume RUN --model NAME` carries, and the one way out of a
+	// run blocked on a per-model limit: the login has no room for the
+	// model the run was started with, and another one is still answering.
+	//
+	// Empty leaves the run on the model it has, which is every resume
+	// that is answering a question or picking up an interrupt.
+	Model string
+}
+
 // Resume continues a blocked or interrupted run: it reopens the run, asks
 // the operator for an answer when the agent was waiting on a question, and
 // starts a new session against the stored provider handle.
-func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
+func (r *Runner) Resume(ctx context.Context, runID string, o ResumeOptions) (Outcome, error) {
 	if r.Config == nil {
 		return Outcome{}, fmt.Errorf("run: no workspace configuration")
 	}
@@ -404,6 +417,8 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 	// rather than duplicating the paths the blocked attempt recorded.
 	p.state.Notes = nil
 
+	applyModel(p, o.Model, "resume --model", r.now())
+
 	text, err := r.resumeText(state)
 	if err != nil {
 		return Outcome{}, err
@@ -416,6 +431,23 @@ func (r *Runner) Resume(ctx context.Context, runID string) (Outcome, error) {
 }
 
 const resumeContinue = "Continue where you left off and produce the JSON note."
+
+// applyModel puts a continued run on another model: the session about to
+// start asks for it, and so does every session after it, because the run's
+// model is what a later steer or resume reads back. The reason is recorded
+// as a segment, so the state says what moved the run rather than only that
+// it moved.
+//
+// An empty model changes nothing, which is every resume and steer that did
+// not name one.
+func applyModel(p *prepared, model, why string, at time.Time) {
+	model = strings.TrimSpace(model)
+	if model == "" || model == p.state.RequestedModel() {
+		return
+	}
+	p.state.Model, p.state.ModelRequested = model, model
+	p.state.ModelSegments = append(p.state.ModelSegments, store.ModelSegment{At: at, Model: model, Why: why})
+}
 
 // askedPrefix marks a blocked run's Reason as carrying the agent's actual
 // question, for resumeText to recover and put to the operator. It stays

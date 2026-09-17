@@ -48,7 +48,7 @@ func TestSteerKeepsTheWorktreeAndAmendsTheCommit(t *testing.T) {
 	first := localFix(t, w)
 
 	p := &stubProvider{report: steeredReport, edit: editPage, specs: make(chan provider.SessionSpec, 1), t: t}
-	res, err := Steer(t.Context(), newDeps(w, p), first.RunID, "Also cap the page size")
+	res, err := Steer(t.Context(), newDeps(w, p), first.RunID, "Also cap the page size", "")
 	if err != nil {
 		t.Fatalf("Steer: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSteerUnchangedTreeLeavesTheCommit(t *testing.T) {
 	noGH(t)
 	first := localFix(t, w)
 
-	res, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), first.RunID, "Run the tests again")
+	res, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), first.RunID, "Run the tests again", "")
 	if err != nil {
 		t.Fatalf("Steer: %v", err)
 	}
@@ -166,7 +166,7 @@ func TestSteerReevaluatesTheDeviation(t *testing.T) {
 
 	deviating := strings.Replace(steeredReport, `"deviationFromNote": ""`,
 		`"deviationFromNote": "The cap lives in the pager, not the exporter"`, 1)
-	res, err := Steer(t.Context(), newDeps(w, &stubProvider{report: deviating, edit: editPage, t: t}), first.RunID, "Cap the page size")
+	res, err := Steer(t.Context(), newDeps(w, &stubProvider{report: deviating, edit: editPage, t: t}), first.RunID, "Cap the page size", "")
 	if err != nil {
 		t.Fatalf("Steer: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestSteerReevaluatesTheDeviation(t *testing.T) {
 		t.Errorf("a steer pushed %s", res.Branch)
 	}
 
-	res, err = Steer(t.Context(), newDeps(w, &stubProvider{report: steeredReport, t: t}), first.RunID, "Fine, keep it there")
+	res, err = Steer(t.Context(), newDeps(w, &stubProvider{report: steeredReport, t: t}), first.RunID, "Fine, keep it there", "")
 	if err != nil {
 		t.Fatalf("second Steer: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestSteerRefusals(t *testing.T) {
 		if err != nil || !res.Pushed {
 			t.Fatalf("Run: %v %+v", err, res)
 		}
-		_, err = Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), res.RunID, "More")
+		_, err = Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), res.RunID, "More", "")
 		if err == nil || !strings.Contains(err.Error(), "pushed") {
 			t.Fatalf("Steer on a pushed run: %v", err)
 		}
@@ -209,7 +209,7 @@ func TestSteerRefusals(t *testing.T) {
 		first := localFix(t, w)
 		run(t, w.root, "git", "worktree", "remove", "--force", first.Worktree)
 		p := &stubProvider{report: fixReport, specs: make(chan provider.SessionSpec, 1), t: t}
-		_, err := Steer(t.Context(), newDeps(w, p), first.RunID, "More")
+		_, err := Steer(t.Context(), newDeps(w, p), first.RunID, "More", "")
 		if err == nil || !strings.Contains(err.Error(), "is gone") {
 			t.Fatalf("Steer without the worktree: %v", err)
 		}
@@ -227,7 +227,7 @@ func TestSteerRefusals(t *testing.T) {
 		mustWrite(t, filepath.Join(first.Worktree, "export", "extra.go"), "package export\n")
 		run(t, first.Worktree, "git", "add", "-A", "--", ".", ":(exclude).sirdar")
 		run(t, first.Worktree, "git", "commit", "-q", "--no-verify", "-m", "somebody else's commit")
-		_, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), first.RunID, "More")
+		_, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), first.RunID, "More", "")
 		if err == nil || !strings.Contains(err.Error(), "not at") {
 			t.Fatalf("Steer on a moved branch: %v", err)
 		}
@@ -236,7 +236,7 @@ func TestSteerRefusals(t *testing.T) {
 	t.Run("provider cannot fix", func(t *testing.T) {
 		w := newWorkspace(t, "triaged")
 		first := localFix(t, w)
-		_, err := Steer(t.Context(), newDeps(w, &noFixProvider{t: t}), first.RunID, "More")
+		_, err := Steer(t.Context(), newDeps(w, &noFixProvider{t: t}), first.RunID, "More", "")
 		if err == nil || !strings.Contains(err.Error(), errNoFix.Error()) {
 			t.Fatalf("Steer on a provider that cannot fix: %v", err)
 		}
@@ -244,7 +244,7 @@ func TestSteerRefusals(t *testing.T) {
 
 	t.Run("not a fix run", func(t *testing.T) {
 		w := newWorkspace(t, "triaged")
-		_, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), w.runID, "More")
+		_, err := Steer(t.Context(), newDeps(w, &stubProvider{report: fixReport, t: t}), w.runID, "More", "")
 		if err == nil || !strings.Contains(err.Error(), "not a fix") {
 			t.Fatalf("Steer on the triage run: %v", err)
 		}
@@ -261,7 +261,7 @@ func TestSteerGuardFailsTheRun(t *testing.T) {
 
 	hook := filepath.Join(w.root, ".git", "hooks", "pre-commit")
 	p := &stubProvider{report: steeredReport, edit: editThen(hook, "#!/bin/sh\nexit 0\n"), t: t}
-	res, err := Steer(t.Context(), newDeps(w, p), first.RunID, "More")
+	res, err := Steer(t.Context(), newDeps(w, p), first.RunID, "More", "")
 	if err == nil {
 		t.Fatal("a session that wrote a hook was accepted")
 	}

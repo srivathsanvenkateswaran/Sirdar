@@ -8,21 +8,46 @@ same caps, and its note is rendered again when the answer changes.
 sirdar steer 20260915T091200Z-3f2a "Re-check the partial-return path"
 sirdar steer 20260915T091200Z-3f2a "Now write the RCA from this"
 sirdar steer 20260915T104500Z-9c01 "Keep the change to the Return branch; leave the pager alone"
+sirdar steer 20260915T091200Z-3f2a "Read it again, carefully" --model claude-opus-5
 ```
 
 `sirdar resume` is for a run that stopped and is waiting — a question, a rate limit, an
 interrupt. `sirdar steer` is for a run that is done and that you want more from. A blocked run
 can be steered too; the instruction is then what the agent gets instead of an answer.
 
-Over HTTP it is `POST /api/workspaces/{id}/runs/{runId}/steer` with `{"text": "..."}`, answering
-`202` with `{"jobId": ..., "runId": ...}`. The run's `state.json` goes to `running`, and
-`run.updated` and `run.event` flow over `/api/events` as they do for any run. The desktop app
-has the same call on its bridge.
+## Changing the model
+
+`--model NAME` on `steer`, and on `resume`, puts the continued session — and every session of the
+run after it — on another model. It is the way past a run blocked on a per-model limit
+(`providers.claude.fallbackModels` in `docs/config.md`), and it is also how to ask a second model
+to check the first one's note without starting the triage again.
+
+It is honoured, not merely passed: `claude -p --resume <id> --model <other>` answers under the
+model named, in the same session, with the transcript the first model built. Verified against the
+CLI on 2026-09-17 — a session started on `haiku` and resumed with `--model sonnet` reported
+`claude-sonnet-5` on its `system/init` line, on the assistant message and in the result line's
+`modelUsage`, under the session id it was started with.
+
+The run records which model answered which stretch of it (`ModelSegments` in `state.json`, with
+"start", "model limit: Fable", "resume --model" or "steer --model" as the reason), and `Model`
+stays the model the run is on now — which is what a register row and a session header name, so
+they name the model that actually finished the run. Over HTTP and on the desktop bridge the
+model travels as `model` on the same `resume` and `steer` calls; in the desktop app the
+composer's Model chip picks it on a run that has stopped.
+
+## Over HTTP
+
+`POST /api/workspaces/{id}/runs/{runId}/steer` with `{"text": "..."}`, answering `202` with
+`{"jobId": ..., "runId": ...}`; `POST .../resume` takes `{"answer": "..."}`. Both also take an
+optional `"model"`. The run's `state.json` goes to `running`, and `run.updated` and `run.event`
+flow over `/api/events` as they do for any run. The desktop app has the same two calls on its
+bridge.
 
 ## What the run records
 
 - `state.json` gains a `Steers` list — when, the instruction, and who answered it — and
-  `Usage.ElapsedSeconds`, the wall-clock time every session of the run has spent.
+  `Usage.ElapsedSeconds`, the wall-clock time every session of the run has spent. A run that
+  changed model partway through also gains `ModelSegments`.
 - `events.jsonl` gets a `steer` line ahead of the session's own events, carrying the instruction
   and a `continuation` of `resume` or `primed`. A primed continuation also records a `system` line
   reading `continued in a new session`.
@@ -92,6 +117,9 @@ run that has already reached any cap is refused before a session starts.
 - a triage or rca run made with `--at` whose worktree is gone (keep it with `--keep-worktree`)
 - an eval run, whose note is a measurement and stays out of the register
 - an empty instruction
+
+A model named on a steer or a resume is not a refusal of any kind: the run's *provider* cannot
+change — the session handle names a session that CLI holds — but the model can.
 
 Every refusal happens before `state.json` is touched. Over HTTP a run-level refusal is a `409`;
 a provider-level one is only known once the job has built its dependencies, so it ends the job
