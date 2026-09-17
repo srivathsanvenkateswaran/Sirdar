@@ -62,6 +62,16 @@ func (b *Bridge) Queue(ws string, f app.QueueFilter) ([]app.Ticket, error) {
 	return b.svc.Queue(ctx, ws, f)
 }
 
+// ResolveHelpdesk answers which tracker issue a helpdesk number belongs
+// to. It reads one helpdesk record and starts nothing; a number with no
+// tracker issue behind it comes back with the reason on it rather than as
+// an error, because the composer asks this while somebody is still typing.
+func (b *Bridge) ResolveHelpdesk(ws, number string) (app.HelpdeskLink, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), callTimeout)
+	defer cancel()
+	return b.svc.ResolveHelpdesk(ctx, ws, number)
+}
+
 // Runs lists a workspace's runs, newest first. An empty key lists all.
 func (b *Bridge) Runs(ws, key string) ([]app.RunSummary, error) { return b.svc.Runs(ws, key) }
 

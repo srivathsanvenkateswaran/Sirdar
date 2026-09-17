@@ -72,6 +72,8 @@ type fake struct {
 	gotRemoved   string
 	gotDeleted   string
 	gotFilter    QueueFilter
+	gotHelpdesk  string
+	helpdeskLink HelpdeskLink
 	gotKey       string
 	gotAfter     int
 	gotNoteKind  string
@@ -217,6 +219,18 @@ func (f *fake) RemoveWorkspace(id string) error {
 	f.gotRemoved = id
 	f.mu.Unlock()
 	return nil
+}
+
+func (f *fake) ResolveHelpdesk(_ context.Context, wsID, number string) (HelpdeskLink, error) {
+	if err := f.checkWS(wsID); err != nil {
+		return HelpdeskLink{}, err
+	}
+	f.mu.Lock()
+	f.gotHelpdesk = number
+	link := f.helpdeskLink
+	f.mu.Unlock()
+	link.Number = number
+	return link, nil
 }
 
 func (f *fake) Queue(_ context.Context, wsID string, filter QueueFilter) ([]Ticket, error) {

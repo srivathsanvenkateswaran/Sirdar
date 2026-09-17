@@ -328,3 +328,30 @@ func TestStartRoutesCarryTheOperatorsRequest(t *testing.T) {
 		t.Errorf("fix options %+v, want local", f.gotFix)
 	}
 }
+
+// TestResolveHelpdeskAnswersTheLink pins the read-only lookup the composer
+// makes while somebody is typing a helpdesk number: the tracker key when
+// the record has one, and a reason rather than an error when it does not.
+func TestResolveHelpdeskAnswersTheLink(t *testing.T) {
+	f := newFake()
+	f.helpdeskLink = HelpdeskLink{Key: "OMNI-3233", Subject: "Invoice total is off by one fils"}
+	var got HelpdeskLink
+	decodeJSON(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/helpdesk/25312", ""), 200, &got)
+	if f.gotHelpdesk != "25312" {
+		t.Fatalf("number %q", f.gotHelpdesk)
+	}
+	if got.Key != "OMNI-3233" || got.Number != "25312" {
+		t.Fatalf("link %+v", got)
+	}
+
+	f = newFake()
+	f.helpdeskLink = HelpdeskLink{Reason: "the helpdesk record for 25312 names no tracker issue"}
+	decodeJSON(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/helpdesk/25312", ""), 200, &got)
+	if got.Key != "" || got.Reason == "" {
+		t.Fatalf("an unmapped record should answer 200 with the reason, got %+v", got)
+	}
+}
+
+func TestResolveHelpdeskUnknownWorkspace(t *testing.T) {
+	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/helpdesk/25312", ""), 404, "not_found")
+}

@@ -332,3 +332,21 @@ func (s *server) configSummary(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, summary)
 }
+
+// resolveHelpdesk is GET /api/workspaces/{id}/helpdesk/{number}: which
+// tracker issue a helpdesk number belongs to.
+//
+// It reads one helpdesk record and starts nothing, so it carries no gate
+// beyond the ones every read route has. A number the helpdesk does not
+// know, and a record that names no tracker issue, are both 200 with the
+// reason on them: the composer says that reason under the box while
+// somebody is still typing, and a 404 for every half-typed number would
+// make that line read like a failure rather than an answer.
+func (s *server) resolveHelpdesk(w http.ResponseWriter, r *http.Request) {
+	link, err := s.svc.ResolveHelpdesk(r.Context(), r.PathValue("id"), r.PathValue("number"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, link)
+}

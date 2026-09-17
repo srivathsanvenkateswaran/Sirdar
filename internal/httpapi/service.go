@@ -17,6 +17,7 @@ type Service interface {
 	AddWorkspace(root string) (Workspace, error)
 	RemoveWorkspace(id string) error
 	Queue(ctx context.Context, wsID string, f QueueFilter) ([]Ticket, error)
+	ResolveHelpdesk(ctx context.Context, wsID, number string) (HelpdeskLink, error)
 	Runs(wsID, key string) ([]RunSummary, error)
 	Run(wsID, runID string) (RunDetail, error)
 	DeleteRun(wsID, runID string) error

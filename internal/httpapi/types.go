@@ -26,6 +26,7 @@ type (
 	JobOutcome           = app.JobOutcome
 	Event                = app.Event
 	QueueFilter          = app.QueueFilter
+	HelpdeskLink         = app.HelpdeskLink
 	TriageOptions        = app.TriageOptions
 	RCAOptions           = app.RCAOptions
 	FixOptions           = app.FixOptions
