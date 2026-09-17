@@ -18,6 +18,12 @@ import (
 type SourcesSummary struct {
 	Tracker  *SourceSummary `json:"tracker,omitempty"`
 	Helpdesk *SourceSummary `json:"helpdesk,omitempty"`
+	// QueueTypes is the tracker queue's effective type filter, already
+	// resolved: the configured list, or the default when the workspace
+	// names none. A screen reads it to say why a lane is empty — "no bug
+	// tickets" rather than "nothing at all" — and never to apply the
+	// filter, which the service has already done.
+	QueueTypes []string `json:"queueTypes"`
 }
 
 // SourceSummary is one configured source as the UI names it.
@@ -62,8 +68,9 @@ var productNames = map[string]string{
 
 func summariseSources(cfg *config.Config, hints SourceHints) SourcesSummary {
 	return SourcesSummary{
-		Tracker:  summariseSource(cfg.Sources.Tracker, hints.TrackerURL),
-		Helpdesk: summariseSource(cfg.Sources.Helpdesk, hints.HelpdeskURL),
+		Tracker:    summariseSource(cfg.Sources.Tracker, hints.TrackerURL),
+		Helpdesk:   summariseSource(cfg.Sources.Helpdesk, hints.HelpdeskURL),
+		QueueTypes: cfg.QueueTypes(),
 	}
 }
 

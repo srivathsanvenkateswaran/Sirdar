@@ -133,7 +133,8 @@ export interface MCPCallResult {
  * answers at most 50, newest run first.
  */
 export interface SearchHit { runId: string; key: string; kind: string; status: string; source: 'answer'|'note'; path: string; excerpt: string }
-export interface Ticket { key: string; title: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
+/** `type` is the canonical ticket type — 'bug', 'story', 'subtask' — or '' when the tracker names none. */
+export interface Ticket { key: string; title: string; type: string; priority: string; status: string; assignee: string; url: string; helpdeskRef: string; updatedAt: string; latestRun?: RunSummary }
 export interface Quota { provider: string; observedAt: string; fiveHour?: { utilization: number; resetsAt: string }; sevenDay?: { utilization: number; resetsAt: string }; usedPercent?: number; resetsAt?: string }
 export interface RegisterRow { key: string; kind: string; runId: string; date: string; provider: string; model: string; service: string; classification: string; confidence: string; severity: string; turns: number; costUsd: number; triageVerdict: string; notePath: string; title: string; company: string }
 /** A doctor row. 'warn' is advisory: ok stays true and no exit code moves. */
@@ -225,7 +226,17 @@ export interface MeSummary { email: string; names: string[]; source: IdentitySou
  * drawn under its own product's mark. A role the workspace has not configured
  * is absent.
  */
-export interface SourcesSummary { tracker?: SourceSummary; helpdesk?: SourceSummary }
+export interface SourcesSummary {
+  tracker?: SourceSummary; helpdesk?: SourceSummary
+  /**
+   * The tracker queue's resolved type filter: the configured list, or `['bug']`
+   * when the workspace names none. `[]` or `['*']` means every type. The
+   * service has already applied it — a screen reads it only to say why a lane
+   * is empty. Optional only because a server older than the filter sends
+   * nothing; treat an absent value as the default.
+   */
+  queueTypes?: string[]
+}
 /**
  * One source as the UI names it. `adapter` is the config value (`jira`,
  * `zohodesk`, `exec`); `name` is the product's name, or for an exec adapter

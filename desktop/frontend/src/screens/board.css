@@ -342,6 +342,30 @@
   width: 100%;
 }
 
+.board-ticket__foot {
+  display: flex;
+  align-items: center;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+}
+
+/* The Triage button keeps the right edge whether or not a chip precedes it. */
+.board-ticket__foot > :last-child {
+  margin-inline-start: auto;
+}
+
+.board-ticket__type {
+  padding-block: 1px;
+  padding-inline: 6px;
+  border: 1px solid var(--sd-rule);
+  border-radius: var(--sd-radius-xs);
+  color: var(--sd-ink-3);
+  font-size: var(--sd-text-meta);
+  line-height: 1.6;
+  text-transform: lowercase;
+  white-space: nowrap;
+}
+
 /* ---------- deliveries today ---------- */
 
 .board-landed {

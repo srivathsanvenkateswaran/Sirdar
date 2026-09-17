@@ -71,6 +71,30 @@ const COLUMNS: { id: ColumnId; name: string; empty: string }[] = [
 
 const LIVE = new Set<RunSummary['status']>(['preparing', 'running'])
 
+/** 'bug', 'bug or incident', 'bug, story or task'. */
+function orList(items: string[]): string {
+  if (items.length < 2) return items[0] ?? ''
+  return `${items.slice(0, -1).join(', ')} or ${items[items.length - 1]}`
+}
+
+/**
+ * What the Queue lane says when the tracker came back with nothing.
+ *
+ * The lane is filtered by ticket type, so "nothing is assigned to you" would
+ * be a half-truth: what is true is that no *bug* is. Naming the filter is the
+ * difference between a reader who knows their sub-tasks were left out and one
+ * who thinks the tracker is down. A workspace that turned the filter off gets
+ * the lane's own sentence back, because then nothing was left out.
+ *
+ * `queueTypes` is the resolved filter from the config summary; absent means a
+ * server that predates it, whose default is the same [bug].
+ */
+export function queueEmptyText(queueTypes: string[] | undefined, unfiltered: string): string {
+  const types = (queueTypes ?? ['bug']).map((t) => t.trim()).filter(Boolean)
+  if (types.length === 0 || types.includes('*')) return unfiltered
+  return `No ${orList(types)} tickets assigned to you.`
+}
+
 /** What a card is. Who it belongs to is the assignee menu's question. */
 type KindFilter = 'all' | 'triage' | 'rca' | 'fix'
 
@@ -737,7 +761,9 @@ export default function Board(props: BoardProps): JSX.Element {
                       : assignees.size > 0 && kind === 'all'
                         ? `No runs assigned to ${selectedNames(assignees, options)}.`
                         : 'Nothing here matches the filters.'
-                    : column.empty
+                    : queue
+                      ? queueEmptyText(sources?.queueTypes, column.empty)
+                      : column.empty
 
           return (
             <KanbanColumn
@@ -772,15 +798,25 @@ export default function Board(props: BoardProps): JSX.Element {
                           assignee={card.ticket.assignee || undefined}
                           href={card.ticket.url || undefined}
                         />
-                        <Button
-                          variant="pale"
-                          size="sm"
-                          aria-label={`Triage ${card.key}`}
-                          title="Start a triage of this ticket"
-                          onClick={() => onTriage([card.key])}
-                        >
-                          Triage
-                        </Button>
+                        <div className="board-ticket__foot">
+                          {/* The type says why this card is in front of you:
+                              the lane is filtered, and a reader who cannot
+                              see the filter reads an empty lane as a fault. */}
+                          {card.ticket.type ? (
+                            <span className="board-ticket__type" title="Ticket type">
+                              {card.ticket.type}
+                            </span>
+                          ) : null}
+                          <Button
+                            variant="pale"
+                            size="sm"
+                            aria-label={`Triage ${card.key}`}
+                            title="Start a triage of this ticket"
+                            onClick={() => onTriage([card.key])}
+                          >
+                            Triage
+                          </Button>
+                        </div>
                       </div>
                     ) : (
                       <RunCard

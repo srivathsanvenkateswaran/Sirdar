@@ -71,9 +71,16 @@ func TestSourcesSummaryOnTheWire(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := `{"tracker":{"adapter":"jira","name":"Jira","host":"acme.atlassian.net"}}`
+	want := `{"tracker":{"adapter":"jira","name":"Jira","host":"acme.atlassian.net"},"queueTypes":["bug"]}`
 	if string(raw) != want {
 		t.Fatalf("sources = %s, want %s", raw, want)
+	}
+
+	// The configured list reaches the wire resolved, not as it was typed.
+	all := []string{"*"}
+	cfg.Sources.Tracker.Queue = &config.QueueConfig{Types: &all}
+	if got := SummariseConfig(cfg).Sources.QueueTypes; len(got) != 1 || got[0] != "*" {
+		t.Fatalf("queueTypes = %v, want [*]", got)
 	}
 }
 
