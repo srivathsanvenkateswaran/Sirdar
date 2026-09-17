@@ -272,7 +272,12 @@ export type AppEvent =
 export interface Overrides { provider?: string; model?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }
 export interface RCAStart extends Overrides { prUrl?: string; resolution?: string }
-export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; base?: string; acceptDeviation?: boolean }
+/**
+ * `noPr` pushes the branch and opens no pull request; `local` stops at the
+ * commit — nothing is pushed, the worktree is kept, and the change is read
+ * in the Review screen. The two are `sirdar fix --no-pr` and `--local`.
+ */
+export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; local?: boolean; base?: string; acceptDeviation?: boolean }
 export interface EvalStart extends Overrides { concurrency?: number; retro?: boolean; withRca?: boolean; rubric?: boolean }
 export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;

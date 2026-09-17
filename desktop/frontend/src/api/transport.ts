@@ -302,6 +302,7 @@ interface BridgeBindings {
     o: {
       dryRun: boolean
       noPr: boolean
+      local: boolean
       base: string
       acceptDeviation: boolean
       provider: string
@@ -403,6 +404,7 @@ export function createWailsTransport(): Transport {
       jobId: await bridge().StartFix(ws, key, {
         dryRun: o?.dryRun ?? false,
         noPr: o?.noPr ?? false,
+        local: o?.local ?? false,
         base: o?.base ?? '',
         acceptDeviation: o?.acceptDeviation ?? false,
         provider: o?.provider ?? '',

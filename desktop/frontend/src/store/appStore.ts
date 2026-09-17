@@ -129,6 +129,7 @@ export interface RCAOptions {
 export interface FixOptions {
   dryRun?: boolean
   noPr?: boolean
+  local?: boolean
   base?: string
   acceptDeviation?: boolean
   provider?: string

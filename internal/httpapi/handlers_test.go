@@ -11,7 +11,7 @@ import (
 func TestStartFixPassesEveryFlag(t *testing.T) {
 	f := newFake()
 	w := do(t, f, "POST", "/api/workspaces/"+knownWS+"/fix",
-		`{"key":"OMNI-2510","dryRun":false,"noPr":true,"base":"release/9","acceptDeviation":true,"provider":"codex","model":"gpt-5"}`)
+		`{"key":"OMNI-2510","dryRun":false,"noPr":true,"local":true,"base":"release/9","acceptDeviation":true,"provider":"codex","model":"gpt-5"}`)
 
 	var body struct {
 		JobID string `json:"jobId"`
@@ -23,7 +23,7 @@ func TestStartFixPassesEveryFlag(t *testing.T) {
 	if f.gotFixKey != "OMNI-2510" {
 		t.Fatalf("key %q", f.gotFixKey)
 	}
-	want := FixOptions{NoPR: true, Base: "release/9", AcceptDeviation: true, Provider: "codex", Model: "gpt-5"}
+	want := FixOptions{NoPR: true, Local: true, Base: "release/9", AcceptDeviation: true, Provider: "codex", Model: "gpt-5"}
 	if f.gotFix != want {
 		t.Fatalf("options %+v, want %+v", f.gotFix, want)
 	}
