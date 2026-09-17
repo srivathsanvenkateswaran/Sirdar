@@ -46,6 +46,8 @@ export interface BundlePaneProps {
   helpdeskKey?: string
   /** Reveals the run's bundle directory; absent in a browser, which cannot. */
   onOpenFolder?: () => void
+  /** Told what the prompt carried once it is read, for a tab's count or an outline. */
+  onLoaded?: (bundle: Bundle | null) => void
 }
 
 function Line({ label, children }: { label: string; children: React.ReactNode }): JSX.Element {
@@ -81,7 +83,7 @@ function TicketBlock({
   if (bundle.facts.length === 0) return null
 
   return (
-    <section className="si-card" aria-label="Ticket" data-testid="bundle-ticket">
+    <section className="si-card" aria-label="Ticket" data-sec="ticket" data-testid="bundle-ticket">
       <div className="si-card__head">
         {key ? (
           trackerUrl ? (
@@ -149,7 +151,7 @@ function ConversationBlock({ bundle }: { bundle: Bundle }): JSX.Element {
   const hidden = bundle.thread.length - shown.length
 
   return (
-    <section className="si-block" aria-label="Conversation" data-testid="bundle-conversation">
+    <section className="si-block" aria-label="Conversation" data-sec="conversation" data-testid="bundle-conversation">
       <h3 className="si-block__h">
         Conversation
         {bundle.thread.length > 0 ? (
@@ -205,7 +207,7 @@ function AttachmentsBlock({
       : files.map((path) => ({ name: path.split('/').pop() ?? path, path, mime: '', size: 0 }))
 
   return (
-    <section className="si-block" aria-label="Attachments" data-testid="bundle-attachments">
+    <section className="si-block" aria-label="Attachments" data-sec="attachments" data-testid="bundle-attachments">
       <h3 className="si-block__h">
         Attachments
         {rows.length > 0 ? (
@@ -251,7 +253,7 @@ function PlaybooksBlock({ bundle }: { bundle: Bundle }): JSX.Element | null {
   if (bundle.playbooks.length === 0) return null
 
   return (
-    <section className="si-block" aria-label="Playbooks" data-testid="bundle-playbooks">
+    <section className="si-block" aria-label="Playbooks" data-sec="playbooks" data-testid="bundle-playbooks">
       <button type="button" className="si-fold" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
         <ChevronIcon />
         <span>
@@ -296,6 +298,7 @@ export default function BundlePane({
   assignee,
   helpdeskKey,
   onOpenFolder,
+  onLoaded,
 }: BundlePaneProps): JSX.Element {
   const [prompt, setPrompt] = useState<string | null>(null)
   const [error, setError] = useState('')
@@ -340,6 +343,10 @@ export default function BundlePane({
   }, [transport, workspaceId, runId])
 
   const bundle = useMemo(() => parseBundle(prompt ?? ''), [prompt])
+
+  useEffect(() => {
+    onLoaded?.(prompt === null ? null : bundle)
+  }, [onLoaded, prompt, bundle])
 
   if (prompt === null) return <p className="si-empty">Reading the bundle…</p>
   if (error) return <p className="si-empty si-empty--error">{error}</p>

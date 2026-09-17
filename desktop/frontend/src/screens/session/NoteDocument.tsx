@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import type { NoteKind, Transport } from '../../api/types'
-import { notePathFor, splitFrontmatter, type Frontmatter } from '../../lib/events'
+import { notePathFor, splitFrontmatter } from '../../lib/events'
 import { reasonOf } from '../../lib/format'
 import { stripRTLBlocks } from '../../lib/rtl'
 import NoteFooter from '../../components/session/NoteFooter'
@@ -24,52 +24,6 @@ import { Prose } from './AnswerCard'
  * It reads the note through the Transport, once, and again when the run
  * finishes: a note only exists once the run has written it.
  */
-
-export interface Chip {
-  key: string
-  value: string
-  url?: string
-  /** A tag from the `tags` list: drawn in the highlight. */
-  tag?: boolean
-}
-
-/**
- * The frontmatter as chips. `tags: ["a", "b"]` becomes one chip per tag;
- * a `*_url` field attaches to the `*_key` or `*_id` beside it as its link
- * rather than taking a chip of its own; everything else is key and value.
- */
-export function chipsOf(fields: Frontmatter['fields']): Chip[] {
-  const out: Chip[] = []
-  const urls = new Map<string, string>()
-  for (const f of fields) {
-    const m = /^(.*)_url$/.exec(f.key)
-    if (m) urls.set(m[1], f.value)
-  }
-  for (const f of fields) {
-    if (/_url$/.test(f.key)) continue
-    if (f.key === 'tags') {
-      const inner = f.value.replace(/^\[|\]$/g, '')
-      for (const tag of inner.split(',')) {
-        const clean = tag.trim().replace(/^["']|["']$/g, '')
-        if (clean) out.push({ key: 'tag', value: clean, tag: true })
-      }
-      continue
-    }
-    // `tracker_key` with a `tracker_url` beside it is one chip, "tracker",
-    // linked; `customer_id` with no url is the customer's id, "id".
-    const m = /^(.*)_(?:key|id)$/.exec(f.key)
-    const url = m ? urls.get(m[1]) : undefined
-    const key = m && url ? m[1] : /_id$/.test(f.key) ? 'id' : f.key
-    out.push({ key, value: f.value, url })
-  }
-  // A url with no key beside it still gets its chip.
-  for (const [stem, url] of urls) {
-    if (!fields.some((f) => f.key === `${stem}_key` || f.key === `${stem}_id`)) {
-      out.push({ key: stem, value: url.replace(/^https?:\/\//, ''), url })
-    }
-  }
-  return out
-}
 
 /** Text children with their `file:line` references live; other nodes as they are. */
 function withRefs(children: ReactNode, onRef?: (ref: string) => void): ReactNode {

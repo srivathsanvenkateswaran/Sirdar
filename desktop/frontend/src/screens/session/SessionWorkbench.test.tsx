@@ -358,7 +358,7 @@ describe('SessionWorkbench', () => {
   })
 
   describe('S4 · the Bundle document with the console collapsed', () => {
-    it('lays the tracker and the helpdesk side by side, the thread with its translations, and honest empties', async () => {
+    it('draws the same three blocks the other layouts draw, with the outline over them', async () => {
       const f = fake()
       renderWorkbench(f)
       await screen.findByRole('heading', { name: 'SBX-1' })
@@ -368,24 +368,24 @@ describe('SessionWorkbench', () => {
       await waitFor(() => expect(screen.getByRole('tab', { name: /Bundle/ })).toHaveTextContent('ticket · 4'))
       const outline = screen.getByRole('navigation', { name: 'Sections' })
       expect(within(outline).getAllByRole('button').map((b) => b.textContent)).toEqual([
-        'TrackerSBX-1',
-        'Helpdesk88341',
-        'Thread4',
+        'Ticket',
+        'Conversation4',
         'Attachments0',
         'Playbooks3',
-        '00-environment',
-        '10-helpdesk',
-        '50-code',
       ])
-      expect(within(page).getByText('متجر الفهد للأدوات المنزلية', { selector: 'dd' })).toBeInTheDocument()
-      expect(within(page).getByText('https://sandbox.local/desk/88341')).toBeInTheDocument()
-      const messages = page.querySelectorAll('.wb-msg')
+
+      const ticket = within(page).getByRole('region', { name: 'Ticket' })
+      expect(within(ticket).getByRole('link', { name: /SBX-1/ })).toHaveAttribute('href', 'https://sandbox.local/tracker/SBX-1')
+      expect(within(ticket).getByRole('link', { name: /88341/ })).toHaveAttribute('href', 'https://sandbox.local/desk/88341')
+      expect(within(ticket).getByText('متجر الفهد للأدوات المنزلية')).toHaveAttribute('dir', 'auto')
+      // The URL is the link's target, never text beside the identifier.
+      expect(within(page).queryByText(/https:\/\//)).toBeNull()
+
+      const thread = within(page).getByRole('region', { name: 'Conversation' })
+      const messages = within(thread).getAllByRole('listitem')
       expect(messages).toHaveLength(4)
       expect(messages[0]).toHaveTextContent('أحمد الفهد')
-      expect(messages[0]).toHaveTextContent('translated in the note · Peace be upon you')
-      expect(messages[1]).toHaveTextContent('no translation in the note (agent message)')
-      expect(messages[2]).toHaveTextContent('translated in the note · The return was last Tuesday')
-      expect(within(page).getByText("None on this ticket: the prompt's Files block says (none).")).toBeInTheDocument()
+      expect(within(page).getByRole('region', { name: 'Attachments' })).toHaveTextContent('None in this bundle.')
     })
 
     it('collapses the console to its header and remembers it, and the grip brings it back', async () => {
@@ -412,13 +412,16 @@ describe('SessionWorkbench', () => {
       expect(console_().style.blockSize).toBe('480px')
     })
 
-    it('shows the filed note as a page with its frontmatter and sections', async () => {
+    it('shows the filed note as a page from its title, with the vault scaffolding gone', async () => {
       renderWorkbench(fake())
       await screen.findByRole('heading', { name: 'SBX-1' })
       fireEvent.click(screen.getByRole('tab', { name: /Note/ }))
       const page = await screen.findByRole('region', { name: 'Note' })
       expect(await within(page).findByRole('heading', { name: /Recording a customer return/ })).toBeInTheDocument()
-      expect(within(page).getByText('triaged', { selector: 'b' })).toBeInTheDocument()
+      // Neither the frontmatter strip nor the wikilink line under the title.
+      expect(within(page).queryByText('triaged', { selector: 'b' })).toBeNull()
+      expect(within(page).queryByText(/Register:/)).toBeNull()
+      expect(within(page).queryByText(/_Issue Register/)).toBeNull()
       const outline = screen.getByRole('navigation', { name: 'Sections' })
       expect(within(outline).getAllByRole('button').map((b) => b.textContent)).toEqual([
         'Customer Complaint (translated)',
@@ -427,8 +430,10 @@ describe('SessionWorkbench', () => {
         'Customer Reply Draft',
       ])
       expect(within(page).getByRole('button', { name: 'Copy this section' })).toBeInTheDocument()
-      expect(within(page).getByRole('button', { name: 'Copy path' })).toBeInTheDocument()
-      expect(within(page).getByText('SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md')).toBeInTheDocument()
+      const footer = within(page).getByTestId('note-footer')
+      expect(footer).toHaveTextContent('In Obsidian')
+      expect(footer).toHaveTextContent('SBX-1 recording-a-customer-return-adds-its-quantity-to-stock-twice.md')
+      expect(within(footer).getByRole('button', { name: 'Copy path' })).toBeInTheDocument()
     })
   })
 

@@ -205,18 +205,25 @@ describe('S3 · a step expanded and its twin lit', () => {
 })
 
 describe('S4 · the Bundle drawer', () => {
-  it('slides over the path, shows the ticket, the RTL thread, the empty attachments and the playbooks, and closes on Escape', async () => {
+  it('slides over the path with the same three blocks the other layouts draw, and closes on Escape', async () => {
     mount([triageFixture()], TRIAGE_RUN_ID)
     const doc = await opened()
     await within(doc).findByTestId('note-document')
     fireEvent.click(within(doc).getByRole('button', { name: /^Bundle/ }))
     const drawer = await screen.findByRole('dialog', { name: 'Bundle' })
-    expect(drawer).toHaveTextContent('4 messages · 0 attachments')
-    const view = within(drawer).getByTestId('bundle-view')
-    expect(within(view).getByText('SBX-CUST-1')).toBeInTheDocument()
-    expect(view.querySelectorAll('.sn-msg')).toHaveLength(4)
-    expect(within(view).getByText(/None in this bundle/)).toBeInTheDocument()
-    expect(within(view).getByText('10-helpdesk')).toBeInTheDocument()
+    const view = await within(drawer).findByTestId('bundle-view')
+
+    const ticket = within(view).getByRole('region', { name: 'Ticket' })
+    expect(within(ticket).getByRole('link', { name: /SBX-1/ })).toHaveAttribute('href', 'https://sandbox.local/tracker/SBX-1')
+    expect(within(ticket).getByText('متجر الفهد للأدوات المنزلية')).toHaveAttribute('dir', 'auto')
+    const thread = within(view).getByRole('region', { name: 'Conversation' })
+    expect(within(thread).getAllByRole('listitem')).toHaveLength(4)
+    expect(within(view).getByRole('region', { name: 'Attachments' })).toHaveTextContent('None in this bundle.')
+    expect(within(view).getByRole('button', { name: /3 playbooks in the prompt/ })).toHaveAttribute('aria-expanded', 'false')
+    // No path, no URL text: the identifier is the link.
+    expect(within(view).queryByText(/https:\/\//)).toBeNull()
+    expect(within(view).queryByText(/\/repos\//)).toBeNull()
+
     // The document is untouched behind it.
     expect(within(doc).getByTestId('note-document')).toBeInTheDocument()
     fireEvent.keyDown(document, { key: 'Escape' })
@@ -225,18 +232,21 @@ describe('S4 · the Bundle drawer', () => {
 })
 
 describe('S5 · the Tools drawer', () => {
-  it('lists every call with decision, duration, output and evidence; a row goes to the step and closes the drawer', async () => {
+  it('heads with two numbers, draws three cells a row, and a row goes to the step and closes the drawer', async () => {
     mount([triageFixture()], TRIAGE_RUN_ID)
     const doc = await opened()
     await within(doc).findByTestId('note-document')
     fireEvent.click(within(doc).getByRole('button', { name: /^Tools/ }))
     const drawer = await screen.findByRole('dialog', { name: 'Tools' })
-    expect(drawer).toHaveTextContent('15 calls · 2 denied')
-    const table = within(drawer).getByRole('table')
-    const rows = within(table).getAllByRole('row')
-    expect(rows).toHaveLength(17)
-    expect(within(rows[3]).getByRole('button', { name: 'Marker E1' })).toBeInTheDocument()
-    fireEvent.click(rows[12])
+    const pane = await within(drawer).findByTestId('tools-table')
+    expect(within(pane).getByRole('heading', { level: 3 })).toHaveTextContent('15 calls · 2 needed your approval')
+    expect(within(pane).queryByRole('table')).toBeNull()
+    const rows = within(pane).getAllByRole('listitem')
+    expect(rows).toHaveLength(15)
+    expect(within(pane).getByRole('button', { name: 'Marker E1' })).toBeInTheDocument()
+
+    const target = rows.find((r) => r.textContent?.includes('return and restock usages'))!
+    fireEvent.click(within(target).getAllByRole('button')[0])
     await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Tools' })).toBeNull())
     const path = within(doc).getByRole('log', { name: 'Path' })
     const step = within(path).getByText('rg -n "Return|restock"').closest('[data-testid="tool-step"]') as HTMLElement
@@ -250,7 +260,7 @@ describe('S5 · the Tools drawer', () => {
     fireEvent.click(within(path).getByText('rg -n "Return|restock"').closest('[data-testid="tool-step"]') as HTMLElement)
     fireEvent.click(within(path).getByRole('button', { name: 'Open in Tools' }))
     const drawer = await screen.findByRole('dialog', { name: 'Tools' })
-    expect(drawer.querySelector('tr[data-on="true"]')).toHaveTextContent('rg -n "Return|restock"')
+    expect(drawer.querySelector('[data-on="true"]')).toHaveTextContent('Search Go code for return and restock usages')
   })
 })
 

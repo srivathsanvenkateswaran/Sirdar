@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useMemo, useRef, useState, type MouseEvent } from 'react'
 import type { Marker as MarkerModel } from '../../lib/evidence'
 import { markersForStep } from '../../lib/evidence'
 import ContextMenu, { type MenuEntry } from '../../ui/context-menu'
@@ -85,15 +85,26 @@ export interface ToolsPaneProps {
   rows: ToolRow[]
   /** The evidence markers the answer produced, so a row says what it is cited for. */
   markers?: MarkerModel[]
+  /** The marker whose twin is in view. */
+  hotMarker?: string
+  /** Makes a marker a button: clicking it finds the claim it supports. */
+  onMarker?: (id: string, event: MouseEvent<HTMLElement>) => void
   /** Takes the reader to the call on the transcript or the path. */
   onLocate?: (index: number) => void
   /** The row tinted as the transcript's twin. */
   highlighted?: number
   /** Where the drawer is drawn against; the caller's column must be positioned. */
   drawerWidth?: number
+  /**
+   * What a row click does instead of opening the drawer. The Document
+   * layout draws this pane *inside* a drawer already, and two panels over
+   * one column is the thing the Drawer's spec says not to do — so there a
+   * row takes the reader to the step on the path and the drawer closes.
+   */
+  onRowClick?: (index: number) => void
 }
 
-export default function ToolsPane({ rows, markers, onLocate, highlighted, drawerWidth }: ToolsPaneProps): JSX.Element {
+export default function ToolsPane({ rows, markers, hotMarker, onMarker, onLocate, highlighted, drawerWidth, onRowClick }: ToolsPaneProps): JSX.Element {
   const [sort, setSort] = useState<ToolsSort>('order')
   const [menu, setMenu] = useState(false)
   const [open, setOpen] = useState<number | null>(null)
@@ -146,7 +157,7 @@ export default function ToolsPane({ rows, markers, onLocate, highlighted, drawer
                 className="si-row"
                 data-on={highlighted === r.index ? 'true' : undefined}
                 data-deny={r.decision === 'denied' ? 'true' : undefined}
-                onClick={() => setOpen(r.index)}
+                onClick={() => (onRowClick ? onRowClick(r.index) : setOpen(r.index))}
                 aria-label={`${r.tool}: ${r.summary || 'no description'}`}
               >
                 <span className="si-row__what">
@@ -170,7 +181,7 @@ export default function ToolsPane({ rows, markers, onLocate, highlighted, drawer
                 {cites.length > 0 ? (
                   <span className="si-row__cites">
                     {cites.map((m) => (
-                      <Marker key={m.id} id={m.id} title={m.query} />
+                      <Marker key={m.id} id={m.id} hot={m.id === hotMarker} onClick={onMarker} title={m.query} />
                     ))}
                   </span>
                 ) : null}
@@ -205,7 +216,7 @@ export default function ToolsPane({ rows, markers, onLocate, highlighted, drawer
               <p className="si-call__line">
                 <span className="si-card__label">Cites</span>
                 {markersForStep(shown.index, markers).map((m) => (
-                  <Marker key={m.id} id={m.id} title={m.query} />
+                  <Marker key={m.id} id={m.id} hot={m.id === hotMarker} onClick={onMarker} title={m.query} />
                 ))}
               </p>
             ) : null}

@@ -463,7 +463,7 @@ describe('SessionConversation', () => {
       expect(rows).toHaveLength(13)
       // Three cells: what the call was, the decision when it was not the
       // policy's own, and how long it took. No `#`, no output size.
-      const first = within(rows[0]).getByRole('button')
+      const first = within(rows[0]).getAllByRole('button')[0]
       expect(first.querySelector('.si-row__tool')).toHaveTextContent('Bash')
       expect(first.querySelector('.si-stamp')).toBeNull()
       expect(first.querySelector('.si-row__took')).toBeInTheDocument()
@@ -475,10 +475,10 @@ describe('SessionConversation', () => {
       // Sorting is in the menu, not on chevrons over every column.
       fireEvent.click(within(tools).getByRole('button', { name: 'Tools options' }))
       fireEvent.click(await screen.findByRole('menuitem', { name: /Sort by tool/ }))
-      expect(within(within(tools).getAllByRole('listitem')[0]).getByRole('button').querySelector('.si-row__tool')).toHaveTextContent('Bash')
+      expect(within(tools).getAllByRole('listitem')[0].querySelector('.si-row__tool')).toHaveTextContent('Bash')
 
       // A row opens the drawer with the input, the output and the way back.
-      fireEvent.click(within(rows[2]).getByRole('button'))
+      fireEvent.click(within(rows[2]).getAllByRole('button')[0])
       const detail = await screen.findByTestId('tool-detail')
       expect(within(detail).getByRole('heading', { name: 'Input' })).toBeInTheDocument()
       expect(within(detail).getByRole('heading', { name: 'Output' })).toBeInTheDocument()

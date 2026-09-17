@@ -751,6 +751,10 @@ export default function SessionConversation(props: SessionConversationProps): JS
                       if (step) locate(step)
                     }}
                     markers={markers}
+                    onMarker={(id) => {
+                      const step = model.calls.find((c) => markers.find((m) => m.id === id)?.steps.includes(c.index))
+                      if (step) locate(step)
+                    }}
                   />
                 </div>
               ) : null}

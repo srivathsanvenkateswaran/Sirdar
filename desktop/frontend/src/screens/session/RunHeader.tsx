@@ -68,7 +68,7 @@ export default function RunHeader({
       </h1>
       <KindChip kind={detail.kind} />
       <StatusBadge status={detail.status as SdStatus} detail={detail.status === 'blocked' ? 'waiting on you' : undefined} />
-      <span className="sc-title" title={title} dir="auto">
+      <span className="sc-title sd-bidi" title={title} dir="auto">
         {title ?? detail.title ?? ''}
       </span>
       <AssignedTo name={detail.assignee ?? ''} />

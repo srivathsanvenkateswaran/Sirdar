@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, type MouseEvent } from 'react'
 import type { Marker as MarkerModel } from '../../lib/evidence'
 import ToolsPane, { type ToolRow } from '../../components/session/ToolsPane'
 import type { Decision, StepCall } from './model'
@@ -49,9 +49,11 @@ export interface ToolsTableProps {
   onLocate?: (index: number) => void
   /** The evidence markers (E1…En) derived from the answer. */
   markers?: MarkerModel[]
+  hotMarker?: string
+  onMarker?: (id: string, event: MouseEvent<HTMLElement>) => void
 }
 
-export default function ToolsTable({ calls, highlighted, onLocate, markers }: ToolsTableProps): JSX.Element {
+export default function ToolsTable({ calls, highlighted, onLocate, markers, hotMarker, onMarker }: ToolsTableProps): JSX.Element {
   const rows = useMemo(() => rowsOf(calls), [calls])
-  return <ToolsPane rows={rows} markers={markers} onLocate={onLocate} highlighted={highlighted} />
+  return <ToolsPane rows={rows} markers={markers} hotMarker={hotMarker} onMarker={onMarker} onLocate={onLocate} highlighted={highlighted} />
 }
