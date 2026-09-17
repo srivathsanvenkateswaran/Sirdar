@@ -612,7 +612,7 @@ export default function NewSession(props: {
               </>
             }
             send={{
-              label: confirming ? 'Start' : wantsReading ? 'Read this' : 'Start',
+              label: wantsReading ? 'Read this' : 'Start',
               busyLabel: reading ? 'Reading…' : 'Starting…',
               busy,
               disabled: !canStart,
