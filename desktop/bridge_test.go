@@ -16,6 +16,7 @@ var bridgeMethods = []string{
 	"AddWorkspace",
 	"RemoveWorkspace",
 	"Queue",
+	"ResolveHelpdesk",
 	"Runs",
 	"Run",
 	"DeleteRun",
