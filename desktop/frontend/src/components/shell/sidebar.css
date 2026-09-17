@@ -28,16 +28,15 @@
   background: transparent;
 }
 
-/* The wordmark with the workspace as a badge beside it, and the fold
-   control at the end. The mock's row had 10px gaps and 12px at each side;
-   the toggle costs 28, so the gaps go to 8 and the end padding to 0 (the
-   toggle's own box ends flush with the nav rows), which is what keeps an
-   eight-letter workspace name whole.
+/* The wordmark and the fold control at the end. The mock's row had 10px
+   gaps and 12px at each side; the toggle costs 28, so the gaps go to 8 and
+   the end padding to 0 (the toggle's own box ends flush with the nav rows).
 
    Since 2026-09-16 the 20px brand mark opens the row. It needs no gap of its
    own: 8 against a 20px mark is the 0.36 ratio the logo round's small lockup
    was drawn at (docs/design/2026-09-16-logo/, `.lockup-small`), so the row's
-   own gap is already the lockup's. */
+   own gap is already the lockup's. The workspace, once a chip in this row
+   that a long name was cut to fit, has the row under it (2026-09-17). */
 .sd-sidebar__brand {
   display: flex;
   align-items: center;
@@ -51,6 +50,13 @@
   margin-inline-start: auto;
 }
 
+/* The workspace row: the sidebar's width, 8 under the brand row, the
+   trigger itself in the switcher section below. */
+.sd-sidebar__workspace {
+  flex: 0 0 auto;
+  padding-block-start: var(--sd-space-2);
+}
+
 .sd-sidebar__nav {
   display: flex;
   flex: 0 0 auto;
@@ -62,15 +68,22 @@
 /* ---------- the search ---------- */
 
 /*
- * The search well under the brand row, the width of the sidebar: the
- * library's 40-tall sunk field, held to 36 here so it sits at the rows'
- * own height. Typing filters the sessions list as it goes; the Notes
- * toggle at its end sends the text to the service instead. Not drawn in
- * the rail, where ⌘K unfolds the sidebar first.
+ * The search well is the sessions section's first line, under the nav and
+ * above the group heads: the library's 40-tall sunk field, held to 36 here
+ * so it sits at the rows' own height. Typing filters the sessions list as
+ * it goes; the Notes toggle at its end sends the text to the service
+ * instead. It is stuck to the top of the section's scroll, on the shell's
+ * own ground so the rows pass under it and not through it; the section's
+ * top padding is its own, so nothing shows above it once the list has
+ * moved. Not drawn in the rail, where ⌘K unfolds the sidebar first.
  */
 .sd-sidebar__search {
+  position: sticky;
+  z-index: 1;
+  inset-block-start: 0;
   flex: 0 0 auto;
-  padding-block-start: var(--sd-space-3);
+  padding-block: var(--sd-space-3) var(--sd-space-2);
+  background: var(--sd-shell);
 }
 
 .sd-sidebar__search .sd-search[data-variant='well'] {
@@ -142,7 +155,9 @@
   gap: 2px;
   min-block-size: 0;
   margin-block-start: 20px;
-  padding-block-start: var(--sd-space-3);
+  /* The 12px under the hairline belongs to the search (above), so the
+     stuck field covers it. The rail, with no field, puts it back below. */
+  padding-block-start: 0;
   border-block-start: 1px solid var(--sd-rule);
   overflow-y: auto;
 }
@@ -169,9 +184,11 @@
 /* ---------- the workspace switcher ---------- */
 
 /*
- * The trigger is the workspace badge beside the wordmark: the reference's
- * lavender plan chip, carrying a fact about the workspace. Its popover opens
- * downward, under the brand row.
+ * The trigger is the workspace row under the wordmark: a 40-tall control
+ * the sidebar's width, flat like every read-only control, with the name in
+ * full, the path muted after it in the ledger face, and the chevron pair at
+ * the end. The row's side inset is the nav rows' 14, so the name lines up
+ * with the labels under it. Its popover opens downward, under the row.
  */
 .switcher {
   position: relative;
@@ -179,35 +196,67 @@
 }
 
 .switcher-trigger {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: var(--sd-space-1);
-  max-inline-size: 100%;
-  min-block-size: 26px;
-  margin-inline-start: 2px;
+  gap: var(--sd-space-2);
+  inline-size: 100%;
+  min-block-size: var(--sd-control-h);
   padding-block: 0;
-  padding-inline: 10px 6px;
-  border: 0;
-  border-radius: 6px;
-  background: var(--sd-badge-bg);
-  color: var(--sd-badge-ink);
+  padding-inline: 14px 10px;
+  border: 1px solid var(--sd-rule-strong);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sd-ink);
   font-family: var(--sd-font-ui);
-  font-size: var(--sd-text-ledger);
+  font-size: var(--sd-text-meta);
   font-weight: 500;
-  line-height: 26px;
+  line-height: 1.3;
   letter-spacing: 0;
   text-align: start;
   cursor: pointer;
-  transition: opacity var(--sd-dur-1) ease;
+  transition: background-color var(--sd-dur-1) ease;
 }
 
-.switcher-trigger:hover {
-  opacity: 0.85;
+.switcher-trigger:hover,
+.switcher-trigger[aria-expanded='true'] {
+  background: var(--sd-nav-hover);
 }
 
+.switcher-trigger > svg {
+  flex: 0 0 auto;
+  inline-size: 16px;
+  block-size: 16px;
+  color: var(--sd-ink-3);
+}
+
+/* The rail's trigger, and nothing else's: see the collapsed rules. */
+.switcher-mark {
+  display: none;
+}
+
+/* The name never shrinks; the path gives way first. A name wider than the
+   row is cut on its own, short of the chevron, rather than pushing it out. */
 .switcher-name {
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  max-inline-size: calc(100% - 24px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The path, cut from its start: a right-to-left box puts the ellipsis at
+   the left edge, and the `bdi` inside keeps the path itself reading left
+   to right. The last folder is the one that says which checkout this is. */
+.switcher-root {
+  flex: 1 1 auto;
   min-inline-size: 0;
   overflow: hidden;
+  direction: rtl;
+  color: var(--sd-ink-3);
+  font-family: var(--sd-font-mono);
+  font-size: var(--sd-text-micro);
+  text-align: end;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -335,17 +384,35 @@
   margin-inline-start: 0;
 }
 
-/* The rail keeps the fold control alone. The mark goes with the word: 20 plus
-   its gap plus the 28 toggle is the whole 56px rail with nothing left over. */
+/* The rail's head keeps the fold control alone. The mark goes with the word:
+   20 plus its gap plus the 28 toggle is the whole 56px rail with nothing left
+   over — and the mark comes back on the workspace row, as the row. */
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .brand,
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__brand .sd-brand-mark,
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__search,
-.sd-sidebar[data-collapsed='true'] .switcher {
+.sd-sidebar[data-collapsed='true'] .switcher-name,
+.sd-sidebar[data-collapsed='true'] .switcher-root,
+.sd-sidebar[data-collapsed='true'] .switcher-trigger > svg {
   display: none;
 }
 
+/* The workspace row as the mark alone: a 40 square, centred in the 48 the
+   rail's padding leaves, opening the same list. Its name is the button's. */
+.sd-sidebar[data-collapsed='true'] .switcher-trigger {
+  justify-content: center;
+  inline-size: 40px;
+  margin-inline: auto;
+  padding-inline: 0;
+}
+
+.sd-sidebar[data-collapsed='true'] .switcher-mark {
+  display: inline-flex;
+}
+
+/* With no field the section's 12px under the hairline is its own again. */
 .sd-sidebar[data-collapsed='true'] .sd-sidebar__sessions {
   align-items: center;
+  padding-block-start: var(--sd-space-3);
 }
 
 /* The footer's one button, as the plus alone: 32 square inside the card's

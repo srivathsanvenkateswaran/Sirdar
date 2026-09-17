@@ -70,10 +70,10 @@ function rowOf(screen: Screen): NavName {
 }
 
 /**
- * The app's left edge: the wordmark with the workspace as a badge, the six
- * screens, the sessions list (`SessionsList`), and a footer card with how
- * much of each provider's plan is gone and the one button that starts a
- * session.
+ * The app's left edge: the wordmark, the workspace on its own row under it,
+ * the six screens, the sessions list (`SessionsList`) with the search field
+ * as its first line, and a footer card with how much of each provider's
+ * plan is gone and the one button that starts a session.
  *
  * It replaces the top header. A board that scrolls horizontally has no room to
  * spare above it, and a nav that does not move is one less thing that can
@@ -251,12 +251,6 @@ function Sidebar(props: {
             product, and a second accessible name would read it twice. */}
         <BrandMark decorative />
         <span className="brand">Sirdar</span>
-        <WorkspaceSwitcher
-          workspaces={workspaces}
-          currentId={currentWorkspaceId}
-          onSelect={onSelectWorkspace}
-          onAdd={onAddWorkspace}
-        />
         <PanelToggle
           side="start"
           open={!rail}
@@ -269,37 +263,16 @@ function Sidebar(props: {
         />
       </div>
 
-      {runs.length > 0 ? (
-        <div className="sd-sidebar__search">
-          <SearchBar
-            variant="well"
-            label={mode === 'notes' ? 'Search notes' : 'Search sessions'}
-            placeholder={mode === 'notes' ? 'Search notes' : 'Search sessions'}
-            value={query}
-            onChange={setQuery}
-            inputRef={searchInput}
-            onKeyDown={onSearchKey}
-            aside={
-              <>
-                {onSearchNotes ? (
-                  <button
-                    type="button"
-                    className="sd-sidebar__search-mode"
-                    aria-pressed={mode === 'notes'}
-                    title={mode === 'notes' ? 'Back to filtering the sessions' : 'Search inside the notes and answers'}
-                    onClick={() => setMode((m) => (m === 'notes' ? 'sessions' : 'notes'))}
-                  >
-                    Notes
-                  </button>
-                ) : null}
-                <kbd className="sd-sidebar__kbd" aria-hidden="true">
-                  ⌘K
-                </kbd>
-              </>
-            }
-          />
-        </div>
-      ) : null}
+      {/* The workspace on its own row, the sidebar's width, so its name is
+          never cut to make room for the wordmark. */}
+      <div className="sd-sidebar__workspace">
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          currentId={currentWorkspaceId}
+          onSelect={onSelectWorkspace}
+          onAdd={onAddWorkspace}
+        />
+      </div>
 
       <nav className="sd-sidebar__nav" aria-label="Screens">
         {rows.map((row) => (
@@ -326,6 +299,40 @@ function Sidebar(props: {
         rail={rail}
         onOpen={openRun}
         actions={sessionActions}
+        head={
+          // The search is the sessions section's first line, pinned there
+          // while the rows scroll under it. It goes with the list: no runs,
+          // no field.
+          <div className="sd-sidebar__search">
+            <SearchBar
+              variant="well"
+              label={mode === 'notes' ? 'Search notes' : 'Search sessions'}
+              placeholder={mode === 'notes' ? 'Search notes' : 'Search sessions'}
+              value={query}
+              onChange={setQuery}
+              inputRef={searchInput}
+              onKeyDown={onSearchKey}
+              aside={
+                <>
+                  {onSearchNotes ? (
+                    <button
+                      type="button"
+                      className="sd-sidebar__search-mode"
+                      aria-pressed={mode === 'notes'}
+                      title={mode === 'notes' ? 'Back to filtering the sessions' : 'Search inside the notes and answers'}
+                      onClick={() => setMode((m) => (m === 'notes' ? 'sessions' : 'notes'))}
+                    >
+                      Notes
+                    </button>
+                  ) : null}
+                  <kbd className="sd-sidebar__kbd" aria-hidden="true">
+                    ⌘K
+                  </kbd>
+                </>
+              }
+            />
+          </div>
+        }
         query={query}
         mode={mode}
         hits={hits}

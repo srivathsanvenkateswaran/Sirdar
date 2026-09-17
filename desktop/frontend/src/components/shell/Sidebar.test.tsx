@@ -344,11 +344,20 @@ describe('the search', () => {
       .getAllByRole('button', { name: /OMNI/ })
       .map((r) => r.getAttribute('aria-label'))
 
-  it('sits at the top, filters the list as it is typed, says when nothing answers, and clears on Escape', () => {
+  it('is the first line of the sessions section, under the nav', () => {
     setShowLibrary(false)
     const { container } = mount({ runs, now: NOW })
     const search = container.querySelector('.sd-sidebar__search')!
-    expect(search.previousElementSibling).toHaveClass('sd-sidebar__brand')
+    expect(search.parentElement).toBe(list())
+    expect(search.previousElementSibling).toBeNull()
+    expect(list().previousElementSibling).toBe(screen.getByRole('navigation', { name: 'Screens' }))
+    // Nothing above the nav takes a search: the brand row, then the workspace.
+    expect(container.querySelector('.sd-sidebar__nav')!.previousElementSibling).toHaveClass('sd-sidebar__workspace')
+  })
+
+  it('filters the list as it is typed, says when nothing answers, and clears on Escape', () => {
+    setShowLibrary(false)
+    mount({ runs, now: NOW })
     expect(field()).toHaveAccessibleName('Search sessions')
     expect(field().placeholder).toBe('Search sessions')
 
@@ -465,6 +474,44 @@ describe('the search', () => {
     })
     await act(async () => {})
     expect(list()).toHaveTextContent('Could not search notes. 500 Internal Server Error')
+  })
+})
+
+describe('the workspace row', () => {
+  it('sits under the brand row, the name in full with the path after it', () => {
+    setShowLibrary(false)
+    const { container } = mount()
+    const row = container.querySelector('.sd-sidebar__workspace')!
+    expect(row.previousElementSibling).toHaveClass('sd-sidebar__brand')
+    expect(row.nextElementSibling).toHaveClass('sd-sidebar__nav')
+    const brand = container.querySelector('.sd-sidebar__brand')!
+    expect(brand.querySelector('.switcher')).toBeNull()
+
+    const trigger = within(row as HTMLElement).getByRole('button', { name: 'Workspace: omni' })
+    expect(trigger.querySelector('.switcher-name')).toHaveTextContent('omni')
+    expect(trigger.querySelector('.switcher-root')).toHaveTextContent('/repos/omni')
+    expect(trigger.querySelector('.switcher-root bdi')).toHaveAttribute('dir', 'ltr')
+    expect(trigger).toHaveAttribute('title', '/repos/omni')
+  })
+
+  it('keeps the trigger in the rail, as the mark, and still opens the list from it', () => {
+    setShowLibrary(false)
+    localStorage.setItem(SIDEBAR_COLLAPSED_KEY, '1')
+    const { container, onSelectWorkspace } = mount()
+    expect(container.querySelector('.sd-sidebar')).toHaveAttribute('data-collapsed', 'true')
+    const trigger = screen.getByRole('button', { name: 'Workspace: omni' })
+    expect(trigger.querySelector('.switcher-mark .sd-brand-mark')).not.toBeNull()
+    fireEvent.click(trigger)
+    fireEvent.click(within(screen.getByRole('listbox', { name: 'Workspaces' })).getByRole('option', { name: /billing/ }))
+    expect(onSelectWorkspace).toHaveBeenCalledWith('ws2')
+  })
+
+  it('says so when no workspace is registered', () => {
+    setShowLibrary(false)
+    mount({ workspaces: [], currentWorkspaceId: '' })
+    const trigger = screen.getByRole('button', { name: 'Workspace: none' })
+    expect(trigger).toHaveTextContent('No workspace')
+    expect(trigger.querySelector('.switcher-root')).toBeNull()
   })
 })
 

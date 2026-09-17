@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Workspace } from '../../api/types'
 import { useAnchor } from '../../lib/anchor'
+import BrandMark from '../../ui/brand-mark'
 import { SwitcherIcon } from './icons'
 
 /**
@@ -11,11 +12,15 @@ import { SwitcherIcon } from './icons'
  * app-shell language asks for a popover by name — the switcher is Sirdar's
  * version of the account card the reference pins to the foot of its sidebar.
  *
- * Two triggers draw the same list. `badge` (the default) is the lavender
- * chip beside the wordmark. `inline` is a word in a sentence — New session's
- * headline names the workspace with a dotted underline, and that word opens
- * the switcher. The list is pinned to the viewport by `lib/anchor` either
- * way, so it can never push the window into a scroll.
+ * Two triggers draw the same list. `row` (the default) is the sidebar's own
+ * row under the wordmark: the workspace's name in full, its path muted after
+ * it and cut from the left so the end of the path — the part that tells two
+ * checkouts apart — is what survives, and the chevron at the end. In the
+ * 56px rail the row is the brand mark alone, and still opens the list.
+ * `inline` is a word in a sentence — New session's headline names the
+ * workspace with a dotted underline, and that word opens the switcher. The
+ * list is pinned to the viewport by `lib/anchor` either way, so it can never
+ * push the window into a scroll.
  *
  * The last entry is still the way to register another repository, so the
  * switcher answers "where is my other repo?" without a trip through Settings
@@ -26,9 +31,9 @@ export default function WorkspaceSwitcher(props: {
   currentId: string
   onSelect: (id: string) => void
   onAdd: () => void
-  variant?: 'badge' | 'inline'
+  variant?: 'row' | 'inline'
 }): JSX.Element {
-  const { workspaces, currentId, onSelect, onAdd, variant = 'badge' } = props
+  const { workspaces, currentId, onSelect, onAdd, variant = 'row' } = props
   const [open, setOpen] = useState(false)
   const box = useRef<HTMLDivElement | null>(null)
   const trigger = useRef<HTMLButtonElement | null>(null)
@@ -64,22 +69,37 @@ export default function WorkspaceSwitcher(props: {
     trigger.current?.focus()
   }
 
-  const name = current?.name ?? (variant === 'inline' ? 'this workspace' : 'No workspace')
+  const inline = variant === 'inline'
+  const name = current?.name ?? (inline ? 'this workspace' : 'No workspace')
 
   return (
-    <div className="switcher" data-variant={variant === 'inline' ? 'inline' : undefined} ref={box}>
+    <div className="switcher" data-variant={inline ? 'inline' : undefined} ref={box}>
       <button
         ref={trigger}
         type="button"
-        className={variant === 'inline' ? 'switcher-word' : 'switcher-trigger'}
+        className={inline ? 'switcher-word' : 'switcher-trigger'}
         aria-haspopup="listbox"
         aria-expanded={open}
-        aria-label={variant === 'inline' ? `${name}. Change workspace` : `Workspace: ${current?.name ?? 'none'}`}
-        title={variant === 'inline' ? 'Change workspace' : current?.root ?? ''}
+        aria-label={inline ? `${name}. Change workspace` : `Workspace: ${current?.name ?? 'none'}`}
+        title={inline ? 'Change workspace' : current?.root ?? ''}
         onClick={() => setOpen((v) => !v)}
       >
+        {inline ? null : (
+          // The rail's whole trigger; drawn nowhere else. Decoration: the
+          // button's name already says which workspace.
+          <span className="switcher-mark">
+            <BrandMark decorative />
+          </span>
+        )}
         <span className="switcher-name">{name}</span>
-        {variant === 'inline' ? null : <SwitcherIcon />}
+        {inline || !current?.root ? null : (
+          // An isolated left-to-right run inside a right-to-left box: the box
+          // clips and ellipsises its start, the run keeps the path in order.
+          <span className="switcher-root">
+            <bdi dir="ltr">{current.root}</bdi>
+          </span>
+        )}
+        {inline ? null : <SwitcherIcon />}
       </button>
 
       {open && (
