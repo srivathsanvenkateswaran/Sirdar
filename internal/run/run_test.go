@@ -3492,3 +3492,27 @@ func TestAssistantTextIsRecordedWithItsStreamingMarkers(t *testing.T) {
 		t.Errorf("finished block %+v", said[2].Payload)
 	}
 }
+
+// TestTriageRecordsTheOperatorsRequestAndPutsItInThePrompt pins the two
+// places what the operator typed has to end up: the prompt the session
+// reads, and the run's own state, which is what a screen reads it back
+// from.
+func TestTriageRecordsTheOperatorsRequestAndPutsItInThePrompt(t *testing.T) {
+	const asked = "check the tax rounding on the invoice lines first"
+	cfg := newWorkspace(t)
+	p := &stubProvider{script: replay(finalEvent(triageDoc))}
+	r := newRunner(cfg, p, stubTracker{}, stubHelpdesk{})
+
+	outs, err := r.Triage(context.Background(), []string{"OMNI-1"}, Options{Instruction: "  " + asked + "\n"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out := outs[0]
+	if out.State.Instruction != asked {
+		t.Errorf("state instruction %q, want %q", out.State.Instruction, asked)
+	}
+	prompt := readFile(t, filepath.Join(runDir(t, cfg, out), "prompt.md"))
+	if !strings.Contains(prompt, "# Operator's request") || !strings.Contains(prompt, asked) {
+		t.Errorf("the prompt does not carry the request:\n%s", prompt)
+	}
+}

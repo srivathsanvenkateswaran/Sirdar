@@ -11,7 +11,7 @@ import (
 func TestStartFixPassesEveryFlag(t *testing.T) {
 	f := newFake()
 	w := do(t, f, "POST", "/api/workspaces/"+knownWS+"/fix",
-		`{"key":"OMNI-2510","dryRun":false,"noPr":true,"base":"release/9","acceptDeviation":true,"provider":"codex","model":"gpt-5"}`)
+		`{"key":"OMNI-2510","dryRun":false,"noPr":true,"local":true,"base":"release/9","acceptDeviation":true,"provider":"codex","model":"gpt-5"}`)
 
 	var body struct {
 		JobID string `json:"jobId"`
@@ -23,7 +23,7 @@ func TestStartFixPassesEveryFlag(t *testing.T) {
 	if f.gotFixKey != "OMNI-2510" {
 		t.Fatalf("key %q", f.gotFixKey)
 	}
-	want := FixOptions{NoPR: true, Base: "release/9", AcceptDeviation: true, Provider: "codex", Model: "gpt-5"}
+	want := FixOptions{NoPR: true, Local: true, Base: "release/9", AcceptDeviation: true, Provider: "codex", Model: "gpt-5"}
 	if f.gotFix != want {
 		t.Fatalf("options %+v, want %+v", f.gotFix, want)
 	}
@@ -293,4 +293,84 @@ func TestTriageAndRCACarryProviderAndModel(t *testing.T) {
 		`{"keys":["OMNI-1"],"provider":"gemini"}`), 400, "bad_request")
 	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/rca",
 		`{"key":"OMNI-1","provider":"gemini"}`), 400, "bad_request")
+}
+
+// TestStartRoutesCarryTheOperatorsRequest pins the one field all three
+// starts now share: the words the operator typed around the ticket key in
+// the composer, which the session reads as its Operator's request section.
+func TestStartRoutesCarryTheOperatorsRequest(t *testing.T) {
+	const asked = "check the tax rounding on the invoice lines first"
+
+	f := newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/triage",
+		`{"keys":["OMNI-2510"],"instruction":"`+asked+`"}`), 202, nil)
+	if f.gotTriage.Instruction != asked {
+		t.Errorf("triage instruction %q, want %q", f.gotTriage.Instruction, asked)
+	}
+
+	f = newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/rca",
+		`{"key":"OMNI-2510","prUrl":"https://github.com/acme/api/pull/9","resolution":"reindexed the ledger","instruction":"`+asked+`"}`), 202, nil)
+	if f.gotRCA.Instruction != asked {
+		t.Errorf("rca instruction %q, want %q", f.gotRCA.Instruction, asked)
+	}
+	if f.gotRCA.PRURL != "https://github.com/acme/api/pull/9" || f.gotRCA.Resolution != "reindexed the ledger" {
+		t.Errorf("rca options %+v", f.gotRCA)
+	}
+
+	f = newFake()
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/fix",
+		`{"key":"OMNI-2510","local":true,"instruction":"`+asked+`"}`), 202, nil)
+	if f.gotFix.Instruction != asked {
+		t.Errorf("fix instruction %q, want %q", f.gotFix.Instruction, asked)
+	}
+	if !f.gotFix.Local {
+		t.Errorf("fix options %+v, want local", f.gotFix)
+	}
+}
+
+// TestResolveHelpdeskAnswersTheLink pins the read-only lookup the composer
+// makes while somebody is typing a helpdesk number: the tracker key when
+// the record has one, and a reason rather than an error when it does not.
+func TestResolveHelpdeskAnswersTheLink(t *testing.T) {
+	f := newFake()
+	f.helpdeskLink = HelpdeskLink{Key: "OMNI-3233", Subject: "Invoice total is off by one fils"}
+	var got HelpdeskLink
+	decodeJSON(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/helpdesk/25312", ""), 200, &got)
+	if f.gotHelpdesk != "25312" {
+		t.Fatalf("number %q", f.gotHelpdesk)
+	}
+	if got.Key != "OMNI-3233" || got.Number != "25312" {
+		t.Fatalf("link %+v", got)
+	}
+
+	f = newFake()
+	f.helpdeskLink = HelpdeskLink{Reason: "the helpdesk record for 25312 names no tracker issue"}
+	decodeJSON(t, do(t, f, "GET", "/api/workspaces/"+knownWS+"/helpdesk/25312", ""), 200, &got)
+	if got.Key != "" || got.Reason == "" {
+		t.Fatalf("an unmapped record should answer 200 with the reason, got %+v", got)
+	}
+}
+
+func TestResolveHelpdeskUnknownWorkspace(t *testing.T) {
+	assertError(t, do(t, newFake(), "GET", "/api/workspaces/nope/helpdesk/25312", ""), 404, "not_found")
+}
+
+// TestComposeIntentReadsTheLine pins the fallback route: the text goes in,
+// a reading comes back, and an empty box is refused rather than spending a
+// provider call on nothing.
+func TestComposeIntentReadsTheLine(t *testing.T) {
+	f := newFake()
+	f.composed = ComposedIntent{Key: "OMNI-3233", Mode: "fix", Instruction: "start with the rounding", Confidence: 0.8}
+	var got ComposedIntent
+	decodeJSON(t, do(t, f, "POST", "/api/workspaces/"+knownWS+"/compose-intent",
+		`{"text":"sort out the rounding on 3233 or 2510"}`), 200, &got)
+	if f.gotCompose != "sort out the rounding on 3233 or 2510" {
+		t.Fatalf("text %q", f.gotCompose)
+	}
+	if got != f.composed {
+		t.Fatalf("reading %+v", got)
+	}
+
+	assertError(t, do(t, newFake(), "POST", "/api/workspaces/"+knownWS+"/compose-intent", `{"text":"  "}`), 400, "bad_request")
 }

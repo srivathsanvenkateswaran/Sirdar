@@ -592,3 +592,62 @@ func TestSchemasUseNoOneOf(t *testing.T) {
 		}
 	}
 }
+
+// --- The operator's request ---
+
+// TestOperatorRequestSitsAtTheTopOfEveryPrompt pins where the words an
+// operator typed into the composer land: one section, immediately after the
+// fixed preamble and ahead of the ticket, in all three prompts.
+func TestOperatorRequestSitsAtTheTopOfEveryPrompt(t *testing.T) {
+	const asked = "check the tax rounding on the invoice lines first"
+
+	triageIn := fixedTriageInput()
+	triageIn.Instruction = "  " + asked + "  "
+	triage := Triage(triageIn)
+
+	rcaIn := RCAInput{TriageInput: triageIn, TriageNote: "note", Resolution: "done"}
+	rca := RCA(rcaIn)
+
+	fix := Fix(FixInput{Instruction: asked, Key: "OMNI-1", TriageNote: "note"})
+
+	for name, got := range map[string]string{"triage": triage, "rca": rca, "fix": fix} {
+		heading := strings.Index(got, OperatorRequestHeading)
+		if heading < 0 {
+			t.Errorf("%s: no %q section", name, OperatorRequestHeading)
+			continue
+		}
+		if !strings.Contains(got, asked) {
+			t.Errorf("%s: the request itself is missing", name)
+		}
+		// Ahead of the material it is about, and behind the preamble,
+		// whose rules it explicitly does not lift.
+		if ticket := strings.Index(got, "# Ticket"); ticket >= 0 && heading > ticket {
+			t.Errorf("%s: the request comes after the ticket", name)
+		}
+		if fixSection := strings.Index(got, "# Fix\n"); fixSection >= 0 && heading > fixSection {
+			t.Errorf("%s: the request comes after the fix section", name)
+		}
+		if heading == 0 {
+			t.Errorf("%s: the request displaced the preamble", name)
+		}
+		if !strings.Contains(got, "it does not lift any of them") {
+			t.Errorf("%s: the section does not say the rules still stand", name)
+		}
+	}
+}
+
+// TestNoOperatorRequestSectionWithoutOne keeps every prompt that nobody
+// typed anything for byte-identical to what it was.
+func TestNoOperatorRequestSectionWithoutOne(t *testing.T) {
+	blank := fixedTriageInput()
+	blank.Instruction = "   \n\t "
+	for name, got := range map[string]string{
+		"triage": Triage(blank),
+		"rca":    RCA(RCAInput{TriageInput: blank, TriageNote: "note"}),
+		"fix":    Fix(FixInput{Key: "OMNI-1", TriageNote: "note"}),
+	} {
+		if strings.Contains(got, OperatorRequestHeading) {
+			t.Errorf("%s: a request section appeared with no request", name)
+		}
+	}
+}

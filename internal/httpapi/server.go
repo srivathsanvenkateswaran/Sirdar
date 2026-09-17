@@ -78,6 +78,8 @@ func newServer(svc Service, ui fs.FS, opts ...Option) *server {
 	s.mux.HandleFunc("POST /api/workspaces", s.addWorkspace)
 	s.mux.HandleFunc("DELETE /api/workspaces/{id}", s.removeWorkspace)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/queue", s.queue)
+	s.mux.HandleFunc("GET /api/workspaces/{id}/helpdesk/{number}", s.resolveHelpdesk)
+	s.mux.HandleFunc("POST /api/workspaces/{id}/compose-intent", s.composeIntent)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs", s.runs)
 	s.mux.HandleFunc("GET /api/workspaces/{id}/runs/{runId}", s.run)
 	s.mux.HandleFunc("DELETE /api/workspaces/{id}/runs/{runId}", s.deleteRun)
@@ -319,6 +321,7 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 		DryRun       bool     `json:"dryRun"`
 		At           string   `json:"at"`
 		KeepWorktree bool     `json:"keepWorktree"`
+		Instruction  string   `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -333,6 +336,7 @@ func (s *server) startTriage(w http.ResponseWriter, r *http.Request) {
 	id, err := s.svc.StartTriage(r.Context(), r.PathValue("id"), body.Keys, TriageOptions{
 		Provider: body.Provider, Model: body.Model, DryRun: body.DryRun,
 		At: body.At, KeepWorktree: body.KeepWorktree,
+		Instruction: body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)
@@ -350,6 +354,7 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		Model        string `json:"model"`
 		At           string `json:"at"`
 		KeepWorktree bool   `json:"keepWorktree"`
+		Instruction  string `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -365,6 +370,7 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 		PRURL: body.PRURL, Resolution: body.Resolution,
 		Provider: body.Provider, Model: body.Model,
 		At: body.At, KeepWorktree: body.KeepWorktree,
+		Instruction: body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)

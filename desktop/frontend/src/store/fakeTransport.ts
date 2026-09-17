@@ -1,6 +1,7 @@
 import type {
   AppEvent,
   Check,
+  ComposedIntent,
   ConfigSummary,
   DropHunkRequest,
   EvalReport,
@@ -16,6 +17,7 @@ import type {
   RunEvent,
   RunSummary,
   SearchHit,
+  HelpdeskLink,
   Ticket,
   Transport,
   Usage,
@@ -41,6 +43,8 @@ export interface TransportCalls {
   mcpCall: { ws: string; server: string; tool: string; args?: unknown }[]
   deleteRun: { ws: string; runId: string }[]
   search: { ws: string; q: string }[]
+  resolveHelpdesk: { ws: string; number: string }[]
+  composeIntent: { ws: string; text: string }[]
 }
 
 export interface FakeTransport extends Transport {
@@ -357,6 +361,10 @@ export function createFakeTransport(seed: {
   register?: RegisterRow[]
   /** What `search()` picks from: the hits whose excerpt contains the query, case folded. */
   hits?: SearchHit[]
+  /** What `resolveHelpdesk()` answers, by helpdesk number; a number not named here has no tracker issue. */
+  helpdesk?: Record<string, HelpdeskLink>
+  /** What `composeIntent()` answers. Absent makes the call reject, as a workspace with no provider does. */
+  composed?: ComposedIntent
   /**
    * Whole runs by run id — the detail, the log, the note, the prompt and
    * the change — for the session screen: `run`, `events`, `note`, `prompt`
@@ -400,6 +408,8 @@ export function createFakeTransport(seed: {
     mcpCall: [],
     deleteRun: [],
     search: [],
+    resolveHelpdesk: [],
+    composeIntent: [],
   }
 
   const fake: FakeTransport = {
@@ -430,6 +440,21 @@ export function createFakeTransport(seed: {
     workspaces: async () => seed.workspaces ?? [workspace()],
     addWorkspace: async (root) => workspace({ id: 'ws-new', root }),
     removeWorkspace: async () => {},
+    resolveHelpdesk: async (ws, number) => {
+      calls.resolveHelpdesk.push({ ws, number })
+      return (
+        seed.helpdesk?.[number] ?? {
+          number,
+          key: '',
+          reason: `the helpdesk record for ${number} names no tracker issue`,
+        }
+      )
+    },
+    composeIntent: async (ws, text) => {
+      calls.composeIntent.push({ ws, text })
+      if (!seed.composed) throw new Error('this workspace has no provider to ask')
+      return seed.composed
+    },
     queue: async (ws, filter) => {
       calls.queue.push(ws)
       if (queueError) throw queueError

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/app"
 )
@@ -58,6 +59,7 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 		AcceptDeviation bool   `json:"acceptDeviation"`
 		Provider        string `json:"provider"`
 		Model           string `json:"model"`
+		Instruction     string `json:"instruction"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -78,6 +80,7 @@ func (s *server) startFix(w http.ResponseWriter, r *http.Request) {
 		AcceptDeviation: body.AcceptDeviation,
 		Provider:        body.Provider,
 		Model:           body.Model,
+		Instruction:     body.Instruction,
 	})
 	if err != nil {
 		s.fail(w, err)
@@ -329,4 +332,50 @@ func (s *server) configSummary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, summary)
+}
+
+// resolveHelpdesk is GET /api/workspaces/{id}/helpdesk/{number}: which
+// tracker issue a helpdesk number belongs to.
+//
+// It reads one helpdesk record and starts nothing, so it carries no gate
+// beyond the ones every read route has. A number the helpdesk does not
+// know, and a record that names no tracker issue, are both 200 with the
+// reason on them: the composer says that reason under the box while
+// somebody is still typing, and a 404 for every half-typed number would
+// make that line read like a failure rather than an answer.
+func (s *server) resolveHelpdesk(w http.ResponseWriter, r *http.Request) {
+	link, err := s.svc.ResolveHelpdesk(r.Context(), r.PathValue("id"), r.PathValue("number"))
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, link)
+}
+
+// composeIntent is POST /api/workspaces/{id}/compose-intent: read one
+// ambiguous composer line and say what it was understood as.
+//
+// It is a POST because the line is a body rather than a path — a person can
+// paste a paragraph into the composer — and not because it changes
+// anything. It starts no run and writes nothing; what it does spend is one
+// short provider call, which is why the composer asks it only when its own
+// parser cannot settle the line, and why the answer starts nothing on its
+// own: it comes back as chips a person confirms.
+func (s *server) composeIntent(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Text string `json:"text"`
+	}
+	if !decode(w, r, &body, false) {
+		return
+	}
+	if strings.TrimSpace(body.Text) == "" {
+		writeError(w, http.StatusBadRequest, "bad_request", "text is required")
+		return
+	}
+	out, err := s.svc.ComposeIntent(r.Context(), r.PathValue("id"), body.Text)
+	if err != nil {
+		s.fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, out)
 }

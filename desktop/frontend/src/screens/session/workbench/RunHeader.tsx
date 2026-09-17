@@ -3,6 +3,7 @@ import type { RunDetail } from '../../../api/types'
 import { useNow } from '../../../lib/useNow'
 import ProviderMark from '../../../ui/provider-mark'
 import StatusBadge, { type SdStatus } from '../../../ui/status-badge'
+import AskedFor from '../../../components/session/AskedFor'
 import { SessionLayoutSwitcher } from '../../../components/session/RunHeader'
 import { PersonIcon } from './icons'
 import { gauges, type Gauge as GaugeModel } from './model'
@@ -83,6 +84,7 @@ export default function RunHeader({
       <span className="wb-title" title={title ?? detail.title} dir="auto">
         {title ?? detail.title ?? ''}
       </span>
+      <AskedFor instruction={detail.instruction} />
       <div className="wb-gauges">
         {gauges(detail, at).map((g) => (
           <Gauge key={g.label} {...g} live={live} />

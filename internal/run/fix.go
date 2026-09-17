@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/srivathsanvenkateswaran/sirdar/internal/note"
 	"github.com/srivathsanvenkateswaran/sirdar/internal/store"
@@ -110,6 +111,10 @@ func (r *Runner) prepareFix(key string, o FixOptions) (*prepared, error) {
 		StartedAt: now,
 		UpdatedAt: now,
 		Eval:      o.Eval,
+		// The fix prompt was assembled by internal/fix, which already put
+		// the request in front of the session; this is the same text on
+		// the record, so a screen can say what the run was asked to do.
+		Instruction: strings.TrimSpace(o.Instruction),
 	}
 	p.state.Budget.MaxTurns = cfg.Budget.MaxTurns
 	p.state.Budget.MaxMinutes = cfg.Budget.MaxMinutes

@@ -102,6 +102,11 @@ type RunDetail struct {
 	// first, and who answered each: "resume" for the session that wrote
 	// the note, "primed" for a fresh one handed it.
 	Steers []SteerInfo `json:"steers,omitempty"`
+
+	// Instruction is what the operator asked for when they started the
+	// run — the words they typed around the ticket key. Empty on a run
+	// started without one.
+	Instruction string `json:"instruction,omitempty"`
 }
 
 // SteerInfo is one follow-up instruction on a run, for the run detail.
@@ -306,6 +311,11 @@ type TriageOptions struct {
 	// leaves that directory on disk afterwards.
 	At           string `json:"at"`
 	KeepWorktree bool   `json:"keepWorktree"`
+	// Instruction is what the operator typed around the ticket key in the
+	// composer: what they most want this session to answer. It reaches
+	// the session as an Operator's request section at the top of the
+	// prompt and is recorded on the run.
+	Instruction string `json:"instruction"`
 }
 
 // RCAOptions are the inputs an RCA run takes: the two only it has, and the
@@ -319,6 +329,8 @@ type RCAOptions struct {
 	// repository as it stood at that commit, and keep the worktree.
 	At           string `json:"at"`
 	KeepWorktree bool   `json:"keepWorktree"`
+	// Instruction is the operator's own words, as on TriageOptions.
+	Instruction string `json:"instruction"`
 }
 
 // FixOptions are the flags of one fix job, matching `sirdar fix`.
@@ -340,6 +352,8 @@ type FixOptions struct {
 	// written to fix.diff in the run directory.
 	At    string `json:"at"`
 	Local bool   `json:"local"`
+	// Instruction is the operator's own words, as on TriageOptions.
+	Instruction string `json:"instruction"`
 }
 
 // EvalOptions are the per-invocation overrides an eval job takes. The
@@ -596,6 +610,7 @@ func DetailFor(root string, s store.State, self config.Identity) RunDetail {
 	}); f != (FixInfo{}) {
 		d.Fix = &f
 	}
+	d.Instruction = s.Instruction
 	for _, st := range s.Steers {
 		d.Steers = append(d.Steers, SteerInfo{At: wireTime(st.At), Text: st.Text, Continuation: st.Continuation})
 	}

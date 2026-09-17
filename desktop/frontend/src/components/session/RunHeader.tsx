@@ -8,6 +8,7 @@ import Age from '../Age'
 import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
 import { AssignedTo } from '../../ui/run-card/Avatar'
+import AskedFor from './AskedFor'
 import SourceMark from '../../ui/source-mark'
 import StatusBadge, { type SdStatus } from '../../ui/status-badge'
 import { ConversationLayoutIcon, DocumentLayoutIcon, WorkbenchLayoutIcon } from './icons'
@@ -162,6 +163,7 @@ export default function RunHeader({
         {title ?? ''}
       </span>
       <AssignedTo name={detail.assignee ?? ''} />
+      <AskedFor instruction={detail.instruction} />
       {variant === 'gauges' ? (
         <div className="sn-gauges">
           <span className="sn-head__stat sn-head__provider">

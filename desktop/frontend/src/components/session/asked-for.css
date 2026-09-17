@@ -1,0 +1,30 @@
+/*
+ * "Asked · <what the operator typed>" in a session header.
+ *
+ * One clipped line in the meta type, never a badge: it is a fact about the
+ * run and nothing to act on, and a pill here would compete with the status
+ * badge two places to its left. It gives up its width before the ticket
+ * title does, which is why it shrinks and the title does not.
+ */
+.sd-asked-for {
+  display: inline-flex;
+  flex: 0 1 auto;
+  gap: var(--sd-space-2);
+  align-items: baseline;
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--sd-ink-2);
+  font-size: var(--sd-text-meta);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sd-asked-for__label {
+  flex: none;
+  color: var(--sd-ink-3);
+}
+
+.sd-asked-for__text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

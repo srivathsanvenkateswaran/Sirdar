@@ -16,6 +16,8 @@ var bridgeMethods = []string{
 	"AddWorkspace",
 	"RemoveWorkspace",
 	"Queue",
+	"ResolveHelpdesk",
+	"ComposeIntent",
 	"Runs",
 	"Run",
 	"DeleteRun",

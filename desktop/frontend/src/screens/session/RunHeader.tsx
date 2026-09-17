@@ -11,6 +11,7 @@ import { AssignedTo } from '../../ui/run-card/Avatar'
 import SourceMark from '../../ui/source-mark'
 import StatusBadge, { type SdStatus } from '../../ui/status-badge'
 import { SessionLayoutSwitcher } from '../../components/session/RunHeader'
+import AskedFor from '../../components/session/AskedFor'
 
 /**
  * The compact run header: key under its source's mark, kind, state, the
@@ -64,6 +65,7 @@ export default function RunHeader({
         {title ?? detail.title ?? ''}
       </span>
       <AssignedTo name={detail.assignee ?? ''} />
+      <AskedFor instruction={detail.instruction} />
       <div
         className="sc-stats"
         data-compact={compact ? 'true' : undefined}

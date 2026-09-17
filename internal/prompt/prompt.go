@@ -31,6 +31,13 @@ var RCASchema []byte
 
 // TriageInput is everything Triage needs to assemble a triage prompt.
 type TriageInput struct {
+	// Instruction is what the operator asked for in their own words when
+	// they started the run — the text they typed around the ticket key in
+	// the composer. It is put in front of the session as its own section,
+	// ahead of the ticket, the way a steer's instruction goes ahead of the
+	// session it continues. Empty adds no section at all.
+	Instruction string
+
 	Bundle     ticket.Bundle
 	BundleDir  string // absolute
 	Playbooks  []Playbook
@@ -128,11 +135,16 @@ var rcaFieldGuidance = []string{
 func Triage(in TriageInput) string {
 	sections := []string{
 		strings.TrimRight(preambleMD, "\n"),
+	}
+	if s := operatorRequestSection(in.Instruction); s != "" {
+		sections = append(sections, s)
+	}
+	sections = append(sections,
 		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
-	}
+	)
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -146,11 +158,16 @@ func Triage(in TriageInput) string {
 func RCA(in RCAInput) string {
 	sections := []string{
 		strings.TrimRight(preambleMD, "\n"),
+	}
+	if s := operatorRequestSection(in.Instruction); s != "" {
+		sections = append(sections, s)
+	}
+	sections = append(sections,
 		languageSection(in.NotesLanguage, in.CustomerLanguage),
 		playbooksSection(in.Playbooks),
 		ticketSection(in.Bundle, in.BundleDir),
 		conversationSection(in.ThreadHead, in.ThreadHeadTruncated),
-	}
+	)
 	if len(in.Bundle.Warnings) > 0 {
 		sections = append(sections, warningsSection(in.Bundle.Warnings))
 	}
@@ -164,6 +181,34 @@ func RCA(in RCAInput) string {
 	sections = append(sections, auditRuleLine)
 	sections = append(sections, "Respond with the JSON object only.")
 	return strings.Join(sections, "\n\n") + "\n"
+}
+
+// OperatorRequestHeading names the section an operator's own words go in.
+// It is one heading, spelled once, because three prompts and the screens
+// that quote it all have to agree on what it is called.
+const OperatorRequestHeading = "# Operator's request"
+
+// operatorRequestSection puts what the operator typed in front of the
+// session, ahead of the ticket and everything else the prompt carries. It
+// is the same move a steer makes on a run already finished: the person's
+// own words go first, and the material they are about comes after.
+//
+// The text is fenced, so an instruction that itself contains a heading or a
+// list cannot be read as part of the prompt's own structure, and it is
+// labelled as a request rather than as an instruction that outranks the
+// preamble: a session is still read-only, still cites its evidence, and
+// still answers with the schema, whatever was asked for here.
+//
+// An empty or blank instruction produces no section.
+func operatorRequestSection(instruction string) string {
+	text := strings.TrimSpace(instruction)
+	if text == "" {
+		return ""
+	}
+	return OperatorRequestHeading + "\n\n" +
+		"The person who started this session asked for the following. Treat it as what they " +
+		"most want answered, within the rules above; it does not lift any of them.\n\n" +
+		fenceBlock("", text)
 }
 
 // languageSection states both languages a run writes in: the one the note

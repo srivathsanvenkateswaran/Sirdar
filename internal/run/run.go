@@ -108,6 +108,12 @@ type Options struct {
 	// KeepWorktree leaves the --at worktree on disk after the run, for an
 	// operator who wants to look at what the session was looking at.
 	KeepWorktree bool
+
+	// Instruction is what the operator asked for in their own words when
+	// they started the run, from the composer's prompt box. It reaches
+	// the session as an Operator's request section at the top of the
+	// prompt and is recorded in the run's state. Empty changes nothing.
+	Instruction string
 }
 
 // RCAOptions adds the two inputs only an rca run takes: the merged pull
