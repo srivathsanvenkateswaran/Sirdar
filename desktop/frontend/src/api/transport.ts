@@ -2,9 +2,11 @@ import { coalesce } from './coalesce'
 import type {
   AppEvent,
   Check,
+  ComposedIntent,
   ConfigSummary,
   EvalReport,
   GoldenEntry,
+  HelpdeskLink,
   MCPCallResult,
   MCPInventory,
   MCPToolList,
@@ -134,6 +136,12 @@ export function createHTTPTransport(): Transport {
           limit: f?.limit,
         })}`,
       ),
+    resolveHelpdesk: (ws, number) =>
+      getJSON<HelpdeskLink>(
+        `/workspaces/${encodeURIComponent(ws)}/helpdesk/${encodeURIComponent(number)}`,
+      ),
+    composeIntent: (ws, text) =>
+      postJSON<ComposedIntent>(`/workspaces/${encodeURIComponent(ws)}/compose-intent`, { text }),
     runs: (ws, key) =>
       getJSON<RunSummary[]>(`/workspaces/${encodeURIComponent(ws)}/runs${query({ key })}`),
     run: (ws, runId) =>
@@ -276,6 +284,8 @@ interface BridgeBindings {
   AddWorkspace(root: string): Promise<Workspace>
   RemoveWorkspace(id: string): Promise<void>
   Queue(ws: string, f: { assignee: string; status: string; limit: number }): Promise<Ticket[] | null>
+  ResolveHelpdesk(ws: string, number: string): Promise<HelpdeskLink>
+  ComposeIntent(ws: string, text: string): Promise<ComposedIntent>
   Runs(ws: string, key: string): Promise<RunSummary[] | null>
   Run(ws: string, runId: string): Promise<RunDetail>
   DeleteRun(ws: string, runId: string): Promise<void>
@@ -289,12 +299,12 @@ interface BridgeBindings {
   StartTriage(
     ws: string,
     keys: string[],
-    o: { provider: string; model: string; dryRun: boolean },
+    o: { provider: string; model: string; dryRun: boolean; instruction: string },
   ): Promise<string>
   StartRCA(
     ws: string,
     key: string,
-    o: { prUrl: string; resolution: string; provider: string; model: string },
+    o: { prUrl: string; resolution: string; provider: string; model: string; instruction: string },
   ): Promise<string>
   StartFix(
     ws: string,
@@ -307,6 +317,7 @@ interface BridgeBindings {
       acceptDeviation: boolean
       provider: string
       model: string
+      instruction: string
     },
   ): Promise<string>
   StartEval(
@@ -373,6 +384,8 @@ export function createWailsTransport(): Transport {
           limit: f?.limit ?? 0,
         }),
       ),
+    resolveHelpdesk: (ws, number) => bridge().ResolveHelpdesk(ws, number),
+    composeIntent: (ws, text) => bridge().ComposeIntent(ws, text),
     runs: async (ws, key) => list(await bridge().Runs(ws, key ?? '')),
     run: (ws, runId) => bridge().Run(ws, runId),
     deleteRun: async (ws, runId) => {
@@ -390,6 +403,7 @@ export function createWailsTransport(): Transport {
         provider: o?.provider ?? '',
         model: o?.model ?? '',
         dryRun: o?.dryRun ?? false,
+        instruction: o?.instruction ?? '',
       }),
     }),
     startRCA: async (ws, key, o) => ({
@@ -398,6 +412,7 @@ export function createWailsTransport(): Transport {
         resolution: o?.resolution ?? '',
         provider: o?.provider ?? '',
         model: o?.model ?? '',
+        instruction: o?.instruction ?? '',
       }),
     }),
     startFix: async (ws, key, o) => ({
@@ -409,6 +424,7 @@ export function createWailsTransport(): Transport {
         acceptDeviation: o?.acceptDeviation ?? false,
         provider: o?.provider ?? '',
         model: o?.model ?? '',
+        instruction: o?.instruction ?? '',
       }),
     }),
     startEval: async (ws, keys, o) => ({

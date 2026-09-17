@@ -33,7 +33,9 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * "Sessions show" preference says.
  */
 export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
-export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
+export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo;
+  /** What the operator asked for when they started the run, in their own words; absent when they asked for nothing in particular. */
+  instruction?: string }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`
  * is set when the agent reported doing something other than the note's
@@ -268,8 +270,15 @@ export type AppEvent =
    * happened in between was never delivered.
    */
   | { kind: 'live'; state: 'open' | 'lost' };
-/** The one-off overrides every start accepts; empty means the workspace's own. */
-export interface Overrides { provider?: string; model?: string }
+/**
+ * The one-off overrides every start accepts; empty means the workspace's own.
+ *
+ * `instruction` is what the operator typed around the ticket key in the
+ * composer: what they most want this session to answer. It reaches the
+ * session as an Operator's request section at the top of the prompt and is
+ * recorded on the run. It is not the note, and nothing filed carries it.
+ */
+export interface Overrides { provider?: string; model?: string; instruction?: string }
 export interface TriageStart extends Overrides { dryRun?: boolean }
 export interface RCAStart extends Overrides { prUrl?: string; resolution?: string }
 /**
@@ -278,10 +287,34 @@ export interface RCAStart extends Overrides { prUrl?: string; resolution?: strin
  * in the Review screen. The two are `sirdar fix --no-pr` and `--local`.
  */
 export interface FixStart extends Overrides { dryRun?: boolean; noPr?: boolean; local?: boolean; base?: string; acceptDeviation?: boolean }
+/**
+ * What a helpdesk number resolved to. `key` empty is an ordinary answer:
+ * `reason` then says which of the three it was — the workspace reads no
+ * helpdesk, the record does not exist, or the record names no tracker issue.
+ */
+export interface HelpdeskLink { number: string; key: string; subject?: string; reason?: string }
+/**
+ * How one ambiguous composer line was read. It is a suggestion: the composer
+ * draws it as chips and starts nothing until a person says so.
+ */
+export interface ComposedIntent { key: string; mode: '' | RunKind; instruction: string; confidence: number }
 export interface EvalStart extends Overrides { concurrency?: number; retro?: boolean; withRca?: boolean; rubric?: boolean }
 export interface Transport {
   workspaces(): Promise<Workspace[]>; addWorkspace(root: string): Promise<Workspace>; removeWorkspace(id: string): Promise<void>;
   queue(ws: string, f?: { assignee?: string; status?: string; limit?: number }): Promise<Ticket[]>;
+  /**
+   * Which tracker issue a helpdesk number belongs to. Read-only: it reads
+   * one helpdesk record and starts nothing. A number with no tracker issue
+   * behind it resolves with `key: ''` and the reason on it, because the
+   * composer asks this while somebody is still typing.
+   */
+  resolveHelpdesk(ws: string, number: string): Promise<HelpdeskLink>;
+  /**
+   * Reads one ambiguous composer line with a single short provider call and
+   * answers what it was understood as. Starts nothing: the answer is drawn
+   * as chips a person confirms.
+   */
+  composeIntent(ws: string, text: string): Promise<ComposedIntent>;
   runs(ws: string, key?: string): Promise<RunSummary[]>; run(ws: string, runId: string): Promise<RunDetail>;
   /**
    * Removes a run's directory under .sirdar/runs. The register row and any

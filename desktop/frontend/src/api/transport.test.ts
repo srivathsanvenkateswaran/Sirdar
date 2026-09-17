@@ -47,6 +47,38 @@ describe('http transport', () => {
     expect(got[0]!.usage.costUsd).toBe(0.12)
   })
 
+  it('resolves a helpdesk number on its own route and posts an ambiguous line', async () => {
+    const fetchMock = mockFetch({ number: '25312', key: 'OMNI-3233' })
+    await expect(createTransport().resolveHelpdesk('ws1', '25312')).resolves.toEqual({
+      number: '25312',
+      key: 'OMNI-3233',
+    })
+    expect(fetchMock.mock.calls[0]![0]).toBe('/api/workspaces/ws1/helpdesk/25312')
+
+    const post = mockFetch({ key: 'OMNI-3233', mode: 'fix', instruction: 'the rounding', confidence: 0.8 })
+    await expect(createTransport().composeIntent('ws1', 'sort out the rounding')).resolves.toEqual({
+      key: 'OMNI-3233',
+      mode: 'fix',
+      instruction: 'the rounding',
+      confidence: 0.8,
+    })
+    expect(post.mock.calls[0]![0]).toBe('/api/workspaces/ws1/compose-intent')
+    expect(JSON.parse(String(post.mock.calls[0]![1]?.body))).toEqual({ text: 'sort out the rounding' })
+  })
+
+  it('carries the operator request on every start', async () => {
+    for (const [name, call] of [
+      ['triage', (t: ReturnType<typeof createTransport>) => t.startTriage('ws1', ['OMNI-1'], { instruction: 'check the rounding' })],
+      ['rca', (t: ReturnType<typeof createTransport>) => t.startRCA('ws1', 'OMNI-1', { instruction: 'check the rounding' })],
+      ['fix', (t: ReturnType<typeof createTransport>) => t.startFix('ws1', 'OMNI-1', { instruction: 'check the rounding' })],
+    ] as const) {
+      const fetchMock = mockFetch({ jobId: 'job-1' })
+      await call(createTransport())
+      const body = JSON.parse(String(fetchMock.mock.calls[0]![1]?.body))
+      expect(body.instruction, name).toBe('check the rounding')
+    }
+  })
+
   it('omits the query string when no key is given', async () => {
     const fetchMock = mockFetch([])
 
@@ -413,17 +445,45 @@ describe('wails transport', () => {
       acceptDeviation: false,
       provider: '',
       model: '',
+      instruction: '',
     })
 
     await expect(
-      t.startRCA('ws1', 'OMNI-1', { prUrl: 'https://github.com/acme/api/pull/4', resolution: 'Reverted.' }),
+      t.startRCA('ws1', 'OMNI-1', {
+        prUrl: 'https://github.com/acme/api/pull/4',
+        resolution: 'Reverted.',
+        instruction: 'check the tax rounding first',
+      }),
     ).resolves.toEqual({ jobId: 'job-r' })
     expect(bridge.StartRCA).toHaveBeenCalledWith('ws1', 'OMNI-1', {
       prUrl: 'https://github.com/acme/api/pull/4',
       resolution: 'Reverted.',
       provider: '',
       model: '',
+      instruction: 'check the tax rounding first',
     })
+  })
+
+  it('resolves a helpdesk number and reads an ambiguous line through their bound methods', async () => {
+    const bridge = stubBridge({
+      ResolveHelpdesk: async () => ({ number: '25312', key: 'OMNI-3233' }),
+      ComposeIntent: async () => ({ key: 'OMNI-3233', mode: 'fix', instruction: 'the rounding', confidence: 0.8 }),
+    })
+    const t = createWailsTransport()
+
+    await expect(t.resolveHelpdesk('ws1', '25312')).resolves.toEqual({
+      number: '25312',
+      key: 'OMNI-3233',
+    })
+    expect(bridge.ResolveHelpdesk).toHaveBeenCalledWith('ws1', '25312')
+
+    await expect(t.composeIntent('ws1', 'sort out the rounding')).resolves.toEqual({
+      key: 'OMNI-3233',
+      mode: 'fix',
+      instruction: 'the rounding',
+      confidence: 0.8,
+    })
+    expect(bridge.ComposeIntent).toHaveBeenCalledWith('ws1', 'sort out the rounding')
   })
 
   it('deletes, searches and reveals a run directory through their bound methods', async () => {
