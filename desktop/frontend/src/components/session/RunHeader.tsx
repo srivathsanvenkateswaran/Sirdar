@@ -4,7 +4,7 @@ import { useAnchor } from '../../lib/anchor'
 import { parseBundle } from '../../lib/bundle'
 import { duration, parseTime, usd } from '../../lib/format'
 import { SESSION_LAYOUT_OPTIONS, sessionLayout, setSessionLayout, subscribeSessionLayout, type SessionLayout } from '../../lib/sessionLayout'
-import { sessionsShow, shownNumber, subscribeSessionsShow, withSource, type SessionsShow } from '../../lib/sessionsShow'
+import { helpdeskNumber, sessionsShow, shownNumber, subscribeSessionsShow, withSource, type SessionsShow } from '../../lib/sessionsShow'
 import { useNow } from '../../lib/useNow'
 import KindChip from '../../ui/kind-chip'
 import ProviderMark from '../../ui/provider-mark'
@@ -322,7 +322,7 @@ export default function RunHeader({
 
   const live = LIVE.has(detail.status)
   const shown = shownNumber(detail, show, sources)
-  const other = otherNumber(detail, show, sources)
+  const other = otherNumber(detail, shown.role, sources)
   const word = stateWord(detail.status)
   const said = badgeDetail(detail, notePath)
   const model = detail.model || fallbackModel || 'model unknown'
@@ -334,11 +334,11 @@ export default function RunHeader({
   // there is a second number to hang a link on.
   useEffect(() => {
     if (!other.text || !transport?.prompt || !workspaceId) return
-    let live = true
+    let alive = true
     transport
       .prompt(workspaceId, detail.runId)
       .then((prompt) => {
-        if (!live) return
+        if (!alive) return
         const { ticket } = parseBundle(prompt)
         setLinks({ trackerUrl: ticket['Tracker URL'] || undefined, helpdeskUrl: ticket['Helpdesk URL'] || undefined })
       })
@@ -346,7 +346,7 @@ export default function RunHeader({
         // A number without a page is still the number; it stays plain text.
       })
     return () => {
-      live = false
+      alive = false
     }
   }, [transport, workspaceId, detail.runId, other.text])
 
@@ -448,15 +448,14 @@ export default function RunHeader({
  */
 function otherNumber(
   detail: RunDetail,
-  show: SessionsShow,
+  shownRole: SessionsShow,
   sources?: SourcesSummary,
 ): { text: string; long: string; role: SessionsShow } {
-  const shown = shownNumber(detail, show, sources)
-  if (shown.role === 'helpdesk') {
+  if (shownRole === 'helpdesk') {
     return { text: detail.key, long: withSource(detail.key, sources?.tracker), role: 'tracker' }
   }
   const helpdesk = detail.helpdeskKey?.trim() ?? ''
   if (!helpdesk) return { text: '', long: '', role: 'helpdesk' }
-  const text = helpdesk.startsWith('#') ? helpdesk : `#${helpdesk}`
+  const text = helpdeskNumber(helpdesk)
   return { text, long: withSource(text, sources?.helpdesk), role: 'helpdesk' }
 }
