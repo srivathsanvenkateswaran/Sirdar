@@ -75,7 +75,7 @@ func TestServiceRejectsTraversalIDs(t *testing.T) {
 			"Prompt(runId)":   errOfString(svc.Prompt(ws, id)),
 			"Register":        errOfRows(svc.Register(id)),
 			"StartRCA(key)":   mustErr(svc.StartRCA(ctx, ws, id, RCAOptions{})),
-			"Resume(runId)":   mustErr(svc.Resume(ctx, ws, id, "")),
+			"Resume(runId)":   mustErr(svc.Resume(ctx, ws, id, "", "")),
 		}
 		if _, _, err := svc.Events(ws, id, 0); true {
 			checks["Events(runId)"] = err

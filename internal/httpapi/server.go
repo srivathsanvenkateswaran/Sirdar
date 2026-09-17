@@ -362,12 +362,17 @@ func (s *server) startRCA(w http.ResponseWriter, r *http.Request) {
 func (s *server) resume(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Answer string `json:"answer"`
+		// Model puts the continued session on another model, and every
+		// session of the run after it. It is what a run blocked on a
+		// per-model limit is carried on with. Absent leaves the run on
+		// the model it has, which is every other resume.
+		Model string `json:"model"`
 	}
 	// A resume that is not answering a question carries no body at all.
 	if !decode(w, r, &body, true) {
 		return
 	}
-	id, err := s.svc.Resume(r.Context(), r.PathValue("id"), r.PathValue("runId"), body.Answer)
+	id, err := s.svc.Resume(r.Context(), r.PathValue("id"), r.PathValue("runId"), body.Answer, body.Model)
 	if err != nil {
 		s.fail(w, err)
 		return
@@ -387,6 +392,9 @@ type steerResponse struct {
 func (s *server) steer(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		Text string `json:"text"`
+		// Model puts the continued session on another model; absent
+		// leaves the run on the model it has.
+		Model string `json:"model"`
 	}
 	if !decode(w, r, &body, false) {
 		return
@@ -396,7 +404,7 @@ func (s *server) steer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	runID := r.PathValue("runId")
-	id, err := s.svc.Steer(r.Context(), r.PathValue("id"), runID, body.Text)
+	id, err := s.svc.Steer(r.Context(), r.PathValue("id"), runID, body.Text, body.Model)
 	if err != nil {
 		s.fail(w, err)
 		return

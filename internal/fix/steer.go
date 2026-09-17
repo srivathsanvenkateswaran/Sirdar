@@ -56,7 +56,7 @@ type SteerResult struct {
 // than followed by a second one. The branch is unpushed by construction,
 // so rewriting it costs nothing, and one reviewed commit per fix is what
 // `--accept-deviation` compares the branch against. Nothing is pushed.
-func Steer(ctx context.Context, deps runner.Deps, runID, text string) (SteerResult, error) {
+func Steer(ctx context.Context, deps runner.Deps, runID, text, model string) (SteerResult, error) {
 	cfg := deps.Config
 	if cfg == nil {
 		return SteerResult{}, fmt.Errorf("fix: no workspace configuration")
@@ -134,7 +134,7 @@ func Steer(ctx context.Context, deps runner.Deps, runID, text string) (SteerResu
 	}
 
 	r := &runner.Runner{Deps: deps}
-	out, err := r.Steer(ctx, runID, text, runner.SteerOptions{Root: root})
+	out, err := r.Steer(ctx, runID, text, runner.SteerOptions{Root: root, Model: model})
 	if err != nil {
 		return res, err
 	}

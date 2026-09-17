@@ -87,6 +87,7 @@ type fake struct {
 	gotGolden    struct{ Key, RunID string }
 	gotAnswer    string
 	gotSteer     string
+	gotModel     string
 	steerErr     error // when set, Steer refuses with it
 	gotCancelled JobID
 	gotConnect   bool
@@ -498,17 +499,17 @@ func (f *fake) StartRCA(_ context.Context, wsID, key string, o RCAOptions) (JobI
 	return knownJob, nil
 }
 
-func (f *fake) Resume(_ context.Context, wsID, runID, answer string) (JobID, error) {
+func (f *fake) Resume(_ context.Context, wsID, runID, answer, model string) (JobID, error) {
 	if err := f.checkRun(wsID, runID); err != nil {
 		return "", err
 	}
 	f.mu.Lock()
-	f.gotAnswer = answer
+	f.gotAnswer, f.gotModel = answer, model
 	f.mu.Unlock()
 	return knownJob, nil
 }
 
-func (f *fake) Steer(_ context.Context, wsID, runID, text string) (JobID, error) {
+func (f *fake) Steer(_ context.Context, wsID, runID, text, model string) (JobID, error) {
 	if err := f.checkRun(wsID, runID); err != nil {
 		return "", err
 	}
@@ -517,7 +518,7 @@ func (f *fake) Steer(_ context.Context, wsID, runID, text string) (JobID, error)
 	if f.steerErr != nil {
 		return "", f.steerErr
 	}
-	f.gotSteer = text
+	f.gotSteer, f.gotModel = text, model
 	return knownJob, nil
 }
 

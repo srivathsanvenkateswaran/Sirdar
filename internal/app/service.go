@@ -611,7 +611,12 @@ func (s *Service) StartRCA(ctx context.Context, wsID, key string, o RCAOptions) 
 
 // Resume continues a blocked run, answering the agent's question with
 // answer when it asked one.
-func (s *Service) Resume(ctx context.Context, wsID, runID, answer string) (JobID, error) {
+//
+// model, when given, is the model the continued session and every session
+// after it asks for. It is how a run blocked on a per-model limit carries
+// on: the banner's buttons and the composer's model picker both send one.
+// Empty leaves the run on the model it has.
+func (s *Service) Resume(ctx context.Context, wsID, runID, answer, model string) (JobID, error) {
 	if err := checkID(ErrNoSuchRun, "run", runID); err != nil {
 		return "", err
 	}
@@ -620,7 +625,7 @@ func (s *Service) Resume(ctx context.Context, wsID, runID, answer string) (JobID
 		// session has none, so the answer is handed over as the input.
 		deps.Stdin = strings.NewReader(answer + "\n")
 		r := &runner.Runner{Deps: deps}
-		out, err := r.Resume(jctx, runID)
+		out, err := r.Resume(jctx, runID, runner.ResumeOptions{Model: model})
 		if err != nil {
 			s.log(err)
 			if out.State.RunID == "" {

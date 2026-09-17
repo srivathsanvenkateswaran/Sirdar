@@ -119,8 +119,32 @@ func providerChecks(ctx context.Context, cfg *config.Config) []Check {
 	}
 	if cfg.Provider == "claude" {
 		out = append(out, claudeEnvironmentCheck(cfg))
+		if row, ok := fallbackModelsCheck(cfg); ok {
+			out = append(out, row)
+		}
 	}
 	return out
+}
+
+// fallbackModelsCheck reports providers.claude.fallbackModels when the
+// workspace set one, and nothing at all when it did not.
+//
+// A configured list changes what happens to a run without anyone asking at
+// the time: a per-model limit moves the run onto the next name here and it
+// carries on, so the model that wrote a note may not be the model the
+// config names. That is worth one line in the report an operator runs to
+// find out what a run will do. An empty list is the default and says
+// nothing new — a limit then stops the run and waits — so it gets no row.
+func fallbackModelsCheck(cfg *config.Config) (Check, bool) {
+	models := cfg.FallbackModels()
+	if len(models) == 0 {
+		return Check{}, false
+	}
+	return Check{
+		Name:   "claude fallback models",
+		OK:     true,
+		Detail: strings.Join(models, ", ") + " — tried in this order when a model's own limit is reached",
+	}, true
 }
 
 // doctorChecks runs a provider's diagnostics, handing it the workspace

@@ -15,7 +15,8 @@ func init() { commands["steer"] = cmdSteer }
 // run goes back to running, its transcript grows, and its note is rendered
 // again when the answer changes.
 func cmdSteer(args []string, stdout, stderr io.Writer) int {
-	fs := newFlagSet("steer", stderr, "usage: sirdar steer RUN_ID \"instruction\"")
+	fs := newFlagSet("steer", stderr, "usage: sirdar steer RUN_ID \"instruction\" [--model NAME]")
+	model := fs.String("model", "", "continue on this model instead of the run's")
 	positional, ok := parseFlags(fs, args, 2, 2, stderr)
 	if !ok {
 		return exitUsage
@@ -36,7 +37,7 @@ func cmdSteer(args []string, stdout, stderr io.Writer) int {
 	ctx, stop := interruptible()
 	defer stop()
 
-	out, err := app.Steer(ctx, deps, runID, text)
+	out, err := app.Steer(ctx, deps, runID, text, *model)
 	if err != nil {
 		fmt.Fprintf(stderr, "sirdar: %v\n", err)
 		return 1

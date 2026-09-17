@@ -181,13 +181,13 @@ func TestJobsRejectBadArguments(t *testing.T) {
 	if _, err := svc.StartRCA(ctx, WorkspaceID(root), "", RCAOptions{}); err == nil {
 		t.Fatal("rca with no key should fail")
 	}
-	if _, err := svc.Resume(ctx, WorkspaceID(root), "", ""); err == nil {
+	if _, err := svc.Resume(ctx, WorkspaceID(root), "", "", ""); err == nil {
 		t.Fatal("resume with no run should fail")
 	}
 	for _, err := range []error{
 		mustErr(svc.StartTriage(ctx, "deadbeef1234", []string{"OMNI-1"}, TriageOptions{})),
 		mustErr(svc.StartRCA(ctx, "deadbeef1234", "OMNI-1", RCAOptions{})),
-		mustErr(svc.Resume(ctx, "deadbeef1234", "r1", "")),
+		mustErr(svc.Resume(ctx, "deadbeef1234", "r1", "", "")),
 	} {
 		if !errors.Is(err, ErrNoSuchWorkspace) {
 			t.Fatalf("unknown workspace: %v", err)

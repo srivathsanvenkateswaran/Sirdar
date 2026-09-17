@@ -259,16 +259,21 @@ func (b *Bridge) StartEval(ws string, keys []string, o app.EvalOptions) (string,
 	return string(id), err
 }
 
-// Resume continues a blocked run, answering the agent's question.
-func (b *Bridge) Resume(ws, runId, answer string) (string, error) {
-	id, err := b.svc.Resume(context.Background(), ws, runId, answer)
+// Resume continues a blocked run, answering the agent's question. model,
+// when given, is what the continued session and every session after it ask
+// for — the way out of a run blocked on a per-model limit; empty leaves the
+// run on the model it has.
+func (b *Bridge) Resume(ws, runId, answer, model string) (string, error) {
+	id, err := b.svc.Resume(context.Background(), ws, runId, answer, model)
 	return string(id), err
 }
 
 // Steer continues a finished run with a follow-up instruction, on the
 // same run.
-func (b *Bridge) Steer(ws, runId, text string) (string, error) {
-	id, err := b.svc.Steer(context.Background(), ws, runId, text)
+// model, when given, is the model the continued session asks for; empty
+// leaves the run on the model it has.
+func (b *Bridge) Steer(ws, runId, text, model string) (string, error) {
+	id, err := b.svc.Steer(context.Background(), ws, runId, text, model)
 	return string(id), err
 }
 
