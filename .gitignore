@@ -28,3 +28,6 @@ desktop/frontend/package.json.md5
 # mkdocs build output. site/ is the landing page and is committed, so the
 # docs build is pointed somewhere else by mkdocs.yml's site_dir.
 /.mkdocs-site/
+
+# Claude Code agent worktrees
+.claude/worktrees/
