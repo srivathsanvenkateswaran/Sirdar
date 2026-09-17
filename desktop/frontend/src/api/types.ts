@@ -33,7 +33,14 @@ export interface Usage { turns: number; inputTokens: number; outputTokens: numbe
  * "Sessions show" preference says.
  */
 export interface RunSummary { runId: string; key: string; helpdeskKey?: string; title?: string; kind: RunKind; status: RunState; provider: string; model: string; startedAt: string; updatedAt: string; reason: string; assignee?: string; mine?: boolean; usage: Usage; notes: string[] }
-export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo }
+export interface RunDetail extends RunSummary { promptPath: string; bundleDir: string; warnings: string[]; handle: string; budget: { maxTurns: number; maxMinutes: number; maxUsd: number }; fix?: FixInfo; modelSegments?: ModelSegmentInfo[] }
+/**
+ * One stretch of a run under one model, for a run that changed model partway
+ * through: when it started, which model, and what moved the run onto it —
+ * 'model limit: Fable', 'resume --model', 'steer --model'. `model` on the run
+ * itself is the one it is on now.
+ */
+export interface ModelSegmentInfo { at: string; model: string; why: string }
 /**
  * Where a fix run's work went, read off the run's own state.json. `deviation`
  * is set when the agent reported doing something other than the note's
@@ -236,7 +243,15 @@ export interface SourceSummary { adapter: string; name: string; host: string }
 /** The top of config.yaml: the workspace, where it is, and the provider a new session gets. `configPath` is the file the Settings rows point at. */
 export interface GeneralSummary {
   workspace: string; root: string; configPath: string; provider: string; model: string; billing: string;
-  notesLanguage: string; customerLanguage: string; rtlMarkup: boolean
+  notesLanguage: string; customerLanguage: string; rtlMarkup: boolean;
+  /**
+   * `providers.claude.fallbackModels`: the models a run moves on to, in
+   * order, when the login turns out to have no room for the one it was
+   * started with. Absent or empty means a per-model limit stops the run and
+   * waits for a person, which is the default; the session screen's
+   * model-limit banner offers the first of these first.
+   */
+  fallbackModels?: string[]
 }
 /** The budget block, with `stallMinutes` resolved: 0 is off, an unset key is the default. */
 export interface BudgetSummary { maxTurns: number; maxMinutes: number; maxUsd: number; stallMinutes: number }
@@ -298,9 +313,14 @@ export interface Transport {
   golden(ws: string): Promise<GoldenEntry[]>;
   addGolden(ws: string, o: { key?: string; runId?: string }): Promise<GoldenEntry>;
   configSummary(ws: string): Promise<ConfigSummary>;
-  resume(ws: string, runId: string, answer?: string): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
-  /** Continues a finished run with a follow-up instruction, on the same run. */
-  steer(ws: string, runId: string, text: string): Promise<SteerStarted>;
+  /**
+   * Continues a blocked run. `model` puts the continued session, and every
+   * session of the run after it, on another model — the way past a run
+   * blocked on a per-model limit; omitted leaves the run on the model it has.
+   */
+  resume(ws: string, runId: string, answer?: string, model?: string): Promise<{ jobId: string }>; cancel(jobId: string): Promise<void>;
+  /** Continues a finished run with a follow-up instruction, on the same run. `model` changes the model it continues on. */
+  steer(ws: string, runId: string, text: string, model?: string): Promise<SteerStarted>;
   /** A fix run's change, file by file, with the unified patch. Starts nothing. */
   runDiff(ws: string, runId: string): Promise<RunDiff>;
   /** Reverts one hunk out of the fix commit and answers with the change as it stands after. */

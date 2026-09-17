@@ -57,6 +57,12 @@ type GeneralSummary struct {
 	Model      string `json:"model"`
 	// Billing is "subscription" or "api".
 	Billing string `json:"billing"`
+	// FallbackModels is providers.claude.fallbackModels: the models a run
+	// moves on to, in order, when the login turns out to have no room for
+	// the one it was started with. Empty means a per-model limit stops the
+	// run and waits for a person, which is the default. The session
+	// screen's banner offers the first of these first.
+	FallbackModels []string `json:"fallbackModels,omitempty"`
 	// NotesLanguage and CustomerLanguage are the resolved codes, so a
 	// workspace that named neither reads "en" and "auto" rather than blank.
 	NotesLanguage    string `json:"notesLanguage"`
@@ -227,6 +233,7 @@ func summariseGeneral(cfg *config.Config) GeneralSummary {
 		NotesLanguage:    cfg.NotesLanguage(),
 		CustomerLanguage: cfg.CustomerLanguage(),
 		RTLMarkup:        cfg.RTLMarkup(),
+		FallbackModels:   cfg.FallbackModels(),
 	}
 	if cfg.Root != "" {
 		out.ConfigPath = filepath.Join(cfg.Root, ".sirdar", "config.yaml")

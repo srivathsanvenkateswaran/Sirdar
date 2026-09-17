@@ -33,15 +33,29 @@ export interface ComposerProps {
   placeholder?: string
   /** Draw the send's word beside its arrow while the run is blocked. */
   wideWhenAnswering?: boolean
+  /**
+   * The model the next send asks for, when a reader has chosen one that is
+   * not the run's own. Empty means the run's, which is what the chip shows.
+   */
+  pickedModel?: string
+  /**
+   * Given, the Model chip is a control rather than a fact: what it picks is
+   * what the next answer or steer runs under. It is given on a run that has
+   * stopped — blocked or finished — because that is when a model can still
+   * be chosen; a live run's session already has one.
+   */
+  onPickModel?: (model: string) => void
 }
 
 /**
  * The bottom of the transcript: where the operator talks back.
  *
  * The same card New session draws, with the bar's chips turned into facts:
- * Model is the run's provider and model and cannot change, since a steer
- * resumes the session it has; Mode is the run's kind; Access is the posture
- * that kind ran with. The round send button's word is the run's state —
+ * Mode is the run's kind and Access is the posture that kind ran with, and
+ * neither changes. Model is the exception, and only on a run that has
+ * stopped — blocked or finished: Claude Code takes a different --model on
+ * --resume and answers under it, so the chip picks what the next answer or
+ * steer runs under. While the run is working it is a fact like the others. The round send button's word is the run's state —
  * Answer while the agent is waiting on a question, Steer once the run has
  * finished, and off with the reason while it is working or when the
  * provider refuses to be steered. The button is this screen's one filled
@@ -63,6 +77,8 @@ export default function Composer({
   autoFocus = false,
   placeholder: ownPlaceholder,
   wideWhenAnswering = false,
+  pickedModel = '',
+  onPickModel,
 }: ComposerProps) {
   const [text, setText] = useState('')
 
@@ -107,13 +123,34 @@ export default function Composer({
         error={error}
         chips={
           <>
-            {/* A steer or an answer continues the run this session has, on the
-                model it has, so the chip states the pair and cannot change it. */}
+            {/* On a run that has stopped the chip is a control: Claude Code
+                takes a different --model on --resume and answers under it, so
+                the next answer or steer can be a different model on the same
+                session. While the run is working there is nothing to choose —
+                its session already has a model — and the chip states the pair
+                instead. */}
             <ModelPicker
               provider={provider}
-              model={model}
+              model={onPickModel ? pickedModel || model : model}
+              defaultProvider={provider}
+              defaultModel={model}
               unknownAs="model unknown"
-              readOnly="A steer resumes the same session, so the provider and model cannot change here"
+              readOnly={
+                onPickModel
+                  ? undefined
+                  : 'A steer resumes the same session, so the provider and model cannot change here'
+              }
+              // A run's provider cannot change on a resume — the session
+              // handle names a session that CLI holds — so a row from
+              // another provider, which only the popover's search can
+              // reach, is not a model this run could ask for.
+              onChange={
+                onPickModel
+                  ? (choice) => {
+                      if (!choice.provider || choice.provider === provider) onPickModel(choice.model)
+                    }
+                  : undefined
+              }
             />
             {kind ? (
               <>

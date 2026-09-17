@@ -45,6 +45,13 @@ export interface RunCardProps {
   /** The clock's tooltip: what it is counting. */
   clockTitle?: string
   /**
+   * A few words after the state's own, separated by a middot: "blocked ·
+   * model limit". It is for the one thing a reader has to act on that the
+   * state word alone does not distinguish — a run waiting on a model is not
+   * a run waiting on an answer. Anything longer belongs on the session.
+   */
+  detail?: string
+  /**
    * The accessible name, when the default of `<key>: <title>, <state>` does
    * not say what the click does.
    */
@@ -91,6 +98,7 @@ export default function RunCard({
   assignee,
   clock,
   clockTitle,
+  detail,
   label,
   onOpen,
   href,
@@ -98,7 +106,8 @@ export default function RunCard({
   const live = status === 'preparing' || status === 'running'
   const heading = title || runKey
   const showClock = Boolean(clock) && CLOCKED.includes(status)
-  const word = STATE_WORDS[status] ?? status
+  const stateWord = STATE_WORDS[status] ?? status
+  const word = detail ? `${stateWord} · ${detail}` : stateWord
   const who = assignee?.trim() ? `, assigned to ${assignee.trim()}` : ''
   const name =
     label ?? (title ? `${runKey}: ${title}, ${word}${who}` : `${runKey}, ${word}${who}`)
@@ -115,7 +124,7 @@ export default function RunCard({
 
       <span className="sd-run-card__foot">
         <span className="sd-run-card__state" title={showClock ? clockTitle : undefined}>
-          <StateGlyph state={status} clock={showClock ? clock : undefined} />
+          <StateGlyph state={status} word={word} clock={showClock ? clock : undefined} />
         </span>
         <span className="sd-run-card__who">
           {title && (

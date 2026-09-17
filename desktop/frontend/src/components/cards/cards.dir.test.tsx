@@ -43,4 +43,17 @@ describe('board cards', () => {
     expect(screen.queryByText(RUN.reason)).toBeNull()
     expect(screen.getByText('blocked')).toBeInTheDocument()
   })
+
+  /*
+   * The one exception, and it is three words rather than a reason: a run
+   * waiting on a model is not a run waiting on an answer, and the two sit
+   * in the same lane. The model itself stays off the card — it is on the
+   * session, with the buttons that act on it.
+   */
+  it('says when a blocked run is waiting on a model rather than on an answer', () => {
+    const limited = { ...RUN, reason: 'model limit: Fable' }
+    render(<RunCard run={limited} title={ARABIC_TITLE} onOpen={() => {}} />)
+    expect(screen.getByText('blocked · model limit')).toBeInTheDocument()
+    expect(screen.queryByText(limited.reason)).toBeNull()
+  })
 })

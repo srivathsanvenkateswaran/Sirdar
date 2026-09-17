@@ -105,6 +105,13 @@ describe('RunCard', () => {
     expect(screen.getByText('blocked')).toBeInTheDocument()
   })
 
+  it('puts a detail after the state word, and nothing at all without one', () => {
+    const { rerender } = render(<RunCard {...BASE} status="blocked" detail="model limit" />)
+    expect(screen.getByText('blocked · model limit')).toBeInTheDocument()
+    rerender(<RunCard {...BASE} status="blocked" />)
+    expect(screen.getByText('blocked')).toBeInTheDocument()
+  })
+
   it('shows the clock only while the run is live or waiting', () => {
     const { rerender } = render(<RunCard {...BASE} status="running" clock="1:47" />)
     expect(screen.getByText('1:47')).toBeInTheDocument()

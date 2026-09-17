@@ -16,7 +16,8 @@ import Composer, { type ComposerMode } from '../../components/run/Composer'
 import { BundleIcon, ChangesIcon, NoteIcon, ToolsIcon } from '../../components/run/paneIcons'
 import { LIVE, TERMINAL, useRunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
-import { askedQuestion, notePathFor } from '../../lib/events'
+import ModelLimitBanner from '../../components/session/ModelLimitBanner'
+import { askedQuestion, modelLimited, notePathFor } from '../../lib/events'
 import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
 import { evidenceOf } from '../../components/session/model'
 import { reasonOf, tokens, usd } from '../../lib/format'
@@ -127,6 +128,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
   const [actionError, setActionError] = useState('')
   const [steerRefusal, setSteerRefusal] = useState('')
   const [sent, setSent] = useState(0)
+  /**
+   * The model the next answer or steer asks for, when the reader has picked
+   * one that is not the run's. Empty is the run's own, and it is cleared
+   * whenever the run moves: a choice is about the send it was made for.
+   */
+  const [pickedModel, setPickedModel] = useState('')
   const [changed, setChanged] = useState<number | null>(null)
   /** The one open card, by its event index. */
   const [openCall, setOpenCall] = useState(-1)
@@ -160,6 +167,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
 
   useEffect(() => {
     setSteerRefusal('')
+    setPickedModel('')
   }, [status])
 
   useEffect(() => {
@@ -275,11 +283,11 @@ export default function SessionConversation(props: SessionConversationProps): JS
   )
 
   const answer = useCallback(
-    async (text: string) => {
+    async (text: string, model = pickedModel) => {
       setPending('answer')
       setActionError('')
       try {
-        const started = await transport.resume(workspaceId, runId, text)
+        const started = await transport.resume(workspaceId, runId, text, model)
         if (started?.jobId) setRunJob(runId, started.jobId)
         noteOwnWords(text)
         setSent((n) => n + 1)
@@ -290,7 +298,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         setPending('')
       }
     },
-    [transport, workspaceId, runId, noteOwnWords],
+    [transport, workspaceId, runId, noteOwnWords, pickedModel],
   )
 
   const steer = useCallback(
@@ -298,7 +306,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
       setPending('steer')
       setActionError('')
       try {
-        const started = await transport.steer(workspaceId, runId, text)
+        const started = await transport.steer(workspaceId, runId, text, pickedModel)
         if (started?.jobId) setRunJob(runId, started.jobId)
         setSent((n) => n + 1)
         setDetail((prev) => (prev ? { ...prev, status: 'running' } : prev))
@@ -311,7 +319,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
         setPending('')
       }
     },
-    [transport, workspaceId, runId, noteOwnWords, setDetail],
+    [transport, workspaceId, runId, noteOwnWords, setDetail, pickedModel],
   )
 
   const acceptDeviation = useCallback(async () => {
@@ -342,6 +350,12 @@ export default function SessionConversation(props: SessionConversationProps): JS
   }, [jobId, transport, runId])
 
   const question = askedQuestion(detail?.reason)
+  /**
+   * The model the login has no room for, when that is why the run stopped.
+   * It is a choice rather than a wait — every other model on the account is
+   * answering — so the banner over the composer offers the choice.
+   */
+  const limitedModel = blocked ? modelLimited(detail?.reason) : ''
 
   const mode: ComposerMode = useMemo(() => {
     if (!detail) return { kind: 'disabled', reason: 'Loading the run…' }
@@ -648,6 +662,19 @@ export default function SessionConversation(props: SessionConversationProps): JS
             </button>
           ) : null}
           <div className="sc-composer" data-mode={mode.kind}>
+            {limitedModel ? (
+              <ModelLimitBanner
+                transport={transport}
+                workspaceId={workspaceId}
+                provider={detail.provider}
+                limited={limitedModel}
+                busy={sendBusy}
+                onContinue={(model) => {
+                  setPickedModel(model)
+                  void answer('', model)
+                }}
+              />
+            ) : null}
             <Composer
               mode={mode}
               busy={sendBusy}
@@ -660,6 +687,8 @@ export default function SessionConversation(props: SessionConversationProps): JS
               autoFocus={mode.kind === 'answer'}
               placeholder={placeholder}
               wideWhenAnswering
+              pickedModel={pickedModel}
+              onPickModel={terminal || blocked ? setPickedModel : undefined}
             />
           </div>
         </div>
