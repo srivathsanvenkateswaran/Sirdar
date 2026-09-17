@@ -10,7 +10,7 @@ import { ChevronDownIcon, LockIcon, PencilIcon } from './icons'
  * The command bar: the composer as one line at the very bottom of the
  * window — a `›` prompt, a field that grows only as the reader types into
  * it, the model, mode and access as chips, and the screen's one filled
- * button, Send or Answer with its ⌘↵ hint. Blocked, the mode chip says
+ * button, Send or Answer with its ↵ hint. Blocked, the mode chip says
  * `answer` and the question band above the bar carries the question; the
  * bar itself stays one line.
  *

@@ -369,7 +369,7 @@ export default function SessionConversation(props: SessionConversationProps): JS
           onRun: () => {},
           disabled: mode.kind === 'disabled',
           busy: sendBusy,
-          shortcut: '⌘↵',
+          shortcut: '↵',
           title: mode.kind === 'disabled' ? mode.reason : undefined,
           placement: 'screen',
         }
