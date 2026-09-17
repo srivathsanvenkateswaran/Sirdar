@@ -76,6 +76,30 @@ function shared(
     }
   }
 
+  const stop = () => {
+    if (!close) return
+    const shut = close
+    close = null
+    shut()
+  }
+
+  /*
+   * A page put into the back/forward cache is not destroyed, and its open
+   * stream goes into the cache with it, still holding one of the browser's
+   * six connections per host. Six loads of `sirdar serve` used to leave six
+   * of them there and the next one waited on a socket for as long as it
+   * took the cache to evict one — the twelve-second stall on the sixth
+   * consecutive load. So the stream is let go when the page is put away and
+   * opened again when it comes back, and the store resyncs off the `live`
+   * events either end of that, as it does for any other break.
+   */
+  if (typeof window !== 'undefined') {
+    window.addEventListener('pagehide', stop)
+    window.addEventListener('pageshow', () => {
+      if (handlers.size > 0 && !close) close = open(emit)
+    })
+  }
+
   return (handler) => {
     handlers.add(handler)
     close ??= open(emit)
@@ -86,11 +110,7 @@ function shared(
       // The last one out closes the stream, and closing hands over what is
       // still queued — so it is closed while this handler is still
       // listening, or that last burst would reach nobody.
-      if (handlers.size === 1 && close) {
-        const stop = close
-        close = null
-        stop()
-      }
+      if (handlers.size === 1) stop()
       handlers.delete(handler)
     }
   }

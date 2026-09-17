@@ -470,6 +470,44 @@ describe('http transport events', () => {
     off()
   })
 
+  /**
+   * The other half of finding #2: a page put into the back/forward cache
+   * is not destroyed, and an open stream goes into the cache with it, still
+   * holding one of the six connections the browser allows per host. Six
+   * loads left six of them there, and the next one waited on a socket.
+   */
+  it('lets the stream go when the page is put away and opens it again when it comes back', () => {
+    vi.useFakeTimers()
+    vi.stubGlobal('EventSource', FakeEventSource)
+    FakeEventSource.opened = 0
+    const transport = createTransport()
+    const handler = vi.fn()
+    const off = transport.subscribe(handler)
+
+    expect(FakeEventSource.opened).toBe(1)
+    const first = FakeEventSource.last as FakeEventSource
+
+    window.dispatchEvent(new Event('pagehide'))
+    expect(first.closed).toBe(true)
+
+    window.dispatchEvent(new Event('pageshow'))
+    expect(FakeEventSource.opened).toBe(2)
+    const second = FakeEventSource.last as FakeEventSource
+    expect(second).not.toBe(first)
+
+    // The restored stream feeds the same subscriber.
+    second.fire('run.updated', JSON.stringify({ workspaceId: 'ws1', run: sample[0] }))
+    vi.advanceTimersByTime(FLUSH_MS)
+    expect(handler).toHaveBeenCalledTimes(1)
+
+    off()
+    expect(second.closed).toBe(true)
+
+    // Nothing is reopened for a page with no subscribers left.
+    window.dispatchEvent(new Event('pageshow'))
+    expect(FakeEventSource.opened).toBe(2)
+  })
+
   /** A handler that throws must not stop the others being called. */
   it('keeps the stream up when one subscriber throws', () => {
     vi.useFakeTimers()

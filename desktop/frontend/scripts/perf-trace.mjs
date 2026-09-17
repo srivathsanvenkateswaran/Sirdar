@@ -274,7 +274,11 @@ async function boot(cdp) {
   const loaded = cdp.once('Page.loadEventFired')
   await cdp.send('Page.navigate', { url: BOARD })
   await loaded
-  const painted = await cdp.eval(`__sd.whenPainted(() => document.querySelector('.sd-lane .sd-run-card'))`)
+  // A run card, wherever it is drawn: the board's lanes hold only the runs
+  // that still want something doing, and a workspace whose runs have all
+  // settled shows its cards in the sessions list instead. Either way the
+  // first card is the frame the workspace's runs reached the window in.
+  const painted = await cdp.eval(`__sd.whenPainted(() => document.querySelector('.sd-run-card'))`)
   const nav = await cdp.eval(`(() => {
     const n = performance.getEntriesByType('navigation')[0]
     const fcp = performance.getEntriesByName('first-contentful-paint')[0]
@@ -348,7 +352,7 @@ async function typeFilter(cdp, text) {
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
     setter.call(i, '')
     i.dispatchEvent(new Event('input', { bubbles: true }))
-    await __sd.whenPainted(() => document.querySelectorAll('.sd-lane .sd-run-card').length > 0)
+    await __sd.whenPainted(() => document.querySelectorAll('.sd-run-card').length > 0)
   })()`)
   return times
 }
