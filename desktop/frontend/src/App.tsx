@@ -1,7 +1,17 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import {
+  memo,
+  useCallback,
+  useDeferredValue,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react'
 import type { RunSummary, Ticket } from './api/types'
 import Sidebar, { type SessionActions } from './components/shell/Sidebar'
 import { parseBundle } from './lib/bundle'
+import { usePendingLonger } from './lib/pending'
 import { PrimaryActionProvider } from './components/shell/primaryAction'
 import { PAGE_ENTER_CLASS, PAGE_ENTER_ONCE_MS } from './ui/motion'
 import Toasts from './ui/toast'
@@ -252,7 +262,16 @@ function Shell(): JSX.Element {
   if (screen.name !== 'settings') behind.current = screen
   const settingsOpen = screen.name === 'settings'
   const settingsPage = screen.name === 'settings' ? screen.page : undefined
-  const shown = settingsOpen ? behind.current : screen
+  const wanted = settingsOpen ? behind.current : screen
+  /*
+   * Opening a run mounts a whole session tree — 273 to 378ms on a run of
+   * 2270 events — and the window used to show nothing at all until it was
+   * ready. The page is deferred, so the screen the reader came from stays
+   * painted while the next one renders behind it, and `busy` marks the
+   * wait only once it is long enough to notice. See lib/pending.
+   */
+  const shown = useDeferredValue(wanted)
+  const busy = usePendingLonger(shown !== wanted)
 
   const runs = runsOrNone ?? NO_RUNS
   const tickets = ticketsOrNone ?? NO_TICKETS
@@ -432,7 +451,12 @@ function Shell(): JSX.Element {
     <div className="app">
       <ConnectedSidebar onNavigate={navigate} />
       <main className="main">
-        <div className={entering ? `sd-page ${PAGE_ENTER_CLASS}` : 'sd-page'} key={pageKey}>
+        <div
+          className={entering ? `sd-page ${PAGE_ENTER_CLASS}` : 'sd-page'}
+          key={pageKey}
+          aria-busy={busy || undefined}
+          data-opening={busy || undefined}
+        >
           {workspaces.length === 0 && !loading && shown.name !== 'library' ? (
             <p className="app-empty">
               No workspace yet. Open Settings and add the path to a repository that has a{' '}
