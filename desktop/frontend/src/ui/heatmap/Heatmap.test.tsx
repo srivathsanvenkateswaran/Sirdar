@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
-import Heatmap, { bucketOf, cellName, monthLabels } from './index'
+import Heatmap, { HeatmapLegend, bucketOf, cellName, monthLabels } from './index'
 
 describe('monthLabels', () => {
   it('names the column whose Monday starts a month, and never the first column', () => {
@@ -99,5 +99,35 @@ describe('Heatmap', () => {
     render(<Heatmap days={days} weeks={2} endDate="2026-09-14" label="Runs per day" />)
     const group = screen.getByRole('group', { name: 'Runs per day' })
     expect(group).toHaveAttribute('tabindex', '0')
+  })
+
+  it('draws at the default size unless told otherwise, and on 10px columns when compact', () => {
+    const { container, rerender } = render(<Heatmap days={days} weeks={2} endDate="2026-09-14" />)
+    expect(container.querySelector('.sd-heatmap')).toHaveAttribute('data-size', 'default')
+    expect(container.querySelector<HTMLElement>('.sd-heatmap__grid')?.style.gridTemplateColumns).toBe(
+      'repeat(2, 14px)',
+    )
+
+    rerender(<Heatmap days={days} weeks={2} endDate="2026-09-14" size="compact" />)
+    expect(container.querySelector('.sd-heatmap')).toHaveAttribute('data-size', 'compact')
+    expect(container.querySelector<HTMLElement>('.sd-heatmap__grid')?.style.gridTemplateColumns).toBe(
+      'repeat(2, 10px)',
+    )
+    expect(container.querySelector('.sd-heatmap__legend')).toHaveAttribute('data-size', 'compact')
+  })
+
+  it('leaves the legend out when the screen places its own', () => {
+    const { container } = render(
+      <>
+        <Heatmap days={days} weeks={2} endDate="2026-09-14" legend={false} />
+        <HeatmapLegend size="compact" />
+      </>,
+    )
+    expect(container.querySelector('.sd-heatmap .sd-heatmap__legend')).toBeNull()
+    const legend = container.querySelector('.sd-heatmap__legend')
+    expect(legend).toHaveAttribute('data-size', 'compact')
+    for (const label of ['0', '1', '2-4', '5-9', '10+']) {
+      expect(screen.getByText(label)).toBeInTheDocument()
+    }
   })
 })

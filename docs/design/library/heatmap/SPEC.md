@@ -18,8 +18,8 @@ chevron are refused.
 
 ## Anatomy
 
-- `section.sd-heatmap` — the block, named for a screen reader, pinned
-  `direction: ltr`.
+- `section.sd-heatmap[data-size]` — the block, named for a screen reader,
+  pinned `direction: ltr`. `default` or `compact`.
 - `div.sd-heatmap__body` — the weekday column beside the scroll container.
 - `div.sd-heatmap__weekdays[aria-hidden]` — seven letters, M to S, on the
   cells' own 14px rows, in `--sd-ink-3` at `--sd-text-ledger`.
@@ -33,8 +33,17 @@ chevron are refused.
   gap, one column per week, Monday at the top.
 - `button.sd-heatmap__cell[data-heat]` — 14 by 14, `--sd-radius-xs`, one of
   the five steps. Every cell is a button.
-- `p.sd-heatmap__legend` — the word "Runs a day", then five swatches each
-  labelled with its bucket: `0`, `1`, `2-4`, `5-9`, `10+`.
+- `p.sd-heatmap__legend[data-size]` — the word "Runs a day", then five
+  swatches each labelled with its bucket: `0`, `1`, `2-4`, `5-9`, `10+`.
+  Drawn under the grid unless `legend={false}`; the exported `HeatmapLegend`
+  is the same element on its own, for a screen that places it beside the
+  grid's title.
+
+Compact (`size="compact"`): 10px cells at a 2px gap, a 14px month row, the
+weekday letters and month names at `--sd-text-micro`, the legend at the same
+size with 10px swatches. Twenty-six weeks come to 310px across and 98px tall
+with the month row; the Register uses it so the grid shares a row with the
+stat strip and the table under both gets the height.
 
 ## States
 
@@ -92,6 +101,12 @@ own text is `--sd-ink-3`, **4.98:1** on the paper and **4.73:1** on a card.
 Reduced motion: nothing here moves in any state.
 
 ## Changelog
+
+### 2026-09-17 (register compact)
+Gained `size="compact"` — 10px cells at a 2px gap, the month row at 14px,
+letters and legend at the micro size — and `legend={false}` with an exported
+`HeatmapLegend`, so the Register can put the legend on the title row and
+give the table the height the grid was taking. The default size is unchanged.
 
 ### 2026-09-15 (register screen)
 Weeks now run Monday to Sunday, as the Register mock draws them and ISO

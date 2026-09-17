@@ -6,6 +6,8 @@ export interface HeatmapDay {
   count: number
 }
 
+export type HeatmapSize = 'default' | 'compact'
+
 export interface HeatmapProps {
   days: HeatmapDay[]
   /** How many weeks of columns to draw; 26 by default. The grid scrolls past the container. */
@@ -16,7 +18,21 @@ export interface HeatmapProps {
   label?: string
   /** Called with the day's date when a cell is chosen. */
   onSelect?: (date: string) => void
+  /**
+   * `compact` draws 10px cells at a 2px gap, for a grid that shares a row
+   * with other things; the default is 14 at 6. The legend follows the size.
+   */
+  size?: HeatmapSize
+  /**
+   * Whether the legend is drawn under the grid. A screen that wants it
+   * elsewhere — beside the grid's title, say — passes false and places a
+   * `HeatmapLegend` of its own.
+   */
+  legend?: boolean
 }
+
+/** The cell edge and the gap between cells, by size. The stylesheet repeats them. */
+const CELL: Record<HeatmapSize, number> = { default: 14, compact: 10 }
 
 /** The five buckets, in order. Index is the `--sd-heat-N` step. */
 export const BUCKETS = [
@@ -138,14 +154,16 @@ export default function Heatmap({
   endDate,
   label = 'Runs per day',
   onSelect,
+  size = 'default',
+  legend = true,
 }: HeatmapProps): JSX.Element {
   const cells = grid(days, weeks, endDate)
   const columns = Math.ceil(cells.length / 7)
   const months = monthLabels(cells)
-  const track = { gridTemplateColumns: `repeat(${columns}, 14px)` }
+  const track = { gridTemplateColumns: `repeat(${columns}, ${CELL[size]}px)` }
 
   return (
-    <section className="sd-heatmap" aria-label={label}>
+    <section className="sd-heatmap" aria-label={label} data-size={size}>
       <div className="sd-heatmap__body">
         <div className="sd-heatmap__weekdays" aria-hidden="true">
           {WEEKDAY_LETTERS.map((letter, i) => (
@@ -179,15 +197,26 @@ export default function Heatmap({
           </div>
         </div>
       </div>
-      <p className="sd-heatmap__legend">
-        <span className="sd-heatmap__legend-word">Runs a day</span>
-        {BUCKETS.map((bucket, step) => (
-          <span className="sd-heatmap__legend-step" key={bucket.label}>
-            <span className="sd-heatmap__cell" data-heat={step} aria-hidden="true" />
-            <span className="sd-heatmap__legend-count">{bucket.label}</span>
-          </span>
-        ))}
-      </p>
+      {legend && <HeatmapLegend size={size} />}
     </section>
+  )
+}
+
+/**
+ * The word "Runs a day" and the five swatches with their bucket boundaries.
+ * Drawn under the grid by default; a screen that turns the grid's own legend
+ * off places this one where it wants it, at the same size as the grid.
+ */
+export function HeatmapLegend({ size = 'default' }: { size?: HeatmapSize }): JSX.Element {
+  return (
+    <p className="sd-heatmap__legend" data-size={size}>
+      <span className="sd-heatmap__legend-word">Runs a day</span>
+      {BUCKETS.map((bucket, step) => (
+        <span className="sd-heatmap__legend-step" key={bucket.label}>
+          <span className="sd-heatmap__cell" data-heat={step} aria-hidden="true" />
+          <span className="sd-heatmap__legend-count">{bucket.label}</span>
+        </span>
+      ))}
+    </p>
   )
 }
