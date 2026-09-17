@@ -6,7 +6,6 @@ import ComposerStrip from '../../components/session/ComposerStrip'
 import { BundleIcon, OpenIcon, ToolsIcon } from '../../components/session/icons'
 import type { SessionModel } from '../../components/session/model'
 import NoteDocument, { MetaCell } from '../../components/session/NoteDocument'
-import RunHeader, { LayoutSwitcher } from '../../components/session/RunHeader'
 import ToolsPane from '../../components/session/ToolsPane'
 import { rowsOf } from '../../components/session/toolRows'
 import { PathList } from '../../components/session/TurnGroup'
@@ -44,9 +43,9 @@ function reveal(el: Element | null | undefined): void {
  * change, with C markers tying each hunk to the edit that wrote it.
  */
 export default function SessionDocument(props: SessionLayoutProps): JSX.Element {
-  const { transport, workspaceId, detail, data, title, notesDir, sources, live, actions, pending, actionError, steerRefusal, sent, canCancel, layout, onLayout } = props
+  const { transport, workspaceId, detail, data, title, notesDir, live, actions, pending, actionError, steerRefusal, sent, canCancel } = props
   const { model, note, bundle, changes, drops, everything, setEverything } = data
-  // The record's model, else the one the log names, so the header never says "model unknown" for a run that did say.
+  // The record's model, else the one the log names, so the strip never says "model unknown" for a run that did say.
   const named = useMemo(() => (detail.model || !model.model ? detail : { ...detail, model: model.model }), [detail, model.model])
   const [drawer, setDrawer] = useState<DrawerName>(null)
   const [open, setOpen] = useState<ReadonlySet<number>>(() => new Set())
@@ -230,15 +229,6 @@ export default function SessionDocument(props: SessionLayoutProps): JSX.Element 
 
   return (
     <div className="sn" data-layout="document" data-testid="session-document">
-      <RunHeader
-        detail={named}
-        title={title}
-        sources={sources}
-        notePath={notePath}
-        switcher={<LayoutSwitcher value={layout} onChange={onLayout} />}
-        transport={props.transport}
-        workspaceId={props.workspaceId}
-      />
       {actionError && pending !== 'accept' && model.composer.kind === 'disabled' ? (
         <p className="sn-failed-line" role="alert">
           {actionError}

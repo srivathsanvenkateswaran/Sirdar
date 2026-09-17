@@ -5,7 +5,7 @@ import { PrimaryActionProvider } from '../../components/shell/primaryAction'
 import { renderCount, resetRenderCounts } from '../../lib/renderProbe'
 import { createFakeTransport, type FakeTransport } from '../../store/fakeTransport'
 import { TRIAGE_DETAIL, stream, triageEvents } from './fixtures'
-import SessionConversation from './SessionConversation'
+import Session from '../Session'
 
 /*
  * What a streamed line costs the Session window.
@@ -30,7 +30,7 @@ function mount(events: RunEvent[], detail: RunDetail = RUNNING): FakeTransport {
   transport.prompt = vi.fn(async () => '')
   render(
     <PrimaryActionProvider>
-      <SessionConversation
+      <Session
         transport={transport}
         workspaceId="ws1"
         runId={detail.runId}

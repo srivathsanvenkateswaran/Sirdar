@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { FixStart, NoteKind, RunDiff, SourcesSummary, Transport } from '../../api/types'
 import type { ComposerMode } from '../../components/run/Composer'
-import { LIVE, useRunFeed } from '../../components/run/useRunFeed'
+import { LIVE, type RunFeed } from '../../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../../components/shell/primaryAction'
 import { parseTime, reasonOf } from '../../lib/format'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../../lib/jobs'
@@ -38,7 +38,6 @@ import {
   type Permissions,
 } from './workbench/model'
 import NoteDocument from './workbench/NoteDocument'
-import RunHeader from '../../components/session/RunHeader'
 import { useSessionModel } from './model'
 import { evidenceOf } from '../../components/session/model'
 import { deriveEvidenceMarkers, stepLikeOf } from '../../lib/evidence'
@@ -54,8 +53,9 @@ import './session-workbench.css'
  * composer as one command bar at the very bottom.
  *
  * Reached through `screens/Session.tsx` when the `sirdar.sessionLayout`
- * preference says `workbench`. It reads the run the way the other layouts
- * do (`useRunFeed`) and builds its own model from the events in
+ * preference says `workbench`. The run and its log are the Session's own
+ * feed, handed down so the header above does not remount on a layout
+ * switch; the layout builds its own model from the events in
  * `./workbench/model`; the blocks under `./workbench` are local adapters
  * carrying the shared blocks' names, to be swapped for
  * `src/components/session/*` when those land.
@@ -116,11 +116,13 @@ export interface SessionWorkbenchProps {
   onBack: () => void
   onOpenReview: () => void
   onStartFix?: (key: string, opts?: FixStart) => Promise<void> | void
+  /** The run and its log, read once by the Session above and shared with its header. */
+  feed: RunFeed
 }
 
 export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Element {
-  const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix } = props
-  const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
+  const { transport, workspaceId, runId, notesDir, onBack, onOpenReview, onStartFix } = props
+  const { detail, setDetail, events, setEvents, loadError, finished } = props.feed
   const jobId = useRunJob(runId)
 
   // ---- state --------------------------------------------------------------
@@ -465,15 +467,6 @@ export default function SessionWorkbench(props: SessionWorkbenchProps): JSX.Elem
 
   return (
     <div className="wb" data-testid="session-workbench">
-      <RunHeader
-        variant="workbench"
-        detail={detail}
-        title={title}
-        sources={sources}
-        fallbackModel={model}
-        transport={transport}
-        workspaceId={workspaceId}
-      />
       <span className="visually-hidden" aria-live="polite">{`Run ${stateWord(detail.status)}`}</span>
       {/* The bar carries what a send or a stop came back with; this line is
           for the errors no composer is up to hold. */}

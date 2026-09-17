@@ -1,9 +1,12 @@
-import { useCallback, useDeferredValue, useEffect, useState, useSyncExternalStore } from 'react'
-import type { FixStart, SourcesSummary, Transport } from '../api/types'
+import { useCallback, useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore } from 'react'
+import type { FixStart, NoteKind, SourcesSummary, Transport } from '../api/types'
 import type { Decision } from '../components/session/ComposerStrip'
+import { modelOf } from '../components/session/model'
+import RunHeader from '../components/session/RunHeader'
 import { useSessionModel, withoutCode } from '../components/session/useSessionModel'
-import { LIVE, useRunFeed } from '../components/run/useRunFeed'
+import { LIVE, useRunFeed, type RunFeed } from '../components/run/useRunFeed'
 import { useProvidePrimaryAction } from '../components/shell/primaryAction'
+import { notePathFor } from '../lib/events'
 import { clearRunJob, getRunJob, setRunJob, subscribeRunJobs } from '../lib/jobs'
 import { reasonOf } from '../lib/format'
 import { usePendingLonger } from '../lib/pending'
@@ -40,6 +43,18 @@ const LAYOUTS: Record<'document', (props: SessionLayoutProps) => JSX.Element> = 
   document: SessionDocument,
 }
 
+/**
+ * Which note the header's state chip means by `note saved`: an RCA run's
+ * own RCA note, a fix run's note.md, a triage run's triage note. The header
+ * asks for it once here so all three layouts say the same thing about the
+ * same run.
+ */
+function headNoteKind(kind: string | undefined): NoteKind {
+  if (kind === 'rca') return 'rca'
+  if (kind === 'fix') return ''
+  return 'triage'
+}
+
 export interface SessionProps {
   transport: Transport
   workspaceId: string
@@ -74,6 +89,7 @@ export interface SessionProps {
  * sidebar's New session steps down.
  */
 export default function Session(props: SessionProps): JSX.Element {
+  const { transport, workspaceId, runId, title, sources } = props
   const wanted = useSyncExternalStore(subscribeSessionLayout, sessionLayout, () => 'conversation' as SessionLayout)
   /*
    * The switcher used to unmount one layout and mount another whole tree
@@ -84,25 +100,54 @@ export default function Session(props: SessionProps): JSX.Element {
    */
   const layout = useDeferredValue(wanted)
   const busy = usePendingLonger(layout !== wanted)
+  /*
+   * The feed is the window's, not the layout's. Each layout used to open
+   * its own — which meant switching layout re-read the run and rebuilt the
+   * header from nothing, and the owner watched the header bar blink on
+   * every switch. Read once here and handed down, the run is the same
+   * object across a switch and the header above never unmounts.
+   */
+  const feed = useRunFeed(transport, workspaceId, runId)
+  const { detail, events } = feed
+
+  // The model the log named, for a run whose record carries none.
+  const fallbackModel = useMemo(() => modelOf(events), [events])
+  const notePath = useMemo(
+    () => notePathFor(headNoteKind(detail?.kind), detail?.notes),
+    [detail?.kind, detail?.notes],
+  )
+
   // The frame is always here, switch or no switch: adding it only while the
   // switch is on would remount the layout it is meant to keep on screen.
   return (
     <div className="sn-frame" data-switching={busy || undefined} aria-busy={busy || undefined}>
+      {detail ? (
+        <RunHeader
+          detail={detail}
+          title={title}
+          sources={sources}
+          variant={layout === 'workbench' ? 'workbench' : 'default'}
+          notePath={notePath}
+          fallbackModel={fallbackModel}
+          transport={transport}
+          workspaceId={workspaceId}
+        />
+      ) : null}
       {layout === 'conversation' ? (
-        <SessionConversation {...props} />
+        <SessionConversation {...props} feed={feed} />
       ) : layout === 'workbench' ? (
-        <SessionWorkbench {...props} />
+        <SessionWorkbench {...props} feed={feed} />
       ) : (
-        <SessionShared {...props} layout={layout} />
+        <SessionShared {...props} feed={feed} layout={layout} />
       )}
     </div>
   )
 }
 
-/** The Document and Workbench layouts: one feed, one model, one set of actions, the chosen layout drawing them. */
-function SessionShared(props: SessionProps & { layout: 'document' }): JSX.Element {
+/** The Document layout: the window's feed, one model, one set of actions, the layout drawing them. */
+function SessionShared(props: SessionProps & { feed: RunFeed; layout: 'document' }): JSX.Element {
   const { transport, workspaceId, runId, title, notesDir, sources, onBack, onOpenReview, onStartFix, layout } = props
-  const { detail, setDetail, events, setEvents, loadError, finished } = useRunFeed(transport, workspaceId, runId)
+  const { detail, setDetail, events, setEvents, loadError, finished } = props.feed
   const data = useSessionModel(transport, workspaceId, runId, detail, events, finished)
   const [pending, setPending] = useState<SessionLayoutProps['pending']>('')
   const [actionError, setActionError] = useState('')
